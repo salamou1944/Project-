@@ -58,3 +58,10 @@ REPAIR IN PROGRESS — current verified code failures found in the user-owned re
 - Root cause: discovery treated a GitHub access denial as an unhandled fatal exception.
 - Patched COLLECTION/AUTO/intelligent_extract.py at commit bd3db15cb19526e00fb1be30951f7d1b0f83c3f5 to classify HTTP 403 repository enumeration as an explicit BLOCKED_REPOS inventory record; GitHub rate-limit responses are now surfaced distinctly instead of being silently misclassified.
 - Verification pending on the next collection-continuous run.
+
+
+## Follow-up verification
+- Collection harvest failed twice after the first patch because the API wrapper converted GitHub rate-limit/403 responses to RuntimeError and Gist discovery only caught the old urllib exception type.
+- Patched Gist discovery to classify both HTTP_403 and rate-limit RuntimeErrors explicitly and continue collection.
+- Verification: collection-continuous run 36185464177 on commit 575ea3d6a2069967fb3d908c889d96d8846690c8 completed SUCCESS.
+- AI_operating_memory repair verification: Incoming skill gate, CI, and Canonical state validation all completed SUCCESS on commit cd9c4f7c7f9265176e1efe1d6c79e32dc318c35c.
