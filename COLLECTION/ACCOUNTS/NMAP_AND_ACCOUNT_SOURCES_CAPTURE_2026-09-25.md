@@ -3,73 +3,52 @@
 Status: EXTRACTED_PENDING_DEEP_VERIFICATION
 
 ## Scope correction
-This capture records the external GitHub account/repository sources the user explicitly asked to include in the collection, including the Nmap-related material and the previously identified account collections. It is not limited to Project-, agent-skills, or Agent-Reach.
+This capture records the external GitHub account/repository sources included in COLLECTION, including Nmap-related material and previously identified account collections. It is not limited to Project-, agent-skills, or Agent-Reach.
 
-## aw-junaid — confirmed
-Profile: https://github.com/aw-junaid
-The profile currently exposes 33 public repositories.
+## aw-junaid
+Profile exposes 33 public repositories and 76 public gists in the current public profile views.
 
-Relevant repositories inspected:
-- https://github.com/aw-junaid/bug-bounty
-- https://github.com/aw-junaid/Kali-Linux
+Priority repositories already inspected:
+- aw-junaid/bug-bounty
+- aw-junaid/Kali-Linux
 
-### Nmap-related evidence found in bug-bounty
-- resources/cheatsheets/ports.md
-- resources/cheatsheets/Tomcat Security Testing.md
-- resources/cheatsheets/WAFs.md
-- resources/cheatsheets/Joomla.md
-- tools/README.md
-- tools/personal-script/readme.md
-- tools/personal-script/8-Hour Challenge.md
-- methodologies/web penetration/Webshell.md
+Nmap/security evidence found across the two repositories includes Nmap, masscan, NSE references, web-service enumeration, scanning methodology, and security-testing material. Preserve exact source paths and revisions when extracting.
 
-The repository contains Nmap references across scanning, service/version enumeration, NSE usage, web-service discovery and methodology material. Collection must preserve the source files rather than reducing the source to a single Nmap link.
+Gists are now explicitly part of the discovery queue. Public profile evidence shows 76 gists; examples include XSS, computer networking, algorithms/data structures, assembly language and other technical/security material. Gists must be inventoried before the account is considered exhausted.
 
-### Nmap-related evidence found in Kali-Linux
-- Kali Linux Tools/Nmap.md
-- Kali Linux Tools/masscan.md
-- book/3.md
-- book/24.md
-- book/25.md
-- book/26.md
-- book/27.md
+## mufeedvh
+Profile exposes 42 public repositories in the current public profile view.
 
-This source is valuable not only for Nmap itself but also for adjacent reconnaissance/scanning workflow knowledge, including masscan-to-Nmap relationships and operational notes.
+Priority repository already inspected:
+- mufeedvh/code2prompt
 
-## mufeedvh — confirmed
-Profile: https://github.com/mufeedvh
-The profile currently exposes 42 public repositories.
+code2prompt evidence includes Rust workspace code, file processors, prompt/session rendering, token maps/counting, Python bindings, website documentation, and agent skill files. Continue across the remaining repositories.
 
-Relevant repository inspected:
-- https://github.com/mufeedvh/code2prompt
+## Nmap ecosystem
+The official nmap organization currently exposes 7 public repositories:
+- nmap/nmap
+- nmap/npcap
+- nmap/ncrack
+- nmap/libdnet
+- nmap/libpcap
+- nmap/styrene
+- nmap/tcpdump
 
-Current repository evidence includes:
-- Rust workspace structure under crates/
-- file processors for CSV, TSV, JSONL, Jupyter notebooks and default text
-- prompt rendering/session code
-- token counting and token-map code
-- agent skill files
-- Python bindings
-- website documentation
-- active issue/PR activity
+Repository-level inspection must proceed beyond profile metadata. Current web evidence confirms nmap/ncrack and nmap/npcap have substantial source trees and active/current documentation; this is discovery evidence until source-level extraction is performed.
 
-This is a high-value source for local codebase-to-prompt generation, structured file processing, token estimation, agent skills and reusable code-intelligence patterns.
+## Collection state rules
+discovered -> inspected -> extracted -> verified -> reusable
 
-## Collection rule for these account sources
-1. Preserve repository + exact file path + revision/commit when extracted.
-2. Treat account profile counts as discovery metadata, not as proof that every repository has been inspected.
-3. Continue recursively through the identified account repositories rather than stopping at profile pages.
-4. For security material, retain it as authorized defensive/research knowledge; do not operationalize it against systems without authorization.
-5. Do not copy credentials, secrets, private data or unrelated personal information.
+Account profile counts are discovery metadata, not proof of repository/file completion.
+README/marketing/awesome-list evidence is not sufficient for production-readiness, security, licensing, or feature-parity claims.
 
-## Current evidence references
-- aw-junaid profile: 33 public repositories.
-- mufeedvh profile: 42 public repositories.
-- Nmap material is confirmed in both aw-junaid/bug-bounty and aw-junaid/Kali-Linux.
-- code2prompt currently contains substantial prompt/file-processing/token/agent-skill implementation material.
+## Security boundary
+Security and dual-use tools may be collected as authorized research/defensive source material. Do not operationalize unauthorized intrusion, credential theft, malware deployment, or exploitation.
 
-## Next extraction targets
-- Complete the previously identified aw-junaid repository set, not only the two Nmap-related repositories.
-- Continue the previously identified mufeedvh repository set, not only code2prompt.
-- Resolve the remaining Nmap ecosystem repositories/accounts previously supplied by the user.
-- Store each verified batch in Project- with provenance and status.
+## Remaining account extraction queue
+1. aw-junaid: inventory and process all 33 repositories.
+2. aw-junaid: inventory and process all 76 public gists.
+3. mufeedvh: inventory and process all 42 repositories.
+4. nmap organization: process all 7 repositories.
+5. Preserve provenance for every extracted batch in Project-.
+6. Cross-link overlapping tools, implementations, dependencies, licenses and replacement opportunities.
