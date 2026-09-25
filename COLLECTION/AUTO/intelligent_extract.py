@@ -74,7 +74,9 @@ def discover():
 def extract_repo(repo):
     meta = api(f"/repos/{repo}")
     branch = meta["default_branch"]
-    tree = api(f"/repos/{repo}/git/trees/{branch}?recursive=1")
+    branch_data = api(f"/repos/{repo}/branches/{urllib.parse.quote(branch, safe="")}")
+    revision_sha = branch_data.get("commit",{}).get("sha")
+    tree = api(f"/repos/{repo}/git/trees/{revision_sha}?recursive=1")
     entries = tree.get("tree", [])
     candidates = [e for e in entries if e.get("type") == "blob" and e.get("size",0) <= MAX_BYTES_PER_FILE and score(e.get("path","")) > 0]
     candidates.sort(key=lambda e:(score(e["path"]), -e.get("size",0)), reverse=True)
@@ -96,7 +98,7 @@ def extract_repo(repo):
     return {
         "canonical_source": f"github:{repo}",
         "repo": repo,
-        "revision_sha": meta.get("default_branch"),
+        "revision_sha": revision_sha,
         "default_branch": branch,
         "repo_updated_at": meta.get("updated_at"),
         "license": (meta.get("license") or {}).get("spdx_id"),
