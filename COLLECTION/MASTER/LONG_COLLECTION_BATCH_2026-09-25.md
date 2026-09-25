@@ -356,3 +356,16 @@ Purpose: password-cracking reference covering Hashcat, John the Ripper, wordlist
 - mcp-server-weibo — SHA 529341dab4286c766b57ab875165105ae45940c0 — Weibo MCP server for user/content/search/trend data, with local/Docker deployment options.
 - new-api-neo — SHA 06924e547f45dc543f69b14b3cae4abf1e477e5c — LLM gateway and AI asset-management system with multilingual docs and Docker distribution.
 - openclaw — SHA fe48160c957e530ed03aa819bcf60791078629c4 — personal AI assistant/control plane; high-priority source for Gateway, channels, automation and agent runtime patterns.
+
+
+## README extraction — mufeedvh batch 01
+- code2prompt — SHA 70bb36263b10e3db52b7ec8f07d3b790d739cdb7 — converts a codebase into a single LLM prompt; docs/CLI ecosystem.
+- moonwalk — SHA fb63af935bf4d05a1c89a2571b280fc4f0175e94 — red-team artifact/timestamp/log cleanup utility; security research reference only.
+- pdfrip — SHA bf7941f3e7162a9385343d42373bed5c98a1ff1c — Rust PDF password-cracking utility with structured search and checkpoint/resume.
+- binserve — SHA dfa499ee6a5ab26a4aa0f21c1f69def0d3ffb60d — single-binary static web server with TLS, routing, hot reload, caching, templating and security; self-hosting focus.
+- basecrack — SHA 962e33ebd391470df45316f6c0a033f3717644da — decoder for base encodings, including image EXIF/OCR workflows.
+- CVE-2019-8449 — SHA 6338c73d35e7e170bfd40d65449ed521fb4fd678 — historical Jira information-disclosure PoC/reference; not an active target.
+- paydept — SHA e744e7b748b572a2065b4af7dc4d2c0ff51e13d3 — scans dependencies for donation/funding metadata and exports results.
+- seclip — SHA 01c0059c0f366442d072f170b1604bd23d3b1f73 — cross-platform secret-to-clipboard utility with auto-clear.
+- gisture — SHA 7254251bbeea244eccf21984cb654cb33d5d46e2 — single-binary blog generator using GitHub Gists, with SEO/templates/highlighting.
+- mnmlang — SHA b8b502ccf6e6eb16140a849d10320319fba413d5 — toy programming language with parser/interpreter, PNG compiler/decompiler, FastAPI playground and tests.
