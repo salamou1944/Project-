@@ -56,6 +56,10 @@ The detailed collection corpus is stored under COLLECTION/ and includes AI, brow
 - COLLECTION/VERIFICATION/VERIFICATION_QUEUE_NEXT.md
 - COLLECTION/VERIFICATION/NMAP_ECOSYSTEM_DEEP_VERIFICATION_BATCH_01_2026-09-25.md
 
+### AI / Local Workspaces
+- COLLECTION/AI/LOCAL_AI_WORKSPACES_BATCH_01_2026-09-25.md
+  - Distinct self-hosted/local AI workspace and agent sources; overlapping functionality is intentionally retained.
+
 ### OSINT
 - COLLECTION/OSINT/SHERLOCK_CAPTURE_2026-09-25.md
   - Sherlock username-focused OSINT discovery; MIT; self-hostable; deep verification pending.
