@@ -75,7 +75,7 @@ def discover():
 def extract_repo(repo):
     meta = api(f"/repos/{repo}")
     branch = meta["default_branch"]
-    branch_data = api(f"/repos/{repo}/branches/{urllib.parse.quote(branch, safe="")}")
+    branch_data = api(f"/repos/{repo}/branches/{urllib.parse.quote(branch, safe='')}")
     revision_sha = branch_data.get("commit",{}).get("sha")
     tree = api(f"/repos/{repo}/git/trees/{revision_sha}?recursive=1")
     entries = tree.get("tree", [])
