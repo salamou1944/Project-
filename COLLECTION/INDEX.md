@@ -64,6 +64,7 @@ The detailed collection corpus is stored under COLLECTION/ and includes AI, brow
 - COLLECTION/ACCOUNTS/NMAP_AND_ACCOUNT_SOURCES_CAPTURE_2026-09-25.md
 - COLLECTION/ACCOUNTS/AW_JUNAID_DEEP_EXTRACTION_BATCH_01_2026-09-25.md
 - COLLECTION/ACCOUNTS/ACCOUNT_DEEP_EXTRACTION_BATCH_02_2026-09-25.md
+- COLLECTION/ACCOUNTS/MUFEEDVH_DEEP_EXTRACTION_BATCH_02_2026-09-25.md
 - Scope includes aw-junaid, mufeedvh, Nmap ecosystem and previously identified account/repository sources.
 
 ### ASTRA / Free / Project continuation
