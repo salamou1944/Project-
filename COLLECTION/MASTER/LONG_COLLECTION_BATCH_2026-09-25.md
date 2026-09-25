@@ -272,3 +272,47 @@ Purpose: largest current discovery batch for reducing recurring SaaS/API subscri
 7. Check commercial-use and redistribution terms.
 8. Test the highest-value candidates locally where feasible.
 9. Promote only evidence-backed candidates to VERIFIED/REUSABLE.
+
+
+## README extraction batch — aw-junaid (2026-09-25)
+The following repositories were directly fetched from their current default-branch README.md during the collection pass; each entry records the observed blob SHA and an excerpt for semantic indexing.
+
+### Hacking-Tools
+SHA: 05877acce00b2c9ea0989f3fd56958089016d2dd
+Purpose: security research / malware analysis / education collection. README explicitly limits use to authorized research, malware analysis, and education.
+
+### Kali-Linux
+SHA: d3db045f5844a82fc2524e999e4ee643cb979c31
+Purpose: Kali Linux tools documentation, including web penetration testing, ethical hacking and forensics.
+
+### bug-bounty
+SHA: e67128a5f0e4f61d5ebe38b1941c3d2c318bd8e1
+Purpose: bug-bounty/security reference collection; README indicates MIT license.
+
+### Black-Hat-Python
+SHA: de1f97efeb682bb291b4f9522f734cb74dfe736f
+Purpose: Black Hat Python reference/materials; README notes some code portions originate from other open sources.
+
+### Computer-Science
+SHA: 80f5e29ce1331b3650eec46ed8a3166c031c0451
+Purpose: broad computer-science/programming resource index, including learning resources and project ideas.
+
+### Python-System-Administration
+SHA: efef9e4f15a54c8e7ccae56060c9fe29f7f66aca
+Purpose: Python scripts, automation, DevOps utilities, system administration, infrastructure management, cloud automation and monitoring examples.
+
+### cybersec-projects
+SHA: a8ea48f3e73060343978fbbaf719385748d1b72e
+Purpose: hands-on cybersecurity learning/research projects, offensive and defensive tools, automation and simulations.
+
+### self-hostable-services
+SHA: b1409a311b32c007eaa35a53db6116eb8e50e047
+Purpose: free self-hostable network/web services, including email, file sharing, CMS, automation, backup, booking, communication and related categories; Docker support is highlighted.
+
+### Security-and-Hacking
+SHA: 32f1b99860e0399a41e0e08756ab7cf680bde0f5
+Purpose: security/hacking reference spanning network, endpoint, web, reverse engineering, cryptography, CTF and bug-bounty categories.
+
+### Password-Cracking
+SHA: b55126b348a6942d1da1b18ec9f3bc3f79f16986
+Purpose: password-cracking reference covering Hashcat, John the Ripper, wordlists, file formats, AI and research; treated as security-reference material, not an operational target list.
