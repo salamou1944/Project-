@@ -88,11 +88,10 @@ def discover():
         try:
             for g in paged(f"/users/{user}/gists"):
                 gists[g["id"]] = {"kind":"gist","id":g["id"],"owner":user}
-        except urllib.error.HTTPError as ex:
-            if ex.code == 403:
-                # GitHub Actions GITHUB_TOKEN can be forbidden from user-Gists.
-                # Keep the source inventory explicit rather than failing the repository harvest.
-                gists[f"BLOCKED:{user}"] = {"kind":"gist","owner":user,"blocked":"HTTP_403"}
+        except RuntimeError as ex:
+            if any(marker in str(ex) for marker in ("github_api_http_403", "github_rate_limit_exhausted")):
+                reason = "RATE_LIMIT" if "github_rate_limit_exhausted" in str(ex) else "HTTP_403"
+                gists[f"BLOCKED:{user}"] = {"kind":"gist","owner":user,"blocked":reason}
             else:
                 raise
     return list(sources.values()), list(gists.values())
