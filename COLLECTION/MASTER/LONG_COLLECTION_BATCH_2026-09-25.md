@@ -343,3 +343,16 @@ Purpose: password-cracking reference covering Hashcat, John the Ripper, wordlist
 - Fuzzing-for-Security-Testing — SHA f95dbc0d485f9f843c7f99d2e8535f58221885e3 — fuzzing and software security testing reference.
 - aw-junaid.github.io — SHA cdb8b3897c738b7c8319617a244fe7b14ed730fa — project/website profile repository.
 - Quotes — SHA 8f911229f78929110fcbc0233c04215c07536814 — philosophical notes/quotes focused on resilience, authenticity, perception, control, pain, friendship and wisdom.
+
+
+## README extraction — Panniantong batch 01
+- Agent-Reach — SHA 5ef5446b64ae5a5c9931691e63566f0b3403ad2f — internet-capability router for AI agents; MIT/Python 3.10+.
+- xfetch — SHA abf0191dda0114b35ce1050dbda5150c7a251f18 — X/Twitter CLI scraper using cookies, multi-format export, resumable pagination and rate-limit awareness; no API key.
+- agent-vault-backup — SHA 5a73630e2c1e62c9281dc64577395dcda5aaba86 — agent backup to GitHub with version history, incremental sync and scheduled backups.
+- awesome-claude-code — SHA efbf6e20cc822b4c501d87aa5c39ebfb2dbcf1f3 — curated Claude Code commands, configs, CLI tools and workflow resources.
+- wechat-article-for-ai — SHA 3eea60648e72f8ed56055513625a9fe57d5f70e8 — converts WeChat articles to Markdown with local images; MCP/SKILL integration and retry/CAPTCHA handling.
+- skillshare — SHA 115b555660341c7745576e63dd247db000f878d9 — cross-platform skill-sharing ecosystem (macOS/Linux/Windows; Go).
+- last30days-skill — SHA e804a32fc0effef566718dcd900faf110aef8c5b — recent-web/social research skill with citations and comparative mode.
+- mcp-server-weibo — SHA 529341dab4286c766b57ab875165105ae45940c0 — Weibo MCP server for user/content/search/trend data, with local/Docker deployment options.
+- new-api-neo — SHA 06924e547f45dc543f69b14b3cae4abf1e477e5c — LLM gateway and AI asset-management system with multilingual docs and Docker distribution.
+- openclaw — SHA fe48160c957e530ed03aa819bcf60791078629c4 — personal AI assistant/control plane; high-priority source for Gateway, channels, automation and agent runtime patterns.
