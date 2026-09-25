@@ -68,8 +68,16 @@ def discover():
             sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
     gists = {}
     for user in ("aw-junaid","mufeedvh","Panniantong","salamou1944"):
-        for g in paged(f"/users/{user}/gists"):
-            gists[g["id"]] = {"kind":"gist","id":g["id"],"owner":user}
+        try:
+            for g in paged(f"/users/{user}/gists"):
+                gists[g["id"]] = {"kind":"gist","id":g["id"],"owner":user}
+        except urllib.error.HTTPError as ex:
+            if ex.code == 403:
+                # GitHub Actions GITHUB_TOKEN can be forbidden from user-Gists.
+                # Keep the source inventory explicit rather than failing the repository harvest.
+                gists[f"BLOCKED:{user}"] = {"kind":"gist","owner":user,"blocked":"HTTP_403"}
+            else:
+                raise
     return list(sources.values()), list(gists.values())
 
 def extract_repo(repo):
@@ -144,6 +152,8 @@ def main():
         for item in repos:
             jobs.append(("repo",item,ex.submit(extract_repo,item["full_name"])))
         for item in gists:
+            if item.get("blocked"):
+                continue
             jobs.append(("gist",item,ex.submit(extract_gist,item["id"],item["owner"])))
         for kind,item,fut in jobs:
             try:
@@ -162,7 +172,11 @@ def main():
                 canonical=f"github:{item['full_name']}" if kind=="repo" else f"github-gist:{item['id']}"
                 manifest["sources"].append({"canonical_source":canonical,"state":"BLOCKED_EXTERNAL_ACCESS","error":str(e)})
     manifest["extracted_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="extracted")
+    blocked_gist_owners=[x["owner"] for x in gists if x.get("blocked")]
+    manifest["blocked_gist_owners"]=blocked_gist_owners
     manifest["blocked_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="BLOCKED_EXTERNAL_ACCESS")
+    for owner in blocked_gist_owners:
+        manifest["sources"].append({"canonical_source":f"github-gists:{owner}","state":"BLOCKED_EXTERNAL_ACCESS","reason":"GitHub Actions token received HTTP 403 for user Gists"})
     (ROOT/"MANIFEST.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n")
     print(json.dumps({"repo_count":len(repos),"gist_count":len(gists),
                       "extracted_sources":manifest["extracted_sources"],
