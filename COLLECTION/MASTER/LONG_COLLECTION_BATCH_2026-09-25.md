@@ -329,3 +329,17 @@ Purpose: password-cracking reference covering Hashcat, John the Ripper, wordlist
 - Malware-Analysis — SHA acbf8b40b8f66c249d28c9ae2596e115ee9ad80b — static/dynamic analysis, reverse engineering and sandboxing.
 - awesome — README.md not found on default path during this fetch; tree metadata remains authoritative for existence.
 - Docker — SHA 20cc7f2a055196449ed7c01221e54e243388e77d — Docker-oriented reference repository.
+
+
+## README extraction batch — aw-junaid 03
+- Algorithms — SHA 8259837b6068234458e9255dd554a22b6c434349 — sorting, searching, graphs, dynamic programming, examples and performance analysis.
+- DevOps-Security — SHA 627c919c8dc53e683c62ab1a382d38c542d03005 — CI/CD security, IaC, container security and vulnerability scanning.
+- eBPF-in-Security — SHA 26d54f15a6f40678e1273003f484f8d11062ab44 — eBPF for packet processing, tracing/monitoring and access-control use cases.
+- Python — SHA f2162edc2062c699b056691f0c5100affebf4820 — Python web scraping, data analysis, automation and ML resources.
+- embedded-and-iot-security — SHA 04fed8c9e883db33fda6a95a69d105c9f6e00072 — curated embedded/IoT security tools, frameworks, hardware, research and training.
+- Data-Visualization — SHA d383cdeb947fc3776ce7e8ff38619ae2a8a00420 — visualization libraries/tools across JS, Python, React, maps and other ecosystems.
+- Assembly-Language — SHA ccbf1e9e3305352e49b44dd0e2490dca3be4d38b — assembly-language reference repository.
+- Cpp-or-C — SHA fdd6d1e32f5b26e64b36fcbabdbc0b206f9303cf — C/C++ data structures, algorithms, system design and optimization.
+- Fuzzing-for-Security-Testing — SHA f95dbc0d485f9f843c7f99d2e8535f58221885e3 — fuzzing and software security testing reference.
+- aw-junaid.github.io — SHA cdb8b3897c738b7c8319617a244fe7b14ed730fa — project/website profile repository.
+- Quotes — SHA 8f911229f78929110fcbc0233c04215c07536814 — philosophical notes/quotes focused on resilience, authenticity, perception, control, pain, friendship and wisdom.
