@@ -196,6 +196,9 @@ def main():
     manifest["blocked_repo_owners"]=blocked_repo_owners
     manifest["blocked_gist_owners"]=blocked_gist_owners
     manifest["blocked_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="BLOCKED_EXTERNAL_ACCESS") + len(blocked_repo_owners)
+    for item in repos:
+        if item.get("blocked"):
+            manifest["sources"].append({"canonical_source":f"github-repos:{item["owner"]}","state":"BLOCKED_EXTERNAL_ACCESS","reason":item["blocked"]})
     for owner in blocked_gist_owners:
         manifest["sources"].append({"canonical_source":f"github-gists:{owner}","state":"BLOCKED_EXTERNAL_ACCESS","reason":"GitHub Actions token received HTTP 403 for user Gists"})
     (ROOT/"MANIFEST.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n")
