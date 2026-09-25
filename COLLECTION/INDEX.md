@@ -99,3 +99,11 @@ Continue repository/document research broadly, with special priority:
 - Document ingestion: Docling + OCRmyPDF.
 - Creative/media: rembg + Upscayl + whisper.cpp + FFmpeg.
 - Free/self-hosted replacements for recurring paid developer SaaS.
+
+
+## AI capture added 2026-09-25
+The first AI source-preservation batch is now stored before deep verification:
+- COLLECTION/AI/AI_INDEX.md — agent frameworks, runtimes, memory/RAG, local inference, AI applications, evals/safety.
+- COLLECTION/SOURCES/AI_DISCOVERY_SOURCES.md — preserved discovery sources and research rules.
+- 50+ named AI repositories/entry points were captured for subsequent recursive inspection.
+- These entries are DISCOVERY_CAPTURED, not automatically VERIFIED.
