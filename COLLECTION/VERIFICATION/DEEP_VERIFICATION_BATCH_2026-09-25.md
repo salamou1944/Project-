@@ -69,6 +69,44 @@ Status: VERIFIED_EVIDENCE_CAPTURED (repository-level evidence; not production de
 - Project fit: direct local-model runtime for subscription-reduction paths.
 - Boundary: local runtime removes provider API dependency only when a suitable local model/hardware path exists; model licensing and compute costs remain separate.
 
+## Hatchet — deeper repository verification
+- Upstream: https://github.com/hatchet-dev/hatchet
+- Repository evidence confirms durable task/queue primitives in the codebase, including durable queues/listeners and durable task factories.
+- Repository evidence contains an explicit idempotency repository and idempotency-key implementation; documentation describes using idempotency to prevent duplicate task runs from duplicate webhook/event sends.
+- Project fit: strong candidate for long-running Elite/ARMY-14/research/deployment execution where retries, duplicate-event protection and durable state matter.
+- Verification limit: this remains repository-level evidence; no production failure-injection or recovery drill has been executed against our systems.
+
+## Coolify — self-hosted deployment boundary
+- Upstream: https://github.com/coollabsio/coolify
+- Repository evidence exposes a self-hosted operating path and Docker-based self-hosted upgrade checks.
+- Project fit: infrastructure-cost-reduction candidate for workloads that can move from hosted deployment to operator-controlled infrastructure.
+- Boundary: using Coolify would not remove the underlying VPS/server/network/storage cost and is not a drop-in replacement for Railway-specific managed infrastructure.
+- Verification limit: no migration or production deployment has been performed; no claim of Railway feature parity.
+
+## LiteLLM — deeper gateway evidence
+- Upstream: https://github.com/BerriAI/litellm
+- Repository evidence confirms MIT licensing for the OSS project components and a proxy/gateway architecture.
+- README evidence confirms a unified OpenAI-format interface across many model providers and self-hosted proxy deployment.
+- Project fit: strong candidate for Salamou-31 provider normalization and controlled routing, especially where the application already uses OpenAI-compatible interfaces.
+- Boundary: LiteLLM normalizes/routs providers; it does not make paid model inference free. Local runtimes such as Ollama are a separate cost-reduction layer.
+- Verification limit: no production gateway migration or load test has been executed in our projects.
+
+## Agent Reach — current source evidence refresh
+- Upstream: https://github.com/Panniantong/Agent-Reach
+- Current README evidence states local cookies are retained locally and the project provides a health/diagnostic path plus primary/fallback routing for supported channels.
+- Project fit: useful for research intake and source-routing, but each channel remains subject to its own authentication, anti-bot and external-service boundary.
+
+## Ollama — current source evidence refresh
+- Upstream: https://github.com/ollama/ollama
+- Current repository API specification identifies MIT licensing for the HTTP API specification and the repository documents a local REST endpoint at localhost:11434.
+- Repository README documents integration paths for Codex and other coding agents plus local model execution.
+- Project fit: direct local inference option for development/research and for reducing dependence on paid API inference when hardware/model quality is sufficient.
+- Boundary: local inference has compute, hardware and model-license constraints and is not a universal replacement for hosted frontier models.
+
+## Verification state update
+- VERIFIED_EVIDENCE_CAPTURED now includes deeper repository evidence for Hatchet durability/idempotency, Coolify self-hosting, LiteLLM gateway/OSS boundary, Agent Reach local/health-routing behavior, and Ollama local API/Codex integration.
+- Still NOT production-verified: migration safety, runtime benchmarks, failure injection, recovery drills, and end-to-end integration inside our projects.
+
 ## Verification state
 - VERIFIED_EVIDENCE_CAPTURED: Preloop, Agent Reach, Activepieces, Windmill, Hatchet (license), LiteLLM (license), Restic (security/design), Ollama (API).
 - PARTIAL: Plakar.
