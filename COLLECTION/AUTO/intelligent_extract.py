@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-import base64, datetime, hashlib, json, os, re, urllib.request, urllib.error
+import base64, datetime, hashlib, json, os, re, urllib.parse, urllib.request, urllib.error
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 TOKEN = os.environ["GH_TOKEN"]
 API = "https://api.github.com"
 ROOT = Path("COLLECTION/AUTO/EXTRACTED")
-MAX_FILES = 8
+MAX_FILES = 16
 MAX_BYTES_PER_FILE = 60000
-MAX_BYTES_PER_SOURCE = 300000
+MAX_BYTES_PER_SOURCE = 500000
 
 def api(path):
     req = urllib.request.Request(API + path, headers={
@@ -61,11 +61,9 @@ def discover():
     sources = {}
     for user in ("aw-junaid","mufeedvh","Panniantong","salamou1944"):
         for r in paged(f"/users/{user}/repos?type=all"):
-            if not r.get("fork"):
-                sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
-    for r in paged("/orgs/nmap/repos?type=all"):
-        if not r.get("fork"):
             sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
+    for r in paged("/orgs/nmap/repos?type=all"):
+        sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
     gists = {}
     for user in ("aw-junaid","mufeedvh","Panniantong","salamou1944"):
         try:
@@ -171,7 +169,7 @@ def main():
             except Exception as e:
                 canonical=f"github:{item['full_name']}" if kind=="repo" else f"github-gist:{item['id']}"
                 manifest["sources"].append({"canonical_source":canonical,"state":"BLOCKED_EXTERNAL_ACCESS","error":str(e)})
-    manifest["extracted_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="extracted")
+    manifest["extracted_sources"]=sum(1 for x in manifest["sources"] if x["state"] in ("extracted","EMPTY_REPOSITORY"))
     blocked_gist_owners=[x["owner"] for x in gists if x.get("blocked")]
     manifest["blocked_gist_owners"]=blocked_gist_owners
     manifest["blocked_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="BLOCKED_EXTERNAL_ACCESS")
