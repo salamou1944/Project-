@@ -153,13 +153,6 @@ Verified from public repository evidence:
 
 Collection value: reusable remote coding-agent workstation pattern with persistent terminal/browser state and strong process-boundary lessons.
 
-## Cross-source note
-All eight sources above are intentionally retained separately despite substantial overlap with Odysseus and each other. Functional overlap is not a deduplication reason.
-
-## Verification queue
-For each source, deep-verify dependency manifests, current revision/commit provenance, complete license files, tests/CI, deployment path, external-cost boundaries, optional cloud dependencies, security controls, and operational limitations before any VERIFIED classification.
-
-
 ## 9. Agency Agents — msitarzewski/agency-agents
 Source: https://github.com/msitarzewski/agency-agents
 Default branch: main
@@ -183,7 +176,6 @@ External-cost boundary:
 
 Collection value: reusable specialist-agent corpus and multi-tool conversion/install patterns. It is retained as an independent source even though it overlaps with other agent/workspace projects.
 
-
 ## 10. Dagents — dagents/dagents
 Source: https://github.com/dagents/dagents
 Default branch: main
@@ -203,7 +195,6 @@ Verified from repository evidence:
 - External costs remain possible where selected CLI agents or LLM providers themselves require paid access; this must not be counted as eliminated by Dagents.
 
 Collection value: potentially important orchestration layer for combining Agency Agents/personas with multiple local coding CLIs while retaining durable workflow assets. Retained as an independent source despite overlap.
-
 
 ## 11. OpenCode — anomalyco/opencode
 Source: https://github.com/anomalyco/opencode
@@ -228,3 +219,33 @@ External-cost boundary:
 - OpenCode software is MIT and can run locally, but model inference may require paid provider access unless a suitable local/free model path is used. Provider cost is therefore not eliminated automatically.
 
 Collection value: major open-source coding-agent baseline; relevant to subscription elimination, local development, agent orchestration, and integration with the previously collected Agency Agents/Dagents ecosystem.
+
+## 12. Bytebot — bytebot-ai/bytebot
+Source: https://github.com/bytebot-ai/bytebot
+Default branch: main
+README SHA: 35d33811777baf882a5dda901785cfa0a72c5cd7
+LICENSE SHA: 261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64
+License: Apache-2.0
+Repository state: archived=true
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from repository evidence:
+- Open-source AI desktop agent with a full virtual Ubuntu desktop rather than browser-only automation.
+- Can operate browsers, email clients, office tools, IDEs, files, PDFs and spreadsheets, and run command-line tools.
+- Web task interface plus REST APIs for task creation and direct computer-use control.
+- Four-part architecture: virtual desktop, AI agent, task UI, and APIs.
+- Docker Compose self-hosting path; README also documents Railway deployment.
+- Supports Anthropic, OpenAI and Gemini directly; LiteLLM integration provides access to Azure OpenAI, AWS Bedrock, local Ollama and other providers.
+- Persistent desktop environment allows installed programs/configuration to survive future tasks.
+- Kubernetes/Helm deployment is documented.
+- The README explicitly states self-hosting gives infrastructure control and avoids platform task limits, but model-provider costs remain unless a local/free inference path is used.
+- Repository is currently marked archived in GitHub metadata; this is a significant maintenance/operational flag and requires deeper verification before reuse.
+- Apache-2.0 license confirmed directly from LICENSE.
+
+Collection value: distinct full-desktop computer-use architecture, useful as a reference for browser/desktop automation, document workflows and human-takeover patterns. Retained even though it overlaps with browser-agent and desktop-agent sources.
+
+## Cross-source note
+All twelve sources above are intentionally retained separately despite substantial overlap with other AI workspaces, coding agents and browser/desktop automation projects. Functional overlap is not a deduplication reason.
+
+## Verification queue
+For each source, deep-verify dependency manifests, current revision/commit provenance, complete license files, tests/CI, deployment path, external-cost boundaries, optional cloud dependencies, security controls, maintenance state, and operational limitations before any VERIFIED classification.
