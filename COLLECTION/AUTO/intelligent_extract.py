@@ -70,12 +70,19 @@ def discover():
             for r in paged(f"/users/{user}/repos?type=all"):
                 sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
         except RuntimeError as ex:
-            if "github_api_http_403" in str(ex):
-                sources[f"BLOCKED_REPOS:{user}"] = {"kind":"repo","owner":user,"blocked":"HTTP_403"}
+            if any(marker in str(ex) for marker in ("github_api_http_403", "github_rate_limit_exhausted")):
+                reason = "RATE_LIMIT" if "github_rate_limit_exhausted" in str(ex) else "HTTP_403"
+                sources[f"BLOCKED_REPOS:{user}"] = {"kind":"repo","owner":user,"blocked":reason}
             else:
                 raise
-    for r in paged("/orgs/nmap/repos?type=all"):
-        sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
+    try:
+        for r in paged("/orgs/nmap/repos?type=all"):
+            sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
+    except RuntimeError as ex:
+        if any(marker in str(ex) for marker in ("github_api_http_403", "github_rate_limit_exhausted")):
+            sources["BLOCKED_REPOS:nmap"] = {"kind":"repo","owner":"nmap","blocked":"RATE_LIMIT" if "github_rate_limit_exhausted" in str(ex) else "HTTP_403"}
+        else:
+            raise
     gists = {}
     for user in ("aw-junaid","mufeedvh","Panniantong","salamou1944"):
         try:
@@ -160,6 +167,8 @@ def main():
     jobs=[]
     with ThreadPoolExecutor(max_workers=8) as ex:
         for item in repos:
+            if item.get("blocked"):
+                continue
             jobs.append(("repo",item,ex.submit(extract_repo,item["full_name"])))
         for item in gists:
             if item.get("blocked"):
@@ -183,8 +192,10 @@ def main():
                 manifest["sources"].append({"canonical_source":canonical,"state":"BLOCKED_EXTERNAL_ACCESS","error":str(e)})
     manifest["extracted_sources"]=sum(1 for x in manifest["sources"] if x["state"] in ("extracted","EMPTY_REPOSITORY"))
     blocked_gist_owners=[x["owner"] for x in gists if x.get("blocked")]
+    blocked_repo_owners=[x["owner"] for x in repos if x.get("blocked")]
+    manifest["blocked_repo_owners"]=blocked_repo_owners
     manifest["blocked_gist_owners"]=blocked_gist_owners
-    manifest["blocked_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="BLOCKED_EXTERNAL_ACCESS")
+    manifest["blocked_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="BLOCKED_EXTERNAL_ACCESS") + len(blocked_repo_owners)
     for owner in blocked_gist_owners:
         manifest["sources"].append({"canonical_source":f"github-gists:{owner}","state":"BLOCKED_EXTERNAL_ACCESS","reason":"GitHub Actions token received HTTP 403 for user Gists"})
     (ROOT/"MANIFEST.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n")
