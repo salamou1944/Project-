@@ -90,3 +90,7 @@ Continue:
 - High-value verification queue under COLLECTION/VERIFICATION/VERIFICATION_QUEUE_NEXT.md.
 
 No completion claim is made. Collection remains active.
+
+
+## Provenance audit
+- COLLECTION/MASTER/DEDUPLICATION_AND_PROVENANCE_AUDIT_2026-09-25.md
