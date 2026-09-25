@@ -182,3 +182,24 @@ External-cost boundary:
 - Actual execution still depends on the selected host/LLM/tool; local or no-key model paths must be verified separately and are not assumed from this repository.
 
 Collection value: reusable specialist-agent corpus and multi-tool conversion/install patterns. It is retained as an independent source even though it overlaps with other agent/workspace projects.
+
+
+## 10. Dagents — dagents/dagents
+Source: https://github.com/dagents/dagents
+Default branch: main
+README SHA: 2ab7b925ec580113a10490c97237298d50184dd8
+LICENSE SHA: c5fb83242f44aeb962255574afcf802bd02ec0ed
+License: Apache-2.0
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from repository evidence:
+- Local-first orchestration workbench for heterogeneous CLI coding agents including Claude, Codex and Qwen plus community adapters.
+- Workflow engine exposes a 14-node DAG with parallel waves, condition routing, loops and human-in-the-loop; runs stream node results and retain run links/history.
+- Can mount agency-agents-style persona libraries from the filesystem, enable personas on demand and detect upstream drift.
+- Docker Compose stack provides Postgres, gateway and console; local bindings default to 127.0.0.1.
+- HTTP LLM providers are optional rather than the baseline execution dependency; local CLI agents can run the workbench without a provider configured.
+- Gateway/console architecture uses Next.js, Hono and a workflow package; remote execution is supported through a pull-based daemon.
+- LLM API keys are documented as encrypted at rest; repository states no telemetry/accounts/callbacks home for the local-first mode.
+- External costs remain possible where selected CLI agents or LLM providers themselves require paid access; this must not be counted as eliminated by Dagents.
+
+Collection value: potentially important orchestration layer for combining Agency Agents/personas with multiple local coding CLIs while retaining durable workflow assets. Retained as an independent source despite overlap.
