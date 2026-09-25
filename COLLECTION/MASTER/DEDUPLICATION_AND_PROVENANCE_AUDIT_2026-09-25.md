@@ -23,8 +23,8 @@ When a source already exists:
 5. never replace stronger evidence with weaker discovery evidence.
 
 ## User repository role map
-- salamou1944/Astra- = ASTRA bot implementation.
-- salamou1944/Astra = ASTRA storage/evidence.
+- salamou1944/Astra- = ASTRA bot implementation (verified from repository description and bot/execution files).
+- salamou1944/Astra = ASTRA research/validation repository and evidence source (separate from Astra-).
 - salamou1944/Project- = Free Project / central collection store.
 - salamou1944/Files- = collected files/materials.
 - salamou1944/agent-skills = engineering/control-plane.
@@ -46,3 +46,8 @@ The following are expected overlaps, not duplicates:
 
 ## Collection remains open
 This audit does not close collection. Remaining work includes account-wide repository and public-gist exhaustion, remaining Nmap source inspection, remaining mufeedvh repositories, high-value verification, source-graph exhaustion, and final consistency checks.
+
+## Reconciliation update — 2026-09-25
+- mufeedvh inventory discrepancy is resolved: 43 repositories are returned by current account search.
+- Panniantong/RD_everything is resolved as an existing but empty repository; it is not a missing tree caused by collection failure.
+- ASTRA role mapping was corrected: Astra- is the bot implementation; Astra is the separate research/validation repository. Do not merge their evidence or identity.
