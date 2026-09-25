@@ -1,0 +1,75 @@
+{
+  "canonical_source": "github:salamou1944/Files-",
+  "repo": "salamou1944/Files-",
+  "revision_sha": "ebde21ee2230f80b0d6c632757b3854b8022679a",
+  "default_branch": "main",
+  "repo_updated_at": "2026-09-24T14:38:25Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 8,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 300000
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": "a1a698dbb7afc69cc47cb98587793942b333a19d",
+      "content_sha256": "7fffd462048971a56c6b4c320d7cc2c25e447f1533ed6240184163165d377290",
+      "score": 170,
+      "content": "# Files-"
+    },
+    {
+      "path": "collection/mufeedvh/repos/paydept/.github/workflows/release.yml",
+      "sha": "5cd48d3222203516aa20c3208e156aa0aef03b12",
+      "content_sha256": "cd83de6d3c29c0c0a2c61307403b397712a7a57294834748ddcefbc8eb937fc7",
+      "score": 113,
+      "content": "name: paydept Release Action\n\non:\n  release:\n    types: [created]\n\njobs:\n  build-ubuntu:\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v2\n\n      - name: Install latest rust toolchain\n        uses: actions-rs/toolchain@v1\n        with:\n          toolchain: stable\n          default: true\n          override: true\n         \n      - name: Build\n        run: cargo build --all --release && strip target/release/paydept && mv target/release/paydept target/release/paydept_amd64\n    \n      - name: Release\n        uses: softprops/action-gh-release@v1\n        if: startsWith(github.ref, 'refs/tags/')\n        with:\n          files: |\n           target/release/paydept_amd64\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n  build-win:\n    runs-on: windows-latest\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v2\n\n      - name: Install latest rust toolchain\n        uses: actions-rs/toolchain@v1\n        with:\n          toolchain: stable\n          default: true\n          override: true\n\n      - name: Build\n        run: cargo build --all --release\n\n      - name: Release\n        uses: softprops/action-gh-release@v1\n        if: startsWith(github.ref, 'refs/tags/')\n        with:\n          files: target/release/paydept.exe\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n  build-mac:\n    runs-on: macos-latest\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v2\n\n      - name: Install latest rust toolchain\n        uses: actions-rs/toolchain@v1\n        with:\n          toolchain: stable\n          target: x86_64-apple-darwin\n          default: true\n          override: true\n\n      - name: Build for mac\n        run: cargo build --all --release && strip target/release/paydept && mv target/release/paydept target/release/paydept_darwin\n\n      - name: Release\n        uses: softprops/action-gh-release@v1\n        if: startsWith(github.ref, 'refs/tags/')\n        with:\n          files: |\n            target/release/paydept_darwin\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
+    },
+    {
+      "path": "collection/mufeedvh/repos/paydept/src/search.rs",
+      "sha": "29e37ee088d354203b5bab238dd1f9dfe30c5abc",
+      "content_sha256": "2f85361a33282843c0e5cc6c2617c6d05254024070d1b0c1c82aa4a2d31a8034",
+      "score": 100,
+      "content": "use std::fs;\nuse std::io::Result;\nuse std::path::PathBuf;\nuse std::collections::HashMap;\n\nuse url::Url;\nuse regex::Regex;\nuse parking_lot::Mutex;\nuse once_cell::sync::Lazy;\nuse yaml_rust::{YamlLoader, Yaml};\n\n/// List of support websites\nstatic SUPPORT_WEBSITES: [&'static str; 11] = [\n    \"opencollective.com\",\n    \"www.patreon.com\",\n    \"patreon.com\",\n    \"ko-fi.com\",\n    \"tidelift.com\",\n    \"www.buymeacoffee.com\",\n    \"paypal.me\",\n    \"otechie.com\",\n    \"liberapay.com\",\n    \"funding.communitybridge.org\",\n    \"crowdfunding.lfx.linuxfoundation.org\"\n];\n\n/// Filter for anomalies\nstatic BLACKLIST: [&'static str; 2] = [\n    \"opencollective.com/debug\",\n    \"tidelift.com/security\"\n];\n\n/// HashMap to store the results\npub static DEP_SUPPORT_LIST: Lazy<Mutex<HashMap<String, String>>> = Lazy::new(|| {\n    Mutex::new(HashMap::with_capacity(500))\n});\n\n/// Check if the URL's host is one of the support websites.\nfn check_host(url: &str) -> bool {\n    for value in BLACKLIST {\n        if url.contains(value) {\n            return false\n        }\n    }\n\n    match Url::parse(url) {\n        Ok(parsed_url) => {\n            match parsed_url.host_str() {\n                Some(host) => {\n                    SUPPORT_WEBSITES.contains(&host)\n                },\n                None => false\n            }\n        },\n        Err(_) => false\n    }\n}\n\n/// Get the dependencies root directory name\nfn get_dependency_name(path: &mut PathBuf, root: bool) -> Option<String> {\n    // if pathbuf is currently reading a file under root\n    // pop once, otherwise traverse directory twice.\n    if root {\n        path.pop();\n    } else {\n        path.pop();\n        path.pop();\n    }\n\n    if path.file_name().is_some() {\n        // this will definitely bite me later\n        return Some(String::from(\n            path.file_name()\n                .unwrap()\n                .to_str()\n                .unwrap()\n        ))\n    } else {\n        None\n    }\n}\n\n/// Insert the dependency and it's respective support links to the HashMap.\nfn insert_dependency(path: &mut PathBuf, url: String, root: bool) {\n    let dep_name = get_dependency_name(path, root);\n\n    match dep_name {\n        Some(dep_name) => {\n            DEP_SUPPORT_LIST.lock().insert(dep_name, url);\n        },\n        None => ()\n    }\n}\n\n/// Construct support URLs from FUNDING.yml keywords.\n/// \n/// Follows [GitHub FUNDING.yml Format](https://docs.github.com/articles/displaying-a-sponsor-button-in-your-repository).\nfn construct_support_url(key: &Yaml, value: &Yaml, urls: &mut Vec<String>) {\n    match key {\n        Yaml::String(platform) => {            \n            let platform = platform.as_str();\n            match platform {\n                \"github\" => {\n                    match value {\n                        Yaml::Array(array) => {\n                            for username in array {\n                                urls.push(format!(\n                                    \"https://github.com/sponsors/{}\",\n                                    username.as_str().unwrap()\n                                ))\n                            }\n                        },\n                        _ => ()\n                    }\n                },\n                \"custom\" => {\n                    match value {\n                        Yaml::Array(array) => {\n                            for url in array {\n                                urls.push(\n                                    String::from(url.as_str().unwrap())\n                                )\n                            }\n                        },\n                        _ => ()\n                    }\n                },\n                _ => ()\n            }\n\n            let value_str = match value.as_str() {\n                Some(value) => value,\n                None => return\n            };\n\n            match platform {\n                \"patreon\" => {\n                    urls.push(format!(\"https://www.patreon.com/{}\", value_str))\n                },\n                \"open_collective\" => {\n                    urls.push(format!(\"https://opencollective.com/{}\", value_str))\n                },\n                \"ko_fi\" => {\n                    urls.push(format!(\"https://ko-fi.com/{}\", value_str))\n                },\n                \"tidelift\" => {\n                    urls.push(format!(\"https://tidelift.com/funding/github/{}\", value_str))\n                },                \n                \"community_bridge\" => {\n                    urls.push(format!(\"https://funding.communitybridge.org/projects/{}\", value_str))\n                },\n                \"liberapay\" => {\n                    urls.push(format!(\"https://liberapay.com/{}\", value_str))\n                },\n                \"issuehunt\" => {\n                    urls.push(format!(\"https://issuehunt.io/r/{}\", value_str))\n                },\n                \"otechie\" => {\n                    urls.push(format!(\"https://otechie.com/{}\", value_str))\n                },\n                \"lfx_crowdfunding\" => {\n                    urls.push(format!(\"https://crowdfunding.lfx.linuxfoundation.org/projects/{}\", value_str))\n                },\n                _ => ()\n            }\n        },\n        _ => ()\n    }\n}\n\n/// Get values from the FUNDING.yml file.\nfn parse_funding_yaml(file_c: &str) -> Option<Vec<String>> {\n    let mut support_urls: Vec<String> = Vec::with_capacity(10);\n    \n    match YamlLoader::load_from_str(file_c) {\n        Ok(yaml) => {\n            for value in yaml.clone() {\n                match value {\n                    Yaml::Hash(values) => {\n                        for (key, value) in values.iter() {\n                            construct_support_url(\n                                key,\n                                value,\n                                &mut support_urls\n                            )\n                        }\n                    },\n                    _ => ()\n                }\n            }\n        },\n        Err(_) => return None\n    };\n\n    Some(support_urls)\n}\n\n/// Read all FUNDING.yml files to get support links.\npub fn funding_yml_files(files: Vec<PathBuf>) -> Result<()> {\n    for mut file in files {\n        if file.is_file() {\n            let read_file = fs::read(file.clone())?;\n            let file_contents = String::from_utf8_lossy(&read_file);\n\n            let support_urls = parse_funding_yaml(&file_contents);\n\n            match support_urls {\n                Some(urls) => {\n                    if !urls.is_empty() {\n                        insert_dependency(&mut file, urls.join(\"\\n\"), false)\n                    }\n                },\n                None => ()\n            }\n        }\n    }\n\n    Ok(())\n}\n\n/// Parse and sort support URLs in README files.\npub fn parse_urls(files: Vec<PathBuf>) -> Result<()> {\n    let url_regex = Regex::new(\n        r\"https?://(www\\.)?[-a-zA-Z0-9@:%._\\+~#=]{1,256}\\.[a-zA-Z0-9()]{1,6}\\b([-a-zA-Z0-9()@:%_\\+.~#?&//=]*)\"\n    ).unwrap();\n\n    for mut file in files {\n        if file.is_file() {\n            let read_file = fs::read(file.clone())?;\n            let file_contents = String::from_utf8_lossy(&read_file);\n\n            for url in url_regex.captures_iter(&file_contents) {\n                if check_host(&url[0]) {\n                    let mut url = String::from(&url[0]);\n                    // links from markdown consume ')' and '.'\n                    while url.ends_with(')') || url.ends_with('.') {\n                        url.pop();\n                    }\n\n                    insert_dependency(&mut file, url, true)\n                }\n            }\n        }\n    }\n\n    Ok(())\n}"
+    },
+    {
+      "path": "collection/mufeedvh/repos/SubCalc/requirements.txt",
+      "sha": "1a6acf1c690002f55fb073ad8ed47bc1dab3c809",
+      "content_sha256": "771b909f2273fa70f534f8b810fef09f124c8268a11817546784f8fba00d8085",
+      "score": 77,
+      "content": "colorama\npyfiglet\npandas\nnumpy\n"
+    },
+    {
+      "path": "collection/mufeedvh/repos/ajnatham/Cargo.toml",
+      "sha": "d96eeb16da78e58c3c77195f2399fa0d9eac31e5",
+      "content_sha256": "d451b3426a61832d79fd07a5245cd07d4aa630a9628381dafa3ebc18c4eb7778",
+      "score": 77,
+      "content": "[package]\nname = \"ajnatham\"\nversion = \"0.1.0\"\nauthors = [\"Mufeed VH <mufeedvh@gmail.com>\"]\nedition = \"2018\"\n\n# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html\n\n[dependencies]\n"
+    },
+    {
+      "path": "collection/mufeedvh/repos/paydept/Cargo.toml",
+      "sha": "863c51bda9bc8ffb18028e89ae4df39dbaf8b535",
+      "content_sha256": "2b572ed3d1f726a5193d898ff1cc9ff5973829d497fc50ed4e7d56671287c940",
+      "score": 77,
+      "content": "[package]\nname = \"paydept\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\ncolored = \"2.0.0\"\ncomfy-table = \"5.0.1\"\ncsv = \"1.1.6\"\njwalk = \"0.6.0\"\nonce_cell = \"1.9.0\"\nparking_lot = \"0.12.0\"\nregex = \"1.5.4\"\nurl = \"2.2.2\"\nyaml-rust = \"0.4.5\"\n"
+    },
+    {
+      "path": "collection/mufeedvh/COLLECTION_MANIFEST.md",
+      "sha": "8dafd2f3186f1b5b88204fde2245dadf3943a99a",
+      "content_sha256": "51536b762f42a489b8df61bbde87ed322aa3bfb3a0ed8893785b94ae9e1a6c08",
+      "score": 66,
+      "content": "# MufeedVH Collection\n\nSource: GitHub account `mufeedvh`\nDestination: `salamou1944/Files-`\n\nDiscovered public repositories: 43\n\n## Repository inventory\n1. mufeedvh/code2prompt\n2. mufeedvh/moonwalk\n3. mufeedvh/pdfrip\n4. mufeedvh/binserve\n5. mufeedvh/basecrack\n6. mufeedvh/CVE-2019-8449\n7. mufeedvh/paydept\n8. mufeedvh/seclip\n9. mufeedvh/gisture\n10. mufeedvh/mnmlang\n11. mufeedvh/regretti\n12. mufeedvh/l33tmario\n13. mufeedvh/maram\n14. mufeedvh/log4jail\n15. mufeedvh/okjson\n16. mufeedvh/website\n17. mufeedvh/ajnatham\n18. mufeedvh/macmountusb\n19. mufeedvh/bury\n20. mufeedvh/notes\n21. mufeedvh/cheatsheets\n22. mufeedvh/tupperplot\n23. mufeedvh/gofindapis\n24. mufeedvh/zola\n25. mufeedvh/BrokenLinkHijacking\n26. mufeedvh/project-euler\n27. mufeedvh/jam0001\n28. mufeedvh/huntr\n29. mufeedvh/SubCalc\n30. mufeedvh/rc-zip\n31. mufeedvh/varnamd-govarnam\n32. mufeedvh/x86doc\n33. mufeedvh/axum\n34. mufeedvh/configuration\n35. mufeedvh/pcb\n36. mufeedvh/timers\n37. mufeedvh/mufeedvh\n38. mufeedvh/govarnam\n39. mufeedvh/majeur\n40. mufeedvh/cado-nfs\n41. mufeedvh/mlmorph\n42. mufeedvh/superpowers\n43. mufeedvh/schemes\n\n## Collection state\n- Repository inventory: VERIFIED\n- File-content snapshot: NOT YET COMPLETE\n- Full Git history/refs: NOT YET COMPLETE\n- Public Gists: NOT INCLUDED in this repository inventory; repository search does not enumerate Gists.\n\nThis manifest is a provenance record. It must not be treated as proof that all repository files have already been copied.\n"
+    },
+    {
+      "path": "collection/mufeedvh/repos/ajnatham/README.md",
+      "sha": "0fbfbcf16fc54202f50c2b4bdbf5a9647c14d6f0",
+      "content_sha256": "8e98c594bf19751bde970e4ccca115846938465d29b0a8795611f697cc252b8d",
+      "score": 62,
+      "content": "# ajnatham\nAn encrypted data storage for notes, passwords, private keys and the like with API and Markdown support.\n"
+    }
+  ],
+  "generated_at": "2026-09-25T19:31:20.032483+00:00"
+}

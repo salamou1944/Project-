@@ -1,0 +1,75 @@
+{
+  "canonical_source": "github:salamou1944/Astra-",
+  "repo": "salamou1944/Astra-",
+  "revision_sha": "7c768458cdf2a5831f781e914fe31cc5e86109eb",
+  "default_branch": "main",
+  "repo_updated_at": "2026-09-25T04:00:04Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 8,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 300000
+  },
+  "files": [
+    {
+      "path": ".github/workflows/bot-ci.yml",
+      "sha": "f734c5506d834a1c5b1eb545b8183358a27c6975",
+      "content_sha256": "a8805e63483fe3982b6dd19ce86201c8ebda6fe26c04d4691082eb96ab27bdee",
+      "score": 193,
+      "content": "name: ASTRA BOT CI\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\npermissions:\n  contents: read\njobs:\n  test-and-smoke:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.13\"\n      - run: python -m unittest discover -s tests -v\n      - run: python scripts/live_readiness_check.py\n      - run: python scripts/astra_bot.py\n      - name: Assert paper-only\n        run: python -c \"import json; d=json.load(open('evidence/astra_bot_snapshot.json')); assert d['mode']=='PAPER' and d['live_order_submitted'] is False; print('ASTRA BOT PAPER SMOKE PASS')\"\n      - uses: actions/upload-artifact@v4\n        with:\n          name: astra-bot-evidence\n          path: evidence/astra_bot_snapshot.json\n"
+    },
+    {
+      "path": "README.md",
+      "sha": "e5770877b418682c7f0ba9c82517a2bf9351d9b0",
+      "content_sha256": "f587ba9fe58a96365684c059ed749b6aeec85ee284c70dc6638d53226a8ff0d8",
+      "score": 170,
+      "content": "# ASTRA Private Trading Bot\n\nExecutable ASTRA bot boundary.\n\nImplemented:\n- Kraken public OHLC ingestion\n- fixed long-momentum 30-day signal\n- deterministic paper execution\n- idempotent intent ledger\n- kill switch and fail-closed execution gate\n- unit tests and CI paper smoke\n\nSafety:\n- live trading is OFF\n- runner refuses ASTRA_LIVE_TRADING=1\n- no withdrawal capability\n- no profitability or alpha claim\n\nResearch and evidence remain in salamou1944/Astra. Its current research gates do not establish profitability, so this bot remains paper-only.\n"
+    },
+    {
+      "path": "tests/test_bot.py",
+      "sha": "4a47db6cd28cbaf2bd1ea744682221e18724faea",
+      "content_sha256": "5121ec4847f5dd0356cf6535b71b3035668dab43013b194908ad47a79437e2c1",
+      "score": 93,
+      "content": "import os,unittest\nfrom unittest.mock import patch\nfrom decimal import Decimal\nfrom scripts.astra_bot import run_once\n\nfrom astra.core import Bar\n\nclass BotTests(unittest.TestCase):\n    def test_paper_entry(self):\n        bars=[Bar(i,100+i) for i in range(40)]\n        with patch(\"scripts.astra_bot.fetch_ohlc\",return_value=bars):\n            d=run_once(previous_signal=0,quantity=Decimal(\"0.001\"))\n        self.assertEqual(d[\"mode\"],\"PAPER\")\n        self.assertFalse(d[\"live_order_submitted\"])\n        self.assertEqual(d[\"paper_position\"],\"0.001\")\n\n    def test_live_env_cannot_run(self):\n        with patch.dict(os.environ,{\"ASTRA_LIVE_TRADING\":\"1\"}):\n            with self.assertRaises(SystemExit):\n                import scripts.astra_bot as b\n                b.main()\n"
+    },
+    {
+      "path": "tests/test_safety.py",
+      "sha": "c2d5cf2c287b67eb40d39519f6da7117be92701d",
+      "content_sha256": "cf7f2fd1752a9d0d4235211aa15afe32625b69d20e2e3ac7837958515f85df38",
+      "score": 93,
+      "content": "import unittest,os\nfrom astra.execution.gates import GateState\nfrom astra.execution.kraken import KrakenConfig,KrakenSpot,KrakenError\nfrom astra.risk import RiskGuardian\nclass SafetyTests(unittest.TestCase):\n def test_all_gates_required(self):\n  self.assertFalse(GateState(True,True,True,True,True,True,True,False).authorize())\n  self.assertTrue(GateState(True,True,True,True,True,True,True,True).authorize())\n def test_default_off(self):\n  os.environ.pop(\"ASTRA_LIVE_TRADING\",None); self.assertFalse(KrakenConfig.from_env().live_enabled)\n def test_live_missing_credentials_blocked(self):\n  with self.assertRaises(KrakenError): KrakenSpot(KrakenConfig(live_enabled=True))\n def test_risk_halts(self):\n  r=RiskGuardian(); r.reset(100); self.assertTrue(r.observe(91)[\"halted\"])\nif __name__==\"__main__\":unittest.main()\n"
+    },
+    {
+      "path": "BOT_INTEGRATION.md",
+      "sha": "09445b81fa77527791647d542b5b36f44df9209f",
+      "content_sha256": "177f0bbcaf10cf17ff1e0f211bce43776fed8263e36981330b8708a2da26e636",
+      "score": 70,
+      "content": "# ASTRA Bot Integration Record — 2026-09-25\n\nImplementation repository: salamou1944/Astra-\nResearch/evidence repository: salamou1944/Astra\nCollection repository: salamou1944/Project-\nCollected materials repository: salamou1944/Files-\n\nIntegrated evidence-derived capabilities:\n- verified Kraken public-data boundary\n- fixed long_momentum(window=30, threshold=0) candidate used by the existing holdout evidence\n- paper execution lifecycle concepts\n- idempotent order intent\n- kill switch and fail-closed execution gate\n- paper-only smoke verification\n\nSource research status:\n- REAL_DATA is proven in Astra.\n- Research gates are failed.\n- Profitability and alpha remain UNVERIFIED.\n- Prospective paper sample is still an evidence gate, not a live authorization.\n- Live trading remains OFF.\n\nThis bot intentionally does not promote the research result into a profitability claim or live permission.\n"
+    },
+    {
+      "path": "OPERATIONAL_READINESS.md",
+      "sha": "f2a44fa805004242a574c2bf878636d01867a15d",
+      "content_sha256": "73df1bdc2c85ba0a111390ecfd529a5a01c922041ed3969b5e519bd4be80328c",
+      "score": 70,
+      "content": "# ASTRA Operational Readiness\n\nThe executable bot boundary is hardened for production-style paper operation.\n\nImplemented:\n- Kraken public market-data ingestion\n- deterministic strategy boundary\n- paper execution with costs\n- idempotent intent tracking\n- risk limits and automatic halt\n- Kraken authenticated adapter behind fail-closed authorization\n- reconciliation and kill-switch gates\n- explicit human-approval gate\n- no withdrawal capability\n- CI tests and paper smoke verification\n\nLive authorization remains deliberately false. The research repository salamou1944/Astra currently records failed research/robustness gates and profitability/alpha as UNVERIFIED. Therefore no technical implementation may represent the system as proven profitable or live-ready.\n\nThe required live transition is evidence-gated: DATA_VALID, STRATEGY_VALID, RISK_VALID, EXECUTION_VALID, RECONCILIATION_VALID, KILL_SWITCH_VALID, explicit HUMAN_APPROVAL, and LIVE_ENABLED must all be true. No gate is inferred automatically.\n"
+    },
+    {
+      "path": "collection/aw-junaid/COLLECTION_MANIFEST.md",
+      "sha": "959afbe63f1f461466d8d10b9a6e062b3f14ec72",
+      "content_sha256": "409407a1f6180e1e1b169f8db0990b6d9354aa87c6b8f002a24dda05539f5cfc",
+      "score": 66,
+      "content": "# aw-junaid collection manifest\n\nSource account: `aw-junaid`\nDestination: `salamou1944/Astra-`\nScope: public repositories + public Gists + cross-repository Nmap-related material.\n\nRepository inventory discovered: 33\n\n1. `Hacking-Tools` — default branch `master`\n2. `Kali-Linux` — default branch `main`\n3. `bug-bounty` — default branch `main`\n4. `Black-Hat-Python` — default branch `main`\n5. `Computer-Science` — default branch `main`\n6. `Python-System-Administration` — default branch `main`\n7. `cybersec-projects` — default branch `main`\n8. `Quantum-Mechanics` — default branch `main`\n9. `aw-junaid` — default branch `main`\n10. `self-hostable-services` — default branch `main`\n11. `Security-and-Hacking` — default branch `main`\n12. `Password-Cracking` — default branch `main`\n13. `programming-books` — default branch `main`\n14. `Neuroscience` — default branch `main`\n15. `golang-web-security` — default branch `main`\n16. `Machine-Learning-For-Security` — default branch `main`\n17. `android-security` — default branch `main`\n18. `PHP-Web-Security` — default branch `main`\n19. `Web-Security` — default branch `main`\n20. `Malware-Analysis` — default branch `main`\n21. `awesome` — default branch `main`\n22. `Docker` — default branch `main`\n23. `Algorithms` — default branch `main`\n24. `DevOps-Security` — default branch `main`\n25. `eBPF-in-Security` — default branch `main`\n26. `Python` — default branch `main`\n27. `embedded-and-iot-security` — default branch `main`\n28. `Data-Visualization` — default branch `main`\n29. `Assembly-Language` — default branch `main`\n30. `Cpp-or-C` — default branch `main`\n31. `Fuzzing-for-Security-Testing` — default branch `main`\n32. `aw-junaid.github.io` — default branch `main`\n33. `Quotes` — default branch `main`\n\n## Integrity rules\n- Preserve source attribution and repository provenance.\n- Do not treat repository metadata size as proof of emptiness or completeness.\n- Verify refs/commits/trees/content on the source.\n- Verify destination content after each write.\n- Do not mark the collection complete while any scoped source remains unverified.\n- Nmap scope is cross-repository, not limited to a single Nmap directory.\n\n## Destination state at manifest creation\nDefault branch: `main`\nExisting destination history is preserved; collection content is added without mixing it into the separate `Astra` repository."
+    },
+    {
+      "path": "astra/__init__.py",
+      "sha": "1f356cc57bfa00a3b251402604c54702fb414c96",
+      "content_sha256": "46c663463329acd7039bdef0a9145293aad32e04d7f0dd06ca2719c99f0eb014",
+      "score": 33,
+      "content": "__version__ = '1.0.0'\n"
+    }
+  ],
+  "generated_at": "2026-09-25T19:31:19.439061+00:00"
+}
