@@ -316,3 +316,16 @@ Purpose: security/hacking reference spanning network, endpoint, web, reverse eng
 ### Password-Cracking
 SHA: b55126b348a6942d1da1b18ec9f3bc3f79f16986
 Purpose: password-cracking reference covering Hashcat, John the Ripper, wordlists, file formats, AI and research; treated as security-reference material, not an operational target list.
+
+
+## README extraction batch — aw-junaid 02
+- programming-books — SHA aad4eef31898376bd32e729667f52b9412a04639 — curated free programming books/resources.
+- Neuroscience — SHA d30099d325658a8baba81fa05d7b4aa2dca2677d — computational neuroscience concepts, datasets, tools and research.
+- golang-web-security — SHA 4d9c7e24750f95a29c95619d4f52592e5f21285b — secure Go web development: auth, authorization, validation, CSRF, headers.
+- Machine-Learning-For-Security — SHA 6b6e83135c349518065fd5df46ebe73b6572fb8d — anomaly detection, malware classification, threat prediction.
+- android-security — SHA 17fcc7d1b71239a142907bb89827b4c0f7663b6c — Android secure development, reverse engineering, vulnerability testing.
+- PHP-Web-Security — SHA 3a5f960c415fc6784970f11d302a1a8259e172be — PHP web security reference.
+- Web-Security — SHA be569f4f81d0c426cd3926d2195991997a680c3c — OWASP Top 10, XSS, SQLi, CSRF and secure coding.
+- Malware-Analysis — SHA acbf8b40b8f66c249d28c9ae2596e115ee9ad80b — static/dynamic analysis, reverse engineering and sandboxing.
+- awesome — README.md not found on default path during this fetch; tree metadata remains authoritative for existence.
+- Docker — SHA 20cc7f2a055196449ed7c01221e54e243388e77d — Docker-oriented reference repository.
