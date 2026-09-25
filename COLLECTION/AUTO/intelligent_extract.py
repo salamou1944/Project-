@@ -17,8 +17,14 @@ def api(path):
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "collection-bot",
     })
-    with urllib.request.urlopen(req, timeout=30) as r:
-        return json.load(r)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as ex:
+        body = ex.read().decode("utf-8", "replace")
+        if ex.code == 403 and "rate limit" in body.lower():
+            raise RuntimeError(f"github_rate_limit_exhausted:{path}") from ex
+        raise RuntimeError(f"github_api_http_{ex.code}:{path}") from ex
 
 def paged(path):
     page = 1
@@ -60,8 +66,14 @@ def score(path):
 def discover():
     sources = {}
     for user in ("aw-junaid","mufeedvh","Panniantong","salamou1944"):
-        for r in paged(f"/users/{user}/repos?type=all"):
-            sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
+        try:
+            for r in paged(f"/users/{user}/repos?type=all"):
+                sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
+        except RuntimeError as ex:
+            if "github_api_http_403" in str(ex):
+                sources[f"BLOCKED_REPOS:{user}"] = {"kind":"repo","owner":user,"blocked":"HTTP_403"}
+            else:
+                raise
     for r in paged("/orgs/nmap/repos?type=all"):
         sources[r["full_name"]] = {"kind":"repo","full_name":r["full_name"]}
     gists = {}
