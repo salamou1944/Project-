@@ -5,8 +5,8 @@ Scope: GitHub repositories discoverable for the accounts explicitly identified i
 
 ## Accounts
 - aw-junaid: 33 repositories discovered.
-- mufeedvh: 43 repositories discovered.
-- Panniantong: 38 repositories discovered.
+- mufeedvh: 43 repositories discovered (re-verified).
+- Panniantong: 38 repositories discovered (re-verified; RD_everything is an empty repository, so recursive tree returns GitHub 409 Repository is empty).
 - salamou1944: 8 connected repositories discovered.
 Total repository inventory: 122.
 
@@ -122,7 +122,7 @@ awesome-cursorrules 1452
 flux-kontext-template 307
 awesome-ai-agents-1 16
 WechatBot 30
-RD_everything: tree unavailable through the connector during this pass
+RD_everything: repository exists but is empty; GitHub returns 409 "Git Repository is empty" for recursive tree
 ppp 7
 WechatBot2 30
 oss-gallery-mcp 110
@@ -156,3 +156,10 @@ README and recursive tree were directly inspected. The repository is a large sec
 
 ## Collection integrity
 This file records repository/tree harvesting plus targeted deep extraction. It does not claim that every file in every repository has been semantically read. Such a claim would be false for the current tool limits and repository sizes.
+
+## Re-verification updates — 2026-09-25 execution pass
+- mufeedvh account search returns exactly 43 repositories; the older 42-repository state is stale.
+- Panniantong account search returns exactly 38 repositories.
+- Panniantong/RD_everything exists but has no Git tree because the repository is empty; this is now resolved as an empty-source exception, not an unresolved inspection gap.
+- salamou1944 account search returns exactly 8 repositories.
+- ASTRA role evidence: salamou1944/Astra- is explicitly described as "Bot" and contains bot integration/readiness files plus executable bot/execution code; salamou1944/Astra is a separate Python repository with extensive real-data/research validation workflows. The prior role-map statement that reversed these two repositories is stale and must not be reused.
