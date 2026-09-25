@@ -45,4 +45,10 @@ Collection remains active. Preserve:
 
 Development work is intentionally deferred until the collection phase reaches its completion gate.
 
-No completion claim is made here.
+## Bot implementation integration — 2026-09-25
+
+`Astra-` now contains the executable private paper-bot boundary assembled from the verified components in `Astra` and the collection/material provenance in `Project-` and `Files-`. CI run 36092378245 reached successful test, public-data paper smoke, and paper-only assertion steps; only GitHub action post-cleanup remained in progress at inspection time.
+
+This does not close ASTRA's research/live gate. Profitability/alpha remain UNVERIFIED and live-money execution remains OFF.
+
+No completion claim is made for profitability or live readiness.
