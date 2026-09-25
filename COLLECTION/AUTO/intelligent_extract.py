@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import base64, datetime, hashlib, json, os, re, urllib.request, urllib.error
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 
 TOKEN = os.environ["GH_TOKEN"]
 API = "https://api.github.com"
@@ -135,26 +136,37 @@ def main():
     ROOT.mkdir(parents=True, exist_ok=True)
     repos,gists=discover()
     manifest={"generated_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
-              "repo_count":len(repos),"gist_count":len(gists),"policy":{"max_files_per_source":MAX_FILES,"max_file_bytes":MAX_BYTES_PER_FILE},
+              "repo_count":len(repos),"gist_count":len(gists),
+              "policy":{"max_files_per_source":MAX_FILES,"max_file_bytes":MAX_BYTES_PER_FILE,"max_source_bytes":MAX_BYTES_PER_SOURCE},
               "sources":[]}
-    for item in repos:
-        try:
-            data=extract_repo(item["full_name"])
-            out=ROOT / f"{safe_name(item['full_name'])}.json"
-            out.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n")
-            manifest["sources"].append({"canonical_source":data["canonical_source"],"state":data["state"],"path":str(out),"files_extracted":len(data["files"]),"tree_truncated":data["tree_truncated"]})
-        except Exception as e:
-            manifest["sources"].append({"canonical_source":f"github:{item['full_name']}","state":"BLOCKED_EXTERNAL_ACCESS","error":str(e)})
-    for item in gists:
-        try:
-            data=extract_gist(item["id"],item["owner"])
-            out=ROOT / f"gist_{safe_name(item['owner'])}_{item['id']}.json"
-            out.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n")
-            manifest["sources"].append({"canonical_source":data["canonical_source"],"state":data["state"],"path":str(out),"files_extracted":len(data["files"])})
-        except Exception as e:
-            manifest["sources"].append({"canonical_source":f"github-gist:{item['id']}","state":"BLOCKED_EXTERNAL_ACCESS","error":str(e)})
+    jobs=[]
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        for item in repos:
+            jobs.append(("repo",item,ex.submit(extract_repo,item["full_name"])))
+        for item in gists:
+            jobs.append(("gist",item,ex.submit(extract_gist,item["id"],item["owner"])))
+        for kind,item,fut in jobs:
+            try:
+                data=fut.result()
+                if kind=="repo":
+                    out=ROOT/f"{safe_name(item['full_name'])}.json"
+                    record={"canonical_source":data["canonical_source"],"state":data["state"],"path":str(out),
+                            "files_extracted":len(data["files"]),"tree_truncated":data["tree_truncated"]}
+                else:
+                    out=ROOT/f"gist_{safe_name(item['owner'])}_{item['id']}.json"
+                    record={"canonical_source":data["canonical_source"],"state":data["state"],"path":str(out),
+                            "files_extracted":len(data["files"])}
+                out.write_text(json.dumps(data,ensure_ascii=False,indent=2)+"\n")
+                manifest["sources"].append(record)
+            except Exception as e:
+                canonical=f"github:{item['full_name']}" if kind=="repo" else f"github-gist:{item['id']}"
+                manifest["sources"].append({"canonical_source":canonical,"state":"BLOCKED_EXTERNAL_ACCESS","error":str(e)})
+    manifest["extracted_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="extracted")
+    manifest["blocked_sources"]=sum(1 for x in manifest["sources"] if x["state"]=="BLOCKED_EXTERNAL_ACCESS")
     (ROOT/"MANIFEST.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+"\n")
-    print(json.dumps({"repo_count":len(repos),"gist_count":len(gists),"source_records":len(manifest["sources"])}))
+    print(json.dumps({"repo_count":len(repos),"gist_count":len(gists),
+                      "extracted_sources":manifest["extracted_sources"],
+                      "blocked_sources":manifest["blocked_sources"]}))
 
 if __name__=="__main__":
     main()
