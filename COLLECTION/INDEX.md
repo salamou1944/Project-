@@ -164,3 +164,10 @@ Discovery sources used for this sweep:
 - https://github.com/spinov001-art/free-developer-tools-2026
 
 Current scope now includes project management, CRM/support, marketing/email, analytics/APM, collaboration, API clients, git/forge, CI/CD/PaaS, remote development, secrets/identity, storage, security and networking. All newly captured entries remain DISCOVERY_CAPTURED until individually verified.
+
+
+## Deep verification added — 2026-09-25
+Repository-level evidence has now been persisted under COLLECTION/VERIFICATION/:
+- COLLECTION/VERIFICATION/DEEP_VERIFICATION_BATCH_2026-09-25.md
+- COLLECTION/VERIFICATION/VERIFICATION_QUEUE_NEXT.md
+Verified/partially verified evidence currently covers Preloop, Agent Reach, Activepieces, Windmill, Hatchet, LiteLLM, Restic, Plakar and Ollama. The files explicitly distinguish repository evidence from production/runtime validation and record paid/cloud/external-cost boundaries.
