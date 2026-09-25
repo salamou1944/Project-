@@ -1,51 +1,43 @@
-# ALTERNATIVE SOURCE FAMILY — LOCAL AI WORKSPACES BATCH 01 — 2026-09-25
+# Local AI Workspaces — Batch 01 — 2026-09-25
 
-Rule: collect distinct sources even when they overlap in function. Do not collapse candidates merely because they perform the same job.
+## Collection rule
+Retain distinct sources even when they perform overlapping functions. Do not collapse repositories merely because they are alternatives in the same category. Preserve each source when it contributes different architecture, license, runtime, integrations, security controls, operational tradeoffs, subscription-elimination value, or reusable implementation evidence.
 
 ## 1. SOMI — Somi-Project/Somi
 Source: https://github.com/Somi-Project/Somi
-Branch: master
+Default branch: master
 README SHA: 52ab8a7e821426f2ae61abefd26d73942e87a3a7
+License: not established from repository LICENSE fetch
 Status: EXTRACTED_PENDING_DEEP_VERIFICATION
 
-Verified from repository README:
+Verified from repository evidence:
 - Fully self-hosted/local-first AI agent framework.
-- Desktop PySide6 control surface.
-- Local chat, persistent memory, coding workspace, research workspace.
-- OCR and structured extraction.
-- Local STT/TTS.
-- Tool/skill registry, workflows, subagents.
-- Browser automation and research stacks.
-- Approval-aware execution, audit trails, node/gateway foundations.
-- Release gate, freeze artifacts, replay harness and security audit tooling.
-- Requires local Ollama for quick start; Python 3.11+ and Git.
-- Repository README states no subscriptions/forced SaaS; this is a project claim and still requires dependency verification.
-- License file was not resolved in the inspected repository path; do not infer license.
+- Desktop PySide6 operator shell with Control Room, Coding Studio, Research Studio, speech controls and Node Manager.
+- Local chat, persistent memory, research, coding, OCR, speech, browser automation, workflows and subagents.
+- Approval-aware tools, sandboxed execution paths, audit/replay/freeze/release-gate tooling.
+- Quick start requires Python 3.11+, Git and Ollama at 127.0.0.1:11434; README recommends 16GB RAM and optional NVIDIA GPU.
+- License remains unknown; do not infer it from metadata or third-party listings.
 
-Collection value: distinct architecture emphasizing local desktop operator, evidence workflows, security controls and skill expansion.
+Collection value: local operator/control-plane architecture with explicit audit/replay/security-gate concepts.
 
 ## 2. OpenEnsemble — openensemble/openensemble
 Source: https://github.com/openensemble/openensemble
 Default branch: main
+License: pending direct LICENSE verification
 Status: EXTRACTED_PENDING_DEEP_VERIFICATION
 
-Verified from repository README:
-- Self-hosted multi-user AI assistant platform.
-- Specialist agents and coordinator delegation.
-- Per-user isolation for agents, skills, sessions, files and settings.
-- Providers include local Ollama/LM Studio plus numerous cloud providers.
-- Bundled local reasoning and embedding models via node-llama-cpp.
-- Deep research saved as persistent research documents.
-- Gmail/Exchange/IMAP email integration.
-- Calendar, expenses, documents, code projects.
-- Background recurring/one-shot tasks.
-- MCP, remote nodes and voice-device support.
-- Open-hardware ESP32-S3 voice satellite repository.
-- Built-in skill builder.
-- Node.js server architecture.
-- Important: cloud provider options remain external costs; local model path can reduce these but hardware is still required.
+Verified from repository evidence:
+- Self-hosted multi-user AI assistant.
+- Specialist agents and coordinator delegation with per-user isolation.
+- Local and cloud model providers; local Ollama/LM Studio paths.
+- Bundled local reasoning/embedding via node-llama-cpp.
+- Deep research to persistent research documents.
+- Gmail/Exchange/IMAP, calendar, expenses, documents and code projects.
+- Background recurring and one-shot tasks.
+- MCP, remote nodes, voice-device/ESP32 integration and skill builder.
+- Node.js server.
 
-Collection value: distinct multi-user/team + voice-satellite + specialist-agent architecture, not collapsed into Odysseus.
+Collection value: multi-user assistant/team architecture, local model path and recurring task/event integration.
 
 ## 3. Oceano — Hugofsco/oceano
 Source: https://github.com/Hugofsco/oceano
@@ -63,16 +55,106 @@ Verified from repository evidence:
 - Local model serving/inference path with llama-swap and Hugging Face model catalog.
 - Configurable tool loading budgets and discovery.
 - Typed tool outcomes, verification evidence, operation IDs and idempotent replay protections.
-- Durable content-free recovery checkpoints.
+- Durable recovery checkpoints.
 - SSRF protections and workspace confinement; systemd hardening documented.
 - Default web UI bind is 0.0.0.0, with login/TOTP recommended; trusted-network-only posture is explicitly stated.
-- MIT license confirmed.
 - Cloud/provider integrations exist but local-first path is available.
 
-Collection value: distinct focus on tool-budgeting, recovery checkpoints, idempotency, browser safety and resident Claude/Codex bridges.
+Collection value: distinct focus on tool-budgeting, recovery checkpoints, idempotency, browser safety and resident coding-agent bridges.
+
+## 4. Synapse — zai-org/Synapse
+Source: https://github.com/zai-org/Synapse
+Default branch: main
+README SHA: 692022bf8b9ce37c3b8a0014b1016d00da357ca3
+LICENSE SHA: Apache-2.0 license file fetched directly
+License: Apache-2.0
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from repository evidence:
+- Self-hosted AI workspace centered on conversations as the collaboration/runtime boundary.
+- Native actors, bridged remote agents, external IM identities and human workspace members can share conversations.
+- Remote-agent daemon bridges Codex CLI and Claude Code through an outbound WebSocket.
+- Filesystem, command line, Chrome DevTools/browser and computer-use capabilities are exposed as governed MCP capabilities.
+- Session-scoped sandbox options: local process, Docker, or off-box E2B-compatible/CubeSandbox endpoint; sandbox is opt-in and off by default.
+- Explicit/revocable workspace resource grants and consume-once approvals.
+- Durable schedules, webhooks and GitHub/GitLab event wakeups.
+- Permissioned memory spaces with lexical retrieval plus embeddings.
+- Provider architecture allows cloud APIs or self-hosted sidecars for embedding/OCR/document extraction/transcription/ASR; core defaults can operate without optional providers.
+- Deployment uses Node.js 22, Docker Compose, PostgreSQL and Redis; external model credentials are required for real model operation unless a self-hosted model provider is configured.
+- README explicitly labels the project early design/implementation and warns that schemas/runtime contracts may change.
+
+Collection value: strong governed-agent/resource-grant model, remote coding-agent bridge, event-driven wakeups and capability-aware device runtime.
+
+## 5. OpenAgents — openagents-org/openagents
+Source: https://github.com/openagents-org/openagents
+Default branch: develop
+LICENSE SHA: 261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64
+License: Apache-2.0
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from public source discovery:
+- Collaboration-oriented open-source/self-hosted workspace for humans and AI agents.
+- Shared conversations, files/context and connected agents.
+- Self-hosting path is advertised as the full platform with workspace, launcher and CLI.
+- Roles, membership and access control are part of the self-hosted model.
+- Hosted mode exists separately; hosted availability is not counted as a free local dependency.
+
+Collection value: team collaboration boundary and shared human/agent workspace model distinct from single-user local assistants.
+
+## 6. PolyRob — theselfruleorg/polyrob
+Source: https://github.com/theselfruleorg/polyrob
+Default branch: main
+LICENSE SHA: 9987b4d833ed6a597a7ef9470b2ecbfabc96a21e
+License: MIT
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from public repository evidence:
+- Self-hosted autonomous AI agent intended to pursue goals, learn from experience and run locally.
+- Core install can be used with zero cloud dependencies according to the project documentation.
+- Optional browser automation via Playwright and optional FastAPI/web console.
+- Docker Compose deployment persists memory, sessions and skills across restarts.
+- Explicit deployment posture distinguishes local loopback mode from public/owner-authenticated mode; public binding upgrades to an authenticated posture.
+
+Collection value: goal-driven autonomous agent with a clearly separated zero-cloud core and browser/server extras.
+
+## 7. Jarvis — dev-core-busy/jarvis
+Source: https://github.com/dev-core-busy/jarvis
+Default branch: master
+LICENSE SHA: eb17f6a0cfb9da71e073b5bc720c4ad32d8745e6
+License: Apache-2.0
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from public repository evidence:
+- Self-hosted autonomous Linux agent.
+- Multi-LLM and multi-user architecture.
+- Web chat plus Outlook/Excel task surface and WhatsApp entry point.
+- Browsing, file read/write, code execution, spreadsheet editing, Office documents/diagrams, rule-based email responses, read-only SAP data access and calendar management.
+- Optional VNC view exposes the desktop while the agent operates.
+- README describes a security layer and sandboxed execution.
+
+Collection value: enterprise/workplace automation surface spanning email, Office, SAP read-only data, calendar and desktop control.
+
+## 8. Ptylon — alexfrmn/ptylon
+Source: https://github.com/alexfrmn/ptylon
+Default branch: main
+README SHA: f7bef03be0ee54f5d6df667b76d4dfa76767d27d
+LICENSE SHA: a21feb4c3af58e4f7508cc896dc40a63b22b4c21
+License: MIT
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from public repository evidence:
+- Self-hosted browser-native terminal workspace for coding agents such as Claude Code and Codex.
+- Persistent PTY sessions, server-side browser panels, files and Monaco editor in one authenticated URL.
+- Docker Compose and systemd deployment.
+- Separate authenticated WebSocket gateway and localhost-only PTY daemon; browser control uses CDP.
+- Workspace/file access boundaries and explicit secret configuration.
+- Browser regression tests, PTY gateway tests, TypeScript/lint/build verification and localhost admin browser automation.
+- Current limitations explicitly include headless-browser/IP-reputation blocking and PTY state loss on host reboot.
+
+Collection value: reusable remote coding-agent workstation pattern with persistent terminal/browser state and strong process-boundary lessons.
 
 ## Cross-source note
-These three are intentionally retained as separate candidates despite overlap with Odysseus. Functional overlap is useful because architecture, license, local-runtime assumptions, security controls and operational tradeoffs differ.
+All eight sources above are intentionally retained separately despite substantial overlap with Odysseus and each other. Functional overlap is not a deduplication reason.
 
-## Next
-Deep-verify dependencies, licenses where missing, release provenance, deployment path, external-cost boundaries, security model and tests before any VERIFIED classification.
+## Verification queue
+For each source, deep-verify dependency manifests, current revision/commit provenance, complete license files, tests/CI, deployment path, external-cost boundaries, optional cloud dependencies, security controls, and operational limitations before any VERIFIED classification.
