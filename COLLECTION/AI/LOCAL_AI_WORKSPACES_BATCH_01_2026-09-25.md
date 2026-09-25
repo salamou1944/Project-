@@ -203,3 +203,28 @@ Verified from repository evidence:
 - External costs remain possible where selected CLI agents or LLM providers themselves require paid access; this must not be counted as eliminated by Dagents.
 
 Collection value: potentially important orchestration layer for combining Agency Agents/personas with multiple local coding CLIs while retaining durable workflow assets. Retained as an independent source despite overlap.
+
+
+## 11. OpenCode — anomalyco/opencode
+Source: https://github.com/anomalyco/opencode
+Default branch: dev
+README SHA: b5a4c8ddd9794e8c20bd287603bfa0c336522796
+LICENSE SHA: 6439474beed8e0271df9862eff97ffd70ec2464c
+SECURITY SHA: e7e59f4a27ac2bd2ed5005f8851dcb946c08f914
+License: MIT
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from repository evidence:
+- Open-source AI coding agent with terminal UI, desktop application, and IDE-oriented ecosystem.
+- Built-in build agent (full access), plan agent (read-only by default) and general subagent.
+- Provider-agnostic architecture; official documentation states API keys are required for configured LLM providers, while repository/docs support local models and multiple providers.
+- Installation supports npm/bun/pnpm/yarn, Homebrew, Arch, Windows package managers, Nix and Docker.
+- Repository explicitly describes OpenCode as local software with shell, file and web access.
+- Security model is important: permissions are UX awareness/confirmation, NOT a security sandbox. For real isolation, project security guidance recommends Docker or VM.
+- Opt-in server mode can require HTTP Basic Auth via OPENCODE_SERVER_PASSWORD; unauthenticated server mode is possible if enabled without the password.
+- Distinct related repositories found under anomalyco include opencode-sdk-python, opencode-sdk-go, opencode-sdk-js, opencode-bench, opencode-copilot-auth, opencode-voice, and opencode-beta; these should be retained as separate sources where relevant rather than merged into the core repository.
+
+External-cost boundary:
+- OpenCode software is MIT and can run locally, but model inference may require paid provider access unless a suitable local/free model path is used. Provider cost is therefore not eliminated automatically.
+
+Collection value: major open-source coding-agent baseline; relevant to subscription elimination, local development, agent orchestration, and integration with the previously collected Agency Agents/Dagents ecosystem.
