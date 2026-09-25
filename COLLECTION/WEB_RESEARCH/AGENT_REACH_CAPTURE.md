@@ -1,9 +1,9 @@
 # Agent Reach — Captured Source Map
 
-Status: DISCOVERY_CAPTURED
+Status: DEEP_INSPECTED
 Captured: 2026-09-25
 Source: https://github.com/Panniantong/Agent-Reach
-Revision: main (docs tree observed; individual file SHAs preserved below)
+Revision observed: main @ a19a171fa980a0785849596492e0af4db800c82f
 
 ## Why this source matters
 Agent Reach is an orchestration/selection layer around upstream internet-access tools rather than a single web-scraping engine. Its docs describe free/open-source routes for web reading, GitHub, YouTube, RSS, Reddit, Bilibili and optional authenticated channels, with health checking via `agent-reach doctor`. citeturn0search1
@@ -34,5 +34,13 @@ Agent Reach is an orchestration/selection layer around upstream internet-access 
 - Keep credentials outside source-collection storage
 - Pin important upstream versions/commits where reproducibility matters
 
+## Fresh verification evidence — 2026-09-25
+- `pyproject.toml` at observed revision declares version `1.5.0`, Python `>=3.10`, and MIT license.
+- `docs/README_en.md`, `docs/install.md`, `docs/troubleshooting.md`, `docs/update.md`, `docs/cookie-export.md`, `agent_reach/core.py`, `agent_reach/doctor.py`, `agent_reach/config.py`, `agent_reach/skill/SKILL_en.md`, `tests/test_channel_contracts.py`, `tests/test_skill_command.py`, `llms.txt`, `CLAUDE.md`, and `CHANGELOG.md` were directly inspected.
+- The inspected implementation exposes `doctor()` through the core API and a diagnostic engine that aggregates per-channel checks.
+- The inspected docs distinguish zero-config channels from cookie/authenticated or externally dependent channels; therefore `one install, zero API fees` is not equivalent to zero external operating cost for every channel.
+- Adapter discovery is explicitly not proof that authentication or target-content access works.
+
 ## Verification status
-DISCOVERY_CAPTURED only. The repository tree and key docs were inspected, but this file does NOT claim recursive source-code verification or production suitability.
+DEEP_INSPECTED. This is source/documentation verification, not a claim that the repository was executed in this ChatGPT runtime or that every channel was independently tested.
+
