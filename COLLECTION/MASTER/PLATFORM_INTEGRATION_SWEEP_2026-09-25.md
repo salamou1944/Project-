@@ -60,3 +60,21 @@ This record consolidates the results of the platform-focused sweep so the same s
 ## Evidence status
 COLLECTED_AND_INDEXED.
 No claim is made that every upstream repository in the entire historical collection universe has been exhaustively re-inspected in this single sweep. The platform-focused sources found in the current Project- collection were indexed without duplicating raw captures.
+
+## Current official-source verification (2026-09-25)
+
+### OpenAI Docs MCP / Skills
+- Official OpenAI documentation currently exposes a read-only Docs MCP at https://developers.openai.com/mcp for searching and reading OpenAI developer documentation.
+- Official guidance distinguishes the MCP server (live documentation retrieval) from the Skill (workflow instructions, decision points, output requirements and optional resources).
+- The Docs MCP is documentation-only; it does not call the OpenAI API on behalf of the agent.
+- Adoption implication: this is suitable for evidence-backed OpenAI/Codex development workflows, but it must not be represented as an API execution channel.
+
+### Railway + Codex + ChatGPT
+- Current official Railway documentation confirms a Railway Codex plugin that packages the `use-railway` skill with Railway's hosted MCP server.
+- Current Railway documentation also confirms a ChatGPT plugin using the same skill + hosted MCP pattern, with OAuth authentication.
+- Railway's current CLI documentation supports MCP installation for Codex and other coding tools and distinguishes hosted MCP, OAuth, and local MCP modes.
+- Adoption implication: the integration pattern is directly relevant to evidence-gated deployment operations, but authentication/authorization and actual tool execution still require runtime verification in the target account/session.
+
+### Evidence boundary
+- Official documentation proves the currently documented capability and integration surface; it does not prove that our connected account, repository, Railway project, or deployment is authenticated and operational.
+- Preserve the rule: documented capability != configured capability != reachable capability != successful execution.
