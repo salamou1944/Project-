@@ -51,3 +51,10 @@ REPAIR IN PROGRESS — current verified code failures found in the user-owned re
 ### agent-skills review boundary
 - Closure integrity run 36181862524 is FAILED only because the repository security gate intentionally rejects direct workflow-file changes until explicit review: workflow-change-requires-explicit-review:.github/workflows/easy-runtime-external-smoke.yml.
 - This is an intentional safety/review control, not a code/test defect. The workflow source repair remains present; automatic bypass or merge would weaken the repository's own security boundary.
+
+
+## Follow-up repair — 2026-09-25T20:00Z
+- Project- collection run 36182136910 failed at discovery with HTTP 403 from GitHub Actions token while enumerating user repositories.
+- Root cause: discovery treated a GitHub access denial as an unhandled fatal exception.
+- Patched COLLECTION/AUTO/intelligent_extract.py at commit bd3db15cb19526e00fb1be30951f7d1b0f83c3f5 to classify HTTP 403 repository enumeration as an explicit BLOCKED_REPOS inventory record; GitHub rate-limit responses are now surfaced distinctly instead of being silently misclassified.
+- Verification pending on the next collection-continuous run.
