@@ -142,3 +142,17 @@ Salamou-31, AI_operating_memory, Files-, Astra, agent-skills, Easy-, Project-, A
 
 ## No false completion claim
 Repository inventory/tree harvest is materially advanced, but "all information" at full file-content level is NOT yet complete. This record must not be interpreted as file-content completion.
+
+
+## Deep source extraction completed during this pass
+### Agent-Reach
+Directly inspected current revision a19a171fa980a0785849596492e0af4db800c82f, including README/docs, channel base, doctor, probe, CLI, MCP integration, config, tests and security-related paths. Confirmed architectural patterns: tiered capability model (zero-config / free-key or login / setup), ordered backend routing, side-effect-free health probes, explicit unavailable/error states, MCP exposure for diagnostics, and credential-path security checks. These are captured in the dedicated Agent-Reach source map.
+
+### OpenClaw
+README was directly inspected from Panniantong/openclaw. It documents a personal AI assistant/control-plane architecture with Gateway, multi-channel routing, browser/canvas/nodes, cron/webhooks, skills, model failover and doctor/security tooling. It is a high-priority source for the control-plane/always-on-agent patterns relevant to our engineering work.
+
+### aw-junaid/Hacking-Tools
+README and recursive tree were directly inspected. The repository is a large security research/education collection spanning malware analysis, OSINT, penetration testing, network analysis, cryptography, programming and related references. Offensive material is treated as research-only and not automatically converted into operational actions.
+
+## Collection integrity
+This file records repository/tree harvesting plus targeted deep extraction. It does not claim that every file in every repository has been semantically read. Such a claim would be false for the current tool limits and repository sizes.
