@@ -146,3 +146,21 @@ The first AI source-preservation batch is stored before deep verification:
 - COLLECTION/AI/LOCAL_AI_RUNTIME_AND_AGENTS_2026.md — local multimodal AI/runtime expansion.
 - COLLECTION/WEB_RESEARCH/BROWSER_AUTOMATION_EXPANSION_2026.md — additional local browser-agent candidates.
 - These additions are DISCOVERY_CAPTURED unless an entry was explicitly supported by inspected repository documentation; discovery is not an adoption decision.
+
+
+## Paid-service elimination expansion — 2026-09-25
+A broad paid-SaaS replacement sweep was captured into dedicated indexes:
+- COLLECTION/SELF_HOSTED/PAID_SAAS_REPLACEMENT_MAP_2026.md
+- COLLECTION/OBSERVABILITY_CONTROL/APM_AND_MONITORING_EXPANSION_2026.md
+- COLLECTION/COMMUNICATION/COMMUNICATION_AND_COLLABORATION_EXPANSION_2026.md
+- COLLECTION/CRM_SUPPORT/CRM_SUPPORT_MARKETING_EXPANSION_2026.md
+- COLLECTION/DEVTOOLS/DEVELOPER_SAAS_REPLACEMENTS_EXPANSION_2026.md
+
+Discovery sources used for this sweep:
+- https://github.com/SolvoHQ/awesome-self-host-saas-alternatives
+- https://github.com/open-saas-directory/awesome-saas-directory
+- https://selfhosttools.com/
+- https://ideaproof.io/open-source/self-hosted
+- https://github.com/spinov001-art/free-developer-tools-2026
+
+Current scope now includes project management, CRM/support, marketing/email, analytics/APM, collaboration, API clients, git/forge, CI/CD/PaaS, remote development, secrets/identity, storage, security and networking. All newly captured entries remain DISCOVERY_CAPTURED until individually verified.
