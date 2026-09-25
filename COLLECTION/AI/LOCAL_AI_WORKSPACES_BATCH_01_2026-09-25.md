@@ -158,3 +158,27 @@ All eight sources above are intentionally retained separately despite substantia
 
 ## Verification queue
 For each source, deep-verify dependency manifests, current revision/commit provenance, complete license files, tests/CI, deployment path, external-cost boundaries, optional cloud dependencies, security controls, and operational limitations before any VERIFIED classification.
+
+
+## 9. Agency Agents — msitarzewski/agency-agents
+Source: https://github.com/msitarzewski/agency-agents
+Default branch: main
+README SHA: a3a6c65b8eb5a3b0722ab504eed00e2d06494720
+LICENSE SHA: 523078c01624b9b1b1c551e75054b9d3a9f953ab
+License: MIT
+Status: EXTRACTED_PENDING_DEEP_VERIFICATION
+
+Verified from repository evidence:
+- Large collection of specialized AI-agent personas organized by divisions such as engineering, security, marketing, product, project management, support, testing, strategy, and specialized roles.
+- Agent files are intended as reusable role/workflow definitions with identity, mission, workflows, deliverables, examples, success metrics and communication guidance.
+- Native/scripted integration paths for Claude Code, GitHub Copilot, Antigravity, Gemini CLI, OpenCode, OpenClaw, Cursor, Aider, Windsurf, Kimi, Codex, Osaurus, Hermes and Mistral Vibe are documented.
+- Installer supports selecting tools, divisions or individual agents and dry-run/listing modes.
+- Repository README documents an OpenCode runtime limit of approximately 119 agents and warns that excess agents may be silently dropped; this is an operational limitation, not a claim that the collection itself is limited to that number.
+- A separate native Agency Agents app repository exists and is advertised as a local-first installer/control surface; it is a distinct source and will be collected separately rather than merged into this repository.
+- MIT license confirmed directly from LICENSE.
+
+External-cost boundary:
+- The agent definitions themselves are open-source and local files.
+- Actual execution still depends on the selected host/LLM/tool; local or no-key model paths must be verified separately and are not assumed from this repository.
+
+Collection value: reusable specialist-agent corpus and multi-tool conversion/install patterns. It is retained as an independent source even though it overlaps with other agent/workspace projects.
