@@ -1,0 +1,54 @@
+{
+  "canonical_source": "github:mufeedvh/timers",
+  "repo": "mufeedvh/timers",
+  "revision_sha": "142ea0b57e04601154a20694d61ef4b4b9e8218c",
+  "default_branch": "master",
+  "repo_updated_at": "2023-09-16T07:49:16Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 16,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 500000
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": "c6e226a3247285c4f831f289253bbeedbc2051bc",
+      "content_sha256": "d11f91b40e4a25ce2caa8d61de1fb22e47bde602b2c52b7b1fa95c1f85d2c948",
+      "score": 170,
+      "content": "# timers\n\nA countdown timer for your command line.\n\n### Features\n- Simple notation\n- Countdown display\n- Timer end notification\n- Log usage to output file\n\n## Usage\n\nSet countdown for 1 minute\n```\n$ timers 1m\n```\n\nSet countdown for 1 second\n```\n$ timers 1s\n```\n\nSet countdown for 1 hour\n```\n$ timers 1h\n```\n\nLog usage to output file\n```\n$ timers -o log.txt 10s\n```\nLog format: `timer_set`,`start_date`,`end_date`\n\n`start_date` and `end_date` in [RFC3339](https://www.rfc-editor.org/rfc/rfc3339) format.\n\nFor more granular control, you can combine units. To set countdown for 10 minutes and 30 seconds,\n```\ntimers 10m30s\n```\n"
+    },
+    {
+      "path": ".github/workflows/rust.yml",
+      "sha": "3c13d1be287f5cbac23010bbd00eee5bfd2dcf65",
+      "content_sha256": "f394411995c12d93808e11341fde58c291f108a881d02402d5bca4d69aefac9d",
+      "score": 121,
+      "content": "name: Rust\n\non:\n  push:\n    branches: [ master ]\n  pull_request:\n    branches: [ master ]\n\nenv:\n  CARGO_TERM_COLOR: always\n\njobs:\n  build:\n\n    runs-on: ubuntu-latest\n\n    steps:\n    - uses: actions/checkout@v2\n    - name: Build\n      run: cargo build --verbose\n    - name: Run tests\n      run: cargo test --verbose\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": "16530955df43f820335f52e1f6e279c38996a2e1",
+      "content_sha256": "9dcb4bc5eecd4aef8fa6035252a19c721cbe530a3d322b606adbcc1a6f5e8d84",
+      "score": 85,
+      "content": "[package]\nname = \"timers\"\nversion = \"0.1.0\"\nauthors = [\"Vivek R <123vivekr@gmail.com>\"]\nedition = \"2018\"\n\n# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html\n\n[dependencies]\nnotify-rust = \"4\"\nfiglet-rs = \"0.1.3\"\ntimer = \"0.1.3\"\nchrono = \"0.4.19\"\nmore-asserts = \"0.2.2\"\ntempfile = \"3.4.0\"\nclap = { version = \"4.1.8\", features = [\"derive\"] }\n"
+    },
+    {
+      "path": "src/main.rs",
+      "sha": "08384c7bd86aced12a18e98eebe7f6048a36a025",
+      "content_sha256": "2ae1d6df5515a765fcf167ea5f52e6b4128b01a4cd18bfbbb13b87543c0a1452",
+      "score": 33,
+      "content": "use clap::{arg, Command};\n\nuse notify_rust::Notification;\nuse timers::Config;\n\nfn main() {\n    // clear terminal\n    print!(\"\\x1B[2J\\x1B[1;1H\");\n\n    let cmd = Command::new(\"timer\")\n        .author(\"Vivek R, 123vivekr@gmail.com\")\n        .version(\"0.1.0\")\n        .args(&[\n            arg!(<time_string> \"Time in format HHhMMmSSs\"),\n            arg!(-o --output [output] \"Output filename\"),\n        ])\n        .get_matches();\n\n    let time_string = cmd\n        .get_one::<String>(\"time_string\")\n        .expect(\"time_string is required\")\n        .to_string();\n\n    let output_filename = cmd.get_one::<String>(\"output\").map(|s| s.to_string());\n\n    let config = Config::new(time_string, output_filename);\n\n    timers::run(config);\n\n    Notification::new()\n        .summary(\"Timer\")\n        .body(\"Time's up!\")\n        .icon(\"clock\")\n        .show()\n        .expect(\"Error displaying notification\");\n}\n"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha": "46464b35aeaf30b78833eff1b527795bf9501dc3",
+      "content_sha256": "e6f2ab5779c860991b50496463ebc749f0608e274192d385793611d8759b1546",
+      "score": 33,
+      "content": "\nuse figlet_rs::FIGfont;\nuse std::fmt;\nuse std::fs::OpenOptions;\nuse std::io::Write;\nuse std::str;\nuse std::thread;\nuse std::time::Duration;\nuse timer::Timer as TimerLib;\n\n#[derive(Debug, Clone)]\npub struct ParserError;\n\nimpl fmt::Display for ParserError {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        write!(f, \"Error parsing arguments\")\n    }\n}\n\n#[derive(Debug, Clone)]\nstruct Timer {\n    seconds: usize,\n    minutes: usize,\n    hours: usize,\n}\n\npub struct Config {\n    timer: Timer,\n    output_filename: Option<String>,\n}\n\nimpl Config {\n    /// Returns new `Config`\n    pub fn new(time_string: String, output_filename: Option<String>) -> Config {\n        // TODO: handle error gracefully\n        let timer = Config::parse_arg(&time_string).expect(\"Error parsing time string\");\n\n        Config {\n            timer,\n            output_filename,\n        }\n    }\n\n    /// Parses the time string into hours, minutes and seconds\n    ///\n    /// Returns `Config`\n    ///\n    /// The`parse_time_string` function will throw `ParserError`\n    fn parse_arg(time_string: &str) -> Result<Timer, ParserError> {\n        let mut hours: usize = 0;\n        let mut minutes: usize = 0;\n        let mut seconds: usize = 0;\n\n        let mut s = String::new();\n        // slice string at h, m and s\n        for char in time_string.chars() {\n            match char {\n                'h' => {\n                    hours = s.parse::<usize>().unwrap();\n                    s = String::new();\n                }\n                'm' => {\n                    minutes = s.parse::<usize>().unwrap();\n                    s = String::new();\n                }\n                's' => {\n                    seconds = s.parse::<usize>().unwrap();\n                    s = String::new();\n                }\n                _ => s.push(char),\n            };\n        }\n\n        Ok(Timer {\n            seconds,\n            minutes,\n            hours,\n        })\n    }\n}\n\nimpl Timer {\n    /// counts down timer by one second\n    ///\n    /// Returns `false` when timer runs out\n    fn tick(&mut self) -> bool {\n        if self.seconds > 0 {\n            self.seconds -= 1;\n        } else if self.minutes > 0 {\n            self.minutes -= 1;\n            self.seconds = 59;\n        } else if self.hours > 0 {\n            self.hours -= 1;\n            self.minutes = 59;\n            self.seconds = 59;\n        } else {\n            return false;\n        }\n\n        true\n    }\n\n    /// Returns remaining time in clock format\n    fn as_string(&self) -> String {\n        let mut time_string = String::new();\n\n        if self.hours > 0 {\n            time_string.push_str(format!(\"{}h\", self.hours).as_str());\n        }\n\n        if self.minutes > 0 {\n            time_string.push_str(format!(\"{}m\", self.minutes).as_str());\n        }\n\n        if self.seconds > 0 {\n            time_string.push_str(format!(\"{}s\", self.seconds).as_str());\n        }\n\n        time_string\n    }\n\n    // Return total time in seconds\n    fn total_time(&self) -> usize {\n        self.hours * 3600 + self.minutes * 60 + self.seconds\n    }\n}\n\nimpl fmt::Display for Timer {\n    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {\n        let font = FIGfont::standand().unwrap();\n        let figure = font.convert(self.as_string().as_str());\n\n        match figure {\n            Some(s) => write!(f, \"{}\", s),\n            None => write!(f, \"\"),\n        }\n    }\n}\n\npub fn run(config: Config) {\n    let timer_lib = TimerLib::new();\n    let mut timer = config.timer;\n\n    // create backup for output file\n    let timer_backup = timer.clone();\n\n    let total_time = timer.total_time();\n\n    println!(\"{}\", timer);\n    let _guard = timer_lib.schedule_repeating(chrono::Duration::seconds(1), move || {\n        timer.tick();\n        // clear screen\n        print!(\"\\x1B[2J\\x1B[1;1H\");\n        println!(\"{}\", timer);\n    });\n\n    thread::sleep(Duration::from_secs(total_time as u64));\n\n    if let Some(output_filename) = config.output_filename {\n        write_to_output_file(output_filename, timer_backup);\n    }\n}\n\nfn write_to_output_file(output_filename: String, timer: Timer) {\n    let end_time = chrono::Local::now();\n    let start_time = end_time - chrono::Duration::seconds(timer.total_time() as i64);\n\n    let mut file = OpenOptions::new()\n        .create(true)\n        .write(true)\n        .append(true)\n        .open(output_filename)\n        .unwrap();\n\n    if let Err(e) = writeln!(\n        file,\n        \"{}:{}:{},{},{}\",\n        timer.hours,\n        timer.minutes,\n        timer.seconds,\n        start_time.to_rfc3339(),\n        end_time.to_rfc3339()\n    ) {\n        eprintln!(\"Couldn't write to file: {}\", e);\n    }\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n    \n    use std::path::Path;\n    use std::time::Instant;\n    use tempfile::tempdir;\n\n    #[test]\n    fn test_tick() {\n        // return false when timer runs out\n        let mut timer = Timer {\n            seconds: 0,\n            minutes: 0,\n            hours: 0,\n        };\n\n        assert_eq!(timer.tick(), false);\n\n        // return true if timer isn't timed out\n        let mut timer = Timer {\n            seconds: 2,\n            minutes: 0,\n            hours: 0,\n        };\n\n        assert_eq!(timer.tick(), true);\n    }\n\n    #[test]\n    fn ten_second_timer_should_run_for_around_ten_seconds() {\n        let config = Config {\n            timer: Timer {\n                seconds: 10,\n                minutes: 0,\n                hours: 0,\n            },\n            output_filename: None,\n        };\n        let required_time = Duration::from_secs(10);\n        let delta = Duration::from_millis(20);\n        let estimated_time = required_time + delta;\n\n        let start_time = Instant::now();\n        run(config);\n        let elapsed_time = start_time.elapsed();\n\n        more_asserts::assert_le!(elapsed_time, estimated_time);\n    }\n\n    #[test]\n    fn create_file_if_no_file_exists_and_output_filename_provided() {\n        let dir = tempdir().unwrap();\n\n        let output_filename = String::from(\"test_file.txt\");\n        let output_file_path = format!(\"{}/{}\", dir.path().display(), output_filename);\n\n        println!(\"{}\", output_file_path);\n\n        assert!(!Path::new(&output_file_path).exists());\n\n        let config = Config {\n            timer: Timer {\n                seconds: 1, // arbitrary time length\n                minutes: 0,\n                hours: 0,\n            },\n            output_filename: Some(output_file_path.clone()),\n        };\n\n        run(config);\n\n        assert!(Path::new(&output_file_path).exists());\n    }\n}\n"
+    }
+  ],
+  "generated_at": "2026-09-25T19:34:01.873416+00:00"
+}

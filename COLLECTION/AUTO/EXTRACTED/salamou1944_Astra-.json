@@ -9,9 +9,9 @@
   "tree_truncated": false,
   "state": "extracted",
   "extraction_policy": {
-    "max_files": 8,
+    "max_files": 16,
     "max_file_bytes": 60000,
-    "max_source_bytes": 300000
+    "max_source_bytes": 500000
   },
   "files": [
     {
@@ -69,7 +69,63 @@
       "content_sha256": "46c663463329acd7039bdef0a9145293aad32e04d7f0dd06ca2719c99f0eb014",
       "score": 33,
       "content": "__version__ = '1.0.0'\n"
+    },
+    {
+      "path": "astra/strategies.py",
+      "sha": "fe4b0a7fe7d7cf5c2b2e6ec49505efd7f91d1d25",
+      "content_sha256": "5e018baa4df9dc233b51fcc7d163567356f8c9ede83395229f5e4930601650da",
+      "score": 33,
+      "content": "def long_momentum(bars, window=30, threshold=0.0):\n    closes=[b.close for b in bars]; out=[]\n    for i,p in enumerate(closes):\n        out.append(0 if i < window else int(p/closes[i-window]-1 > threshold/100))\n    return out\n"
+    },
+    {
+      "path": "scripts/live_readiness_check.py",
+      "sha": "c029699af47ddb2c7cfa7ac5ad0e509d08acf0f7",
+      "content_sha256": "bd05edd32d72e720044e7dfaaafc30eace344b823953358805572ee9c0fe8e8a",
+      "score": 33,
+      "content": "\"\"\"Technical readiness check; it never enables live trading.\"\"\"\nfrom astra.execution.gates import GateState\nfrom astra.execution.kraken import KrakenConfig,KrakenSpot\ndef main():\n    cfg=KrakenConfig.from_env()\n    assert not cfg.live_enabled\n    KrakenSpot(cfg)\n    state=GateState(True,False,True,True,True,True,False,False)\n    assert not state.authorize()\n    print({\"technical_components\":\"READY\",\"live_authorization\":False,\"strategy_valid\":False,\"human_approval\":False,\"live_enabled\":False,\"withdrawal_api\":False})\nif __name__==\"__main__\": main()\n"
+    },
+    {
+      "path": "astra/core.py",
+      "sha": "98b5c3075301859cceb50fd08928e401f34f95a2",
+      "content_sha256": "00edb29bbb00b260b377a2d3c271bda4d2951b2d46a0011214e7cbf48380ad37",
+      "score": 33,
+      "content": "from dataclasses import dataclass\n\n@dataclass(frozen=True)\nclass Bar:\n    t: int\n    close: float\n\ndef backtest_signals(bars, signals, fee=0.0005, slip=0.0002):\n    if len(bars) != len(signals): raise ValueError(\"signals length must match bars\")\n    equity=1.0; pos=0; peak=1.0; maxdd=0.0; trades=0\n    for i,b in enumerate(bars):\n        if i: equity *= 1 + pos*(b.close/bars[i-1].close-1)\n        target=max(0,min(1,int(signals[i])))\n        if target != pos:\n            equity *= max(0,1-abs(target-pos)*(fee+slip)); trades+=1; pos=target\n        peak=max(peak,equity); maxdd=max(maxdd,1-equity/peak)\n    return {\"return_pct\":round((equity-1)*100,6),\"max_drawdown_pct\":round(maxdd*100,6),\"trades\":trades}\n"
+    },
+    {
+      "path": "astra/risk.py",
+      "sha": "41b77f2193790195fd4ba244d3103638a64db633",
+      "content_sha256": "e20f4ae498b2139124fa064a69cc157556a4d2d39b540e54a9b3c1645b9d558e",
+      "score": 33,
+      "content": "from dataclasses import dataclass\nimport math\n\n@dataclass(frozen=True)\nclass RiskLimits:\n    max_position: float=1.0\n    max_daily_loss: float=0.02\n    max_drawdown: float=0.08\n\nclass RiskGuardian:\n    def __init__(self, limits=RiskLimits()):\n        self.limits=limits; self.day_start=1.0; self.peak=1.0; self.halted=False; self.reason=None\n    def reset_day(self,equity):\n        self.day_start=float(equity); self.peak=float(equity); self.halted=False; self.reason=None\n    def observe(self,equity):\n        equity=float(equity)\n        if not math.isfinite(equity) or equity < 0: raise ValueError(\"invalid equity\")\n        self.peak=max(self.peak,equity)\n        daily=(self.day_start-equity)/self.day_start if self.day_start else 0\n        dd=(self.peak-equity)/self.peak if self.peak else 0\n        if daily >= self.limits.max_daily_loss: self.halted=True; self.reason=\"daily_loss_limit\"\n        if dd >= self.limits.max_drawdown: self.halted=True; self.reason=\"max_drawdown_limit\"\n        return {\"halted\":self.halted,\"reason\":self.reason,\"daily_loss\":daily,\"drawdown\":dd}\n    def authorize(self,target):\n        if self.halted:return 0.0\n        return max(-self.limits.max_position,min(self.limits.max_position,float(target)))\n"
+    },
+    {
+      "path": "scripts/astra_bot.py",
+      "sha": "96da52a7019d7e2c376e1eb78b52e0db7601f2db",
+      "content_sha256": "cfad896a16656b42294f1f3de7c3f3c944674fe61e89568aa9950f16fae7bdf8",
+      "score": 33,
+      "content": "from __future__ import annotations\nimport json,os\nfrom datetime import datetime,timezone\nfrom decimal import Decimal\nfrom urllib.request import Request,urlopen\nfrom pathlib import Path\nimport sys\nsys.path.insert(0,str(Path(__file__).resolve().parents[1]))\nfrom astra.core import Bar\nfrom astra.strategies import long_momentum\nfrom astra.execution.paper import PaperBroker\nfrom astra.execution.safety import KillSwitch,ExecutionGate\nfrom astra.execution.ledger import OrderIntent,ExecutionLedger\n\nURL=\"https://api.kraken.com/0/public/OHLC\"; PAIR=\"XBTUSD\"; WINDOW=30\n\ndef fetch_ohlc():\n    req=Request(f\"{URL}?pair={PAIR}&interval=1440\",headers={\"User-Agent\":\"ASTRA-private-bot/1.0\"})\n    with urlopen(req,timeout=15) as r: p=json.loads(r.read().decode())\n    if p.get(\"error\"): raise RuntimeError(\"; \".join(map(str,p[\"error\"])))\n    key=next(k for k in p[\"result\"] if k!=\"last\"); rows=p[\"result\"][key]\n    bars=[Bar(int(x[0]),float(x[4])) for x in rows]\n    if len(bars)<WINDOW+2: raise RuntimeError(\"insufficient market data\")\n    return bars\n\ndef run_once(previous_signal=0,quantity=Decimal(\"0.001\"),bars=None):\n    bars=bars or fetch_ohlc(); sig=int(long_momentum(bars,WINDOW,0)[-1]); last=bars[-1]\n    broker=PaperBroker(); ledger=ExecutionLedger(); kill=KillSwitch(); gate=ExecutionGate(kill)\n    intent=None; order=None\n    if sig!=previous_signal and sig==1:\n        intent=OrderIntent.create(symbol=PAIR,side=\"buy\",quantity=str(quantity),strategy_id=\"long_momentum_w30_t0\",signal_timestamp=datetime.fromtimestamp(last.t,tz=timezone.utc).isoformat())\n        if ledger.register(intent):\n            order=broker.submit(symbol=PAIR,side=\"buy\",quantity=quantity); broker.advance(symbol=PAIR,market_price=last.close)\n    live=gate.authorize(data_valid=True,strategy_valid=False,risk_valid=True,execution_valid=True,reconciliation_valid=True,human_approval=False,live_enabled=False)\n    if live: raise AssertionError(\"live authorization must remain impossible\")\n    return {\"mode\":\"PAPER\",\"pair\":PAIR,\"observed_bars\":len(bars),\"last_price\":str(last.close),\"signal\":sig,\"intent_id\":intent.intent_id if intent else None,\"order_id\":order.order_id if order else None,\"order_status\":order.status.value if order else None,\"paper_position\":str(broker.positions.get(PAIR,Decimal(\"0\"))),\"paper_cash\":str(broker.cash),\"live_order_submitted\":False,\"kill_switch_halted\":kill.halted}\n\ndef main():\n    if os.getenv(\"ASTRA_LIVE_TRADING\",\"0\")==\"1\": raise SystemExit(\"ASTRA bot refuses live mode\")\n    d=run_once(previous_signal=int(os.getenv(\"ASTRA_PREVIOUS_SIGNAL\",\"0\")))\n    p=Path(\"evidence/astra_bot_snapshot.json\"); p.parent.mkdir(exist_ok=True); p.write_text(json.dumps(d,indent=2)+\"\\n\"); print(json.dumps(d,indent=2))\n\nif __name__==\"__main__\": main()\n"
+    },
+    {
+      "path": "astra/execution/__init__.py",
+      "sha": "ff49852ef1754fb21c05083475adc8d07f1b47c8",
+      "content_sha256": "bf15996884009264ffae613c75b4b6ffae771a87514e316a4bd241e663e80511",
+      "score": 31,
+      "content": "from .safety import ExecutionGate, KillSwitch\nfrom .paper import PaperBroker, OrderStatus\n"
+    },
+    {
+      "path": "astra/execution/safety.py",
+      "sha": "1de4f7b4ccff1a0d74d442ffc4f63de17f50bc80",
+      "content_sha256": "a6cf393ae08c4dcbb8bce30273f43704a5c7551e344fcd643ce18eb62af019ef",
+      "score": 31,
+      "content": "from dataclasses import dataclass\n\n@dataclass\nclass KillSwitch:\n    halted: bool=False\n    reason: str|None=None\n    def trip(self,reason): self.halted=True; self.reason=str(reason)\n    def authorize(self): return not self.halted\n\nclass ExecutionGate:\n    def __init__(self,kill_switch): self.kill_switch=kill_switch\n    def authorize(self,*,data_valid,strategy_valid,risk_valid,execution_valid,reconciliation_valid,human_approval,live_enabled):\n        return bool(live_enabled and data_valid and strategy_valid and risk_valid and execution_valid and reconciliation_valid and human_approval and self.kill_switch.authorize())\n"
+    },
+    {
+      "path": "astra/execution/gates.py",
+      "sha": "b588d1073e7504b4b8f1733b50564756e43c5889",
+      "content_sha256": "b643e03c9b1f38cfe25c688d00f47d12a4788cd41b4a6622c5a566c165256455",
+      "score": 31,
+      "content": "from dataclasses import dataclass\n@dataclass(frozen=True)\nclass GateState:\n    data_valid: bool=False\n    strategy_valid: bool=False\n    risk_valid: bool=False\n    execution_valid: bool=False\n    reconciliation_valid: bool=False\n    kill_switch_valid: bool=False\n    human_approval: bool=False\n    live_enabled: bool=False\n    def authorize(self): return all((self.data_valid,self.strategy_valid,self.risk_valid,self.execution_valid,self.reconciliation_valid,self.kill_switch_valid,self.human_approval,self.live_enabled))\nclass LiveAuthorization:\n    def __init__(self,state): self.state=state\n    def authorize(self): return self.state.authorize()\n"
     }
   ],
-  "generated_at": "2026-09-25T19:31:19.439061+00:00"
+  "generated_at": "2026-09-25T19:34:22.300019+00:00"
 }
