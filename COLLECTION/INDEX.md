@@ -107,3 +107,10 @@ The first AI source-preservation batch is now stored before deep verification:
 - COLLECTION/SOURCES/AI_DISCOVERY_SOURCES.md — preserved discovery sources and research rules.
 - 50+ named AI repositories/entry points were captured for subsequent recursive inspection.
 - These entries are DISCOVERY_CAPTURED, not automatically VERIFIED.
+
+
+## Web research capture added 2026-09-25
+- COLLECTION/WEB_RESEARCH/AGENT_REACH_CAPTURE.md — Agent Reach documentation tree, installation/safety/diagnostic patterns and reusable routing concepts.
+- COLLECTION/WEB_RESEARCH/BROWSER_AUTOMATION_INDEX.md — Playwright, Browser Use, Open Browser, OpenBrowser broker, Browserable and AgentBrowser discovery candidates.
+- COLLECTION/DOCUMENTS/DOCUMENT_OCR_INDEX.md — OCRmyPDF, Docling and Tesseract document/OCR candidates.
+- These additions are DISCOVERY_CAPTURED unless an entry was explicitly supported by inspected repository documentation; discovery is not an adoption decision.
