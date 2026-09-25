@@ -82,6 +82,35 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Core multimedia processing stack for audio/video/subtitles/metadata.
   - Useful as foundational local media infrastructure.
 
+## New 2026-09-25 discovery captures
+
+### Self-hosted SaaS replacements
+- COLLECTION/SELF_HOSTED/SAAS_REPLACEMENTS_INDEX.md
+- Discovery sources include:
+  - https://github.com/SolvoHQ/awesome-self-host-saas-alternatives
+  - https://github.com/open-saas-directory/awesome-saas-directory
+- Newly surfaced replacement families include Gitea/Forgejo/GitLab CE, Bruno/Hoppscotch, Umami/Plausible, Coolify/Dokku/CapRover, n8n/Activepieces/Huginn, Continue/Tabby/Aider, Ollama/vLLM/LiteLLM, and Headscale/NetBird.
+- These are discovery candidates; license and current feature parity require per-project verification.
+
+### Local AI runtime and agent expansion
+- COLLECTION/AI/LOCAL_AI_RUNTIME_AND_AGENTS_2026.md
+- New candidates:
+  - LocalAI — multimodal local AI engine.
+  - SOMI — local-first AI workstation/agent framework.
+  - LibrAgent — local agent workspace with tools/MCP/browser.
+  - Pan-Agent — self-hosted desktop/PC-control agent.
+  - Pernix — self-hosted agent server; explicitly not production software.
+- Discovery source: https://github.com/Supersynergy/awesome-local-ai-agents
+
+### Browser automation expansion
+- COLLECTION/WEB_RESEARCH/BROWSER_AUTOMATION_EXPANSION_2026.md
+- New candidates:
+  - Writ — self-hosted record/replay browser workflows, REST/MCP, OCR and monitoring.
+  - WebOperator — local Chrome agent/MCP with existing browser sessions.
+  - WebNav — local AI browser extension.
+  - AgentBrowser — REST/WebSocket browser control with dashboard and vision-oriented extraction.
+- These require security/session/isolation/license verification before reuse.
+
 ## Collection rules
 1. Do not treat a discovery as production-ready without verification.
 2. Preserve source URL, revision/version where relevant, license, setup method, and limitations.
@@ -92,25 +121,28 @@ Central collection of repositories, documentation, tools, and reusable implement
 
 ## Next collection frontier
 Continue repository/document research broadly, with special priority:
-- Agent Reach docs and upstream channel implementations.
-- Firecrawl self-hosting and dependency architecture.
+- Agent Reach upstream channel implementations and dependency tree.
+- Firecrawl self-hosting/dependency architecture.
 - Search/retrieval stack: SearXNG + Jina + local indexes.
-- Browser automation: Playwright + Browser Use.
-- Document ingestion: Docling + OCRmyPDF.
-- Creative/media: rembg + Upscayl + whisper.cpp + FFmpeg.
-- Free/self-hosted replacements for recurring paid developer SaaS.
-
+- Browser automation and authenticated-session security.
+- Document ingestion/OCR and local multimodal processing.
+- Local AI inference and multimodal runtimes.
+- Self-hosted SaaS replacements and recurring developer-tool bills.
+- Automation/orchestration, API gateways, databases, security, evals/observability and coding-agent ecosystems.
+- Continue following references from high-value discovery indexes rather than stopping at their first page.
 
 ## AI capture added 2026-09-25
-The first AI source-preservation batch is now stored before deep verification:
+The first AI source-preservation batch is stored before deep verification:
 - COLLECTION/AI/AI_INDEX.md — agent frameworks, runtimes, memory/RAG, local inference, AI applications, evals/safety.
 - COLLECTION/SOURCES/AI_DISCOVERY_SOURCES.md — preserved discovery sources and research rules.
 - 50+ named AI repositories/entry points were captured for subsequent recursive inspection.
 - These entries are DISCOVERY_CAPTURED, not automatically VERIFIED.
 
-
 ## Web research capture added 2026-09-25
 - COLLECTION/WEB_RESEARCH/AGENT_REACH_CAPTURE.md — Agent Reach documentation tree, installation/safety/diagnostic patterns and reusable routing concepts.
 - COLLECTION/WEB_RESEARCH/BROWSER_AUTOMATION_INDEX.md — Playwright, Browser Use, Open Browser, OpenBrowser broker, Browserable and AgentBrowser discovery candidates.
 - COLLECTION/DOCUMENTS/DOCUMENT_OCR_INDEX.md — OCRmyPDF, Docling and Tesseract document/OCR candidates.
+- COLLECTION/SELF_HOSTED/SAAS_REPLACEMENTS_INDEX.md — recurring SaaS replacement discovery.
+- COLLECTION/AI/LOCAL_AI_RUNTIME_AND_AGENTS_2026.md — local multimodal AI/runtime expansion.
+- COLLECTION/WEB_RESEARCH/BROWSER_AUTOMATION_EXPANSION_2026.md — additional local browser-agent candidates.
 - These additions are DISCOVERY_CAPTURED unless an entry was explicitly supported by inspected repository documentation; discovery is not an adoption decision.
