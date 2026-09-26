@@ -86,3 +86,12 @@ EASY has a deterministic-safe fixture path and provider-neutral creative boundar
 - New targeted outreach sent to the household private-AI project contact `37jn5k7ti@mozmail.com`, based on the public September 23 job brief and its stated first-phase budget.
 - No response or payment is being counted yet.
 - Existing public job listings are treated as opportunities, not clients, until reply/acceptance/payment evidence exists.
+
+
+## 2026-09-26 platform-leverage execution
+- GitHub installation inventory verified 8 accessible owner repositories: agent-skills, AI_operating_memory, Astra, Astra-, Easy-, Files-, Project-, Salamou-31. No additional owner repositories were returned by the authenticated installation inventory in this run.
+- Current n8n Jobs page was rechecked: active listings include fixed-price n8n/Make automation work, AI support automation, ongoing n8n maintenance, and other automation roles. These are opportunities only, not customers or revenue.
+- Current AI support opportunity: Latin American payment processor seeking n8n + LLM + APIs for conversation classification, FAQ answers, DB/API queries, actions, human escalation, and context; public contact is WhatsApp +573235816890. No direct outbound action was taken because no supported WhatsApp channel is connected here.
+- Current fixed-price automation opportunity: Marius_Bauzis seeking ongoing n8n/Make specialists for CRM/API/AI/email/Shopify automation; payment is milestone-based after client approval/funds release. No direct forum reply action was available through the connected tools, so it remains an opportunity, not contacted evidence.
+- Open-source leverage research: Vendure is self-hostable and extensible through plugins, but GPLv3 applies to the core; Activepieces core is MIT while enterprise directories are commercially licensed; Saleor storefront licensing currently includes FSL-1.1-ALv2 restrictions on competing use. These licensing facts prevent unsafe reuse assumptions.
+- No platform was forked or deployed solely from this research. Integration should proceed only after a concrete customer/product gap is identified.
