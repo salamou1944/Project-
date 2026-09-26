@@ -1,10 +1,17 @@
 # COLLECTION — Research Index
 
 Status: INCREMENTAL_COLLECTION
-Updated: 2026-09-25
+Updated: 2026-09-26
 
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
+
+## Permanent agentic AI discovery source
+- agentic-ai-apis — https://github.com/cporter202/agentic-ai-apis
+- Capture: COLLECTION/AI/AGENTIC_AI_APIS_CAPTURE_2026-09-26.md
+- Scope: Agents, AI Models, MCP Servers
+- Upstream README inspected 2026-09-26: 3,024 catalog entries
+- Role: permanent discovery source; candidates require independent source/license/API/cost/security/runtime verification before promotion.
 
 ## Current research batch
 
@@ -90,6 +97,7 @@ Continue:
 - aw-junaid remaining repositories/gists, mufeedvh repositories, Nmap ecosystem and other previously supplied accounts.
 - Agent Reach adapters/dependencies and persistent research intake.
 - High-value verification queue under COLLECTION/VERIFICATION/VERIFICATION_QUEUE_NEXT.md.
+- agentic-ai-apis: continuously inspect for high-value agent/model/MCP candidates tied to real capability gaps.
 
 No completion claim is made. Collection remains active.
 
