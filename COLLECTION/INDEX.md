@@ -95,3 +95,6 @@ No completion claim is made. Collection remains active.
 
 ## Provenance audit
 - COLLECTION/MASTER/DEDUPLICATION_AND_PROVENANCE_AUDIT_2026-09-25.md
+
+## AI engineering curriculum source
+- COLLECTION/AI/AI_ENGINEERING_FROM_SCRATCH_CAPTURE_2026-09-26.md — MIT-licensed AI engineering curriculum capture; use as a durable pattern/knowledge source and reverify upstream revisions before promotion.
