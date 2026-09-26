@@ -78,3 +78,11 @@ EASY has a deterministic-safe fixture path and provider-neutral creative boundar
 - Confirmed payment/revenue: NO evidence.
 - Sellable service capability: YES for the scoped offers above.
 - First-dollar target: one paid micro-deliverable, not a large product launch.
+
+
+## 2026-09-26 execution
+- Current public demand checked: n8n Community currently shows active hiring for n8n/AI automation, including a household private-AI project with a stated $1,000–$2,000 first phase and an AI support automation project in Latin America. citeturn5search1turn6search11
+- Direct targeted follow-ups sent from `api-pilot@agentmail.to` to five previously contacted, non-bounced prospects: Vserve, Potential Digital, Nadim/Aroundata, Priscilla/Doiron Seller Partner, and Ian/Central.
+- New targeted outreach sent to the household private-AI project contact `37jn5k7ti@mozmail.com`, based on the public September 23 job brief and its stated first-phase budget.
+- No response or payment is being counted yet.
+- Existing public job listings are treated as opportunities, not clients, until reply/acceptance/payment evidence exists.
