@@ -24,3 +24,10 @@ These sources are preserved so future research can resume even if a page changes
 4. Separate open-source/local capability from hosted/free-tier capability.
 5. Record limitations and hardware requirements.
 6. Never mark a source VERIFIED solely because an aggregator lists it.
+
+
+## Newly captured repository
+- OmniRoute: https://github.com/diegosouzapw/OmniRoute
+- Captured: 2026-09-27
+- Classification: AI gateway / multi-provider routing / MCP / A2A / token compression / free-provider discovery.
+- State: DISCOVERY_CAPTURED; not yet VERIFIED or adopted.
