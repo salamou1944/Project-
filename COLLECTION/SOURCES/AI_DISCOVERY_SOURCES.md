@@ -75,3 +75,10 @@ These sources are preserved so future research can resume even if a page changes
 - awesome-* / open-source-* repositories: discovery indexes, not proof of individual component capabilities.
 - mpt-assets / homebrew-* / winget-pkgs: packaging/assets/catalog infrastructure; ingest as discovery metadata unless a concrete capability is verified.
 - harry0703 profile repository: profile metadata only.
+
+
+## Machine-readable capability inventory
+- File: `COLLECTION/AUTO/EXTRACTED/harry0703_capability_inventory_2026-09-27.json`
+- Collection revision containing the inventory: `79d97983a95a808c2881b2e0c21c3366ad620aa4`
+- Contains 10 deep-inspected remaining harry0703 repositories with capability type, evidence level, license/security notes, compatibility and dedupe keys.
+- Exact source commit SHA is intentionally null where the connected GitHub branch endpoint exposed only branch names; README blob SHA is not substituted for commit identity.
