@@ -1,11 +1,12 @@
 # OpenClaw API List — Operational Capture (2026-09-27)
 
 Source: cporter202/openclaw-api-list
-Revision inspected: main
+Revision inspected/pinned: 3afa19dd12f3cdc6bc2e297e9b6945059ada0cae
 Purpose: discovery source for the AI Operating Operator, not an execution trust boundary.
 
 ## Verified source structure
 - Curated OpenClaw list: ~100 APIs in OPENCLAW_RECOMMENDED.md.
+- Operator category coverage: recommended, MCP, integrations, automation, open-source, agents, AI, developer tools, ecommerce, jobs, lead generation, news, SEO, social, travel, videos, other.
 - Categories include MCP servers, integrations, automation, AI, agents, travel, jobs, news, ecommerce, lead generation, social media, SEO, videos, and open-source.
 - Focus document states that APIs are intended to be callable by skills, MCP-compatible, webhook-friendly, or integration-ready.
 - MCP is identified as a first-class integration path.
@@ -24,20 +25,20 @@ Implemented in salamou1944/agent-skills:
 - adapter: apps/ai-operating-operator/adapters/api-catalog-adapter.mjs
 - actions: health, search, category
 - authorization: explicit task action api_catalog_read
-- source restricted to raw.githubusercontent.com/cporter202/openclaw-api-list
+- source restricted to the pinned raw.githubusercontent.com/cporter202/openclaw-api-list revision
 - independent verifier: api-catalog-independent-verifier-v1
-- self-test includes live catalog retrieval.
+- self-test includes live catalog retrieval, pinned-revision provenance, structured provider URLs, AI/Agents category coverage, and authorization denial.
 
 ## Verified live use
-The operator self-test retrieved OPENCLAW_RECOMMENDED.md from the source and searched for "MCP".
+The operator self-test retrieves OPENCLAW_RECOMMENDED.md from the pinned source revision and searches for "MCP"; it also checks AI and Agents category coverage.
 Observed 5 results:
 - Brave Search MCP Server
 - Google Search MCP Server
 - Tavily MCP Server
 - Exa MCP Server
 - Firecrawl MCP Server
-The response was independently verified with status 200 and executionId.
+The response is independently verified with status 200, executionId, and matching sourceRevision.
 
 ## Status
-DISCOVERY SOURCE -> ADAPTER_READY -> TESTED.
+DISCOVERY SOURCE -> ADAPTER_READY -> TESTED (pinned, bounded, read-only catalog discovery).
 This capture does not promote any listed third-party API to HUMAN_READY. Each future provider must pass its own license/terms, cost/quota, security, reachability, operation, and independent-verification gates.
