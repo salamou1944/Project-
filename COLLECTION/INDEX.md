@@ -14,6 +14,11 @@ Central collection of repositories, documentation, tools, and reusable implement
 - Role: permanent architecture/capability source; exact license/terms review is required before code reuse.
 
 ## Permanent agentic AI discovery source
+- cporter202/openclaw-api-list — https://github.com/cporter202/openclaw-api-list
+- Capture: COLLECTION/AI/OPENCLAW_API_LIST_CAPTURE_2026-09-27.md
+- Scope: agent-callable APIs, MCP servers, OpenAPI-to-MCP patterns, integrations, automation and self-hosted/free discovery.
+- Role: permanent discovery source; independently verify provider, license, cost, security and runtime before promotion.
+
 - agentic-ai-apis — https://github.com/cporter202/agentic-ai-apis
 - Capture: COLLECTION/AI/AGENTIC_AI_APIS_CAPTURE_2026-09-26.md
 - Scope: Agents, AI Models, MCP Servers
