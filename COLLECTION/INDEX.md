@@ -15,6 +15,10 @@ Central collection of repositories, documentation, tools, and reusable implement
 
 ## Permanent agentic AI discovery source
 - cporter202/openclaw-api-list — https://github.com/cporter202/openclaw-api-list
+- openclaw/mcporter — https://github.com/openclaw/mcporter
+- Capture: COLLECTION/AI/MCPORTER_CAPTURE_2026-09-27.md
+- Scope: MIT-licensed MCP runtime/CLI, server/tool discovery, bounded MCP transport, typed clients, and record/replay patterns.
+- Role: architecture source; implementation requires explicit server/tool allowlists, authorization, schema validation, evidence, and independent verification.
 - Capture: COLLECTION/AI/OPENCLAW_API_LIST_CAPTURE_2026-09-27.md
 - Scope: agent-callable APIs, MCP servers, OpenAPI-to-MCP patterns, integrations, automation and self-hosted/free discovery.
 - Role: permanent discovery source; independently verify provider, license, cost, security and runtime before promotion.
