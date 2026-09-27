@@ -6,6 +6,13 @@ Updated: 2026-09-26
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
 
+## Permanent agentic AI discovery sources
+- Agent Zero — https://github.com/agent0ai/agent-zero
+- Capture: COLLECTION/AI/AGENT_ZERO_CAPTURE_2026-09-27.md
+- Scope: computer-use architecture, project/workspace isolation, skills/plugins/MCP/A2A, multi-agent delegation, workspace recovery/time-travel patterns
+- Inspected 2026-09-27 at revision e3051fb584b1a36be2b0a0c90606f1c2c2d356ec
+- Role: permanent architecture/capability source; exact license/terms review is required before code reuse.
+
 ## Permanent agentic AI discovery source
 - agentic-ai-apis — https://github.com/cporter202/agentic-ai-apis
 - Capture: COLLECTION/AI/AGENTIC_AI_APIS_CAPTURE_2026-09-26.md
