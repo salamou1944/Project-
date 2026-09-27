@@ -118,3 +118,5 @@ No completion claim is made. Collection remains active.
 
 ## AI engineering curriculum source
 - COLLECTION/AI/AI_ENGINEERING_FROM_SCRATCH_CAPTURE_2026-09-26.md — MIT-licensed AI engineering curriculum capture; use as a durable pattern/knowledge source and reverify upstream revisions before promotion.
+
+- OPENCLAW_API_LIST_OPERATIONAL_CAPTURE_2026-09-27.md — operational OpenClaw API catalog source and verified operator integration
