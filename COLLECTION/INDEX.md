@@ -25,6 +25,11 @@ Central collection of repositories, documentation, tools, and reusable implement
 - Upstream README inspected 2026-09-26: 3,024 catalog entries
 - Role: permanent discovery source; candidates require independent source/license/API/cost/security/runtime verification before promotion.
 
+- ruvnet/ruflo — https://github.com/ruvnet/ruflo
+- Capture: COLLECTION/AI/RUFLO_CAPTURE_2026-09-27.md
+- Scope: agent meta-harness, multi-agent orchestration, adaptive planning, memory provenance, model routing, security/readiness audits, and witness/receipt verification.
+- Role: permanent architecture/capability source; MIT license verified; selected patterns require independent operator tests.
+
 ## Current research batch
 
 ### Web access / research
