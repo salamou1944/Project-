@@ -109,3 +109,26 @@ Inventory status: 21 repositories discovered. Capability verification is reposit
 
 ### Reuse gate
 No item above is promoted automatically into executable capability. Adoption requires: canonical identity + exact revision + license/security review + compatibility check + independent verification + project-specific test.
+
+
+## harry0703 deep inspection — 2026-09-27
+
+Deep inspection completed for the remaining 10 repositories. Default branches and repository content were inspected through the GitHub connector. Exact commit SHAs were not exposed by the branch endpoint, so no fabricated SHA is recorded; README blob SHAs are preserved as file-level evidence where available.
+
+| Repository | Branch | Capability / role | License evidence | Evidence level | Dedupe result |
+|---|---|---|---|---|---|
+| harry0703/yt-dlp | master | Feature-rich CLI audio/video downloader; extractors, subtitles, post-processing, plugins, embedding | Unlicense/public-domain dedication | VERIFIED_FROM_README + LICENSE | Capability overlaps with existing Agent-Reach intake; exact repo was not already indexed as a canonical source |
+| harry0703/stopwords-zh | master | Chinese/English stopword datasets and filtering helpers; Baidu/HIT/ICT/SCU/CN/Marimo/ISO sources | MIT | VERIFIED_FROM_README + LICENSE | No exact canonical match found in Project- code search |
+| harry0703/mpt-assets | main | Media assets for MoneyPrinterTurbo | No LICENSE file found at inspected path | VERIFIED_FROM_README | Companion asset source; linked to already-collected MoneyPrinterTurbo, not a new general capability |
+| harry0703/winget-pkgs | master | Windows package-manager manifest/catalog infrastructure | MIT | VERIFIED_FROM_README + LICENSE | Discovery/infrastructure; not an executable capability for the operator |
+| harry0703/awesome-mac | master | Curated macOS software discovery index | CC0-1.0 | DISCOVERY_INDEX | No exact canonical match found in Project- code search |
+| harry0703/homebrew-cask | main | Homebrew Cask package/catalog infrastructure for GUI apps, CLI tools, fonts and plugins | BSD 2-Clause | VERIFIED_FROM_README + LICENSE | Discovery/package infrastructure; adoption requires package-level verification |
+| harry0703/homebrew-tap | main | Personal Homebrew tap; MangoDisk cask + CLI formula with pinned SHA-256 release artifacts | No LICENSE file found at inspected path | VERIFIED_FROM_README | Direct companion to MangoDisk; no new general capability |
+| harry0703/open-source-mac-os-apps | master | Curated macOS open-source application discovery index | CC0-1.0 | DISCOVERY_INDEX + LICENSE | No exact canonical match found in Project- code search |
+| harry0703/awesome-rust | main | Curated Rust ecosystem index spanning AI, observability, security, deployment, web, databases and more | License file not found at inspected path | DISCOVERY_INDEX | No exact canonical match found in Project- code search |
+| harry0703/awesome-rust-1 | master | Alternate/older Rust ecosystem discovery index | License file not found at inspected path | DISCOVERY_INDEX | Treat as possible duplicate/variant of awesome-rust; do not count as a distinct capability source |
+
+### Security / reuse gates
+- yt-dlp remains gated for operational media acquisition: use only for authorized content and explicit project use-cases.
+- Package/catalog repositories are metadata sources, not automatically trusted installers.
+- Discovery indexes are never promoted to executable capabilities without resolving the linked project, license, security posture, exact revision and compatibility.
