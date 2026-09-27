@@ -71,3 +71,41 @@ Purpose: preserve AI/agent/model infrastructure sources now, before deeper recur
 
 ## Important rule
 This file is a source-preservation layer. Before integration, inspect repository files, license, release activity, dependency/security posture, local execution path, and actual capabilities. Do not infer a paid-service replacement merely from an entry in an awesome list.
+
+
+## harry0703 capability extraction — 2026-09-27
+
+Source account: https://github.com/harry0703
+Inventory status: 21 repositories discovered. Capability verification is repository/file specific; discovery indexes are not treated as verified implementations.
+
+### VERIFIED_FROM_REPOSITORY_CONTENT
+
+| Repository | Exact revision | Capability | Evidence level |
+|---|---|---|---|
+| harry0703/MoneyPrinterTurbo | 8e259e9f072c9e08464f040cd658d4eb046a57d0 | AI short-video generation pipeline; Agent/WebUI/API/CLI; script generation; material search; subtitles; BGM; video composition; multiple LLM/TTS/media providers; Docker; Redis; LiteLLM; FFmpeg integration; path-security helper | VERIFIED_FROM_README/TREE/FILES |
+| harry0703/AudioNotes | 9a580707eb9258ce53c59a5edd70e834a5d8098d | Local-first audio/video transcription; FunASR; local Ollama Q&A/note generation; Markdown notes; browser recording; Docker; local storage | VERIFIED_FROM_README |
+| harry0703/MangoDisk | 3b83950053d9ed4cd9a6c7577d2f1cb7a05f83a1 | Cross-platform storage analysis/cleanup; duplicate/large-file cleanup; privacy cleanup; application uninstall; startup/system maintenance; AI explanations; Tauri 2 + Rust core | VERIFIED_FROM_README |
+| harry0703/FlashVoice | 599b1aa2c9054d2488f85fd78411a404fac6c626 | Local real-time voice input/transcription; SenseVoice; offline file transcription; system/mic audio; optional local Ollama/OpenAI-compatible proofreading; macOS/Windows desktop | VERIFIED_FROM_README |
+| harry0703/claude-code | 7af07613ac688bfd9ba2cb2b72d7973378cfc317 | Coding-agent related repository | VERIFIED_IDENTITY; capability details require deeper file-level inspection |
+| harry0703/go-openai | 38b16a3c413a3ea076cf4082ea5cd1754b72c70f | Go OpenAI client/library source | VERIFIED_IDENTITY; integration suitability requires license/API inspection |
+| harry0703/go-admin | 8bc57590ab57df9d09930a774014421d0a82a2f2 | Go web/admin application foundation; admin UI, database/config/upload patterns | VERIFIED_FROM_REPOSITORY_CONTENT |
+| harry0703/awesome-tauri | c17a8b9583201ed61608b1bb2365e2ceebaf9161 | Curated Tauri ecosystem discovery: templates, plugins, integrations, applications | DISCOVERY_INDEX |
+| harry0703/open-apps | 109c1965ba0123b5d62db69cb50e937a003bc7cb | Curated production open-source application discovery directory | DISCOVERY_INDEX |
+| harry0703/awesome-windows | 20520c38de56b5cb0e9eb757ef138c5e5fa1f99d | Curated Windows applications/tools discovery | DISCOVERY_INDEX |
+
+### DISCOVERY_ONLY_PENDING_DEEP_INSPECTION
+
+- harry0703/yt-dlp — media acquisition/download source; operational reuse requires security/legal/use-case gate.
+- harry0703/stopwords-zh — Chinese NLP data.
+- harry0703/mpt-assets — assets repository; inspect concrete contents before reuse.
+- harry0703/winget-pkgs — packaging/catalog infrastructure.
+- harry0703/awesome-mac — macOS software discovery index.
+- harry0703/harry0703 — profile metadata repository.
+- harry0703/awesome-rust — Rust ecosystem discovery index.
+- harry0703/homebrew-cask — package catalog infrastructure.
+- harry0703/homebrew-tap — personal Homebrew tap; inspect manifests before reuse.
+- harry0703/open-source-mac-os-apps — open-source macOS app discovery index.
+- harry0703/awesome-rust-1 — duplicate/variant Rust discovery index; dedupe before treating as a separate knowledge source.
+
+### Reuse gate
+No item above is promoted automatically into executable capability. Adoption requires: canonical identity + exact revision + license/security review + compatibility check + independent verification + project-specific test.
