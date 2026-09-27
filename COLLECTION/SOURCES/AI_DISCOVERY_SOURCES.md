@@ -31,3 +31,47 @@ These sources are preserved so future research can resume even if a page changes
 - Captured: 2026-09-27
 - Classification: AI gateway / multi-provider routing / MCP / A2A / token compression / free-provider discovery.
 - State: DISCOVERY_CAPTURED; not yet VERIFIED or adopted.
+
+## harry0703 public repository source
+- Account: https://github.com/harry0703
+- Captured: 2026-09-27
+- Discovery method: GitHub repository search for `user:harry0703` via authenticated GitHub connector.
+- Public repositories discovered: 21
+- Policy: treat each repository as an independent discovery source; deduplicate by canonical `owner/repo` identity; resolve and preserve the exact default-branch commit revision when the capability feed ingests it.
+
+### Discovered repositories
+- https://github.com/harry0703/MoneyPrinterTurbo
+- https://github.com/harry0703/MangoDisk
+- https://github.com/harry0703/AudioNotes
+- https://github.com/harry0703/FlashVoice
+- https://github.com/harry0703/claude-code
+- https://github.com/harry0703/yt-dlp
+- https://github.com/harry0703/go-admin
+- https://github.com/harry0703/stopwords-zh
+- https://github.com/harry0703/mpt-assets
+- https://github.com/harry0703/go-openai
+- https://github.com/harry0703/awesome-tauri
+- https://github.com/harry0703/winget-pkgs
+- https://github.com/harry0703/open-apps
+- https://github.com/harry0703/awesome-windows
+- https://github.com/harry0703/awesome-mac
+- https://github.com/harry0703/harry0703
+- https://github.com/harry0703/awesome-rust
+- https://github.com/harry0703/homebrew-cask
+- https://github.com/harry0703/homebrew-tap
+- https://github.com/harry0703/open-source-mac-os-apps
+- https://github.com/harry0703/awesome-rust-1
+
+### Initial capability triage
+- MoneyPrinterTurbo: AI video generation/media pipeline, WebUI/API/CLI, agent Skill, Docker.
+- AudioNotes: local audio/video transcription, structured Markdown notes, local Ollama workflow, Docker.
+- MangoDisk: local disk cleanup/storage analysis/optimization, desktop + CLI.
+- FlashVoice: audio/voice capability source; requires repository-level verification before adoption.
+- claude-code: coding-agent related source; requires repository-level verification and provenance checks before reuse.
+- yt-dlp: media acquisition/downloading capability; security/legal/use-case gates required before operational reuse.
+- go-admin: Go administration/application foundation; requires project-fit verification.
+- go-openai: Go OpenAI client/library capability; verify upstream relationship/license before reuse.
+- stopwords-zh: Chinese NLP stopword data.
+- awesome-* / open-source-* repositories: discovery indexes, not proof of individual component capabilities.
+- mpt-assets / homebrew-* / winget-pkgs: packaging/assets/catalog infrastructure; ingest as discovery metadata unless a concrete capability is verified.
+- harry0703 profile repository: profile metadata only.
