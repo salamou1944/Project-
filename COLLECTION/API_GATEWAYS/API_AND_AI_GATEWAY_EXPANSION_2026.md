@@ -54,3 +54,12 @@ Status: DISCOVERY_CAPTURED
 
 ## Rule
 Gateway discovery is not adoption. Record whether the core is actually open/self-hostable, whether provider calls remain metered, and whether security controls are enforced rather than merely exposed.
+
+
+## OmniRoute
+- URL: https://github.com/diegosouzapw/OmniRoute
+- Revision observed: release/v3.8.51.
+- License: MIT according to the repository README.
+- Capability observed: unified OpenAI-compatible AI gateway, multi-provider routing, quota-aware fallback, token/context compression, MCP/A2A, and free-provider/self-hosted paths.
+- Potential value: reduce single-provider dependency in EASY and strengthen Salamou-31/API Factory gateway infrastructure; selected resilience patterns may also inform Elite/ARMY-14.
+- Verification required: inspect source implementation, provider adapters, authentication, quota semantics, security controls, tests, and actual free-tier conditions before reuse.
