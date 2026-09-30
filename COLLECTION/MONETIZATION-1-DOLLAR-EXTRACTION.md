@@ -12,7 +12,6 @@ Source: `Salamou-31/AI-API-HUB/OFFERS-AND-PRICING.md`
 - Deliverable: diagnose one workflow, identify root cause, fix, test.
 - Existing commercial range: $75–$250.
 - Delivery target: 1–2 days.
-- First-dollar path: sell one narrowly scoped repair; do not promise broader automation.
 
 ### 2. AI/API Integration Pilot
 Source: same offer catalog.
@@ -25,13 +24,11 @@ Source: same offer catalog.
 Source: same offer catalog.
 - Deliverable: current-stack review, automation opportunities, architecture, recommended tools, priorities, implementation estimate.
 - Existing range: $100–$500.
-- Suitable as a low-friction paid diagnostic.
 
 ### 4. Product-content micro-service
 Source: `Salamou-31/services/ai-product-content-api`.
 - Existing endpoint: `POST /v1/product-content`.
 - Existing runtime has API-key auth, rate limiting, daily quota, input validation, fail-closed health behavior, and provider-neutral configuration.
-- Commercial README supports offering it as an API or done-for-you service.
 
 ### 5. Support Resolution Engine
 Source: `Easy-/api-lab/SALES-KIT-SUPPORT-RESOLUTION-ENGINE.md`.
@@ -43,12 +40,10 @@ Source: `Easy-/api-lab/SALES-KIT-SUPPORT-RESOLUTION-ENGINE.md`.
 Sources: EASY paid-opportunity matrix + Salamou-31 service catalog.
 - Deliverable: PDF/email/document → OCR/extraction → structured data → destination.
 - Existing starting ranges: $250–$900 for a pilot.
-- Best first version: one document type and one output destination.
 
 ### 7. E-commerce automation
 Sources: Salamou-31 service catalog + EASY commerce connector.
 - Potential deliverables: Shopify/WooCommerce integration, product enrichment, order/customer synchronization, support/inventory/reporting.
-- EASY has an isolated Shopify read-only adapter with fixture tests and CI coverage; live smoke requires runtime credentials.
 - Sell scoped integration/diagnostic work, not unsupported production claims.
 
 ## Free/low-cost LLM leverage — 2026-09-30
@@ -56,44 +51,43 @@ Sources: Salamou-31 service catalog + EASY commerce connector.
 Source: `mnfst/awesome-free-llm-apis` (https://github.com/mnfst/awesome-free-llm-apis).
 
 Material findings:
-- Google Gemini: free-tier access is available for eligible models; data-handling terms and regional/API-client restrictions must be checked for the exact customer use case. Suitable candidate for low-volume, non-sensitive workloads after live verification.
-- Groq: free-plan rate limits exist for multiple models, including openai/gpt-oss-120b, openai/gpt-oss-20b, Qwen and Whisper. Candidate for fast classification, extraction, routing and support workloads; exact current quota/terms must be verified before customer production.
-- Cloudflare Workers AI: free allocation is limited (10,000 Neurons/day in the collected source). Useful for bounded workloads, not an SLA substitute.
-- Z AI: free models are listed, but model lifecycle/catalog changes require live verification before committing to a customer.
-- Kilo/anonymous routers: useful for experiments only until logging/data handling and commercial terms are independently verified; never send confidential customer data through unverified anonymous access.
+- Google Gemini: free-tier access exists for eligible models; data-handling terms and regional/API-client restrictions must be checked for the exact customer use case.
+- Groq: free-plan rate limits exist for multiple models, including openai/gpt-oss-120b, openai/gpt-oss-20b, Qwen and Whisper. Candidate for fast classification, extraction, routing and support workloads.
+- Cloudflare Workers AI: free allocation is limited (10,000 Neurons/day in the collected source); useful for bounded workloads, not an SLA substitute.
+- Z AI: free models are listed, but model lifecycle/catalog changes require live verification.
+- Kilo/anonymous routers: experiments only until logging/data handling and commercial terms are independently verified; never send confidential customer data through unverified anonymous access.
 - Cohere Trial: source marks the trial non-commercial; excluded from paid customer delivery.
 - Mistral: collected evidence indicates billing activation is required for functional API keys; excluded from the zero-upfront path.
-Rule: provider availability/capability is not revenue. No provider is used in paid delivery until current terms, quota, API availability, commercial use, and reliability are verified for the specific job.
+- No provider is used in paid delivery until current terms, quota, API availability, commercial use, and reliability are verified for the specific job.
 
 ### Reusable delivery leverage confirmed in our repositories
-- `Salamou-31/AI-API-HUB`: full-service technical delivery hub covering AI workflow automation, REST API/webhooks/OAuth, n8n repair, CRM/WhatsApp, document extraction/OCR and e-commerce automation.
-- `AI-API-HUB/api-factory/factory.mjs`: provider adapter boundary plus RequestLedger and UsageLedger, directly reusable for provider-neutral API products.
+- `Salamou-31/AI-API-HUB`: AI workflow automation, REST API/webhooks/OAuth, n8n repair, CRM/WhatsApp, document extraction/OCR and e-commerce automation.
+- `AI-API-HUB/api-factory/factory.mjs`: provider adapter boundary plus RequestLedger and UsageLedger.
 - `AI-API-HUB/COMMERCIAL-OPERATING-BACKLOG.md`: reusable templates for API integration, webhook/OAuth, n8n repair, AI lead qualification, CRM synchronization, WhatsApp/SMS/voice, document/OCR and Shopify.
-- `Project-/COLLECTION`: existing evidence ledger and opportunity records prevent capability claims from being confused with commercial evidence.
+- `Project-/COLLECTION`: evidence records separating capability from commercial proof.
 
 ## 2026-09-30 execution
 
 ### AgentMail
 - Connected inboxes checked: `api-pilot@agentmail.to` and `easy@agentmail.to`.
 - Messages received after 2026-09-29T00:00:00Z: 0 in both inboxes.
-- Therefore: no new reply, acceptance, payment or revenue evidence.
+- New reply/acceptance/payment/revenue evidence: none.
 
-### Actionable opportunity actually pursued
+### Outreach correction
 **CryptoFiscal — Junior AI & Automation Operator**
 - Source: https://community.n8n.io/t/buscamos-un-automatizador-ia-junior/312900
 - Public business contact: info@cryptofiscal.org
-- Role: remote, part-time/objectives-based Junior AI & Automation Operator.
-- Listed compensation in our verified opportunity record: $500/month plus possible result bonuses.
-- Required work: n8n/Make, APIs/webhooks, WhatsApp, Notion, Gmail, CRM, forms and AI tools.
-- A targeted email was actually sent from `api-pilot@agentmail.to` on 2026-09-30 to the published business address.
-- Message ID: <010001a0f048601d-b493b1c5-582e-4285-8582-820e5af33048-000000@email.amazonses.com>
-- Status: OUTREACH SENT — awaiting reply. It is NOT a customer, acceptance or revenue.
+- The original listing advertised remote part-time work, n8n/Make, APIs/webhooks, WhatsApp, Notion, Gmail, CRM, forms and AI tools, with $500/month plus possible result bonuses.
+- An email was sent from `api-pilot@agentmail.to` on 2026-09-30, message ID `<010001a0f048601d-b493b1c5-582e-4285-8582-820e5af33048-000000@email.amazonses.com>`.
+- **Important evidence correction:** the current source page explicitly says the selection process was closed and asks applicants not to send more messages. Therefore this outreach must be classified as **invalid/late outreach**, not as a valid active lead. No follow-up will be sent.
+- This event produced no customer, acceptance, or revenue evidence.
 
-### Other fresh verified opportunities
-- Marius_Bauzis: ongoing fixed-price n8n/Make projects covering CRM, APIs, AI, email/forms and Shopify/e-commerce. Source: https://community.n8n.io/t/looking-for-n8n-make-automation-specialist-for-ongoing-fixed-price-projects/315672
-- Jyotirmoy_Das: n8n builder collaboration for WhatsApp/AI/API/CRM workflows, with payment only when client projects exist. Source: https://community.n8n.io/t/looking-for-1-2-n8n-builders-for-long-term-collaboration/316792
-- Latin American payment processor: n8n + AI support system covering conversation classification, DB/API queries, actions, human escalation and context; public WhatsApp contact exists, but no supported WhatsApp outbound tool is connected here, so no contact was fabricated. Source: https://community.n8n.io/t/buscamos-ai-automation-engineer-para-construir-nuestro-sistema-de-soporte-con-ia/315655
-- These remain opportunities, not customers, until reply/acceptance/payment evidence exists.
+### Fresh active opportunities verified
+- **Marius_Bauzis:** ongoing fixed-price n8n/Make work covering CRM, APIs, AI, email/forms and Shopify/e-commerce. Source: https://community.n8n.io/t/looking-for-n8n-make-automation-specialist-for-ongoing-fixed-price-projects/315672
+- **Jyotirmoy_Das:** n8n builder collaboration for WhatsApp/AI/API/CRM workflows. Source: https://community.n8n.io/t/looking-for-1-2-n8n-builders-for-long-term-collaboration/316792
+- **Dorian56:** urgent paid n8n workflow repair; thread activity continued through September 28, 2026. Source: https://community.n8n.io/t/n8n-freelancer-needed-for-workflow/314417
+- **Latin American payment processor:** n8n + AI support system for conversation classification, FAQ responses, DB/API queries, actions, human escalation and context; public WhatsApp contact exists. No outbound action was taken because no supported WhatsApp outbound channel is connected here. Source: https://community.n8n.io/t/buscamos-ai-automation-engineer-para-construir-nuestro-sistema-de-soporte-con-ia/315655
+- These are opportunities only. None is counted as a customer or revenue.
 
 ## Do NOT sell as a proven product yet
 
@@ -111,16 +105,17 @@ Provider-neutral creative boundary exists, but production claims require real pr
 4. Record evidence: prospect → reply → accepted scope → payment → delivery.
 5. Never count a public listing as a client or revenue.
 6. Do not spend on paid APIs before a client-funded requirement exists.
-7. Do not send duplicate cold outreach to the same prospect.
-8. Use direct public contact only when verified and relevant.
+7. Do not send duplicate cold outreach.
+8. Verify that a listing is still open immediately before outreach.
+9. Use direct public contact only when verified and relevant.
 
 ## Current evidence status
 
-- Confirmed customer: NO evidence.
-- Confirmed payment/revenue: NO evidence.
-- Outreach actually sent this run: 1 (CryptoFiscal).
-- Replies received this run: 0.
-- Paid lead credits spent this run: $0.
-- Upfront spend this run: $0.
-- Sellable service capability: YES for the scoped offers above.
-- First-dollar target: one paid micro-deliverable, not a large product launch.
+- Confirmed customer: **NO evidence**.
+- Confirmed payment/revenue: **NO evidence**.
+- Valid new outreach this run: **0**.
+- Invalid/late outreach this run: **1 (CryptoFiscal; listing closed)**.
+- Replies received this run: **0**.
+- Paid lead credits spent: **$0**.
+- Upfront spend: **$0**.
+- Sellable scoped capability: **YES**.
