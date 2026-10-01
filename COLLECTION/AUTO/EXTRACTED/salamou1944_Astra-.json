@@ -1,9 +1,9 @@
 {
   "canonical_source": "github:salamou1944/Astra-",
   "repo": "salamou1944/Astra-",
-  "revision_sha": "f7ca5d08da62981b7c96c0007f7dd8339a296b33",
+  "revision_sha": "67c11fe9b58929799b61eaf6717d8f756da7e27d",
   "default_branch": "main",
-  "repo_updated_at": "2026-09-25T19:45:44Z",
+  "repo_updated_at": "2026-10-01T15:05:02Z",
   "license": null,
   "topics": [],
   "tree_truncated": false,
@@ -23,10 +23,17 @@
     },
     {
       "path": "README.md",
-      "sha": "e5770877b418682c7f0ba9c82517a2bf9351d9b0",
-      "content_sha256": "f587ba9fe58a96365684c059ed749b6aeec85ee284c70dc6638d53226a8ff0d8",
+      "sha": "19cf871b891ead1886dfc08810472e6c85b77927",
+      "content_sha256": "9902d27b15b0d8b5d3f4c11cd5917036695b7635968281cdf17f369f738c3c73",
       "score": 170,
-      "content": "# ASTRA Private Trading Bot\n\nExecutable ASTRA bot boundary.\n\nImplemented:\n- Kraken public OHLC ingestion\n- fixed long-momentum 30-day signal\n- deterministic paper execution\n- idempotent intent ledger\n- kill switch and fail-closed execution gate\n- unit tests and CI paper smoke\n\nSafety:\n- live trading is OFF\n- runner refuses ASTRA_LIVE_TRADING=1\n- no withdrawal capability\n- no profitability or alpha claim\n\nResearch and evidence remain in salamou1944/Astra. Its current research gates do not establish profitability, so this bot remains paper-only.\n"
+      "content": "# ASTRA Private Trading Bot\n\nExecutable ASTRA bot boundary.\n\nImplemented:\n- Kraken public OHLC ingestion\n- fixed long-momentum 30-day signal\n- deterministic paper execution\n- idempotent intent ledger\n- kill switch and fail-closed execution gate\n- authenticated Kraken Spot adapter for Balance/OpenOrders/QueryOrders/CancelOrder/AddOrder\n- exchange-truth reconciliation for live orders\n- evidence-gated live execution orchestration\n- explicit human approval requirement\n- no withdrawal capability\n- unit tests and CI paper smoke\n\nSafety:\n- live trading remains OFF by default\n- the paper runner refuses live mode\n- live execution cannot proceed unless every authorization gate passes\n- exchange order IDs and execution state must be reconciled before success is recorded\n- no profitability or alpha claim\n\nResearch and evidence remain in salamou1944/Astra. Its current research gates do not establish profitability, so this bot remains paper-only until those gates and the operational gates are independently proven.\n"
+    },
+    {
+      "path": "astra/execution/reconciliation.py",
+      "sha": "29175d6b3e0e34768dd362be0d7f28da85a606aa",
+      "content_sha256": "e0f5f3890278201c9b72242df7e67118a1edba6694ec22b53eeb67dc90038515",
+      "score": 103,
+      "content": "\"\"\"Fail-closed reconciliation for Kraken Spot execution.\n\nNo local state is treated as authoritative. Exchange responses are the source of\ntruth for order state, and mismatches block further live execution.\n\"\"\"\nfrom __future__ import annotations\n\nfrom dataclasses import dataclass\nfrom decimal import Decimal\n\n\n@dataclass(frozen=True)\nclass ReconciliationResult:\n    ok: bool\n    reason: str\n    order_id: str | None = None\n    status: str | None = None\n    executed_volume: Decimal = Decimal(\"0\")\n    remaining_volume: Decimal = Decimal(\"0\")\n\n\nclass KrakenReconciler:\n    TERMINAL = {\"closed\", \"canceled\", \"expired\", \"rejected\"}\n\n    def __init__(self, broker):\n        self.broker = broker\n\n    def order(self, txid: str, *, expected_volume: Decimal | None = None) -> ReconciliationResult:\n        if not txid:\n            return ReconciliationResult(False, \"missing_exchange_order_id\")\n\n        result = self.broker.query_orders(txid)\n        orders = result.get(\"orders\") or {}\n        raw = orders.get(txid)\n\n        # Kraken may return a single key even when the requested identifier is\n        # represented in a normalized form. Never accept an unrelated order.\n        if raw is None and len(orders) == 1:\n            candidate_id, candidate = next(iter(orders.items()))\n            if candidate_id == txid:\n                raw = candidate\n\n        if not isinstance(raw, dict):\n            return ReconciliationResult(False, \"exchange_order_not_found\", txid)\n\n        status = str(raw.get(\"status\", \"\")).lower()\n        if not status:\n            return ReconciliationResult(False, \"exchange_order_status_missing\", txid)\n\n        try:\n            executed = Decimal(str(raw.get(\"vol_exec\", \"0\")))\n            remaining = Decimal(str(raw.get(\"vol\", \"0\"))) - executed\n        except Exception:\n            return ReconciliationResult(False, \"invalid_exchange_volume\", txid)\n\n        if executed < 0 or remaining < 0:\n            return ReconciliationResult(False, \"invalid_exchange_volume\", txid, status)\n\n        if expected_volume is not None and executed > Decimal(str(expected_volume)):\n            return ReconciliationResult(False, \"executed_volume_exceeds_intent\", txid, status, executed, remaining)\n\n        if status not in self.TERMINAL:\n            return ReconciliationResult(True, \"order_open\", txid, status, executed, remaining)\n\n        return ReconciliationResult(True, \"order_reconciled\", txid, status, executed, remaining)\n\n    def open_orders_snapshot(self):\n        result = self.broker.open_orders()\n        orders = result.get(\"open\") or {}\n        if not isinstance(orders, dict):\n            raise RuntimeError(\"invalid_open_orders_response\")\n        return orders\n"
     },
     {
       "path": "tests/test_bot.py",
@@ -43,6 +50,13 @@
       "content": "import unittest,os\nfrom astra.execution.gates import GateState\nfrom astra.execution.kraken import KrakenConfig,KrakenSpot,KrakenError\nfrom astra.risk import RiskGuardian\nclass SafetyTests(unittest.TestCase):\n def test_all_gates_required(self):\n  self.assertFalse(GateState(True,True,True,True,True,True,True,False).authorize())\n  self.assertTrue(GateState(True,True,True,True,True,True,True,True).authorize())\n def test_default_off(self):\n  os.environ.pop(\"ASTRA_LIVE_TRADING\",None); self.assertFalse(KrakenConfig.from_env().live_enabled)\n def test_live_missing_credentials_blocked(self):\n  with self.assertRaises(KrakenError): KrakenSpot(KrakenConfig(live_enabled=True))\n def test_risk_halts(self):\n  r=RiskGuardian(); r.reset_day(100); self.assertTrue(r.observe(98)[\"halted\"]); self.assertEqual(r.observe(98)[\"reason\"], \"daily_loss_limit\")\nif __name__==\"__main__\":unittest.main()\n"
     },
     {
+      "path": "tests/test_live_execution.py",
+      "sha": "0736bc8b386acd2041d4798072627f59aa23591a",
+      "content_sha256": "4836879438e86ef05c8186908129575d963e4fcd5aff8504e437c460a7ef4f7c",
+      "score": 93,
+      "content": "import unittest\nfrom decimal import Decimal\nfrom astra.execution.live import LiveExecutionError, LiveExecutionService\nfrom astra.execution.reconciliation import KrakenReconciler\n\n\nclass FakeGate:\n    def __init__(self, allowed=True):\n        self.allowed = allowed\n\n    def authorize(self):\n        return self.allowed\n\n\nclass FakeBroker:\n    def __init__(self, txid=\"OID-1\"):\n        self.txid = txid\n\n    def submit_if_authorized(self, gate, **order):\n        if not gate.authorize():\n            return {\"submitted\": False, \"mode\": \"LIVE_BLOCKED\"}\n        return {\"submitted\": True, \"mode\": \"LIVE_SPOT\", \"result\": {\"txid\": [self.txid]}}\n\n    def query_orders(self, txid):\n        return {\"orders\": {txid: {\"status\": \"closed\", \"vol\": \"0.001\", \"vol_exec\": \"0.001\"}}}\n\n    def open_orders(self):\n        return {\"open\": {}}\n\n\nclass LiveExecutionTests(unittest.TestCase):\n    def test_human_approval_required(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate())\n        with self.assertRaisesRegex(LiveExecutionError, \"human approval\"):\n            service.submit(\n                symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n                strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n                human_approval=False,\n            )\n\n    def test_gate_required(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate(False))\n        with self.assertRaisesRegex(LiveExecutionError, \"gate denied\"):\n            service.submit(\n                symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n                strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n                human_approval=True,\n            )\n\n    def test_duplicate_intent_blocked(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate())\n        kwargs = dict(\n            symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n            strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n            human_approval=True,\n        )\n        first = service.submit(**kwargs)\n        self.assertEqual(first[\"exchange_order_id\"], \"OID-1\")\n        with self.assertRaisesRegex(LiveExecutionError, \"duplicate\"):\n            service.submit(**kwargs)\n\n    def test_reconciliation_uses_exchange_truth(self):\n        reconciler = KrakenReconciler(FakeBroker())\n        result = reconciler.order(\"OID-1\", expected_volume=Decimal(\"0.001\"))\n        self.assertTrue(result.ok)\n        self.assertEqual(result.status, \"closed\")\n        self.assertEqual(result.executed_volume, Decimal(\"0.001\"))\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    {
       "path": "BOT_INTEGRATION.md",
       "sha": "09445b81fa77527791647d542b5b36f44df9209f",
       "content_sha256": "177f0bbcaf10cf17ff1e0f211bce43776fed8263e36981330b8708a2da26e636",
@@ -51,10 +65,10 @@
     },
     {
       "path": "OPERATIONAL_READINESS.md",
-      "sha": "f2a44fa805004242a574c2bf878636d01867a15d",
-      "content_sha256": "73df1bdc2c85ba0a111390ecfd529a5a01c922041ed3969b5e519bd4be80328c",
+      "sha": "9e7b20db69f01ec03c0ab8725d63af733b0ded1c",
+      "content_sha256": "211e7384986843a7ed77b93b08e71984ce84fb916187a3c08c7a0d31afd31da8",
       "score": 70,
-      "content": "# ASTRA Operational Readiness\n\nThe executable bot boundary is hardened for production-style paper operation.\n\nImplemented:\n- Kraken public market-data ingestion\n- deterministic strategy boundary\n- paper execution with costs\n- idempotent intent tracking\n- risk limits and automatic halt\n- Kraken authenticated adapter behind fail-closed authorization\n- reconciliation and kill-switch gates\n- explicit human-approval gate\n- no withdrawal capability\n- CI tests and paper smoke verification\n\nLive authorization remains deliberately false. The research repository salamou1944/Astra currently records failed research/robustness gates and profitability/alpha as UNVERIFIED. Therefore no technical implementation may represent the system as proven profitable or live-ready.\n\nThe required live transition is evidence-gated: DATA_VALID, STRATEGY_VALID, RISK_VALID, EXECUTION_VALID, RECONCILIATION_VALID, KILL_SWITCH_VALID, explicit HUMAN_APPROVAL, and LIVE_ENABLED must all be true. No gate is inferred automatically.\n"
+      "content": "# ASTRA Operational Readiness\n\nThe executable bot boundary is hardened for production-style paper operation and contains a fail-closed path for future Kraken Spot live execution.\n\nImplemented:\n- Kraken public market-data ingestion\n- deterministic strategy boundary\n- paper execution with costs\n- idempotent intent tracking\n- risk limits and automatic halt\n- authenticated Kraken adapter for account/order operations\n- exchange-truth order reconciliation\n- live execution orchestration behind authorization gates\n- explicit human-approval gate\n- no withdrawal capability\n- CI tests and paper smoke verification\n\nLive authorization remains deliberately false. The research repository salamou1944/Astra records research/robustness and profitability gates that must be proven independently before live operation is considered.\n\nRequired live transition:\nDATA_VALID, STRATEGY_VALID, RISK_VALID, EXECUTION_VALID, RECONCILIATION_VALID, KILL_SWITCH_VALID, explicit HUMAN_APPROVAL, and LIVE_ENABLED must all be true.\n\nAdditional execution invariants:\n- one deterministic intent maps to at most one exchange submission\n- a successful submission must contain exactly one exchange order ID\n- exchange order state, not local state, is authoritative for reconciliation\n- executed volume may not exceed the requested intent\n- withdrawal endpoints are absent\n- default configuration keeps live execution disabled\n\nThis repository does not claim profitability, alpha, or live readiness merely because the Kraken adapter exists.\n"
     },
     {
       "path": "collection/aw-junaid/COLLECTION_MANIFEST.md",
@@ -111,21 +125,7 @@
       "content_sha256": "bf15996884009264ffae613c75b4b6ffae771a87514e316a4bd241e663e80511",
       "score": 31,
       "content": "from .safety import ExecutionGate, KillSwitch\nfrom .paper import PaperBroker, OrderStatus\n"
-    },
-    {
-      "path": "astra/execution/safety.py",
-      "sha": "1de4f7b4ccff1a0d74d442ffc4f63de17f50bc80",
-      "content_sha256": "a6cf393ae08c4dcbb8bce30273f43704a5c7551e344fcd643ce18eb62af019ef",
-      "score": 31,
-      "content": "from dataclasses import dataclass\n\n@dataclass\nclass KillSwitch:\n    halted: bool=False\n    reason: str|None=None\n    def trip(self,reason): self.halted=True; self.reason=str(reason)\n    def authorize(self): return not self.halted\n\nclass ExecutionGate:\n    def __init__(self,kill_switch): self.kill_switch=kill_switch\n    def authorize(self,*,data_valid,strategy_valid,risk_valid,execution_valid,reconciliation_valid,human_approval,live_enabled):\n        return bool(live_enabled and data_valid and strategy_valid and risk_valid and execution_valid and reconciliation_valid and human_approval and self.kill_switch.authorize())\n"
-    },
-    {
-      "path": "astra/execution/gates.py",
-      "sha": "b588d1073e7504b4b8f1733b50564756e43c5889",
-      "content_sha256": "b643e03c9b1f38cfe25c688d00f47d12a4788cd41b4a6622c5a566c165256455",
-      "score": 31,
-      "content": "from dataclasses import dataclass\n@dataclass(frozen=True)\nclass GateState:\n    data_valid: bool=False\n    strategy_valid: bool=False\n    risk_valid: bool=False\n    execution_valid: bool=False\n    reconciliation_valid: bool=False\n    kill_switch_valid: bool=False\n    human_approval: bool=False\n    live_enabled: bool=False\n    def authorize(self): return all((self.data_valid,self.strategy_valid,self.risk_valid,self.execution_valid,self.reconciliation_valid,self.kill_switch_valid,self.human_approval,self.live_enabled))\nclass LiveAuthorization:\n    def __init__(self,state): self.state=state\n    def authorize(self): return self.state.authorize()\n"
     }
   ],
-  "generated_at": "2026-10-01T13:09:21.304902+00:00"
+  "generated_at": "2026-10-01T22:39:49.880013+00:00"
 }
