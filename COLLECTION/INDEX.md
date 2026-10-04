@@ -14,6 +14,12 @@ Central collection of repositories, documentation, tools, and reusable implement
 - ruvnet/ruflo — https://github.com/ruvnet/ruflo
 
 ## Permanent account-wide collection sources
+- senamakel — https://github.com/senamakel
+  - Account-wide source added: COLLECTION/ACCOUNTS/SENAMAKEL_2026-10-04.md
+  - High-priority verified repositories: openhuman, opencompany, medulla, tinyagents, tinyinference, tinycortex, tinysearch, openhuman-skills, agent-ctrl, tinyhivemind, tinyflows, tinymcp, tinymemory, tinyjuice.
+  - Strategic relevance: agent orchestration, durable execution/state, memory/provenance, provider routing, search/evidence, parallel agent operations and one-person-company automation.
+  - Inventory discrepancy is recorded: profile view showed 71 repositories while connected GitHub search returned 89 accessible public records; full enumeration must reconcile this before exhaustion.
+
 - miqdadbadjuber — https://github.com/miqdadbadjuber
   - Account-wide source added: COLLECTION/ACCOUNTS/MIQDADBADJUBER_2026-10-04.md
   - GitHub profile currently reports 11 public repositories.
