@@ -75,6 +75,14 @@ Central collection of repositories, documentation, tools, and reusable implement
   - P0 leverage assessment: COLLECTION/VERIFICATION/ROHITG00_P0_LEVERAGE_ASSESSMENT_2026-10-04.md
   - Full account enumeration: COMPLETE for 320 public repositories returned by four owner-scoped search pages on 2026-10-04; downstream account expansion remains pending.
 
+- Wassimyounes01 — https://github.com/Wassimyounes01
+  - Account-wide source added: COLLECTION/ACCOUNTS/WASSIMYOUNES01_2026-10-04.md
+  - GitHub profile currently reports 21 public repositories.
+  - Primary verified source: qwen38-uncensored — local Qwen 3.8 27B abliterated/uncensored serving harness with Ollama and optional MLX paths.
+  - High-value adjacent sources surfaced: cortex, event-driven-autonomous-loop, apify-replacement, ai-video-studio-kit, flywheel, agent-workbench, agent-patterns-cookbook, genesis-plan-graph.
+  - Priority leverage: free/local inference, autonomous execution loops, self-hosted SaaS replacement, evidence-bound agent orchestration, video tooling and task-strategy optimization.
+  - Enumeration rule: all 21 public repositories must be inventoried and relevant content inspected before the account is considered exhausted.
+
 ## Additional account targets discovered
 - sherlock-project — https://github.com/sherlock-project
   - Account-wide source discovered and enumerated: 5 public repositories.
