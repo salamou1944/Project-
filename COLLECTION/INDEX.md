@@ -90,6 +90,12 @@ Central collection of repositories, documentation, tools, and reusable implement
 - Playwright — https://github.com/microsoft/playwright
 - Browser Use — https://github.com/browser-use/browser-use
 
+### OSINT / identity discovery
+- Sherlock — https://github.com/sherlock-project/sherlock
+  - MIT; username discovery across 400+ social networks.
+  - Use only as discovery evidence; results are not identity verification.
+  - Integrated into Salamou-31/API Factory as a bounded local adapter.
+
 ### Documents / files
 - Docling — https://github.com/docling-project/docling
 - OCRmyPDF — https://github.com/ocrmypdf/OCRmyPDF
