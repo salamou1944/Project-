@@ -31,6 +31,12 @@ Central collection of repositories, documentation, tools, and reusable implement
   - opencut-classic is archived; retain it as historical/implementation reference.
 - Pablostanley — https://github.com/pablostanley
 - debpalash — https://github.com/debpalash
+- h-guo18 — https://github.com/h-guo18
+  - Account-wide source discovered and enumerated: 20 public repositories in the current GitHub collection pass.
+  - Account capture: COLLECTION/ACCOUNTS/H-GUO18_2026-10-04.md
+  - Immediate high-value queue: vllm-kimidumper, Model-Optimizer, SnapKV, stablehlo, TensorRT-LLM, FinancialDatasets, ZhWiki-Retrieval-System, fewshotgen.
+  - Priority leverage: inference optimization, quantization/KV-cache efficiency, ML compiler portability, retrieval and financial-data research.
+  - Licensing/compatibility caution: Apache-2.0 confirmed for Model-Optimizer, vllm-kimidumper and stablehlo; SnapKV and FinancialDatasets require further license/redistribution verification.
   - Account-wide source discovered and enumerated: 37 public repositories in the current GitHub collection pass.
   - Account capture: COLLECTION/ACCOUNTS/DEBPALASH_2026-10-04.md
   - Immediate high-value queue: VoiceStudio, OpenGTM, Friday, Opal, agentwork, awesome-mcp-servers, remotions-video, open-agi.
