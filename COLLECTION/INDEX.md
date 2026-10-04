@@ -61,6 +61,14 @@ Central collection of repositories, documentation, tools, and reusable implement
   - P0 leverage assessment: COLLECTION/VERIFICATION/ROHITG00_P0_LEVERAGE_ASSESSMENT_2026-10-04.md
   - Full account enumeration: COMPLETE for 320 public repositories returned by four owner-scoped search pages on 2026-10-04; downstream account expansion remains pending.
 
+## Additional account targets discovered
+- cporter202 — https://github.com/cporter202 — 24 public repositories discovered; high-value: API-mega-list, agentic-ai-apis, automate-for-growth, automate-faceless-content, job-data-apis-and-scrapers, ai-agent-tools.
+- trycua — https://github.com/trycua — 45 public repositories discovered; high-value: cua, acu, e2e-test-agent, terraform-provider-fleets, cua-driver-fps-bench, gameworld-autoresearch, packer-plugin-lume.
+- shobhitagnihotri69 — https://github.com/shobhitagnihotri69 — account target; high-value trail: mercor-grpo-agent, CUA contributions, hflow, graph extraction, LangGraph examples; full enumeration pending.
+- proffesor-for-testing — https://github.com/proffesor-for-testing — account target via agentic-qe; high-value: verification/governance, browser QE, RVF memory, adversarial quality gates, skills; full enumeration pending.
+- mizorewww — https://github.com/mizorewww — account target via laya-coreml; high-value: Apache-2.0 local Apple Core ML/Neural Engine typed decision inference; full enumeration pending.
+- stablyai — https://github.com/stablyai — account target via Orca; high-value: MIT multi-agent orchestration, isolated Git worktrees, remote execution, browser/design, MCP/hooks/skills; full enumeration pending.
+
 ## Current research batch
 
 ### Web access / research
