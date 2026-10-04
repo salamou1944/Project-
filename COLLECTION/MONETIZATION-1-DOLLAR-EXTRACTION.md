@@ -119,3 +119,38 @@ Provider-neutral creative boundary exists, but production claims require real pr
 - Paid lead credits spent: **$0**.
 - Upfront spend: **$0**.
 - Sellable scoped capability: **YES**.
+
+
+## 2026-10-04 recovery: previously blocked ledger updates
+
+This section records the material findings from the monetization sweeps whose GitHub ledger writes were previously reported as blocked. The entries below are historical evidence from the corresponding sweep reports; they are not retroactively treated as customer or revenue evidence.
+
+### Sweep: 2026-10-01/02 — recovery record
+- AgentMail inboxes checked: `api-pilot@agentmail.to`, `easy@agentmail.to`.
+- No new reply, acceptance, payment, or revenue evidence was reported.
+- Fresh opportunity reported: **Nexa Consultancy — Automation Developer**, with n8n/Make, GoHighLevel, WhatsApp/email notifications, REST APIs/webhooks, AI APIs, monitoring/repair. Public listing source recorded in the sweep: Wellfound, job dated 2026-09-16. No verified free direct contact was found; no outreach was sent.
+- Additional opportunity reported: **ACE Workflow — Workflow Builder**, covering n8n/Make, Airtable, HubSpot/Slack, Stripe/Xero and AI workflows. No verified free direct contact was found; no outreach was sent.
+- **Magic1** was reviewed but treated as stale for that sweep; no outreach.
+- Free-LLM findings reported from `mnfst/awesome-free-llm-apis`: Groq, Google Gemini and Cloudflare Workers AI were considered cost-reduction candidates; Gemini data-use implications and free-tier limitations were flagged. No provider was activated or used for a paid customer delivery.
+- Status: opportunities/capabilities only; **customer = 0, revenue = $0, paid lead credits = $0, upfront spend = $0**.
+
+### Sweep: 2026-10-02 — recovery record
+- AgentMail: no new reply, acceptance, payment, or revenue evidence reported.
+- Fresh opportunity reported: **KB DIGITAL**, an n8n Community recruitment thread seeking AI + automation + n8n, AI agents, API/webhook/database integrations and technical delivery. Public contact recorded in the sweep: `info@kbgroup.es`. A targeted outreach attempt was reported as blocked before delivery; therefore **outreach delivered = 0**.
+- Fresh opportunity reported: **Jyotirmoy Das**, seeking n8n work involving WhatsApp automation, lead qualification, AI FAQ, human handoff, booking, CRM/database integrations, APIs and webhooks. No customer acceptance/payment evidence.
+- Free-LLM scan again identified Groq, Cloudflare Workers AI, Cerebras, Gemini and Aion Labs as candidates subject to live terms/quota/data-handling verification. Cohere Trial remained excluded as non-commercial.
+- Status: **customer = 0, revenue = $0, paid lead credits = $0, upfront spend = $0**.
+
+### Sweep: 2026-10-03 — recovery record
+- AgentMail: no new reply, acceptance, payment, or revenue evidence reported.
+- Fresh opportunity prioritized: **BluMark Agency — Senior AI & Automation Operations Lead**, reported as an active 2026-10-03 role involving n8n/Make, LLM APIs, custom webhooks, WhatsApp Business API, CRM integrations, JavaScript/Python nodes and ongoing remote contract work. Public contact recorded in the sweep: `info@blumark.agency`.
+- A targeted email attempt through `api-pilot@agentmail.to` was reported as blocked before delivery. Therefore **outreach delivered = 0** and no lead is counted as contacted.
+- Additional current n8n-board opportunities were identified around workflow repair, AI automation, manufacturing/RFQ automation, insurance lead pipelines, AI support and n8n/Make work; no acceptance/payment evidence.
+- Free-LLM scan: Groq, Cerebras, Cloudflare Workers AI, Gemini and Aion Labs remained possible zero-upfront delivery-cost levers, subject to current provider terms, quotas, API availability, commercial use, data handling and reliability checks. Cohere Trial remained excluded.
+- Status: **customer = 0, revenue = $0, paid lead credits = $0, upfront spend = $0**.
+
+### Write-recovery evidence
+- The previous sweep reports stated that updates to this file were blocked by the connected GitHub safety layer.
+- On 2026-10-04 the file was successfully fetched from the live repository, confirming the pre-recovery file SHA as `db1fa296551acd4b844fab0bb7ff9b3619f3d4ff`.
+- This recovery update is being applied serially using the file's current blob SHA, avoiding concurrent content writes. GitHub's contents API requires the current blob SHA when replacing an existing file.
+- This commit is the authoritative record that the previously unrecorded sweep findings have now been persisted.
