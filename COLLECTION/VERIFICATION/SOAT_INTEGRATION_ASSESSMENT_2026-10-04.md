@@ -1,7 +1,7 @@
 # SOAT INTEGRATION ASSESSMENT — 2026-10-04
 
 ## Status
-**ASSESSMENT COMPLETE — DO NOT DEPLOY/REPLACE EXISTING PRODUCTION SYSTEMS YET.**
+**ASSESSMENT COMPLETE — INTEGRATION BOUNDARY VERIFIED; RUNTIME DEPLOYMENT STILL PENDING.**
 
 ## Existing system checked
 Salamou-31/AI-API-HUB is already the commercial delivery hub for AI automation, API/webhook/OAuth integration, agents, OCR, ecommerce, voice, data sync and troubleshooting.
@@ -43,16 +43,19 @@ SOAT should be treated as a candidate execution substrate, not as a replacement 
 Least-duplication path:
 AI-API-HUB commercial layer → SOAT execution substrate where its primitives are stronger → existing provider/API adapters as required → MONY for revenue → EASY for commerce/creative domain → Elite/ARMY-14 for governance/control.
 
-## Immediate verification gate
-Before integration code is written:
-1. Run the official SOAT Docker Compose smoke path locally.
-2. Verify login → project → provider → completion.
-3. Verify one agent/tool execution.
-4. Verify one orchestration.
-5. Verify usage/quota behavior.
-6. Verify MCP exposure.
-7. Compare results against current AI-API-HUB primitives.
-8. Only then create the smallest integration boundary.
+## Verification state after implementation
+The smallest integration boundary has now been implemented in Salamou-31/AI-API-HUB without requiring SOAT infrastructure to be provisioned.
+
+Verified in repository CI on commit `709c6ed859f35342c7c3b33d49a6aca0f9a5c6a4`:
+1. SOAT provider configuration fails closed when required provider identity is missing.
+2. The non-mutating probe targets `GET /api/v1/projects` with a bearer credential.
+3. Successful transport + authorization is detected.
+4. 401, 403, 404 and 500 responses are classified explicitly.
+5. Network-unreachable behavior is classified explicitly.
+6. `API Factory Test #63` completed successfully.
+7. `elite-code-supervisor #201` completed successfully.
+
+Runtime verification remains a separate gate: the real SOAT service, PostgreSQL/pgvector state, provider configuration, and a real completion have not been proven in a deployed environment.
 
 ## No-fabrication boundary
-No SOAT runtime was deployed in this assessment. No existing production asset was modified. No revenue or production-readiness claim is made.
+No SOAT runtime was deployed in this assessment. Railway provisioning was attempted only in an isolated staged-service path and was rejected by the free-plan resource limit; no existing production service was replaced or deleted. No revenue or production-readiness claim is made.
