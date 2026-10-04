@@ -30,31 +30,35 @@ Central collection of repositories, documentation, tools, and reusable implement
   - OpenCut is MIT-licensed; current rewrite targets a Rust core, Editor API, plugin architecture, MCP server, headless/batch rendering, and scripting.
   - opencut-classic is archived; retain it as historical/implementation reference.
 - Pablostanley — https://github.com/pablostanley
+  - Account capture: COLLECTION/ACCOUNTS/PABLOSTANLEY_2026-10-04.md
+  - Enumerated in the current GitHub collection pass: 37 public repositories.
+  - Immediate high-value queue: yoinks, squig, efecto-plugin, hilos-agents, pixabots, typexperiments, designteam-app/designteam, vgpu, vercel-slides.
 - debpalash — https://github.com/debpalash
+  - Account-wide source discovered and enumerated: 37 public repositories in the current GitHub collection pass.
+  - Account capture: COLLECTION/ACCOUNTS/DEBPALASH_2026-10-04.md
+  - Immediate high-value queue: VoiceStudio, OpenGTM, Friday, Opal, agentwork, awesome-mcp-servers, remotions-video, open-agi.
+  - Priority leverage: local-first voice/audio, self-hosted GTM/lead enrichment, MCP/agent tooling, media/browser infrastructure.
 - h-guo18 — https://github.com/h-guo18
+  - Account-wide source discovered and enumerated: 20 public repositories in the current GitHub collection pass.
+  - Account capture: COLLECTION/ACCOUNTS/H-GUO18_2026-10-04.md
+  - Immediate high-value queue: vllm-kimidumper, Model-Optimizer, SnapKV, stablehlo, TensorRT-LLM, FinancialDatasets, ZhWiki-Retrieval-System, fewshotgen.
+  - Priority leverage: inference optimization, quantization/KV-cache efficiency, ML compiler portability, retrieval and financial-data research.
 - ARPAHLS — https://github.com/ARPAHLS
+  - Account-wide source discovered and enumerated: 19 public repositories in the current GitHub collection pass.
+  - Account capture: COLLECTION/ACCOUNTS/ARPAHLS_2026-10-04.md
+  - Immediate high-value queue: skillware, rooms, aura, mnemolink, micro-f1-mask, avatar, vic_aisaq_demo, lc0_vic, OPSIE, gatekeeper.
+  - Priority leverage: modular skills, local-first multi-agent orchestration, agent-loop runtime, agent memory/personas, PII scrubbing, local avatar/agent UI, storage-aware retrieval and policy/security tooling.
 - zeenie-ai — https://github.com/zeenie-ai
   - Account-wide source discovered and enumerated: 6 public repositories.
   - Account capture: COLLECTION/ACCOUNTS/ZEENIE-AI_2026-10-04.md
   - Immediate high-value queue: OpenCompany, docs-OpenCompany, edgymeow, AgentEmpire, temporal-server, Kimi-K3.
   - Priority leverage: AI employees/workflow orchestration, approvals and bounded execution, skills/memory, browser/WhatsApp integrations, Temporal workflow runtime, and open-weight agentic models.
-  - Account-wide source discovered and enumerated: 19 public repositories in the current GitHub collection pass.
-  - Account capture: COLLECTION/ACCOUNTS/ARPAHLS_2026-10-04.md
-  - Immediate high-value queue: skillware, rooms, aura, mnemolink, micro-f1-mask, avatar, vic_aisaq_demo, lc0_vic, OPSIE, gatekeeper.
-  - Priority leverage: modular skills, local-first multi-agent orchestration, agent-loop runtime, agent memory/personas, PII scrubbing, local avatar/agent UI, storage-aware retrieval and policy/security tooling.
-  - Account-wide source discovered and enumerated: 20 public repositories in the current GitHub collection pass.
-  - Account capture: COLLECTION/ACCOUNTS/H-GUO18_2026-10-04.md
-  - Immediate high-value queue: vllm-kimidumper, Model-Optimizer, SnapKV, stablehlo, TensorRT-LLM, FinancialDatasets, ZhWiki-Retrieval-System, fewshotgen.
-  - Priority leverage: inference optimization, quantization/KV-cache efficiency, ML compiler portability, retrieval and financial-data research.
-  - Licensing/compatibility caution: Apache-2.0 confirmed for Model-Optimizer, vllm-kimidumper and stablehlo; SnapKV and FinancialDatasets require further license/redistribution verification.
-  - Account-wide source discovered and enumerated: 37 public repositories in the current GitHub collection pass.
-  - Account capture: COLLECTION/ACCOUNTS/DEBPALASH_2026-10-04.md
-  - Immediate high-value queue: VoiceStudio, OpenGTM, Friday, Opal, agentwork, awesome-mcp-servers, remotions-video, open-agi.
-  - Priority leverage: local-first voice/audio, self-hosted GTM/lead enrichment, MCP/agent tooling, media/browser infrastructure.
-  - Account capture: COLLECTION/ACCOUNTS/PABLOSTANLEY_2026-10-04.md
-  - Enumerated in the current GitHub collection pass: 37 public repositories.
-  - Immediate high-value queue: yoinks, squig, efecto-plugin, hilos-agents, pixabots, typexperiments, designteam-app/designteam, vgpu, vercel-slides.
-  - Account-wide source; all public repositories remain eligible for recursive inspection and downstream account discovery.
+- rohitg00 — https://github.com/rohitg00
+  - Account-wide source discovered; GitHub profile currently reports 320 public repositories.
+  - Account capture: COLLECTION/ACCOUNTS/ROHITG00_2026-10-04.md
+  - Current high-value queue: agentmemory, pro-workflow, skillkit, agentbrain, ai-engineering-from-scratch, rimuru, kubectl-mcp-server, awesome-claude-code-toolkit, awesome-openclaw.
+  - Priority leverage: persistent agent memory, self-correcting workflows, portable skills, evidence-first agent operation, MCP/infrastructure control, agent observability/cost control, and reusable AI-engineering artifacts.
+  - Full account enumeration remains pending; no false COMPLETE claim.
 
 ## Current research batch
 
@@ -106,6 +110,6 @@ Daily collection must expand every discovered repository to its owning account/o
 Full rule: COLLECTION/CONTROL/ACCOUNT_REPOSITORY_EXPANSION_RULE.md
 
 ## Current frontier
-Continue weekly Top Five selection, free/self-hosted replacement discovery, account-wide collection, downstream account expansion, Agent Reach adapters/dependencies, OpenCut video/editor capabilities, Pablostanley design/agent/video tooling, and high-value verification under COLLECTION/VERIFICATION.
+Continue weekly Top Five selection, free/self-hosted replacement discovery, account-wide collection, downstream account expansion, Agent Reach adapters/dependencies, OpenCut video/editor capabilities, Pablostanley design/agent/video tooling, debpalash voice/GTM/agent/video tooling, h-guo18 inference/model optimization, ARPAHLS agent/retrieval/privacy/security tooling, zeenie-ai OpenCompany/AgentEmpire/WhatsApp/Temporal, rohitg00 agent memory/workflow/skills/evidence tooling, and high-value verification under COLLECTION/VERIFICATION.
 
 No completion claim is made. Collection remains active.
