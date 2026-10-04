@@ -32,6 +32,11 @@ Central collection of repositories, documentation, tools, and reusable implement
 - Pablostanley — https://github.com/pablostanley
 - debpalash — https://github.com/debpalash
 - h-guo18 — https://github.com/h-guo18
+- ARPAHLS — https://github.com/ARPAHLS
+  - Account-wide source discovered and enumerated: 19 public repositories in the current GitHub collection pass.
+  - Account capture: COLLECTION/ACCOUNTS/ARPAHLS_2026-10-04.md
+  - Immediate high-value queue: skillware, rooms, aura, mnemolink, micro-f1-mask, avatar, vic_aisaq_demo, lc0_vic, OPSIE, gatekeeper.
+  - Priority leverage: modular skills, local-first multi-agent orchestration, agent-loop runtime, agent memory/personas, PII scrubbing, local avatar/agent UI, storage-aware retrieval and policy/security tooling.
   - Account-wide source discovered and enumerated: 20 public repositories in the current GitHub collection pass.
   - Account capture: COLLECTION/ACCOUNTS/H-GUO18_2026-10-04.md
   - Immediate high-value queue: vllm-kimidumper, Model-Optimizer, SnapKV, stablehlo, TensorRT-LLM, FinancialDatasets, ZhWiki-Retrieval-System, fewshotgen.
