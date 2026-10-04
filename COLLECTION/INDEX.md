@@ -30,6 +30,11 @@ Central collection of repositories, documentation, tools, and reusable implement
   - OpenCut is MIT-licensed; current rewrite targets a Rust core, Editor API, plugin architecture, MCP server, headless/batch rendering, and scripting.
   - opencut-classic is archived; retain it as historical/implementation reference.
 - Pablostanley — https://github.com/pablostanley
+- debpalash — https://github.com/debpalash
+  - Account-wide source discovered and enumerated: 37 public repositories in the current GitHub collection pass.
+  - Account capture: COLLECTION/ACCOUNTS/DEBPALASH_2026-10-04.md
+  - Immediate high-value queue: VoiceStudio, OpenGTM, Friday, Opal, agentwork, awesome-mcp-servers, remotions-video, open-agi.
+  - Priority leverage: local-first voice/audio, self-hosted GTM/lead enrichment, MCP/agent tooling, media/browser infrastructure.
   - Account capture: COLLECTION/ACCOUNTS/PABLOSTANLEY_2026-10-04.md
   - Enumerated in the current GitHub collection pass: 37 public repositories.
   - Immediate high-value queue: yoinks, squig, efecto-plugin, hilos-agents, pixabots, typexperiments, designteam-app/designteam, vgpu, vercel-slides.
