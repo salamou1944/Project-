@@ -167,3 +167,9 @@ Full rule: COLLECTION/CONTROL/ACCOUNT_REPOSITORY_EXPANSION_RULE.md
 Continue weekly Top Five selection, free/self-hosted replacement discovery, account-wide collection, downstream account expansion, Agent Reach adapters/dependencies, OpenCut video/editor capabilities, Pablostanley design/agent/video tooling, debpalash voice/GTM/agent/video tooling, h-guo18 inference/model optimization, ARPAHLS agent/retrieval/privacy/security tooling, zeenie-ai OpenCompany/AgentEmpire/WhatsApp/Temporal, rohitg00 agent memory/workflow/skills/evidence tooling, and high-value verification under COLLECTION/VERIFICATION.
 
 No completion claim is made. Collection remains active.
+
+### xihongshichaojidan8 — 2026-10-04
+- https://github.com/xihongshichaojidan8
+- 5 public repositories captured in the current owner-scoped pass.
+- Priority: AgentScope Java event/permission/middleware/distributed-agent patterns; DeerFlow super-agent harness, skills, memory, scheduling and sandbox patterns.
+- Account record: COLLECTION/ACCOUNTS/XIHONGSHICHAOJIDAN8_2026-10-04.md
