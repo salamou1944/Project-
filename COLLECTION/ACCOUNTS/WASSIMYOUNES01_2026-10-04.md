@@ -43,3 +43,100 @@ https://github.com/Wassimyounes01/qwen38-uncensored
 - Repository README claims are recorded as claims, not independently reproduced model-performance benchmarks.
 - The repository README states 30–50% faster MLX inference on Apple Silicon; this is an upstream claim and should not be treated as a measured result in our environment.
 - The README describes the model as weight-level abliterated and references Arditi et al. (2024); this is provenance information, not independent verification of refusal-rate or capability benchmarks.
+
+## Corrected account enumeration
+
+The initial profile-level count of 21 is stale/incomplete. Owner-scoped GitHub repository search on 2026-10-04 returned 47 public repositories. The account is not exhausted.
+
+### Complete repository inventory
+1. qwen38-uncensored
+2. cortex
+3. event-driven-autonomous-loop
+4. ai-video-studio-kit
+5. apify-replacement
+6. agent-os
+7. sentience-loop
+8. telegram-command-bridge
+9. flywheel
+10. genesis-task-context
+11. genesis-repo-atlas
+12. dual-uncensored
+13. genesis-prompt-kit
+14. genesis-evidence-collector
+15. genesis-change-impact
+16. genesis-verified-reuse
+17. genesis-regression-memory
+18. genesis-batch-drafts
+19. genesis-constraint-compiler
+20. genesis-context-graph
+21. genesis-worker-router
+22. genesis-charter-lab
+23. genesis-night-research
+24. whatsapp-command-channel
+25. genesis-task-adaptation
+26. cursor-uncensored
+27. genesis-task-ledger
+28. genesis-source-packets
+29. genesis-suite
+30. genesis-routing-metrics
+31. genesis-paired-experiments
+32. genesis-release-integrity
+33. genesis-review-gate
+34. prompt-engineer
+35. genesis-plan-graph
+36. output-speed
+37. context-budget
+38. agent-pipeline
+39. memory
+40. fusion
+41. bugbot
+42. autonomous-loop
+43. llm-split
+44. myriad
+45. megacycle
+46. agent-patterns-cookbook
+47. agent-workbench
+
+### High-value findings
+- agent-os: self-hostable kernel concept with capability-seat routing by task kind, cycles, JSONL-backed memory/ledger/state and per-kind token budgets.
+- sentience-loop: prediction, maturation, scoring against observed outcomes, surprise, reflection and append-only audit; useful as a calibration/evidence pattern.
+- event-driven-autonomous-loop: durable queue, completion-event wake and stop-hook continuation; strong fit for long-running execution.
+- genesis-task-context + genesis-source-packets: bounded context/source packets with explicit evidence and gaps.
+- genesis-repo-atlas: bounded, symlink-aware repository metadata census.
+- genesis-prompt-kit: explicit acceptance criteria and stopping rules before dispatch.
+- genesis-evidence-collector: aggregates tests, artifacts and review into structured completion evidence.
+- genesis-change-impact: reverse dependency analysis after edits.
+- genesis-verified-reuse: fingerprinted reuse without inheriting approval.
+- genesis-regression-memory: durable regression records and reopening stale resolutions.
+- genesis-constraint-compiler: turns declared effects into concrete review checks; advisory, not execution authority.
+- genesis-context-graph: provenance, freshness and approval-aware reusable context.
+- genesis-worker-router: bounded provider routing with deadline, attempt, concurrency, account-cap and output controls.
+- genesis-task-adaptation: durable plan-bound revisions and recheck requirements.
+- genesis-task-ledger: immutable task contracts, current artifact hashes, reviewer receipt and deduplicated credit.
+- genesis-suite: bundles 21 bounded workflow components; compare against existing agent-skills before adoption.
+- genesis-routing-metrics + genesis-paired-experiments: matched task-history measurement and missing-cost preservation.
+- genesis-release-integrity: explicit release-byte inventory and verification.
+- genesis-review-gate: strict review/refutation receipt with incomplete-state semantics.
+- prompt-engineer: scored, gated, versioned and lineage-tracked machine-authored prompts.
+- genesis-plan-graph: dependency/ownership-safe ready-wave scheduling.
+- output-speed + context-budget: free token, latency and context-pressure controls.
+- agent-pipeline: local coordination from task contract through routing, review evidence and controlled improvement.
+- memory: zero-dependency persistent agent memory with core blocks plus append-only archive.
+- fusion: cost-aware lane selection with deterministic checks and model adapters.
+- bugbot: finder/refuter adversarial diff review with CI-gating of confirmed criticals.
+- autonomous-loop + flywheel + megacycle + myriad: task selection, reward/policy updates, continuous codebase scanning and verifier-based self-play patterns.
+- llm-split: provider/plan traffic-share balancing with a daily ledger and kill switch.
+- ai-video-studio-kit: self-hosted short-form video pipeline relevant to YouTube/media work.
+- apify-replacement: self-hosted scraper/enrichment pipeline relevant to prospecting; production use still requires terms/robots/reliability checks.
+- telegram-command-bridge + whatsapp-command-channel: remote command channels to a local agent; useful pattern but requires authentication and provider/account setup.
+- qwen38-uncensored: local Qwen 3.8 27B serving path for controlled local inference where hardware permits.
+
+### Empty/placeholder repositories
+- dual-uncensored
+- cursor-uncensored
+
+### Duplication / adoption rule
+The Genesis family is unusually repetitive by design. Do not copy all components into Salamou-31. Compare exact contracts against existing agent-skills, Delivery Gate, ASTRA and COLLECTION, then extract only missing primitives with measurable leverage.
+
+### Safety / provenance boundary
+qwen38-uncensored is treated as local-model infrastructure, not as a blanket recommendation to remove safety controls. Public-facing use retains application-level safety, authorization and abuse controls.
