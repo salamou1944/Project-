@@ -33,6 +33,11 @@ Central collection of repositories, documentation, tools, and reusable implement
 - debpalash — https://github.com/debpalash
 - h-guo18 — https://github.com/h-guo18
 - ARPAHLS — https://github.com/ARPAHLS
+- zeenie-ai — https://github.com/zeenie-ai
+  - Account-wide source discovered and enumerated: 6 public repositories.
+  - Account capture: COLLECTION/ACCOUNTS/ZEENIE-AI_2026-10-04.md
+  - Immediate high-value queue: OpenCompany, docs-OpenCompany, edgymeow, AgentEmpire, temporal-server, Kimi-K3.
+  - Priority leverage: AI employees/workflow orchestration, approvals and bounded execution, skills/memory, browser/WhatsApp integrations, Temporal workflow runtime, and open-weight agentic models.
   - Account-wide source discovered and enumerated: 19 public repositories in the current GitHub collection pass.
   - Account capture: COLLECTION/ACCOUNTS/ARPAHLS_2026-10-04.md
   - Immediate high-value queue: skillware, rooms, aura, mnemolink, micro-f1-mask, avatar, vic_aisaq_demo, lc0_vic, OPSIE, gatekeeper.
