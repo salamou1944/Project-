@@ -154,3 +154,32 @@ This section records the material findings from the monetization sweeps whose Gi
 - On 2026-10-04 the file was successfully fetched from the live repository, confirming the pre-recovery file SHA as `db1fa296551acd4b844fab0bb7ff9b3619f3d4ff`.
 - This recovery update is being applied serially using the file's current blob SHA, avoiding concurrent content writes. GitHub's contents API requires the current blob SHA when replacing an existing file.
 - This commit is the authoritative record that the previously unrecorded sweep findings have now been persisted.
+
+## 2026-10-04 operating-path correction: single source of truth + write recovery
+
+### Problem found
+Two monetization ledgers existed in the same repository:
+- root: `MONETIZATION-1-DOLLAR-EXTRACTION.md`
+- canonical: `COLLECTION/MONETIZATION-1-DOLLAR-EXTRACTION.md`
+
+They had diverged. This could cause future sweeps to update one path while downstream decisions read the other.
+
+### Correction
+- `COLLECTION/MONETIZATION-1-DOLLAR-EXTRACTION.md` is now the **only canonical evidence ledger**.
+- The root file is now a compatibility/index pointer and must not contain independent monetization evidence.
+- Historical evidence from the root was preserved through the existing canonical recovery records; no customer/revenue claim was upgraded.
+
+### Required update protocol
+For every future monetization sweep:
+1. Read the canonical COLLECTION ledger before writing.
+2. Fetch its current blob SHA.
+3. Append the new evidence to the fetched content; never replace unseen content.
+4. Perform exactly one sequential update for that path.
+5. Verify the returned commit SHA and then re-fetch the file.
+6. Confirm the newly appended section is present before reporting success.
+7. If a write is blocked, do not claim success and do not silently maintain a competing ledger elsewhere.
+8. Retry the same canonical path when the tool permits; if still blocked, preserve the pending change explicitly for the next write attempt.
+9. Never count a listing, outreach, provider, capability, reply, or contact as revenue/customer evidence without the required commercial proof.
+
+### No-duplicate rule
+Do not create another monetization ledger under the repository root, COLLECTION, or another project directory unless the user explicitly changes the architecture. Search the repository for existing monetization ledgers before creating a new one.
