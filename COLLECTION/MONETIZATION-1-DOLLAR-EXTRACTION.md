@@ -183,3 +183,32 @@ For every future monetization sweep:
 
 ### No-duplicate rule
 Do not create another monetization ledger under the repository root, COLLECTION, or another project directory unless the user explicitly changes the architecture. Search the repository for existing monetization ledgers before creating a new one.
+
+
+## 2026-10-04 blocker correction — delivery path + valid outreach
+
+### Valid outreach delivered
+- **Blumark Agency — Senior AI & Automation Operations Lead:** the active n8n Community listing was re-verified on 2026-10-04. The listing requests n8n/Make, LLM APIs, custom webhooks, WhatsApp Business API, CRM integrations, JavaScript/Python and operational automation. Source: https://community.n8n.io/t/hiring-senior-ai-automation-operations-lead-n8n-make-specialist-remote/318516
+- A targeted email was successfully accepted by the connected AgentMail sender path at **info@blumark.agency**.
+- Message ID: `<010001a10522b1f3-0ffe5ef7-d205-416c-904b-725023d06cf3-000000@email.amazonses.com>`.
+- Thread ID: `bebd4051-a342-4aa7-9509-b0d8fa574a32`.
+- This is **valid outreach delivered**, not a lead/customer/revenue event. Awaiting reply or acceptance.
+
+### Public delivery-path correction for PASTEL HOST · STANDARD 3D
+- The reusable source in `salamou1944/Pastel-` already has a shared Host Standard architecture, verified customer knowledge, contact actions, 3D avatar fallback logic and a browser-verification gate.
+- The missing commercial-path blocker was a proven public deployment route.
+- Added `.github/workflows/pages-host-standard.yml` to deploy `host-standard/` through GitHub Pages on pushes to `main`.
+- Commit: `1929c6112babfb2734a7d7dd1a601690a7b24f7d`.
+- This establishes a **free public deployment mechanism**, but the public URL is not counted as verified until the GitHub Pages workflow completes successfully and the live page is browser-tested.
+- No Railway production service was repurposed for PASTEL, avoiding interference with the live EASY runtime.
+
+### Current blocker classification after correction
+1. **Commercial acquisition:** partially unblocked — one fresh, valid direct outreach has now been delivered successfully.
+2. **PASTEL public demo:** deployment path unblocked at source level; live URL/runtime verification remains pending.
+3. **AI/API delivery:** reusable capabilities exist; paid-provider spend remains blocked until customer-funded scope exists.
+4. **EASY live generation:** provider credit exhaustion remains a deliberate external blocker; it is not allowed to block zero-cost commercial outreach or non-provider work.
+5. **MONY:** no qualifying PartnerStack reward/commission evidence; therefore no revenue is claimed.
+6. **Elite/AI Operating:** repository source exists and current main has no open PR/bug items surfaced by the connected GitHub search; task-specific runtime evidence still remains the acceptance gate.
+
+### Rule reinforced
+A blocker is considered removed only when the next external acceptance step is executable and evidence can be captured. Source code, workflow creation, listing, outreach delivery, provider availability and capability are not interchangeable with customer acceptance or payment.
