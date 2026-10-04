@@ -77,11 +77,11 @@ Central collection of repositories, documentation, tools, and reusable implement
 
 - Wassimyounes01 — https://github.com/Wassimyounes01
   - Account-wide source added: COLLECTION/ACCOUNTS/WASSIMYOUNES01_2026-10-04.md
-  - GitHub profile currently reports 21 public repositories.
+  - Initial profile view reported 21, but owner-scoped GitHub repository search on 2026-10-04 returned 47 public repositories; the discrepancy is recorded rather than hidden.
   - Primary verified source: qwen38-uncensored — local Qwen 3.8 27B abliterated/uncensored serving harness with Ollama and optional MLX paths.
-  - High-value adjacent sources surfaced: cortex, event-driven-autonomous-loop, apify-replacement, ai-video-studio-kit, flywheel, agent-workbench, agent-patterns-cookbook, genesis-plan-graph.
-  - Priority leverage: free/local inference, autonomous execution loops, self-hosted SaaS replacement, evidence-bound agent orchestration, video tooling and task-strategy optimization.
-  - Enumeration rule: all 21 public repositories must be inventoried and relevant content inspected before the account is considered exhausted.
+  - High-value sources inspected include agent-os, event-driven-autonomous-loop, Genesis evidence/context/routing/review components, memory, fusion, bugbot, autonomous-loop, megacycle, ai-video-studio-kit, apify-replacement, and agent-workbench.
+  - Priority leverage: free/local inference, autonomous execution, evidence-bound orchestration, self-hosted prospecting, media tooling, routing/cost control and persistent memory.
+  - Enumeration rule: all 47 repositories returned by the current owner-scoped search are inventoried; repository-level inspection is now broad but account exhaustion still requires checking newly appearing repositories in future collection passes.
 
 ## Additional account targets discovered
 - sherlock-project — https://github.com/sherlock-project
