@@ -59,3 +59,13 @@ The operational target is:
 REPOSITORY → OWNER ACCOUNT → ALL PUBLIC REPOSITORIES → RELEVANT CONTENT → NEW SOURCES/ACCOUNTS → REPEAT
 
 The objective is zero missed repositories caused by stopping at a single repository.
+
+## Account-first targeting rule
+
+When a GitHub account or organization is explicitly targeted, the **account itself is the collection unit**. Do not target or scope the collection to one repository merely because that repository is the initial lead.
+
+The required sequence is:
+
+ACCOUNT TARGET → ALL PUBLIC REPOSITORIES → ALL RELEVANT CONTENT/SOURCES → NEW ACCOUNTS → REPEAT
+
+A repository may be the entry point for discovery, but once its owner is identified, the complete public account repository set becomes in-scope for that collection run. This applies equally to user-supplied accounts, permanently monitored accounts, weekly selections, and accounts discovered through other repositories.
