@@ -88,6 +88,13 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Priority leverage: free/local inference, autonomous execution, evidence-bound orchestration, self-hosted prospecting, media tooling, routing/cost control and persistent memory.
   - Enumeration rule: all 47 repositories returned by the current owner-scoped search are inventoried; repository-level inspection is now broad but account exhaustion still requires checking newly appearing repositories in future collection passes.
 
+- charlie947 — https://github.com/charlie947
+  - Account-wide source added: COLLECTION/ACCOUNTS/CHARLIE947_2026-10-04.md
+  - Enumerated: 19 public repositories in the current owner-scoped GitHub search.
+  - High-value sources: social-media-skills, ai-second-brain, show-me, motion-graphics-skills, life-automation-skills, close, save-progress, codex-task-router, mod-maker, automation-audit, choose-and-compare-models.
+  - Priority leverage: task-scoped skills, evidence-bound completion, persistent operating memory, deterministic routing, local safety/resource guards, visual proof, media generation and automation auditing.
+  - Repository-level reuse requires comparison against existing agent-skills/ASTRA/COLLECTION before implementation.
+
 ## Additional account targets discovered
 - sherlock-project — https://github.com/sherlock-project
   - Account-wide source discovered and enumerated: 5 public repositories.
