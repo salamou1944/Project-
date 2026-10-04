@@ -14,6 +14,11 @@ Central collection of repositories, documentation, tools, and reusable implement
 - ruvnet/ruflo — https://github.com/ruvnet/ruflo
 
 ## Permanent account-wide collection sources
+- Mem0ai — https://github.com/mem0ai/mem0
+  - Permanent AI-memory/retrieval source added for ASTRA/AI Operating Memory comparison.
+  - Priority leverage: long-term agent memory, multi-signal retrieval, temporal/entity-aware memory, deduplication and memory lifecycle/evaluation.
+  - Rule: inspect Mem0 primitives against existing ASTRA/TinyCortex/agent-skills before adopting; do not duplicate existing capabilities.
+
 - senamakel — https://github.com/senamakel
   - Account-wide source added: COLLECTION/ACCOUNTS/SENAMAKEL_2026-10-04.md
   - High-priority verified repositories: openhuman, opencompany, medulla, tinyagents, tinyinference, tinycortex, tinysearch, openhuman-skills, agent-ctrl, tinyhivemind, tinyflows, tinymcp, tinymemory, tinyjuice.
