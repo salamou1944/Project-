@@ -14,6 +14,14 @@ Central collection of repositories, documentation, tools, and reusable implement
 - ruvnet/ruflo — https://github.com/ruvnet/ruflo
 
 ## Permanent account-wide collection sources
+- miqdadbadjuber — https://github.com/miqdadbadjuber
+  - Account-wide source added: COLLECTION/ACCOUNTS/MIQDADBADJUBER_2026-10-04.md
+  - GitHub profile currently reports 11 public repositories.
+  - Primary verified source: anti-slop — https://github.com/miqdadbadjuber/anti-slop — MIT, latest inspected release v3.2.20.
+  - Additional repositories surfaced by the author's portfolio: portfolio, contextforge, DiagramPilot-AI, OpenFolio-AI; each requires independent repository-level verification.
+  - Priority leverage: agent quality/delivery gates, cross-agent skill distribution, context engineering, architecture-diagram generation, portfolio tooling.
+  - Enumeration rule: all 11 public repositories must be inventoried and processed before the account is considered exhausted.
+
 - Panniantong — https://github.com/Panniantong
   - Account capture: COLLECTION/ACCOUNTS/PANNIANTONG_2026-10-04.md
   - Enumerated: 38 public repositories.
