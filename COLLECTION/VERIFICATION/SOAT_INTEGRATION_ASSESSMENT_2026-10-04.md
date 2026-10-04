@@ -1,7 +1,7 @@
 # SOAT INTEGRATION ASSESSMENT — 2026-10-04
 
 ## Status
-**ASSESSMENT COMPLETE — INTEGRATION BOUNDARY VERIFIED; RUNTIME DEPLOYMENT STILL PENDING.**
+**ASSESSMENT COMPLETE — EPHEMERAL RUNTIME VERIFIED; PRODUCTION RUNTIME STILL PENDING.**
 
 ## Existing system checked
 Salamou-31/AI-API-HUB is already the commercial delivery hub for AI automation, API/webhook/OAuth integration, agents, OCR, ecommerce, voice, data sync and troubleshooting.
@@ -44,7 +44,7 @@ Least-duplication path:
 AI-API-HUB commercial layer → SOAT execution substrate where its primitives are stronger → existing provider/API adapters as required → MONY for revenue → EASY for commerce/creative domain → Elite/ARMY-14 for governance/control.
 
 ## Verification state after implementation
-The smallest integration boundary has now been implemented in Salamou-31/AI-API-HUB without requiring SOAT infrastructure to be provisioned.
+The smallest integration boundary has been implemented in Salamou-31/AI-API-HUB, and the real SOAT runtime has now been verified ephemerally in GitHub Actions without requiring persistent SOAT infrastructure.
 
 Verified in repository CI on commit `709c6ed859f35342c7c3b33d49a6aca0f9a5c6a4`:
 1. SOAT provider configuration fails closed when required provider identity is missing.
@@ -55,7 +55,16 @@ Verified in repository CI on commit `709c6ed859f35342c7c3b33d49a6aca0f9a5c6a4`:
 6. `API Factory Test #63` completed successfully.
 7. `elite-code-supervisor #201` completed successfully.
 
-Runtime verification remains a separate gate: the real SOAT service, PostgreSQL/pgvector state, provider configuration, and a real completion have not been proven in a deployed environment.
+Verified by the manually triggered **SOAT Runtime Integration Smoke** workflow:
+1. Pinned SOAT revision `600721c1fa30de27c14f6da5e5917049a5339036` was started as a real Docker runtime in the GitHub Actions runner.
+2. SOAT health endpoint passed.
+3. API Factory reached the real SOAT HTTP boundary and correctly received/classified `401 invalid_credentials` using a deliberately invalid CI credential.
+4. The official SOAT smoke suite completed successfully.
+5. The runtime was cleaned up after verification.
+
+This proves the SOAT runtime, HTTP boundary, API Factory adapter boundary, and official smoke suite work together in an isolated ephemeral environment.
+
+Runtime production verification remains a separate gate: a persistent SOAT deployment, real authenticated provider configuration, and a real successful AI completion have not yet been proven.
 
 ## No-fabrication boundary
-No SOAT runtime was deployed in this assessment. Railway provisioning was attempted only in an isolated staged-service path and was rejected by the free-plan resource limit; no existing production service was replaced or deleted. No revenue or production-readiness claim is made.
+No persistent SOAT runtime was deployed in this assessment. Railway provisioning was attempted only in an isolated staged-service path and was rejected by the free-plan resource limit; no existing production service was replaced or deleted. No revenue or production-readiness claim is made.
