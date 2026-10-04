@@ -29,6 +29,11 @@ Central collection of repositories, documentation, tools, and reusable implement
   - High-value sources: OpenCut, opencut-classic, ffmpeg-rust.
   - OpenCut is MIT-licensed; current rewrite targets a Rust core, Editor API, plugin architecture, MCP server, headless/batch rendering, and scripting.
   - opencut-classic is archived; retain it as historical/implementation reference.
+- Pablostanley — https://github.com/pablostanley
+  - Account capture: COLLECTION/ACCOUNTS/PABLOSTANLEY_2026-10-04.md
+  - Enumerated in the current GitHub collection pass: 37 public repositories.
+  - Immediate high-value queue: yoinks, squig, efecto-plugin, hilos-agents, pixabots, typexperiments, designteam-app/designteam, vgpu, vercel-slides.
+  - Account-wide source; all public repositories remain eligible for recursive inspection and downstream account discovery.
 
 ## Current research batch
 
@@ -80,6 +85,6 @@ Daily collection must expand every discovered repository to its owning account/o
 Full rule: COLLECTION/CONTROL/ACCOUNT_REPOSITORY_EXPANSION_RULE.md
 
 ## Current frontier
-Continue weekly Top Five selection, free/self-hosted replacement discovery, account-wide collection, downstream account expansion, Agent Reach adapters/dependencies, OpenCut video/editor capabilities, and high-value verification under COLLECTION/VERIFICATION.
+Continue weekly Top Five selection, free/self-hosted replacement discovery, account-wide collection, downstream account expansion, Agent Reach adapters/dependencies, OpenCut video/editor capabilities, Pablostanley design/agent/video tooling, and high-value verification under COLLECTION/VERIFICATION.
 
 No completion claim is made. Collection remains active.
