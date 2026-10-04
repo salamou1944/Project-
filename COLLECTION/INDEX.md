@@ -62,6 +62,11 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Full account enumeration: COMPLETE for 320 public repositories returned by four owner-scoped search pages on 2026-10-04; downstream account expansion remains pending.
 
 ## Additional account targets discovered
+- sherlock-project — https://github.com/sherlock-project
+  - Account-wide source discovered and enumerated: 5 public repositories.
+  - Account capture: COLLECTION/ACCOUNTS/SHERLOCK-PROJECT_2026-10-04.md
+  - High-value: sherlock (MIT username OSINT engine), sherlockproject.xyz, api, build.
+  - Integration: optional username-discovery adapter in Salamou-31/API Factory; discovery is not identity verification.
 - cporter202 — https://github.com/cporter202 — 24 public repositories discovered; high-value: API-mega-list, agentic-ai-apis, automate-for-growth, automate-faceless-content, job-data-apis-and-scrapers, ai-agent-tools.
 - trycua — https://github.com/trycua — 45 public repositories discovered; high-value: cua, acu, e2e-test-agent, terraform-provider-fleets, cua-driver-fps-bench, gameworld-autoresearch, packer-plugin-lume.
 - shobhitagnihotri69 — https://github.com/shobhitagnihotri69 — account target; high-value trail: mercor-grpo-agent, CUA contributions, hflow, graph extraction, LangGraph examples; full enumeration pending.
