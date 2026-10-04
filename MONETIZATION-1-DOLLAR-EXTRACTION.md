@@ -1,43 +1,24 @@
 # MONETIZATION — $1 EXTRACTION
 
-Verified 2026-09-27.
+> **Canonical ledger:** COLLECTION/MONETIZATION-1-DOLLAR-EXTRACTION.md
+>
+> This root file is intentionally kept as a compatibility/index pointer. Do **not** maintain a second monetization ledger here. All new evidence, opportunity sweeps, AgentMail outcomes, provider findings, outreach state, acceptance/payment evidence, and revenue status must be recorded in the canonical COLLECTION/ ledger.
 
-- Confirmed revenue: $0.
-- AgentMail checked: 4 threads; all were delivery failures/bounces; no positive commercial reply.
-- Upwork account is connected; submitted proposals: 0.
-- Previously inspected $800 n8n job required 15 Connects while balance was 0; no proposal was submitted and no Connects were purchased.
-- Upwork 2026 documentation: Basic may receive 10 free Connects/month; free Connects can also arise from eligible activities, badges, interviews, or promotions. Client invitations can be answered without Connects.
+## Why this was corrected
 
-## Free LLM leverage
+A duplicate root ledger and a canonical COLLECTION/ ledger had diverged. That created a stale-source-of-truth risk: a sweep could be written successfully to one path while another path still reported older evidence.
 
-Source: mnfst/awesome-free-llm-apis.
+As of 2026-10-04:
+- Canonical ledger: COLLECTION/MONETIZATION-1-DOLLAR-EXTRACTION.md
+- Confirmed customer: **0**
+- Confirmed revenue: **$0**
+- Paid lead credits spent: **$0**
+- Upfront spend: **$0**
 
-### Google Gemini
-Current Google pricing confirms a free tier with free input/output tokens for eligible models. Free-tier content may be used to improve Google products. Use only for suitable low-volume/prototype workloads until customer data handling is approved. Status: CANDIDATE; verify current terms per paid use case.
+Historical material previously stored only in this root file has been superseded by the canonical evidence ledger. The root file must not be used to make current revenue or customer claims.
 
-### Groq
-Current Groq documentation confirms free-plan rate limits for several models, including openai/gpt-oss-120b, openai/gpt-oss-20b, Qwen and Whisper. Useful for fast classification, extraction, routing and support workflows. Status: CANDIDATE; verify current commercial/data-handling terms before customer production use.
+## Operating rule
 
-### Mistral
-Current documentation indicates new organizations need billing activation for functional API keys. Excluded from the zero-upfront path.
+**Listing ≠ lead. Outreach ≠ lead. Provider availability ≠ revenue. Capability ≠ customer.**
 
-### Cohere
-The collected source marks its free trial as non-commercial. Excluded from paid customer delivery.
-
-### Anonymous/free routers
-LLM7/Kilo-style free access is useful for research, but limits/catalogs can change and provider logging/data-handling concerns exist. Do not use with confidential customer data until independently verified.
-
-## Sellable zero-upfront offers
-
-1. Lead-flow repair: forms/Meta/WhatsApp -> deduplication -> CRM -> routing -> notifications -> retries/reporting.
-2. Document-to-CRM automation: PDF/email/form -> extraction -> validation -> JSON -> CRM/webhook.
-3. E-commerce support automation: classify requests -> lookup/routing -> response draft -> human escalation.
-4. API/webhook repair: normalization -> retries -> idempotency -> logging -> alerts.
-
-## Acquisition rule
-
-Do not spend on Connects or paid lead credits before a real commercial signal. Use targeted direct outreach to verified contacts and Upwork when free Connects or client invitations are available.
-
-## Evidence rule
-
-Listing != lead. Outreach != lead. Provider availability != revenue. Capability != customer. Count commercial progress only after reply/acceptance/payment evidence.
+Commercial progress is counted only after verifiable reply, acceptance, payment, or equivalent transaction evidence.
