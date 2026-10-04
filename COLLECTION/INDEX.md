@@ -129,3 +129,10 @@ No completion claim is made. Collection remains active.
 - COLLECTION/AI/AI_ENGINEERING_FROM_SCRATCH_CAPTURE_2026-09-26.md — MIT-licensed AI engineering curriculum capture; use as a durable pattern/knowledge source and reverify upstream revisions before promotion.
 
 - OPENCLAW_API_LIST_OPERATIONAL_CAPTURE_2026-09-27.md — operational OpenClaw API catalog source and verified operator integration
+
+
+## Permanent account-wide expansion rule
+- Daily collection must expand every discovered repository to its owning account/organization and inspect ALL public repositories of that owner, not only pinned, popular, or first-page repositories.
+- Relevant docs, releases/tags/branches, workflows/actions, issues/PRs, and linked sources are inspected when useful.
+- New repositories and accounts discovered from this graph enter the same collection queue; historical captures are preserved.
+- Full rule: COLLECTION/CONTROL/ACCOUNT_REPOSITORY_EXPANSION_RULE.md
