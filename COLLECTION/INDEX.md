@@ -24,6 +24,11 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Intended capture: COLLECTION/ACCOUNTS/CBROCK84_2026-10-04.md
   - High-value sources inspected: gstack, superpowers, strix, prowler, aikido-safe-chain, tradingagents, lumibot, freqtrade.
   - Persistent account capture write was blocked by the GitHub tool security layer during this cycle; therefore this entry records the account as a discovered/queued source, not as a falsely claimed completed capture.
+- OpenCut-app — https://github.com/OpenCut-app
+  - Account-wide source discovered and enumerated: 4 public repositories.
+  - High-value sources: OpenCut, opencut-classic, ffmpeg-rust.
+  - OpenCut is MIT-licensed; current rewrite targets a Rust core, Editor API, plugin architecture, MCP server, headless/batch rendering, and scripting.
+  - opencut-classic is archived; retain it as historical/implementation reference.
 
 ## Current research batch
 
@@ -75,6 +80,6 @@ Daily collection must expand every discovered repository to its owning account/o
 Full rule: COLLECTION/CONTROL/ACCOUNT_REPOSITORY_EXPANSION_RULE.md
 
 ## Current frontier
-Continue weekly Top Five selection, free/self-hosted replacement discovery, account-wide collection, downstream account expansion, Agent Reach adapters/dependencies, and high-value verification under COLLECTION/VERIFICATION.
+Continue weekly Top Five selection, free/self-hosted replacement discovery, account-wide collection, downstream account expansion, Agent Reach adapters/dependencies, OpenCut video/editor capabilities, and high-value verification under COLLECTION/VERIFICATION.
 
 No completion claim is made. Collection remains active.
