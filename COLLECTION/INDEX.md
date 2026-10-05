@@ -150,6 +150,8 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Verified external-only ready set: OpenHands, LiteLLM, Ollama, canonical diegosouzapw/OmniRoute.
   - Explicitly excludes user-owned projects and keeps discovery/verification separate from integration.
   - TossErp remains excluded from READY pending independent license/release verification.
+- `COLLECTION/VERIFIED_EXTERNAL/CAPABILITY_MATRIX_2026-10-05.md`
+  - Capability matrix and integration order for the verified external set.
 
 ## Collection rules
 1. Discovery != production-ready without verification.
