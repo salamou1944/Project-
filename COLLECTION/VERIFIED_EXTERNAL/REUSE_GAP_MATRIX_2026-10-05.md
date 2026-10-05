@@ -49,3 +49,17 @@ Required evidence before implementation:
 - ASTRA: separate evidence domain — preserve boundary
 
 Recorded from live repository inspection on 2026-10-05.
+
+
+## 2026-10-05 adoption update
+
+OmniRoute provider-intelligence extraction has now crossed into the Salamou-31/API Factory boundary as policy metadata, without importing OmniRoute runtime code.
+
+- Policy artifact: `Salamou-31/AI-API-HUB/FREE-PROVIDER-POLICY.md`
+- Machine fixture: `Salamou-31/AI-API-HUB/free-provider-policy-fixture.json`
+- Policy contract test: `Salamou-31/AI-API-HUB/test-free-provider-policy.mjs`
+- API Factory enforcement: `AI-API-HUB/api-factory/provider.mjs`
+- Manifest support: `AI-API-HUB/api-factory/factory.mjs`
+- Runtime gate tests: `AI-API-HUB/api-factory/test-factory.mjs`
+
+The gate is fail-closed for `zeroCostOnly`: incomplete policy, non-`hardStop` evidence, disallowed ToS risk, or non-free status prevents provider readiness/execution. Existing provider behavior remains unchanged unless `freePolicy.zeroCostOnly=true` is explicitly declared.
