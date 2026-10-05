@@ -153,6 +153,9 @@ Central collection of repositories, documentation, tools, and reusable implement
 - `COLLECTION/VERIFIED_EXTERNAL/CAPABILITY_MATRIX_2026-10-05.md`
   - Capability matrix and integration order for the verified external set.
 
+- `COLLECTION/VERIFIED_EXTERNAL/REUSE_GAP_MATRIX_2026-10-05.md`
+  - Live comparison of OpenHands/LiteLLM/Ollama/canonical OmniRoute against Salamou-31/API Factory, agent-skills/Elite, and ASTRA; rejects wholesale duplication and identifies OmniRoute provider-intelligence extraction as the only immediate gap.
+
 ## Collection rules
 1. Discovery != production-ready without verification.
 2. Preserve source URL, revision/version, license, setup method, dependencies and limitations.
