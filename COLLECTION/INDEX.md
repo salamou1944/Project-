@@ -145,6 +145,12 @@ Central collection of repositories, documentation, tools, and reusable implement
 - whisper.cpp — https://github.com/ggml-org/whisper.cpp
 - FFmpeg — https://github.com/FFmpeg/FFmpeg
 
+## Verified external ready projects
+- `COLLECTION/VERIFIED_EXTERNAL/READY_EXTERNAL_PROJECTS_2026-10-05.md`
+  - Verified external-only ready set: OpenHands, LiteLLM, Ollama, canonical diegosouzapw/OmniRoute.
+  - Explicitly excludes user-owned projects and keeps discovery/verification separate from integration.
+  - TossErp remains excluded from READY pending independent license/release verification.
+
 ## Collection rules
 1. Discovery != production-ready without verification.
 2. Preserve source URL, revision/version, license, setup method, dependencies and limitations.
