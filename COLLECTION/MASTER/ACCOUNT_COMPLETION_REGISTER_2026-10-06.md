@@ -101,3 +101,14 @@ Enumeration alone is never represented as deep completion.
 7. Keep the frontier open until no new owners are exposed.
 
 This register is deliberately conservative: it will not claim the final total until the source graph itself has been exhausted.
+
+
+## Completed account sweep: ArchiveBox
+
+- Account: ArchiveBox
+- Owner-scoped enumeration: 25 public repositories on 2026-10-06
+- Account state: DEEP SWEEP COMPLETE for the enumerated 25-repository frontier
+- Capture record: COLLECTION/ACCOUNTS/ARCHIVEBOX_2026-10-06.md
+- New downstream collection targets exposed: Mozilla/Readability, mitmproxy, Webrecorder/WACZ ecosystem, Internet Archive, pywb, Cloudflare, Pydantic, browser-use, Browserbase, Kernel, Anchor Browser, Browserless, ZenRows, gildas-lormeau, yt-dlp, gallery-dl, Puppeteer, Playwright.
+- These downstream owners remain OPEN targets and must be swept recursively before they can be considered complete.
+- ArchiveBox itself is closed for the current collection cycle; it may be reopened only if new public repositories or materially new source graph nodes appear.
