@@ -1,0 +1,50 @@
+name: collection-canonical-reconciliation
+
+on:
+  push:
+    paths:
+      - "COLLECTION/**"
+  schedule:
+    - cron: "37 */3 * * *"
+  workflow_dispatch:
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Collection extraction and canonical reconciliation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/reconcile_canonical_skills.py
+          python3 COLLECTION/AUTO/intelligent_extract.py
+          python3 COLLECTION/AUTO/process_collection.py
+          python3 COLLECTION/AUTO/reconcile_canonical_skills.py
+
+      - name: Enforce terminal decision integrity
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p=json.loads(Path("COLLECTION/MASTER/CANONICAL-PROMOTION-PLAN.json").read_text())
+          allowed={"NEW","UPGRADE","MERGE","REFERENCE","QUARANTINE","REVIEW_NEW_OR_UPGRADE"}
+          bad=[x for x in p["items"] if x.get("terminal_decision") not in allowed]
+          if bad:
+              raise SystemExit("Invalid promotion decision(s): "+", ".join(x.get("capability_key","?") for x in bad))
+          print(json.dumps(p["summary"],sort_keys=True))
+          PY
+
+      - name: Commit reconciliation artifacts
+        run: |
+          set -euo pipefail
+          git config user.name "collection-bot"
+          git config user.email "collection-bot@users.noreply.github.com"
+          git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION
+          git diff --cached --quiet || git commit -m "chore(collection): reconcile canonical skill promotion queue"
+          git push
