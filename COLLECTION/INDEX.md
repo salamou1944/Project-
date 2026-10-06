@@ -95,6 +95,13 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Priority leverage: task-scoped skills, evidence-bound completion, persistent operating memory, deterministic routing, local safety/resource guards, visual proof, media generation and automation auditing.
   - Repository-level reuse requires comparison against existing agent-skills/ASTRA/COLLECTION before implementation.
 
+- dyad-sh — https://github.com/dyad-sh
+  - Primary source: dyad — https://github.com/dyad-sh/dyad
+  - Account capture: COLLECTION/ACCOUNTS/DYAD-SH_2026-10-06.md
+  - Revision inspected: 701d9179b43773a9c654014975ebc699a32fd500
+  - Priority leverage: MCP consent/typed tool contracts, independent shell-review policy, read-only/plan-only capability enforcement, WAL-safe backup/checksums, fake-provider/MCP evaluation fixtures, provider-neutral model registry and deployment integration patterns.
+  - License caution: repo root states Apache-2.0 outside src/pro; src/pro is Functional Source License 1.1 + Apache-2.0 terms. Reuse must respect the boundary.
+
 - Hikhakk — https://github.com/Hikhakk
   - Account capture: COLLECTION/ACCOUNTS/HIKHAKK_2026-10-06.md
   - Primary verified source: higgsfield-mcp-unified — https://github.com/Hikhakk/higgsfield-mcp-unified — MIT.
