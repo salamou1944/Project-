@@ -1,9 +1,9 @@
 {
   "canonical_source": "github:salamou1944/agent-skills",
   "repo": "salamou1944/agent-skills",
-  "revision_sha": "6e84e5bd63b6ffd0b4974fd898302ff681d257ff",
+  "revision_sha": "1e83a87d5e5aeff4d1395093097a7989a209b633",
   "default_branch": "main",
-  "repo_updated_at": "2026-10-06T20:04:25Z",
+  "repo_updated_at": "2026-10-06T22:15:47Z",
   "license": null,
   "topics": [],
   "tree_truncated": false,
@@ -15,11 +15,11 @@
   },
   "files": [
     {
-      "path": ".github/workflows/agent-operator-self-test.yml",
-      "sha": "6afce7a750f0d61e6cc56b9a4c93ea24284d195f",
-      "content_sha256": "ae734dfee68f45ed5e629d6d0fb9b3486159c2318e4aea488e7af94019beea80",
+      "path": ".github/workflows/agent-execution-governance-self-test.yml",
+      "sha": "77fe1b9d4a8028d61af0b49068e3ba4f873bab8f",
+      "content_sha256": "fdf7334444153582ec8e8c304288546f854cddcd1231c852c4e33d4e27aadfc3",
       "score": 256,
-      "content": "name: agent-operator-self-test\n\non:\n  push:\n    branches: [main, 'feat/**']\n  pull_request:\n    paths:\n      - 'skills/agent-operator/**'\n      - 'scripts/agent-operator-self-test.mjs'\n      - '.github/workflows/agent-operator-self-test.yml'\n\njobs:\n  self-test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n      - name: Run self-test\n        run: node scripts/agent-operator-self-test.mjs\n"
+      "content": "name: agent-execution-governance-self-test\n\non:\n  push:\n    branches: [main, 'feat/**']\n  pull_request:\n    paths:\n      - 'skills/agent-execution-governance/**'\n      - 'scripts/agent-execution-governance-self-test.mjs'\n      - '.github/workflows/agent-execution-governance-self-test.yml'\n\njobs:\n  self-test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n      - name: Run self-test\n        run: node scripts/agent-execution-governance-self-test.mjs\n"
     },
     {
       "path": ".github/workflows/easy-runtime-deploy-latest.yml",
@@ -64,18 +64,18 @@
       "content": "# Deep-dive fixtures\n\nSanitized from a 2026-05-13 `fixture-app` Vercel CLI v53.4.0 run. These are\ntrimmed CLI responses (`{query, summary, statistics}` only — the `data[]`\ntime-series array is stripped to keep fixtures small). Identifiers and route names are synthetic; metric shapes and numeric relationships are preserved.\n\n## Empirical findings from `scripts/deep-dive.mjs` shake-out\n\n1. **Route filter with brackets works without escaping.** `--filter \"route eq\n   '/dashboard/[sessionId]'\"` returns 4923 invocations on fixture-app. No\n   escaping or URL-encoding required; the CLI handles the brackets as part\n   of the OData literal.\n\n2. **OData `and` works.** `--filter \"route eq 'R' and http_status ge '500'\"`\n   evaluates as expected. We compose this string verbatim in `lib/deep-dive.mjs`.\n\n3. **Multi-aggregation does NOT work.** Passing `-a p50 -a p95` only honours\n   the *last* `-a`. Each percentile (p50, p75, p95, p99) must be its own\n   query. The deep-dive runner exploits Promise.all parallelism so the\n   wall-clock cost is one CLI-round-trip per candidate, not four.\n\n4. **`vercel.external_api_request.count` dimensions** (verified via\n   `vercel metrics schema vercel.external_api_request.count`):\n   `deployment_id, environment, error_code, fetch_type, function_region,\n   http_status, origin_hostname, origin_path, origin_route, project_id,\n   project_name, request_hostname, request_method, request_path`.\n   The \"calling route\" dimension is `origin_route` (NOT `route` or\n   `function_path`).\n\n5. **`vercel.function_invocation.function_duration_ms` percentile aggregations\n   supported:** `sum, persecond, percent, avg, min, max, p50, p75, p90, p95,\n   p99, stddev`. Default is `avg`.\n\n## Files\n\n- `slow_route_latency_p95.json` — single-percentile latency query (no group-by, filter only)\n- `slow_route_perDeployment.json` — p95 latency grouped by deployment_id\n- `slow_route_startTypeSplit.json` — function_start_type split (hot/cold/prewarmed)\n- `slow_route_statusDist.json` — http_status distribution\n- `uncached_route_cacheBreakdown.json` — cache_result distribution on a route\n\nDeployment identifiers are synthetic. No customer data is included.\n"
     },
     {
-      "path": "skills/vercel-optimize/references/support-topics/cdn-cache-auth-safety.md",
-      "sha": "7ee59d1381fe674c872524fe470208f21e78aa52",
-      "content_sha256": "5691cd39b3403ef939199c3b9b21e28cb447b2f8d2f6dea6000064e5ef3fdfb5",
-      "score": 204,
-      "content": "---\nid: cdn-cache-auth-safety\ntitle: CDN cache auth safety\nstatus: active\ncandidateKinds: [\"uncached_route\", \"cache_header_gap\"]\nframeworks: [\"*\"]\npriority: 100\ncitations: [\"https://vercel.com/docs/caching/cdn-cache\", \"https://vercel.com/docs/caching/cache-control-headers\", \"https://vercel.com/docs/project-configuration\"]\nmaxBriefChars: 900\n---\n\n## Investigation Brief\nTreat edge caching as a safety question first. The route must be a public, cacheable GET path before a shared-cache recommendation is allowed.\n\n## Evidence To Check\nUse `methodDistribution`, `cacheBreakdown`, and headers. Before `s-maxage`, rule out cookies, sessions, authorization, draft state, and user-specific data.\n\n## Do Not Recommend When\nDo not cache mutations, dashboards, account data, request-personalized responses, or routes whose value changes per viewer. Do not mix `private` with shared-cache directives.\n\n## Verification\nName GET share, cache mix, file line, and policy: mechanism, scope, TTL/freshness, and `Vary`. If the right policy is `no-store`, emit no-change/observation.\n"
-    },
-    {
       "path": "skills/vercel-optimize/references/support-topics/auth-preserving-parallelization.md",
       "sha": "f6ea6d5f3c6c74cc0634d723938ac749f220219d",
       "content_sha256": "34cfd687cc106ef15696b8f1f155c30f635234e29f3c4db087193c3c2c3c4bac",
       "score": 204,
       "content": "---\nid: auth-preserving-parallelization\ntitle: Authorization-preserving parallelization\nstatus: active\ncandidateKinds: [\"slow_route\"]\nframeworks: [\"*\"]\npriority: 90\ncitations: [\"vercel-react-best-practices:async-parallel\", \"vercel-react-best-practices:server-parallel-fetching\"]\nmaxBriefChars: 900\n---\n\n## Investigation Brief\nParallelizing awaits is safe only when it does not move private data access ahead of the auth, ownership, tenant, or permission check protecting that data.\n\n## Evidence To Check\nList every awaited operation being reordered. If a private lookup currently runs after `getSession()`, an ownership query, a tenant check, or a redirect guard, prove the lookup itself enforces the same predicate before recommending `Promise.all`.\n\n## Do Not Recommend When\nDo not parallelize a private record fetch with the ownership check that authorizes that fetch. Instead, recommend combining the guard and data lookup into one query constrained by the authenticated user, tenant, or ownership key.\n\n## Verification\nThe fix must preserve the sequential guard or replace it with a single authorized query. Do not promise a latency drop equal to a helper unless that helper duration was measured.\n"
+    },
+    {
+      "path": "skills/vercel-optimize/references/support-topics/cdn-cache-auth-safety.md",
+      "sha": "7ee59d1381fe674c872524fe470208f21e78aa52",
+      "content_sha256": "5691cd39b3403ef939199c3b9b21e28cb447b2f8d2f6dea6000064e5ef3fdfb5",
+      "score": 204,
+      "content": "---\nid: cdn-cache-auth-safety\ntitle: CDN cache auth safety\nstatus: active\ncandidateKinds: [\"uncached_route\", \"cache_header_gap\"]\nframeworks: [\"*\"]\npriority: 100\ncitations: [\"https://vercel.com/docs/caching/cdn-cache\", \"https://vercel.com/docs/caching/cache-control-headers\", \"https://vercel.com/docs/project-configuration\"]\nmaxBriefChars: 900\n---\n\n## Investigation Brief\nTreat edge caching as a safety question first. The route must be a public, cacheable GET path before a shared-cache recommendation is allowed.\n\n## Evidence To Check\nUse `methodDistribution`, `cacheBreakdown`, and headers. Before `s-maxage`, rule out cookies, sessions, authorization, draft state, and user-specific data.\n\n## Do Not Recommend When\nDo not cache mutations, dashboards, account data, request-personalized responses, or routes whose value changes per viewer. Do not mix `private` with shared-cache directives.\n\n## Verification\nName GET share, cache mix, file line, and policy: mechanism, scope, TTL/freshness, and `Vary`. If the right policy is `no-store`, emit no-change/observation.\n"
     },
     {
       "path": "packages/vercel-optimize-tests/test/collect-sub-agent-outputs.test.mjs",
@@ -99,13 +99,6 @@
       "content": "---\nid: external-api-critical-path\ntitle: External API critical path\nstatus: active\ncandidateKinds: [\"external_api_slow\"]\nframeworks: [\"next@>=13.0.0\"]\npriority: 90\ncitations: [\"vercel-react-best-practices:async-parallel\", \"vercel-react-best-practices:server-parallel-fetching\", \"vercel-react-best-practices:server-cache-react\"]\nmaxBriefChars: 850\n---\n\n## Investigation Brief\nFor external API candidates, identify the customer route that waits on the slow hostname and whether the call is on the critical path.\n\n## Evidence To Check\nUse callers-by-route evidence, transfer size, and source awaits. Check whether the upstream call can run in parallel, be cached safely, be reduced in payload size, or move after response.\n\n## Do Not Recommend When\nDo not cache mutations, secrets, per-user responses, or upstream calls whose freshness requirement is unknown.\n\n## Verification\nName the hostname, caller route, p75 or p95 latency, and the exact source line that waits on the call.\n"
     },
     {
-      "path": ".github/workflows/validate-agent-skills.yml",
-      "sha": "c4d1519644689210ab1857d29dab02c8adadd1a6",
-      "content_sha256": "f16eb74871fafca7aa504bdb9fac3d1ca06d3b655be0617ac95fc281b391d228",
-      "score": 196,
-      "content": "name: validate-agent-skills\non:\n  push:\n    paths:\n      - '.agents/skills/**'\n      - 'registry/**'\n      - 'scripts/validate-skills.mjs'\n  pull_request:\n    paths:\n      - '.agents/skills/**'\n      - 'registry/**'\n      - 'scripts/validate-skills.mjs'\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n      - run: node scripts/validate-skills.mjs\n"
-    },
-    {
       "path": ".github/workflows/agent-skills-discovery.yml",
       "sha": "8a76c899c2a2f7bf95fc4937824e6377b36e7a4f",
       "content_sha256": "066241189c39bc26b9d042ba98af3e099b25fa55b6f13384edecf891e37dd57f",
@@ -113,11 +106,11 @@
       "content": "name: Agent Skills Discovery\n\non:\n  pull_request:\n    branches: [main]\n    paths:\n      - 'skills/**'\n      - 'scripts/build-discovery-index.mjs'\n      - '.github/workflows/agent-skills-discovery.yml'\n  push:\n    branches: [main]\n    paths:\n      - 'skills/**'\n      - 'scripts/build-discovery-index.mjs'\n      - '.github/workflows/agent-skills-discovery.yml'\n\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci --ignore-scripts\n      - run: node scripts/build-discovery-index.mjs https://example.com/skills\n\n  publish:\n    if: github.event_name == 'push'\n    needs: validate\n    concurrency:\n      group: agent-skills-discovery-publish\n      cancel-in-progress: true\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n    env:\n      GH_TOKEN: ${{ github.token }}\n      RELEASE_TAG: agent-skills-${{ github.sha }}\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm ci --ignore-scripts\n      - run: node scripts/build-discovery-index.mjs \"https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}\"\n      - run: |\n          gh release view \"$RELEASE_TAG\" >/dev/null 2>&1 ||\n            gh release create \"$RELEASE_TAG\" --draft --target \"$GITHUB_SHA\" \\\n              --title \"Agent Skills ${{ github.sha }}\" \\\n              --notes \"Automated Agent Skills discovery release for ${{ github.sha }}.\"\n          gh release upload \"$RELEASE_TAG\" dist/* --clobber\n          gh release edit \"$RELEASE_TAG\" --draft=false --latest\n"
     },
     {
-      "path": ".github/workflows/elite-hardening-ci.yml",
-      "sha": "36dc8f9ae32d314943f68c84efd7a76adb56b6ef",
-      "content_sha256": "cc8745b1c0689f1a100efea509ebadfd7245ae37230de2c34354740028a6f6d1",
-      "score": 193,
-      "content": "name: elite-hardening-ci\n\non:\n  push:\n    branches:\n      - feat/elite-independent-evidence-hardening\n  pull_request:\n    branches: [main]\n\npermissions:\n  contents: read\n\njobs:\n  verification-hardening:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: npm\n      - run: npm ci --ignore-scripts\n      - run: npm run test:elite:evidence\n      - run: npm run test:elite:retrieval\n      - run: npm run test:elite:faults\n      - run: node --check apps/easy-developer-platform/independent-evidence-gate.mjs\n      - run: node --check apps/easy-developer-platform/retrieval-evaluator.mjs\n      - run: node --check apps/easy-developer-platform/fault-matrix.mjs\n      - run: git diff --check\n"
+      "path": ".github/workflows/validate-agent-skills.yml",
+      "sha": "c4d1519644689210ab1857d29dab02c8adadd1a6",
+      "content_sha256": "f16eb74871fafca7aa504bdb9fac3d1ca06d3b655be0617ac95fc281b391d228",
+      "score": 196,
+      "content": "name: validate-agent-skills\non:\n  push:\n    paths:\n      - '.agents/skills/**'\n      - 'registry/**'\n      - 'scripts/validate-skills.mjs'\n  pull_request:\n    paths:\n      - '.agents/skills/**'\n      - 'registry/**'\n      - 'scripts/validate-skills.mjs'\njobs:\n  validate:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n      - run: node scripts/validate-skills.mjs\n"
     },
     {
       "path": ".github/workflows/army-14-field-exercise.yml",
@@ -125,7 +118,14 @@
       "content_sha256": "50f36f995307ca915f8eeeb2f04e4e8a07d27e2c96682a16d1084487926baf81",
       "score": 193,
       "content": "name: ARMY-14 integrated field exercise\n\non:\n  push:\n    paths:\n      - '.github/agents/**'\n      - 'apps/easy-developer-platform/test-army-14-field-exercise.mjs'\n      - 'package.json'\n      - '.github/workflows/army-14-field-exercise.yml'\n  pull_request:\n    paths:\n      - '.github/agents/**'\n      - 'apps/easy-developer-platform/test-army-14-field-exercise.mjs'\n      - 'package.json'\n      - '.github/workflows/army-14-field-exercise.yml'\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\njobs:\n  field-exercise:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: npm\n      - run: npm ci\n      - name: Run integrated ARMY-14 field exercise\n        run: npm run test:elite:field-exercise\n"
+    },
+    {
+      "path": ".github/workflows/elite-hardening-ci.yml",
+      "sha": "36dc8f9ae32d314943f68c84efd7a76adb56b6ef",
+      "content_sha256": "cc8745b1c0689f1a100efea509ebadfd7245ae37230de2c34354740028a6f6d1",
+      "score": 193,
+      "content": "name: elite-hardening-ci\n\non:\n  push:\n    branches:\n      - feat/elite-independent-evidence-hardening\n  pull_request:\n    branches: [main]\n\npermissions:\n  contents: read\n\njobs:\n  verification-hardening:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: npm\n      - run: npm ci --ignore-scripts\n      - run: npm run test:elite:evidence\n      - run: npm run test:elite:retrieval\n      - run: npm run test:elite:faults\n      - run: node --check apps/easy-developer-platform/independent-evidence-gate.mjs\n      - run: node --check apps/easy-developer-platform/retrieval-evaluator.mjs\n      - run: node --check apps/easy-developer-platform/fault-matrix.mjs\n      - run: git diff --check\n"
     }
   ],
-  "generated_at": "2026-10-06T20:14:35.430724+00:00"
+  "generated_at": "2026-10-06T22:29:13.118929+00:00"
 }
