@@ -67,20 +67,20 @@ def main():
     for key,group in sorted(by_key.items()):
         sources=sorted({x["source"] for x in group})
         restricted=any(x["classification"]=="RESTRICTED" for x in group)
-        action="RESTRICTED" if restricted else ("MERGE_OR_UPGRADE_REVIEW" if len(sources)>1 else "NEW_OR_UPGRADE_REVIEW")
+        action="QUARANTINE" if restricted else ("REVIEW_MERGE_OR_UPGRADE" if len(sources)>1 else "REVIEW_NEW_OR_UPGRADE")
         decisions.append({"capability_key":key,"action":action,"evidence_count":len(group),
         "source_count":len(sources),"sources":sources[:20],"evidence":group[:20],
         "next_gate":"safety review + authorization gate" if restricted else "canonical Skill dedupe + validation"})
     now=datetime.datetime.now(datetime.timezone.utc).isoformat()
     counts={"files_scanned":len(files),"evidence_records":len(all_records),"capability_groups":len(decisions),
-    "restricted":sum(d["action"]=="RESTRICTED" for d in decisions),
-    "merge_or_upgrade":sum(d["action"]=="MERGE_OR_UPGRADE_REVIEW" for d in decisions),
-    "new_or_upgrade":sum(d["action"]=="NEW_OR_UPGRADE_REVIEW" for d in decisions)}
+    "quarantine":sum(d["action"]=="QUARANTINE" for d in decisions),
+    "review_merge_or_upgrade":sum(d["action"]=="REVIEW_MERGE_OR_UPGRADE" for d in decisions),
+    "review_new_or_upgrade":sum(d["action"]=="REVIEW_NEW_OR_UPGRADE" for d in decisions)}
     ready={"generated_at":now,"pipeline":["extract","normalize","classify","dedupe","decide","verify"],"counts":counts,"decisions":decisions}
     (MASTER/"READY.json").write_text(json.dumps(ready,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    queue=[d for d in decisions if d["action"]!="RESTRICTED"]
+    queue=[d for d in decisions if d["action"]!="QUARANTINE"]
     (MASTER/"PROMOTION-QUEUE.json").write_text(json.dumps({"generated_at":now,"items":queue},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
-    restricted_queue=[d for d in decisions if d["action"]=="RESTRICTED"]
+    restricted_queue=[d for d in decisions if d["action"]=="QUARANTINE"]
     (VERIFY/"RESTRICTED-QUEUE.json").write_text(json.dumps({"generated_at":now,"items":restricted_queue},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(counts))
 
