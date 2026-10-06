@@ -69,3 +69,20 @@ The required sequence is:
 ACCOUNT TARGET → ALL PUBLIC REPOSITORIES → ALL RELEVANT CONTENT/SOURCES → NEW ACCOUNTS → REPEAT
 
 A repository may be the entry point for discovery, but once its owner is identified, the complete public account repository set becomes in-scope for that collection run. This applies equally to user-supplied accounts, permanently monitored accounts, weekly selections, and accounts discovered through other repositories.
+
+
+## Valuable-asset stock rule
+
+Collection is a stock-building system, not a discard pipeline. Preserve every materially valuable item, including small or currently unused components, patterns, fixtures, schemas, prompts, adapters, workflows, tests, references, and ready/near-ready projects. Do not discard an item merely because it is small, duplicated at source level, or not needed by the current project.
+
+- Preserve source evidence and provenance even when reusable value is merged elsewhere.
+- Deduplicate at the canonical Skill layer; do not delete historical source records to make the inventory look smaller.
+- When complementary retained inputs can be combined, synthesize a stronger derived asset and preserve the contributing inputs.
+- Keep ready/near-ready projects intact and record their gaps so prepared Skills/components can complete them later.
+- ON-SHELF means paused, retained, searchable, and reusable; it is not deletion or rejection.
+- Before building a new capability, search the existing stock for ready assets, near-ready projects, components, Skills, adapters, fixtures, and infrastructure that can be composed.
+- A collection cycle should increase both inventory quantity and inventory strength: **N inputs → stronger derived asset**, while preserving the N original sources.
+
+The target operating model is:
+
+**COLLECTION → PRESERVE EVERYTHING VALUABLE → EXTRACT VALUE → DEDUPE/MERGE → SYNTHESIZE STRONGER ASSETS → MAKE USABLE/PROVE → SHELF → REUSE/ACTIVATE**
