@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 import base64, datetime, hashlib, json, os, re, urllib.parse, urllib.request, urllib.error
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 TOKEN = os.environ["GH_TOKEN"]
 API = "https://api.github.com"
 ROOT = Path("COLLECTION/AUTO/EXTRACTED")
 MAX_FILES = 16
 MAX_BYTES_PER_FILE = 60000
-MAX_BYTES_PER_SOURCE = 500000
+MAX_BYTES_PER_SOURCE = 500000\nMAX_WORKERS = 32\nMAX_API_WORKERS = 16\nCACHE_DIR = Path("COLLECTION/AUTO/CACHE")
 
-def api(path):
-    req = urllib.request.Request(API + path, headers={
+_api_cache = {}\n\ndef api(path):
+    if path in _api_cache:\n        return _api_cache[path]\n    req = urllib.request.Request(API + path, headers={
         "Authorization": f"Bearer {TOKEN}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -19,7 +19,7 @@ def api(path):
     })
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            return json.load(r)
+            data = json.load(r)\n            _api_cache[path] = data\n            return data
     except urllib.error.HTTPError as ex:
         body = ex.read().decode("utf-8", "replace")
         if ex.code == 403 and "rate limit" in body.lower():
@@ -164,7 +164,7 @@ def main():
               "policy":{"max_files_per_source":MAX_FILES,"max_file_bytes":MAX_BYTES_PER_FILE,"max_source_bytes":MAX_BYTES_PER_SOURCE},
               "sources":[]}
     jobs=[]
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
         for item in repos:
             if item.get("blocked"):
                 continue
