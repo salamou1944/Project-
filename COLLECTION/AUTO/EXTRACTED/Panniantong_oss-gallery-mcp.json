@@ -22,13 +22,6 @@
       "content": "import { handlers } from \"@/auth\";\nexport const { GET, POST } = handlers;\n"
     },
     {
-      "path": "README.md",
-      "sha": "0e67edf871984a4837fb87e8593f4e0e76051288",
-      "content_sha256": "6ad33165582fa6d3378f576fbf80706fff28cc945570ea2a32fc1662b2545d46",
-      "score": 170,
-      "content": "<a href=\"https://oss.gallery\">\n  <img alt=\"OSS Gallery\" src=\"https://raw.githubusercontent.com/dubinc/oss-gallery/main/public/thumbnail.jpg\" />\n</a>\n\n<h3 align=\"center\">OSS Gallery</h3>\n\n<p align=\"center\">\n    A crowdsourced list of the best open-source projects on the internet.\n    <br />\n    <a href=\"https://dub.co/blog/product-discovery-platform\"><strong>Learn how it's built »</strong></a>\n    <br />\n    <br />\n    <a href=\"#introduction\"><strong>Introduction</strong></a> ·\n    <a href=\"#tech-stack\"><strong>Tech Stack</strong></a>\n</p>\n\n<p align=\"center\">\n  <a href=\"https://twitter.com/dubdotco\">\n    <img src=\"https://img.shields.io/twitter/follow/dubdotco?style=flat&label=%40dubdotco&logo=twitter&color=0bf&logoColor=fff\" alt=\"Twitter\" />\n  </a>\n  <a href=\"https://news.ycombinator.com/item?id=40146998\"><img src=\"https://img.shields.io/badge/Hacker%20News-125-%23FF6600\" alt=\"Hacker News\"></a>\n</p>\n\n<br/>\n\n## Introduction\n\n[OSS Gallery](https://oss.gallery) is a crowdsourced list of the best open-source projects on the internet.\n\nIt uses the [Dub.co API](https://dub.co/docs/api-reference/introduction) to create short links for each project page + display real-time click analytics for them.\n\n<img width=\"1062\" alt=\"CleanShot 2024-04-24 at 20 15 09@2x\" src=\"https://github.com/dubinc/oss-gallery/assets/28986134/7d2ff6e6-cdb2-4818-88f9-ce3e6518c09d\">\n\n## Tech Stack\n\n- Next.js Server Actions + Form Actions (zero API routes)\n- Dub [TypeScript SDK](https://github.com/dubinc/dub-node)\n- Tremor for charts\n- Vercel Postgres + deployment\n"
-    },
-    {
       "path": "package.json",
       "sha": "4766a1ca30e2fd686d92aeae6fde08af191e9679",
       "content_sha256": "075146270b16191bf3ba8d3fdc321c463b029dba728af051e21c9827fe66b1f3",
@@ -71,46 +64,11 @@
       "content": "\"use client\";\n\nimport typesense, { ProjectHit } from \"@/lib/typesense\";\nimport { BlurImage, LoadingSpinner } from \"@dub/ui\";\nimport { cn } from \"@dub/utils\";\nimport { Command } from \"cmdk\";\nimport { Link2 } from \"lucide-react\";\nimport { useRouter, useSearchParams } from \"next/navigation\";\nimport { useEffect, useState } from \"react\";\nimport Highlighter from \"react-highlight-words\";\nimport { useDebounce } from \"use-debounce\";\n\nexport default function SearchBar() {\n  const [loading, setLoading] = useState(false);\n  const [items, setItems] = useState<ProjectHit[]>([]);\n\n  const searchParams = useSearchParams();\n  const q = searchParams?.get(\"q\") || \"\";\n\n  function search(query: string) {\n    const params = new URLSearchParams(searchParams.toString());\n    if (query) {\n      params.set(\"q\", query);\n    } else {\n      params.delete(\"q\");\n    }\n    window.history.replaceState(null, \"\", `?${params.toString()}`);\n  }\n\n  const [debouncedQuery] = useDebounce(q, 150);\n\n  useEffect(() => {\n    const abortController = new AbortController();\n\n    if (!debouncedQuery) return setItems([]);\n    const fetchAutocomplete = async (q: string) => {\n      try {\n        setLoading(true);\n        const results = await typesense({ client: true })\n          .collections(\"projects\")\n          .documents()\n          .search(\n            {\n              q,\n              query_by: [\"name\", \"description\"],\n              highlight_full_fields: [\"name\", \"description\"],\n              sort_by: \"stars:desc\",\n              num_typos: 1,\n              limit: 8,\n              exclude_fields: [\"out_of\", \"search_time_ms\"],\n              infix: [\"always\", \"off\"],\n            },\n            {\n              abortSignal: abortController.signal,\n            },\n          );\n        setItems(results.hits as ProjectHit[]);\n      } catch (error) {\n        console.error(error);\n      }\n      setLoading(false);\n    };\n    fetchAutocomplete(debouncedQuery);\n\n    return () => {\n      abortController.abort();\n    };\n  }, [debouncedQuery]);\n\n  const router = useRouter();\n\n  return (\n    <Command\n      className=\"peer relative w-full max-w-md\"\n      loop\n      shouldFilter={false}\n    >\n      <div className=\"absolute inset-y-0 left-3 mt-3 text-gray-400\">\n        {loading ? (\n          <LoadingSpinner className=\"h-4\" />\n        ) : (\n          <Link2 className=\"h-4\" />\n        )}\n      </div>\n      <Command.Input\n        name=\"query\"\n        id=\"query\"\n        className=\"block w-full rounded-md border-gray-200 pl-10 text-sm text-gray-900 placeholder-gray-400 shadow-lg focus:border-gray-500 focus:outline-none focus:ring-gray-500\"\n        placeholder=\"Search for a project\"\n        value={q}\n        onValueChange={search}\n      />\n      <Command.List\n        className={cn(\n          \"absolute z-10 mt-2 h-[calc(var(--cmdk-list-height)+17px)] max-h-[300px] w-full overflow-auto rounded-md border border-gray-200 bg-white p-2 shadow-md transition-all duration-75\",\n          {\n            hidden: items.length === 0,\n          },\n        )}\n      >\n        {items.map((item) => (\n          <Command.Item\n            key={item.document.id}\n            value={item.document.name}\n            onSelect={() => {\n              router.push(`/projects/${item.document.slug}`);\n            }}\n            className=\"group flex cursor-pointer items-center justify-between rounded-md px-4 py-2 text-sm text-gray-900 hover:bg-gray-100 hover:text-gray-900 active:bg-gray-200 aria-disabled:cursor-not-allowed aria-disabled:opacity-75 aria-disabled:hover:bg-white aria-selected:bg-gray-100 aria-selected:text-gray-900\"\n          >\n            <div className=\"flex items-center space-x-2\">\n              <BlurImage\n                src={item.document.logo}\n                alt={item.document.name}\n                className=\"h-6 w-6 rounded-full\"\n                width={16}\n                height={16}\n              />\n              <div className=\"flex flex-col space-y-0.5\">\n                <Highlighter\n                  highlightClassName=\"underline text-gray-800 bg-transparent\"\n                  searchWords={\n                    item.highlights.find((h) => h.field === \"name\")\n                      ?.matched_tokens || []\n                  }\n                  autoEscape={true}\n                  textToHighlight={item.document.name}\n                  className=\"text-sm font-medium text-gray-600 underline-offset-2\"\n                />\n                <Highlighter\n                  highlightClassName=\"underline text-gray-800 bg-transparent\"\n                  searchWords={\n                    item.highlights.find((h) => h.field === \"description\")\n                      ?.matched_tokens || []\n                  }\n                  autoEscape={true}\n                  textToHighlight={item.document.description}\n                  className=\"line-clamp-1 text-xs text-gray-400 underline-offset-2\"\n                />\n              </div>\n            </div>\n          </Command.Item>\n        ))}\n      </Command.List>\n    </Command>\n  );\n}\n\nexport function SearchBarPlaceholder() {\n  return (\n    <div className=\"peer relative w-full max-w-md\">\n      <div className=\"absolute inset-y-0 left-3 mt-3 text-gray-400\">\n        <Link2 className=\"h-4\" />\n      </div>\n      <input\n        name=\"query\"\n        id=\"query\"\n        className=\"block w-full rounded-md border-gray-200 pl-10 text-sm text-gray-900 placeholder-gray-400 shadow-lg focus:border-gray-500 focus:outline-none focus:ring-gray-500\"\n        placeholder=\"Search for a project\"\n        disabled\n        aria-invalid=\"true\"\n      />\n    </div>\n  );\n}\n"
     },
     {
-      "path": "LICENSE.md",
-      "sha": "a797fb7c803cbe7377819ea9389d75bcab600f6e",
-      "content_sha256": "39265b4440d76d9e4b03ea7d8d17a5e411c8610b2179ed7a8ee77ce9725641d2",
-      "score": 70,
-      "content": "MIT License\n\nCopyright (c) 2023 Steven Tey\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
-    },
-    {
-      "path": ".eslintrc.json",
-      "sha": "bffb357a7122523ec94045523758c4b825b448ef",
-      "content_sha256": "1589a15e55fbebc6519c95d91d8f0a090618f20dc78e479858b9c27552484961",
-      "score": 35,
-      "content": "{\n  \"extends\": \"next/core-web-vitals\"\n}\n"
-    },
-    {
-      "path": "postcss.config.js",
-      "sha": "12a703d900da8159c30e75acbd2c4d87ae177f62",
-      "content_sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf",
-      "score": 35,
-      "content": "module.exports = {\n  plugins: {\n    tailwindcss: {},\n    autoprefixer: {},\n  },\n};\n"
-    },
-    {
-      "path": "middleware.ts",
-      "sha": "2ff4f632d9fd25fdc7bb8cb1d04f35d0a334d9ea",
-      "content_sha256": "0e66fd845942529edfaa0c35eeb2b44be5adfb7b41e5926ded46105e83c55b9b",
-      "score": 35,
-      "content": "import NextAuth from \"next-auth\";\nimport authConfig from \"./auth.config\";\n\nexport const { auth: middleware } = NextAuth(authConfig);\n"
-    },
-    {
-      "path": "prettier.config.js",
-      "sha": "24536be578cd20a878ae01e60a702a26e46cc2ff",
-      "content_sha256": "04f497829de797dbac4e0f98820c51e568f642025313661338f782822b41e5ab",
-      "score": 35,
-      "content": "// prettier.config.js\nmodule.exports = {\n  bracketSpacing: true,\n  semi: true,\n  trailingComma: \"all\",\n  printWidth: 80,\n  tabWidth: 2,\n  plugins: [\n    // comment for better diff\n    \"prettier-plugin-organize-imports\",\n    \"prettier-plugin-tailwindcss\",\n  ],\n};\n"
-    },
-    {
-      "path": "next.config.js",
-      "sha": "7ddfc44eb7c47c7168d632943101efe8be5d3a7b",
-      "content_sha256": "c43111552e21f73fa4021c7a4ead9731bb236e3cf7e5e1908fd96e0143f0ab18",
-      "score": 35,
-      "content": "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  reactStrictMode: true,\n  swcMinify: true,\n  experimental: {\n    ppr: true,\n  },\n  images: {\n    unoptimized: true,\n  },\n  async redirects() {\n    return [\n      {\n        source: \"/github\",\n        destination: \"https://github.com/dubinc/oss-gallery\",\n        permanent: false,\n      },\n      {\n        source: \"/projects\",\n        destination: \"/\",\n        permanent: false,\n      },\n    ];\n  },\n};\n\nmodule.exports = nextConfig;\n"
+      "path": "README.md",
+      "sha": "0e67edf871984a4837fb87e8593f4e0e76051288",
+      "content_sha256": "6ad33165582fa6d3378f576fbf80706fff28cc945570ea2a32fc1662b2545d46",
+      "score": 100,
+      "content": "<a href=\"https://oss.gallery\">\n  <img alt=\"OSS Gallery\" src=\"https://raw.githubusercontent.com/dubinc/oss-gallery/main/public/thumbnail.jpg\" />\n</a>\n\n<h3 align=\"center\">OSS Gallery</h3>\n\n<p align=\"center\">\n    A crowdsourced list of the best open-source projects on the internet.\n    <br />\n    <a href=\"https://dub.co/blog/product-discovery-platform\"><strong>Learn how it's built »</strong></a>\n    <br />\n    <br />\n    <a href=\"#introduction\"><strong>Introduction</strong></a> ·\n    <a href=\"#tech-stack\"><strong>Tech Stack</strong></a>\n</p>\n\n<p align=\"center\">\n  <a href=\"https://twitter.com/dubdotco\">\n    <img src=\"https://img.shields.io/twitter/follow/dubdotco?style=flat&label=%40dubdotco&logo=twitter&color=0bf&logoColor=fff\" alt=\"Twitter\" />\n  </a>\n  <a href=\"https://news.ycombinator.com/item?id=40146998\"><img src=\"https://img.shields.io/badge/Hacker%20News-125-%23FF6600\" alt=\"Hacker News\"></a>\n</p>\n\n<br/>\n\n## Introduction\n\n[OSS Gallery](https://oss.gallery) is a crowdsourced list of the best open-source projects on the internet.\n\nIt uses the [Dub.co API](https://dub.co/docs/api-reference/introduction) to create short links for each project page + display real-time click analytics for them.\n\n<img width=\"1062\" alt=\"CleanShot 2024-04-24 at 20 15 09@2x\" src=\"https://github.com/dubinc/oss-gallery/assets/28986134/7d2ff6e6-cdb2-4818-88f9-ce3e6518c09d\">\n\n## Tech Stack\n\n- Next.js Server Actions + Form Actions (zero API routes)\n- Dub [TypeScript SDK](https://github.com/dubinc/dub-node)\n- Tremor for charts\n- Vercel Postgres + deployment\n"
     },
     {
       "path": "tsconfig.json",
@@ -120,12 +78,54 @@
       "content": "{\n  \"compilerOptions\": {\n    \"target\": \"es5\",\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"allowJs\": true,\n    \"skipLibCheck\": true,\n    \"baseUrl\": \".\",\n    \"paths\": {\n      \"@/components/*\": [\"components/*\"],\n      \"@/app/*\": [\"app/*\"],\n      \"@/lib/*\": [\"lib/*\"],\n      \"@/auth\": [\"auth\"]\n    },\n    \"strict\": false,\n    \"allowImportingTsExtensions\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"node\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"preserve\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ]\n  },\n  \"include\": [\"next-env.d.ts\", \"**/*.ts\", \"**/*.tsx\", \".next/types/**/*.ts\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
     },
     {
+      "path": "prettier.config.js",
+      "sha": "24536be578cd20a878ae01e60a702a26e46cc2ff",
+      "content_sha256": "04f497829de797dbac4e0f98820c51e568f642025313661338f782822b41e5ab",
+      "score": 35,
+      "content": "// prettier.config.js\nmodule.exports = {\n  bracketSpacing: true,\n  semi: true,\n  trailingComma: \"all\",\n  printWidth: 80,\n  tabWidth: 2,\n  plugins: [\n    // comment for better diff\n    \"prettier-plugin-organize-imports\",\n    \"prettier-plugin-tailwindcss\",\n  ],\n};\n"
+    },
+    {
       "path": "tailwind.config.ts",
       "sha": "082e4299ce6acc65c494757ba9c2f80f84b7a26d",
       "content_sha256": "b55a1ca887f7215125518bfb75b9b16ae406bba01519704e199750cdeab45fdf",
       "score": 35,
       "content": "import sharedConfig from \"@dub/tailwind-config/tailwind.config.ts\";\nimport type { Config } from \"tailwindcss\";\nimport colors from \"tailwindcss/colors\";\n\nconst config: Pick<Config, \"presets\"> = {\n  presets: [\n    {\n      ...sharedConfig,\n      content: [\n        \"./app/**/*.{js,ts,jsx,tsx}\",\n        \"./components/**/*.{js,ts,jsx,tsx}\",\n        // Path to Dub module\n        \"./node_modules/@dub/ui/**/*.{mjs,js,ts,jsx,tsx}\",\n        // Path to Tremor module\n        \"./node_modules/@tremor/**/*.{js,ts,jsx,tsx}\",\n      ],\n      theme: {\n        transparent: \"transparent\",\n        current: \"currentColor\",\n        extend: {\n          ...sharedConfig?.theme?.extend,\n          fontFamily: {\n            ...sharedConfig?.theme?.extend?.fontFamily,\n            display: [\"var(--font-sf)\", \"system-ui\", \"sans-serif\"],\n            default: [\"var(--font-inter)\", \"system-ui\", \"sans-serif\"],\n          },\n          animation: {\n            ...sharedConfig?.theme?.extend?.animation,\n            \"fade-up\": \"fade-up 0.5s\",\n            \"fade-down\": \"fade-down 0.5s\",\n            \"skew-scroll\": \"skew-scroll 20s linear infinite\",\n            \"infinite-scroll\": \"infinite-scroll 20s linear infinite\",\n          },\n          keyframes: {\n            ...sharedConfig?.theme?.extend?.keyframes,\n            \"fade-up\": {\n              \"0%\": {\n                opacity: \"0\",\n                transform: \"translateY(10px)\",\n              },\n              \"80%\": {\n                opacity: \"0.6\",\n              },\n              \"100%\": {\n                opacity: \"1\",\n                transform: \"translateY(0px)\",\n              },\n            },\n            \"fade-down\": {\n              \"0%\": {\n                opacity: \"0\",\n                transform: \"translateY(-10px)\",\n              },\n              \"80%\": {\n                opacity: \"0.6\",\n              },\n              \"100%\": {\n                opacity: \"1\",\n                transform: \"translateY(0px)\",\n              },\n            },\n            \"skew-scroll\": {\n              \"0%\": {\n                transform:\n                  \"rotateX(20deg) rotateZ(-20deg) skewX(20deg) translateZ(0) translateY(-20%)\",\n              },\n              \"100%\": {\n                transform:\n                  \"rotateX(20deg) rotateZ(-20deg) skewX(20deg) translateZ(0) translateY(-120%)\",\n              },\n            },\n            \"infinite-scroll\": {\n              \"0%\": {\n                transform: \"translateX(0)\",\n              },\n              \"100%\": {\n                transform: \"translateX(-200%)\",\n              },\n            },\n          },\n          colors: {\n            // light mode\n            tremor: {\n              brand: {\n                faint: colors.blue[50],\n                muted: colors.blue[200],\n                subtle: colors.blue[400],\n                DEFAULT: colors.blue[500],\n                emphasis: colors.blue[700],\n                inverted: colors.white,\n              },\n              background: {\n                muted: colors.gray[50],\n                subtle: colors.gray[100],\n                DEFAULT: colors.white,\n                emphasis: colors.gray[700],\n              },\n              border: {\n                DEFAULT: colors.gray[200],\n              },\n              ring: {\n                DEFAULT: colors.gray[200],\n              },\n              content: {\n                subtle: colors.gray[400],\n                DEFAULT: colors.gray[500],\n                emphasis: colors.gray[700],\n                strong: colors.gray[900],\n                inverted: colors.white,\n              },\n            },\n          },\n          boxShadow: {\n            // light\n            \"tremor-input\": \"0 1px 2px 0 rgb(0 0 0 / 0.05)\",\n            \"tremor-card\":\n              \"0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)\",\n            \"tremor-dropdown\":\n              \"0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)\",\n          },\n          borderRadius: {\n            \"tremor-small\": \"0.375rem\",\n            \"tremor-default\": \"0.5rem\",\n            \"tremor-full\": \"9999px\",\n          },\n          fontSize: {\n            \"tremor-label\": [\"0.75rem\", { lineHeight: \"1rem\" }],\n            \"tremor-default\": [\"0.875rem\", { lineHeight: \"1.25rem\" }],\n            \"tremor-title\": [\"1.125rem\", { lineHeight: \"1.75rem\" }],\n            \"tremor-metric\": [\"1.875rem\", { lineHeight: \"2.25rem\" }],\n          },\n        },\n      },\n      safelist: [\n        {\n          pattern:\n            /^(bg-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,\n          variants: [\"hover\", \"ui-selected\"],\n        },\n        {\n          pattern:\n            /^(text-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,\n          variants: [\"hover\", \"ui-selected\"],\n        },\n        {\n          pattern:\n            /^(border-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,\n          variants: [\"hover\", \"ui-selected\"],\n        },\n        {\n          pattern:\n            /^(ring-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,\n        },\n        {\n          pattern:\n            /^(stroke-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,\n        },\n        {\n          pattern:\n            /^(fill-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|100|200|300|400|500|600|700|800|900|950))$/,\n        },\n      ],\n      plugins: [...sharedConfig?.plugins, require(\"@headlessui/tailwindcss\")],\n    },\n  ],\n};\n\nexport default config;\n"
+    },
+    {
+      "path": ".eslintrc.json",
+      "sha": "bffb357a7122523ec94045523758c4b825b448ef",
+      "content_sha256": "1589a15e55fbebc6519c95d91d8f0a090618f20dc78e479858b9c27552484961",
+      "score": 35,
+      "content": "{\n  \"extends\": \"next/core-web-vitals\"\n}\n"
+    },
+    {
+      "path": "middleware.ts",
+      "sha": "2ff4f632d9fd25fdc7bb8cb1d04f35d0a334d9ea",
+      "content_sha256": "0e66fd845942529edfaa0c35eeb2b44be5adfb7b41e5926ded46105e83c55b9b",
+      "score": 35,
+      "content": "import NextAuth from \"next-auth\";\nimport authConfig from \"./auth.config\";\n\nexport const { auth: middleware } = NextAuth(authConfig);\n"
+    },
+    {
+      "path": "next.config.js",
+      "sha": "7ddfc44eb7c47c7168d632943101efe8be5d3a7b",
+      "content_sha256": "c43111552e21f73fa4021c7a4ead9731bb236e3cf7e5e1908fd96e0143f0ab18",
+      "score": 35,
+      "content": "/** @type {import('next').NextConfig} */\nconst nextConfig = {\n  reactStrictMode: true,\n  swcMinify: true,\n  experimental: {\n    ppr: true,\n  },\n  images: {\n    unoptimized: true,\n  },\n  async redirects() {\n    return [\n      {\n        source: \"/github\",\n        destination: \"https://github.com/dubinc/oss-gallery\",\n        permanent: false,\n      },\n      {\n        source: \"/projects\",\n        destination: \"/\",\n        permanent: false,\n      },\n    ];\n  },\n};\n\nmodule.exports = nextConfig;\n"
+    },
+    {
+      "path": "postcss.config.js",
+      "sha": "12a703d900da8159c30e75acbd2c4d87ae177f62",
+      "content_sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf",
+      "score": 35,
+      "content": "module.exports = {\n  plugins: {\n    tailwindcss: {},\n    autoprefixer: {},\n  },\n};\n"
+    },
+    {
+      "path": "lib/prisma.ts",
+      "sha": "10082dc2b2308c72cda32a95f3b20c94e3522ee8",
+      "content_sha256": "a45ae7d59a5615f5c3fc4d7e9018169f70bdecb1c4d6f76fcefb5dd1f45f48ed",
+      "score": 33,
+      "content": "import { PrismaClient } from \"@prisma/client\";\n\ndeclare global {\n  var prisma: PrismaClient | undefined;\n}\n\nconst prisma = global.prisma || new PrismaClient();\n\nif (process.env.NODE_ENV === \"development\") global.prisma = prisma;\n\nexport default prisma;\n"
     }
   ],
-  "generated_at": "2026-10-06T12:23:31.956825+00:00"
+  "generated_at": "2026-10-06T20:14:35.778847+00:00"
 }
