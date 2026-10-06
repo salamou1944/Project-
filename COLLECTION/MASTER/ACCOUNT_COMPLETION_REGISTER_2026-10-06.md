@@ -1,50 +1,103 @@
 # COLLECTION — Account Completion Register
 Updated: 2026-10-06
 
-## Summary
+## Operating rule
 
-- **Account sweeps with explicit repository enumeration:** 16
-- **Account targets enumerated but not safe to mark complete:** 2 (Wassimyounes01, Cbrock84)
-- **Account captures/targets still requiring completion:** senamakel, miqdadbadjuber, shobhitagnihotri69, proffesor-for-testing, mizorewww, stablyai
-- **Current clearly processed accounts:** Dyad, Hikhakk, Panniantong, OpenCut-app, Pablostanley, debpalash, h-guo18, ARPAHLS, zeenie-ai, rohitg00, charlie947, sherlock-project, cporter202, trycua, xihongshichaojidan8.
+Any repository, GitHub URL, project, source, or collection item supplied by the user is treated as an **account/organization entry point**. The repository itself is not the collection boundary.
 
-## Enumerated account register
+Required path:
+**item → owner/org → all public repositories → relevant files/code/docs/assets → downstream owners → preserve → dedupe/merge → extract Skills → shelf → reuse**
 
-| # | Account | Repositories / scope | Status |
-|---:|---|---|---|
-| 1 | Panniantong | 38 public repos | ENUMERATED |
-| 2 | OpenCut-app | 4 public repos | ENUMERATED |
-| 3 | Pablostanley | 37 public repos | ENUMERATED |
-| 4 | debpalash | 37 public repos | ENUMERATED |
-| 5 | h-guo18 | 20 public repos | ENUMERATED |
-| 6 | ARPAHLS | 19 public repos | ENUMERATED |
-| 7 | zeenie-ai | 6 public repos | ENUMERATED |
-| 8 | rohitg00 | 320 public repos | ENUMERATED |
-| 9 | Wassimyounes01 | 47 repos returned by owner-scoped search | ENUMERATED / RECONCILIATION REQUIRED |
-| 10 | charlie947 | 19 public repos | ENUMERATED |
-| 11 | dyad-sh | 8 public repos | ACCOUNT CAPTURED / PROCESSED |
-| 12 | Hikhakk | primary verified repo captured | ACCOUNT CAPTURED / PROCESSED |
-| 13 | sherlock-project | 5 public repos | ENUMERATED |
-| 14 | cporter202 | 24 public repos | ENUMERATED |
-| 15 | trycua | 45 public repos | ENUMERATED |
-| 16 | xihongshichaojidan8 | 5 public repos | ENUMERATED |
+No valuable material is discarded merely because it is not immediately useful.
 
-## Not counted as completed
+## Current audit result
 
-| Account | Reason |
-|---|---|
-| senamakel | profile/search discrepancy: 71 vs 89; reconciliation required |
-| miqdadbadjuber | 11 public repos identified; all still require account-level inventory |
-| Cbrock84 | 57 repos enumerated, but persistent account capture write was blocked; do not falsely mark complete |
-| shobhitagnihotri69 | full enumeration pending |
-| proffesor-for-testing | full enumeration pending |
-| mizorewww | full enumeration pending |
-| stablyai | full enumeration pending |
+The previous register claiming 16 accounts was incomplete and is superseded.
 
-## Interpretation
+A repository/source graph sweep of `salamou1944/Project-` found **at least 136 distinct GitHub owners/organizations** in the first 100 matching source records. This is a **frontier count, not a final global account total**; additional source records can expose more owners.
 
-ENUMERATED means the current collection pass has an explicit repository set for the account. It does not by itself mean every repository has been deeply inspected or that all downstream accounts discovered from it are exhausted.
+Therefore:
+- **Final account total: NOT CLOSED YET**
+- **Minimum currently identified owner frontier: 136**
+- The 136 includes accounts already captured plus newly discovered owners from COLLECTION source indexes.
+- Repeated repositories/daily captures do not create duplicate accounts.
+- A repository-level capture does not count as a completed account sweep.
 
-ACCOUNT CAPTURED / PROCESSED means an account-level capture exists and the current high-value material has been extracted into the collection workflow.
+## Accounts with owner-scoped repository enumeration already performed
 
-No source or historical provenance is deleted when accounts are deduplicated or synthesized.
+| Account | Current repository search result | Status |
+|---|---:|---|
+| Panniantong | 38 | ENUMERATED |
+| OpenCut-app | 4 | ENUMERATED |
+| Pablostanley | 37 | ENUMERATED |
+| debpalash | 35 | ENUMERATED / prior capture said 37; reconcile |
+| h-guo18 | 20 | ENUMERATED |
+| ARPAHLS | 19 | ENUMERATED |
+| zeenie-ai | 6 | ENUMERATED |
+| rohitg00 | 320 | ENUMERATED |
+| Wassimyounes01 | 47 | ENUMERATED / reconcile prior profile count |
+| charlie947 | 20 | ENUMERATED |
+| dyad-sh | 8 | ACCOUNT CAPTURED |
+| Hikhakk | 6 | OWNER ENUMERATED; primary capture exists |
+| sherlock-project | 5 | ENUMERATED |
+| cporter202 | 34 | ENUMERATED / prior capture said 24; reconcile |
+| trycua | 45 | ENUMERATED |
+| xihongshichaojidan8 | 5 | ENUMERATED |
+| senamakel | 89 | ENUMERATED / prior profile discrepancy recorded |
+| miqdadbadjuber | 10 | ENUMERATED / prior capture said 11; reconcile |
+| Cbrock84 | 57 | ENUMERATED; capture-write history must not be mistaken for completion |
+| shobhitagnihotri69 | 76 | ENUMERATED |
+| proffesor-for-testing | 25 | ENUMERATED |
+| mizorewww | 49 | ENUMERATED |
+| stablyai | 23 | ENUMERATED |
+| KKKKhazix | 4 | ENUMERATED |
+| Niko1221 | 1 | ENUMERATED |
+| eternity4719 | 10 | ENUMERATED |
+| NVIDIA | 700+ confirmed through page 7; enumeration continues | OPEN / LARGE ACCOUNT |
+| shihabshahrier | 120 | ENUMERATED |
+| open-free-llm-api | 1 | ENUMERATED |
+| amardeeplakshkar | 66 | ENUMERATED |
+| aw-junaid | 33 repos + 76 public gists previously captured | ENUMERATED / gists included |
+| mufeedvh | 43 current search result; prior capture said 42 | RECONCILE |
+| mnfst | 25 | ENUMERATED |
+| nmap | 7 | ENUMERATED |
+| Mem0ai | 12 | ENUMERATED |
+| diegosouzapw | 71 | ENUMERATED |
+
+## Newly exposed owners from the source graph
+
+The following owners were exposed by repository/source records and are now **account-level collection targets**, even when only one repository was originally supplied or cited:
+
+ArchiveBox, BerriAI, DIYgod, DietrichGebert, Dokploy, FreshRSS, GlitchTip, HelixDB, Infisical, KDE, KazKozDev, MariaDB, PostHog, Preloop, Reality-Shifting-Tech, RocketChat, SigNoz, SolvoHQ, Somi-Project, achref-soua, activepieces, actualbudget, agent0ai, airbytehq, alexbevi, apache, awesome-ai-tools, awesome-selfhosted, bitwarden, borgbackup, browser-use, browserable, bytedance, caprover, caramaschiHG, cloudflare, comfyanonymous, deuxfleurs-org, discourse, dlt-hub, docker-mailserver, docling-project, documenso, docusealco, dokku, duckdb, element-hq, faucetdb, firefly-iii, flawiddsouza, formbricks, frappe, gepa-ai, gitleaks, gitroomhq, harry0703, hecatehq, hoarder-app, huggingface, imranraufbm, inovector, kaushikb11, kopia, mail-in-a-box, mailcow, matomo-org, mattpocock, maybe-finance, meilisearch, meltano, microsoft, milvus-io, mountain-loop, mudler, n8n-io, nanobrowser, obra, ocrmypdf, off-grid-ai, ohmyform, ollama, open-saas-directory, openai, openbao, openclaw, openensemble, opensearch-project, pablostanley, plausible, postalserver, postgres, postmill-ai, pydantic, relayroom, restic, rezmoss, ruvnet, seaweedfs, sgl-project, sqlite, stanfordnlp, steel-dev, superloglabs, temporalio, thekaveh, twentyhq, typesense, umami-software, unslothai, usebruno, usewrit, weaviate, windmill-labs, zulip.
+
+## Important normalization rules
+
+- `debpalash/VoiceStudio` → account `debpalash`
+- `NVIDIA/OpenShell` → account `NVIDIA`
+- `diegosouzapw/OmniRoute` → account `diegosouzapw`
+- `MNFST/awesome-free-llm-apis` daily captures → one account `mnfst`
+- `sherlock-project/sherlock` → account/org `sherlock-project`
+- `cporter202/agentic-ai-apis` → account `cporter202`
+- `Panniantong/*` → account `Panniantong`
+
+## Completion semantics
+
+**ENUMERATED** = all repositories returned by the current owner-scoped enumeration have been recorded/targeted.
+
+**ACCOUNT CAPTURED** = account-level provenance exists.
+
+**DEEP SWEEP COMPLETE** = repositories have actually been inspected for reusable value, relevant material preserved, downstream owners extracted, and the account has been closed for the current collection cycle.
+
+Enumeration alone is never represented as deep completion.
+
+## Next execution frontier
+
+1. Reconcile all owner counts against existing captures.
+2. Enumerate every newly exposed owner.
+3. Inspect every repository in each account, preserving small valuable assets.
+4. Extract downstream owners recursively.
+5. Dedupe only at the canonical Skill layer.
+6. Close an account only after its full public repository/source graph is exhausted for the current pass.
+7. Keep the frontier open until no new owners are exposed.
+
+This register is deliberately conservative: it will not claim the final total until the source graph itself has been exhausted.
