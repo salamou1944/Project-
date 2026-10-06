@@ -1,7 +1,7 @@
 # COLLECTION — Research Index
 
 Status: INCREMENTAL_COLLECTION
-Updated: 2026-10-04
+Updated: 2026-10-06
 
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
@@ -94,6 +94,13 @@ Central collection of repositories, documentation, tools, and reusable implement
   - High-value sources: social-media-skills, ai-second-brain, show-me, motion-graphics-skills, life-automation-skills, close, save-progress, codex-task-router, mod-maker, automation-audit, choose-and-compare-models.
   - Priority leverage: task-scoped skills, evidence-bound completion, persistent operating memory, deterministic routing, local safety/resource guards, visual proof, media generation and automation auditing.
   - Repository-level reuse requires comparison against existing agent-skills/ASTRA/COLLECTION before implementation.
+
+- Hikhakk — https://github.com/Hikhakk
+  - Account capture: COLLECTION/ACCOUNTS/HIKHAKK_2026-10-06.md
+  - Primary verified source: higgsfield-mcp-unified — https://github.com/Hikhakk/higgsfield-mcp-unified — MIT.
+  - Priority leverage: provider adapters, MCP typed contracts, model registry/confidence, preflight validation, retry/backoff/jitter, circuit breaker, idempotency and structured provider errors.
+  - Reuse decision: extract implementation patterns only; do not adopt the experimental private web-backend automation.
+  - Skill extraction: COLLECTION/SKILLS/HIGGSFIELD_RELIABILITY_PATTERNS_2026-10-06.md
 
 ## Additional account targets discovered
 - sherlock-project — https://github.com/sherlock-project
