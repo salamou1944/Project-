@@ -1,7 +1,7 @@
 # COLLECTION — Research Index
 
 Status: INCREMENTAL_COLLECTION
-Updated: 2026-10-06
+Updated: 2026-10-07
 
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
@@ -101,6 +101,13 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Revision inspected: 701d9179b43773a9c654014975ebc699a32fd500
   - Priority leverage: MCP consent/typed tool contracts, independent shell-review policy, read-only/plan-only capability enforcement, WAL-safe backup/checksums, fake-provider/MCP evaluation fixtures, provider-neutral model registry and deployment integration patterns.
   - License caution: repo root states Apache-2.0 outside src/pro; src/pro is Functional Source License 1.1 + Apache-2.0 terms. Reuse must respect the boundary.
+
+- reticlehq — https://github.com/reticlehq
+  - Primary source: reticle — https://github.com/reticlehq/reticle
+  - Account/source capture: COLLECTION/ACCOUNTS/RETICLEHQ_RETICLE_2026-10-07.md
+  - Skill extraction: COLLECTION/SKILLS/RETICLE_REUSABLE_VERIFICATION_PATTERNS_2026-10-07.md
+  - Priority leverage: runtime proof, PASS/FAIL/UNKNOWN verdicts, look→act→observe→assert, first-divergence diagnosis, file:line repair signals, replayable regression flows, structured runtime evidence and local/MCP verification.
+  - Reuse decision: extract/upgrade narrowly; do not import the whole project or duplicate existing SOAT/evidence infrastructure.
 
 - Hikhakk — https://github.com/Hikhakk
   - Account capture: COLLECTION/ACCOUNTS/HIKHAKK_2026-10-06.md
