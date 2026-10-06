@@ -50,18 +50,18 @@
       "content": "mod common;\nuse common::TestProject;\n\nuse pcb_sim::gen_sim;\n\n#[macro_export]\nmacro_rules! sim_snapshot {\n    ($env:expr, $entry:expr $(,)?) => {{\n        let top_path = $env.root().join($entry);\n\n        let mut buf = Vec::new();\n        let schematic = pcb_zen::run(&top_path, pcb_zen::EvalConfig::default())\n            .output_result()\n            .expect(\"failed to compile schematic for simulation\");\n        gen_sim(&schematic, &mut buf)\n            .expect(\"failed to generate .cir contents\");\n        let result = String::from_utf8(buf).unwrap();\n\n        let root_path = $env.root().to_string_lossy();\n\n        // Get the cache directory path for filtering\n        let cache_dir_path = pcb_zen::load::cache_dir()\n            .ok()\n            .map(|p| p.to_string_lossy().into_owned())\n            .unwrap_or_default();\n\n        // Create regex patterns as owned values\n        let temp_dir_pattern = ::regex::escape(&format!(\"{}{}\", root_path, std::path::MAIN_SEPARATOR));\n        let cache_dir_pattern = if !cache_dir_path.is_empty() {\n            Some(::regex::escape(&format!(\"{}{}\", cache_dir_path, std::path::MAIN_SEPARATOR)))\n        } else {\n            None\n        };\n\n        let mut filters = vec![\n            (temp_dir_pattern.as_ref(), \"[TEMP_DIR]\"),\n        ];\n\n        // Add cache directory filter if it exists\n        if let Some(cache_pattern) = cache_dir_pattern.as_ref() {\n            filters.push((cache_pattern.as_ref(), \"[CACHE_DIR]\"));\n        }\n\n        insta::with_settings!({\n            filters => filters,\n        }, {\n            insta::assert_snapshot!(result);\n        });\n    }};\n}\n\n#[test]\nfn snapshot_sim_divider() {\n    let env = TestProject::new();\n\n    env.add_file(\n        \"r.lib\",\n        r#\"\n.SUBCKT my_resistor p n PARAMS: RVAL={0}\nR1 p n {RVAL}\n.ENDS my_resistor\n\"#,\n    );\n\n    env.add_file(\n        \"myresistor.zen\",\n        r#\"\nload(\"@stdlib:v0.3.20/generics/SolderJumper.zen\", \"pin_defs\")\nload(\"@stdlib:v0.3.20/config.zen\", \"config_properties\", \"config_unit\")\nload(\"@stdlib:v0.3.20/units.zen\", \"Resistance\", \"Voltage\")\nload(\"@stdlib:v0.3.20/utils.zen\", \"format_value\")\n\n# -----------------------------------------------------------------------------\n# Component types\n# -----------------------------------------------------------------------------\n\nPackage = enum(\"0201\", \"0402\", \"0603\", \"0805\", \"1206\", \"1210\", \"2010\", \"2512\")\n\n# -----------------------------------------------------------------------------\n# Component parameters\n# -----------------------------------------------------------------------------\n\n# Required\npackage = config(\"package\", Package, default = Package(\"0603\"))\nvalue = config_unit(\"value\", Resistance)\n\n# Optional\nvoltage = config_unit(\"voltage\", Voltage, optional = True)\n\n# Properties - combined and normalized\nproperties = config_properties({\n    \"value\": format_value(value, voltage),\n    \"package\": package,\n    \"resistance\": value,\n    \"voltage\": voltage,\n})\n\n# -----------------------------------------------------------------------------\n# IO ports\n# -----------------------------------------------------------------------------\n\nP1 = io(\"P1\", Net)\nP2 = io(\"P2\", Net)\n\nComponent(\n    name = \"R\",\n    symbol = Symbol(library = \"@kicad-symbols/Device.kicad_sym\", name=\"R\"),\n    footprint = File(\"@kicad-footprints/Resistor_SMD.pretty/R_0201_0603Metric.kicad_mod\"),\n    prefix = \"R\",\n    spice_model = SpiceModel('./r.lib', 'my_resistor',\n        nets=[P1, P2],\n        args={\"RVAL\": str(value.value)}),\n    pin_defs = {\n        \"P1\": \"1\",\n        \"P2\": \"2\",\n    },\n    pins = {\n        \"P1\": P1,\n        \"P2\": P2,\n    },\n    properties = properties,\n)\n\"#,\n    );\n\n    env.add_file(\n        \"divider.zen\",\n        r#\"\nload(\"@stdlib:v0.3.20/interfaces.zen\", \"Power\", \"Ground\", \"Analog\")\nResistor = Module(\"myresistor.zen\")\n\n# Configuration parameters\nr1_value = config(\"r1_value\", str, default=\"10kohms\", optional=True)\nr2_value = config(\"r2_value\", str, default=\"20kohms\", optional=True)\n\n# IO ports\nvin = io(\"vin\", Power)\nvout = io(\"vout\", Analog)\ngnd = io(\"gnd\", Ground)\n\n# Create the voltage divider\nResistor(name=\"R1\", value=r1_value, package=\"0603\", P1=vin.NET, P2=vout.NET)\nResistor(name=\"R2\", value=r2_value, package=\"0603\", P1=vout.NET, P2=gnd.NET)\n\"#,\n    );\n\n    sim_snapshot!(env, \"divider.zen\");\n}\n"
     },
     {
-      "path": "crates/pcb-mcp/Cargo.toml",
-      "sha": "5723c8cdb90ffe3b498d6e064fb6ec52dad100f3",
-      "content_sha256": "86cd7ace24cda2892e15b897f55cc2272152010de5ee1575007e52a0655e8e7e",
-      "score": 156,
-      "content": "[package]\nname = \"pcb-mcp\"\nversion = { workspace = true }\nedition = { workspace = true }\ndescription = \"Model Context Protocol (MCP) server implementation\"\n\n[dependencies]\nanyhow = { workspace = true }\nserde = { workspace = true }\nserde_json = { workspace = true }\nurl = { workspace = true, features = [\"serde\"] }\nrpc-router = \"0.1.3\"\nsignal-hook = \"0.3\"\n"
-    },
-    {
       "path": "crates/pcb-diode-api/Cargo.toml",
       "sha": "112ec1adc7647d10aeaf8e06a187fd9611e2f502",
       "content_sha256": "18a0b2edc34a7423e47bde61bc11a799fe596d7c97f03f19769ea8f46d24e258",
       "score": 156,
       "content": "[package]\nname = \"pcb-diode-api\"\nversion = { workspace = true }\nedition = { workspace = true }\ndescription = \"Diode API client for authentication, component search, and PDF scanning\"\n\n[dev-dependencies]\ninsta = { workspace = true }\n\n[dependencies]\nanyhow = { workspace = true }\nreqwest = { workspace = true }\nserde = { workspace = true }\nserde_json = { workspace = true }\ncolored = { workspace = true }\nrand = { workspace = true }\ntoml = { workspace = true }\ndirs = { workspace = true }\nurlencoding = { workspace = true }\nsha2 = { workspace = true }\nzip = { workspace = true }\nchrono = { workspace = true }\nopen = { workspace = true }\npcb-eda = { workspace = true }\ninquire = { workspace = true }\nindicatif = { workspace = true }\nunicode-width = { workspace = true }\nterminal_size = { workspace = true }\nclap = { workspace = true }\npcb-zen-core = { workspace = true }\npcb-kicad = { workspace = true }\npcb-sch = { workspace = true }\ndeunicode = { workspace = true }\nminijinja = { workspace = true }\nzstd = { workspace = true }\nregex = { workspace = true }\nbase64 = { workspace = true }\nfslock = { workspace = true }\npcb-mcp = { workspace = true }\n"
+    },
+    {
+      "path": "crates/pcb-mcp/Cargo.toml",
+      "sha": "5723c8cdb90ffe3b498d6e064fb6ec52dad100f3",
+      "content_sha256": "86cd7ace24cda2892e15b897f55cc2272152010de5ee1575007e52a0655e8e7e",
+      "score": 156,
+      "content": "[package]\nname = \"pcb-mcp\"\nversion = { workspace = true }\nedition = { workspace = true }\ndescription = \"Model Context Protocol (MCP) server implementation\"\n\n[dependencies]\nanyhow = { workspace = true }\nserde = { workspace = true }\nserde_json = { workspace = true }\nurl = { workspace = true, features = [\"serde\"] }\nrpc-router = \"0.1.3\"\nsignal-hook = \"0.3\"\n"
     },
     {
       "path": "crates/pcb-test-utils/Cargo.toml",
@@ -71,11 +71,18 @@
       "content": "[package]\nname = \"pcb-test-utils\"\nversion.workspace = true\nedition.workspace = true\nrepository.workspace = true\nhomepage.workspace = true\nauthors.workspace = true\n\n[dependencies]\ninsta = { workspace = true }\ntempfile = { workspace = true }\nassert_cmd = { workspace = true }\nassert_fs = { workspace = true }\nduct = { workspace = true }\ndir-diff = { workspace = true }\nignore = { workspace = true }\nregex = { workspace = true }\nsha2 = { workspace = true }\nglobset = { workspace = true }\nurl = { workspace = true }\npcb-zen = { workspace = true }\npcb-zen-core = { workspace = true }\n"
     },
     {
-      "path": "crates/pcb-zen-core/tests/snapshots/spice_model__model_parsing_unexpected_param.snap",
-      "sha": "4596fa5b4abb709f230c30a7906d9db5abe29023",
-      "content_sha256": "ab2cddbd43d8493e688726e333bf29729a6e9b960c3ee53bc1702fbb2a01c6c4",
+      "path": "crates/pcb-zen-core/tests/snapshots/spice_model__model_parsing_bad_name.snap",
+      "sha": "b15231f55799c5c5733b2644bdb415ed67818fdc",
+      "content_sha256": "fe920f3eb6daee1941c1113ee59c652958a31b306fb311a3943ea057177635ae",
       "score": 127,
-      "content": "---\nsource: crates/pcb-zen-core/tests/spice_model.rs\nexpression: output\n---\nError: test.zen:4:7-90 Unexpected argument(s) [\"FOO\"]\n"
+      "content": "---\nsource: crates/pcb-zen-core/tests/spice_model.rs\nexpression: output\n---\nError: test.zen:4:1-67 cannot find subckt named foo\n"
+    },
+    {
+      "path": "crates/pcb-diode-api/src/snapshots/pcb_diode_api__component__tests__embed_step_in_footprint_basic.snap",
+      "sha": "ea8ad19362ab056628898d8ef7eb56467c0d7a8a",
+      "content_sha256": "b2b7116b23c6f055ecb5ba89bc77db9789bd61fe09990b5fdd69dee63f3bfa3e",
+      "score": 127,
+      "content": "---\nsource: crates/pcb-diode-api/src/component.rs\nexpression: result\n---\n(footprint \"Test\"\n\t(layer \"F.Cu\")\n\t(pad \"1\" smd rect\n\t\t(at 0 0)\n\t\t(size 1 1)\n\t\t(layers \"F.Cu\")\n\t)\n\t(embedded_files\n\t\t(file\n\t\t\t(name test.step)\n\t\t\t(type model)\n\t\t\t(data |KLUv/SAOcQAAU1RFUCBEQVRBIEhFUkU=|)\n\t\t\t(checksum \"368eafac8da1ec359463c2e25c4a62db836ca6633c73e039aa84ebe38b28c3bb\")\n\t\t)\n\t)\n\t(model \"kicad-embed://test.step\"\n\t\t(offset\n\t\t\t(xyz 0 0 0)\n\t\t)\n\t\t(scale\n\t\t\t(xyz 1 1 1)\n\t\t)\n\t\t(rotate\n\t\t\t(xyz 0 0 0)\n\t\t)\n\t)\n)\n"
     },
     {
       "path": "crates/pcb-zen/tests/snapshots/spice_model__snapshot_sim_divider.snap",
@@ -83,6 +90,13 @@
       "content_sha256": "a7169b94801fb13a677527001974d08b6514ff05d597c7069e5878fd611e866c",
       "score": 127,
       "content": "---\nsource: crates/pcb-zen/tests/spice_model.rs\nexpression: result\n---\n.SUBCKT my_resistor p n PARAMS: RVAL={0}\nR1 p n {RVAL}\n.ENDS my_resistor\nXR1 vin vout my_resistor RVAL=10000.0\nXR2 vout gnd my_resistor RVAL=20000.0\n"
+    },
+    {
+      "path": "crates/pcb-zen-core/tests/snapshots/spice_model__model_parsing_unexpected_param.snap",
+      "sha": "4596fa5b4abb709f230c30a7906d9db5abe29023",
+      "content_sha256": "ab2cddbd43d8493e688726e333bf29729a6e9b960c3ee53bc1702fbb2a01c6c4",
+      "score": 127,
+      "content": "---\nsource: crates/pcb-zen-core/tests/spice_model.rs\nexpression: output\n---\nError: test.zen:4:7-90 Unexpected argument(s) [\"FOO\"]\n"
     },
     {
       "path": "crates/pcb-zen-core/tests/snapshots/spice_model__model_parsing_missing_param.snap",
@@ -99,20 +113,6 @@
       "content": "---\nsource: crates/pcb-diode-api/src/component.rs\nexpression: result\n---\n(footprint \"Test\"\n\t(layer \"F.Cu\")\n\t(pad \"1\" smd rect\n\t\t(at 0 0)\n\t\t(size 1 1)\n\t\t(layers \"F.Cu\")\n\t)\n\t(embedded_files\n\t\t(file\n\t\t\t(name new.step)\n\t\t\t(type model)\n\t\t\t(data |KLUv/SANaQAATkVXIFNURVAgREFUQQ==|)\n\t\t\t(checksum \"77d27e421d129c030d5426bfd60022a9bbec7e7964cb05b2d459c19d06adf250\")\n\t\t)\n\t)\n\t(model \"kicad-embed://new.step\"\n\t\t(offset\n\t\t\t(xyz 1 2 3)\n\t\t)\n\t\t(scale\n\t\t\t(xyz 2 2 2)\n\t\t)\n\t\t(rotate\n\t\t\t(xyz 45 90 180)\n\t\t)\n\t)\n)\n"
     },
     {
-      "path": "crates/pcb-diode-api/src/snapshots/pcb_diode_api__component__tests__embed_step_in_footprint_basic.snap",
-      "sha": "ea8ad19362ab056628898d8ef7eb56467c0d7a8a",
-      "content_sha256": "b2b7116b23c6f055ecb5ba89bc77db9789bd61fe09990b5fdd69dee63f3bfa3e",
-      "score": 127,
-      "content": "---\nsource: crates/pcb-diode-api/src/component.rs\nexpression: result\n---\n(footprint \"Test\"\n\t(layer \"F.Cu\")\n\t(pad \"1\" smd rect\n\t\t(at 0 0)\n\t\t(size 1 1)\n\t\t(layers \"F.Cu\")\n\t)\n\t(embedded_files\n\t\t(file\n\t\t\t(name test.step)\n\t\t\t(type model)\n\t\t\t(data |KLUv/SAOcQAAU1RFUCBEQVRBIEhFUkU=|)\n\t\t\t(checksum \"368eafac8da1ec359463c2e25c4a62db836ca6633c73e039aa84ebe38b28c3bb\")\n\t\t)\n\t)\n\t(model \"kicad-embed://test.step\"\n\t\t(offset\n\t\t\t(xyz 0 0 0)\n\t\t)\n\t\t(scale\n\t\t\t(xyz 1 1 1)\n\t\t)\n\t\t(rotate\n\t\t\t(xyz 0 0 0)\n\t\t)\n\t)\n)\n"
-    },
-    {
-      "path": "crates/pcb-zen-core/tests/snapshots/spice_model__model_parsing_bad_name.snap",
-      "sha": "b15231f55799c5c5733b2644bdb415ed67818fdc",
-      "content_sha256": "fe920f3eb6daee1941c1113ee59c652958a31b306fb311a3943ea057177635ae",
-      "score": 127,
-      "content": "---\nsource: crates/pcb-zen-core/tests/spice_model.rs\nexpression: output\n---\nError: test.zen:4:1-67 cannot find subckt named foo\n"
-    },
-    {
       "path": "crates/pcb-zen-core/tests/snapshots/spice_model__model_parsing.snap",
       "sha": "24150501cdfa41b7e1fbb1d05a1b1c93d10c4704",
       "content_sha256": "4d8e5a76345d13c967113389c39512b12411888b6a0c6c89f45c56fa28be8e37",
@@ -127,5 +127,5 @@
       "content": "---\nsource: crates/pcb/tests/build.rs\nexpression: output\n---\nCommand: pcb build board.zen\nExit Code: 0\n\n--- STDOUT ---\n\n--- STDERR ---\nWarning: '@github/mycompany/components' is an unstable reference. Use a pinned version.\n   ╭─[ <TEMP_DIR>/board.zen:2:18 ]\n 2 │SimpleResistor = Module(\"@github/mycompany/components/SimpleResistor.zen\")\n   │                                             ╰───────────────────────────── '@github/mycompany/components' is an unstable reference. Use a pinned version.\n\n✓ board.zen (1 components)\n"
     }
   ],
-  "generated_at": "2026-10-06T20:14:33.167036+00:00"
+  "generated_at": "2026-10-06T20:17:16.353129+00:00"
 }
