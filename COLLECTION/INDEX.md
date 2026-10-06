@@ -169,7 +169,7 @@ Central collection of repositories, documentation, tools, and reusable implement
 3. Prefer local/self-hosted/free paths before paid APIs.
 4. Separate free/open-source from free cloud tiers.
 5. Do not copy credentials, secrets or private user data.
-6. Preserve distinct sources even when they provide the same function.
+6. Preserve distinct source records/provenance even when they provide the same function; deduplicate and merge at the canonical Skill layer, not by deleting historical source evidence.
 7. The Top Five rule selects five repositories each week by fresh star-growth evidence and permanently adds them to the collection queue.
 8. Do not mark COMPLETE until the agreed source graph and requested repository/file sets are actually inspected and verified.
 9. Every discovered repository expands to its owning account/organization; enumerate all public repositories and recursively add newly discovered accounts to the collection queue.
