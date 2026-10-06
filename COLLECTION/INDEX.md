@@ -116,6 +116,14 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Reuse decision: extract implementation patterns only; do not adopt the experimental private web-backend automation.
   - Skill extraction: COLLECTION/SKILLS/HIGGSFIELD_RELIABILITY_PATTERNS_2026-10-06.md
 
+- tester-army — https://github.com/tester-army
+  - Account-wide source added and enumerated: 7 public repositories.
+  - Account capture: COLLECTION/ACCOUNTS/TESTER-ARMY_2026-10-07.md
+  - P0 sources: e2e and scout.
+  - P1 sources: cli, unbox-ai, mobile-github-action.
+  - Priority leverage: agentic E2E action/assert/replay, authorization-safe API verification, mutation gates, request budgets, structured findings, coverage/CI evidence, Agent Skills/MCP integration, bounded AI trace/cost/tool analysis, and mobile CI automation.
+  - Reuse decision: extract/upgrade narrowly after semantic dedupe; preserve source provenance; do not wholesale import TesterArmy.
+
 ## Additional account targets discovered
 - sherlock-project — https://github.com/sherlock-project
   - Account-wide source discovered and enumerated: 5 public repositories.
