@@ -130,6 +130,13 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Highest-value current sources: ai-website-cloner-template, youtube-for-ai-agents, fix-claude-code, starry-ai-bookmark-search, slack-for-ai-agents, Powerful-Websites-You-Should-Know-About.
   - New extracted pattern: COLLECTION/SKILLS/WEBSITE_REVERSE_ENGINEERING_CLONE_2026-10-07.md — Map → Observe → Build → Compare with source/local matched-state evidence and production+rendered-comparison completion gate.
   - Reuse rule: semantic dedupe against browser/SOAT/agent-skills; no wholesale project import.
+- APILayer — https://github.com/apilayer
+  - Account-wide source added: COLLECTION/ACCOUNTS/APILAYER_2026-10-07.md
+  - 72 public repositories returned by owner-scoped search on 2026-10-07.
+  - High-value sources inspected: aerostack, ipwiz, privycheck, mail-wiz, collabfab, rent-scam-detector and global-rates.
+  - Priority leverage: evidence-backed scoring, graceful degradation, quota-aware batching/deduplication, server-side credential isolation, multi-provider composition, honest comparison and cached fallback.
+  - Reuse decision: retain account provenance; extract narrow patterns only after semantic dedupe against existing COLLECTION/SOAT/agent-skills/API Factory infrastructure.
+
 - yihui-dev — https://github.com/yihui-dev
   - Account-wide source captured: COLLECTION/ACCOUNTS/YIHUI-DEV_2026-10-07.md
   - 16 public repositories returned by owner-scoped search on 2026-10-07.
