@@ -58,3 +58,6 @@ The states are evidence-gated and independent; no later state is inferred from a
 
 ## Verification note
 The Collection workflows now share a repository-level concurrency group so the promotion/readiness gates do not race each other on writes.
+
+## Writer-boundary verification
+Continuous collection owns writes; canonical reconciliation is verification-only. This removes the previously observed dual-writer race.
