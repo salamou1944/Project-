@@ -14,9 +14,9 @@ These are terminal states only:
 
 ### Transitional review states
 
-`REVIEW_*` queue actions are non-terminal and must not be presented as completed promotion decisions. They mean the evidence is retained for the canonical dedupe/validation gate. The processor may emit `REVIEW_NEW_OR_UPGRADE` for a single-source candidate or `REVIEW_MERGE_OR_UPGRADE` for multi-source evidence. Only after canonical Skill comparison and validation may the item receive one of the five terminal states above.
+\`REVIEW_*\` queue actions are non-terminal and must not be presented as completed promotion decisions. They mean the evidence is retained for the canonical dedupe/validation gate. The processor may emit \`REVIEW_NEW_OR_UPGRADE\` for a single-source candidate or \`REVIEW_MERGE_OR_UPGRADE\` for multi-source evidence. Only after canonical Skill comparison and validation may the item receive one of the five terminal states above.
 
-`RESTRICTED` is not a terminal promotion class. Restricted evidence enters `QUARANTINE` and the safety/authorization gate.
+\`RESTRICTED\` is not a terminal promotion class. Restricted evidence enters \`QUARANTINE\` and the safety/authorization gate.
 
 ## Required evidence
 
@@ -35,3 +35,12 @@ Collection evidence is provenance, not execution proof. Source application code 
 ## Completion rule
 
 Every retained candidate ends in one explicit state: NEW, UPGRADE, MERGE, REFERENCE, or QUARANTINE, with a recorded reason.
+
+## Readiness boundary
+
+Promotion and runtime readiness are separate gates.
+
+- Promotion answers: **what should become a canonical Skill/reference/quarantine decision?**
+- Readiness answers: **can this retained asset actually be activated or used in our environment?**
+
+The Collection processor must not infer runtime readiness from source evidence. See \`COLLECTION/MASTER/READINESS-GATE.md\` for the second gate and \`COLLECTION/MASTER/READINESS-QUEUE.json\` for the explicit per-asset readiness inventory.
