@@ -174,6 +174,13 @@ Central collection of repositories, documentation, tools, and reusable implement
 - whisper.cpp — https://github.com/ggml-org/whisper.cpp
 - FFmpeg — https://github.com/FFmpeg/FFmpeg
 
+- CodeCraft API — https://codecraftapi.com/
+  - Source capture: COLLECTION/SOURCES/CODECRAFT_API_2026-10-07.md
+  - Current official docs expose an OpenAI-compatible /v1 gateway, model capability/pricing metadata, streaming, tools, vision, reasoning and embeddings.
+  - Current pricing page advertises a free tier of 1M tokens/month without a card; this remains source evidence, not runtime verification.
+  - No official GitHub account/organization was identified from the accessible official site navigation; unrelated GitHub search matches were not treated as official.
+  - Reuse boundary: benchmark against Salamou-31/API Factory and existing OmniRoute-derived provider policy; extract only narrow provider metadata/adapter patterns.
+
 ## Verified external ready projects
 - `COLLECTION/VERIFIED_EXTERNAL/READY_EXTERNAL_PROJECTS_2026-10-05.md`
   - Verified external-only ready set: OpenHands, LiteLLM, Ollama, canonical diegosouzapw/OmniRoute.
