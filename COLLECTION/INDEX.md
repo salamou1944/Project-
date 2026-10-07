@@ -124,6 +124,12 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Priority leverage: agentic E2E action/assert/replay, authorization-safe API verification, mutation gates, request budgets, structured findings, coverage/CI evidence, Agent Skills/MCP integration, bounded AI trace/cost/tool analysis, and mobile CI automation.
   - Reuse decision: extract/upgrade narrowly after semantic dedupe; preserve source provenance; do not wholesale import TesterArmy.
 
+- JCodesMore — https://github.com/JCodesMore
+  - Account-wide capture: COLLECTION/ACCOUNTS/JCODEMORE_2026-10-07.md
+  - 18 public repositories returned by owner-scoped search on 2026-10-07.
+  - Highest-value current sources: ai-website-cloner-template, youtube-for-ai-agents, fix-claude-code, starry-ai-bookmark-search, slack-for-ai-agents, Powerful-Websites-You-Should-Know-About.
+  - New extracted pattern: COLLECTION/SKILLS/WEBSITE_REVERSE_ENGINEERING_CLONE_2026-10-07.md — Map → Observe → Build → Compare with source/local matched-state evidence and production+rendered-comparison completion gate.
+  - Reuse rule: semantic dedupe against browser/SOAT/agent-skills; no wholesale project import.
 - yihui-dev — https://github.com/yihui-dev
   - Account-wide source captured: COLLECTION/ACCOUNTS/YIHUI-DEV_2026-10-07.md
   - 16 public repositories returned by owner-scoped search on 2026-10-07.
