@@ -27,3 +27,17 @@ Source: https://codecraftapi.com
 
 ## Evidence status
 Resource captured from the official site. Live production verification of quota, model availability and tool-calling is still required.
+
+## Downstream implementation evidence found
+A public third-party client, AIM-IT4/craftcode-CLI, implements CodeCraft as a thin OpenAI-compatible adapter:
+- `src/providers/codecraft.mjs` sets `https://codecraftapi.com/v1` and derives a plan hint from the observed `X-RateLimit-Limit` value.
+- `src/config.mjs` keeps the API key in an environment variable (`CODECRAFT_API_KEY`) and supports a provider-neutral config boundary.
+- The client also contains token-budget/plan resolution and request guardrails.
+
+Collection interpretation:
+- The adapter shape is useful reference evidence for API Factory.
+- The plan mapping is third-party application logic, not official CodeCraft truth. We must not promote inferred plan/token values to provider policy without live official evidence.
+- Existing OmniRoute/free-provider policy remains canonical for free-tier classification.
+
+## Verification state update
+SOURCE_EVIDENCE_PLUS_THIRD_PARTY_ADAPTER_REFERENCE. Still not runtime VERIFIED. No API key was collected or used.
