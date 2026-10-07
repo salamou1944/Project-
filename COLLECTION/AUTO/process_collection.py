@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """Fast evidence-first post-extraction pipeline.
-Route: normalize -> classify -> dedupe -> promotion decision -> verification queue.
-Third-party code is never copied into executable Skills automatically.
+
+Route:
+normalize -> classify -> dedupe -> promotion decision -> verification queue
+-> explicit readiness state.
+
+Readiness is deliberately NOT inferred from collection evidence. Collection
+evidence can place an item ON_SHELF or QUARANTINED; READY_ON_DEMAND and
+READY_TO_USE require a separate readiness declaration with activation and
+runtime evidence.
 """
 import datetime, hashlib, json, re
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -44,44 +51,97 @@ def inspect_file(path):
         sample=f"{title}\n{body[:12000]}"
         restricted=[x for x in RESTRICTED if x in sample.lower()]
         families=classify(sample)
-        if not families and not restricted: continue
+        if not families and not restricted:
+            continue
         key=norm((families[0]["family"] if families else "restricted")+"-"+Path(title).stem)
         digest=hashlib.sha256((source+"|"+title+"|"+f.get("content_sha256","")).encode()).hexdigest()
-        records.append({"capability_key":key,"evidence_id":digest[:16],"source":source,
-        "source_revision":data.get("revision_sha"),"source_license":data.get("license"),
-        "file":title,"families":families,"classification":"RESTRICTED" if restricted else "REVIEW",
-        "restriction_signals":restricted,"content_sha256":f.get("content_sha256"),
-        "evidence_excerpt":body[:500].replace("\n"," ")})
+        records.append({
+            "capability_key":key,
+            "evidence_id":digest[:16],
+            "source":source,
+            "source_revision":data.get("revision_sha"),
+            "source_license":data.get("license"),
+            "file":title,
+            "families":families,
+            "classification":"RESTRICTED" if restricted else "REVIEW",
+            "restriction_signals":restricted,
+            "content_sha256":f.get("content_sha256"),
+            "evidence_excerpt":body[:500].replace("\n"," ")
+        })
     return records
 
 def main():
-    MASTER.mkdir(parents=True,exist_ok=True); VERIFY.mkdir(parents=True,exist_ok=True)
+    MASTER.mkdir(parents=True,exist_ok=True)
+    VERIFY.mkdir(parents=True,exist_ok=True)
     files=[p for p in EXTRACTED.glob("*.json") if p.name!="MANIFEST.json"]
     all_records=[]
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
         futures=[ex.submit(inspect_file,p) for p in files]
-        for fut in as_completed(futures): all_records.extend(fut.result())
+        for fut in as_completed(futures):
+            all_records.extend(fut.result())
+
     by_key={}
-    for r in all_records: by_key.setdefault(r["capability_key"],[]).append(r)
+    for r in all_records:
+        by_key.setdefault(r["capability_key"],[]).append(r)
+
     decisions=[]
     for key,group in sorted(by_key.items()):
         sources=sorted({x["source"] for x in group})
         restricted=any(x["classification"]=="RESTRICTED" for x in group)
         action="QUARANTINE" if restricted else ("REVIEW_MERGE_OR_UPGRADE" if len(sources)>1 else "REVIEW_NEW_OR_UPGRADE")
-        decisions.append({"capability_key":key,"action":action,"evidence_count":len(group),
-        "source_count":len(sources),"sources":sources[:20],"evidence":group[:20],
-        "next_gate":"safety review + authorization gate" if restricted else "canonical Skill dedupe + validation"})
+        decisions.append({
+            "capability_key":key,
+            "action":action,
+            "evidence_count":len(group),
+            "source_count":len(sources),
+            "sources":sources[:20],
+            "evidence":group[:20],
+            "next_gate":"safety review + authorization gate" if restricted else "canonical Skill dedupe + validation"
+        })
+
     now=datetime.datetime.now(datetime.timezone.utc).isoformat()
-    counts={"files_scanned":len(files),"evidence_records":len(all_records),"capability_groups":len(decisions),
-    "quarantine":sum(d["action"]=="QUARANTINE" for d in decisions),
-    "review_merge_or_upgrade":sum(d["action"]=="REVIEW_MERGE_OR_UPGRADE" for d in decisions),
-    "review_new_or_upgrade":sum(d["action"]=="REVIEW_NEW_OR_UPGRADE" for d in decisions)}
+    counts={
+        "files_scanned":len(files),
+        "evidence_records":len(all_records),
+        "capability_groups":len(decisions),
+        "quarantine":sum(d["action"]=="QUARANTINE" for d in decisions),
+        "review_merge_or_upgrade":sum(d["action"]=="REVIEW_MERGE_OR_UPGRADE" for d in decisions),
+        "review_new_or_upgrade":sum(d["action"]=="REVIEW_NEW_OR_UPGRADE" for d in decisions)
+    }
+
     ready={"generated_at":now,"pipeline":["extract","normalize","classify","dedupe","decide","verify"],"counts":counts,"decisions":decisions}
     (MASTER/"READY.json").write_text(json.dumps(ready,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+
     queue=[d for d in decisions if d["action"]!="QUARANTINE"]
     (MASTER/"PROMOTION-QUEUE.json").write_text(json.dumps({"generated_at":now,"items":queue},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+
     restricted_queue=[d for d in decisions if d["action"]=="QUARANTINE"]
     (VERIFY/"RESTRICTED-QUEUE.json").write_text(json.dumps({"generated_at":now,"items":restricted_queue},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+
+    readiness_items=[]
+    for d in decisions:
+        readiness_items.append({
+            "capability_key":d["capability_key"],
+            "source_count":d["source_count"],
+            "sources":d["sources"],
+            "evidence_count":d["evidence_count"],
+            "evidence_ids":[e["evidence_id"] for e in d["evidence"]],
+            "source_revisions":sorted({e.get("source_revision") for e in d["evidence"] if e.get("source_revision")}),
+            "licenses":sorted({e.get("source_license") for e in d["evidence"] if e.get("source_license")}),
+            "promotion_action":d["action"],
+            "readiness_state":"QUARANTINED" if d["action"]=="QUARANTINE" else "ON_SHELF",
+            "next_readiness_gate":"safety/authorization" if d["action"]=="QUARANTINE" else "explicit readiness declaration + activation/smoke evidence"
+        })
+    (MASTER/"READINESS-QUEUE.json").write_text(
+        json.dumps({
+            "schema_version":"collection-readiness-queue/v1",
+            "generated_at":now,
+            "rule":"collection evidence is provenance; readiness is never inferred",
+            "states":["ON_SHELF","READY_FOR_ADAPTATION","READY_ON_DEMAND","READY_TO_USE","INTEGRATED","TESTED","HUMAN_READY","PRODUCTION_PROVEN","QUARANTINED"],
+            "items":readiness_items
+        },ensure_ascii=False,indent=2)+"\n",encoding="utf-8"
+    )
     print(json.dumps(counts))
 
-if __name__=="__main__": main()
+if __name__=="__main__":
+    main()
