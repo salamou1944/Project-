@@ -124,6 +124,12 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Priority leverage: agentic E2E action/assert/replay, authorization-safe API verification, mutation gates, request budgets, structured findings, coverage/CI evidence, Agent Skills/MCP integration, bounded AI trace/cost/tool analysis, and mobile CI automation.
   - Reuse decision: extract/upgrade narrowly after semantic dedupe; preserve source provenance; do not wholesale import TesterArmy.
 
+- yihui-dev — https://github.com/yihui-dev
+  - Account-wide source captured: COLLECTION/ACCOUNTS/YIHUI-DEV_2026-10-07.md
+  - 16 public repositories returned by owner-scoped search on 2026-10-07.
+  - Highest-value sources: yh-chatcut-skills (independent Agent Skills + staged media workflow), dify (self-hosted LLM app/workflow/RAG/agent platform; use upstream langgenius/dify as canonical), free-ai-tools-directory (discovery index requiring independent verification), awesome-opus5-5-videos and awesome-fable5-5-videos (prompt/video reference corpora), image (Nuxt image optimization).
+  - Reuse rule: extract narrow contracts/patterns and upgrade existing Skills after semantic dedupe; do not wholesale import or treat directories/prompts as runtime proof.
+
 ## Additional account targets discovered
 - sherlock-project — https://github.com/sherlock-project
   - Account-wide source discovered and enumerated: 5 public repositories.
