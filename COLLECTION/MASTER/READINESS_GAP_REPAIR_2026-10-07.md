@@ -55,3 +55,6 @@ The resulting operating path is:
 **COLLECT → PRESERVE → PROMOTE/REFERENCE/QUARANTINE → ON_SHELF → READY_FOR_ADAPTATION → READY_ON_DEMAND → READY_TO_USE → INTEGRATED → TESTED → HUMAN_READY → PRODUCTION_PROVEN**
 
 The states are evidence-gated and independent; no later state is inferred from an earlier one.
+
+## Verification note
+The Collection workflows now share a repository-level concurrency group so the promotion/readiness gates do not race each other on writes.
