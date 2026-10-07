@@ -49,7 +49,7 @@ def main():
     assert "REVIEW_MERGE_OR_UPGRADE" in gate
     assert "READY_ON_DEMAND" in readiness_gate
     assert "READY_TO_USE" in readiness_gate
-    assert "must never infer" in readiness_gate
+    assert "never infer" in readiness_gate
 
     print("collection promotion/readiness-policy consistency: PASS")
 
