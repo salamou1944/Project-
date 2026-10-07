@@ -36,13 +36,6 @@
       "content": "'use client';\n\n/* eslint-disable react/jsx-props-no-spreading */\nimport { useRouter } from 'next/navigation';\nimport { zodResolver } from '@hookform/resolvers/zod';\nimport { Search } from 'lucide-react';\nimport { useTranslations } from 'next-intl';\nimport { useForm } from 'react-hook-form';\nimport { z } from 'zod';\n\nimport { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';\nimport { Input } from '@/components/ui/input';\nimport { Separator } from '@/components/ui/separator';\n\nconst FormSchema = z.object({\n  search: z.string(),\n});\n\nexport default function SearchForm({ defaultSearch }: { defaultSearch?: string }) {\n  const t = useTranslations('Home');\n  const router = useRouter();\n\n  const form = useForm<z.infer<typeof FormSchema>>({\n    resolver: zodResolver(FormSchema),\n    defaultValues: {\n      search: defaultSearch || '',\n    },\n  });\n\n  const onSubmit = (data: z.infer<typeof FormSchema>) => {\n    if (!data.search.trim()) return;\n    router.push(`/query/${data.search}`);\n  };\n\n  return (\n    <Form {...form}>\n      <form onSubmit={form.handleSubmit(onSubmit)}>\n        <FormField\n          control={form.control}\n          name='search'\n          render={({ field }) => (\n            <FormItem>\n              <FormControl>\n                <div className='relative flex w-full items-center text-white/40'>\n                  <Input\n                    placeholder={t('search')}\n                    {...field}\n                    className='h-8 w-full rounded-full border border-white/40 !bg-transparent pr-10 placeholder:text-white/40 lg:h-[38px] lg:w-[392px] lg:pr-12'\n                  />\n                  <Separator className='absolute right-8 h-6 w-px bg-white/40 lg:right-10' orientation='vertical' />\n                  <button type='submit' className='absolute right-2 lg:right-3'>\n                    <Search className='size-[18px] lg:size-5' />\n                    <span className='sr-only'>search</span>\n                  </button>\n                </div>\n              </FormControl>\n              <FormMessage />\n            </FormItem>\n          )}\n        />\n      </form>\n    </Form>\n  );\n}\n"
     },
     {
-      "path": "app/api/cron/crawler.ts",
-      "sha": "89e4e6bba4558d19f9bcd1f4d8c9188fc7b2c67c",
-      "content_sha256": "0e825bbb096f3bb398275f12315fd70a6981aeb956f4145dff23bcfea7ac71a1",
-      "score": 104,
-      "content": "/* eslint-disable no-template-curly-in-string */\ntype CrawlerRequest = {\n  url: string;\n  tags: string[];\n  callback_url: string;\n  key: string;\n};\n\ntype CrawlerResponse = {\n  code: number;\n  msg: string;\n};\n\n// type CrawlerData = {\n//   description: string;\n//   detail: string;\n//   languages: string[];\n//   name: string;\n//   screenshot_data: string;\n//   screenshot_thumbnail_data: string;\n//   tags: string[] | null;\n//   title: string;\n//   url: string;\n// };\n\nexport default async function crawler({ url, tags, callback_url, key }: CrawlerRequest) {\n  const crawlerKey = process.env.CRAWLER_API_KEY;\n  const res = await fetch(process.env.CRAWLER_API!, {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      Authorization: `Bearer ${crawlerKey}`,\n    },\n    body: JSON.stringify({\n      url,\n      tags,\n      callback_url,\n      key,\n    }),\n  });\n  return (await res.json()) as CrawlerResponse;\n}\n"
-    },
-    {
       "path": "app/api/cron_callback/route.ts",
       "sha": "f7fdf7ec3c0b49e2251b317ec5dfba8bc40bd3f1",
       "content_sha256": "5091dffa936c5dd7113670b542138e4d496083d640c933d724ab74f7b632e6c4",
@@ -55,6 +48,13 @@
       "content_sha256": "6230e1cb76006b70bef427d694bef0d8da3979f764fc0dc54558dd9d7c8affa7",
       "score": 104,
       "content": "/* eslint-disable import/prefer-default-export */\nimport { NextRequest, NextResponse } from 'next/server';\nimport { createClient } from '@/db/supabase/client';\n\nimport crawler from './crawler';\n\n// submit table empty -> stop\n\n// filter status\n// isFeature (priority)\n// time order\n\n// when crawler is done\n// insert web_nav table (tags <- tags[0] or 'other')\n// update submit table status\n\nexport async function POST(req: NextRequest) {\n  try {\n    // 获取请求头中的 Authorization\n    const authHeader = req.headers.get('Authorization');\n\n    // 检查 Authorization 是否存在并验证 token\n    if (!authHeader || !authHeader.startsWith('Bearer ')) {\n      return NextResponse.json({ error: 'Authorization header is missing or malformed' }, { status: 401 });\n    }\n\n    const token = authHeader.split(' ')[1];\n    const cronKey = process.env.CRON_AUTH_KEY;\n    // 假设这里有一个函数 `verifyToken` 用于验证 token，如果验证失败则抛出错误\n    const isValid = cronKey === token;\n    if (!isValid) {\n      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });\n    }\n\n    const supabase = createClient();\n\n    console.log('supabase connected!');\n\n    const [{ data: categoryList, error: categoryListError }, { data: submitList, error: submitListError }] =\n      await Promise.all([\n        supabase.from('navigation_category').select(),\n        supabase\n          .from('submit')\n          .select()\n          .eq('status', 0)\n          .order('is_feature', { ascending: false })\n          .order('created_at', { ascending: true }),\n      ]);\n\n    console.log('supabase get categoryList succeed!');\n    if (categoryListError || !categoryList) {\n      return NextResponse.json({ error: 'Category is null' }, { status: 201 });\n    }\n\n    if (submitListError || !submitList || !submitList[0]) {\n      return NextResponse.json({ error: 'Submit list is null' }, { status: 202 });\n    }\n    console.log('supabase get submitList succeed!');\n\n    const callbackUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/cron_callback`;\n\n    const firstSubmitData = submitList[0];\n    const res = await crawler({\n      url: firstSubmitData.url!,\n      tags: categoryList!.map((item) => item.name),\n      callback_url: callbackUrl,\n      key: cronKey,\n    });\n\n    console.log('api get crawler succeed!');\n\n    if (res.code !== 200) {\n      throw new Error(res.msg);\n    }\n    return NextResponse.json({ message: 'Success' });\n  } catch (error) {\n    return Response.json({ error });\n  }\n}\n"
+    },
+    {
+      "path": "app/api/cron/crawler.ts",
+      "sha": "89e4e6bba4558d19f9bcd1f4d8c9188fc7b2c67c",
+      "content_sha256": "0e825bbb096f3bb398275f12315fd70a6981aeb956f4145dff23bcfea7ac71a1",
+      "score": 104,
+      "content": "/* eslint-disable no-template-curly-in-string */\ntype CrawlerRequest = {\n  url: string;\n  tags: string[];\n  callback_url: string;\n  key: string;\n};\n\ntype CrawlerResponse = {\n  code: number;\n  msg: string;\n};\n\n// type CrawlerData = {\n//   description: string;\n//   detail: string;\n//   languages: string[];\n//   name: string;\n//   screenshot_data: string;\n//   screenshot_thumbnail_data: string;\n//   tags: string[] | null;\n//   title: string;\n//   url: string;\n// };\n\nexport default async function crawler({ url, tags, callback_url, key }: CrawlerRequest) {\n  const crawlerKey = process.env.CRAWLER_API_KEY;\n  const res = await fetch(process.env.CRAWLER_API!, {\n    method: 'POST',\n    headers: {\n      'Content-Type': 'application/json',\n      Authorization: `Bearer ${crawlerKey}`,\n    },\n    body: JSON.stringify({\n      url,\n      tags,\n      callback_url,\n      key,\n    }),\n  });\n  return (await res.json()) as CrawlerResponse;\n}\n"
     },
     {
       "path": "app/api/submit/route.ts",
@@ -85,13 +85,6 @@
       "content": "function LoadingItem() {\n  return <div className='h-[38px] w-[75px] rounded-full bg-[#2C2D36]' />;\n}\n\nfunction LoadingCard() {\n  return (\n    <div\n      role='status'\n      className='flex h-[210px] animate-pulse flex-col gap-3 rounded-xl bg-[#2C2D36] p-1 shadow lg:h-[343px]'\n    >\n      <div className='mb-4 flex aspect-[310/174] h-auto w-full items-center justify-center rounded-xl bg-gray-500' />\n      <div className='flex flex-col gap-2 px-[6px]'>\n        <div className='mb-2 h-4 w-24 rounded-full bg-gray-500' />\n        <div className='h-2.5 rounded-full bg-gray-500' />\n        <div className='h-2.5 rounded-full bg-gray-500' />\n        <div className='h-2.5 rounded-full bg-gray-500' />\n      </div>\n    </div>\n  );\n}\n\nexport default function Loading() {\n  const length = Array.from({ length: 12 }, (_, i) => i);\n\n  return (\n    <div className='mt-5 w-full space-y-10'>\n      <div className='flex animate-pulse items-center gap-3'>\n        <LoadingItem />\n        <LoadingItem />\n        <LoadingItem />\n      </div>\n      <div className='h-8 w-[120px] animate-pulse rounded-full bg-gray-500' />\n      <div className='grid w-full grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4'>\n        {length.map((item) => (\n          <LoadingCard key={item} />\n        ))}\n      </div>\n    </div>\n  );\n}\n"
     },
     {
-      "path": "app/[locale]/(with-footer)/(home)/query/[search]/layout.tsx",
-      "sha": "d1a12ada479de2b38723f1c4785d20870d9436d2",
-      "content_sha256": "188a2b51ad17c613f6d34e823b0b97cb11aaf6be14b31910760ea9dadecd69a3",
-      "score": 98,
-      "content": "import { getTranslations } from 'next-intl/server';\n\nimport SearchForm from '@/components/home/SearchForm';\n\nexport default async function Layout({ children, params }: { children: React.ReactNode; params: { search?: string } }) {\n  const t = await getTranslations('Home');\n\n  return (\n    <div className='relative mx-auto w-full max-w-pc px-3 lg:px-0'>\n      <div className='my-5 flex flex-col text-center lg:mx-auto lg:my-10 lg:gap-1'>\n        <h1 className='bg-clip-text text-2xl font-bold text-white lg:h-[56px] lg:text-5xl'>{t('title')}</h1>\n        <h2 className='text-balance text-xs font-bold text-white lg:text-sm'>{t('subTitle')}</h2>\n      </div>\n      <div className='flex w-full items-center justify-center'>\n        <SearchForm defaultSearch={decodeURI(params?.search || '')} />\n      </div>\n      {children}\n    </div>\n  );\n}\n"
-    },
-    {
       "path": "app/[locale]/(with-footer)/(home)/query/[search]/page.tsx",
       "sha": "6abf4a85d8b91ec248ddc62a01dda69fef3c8e6b",
       "content_sha256": "2feb78b8b67cfda9a2ee3c48f01fedb8b8bd6ecddef4b703c20ac599bdad370b",
@@ -99,18 +92,18 @@
       "content": "import { Suspense } from 'react';\nimport { Metadata } from 'next';\nimport dynamic from 'next/dynamic';\nimport { createClient } from '@/db/supabase/client';\nimport { getTranslations } from 'next-intl/server';\n\nimport { RevalidateOneHour } from '@/lib/constants';\nimport { Separator } from '@/components/ui/separator';\nimport Empty from '@/components/Empty';\nimport Faq from '@/components/Faq';\nimport WebNavCardList from '@/components/webNav/WebNavCardList';\n\nimport { TagList } from '../../Tag';\nimport Loading from './loading';\n\nconst ScrollToTop = dynamic(() => import('@/components/page/ScrollToTop'), { ssr: false });\n\nexport async function generateMetadata({ params: { locale } }: { params: { locale: string } }): Promise<Metadata> {\n  const t = await getTranslations({\n    locale,\n    namespace: 'Metadata.home',\n  });\n\n  return {\n    title: t('title'),\n    description: t('description'),\n    keywords: t('keywords'),\n  };\n}\n\nexport const revalidate = RevalidateOneHour / 2;\n\nexport default async function Page({ params }: { params: { search?: string } }) {\n  const supabase = createClient();\n  const t = await getTranslations('Home');\n  const { data: categoryList } = await supabase.from('navigation_category').select();\n  const { data: dataList } = await supabase\n    .from('web_navigation')\n    .select()\n    .ilike('detail', `%${decodeURI(params?.search || '')}%`);\n\n  return (\n    <Suspense fallback={<Loading />}>\n      <div className='mb-10 mt-5'>\n        {params?.search && (\n          <TagList\n            data={categoryList!.map((item) => ({\n              id: String(item.id),\n              name: item.name,\n              href: `/category/${item.name}`,\n            }))}\n          />\n        )}\n      </div>\n      <section className='flex flex-col gap-5'>\n        {dataList && !!dataList.length && params?.search ? (\n          <>\n            <h2 className='mb-1 text-left text-[18px] lg:text-2xl'>{t('result')}</h2>\n            <WebNavCardList dataList={dataList!} />\n          </>\n        ) : (\n          <Empty title={t('empty')} />\n        )}\n      </section>\n      <Separator className='mx-auto my-10 h-px w-4/5 bg-[#2C2D36] lg:my-16' />\n      <Faq />\n      <ScrollToTop />\n    </Suspense>\n  );\n}\n"
     },
     {
+      "path": "app/[locale]/(with-footer)/(home)/query/[search]/layout.tsx",
+      "sha": "d1a12ada479de2b38723f1c4785d20870d9436d2",
+      "content_sha256": "188a2b51ad17c613f6d34e823b0b97cb11aaf6be14b31910760ea9dadecd69a3",
+      "score": 98,
+      "content": "import { getTranslations } from 'next-intl/server';\n\nimport SearchForm from '@/components/home/SearchForm';\n\nexport default async function Layout({ children, params }: { children: React.ReactNode; params: { search?: string } }) {\n  const t = await getTranslations('Home');\n\n  return (\n    <div className='relative mx-auto w-full max-w-pc px-3 lg:px-0'>\n      <div className='my-5 flex flex-col text-center lg:mx-auto lg:my-10 lg:gap-1'>\n        <h1 className='bg-clip-text text-2xl font-bold text-white lg:h-[56px] lg:text-5xl'>{t('title')}</h1>\n        <h2 className='text-balance text-xs font-bold text-white lg:text-sm'>{t('subTitle')}</h2>\n      </div>\n      <div className='flex w-full items-center justify-center'>\n        <SearchForm defaultSearch={decodeURI(params?.search || '')} />\n      </div>\n      {children}\n    </div>\n  );\n}\n"
+    },
+    {
       "path": "public/BingSiteAuth.xml",
       "sha": "b5308c4523170dad1cdf9374a6eadc78fe191bcc",
       "content_sha256": "c114113f39b5cb6684954d790d94425f2e20faf1e4c7484ceebcb1c292ee98f4",
       "score": 78,
       "content": "<?xml version=\"1.0\"?>\n<users>\n\t<user>E86E367F59E86B9C5AFB8C4DEA0FF7F8</user>\n</users>"
-    },
-    {
-      "path": "postcss.config.js",
-      "sha": "12a703d900da8159c30e75acbd2c4d87ae177f62",
-      "content_sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf",
-      "score": 35,
-      "content": "module.exports = {\n  plugins: {\n    tailwindcss: {},\n    autoprefixer: {},\n  },\n};\n"
     },
     {
       "path": "middleware.ts",
@@ -125,7 +118,14 @@
       "content_sha256": "6ea9730492e24a25eed8d13b1a2593fcfecce9143a51af7227487bfa38692056",
       "score": 35,
       "content": "{\n  \"$schema\": \"https://ui.shadcn.com/schema.json\",\n  \"style\": \"default\",\n  \"rsc\": true,\n  \"tsx\": true,\n  \"tailwind\": {\n    \"config\": \"tailwind.config.ts\",\n    \"css\": \"app/[locale]/globals.css\",\n    \"baseColor\": \"slate\",\n    \"cssVariables\": true,\n    \"prefix\": \"\"\n  },\n  \"aliases\": {\n    \"components\": \"@/components\",\n    \"utils\": \"@/lib/utils\"\n  }\n}"
+    },
+    {
+      "path": "postcss.config.js",
+      "sha": "12a703d900da8159c30e75acbd2c4d87ae177f62",
+      "content_sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf",
+      "score": 35,
+      "content": "module.exports = {\n  plugins: {\n    tailwindcss: {},\n    autoprefixer: {},\n  },\n};\n"
     }
   ],
-  "generated_at": "2026-10-07T00:59:37.195389+00:00"
+  "generated_at": "2026-10-07T10:20:21.862117+00:00"
 }

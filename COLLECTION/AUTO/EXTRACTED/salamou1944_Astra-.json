@@ -36,13 +36,6 @@
       "content": "# ASTRA Private Trading Bot\n\nExecutable ASTRA bot boundary.\n\nImplemented:\n- Kraken public OHLC ingestion\n- fixed long-momentum 30-day signal\n- deterministic paper execution\n- idempotent intent ledger\n- kill switch and fail-closed execution gate\n- authenticated Kraken Spot adapter for Balance/OpenOrders/QueryOrders/CancelOrder/AddOrder\n- exchange-truth reconciliation for live orders\n- evidence-gated live execution orchestration\n- explicit human approval requirement\n- no withdrawal capability\n- unit tests and CI paper smoke\n\nSafety:\n- live trading remains OFF by default\n- the paper runner refuses live mode\n- live execution cannot proceed unless every authorization gate passes\n- exchange order IDs and execution state must be reconciled before success is recorded\n- no profitability or alpha claim\n\nResearch and evidence remain in salamou1944/Astra. Its current research gates do not establish profitability, so this bot remains paper-only until those gates and the operational gates are independently proven.\n"
     },
     {
-      "path": "tests/test_live_execution.py",
-      "sha": "0736bc8b386acd2041d4798072627f59aa23591a",
-      "content_sha256": "4836879438e86ef05c8186908129575d963e4fcd5aff8504e437c460a7ef4f7c",
-      "score": 93,
-      "content": "import unittest\nfrom decimal import Decimal\nfrom astra.execution.live import LiveExecutionError, LiveExecutionService\nfrom astra.execution.reconciliation import KrakenReconciler\n\n\nclass FakeGate:\n    def __init__(self, allowed=True):\n        self.allowed = allowed\n\n    def authorize(self):\n        return self.allowed\n\n\nclass FakeBroker:\n    def __init__(self, txid=\"OID-1\"):\n        self.txid = txid\n\n    def submit_if_authorized(self, gate, **order):\n        if not gate.authorize():\n            return {\"submitted\": False, \"mode\": \"LIVE_BLOCKED\"}\n        return {\"submitted\": True, \"mode\": \"LIVE_SPOT\", \"result\": {\"txid\": [self.txid]}}\n\n    def query_orders(self, txid):\n        return {\"orders\": {txid: {\"status\": \"closed\", \"vol\": \"0.001\", \"vol_exec\": \"0.001\"}}}\n\n    def open_orders(self):\n        return {\"open\": {}}\n\n\nclass LiveExecutionTests(unittest.TestCase):\n    def test_human_approval_required(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate())\n        with self.assertRaisesRegex(LiveExecutionError, \"human approval\"):\n            service.submit(\n                symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n                strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n                human_approval=False,\n            )\n\n    def test_gate_required(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate(False))\n        with self.assertRaisesRegex(LiveExecutionError, \"gate denied\"):\n            service.submit(\n                symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n                strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n                human_approval=True,\n            )\n\n    def test_duplicate_intent_blocked(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate())\n        kwargs = dict(\n            symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n            strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n            human_approval=True,\n        )\n        first = service.submit(**kwargs)\n        self.assertEqual(first[\"exchange_order_id\"], \"OID-1\")\n        with self.assertRaisesRegex(LiveExecutionError, \"duplicate\"):\n            service.submit(**kwargs)\n\n    def test_reconciliation_uses_exchange_truth(self):\n        reconciler = KrakenReconciler(FakeBroker())\n        result = reconciler.order(\"OID-1\", expected_volume=Decimal(\"0.001\"))\n        self.assertTrue(result.ok)\n        self.assertEqual(result.status, \"closed\")\n        self.assertEqual(result.executed_volume, Decimal(\"0.001\"))\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
-    },
-    {
       "path": "tests/test_safety.py",
       "sha": "e294669efc688088e3f3bb468c1ccd9461953120",
       "content_sha256": "de9fcf15193c2adc01309946cb21f576ff8e092865daac1fe315c09cc1ceba82",
@@ -50,32 +43,18 @@
       "content": "import unittest,os\nfrom astra.execution.gates import GateState\nfrom astra.execution.kraken import KrakenConfig,KrakenSpot,KrakenError\nfrom astra.risk import RiskGuardian\nclass SafetyTests(unittest.TestCase):\n def test_all_gates_required(self):\n  self.assertFalse(GateState(True,True,True,True,True,True,True,False).authorize())\n  self.assertTrue(GateState(True,True,True,True,True,True,True,True).authorize())\n def test_default_off(self):\n  os.environ.pop(\"ASTRA_LIVE_TRADING\",None); self.assertFalse(KrakenConfig.from_env().live_enabled)\n def test_live_missing_credentials_blocked(self):\n  with self.assertRaises(KrakenError): KrakenSpot(KrakenConfig(live_enabled=True))\n def test_risk_halts(self):\n  r=RiskGuardian(); r.reset_day(100); self.assertTrue(r.observe(98)[\"halted\"]); self.assertEqual(r.observe(98)[\"reason\"], \"daily_loss_limit\")\nif __name__==\"__main__\":unittest.main()\n"
     },
     {
+      "path": "tests/test_live_execution.py",
+      "sha": "0736bc8b386acd2041d4798072627f59aa23591a",
+      "content_sha256": "4836879438e86ef05c8186908129575d963e4fcd5aff8504e437c460a7ef4f7c",
+      "score": 93,
+      "content": "import unittest\nfrom decimal import Decimal\nfrom astra.execution.live import LiveExecutionError, LiveExecutionService\nfrom astra.execution.reconciliation import KrakenReconciler\n\n\nclass FakeGate:\n    def __init__(self, allowed=True):\n        self.allowed = allowed\n\n    def authorize(self):\n        return self.allowed\n\n\nclass FakeBroker:\n    def __init__(self, txid=\"OID-1\"):\n        self.txid = txid\n\n    def submit_if_authorized(self, gate, **order):\n        if not gate.authorize():\n            return {\"submitted\": False, \"mode\": \"LIVE_BLOCKED\"}\n        return {\"submitted\": True, \"mode\": \"LIVE_SPOT\", \"result\": {\"txid\": [self.txid]}}\n\n    def query_orders(self, txid):\n        return {\"orders\": {txid: {\"status\": \"closed\", \"vol\": \"0.001\", \"vol_exec\": \"0.001\"}}}\n\n    def open_orders(self):\n        return {\"open\": {}}\n\n\nclass LiveExecutionTests(unittest.TestCase):\n    def test_human_approval_required(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate())\n        with self.assertRaisesRegex(LiveExecutionError, \"human approval\"):\n            service.submit(\n                symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n                strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n                human_approval=False,\n            )\n\n    def test_gate_required(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate(False))\n        with self.assertRaisesRegex(LiveExecutionError, \"gate denied\"):\n            service.submit(\n                symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n                strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n                human_approval=True,\n            )\n\n    def test_duplicate_intent_blocked(self):\n        service = LiveExecutionService(FakeBroker(), FakeGate())\n        kwargs = dict(\n            symbol=\"XBTUSD\", side=\"buy\", quantity=Decimal(\"0.001\"),\n            strategy_id=\"test\", signal_timestamp=\"2026-01-01T00:00:00+00:00\",\n            human_approval=True,\n        )\n        first = service.submit(**kwargs)\n        self.assertEqual(first[\"exchange_order_id\"], \"OID-1\")\n        with self.assertRaisesRegex(LiveExecutionError, \"duplicate\"):\n            service.submit(**kwargs)\n\n    def test_reconciliation_uses_exchange_truth(self):\n        reconciler = KrakenReconciler(FakeBroker())\n        result = reconciler.order(\"OID-1\", expected_volume=Decimal(\"0.001\"))\n        self.assertTrue(result.ok)\n        self.assertEqual(result.status, \"closed\")\n        self.assertEqual(result.executed_volume, Decimal(\"0.001\"))\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    {
       "path": "tests/test_bot.py",
       "sha": "4a47db6cd28cbaf2bd1ea744682221e18724faea",
       "content_sha256": "5121ec4847f5dd0356cf6535b71b3035668dab43013b194908ad47a79437e2c1",
       "score": 93,
       "content": "import os,unittest\nfrom unittest.mock import patch\nfrom decimal import Decimal\nfrom scripts.astra_bot import run_once\n\nfrom astra.core import Bar\n\nclass BotTests(unittest.TestCase):\n    def test_paper_entry(self):\n        bars=[Bar(i,100+i) for i in range(40)]\n        with patch(\"scripts.astra_bot.fetch_ohlc\",return_value=bars):\n            d=run_once(previous_signal=0,quantity=Decimal(\"0.001\"))\n        self.assertEqual(d[\"mode\"],\"PAPER\")\n        self.assertFalse(d[\"live_order_submitted\"])\n        self.assertEqual(d[\"paper_position\"],\"0.001\")\n\n    def test_live_env_cannot_run(self):\n        with patch.dict(os.environ,{\"ASTRA_LIVE_TRADING\":\"1\"}):\n            with self.assertRaises(SystemExit):\n                import scripts.astra_bot as b\n                b.main()\n"
-    },
-    {
-      "path": "scripts/astra_bot.py",
-      "sha": "96da52a7019d7e2c376e1eb78b52e0db7601f2db",
-      "content_sha256": "cfad896a16656b42294f1f3de7c3f3c944674fe61e89568aa9950f16fae7bdf8",
-      "score": 33,
-      "content": "from __future__ import annotations\nimport json,os\nfrom datetime import datetime,timezone\nfrom decimal import Decimal\nfrom urllib.request import Request,urlopen\nfrom pathlib import Path\nimport sys\nsys.path.insert(0,str(Path(__file__).resolve().parents[1]))\nfrom astra.core import Bar\nfrom astra.strategies import long_momentum\nfrom astra.execution.paper import PaperBroker\nfrom astra.execution.safety import KillSwitch,ExecutionGate\nfrom astra.execution.ledger import OrderIntent,ExecutionLedger\n\nURL=\"https://api.kraken.com/0/public/OHLC\"; PAIR=\"XBTUSD\"; WINDOW=30\n\ndef fetch_ohlc():\n    req=Request(f\"{URL}?pair={PAIR}&interval=1440\",headers={\"User-Agent\":\"ASTRA-private-bot/1.0\"})\n    with urlopen(req,timeout=15) as r: p=json.loads(r.read().decode())\n    if p.get(\"error\"): raise RuntimeError(\"; \".join(map(str,p[\"error\"])))\n    key=next(k for k in p[\"result\"] if k!=\"last\"); rows=p[\"result\"][key]\n    bars=[Bar(int(x[0]),float(x[4])) for x in rows]\n    if len(bars)<WINDOW+2: raise RuntimeError(\"insufficient market data\")\n    return bars\n\ndef run_once(previous_signal=0,quantity=Decimal(\"0.001\"),bars=None):\n    bars=bars or fetch_ohlc(); sig=int(long_momentum(bars,WINDOW,0)[-1]); last=bars[-1]\n    broker=PaperBroker(); ledger=ExecutionLedger(); kill=KillSwitch(); gate=ExecutionGate(kill)\n    intent=None; order=None\n    if sig!=previous_signal and sig==1:\n        intent=OrderIntent.create(symbol=PAIR,side=\"buy\",quantity=str(quantity),strategy_id=\"long_momentum_w30_t0\",signal_timestamp=datetime.fromtimestamp(last.t,tz=timezone.utc).isoformat())\n        if ledger.register(intent):\n            order=broker.submit(symbol=PAIR,side=\"buy\",quantity=quantity); broker.advance(symbol=PAIR,market_price=last.close)\n    live=gate.authorize(data_valid=True,strategy_valid=False,risk_valid=True,execution_valid=True,reconciliation_valid=True,human_approval=False,live_enabled=False)\n    if live: raise AssertionError(\"live authorization must remain impossible\")\n    return {\"mode\":\"PAPER\",\"pair\":PAIR,\"observed_bars\":len(bars),\"last_price\":str(last.close),\"signal\":sig,\"intent_id\":intent.intent_id if intent else None,\"order_id\":order.order_id if order else None,\"order_status\":order.status.value if order else None,\"paper_position\":str(broker.positions.get(PAIR,Decimal(\"0\"))),\"paper_cash\":str(broker.cash),\"live_order_submitted\":False,\"kill_switch_halted\":kill.halted}\n\ndef main():\n    if os.getenv(\"ASTRA_LIVE_TRADING\",\"0\")==\"1\": raise SystemExit(\"ASTRA bot refuses live mode\")\n    d=run_once(previous_signal=int(os.getenv(\"ASTRA_PREVIOUS_SIGNAL\",\"0\")))\n    p=Path(\"evidence/astra_bot_snapshot.json\"); p.parent.mkdir(exist_ok=True); p.write_text(json.dumps(d,indent=2)+\"\\n\"); print(json.dumps(d,indent=2))\n\nif __name__==\"__main__\": main()\n"
-    },
-    {
-      "path": "scripts/live_readiness_check.py",
-      "sha": "d0152aa4feb426e5203ca6db86b4d0746237a448",
-      "content_sha256": "2a9df7eba29799cae4118a55b32a1a6e5e118056280b9c623cb4468e75603094",
-      "score": 33,
-      "content": "\"\"\"Technical readiness check; it never enables live trading.\"\"\"\nfrom pathlib import Path\nimport sys\n\nROOT = Path(__file__).resolve().parents[1]\nif str(ROOT) not in sys.path:\n    sys.path.insert(0, str(ROOT))\n\nfrom astra.execution.gates import GateState\nfrom astra.execution.kraken import KrakenConfig,KrakenSpot\ndef main():\n    cfg=KrakenConfig.from_env()\n    assert not cfg.live_enabled\n    KrakenSpot(cfg)\n    state=GateState(True,False,True,True,True,True,False,False)\n    assert not state.authorize()\n    print({\"technical_components\":\"READY\",\"live_authorization\":False,\"strategy_valid\":False,\"human_approval\":False,\"live_enabled\":False,\"withdrawal_api\":False})\nif __name__==\"__main__\": main()\n"
-    },
-    {
-      "path": "astra/core.py",
-      "sha": "98b5c3075301859cceb50fd08928e401f34f95a2",
-      "content_sha256": "00edb29bbb00b260b377a2d3c271bda4d2951b2d46a0011214e7cbf48380ad37",
-      "score": 33,
-      "content": "from dataclasses import dataclass\n\n@dataclass(frozen=True)\nclass Bar:\n    t: int\n    close: float\n\ndef backtest_signals(bars, signals, fee=0.0005, slip=0.0002):\n    if len(bars) != len(signals): raise ValueError(\"signals length must match bars\")\n    equity=1.0; pos=0; peak=1.0; maxdd=0.0; trades=0\n    for i,b in enumerate(bars):\n        if i: equity *= 1 + pos*(b.close/bars[i-1].close-1)\n        target=max(0,min(1,int(signals[i])))\n        if target != pos:\n            equity *= max(0,1-abs(target-pos)*(fee+slip)); trades+=1; pos=target\n        peak=max(peak,equity); maxdd=max(maxdd,1-equity/peak)\n    return {\"return_pct\":round((equity-1)*100,6),\"max_drawdown_pct\":round(maxdd*100,6),\"trades\":trades}\n"
     },
     {
       "path": "astra/risk.py",
@@ -92,6 +71,20 @@
       "content": "__version__ = '1.0.0'\n"
     },
     {
+      "path": "scripts/live_readiness_check.py",
+      "sha": "d0152aa4feb426e5203ca6db86b4d0746237a448",
+      "content_sha256": "2a9df7eba29799cae4118a55b32a1a6e5e118056280b9c623cb4468e75603094",
+      "score": 33,
+      "content": "\"\"\"Technical readiness check; it never enables live trading.\"\"\"\nfrom pathlib import Path\nimport sys\n\nROOT = Path(__file__).resolve().parents[1]\nif str(ROOT) not in sys.path:\n    sys.path.insert(0, str(ROOT))\n\nfrom astra.execution.gates import GateState\nfrom astra.execution.kraken import KrakenConfig,KrakenSpot\ndef main():\n    cfg=KrakenConfig.from_env()\n    assert not cfg.live_enabled\n    KrakenSpot(cfg)\n    state=GateState(True,False,True,True,True,True,False,False)\n    assert not state.authorize()\n    print({\"technical_components\":\"READY\",\"live_authorization\":False,\"strategy_valid\":False,\"human_approval\":False,\"live_enabled\":False,\"withdrawal_api\":False})\nif __name__==\"__main__\": main()\n"
+    },
+    {
+      "path": "scripts/astra_bot.py",
+      "sha": "96da52a7019d7e2c376e1eb78b52e0db7601f2db",
+      "content_sha256": "cfad896a16656b42294f1f3de7c3f3c944674fe61e89568aa9950f16fae7bdf8",
+      "score": 33,
+      "content": "from __future__ import annotations\nimport json,os\nfrom datetime import datetime,timezone\nfrom decimal import Decimal\nfrom urllib.request import Request,urlopen\nfrom pathlib import Path\nimport sys\nsys.path.insert(0,str(Path(__file__).resolve().parents[1]))\nfrom astra.core import Bar\nfrom astra.strategies import long_momentum\nfrom astra.execution.paper import PaperBroker\nfrom astra.execution.safety import KillSwitch,ExecutionGate\nfrom astra.execution.ledger import OrderIntent,ExecutionLedger\n\nURL=\"https://api.kraken.com/0/public/OHLC\"; PAIR=\"XBTUSD\"; WINDOW=30\n\ndef fetch_ohlc():\n    req=Request(f\"{URL}?pair={PAIR}&interval=1440\",headers={\"User-Agent\":\"ASTRA-private-bot/1.0\"})\n    with urlopen(req,timeout=15) as r: p=json.loads(r.read().decode())\n    if p.get(\"error\"): raise RuntimeError(\"; \".join(map(str,p[\"error\"])))\n    key=next(k for k in p[\"result\"] if k!=\"last\"); rows=p[\"result\"][key]\n    bars=[Bar(int(x[0]),float(x[4])) for x in rows]\n    if len(bars)<WINDOW+2: raise RuntimeError(\"insufficient market data\")\n    return bars\n\ndef run_once(previous_signal=0,quantity=Decimal(\"0.001\"),bars=None):\n    bars=bars or fetch_ohlc(); sig=int(long_momentum(bars,WINDOW,0)[-1]); last=bars[-1]\n    broker=PaperBroker(); ledger=ExecutionLedger(); kill=KillSwitch(); gate=ExecutionGate(kill)\n    intent=None; order=None\n    if sig!=previous_signal and sig==1:\n        intent=OrderIntent.create(symbol=PAIR,side=\"buy\",quantity=str(quantity),strategy_id=\"long_momentum_w30_t0\",signal_timestamp=datetime.fromtimestamp(last.t,tz=timezone.utc).isoformat())\n        if ledger.register(intent):\n            order=broker.submit(symbol=PAIR,side=\"buy\",quantity=quantity); broker.advance(symbol=PAIR,market_price=last.close)\n    live=gate.authorize(data_valid=True,strategy_valid=False,risk_valid=True,execution_valid=True,reconciliation_valid=True,human_approval=False,live_enabled=False)\n    if live: raise AssertionError(\"live authorization must remain impossible\")\n    return {\"mode\":\"PAPER\",\"pair\":PAIR,\"observed_bars\":len(bars),\"last_price\":str(last.close),\"signal\":sig,\"intent_id\":intent.intent_id if intent else None,\"order_id\":order.order_id if order else None,\"order_status\":order.status.value if order else None,\"paper_position\":str(broker.positions.get(PAIR,Decimal(\"0\"))),\"paper_cash\":str(broker.cash),\"live_order_submitted\":False,\"kill_switch_halted\":kill.halted}\n\ndef main():\n    if os.getenv(\"ASTRA_LIVE_TRADING\",\"0\")==\"1\": raise SystemExit(\"ASTRA bot refuses live mode\")\n    d=run_once(previous_signal=int(os.getenv(\"ASTRA_PREVIOUS_SIGNAL\",\"0\")))\n    p=Path(\"evidence/astra_bot_snapshot.json\"); p.parent.mkdir(exist_ok=True); p.write_text(json.dumps(d,indent=2)+\"\\n\"); print(json.dumps(d,indent=2))\n\nif __name__==\"__main__\": main()\n"
+    },
+    {
       "path": "astra/strategies.py",
       "sha": "fe4b0a7fe7d7cf5c2b2e6ec49505efd7f91d1d25",
       "content_sha256": "5e018baa4df9dc233b51fcc7d163567356f8c9ede83395229f5e4930601650da",
@@ -99,11 +92,11 @@
       "content": "def long_momentum(bars, window=30, threshold=0.0):\n    closes=[b.close for b in bars]; out=[]\n    for i,p in enumerate(closes):\n        out.append(0 if i < window else int(p/closes[i-window]-1 > threshold/100))\n    return out\n"
     },
     {
-      "path": "astra/execution/safety.py",
-      "sha": "1de4f7b4ccff1a0d74d442ffc4f63de17f50bc80",
-      "content_sha256": "a6cf393ae08c4dcbb8bce30273f43704a5c7551e344fcd643ce18eb62af019ef",
-      "score": 31,
-      "content": "from dataclasses import dataclass\n\n@dataclass\nclass KillSwitch:\n    halted: bool=False\n    reason: str|None=None\n    def trip(self,reason): self.halted=True; self.reason=str(reason)\n    def authorize(self): return not self.halted\n\nclass ExecutionGate:\n    def __init__(self,kill_switch): self.kill_switch=kill_switch\n    def authorize(self,*,data_valid,strategy_valid,risk_valid,execution_valid,reconciliation_valid,human_approval,live_enabled):\n        return bool(live_enabled and data_valid and strategy_valid and risk_valid and execution_valid and reconciliation_valid and human_approval and self.kill_switch.authorize())\n"
+      "path": "astra/core.py",
+      "sha": "98b5c3075301859cceb50fd08928e401f34f95a2",
+      "content_sha256": "00edb29bbb00b260b377a2d3c271bda4d2951b2d46a0011214e7cbf48380ad37",
+      "score": 33,
+      "content": "from dataclasses import dataclass\n\n@dataclass(frozen=True)\nclass Bar:\n    t: int\n    close: float\n\ndef backtest_signals(bars, signals, fee=0.0005, slip=0.0002):\n    if len(bars) != len(signals): raise ValueError(\"signals length must match bars\")\n    equity=1.0; pos=0; peak=1.0; maxdd=0.0; trades=0\n    for i,b in enumerate(bars):\n        if i: equity *= 1 + pos*(b.close/bars[i-1].close-1)\n        target=max(0,min(1,int(signals[i])))\n        if target != pos:\n            equity *= max(0,1-abs(target-pos)*(fee+slip)); trades+=1; pos=target\n        peak=max(peak,equity); maxdd=max(maxdd,1-equity/peak)\n    return {\"return_pct\":round((equity-1)*100,6),\"max_drawdown_pct\":round(maxdd*100,6),\"trades\":trades}\n"
     },
     {
       "path": "astra/execution/__init__.py",
@@ -113,19 +106,26 @@
       "content": "from .safety import ExecutionGate, KillSwitch\nfrom .paper import PaperBroker, OrderStatus\n"
     },
     {
-      "path": "astra/execution/gates.py",
-      "sha": "b588d1073e7504b4b8f1733b50564756e43c5889",
-      "content_sha256": "b643e03c9b1f38cfe25c688d00f47d12a4788cd41b4a6622c5a566c165256455",
-      "score": 31,
-      "content": "from dataclasses import dataclass\n@dataclass(frozen=True)\nclass GateState:\n    data_valid: bool=False\n    strategy_valid: bool=False\n    risk_valid: bool=False\n    execution_valid: bool=False\n    reconciliation_valid: bool=False\n    kill_switch_valid: bool=False\n    human_approval: bool=False\n    live_enabled: bool=False\n    def authorize(self): return all((self.data_valid,self.strategy_valid,self.risk_valid,self.execution_valid,self.reconciliation_valid,self.kill_switch_valid,self.human_approval,self.live_enabled))\nclass LiveAuthorization:\n    def __init__(self,state): self.state=state\n    def authorize(self): return self.state.authorize()\n"
-    },
-    {
       "path": "astra/execution/ledger.py",
       "sha": "5333509abc63631dd22d1c4934060f59c5c6089d",
       "content_sha256": "670e03dc48977986d95b6ece03ed51ca2260249b29be88f217e8eb4ea7cec3e5",
       "score": 31,
       "content": "from dataclasses import dataclass\nimport hashlib,json\n\n@dataclass(frozen=True)\nclass OrderIntent:\n    intent_id:str; symbol:str; side:str; quantity:str; strategy_id:str; signal_timestamp:str\n    @staticmethod\n    def create(*,symbol,side,quantity,strategy_id,signal_timestamp):\n        d={\"symbol\":symbol.upper(),\"side\":side.lower(),\"quantity\":str(quantity),\"strategy_id\":strategy_id,\"signal_timestamp\":signal_timestamp}\n        return OrderIntent(\"intent-\"+hashlib.sha256(json.dumps(d,sort_keys=True,separators=(\",\",\":\")).encode()).hexdigest()[:24],**d)\n\nclass ExecutionLedger:\n    def __init__(self): self.ids=set(); self.events=[]\n    def register(self,intent):\n        if intent.intent_id in self.ids:return False\n        self.ids.add(intent.intent_id); self.events.append({\"type\":\"intent_created\",\"id\":intent.intent_id}); return True\n"
+    },
+    {
+      "path": "astra/execution/safety.py",
+      "sha": "1de4f7b4ccff1a0d74d442ffc4f63de17f50bc80",
+      "content_sha256": "a6cf393ae08c4dcbb8bce30273f43704a5c7551e344fcd643ce18eb62af019ef",
+      "score": 31,
+      "content": "from dataclasses import dataclass\n\n@dataclass\nclass KillSwitch:\n    halted: bool=False\n    reason: str|None=None\n    def trip(self,reason): self.halted=True; self.reason=str(reason)\n    def authorize(self): return not self.halted\n\nclass ExecutionGate:\n    def __init__(self,kill_switch): self.kill_switch=kill_switch\n    def authorize(self,*,data_valid,strategy_valid,risk_valid,execution_valid,reconciliation_valid,human_approval,live_enabled):\n        return bool(live_enabled and data_valid and strategy_valid and risk_valid and execution_valid and reconciliation_valid and human_approval and self.kill_switch.authorize())\n"
+    },
+    {
+      "path": "astra/execution/gates.py",
+      "sha": "b588d1073e7504b4b8f1733b50564756e43c5889",
+      "content_sha256": "b643e03c9b1f38cfe25c688d00f47d12a4788cd41b4a6622c5a566c165256455",
+      "score": 31,
+      "content": "from dataclasses import dataclass\n@dataclass(frozen=True)\nclass GateState:\n    data_valid: bool=False\n    strategy_valid: bool=False\n    risk_valid: bool=False\n    execution_valid: bool=False\n    reconciliation_valid: bool=False\n    kill_switch_valid: bool=False\n    human_approval: bool=False\n    live_enabled: bool=False\n    def authorize(self): return all((self.data_valid,self.strategy_valid,self.risk_valid,self.execution_valid,self.reconciliation_valid,self.kill_switch_valid,self.human_approval,self.live_enabled))\nclass LiveAuthorization:\n    def __init__(self,state): self.state=state\n    def authorize(self): return self.state.authorize()\n"
     }
   ],
-  "generated_at": "2026-10-07T00:59:38.063328+00:00"
+  "generated_at": "2026-10-07T10:20:23.022719+00:00"
 }
