@@ -143,6 +143,21 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Highest-value sources: yh-chatcut-skills (independent Agent Skills + staged media workflow), dify (self-hosted LLM app/workflow/RAG/agent platform; use upstream langgenius/dify as canonical), free-ai-tools-directory (discovery index requiring independent verification), awesome-opus5-5-videos and awesome-fable5-5-videos (prompt/video reference corpora), image (Nuxt image optimization).
   - Reuse rule: extract narrow contracts/patterns and upgrade existing Skills after semantic dedupe; do not wholesale import or treat directories/prompts as runtime proof.
 
+## Latest high-leverage account captures
+- agent-sandbox — https://github.com/agent-sandbox
+  - Account-wide capture: COLLECTION/ACCOUNTS/AGENT-SANDBOX_2026-10-07.md
+  - 2 public repositories enumerated.
+  - Primary source: agent-sandbox (Apache-2.0).
+  - Priority leverage: E2B-compatible self-hosted sandboxing, multi-tenant isolation, browser/computer/shell execution, pre-warmed pools, pause/resume, snapshots, scale-to-zero and lifecycle observability.
+  - Extracted contract: COLLECTION/SKILLS/AGENT_SANDBOX_LIFECYCLE_CONTRACT_2026-10-07.md
+  - Reuse rule: merge into existing OpenShell/CUA/AI Operating execution-boundary work; no wholesale import.
+- the-open-agent — https://github.com/the-open-agent
+  - Account-wide capture: COLLECTION/ACCOUNTS/THE-OPEN-AGENT_2026-10-07.md
+  - 11 public repositories enumerated.
+  - High-value sources: openagent, oss-skills, agentbench, office-tool-use.
+  - Priority leverage: self-hosted agent runtime, progressive-disclosure maintainer Skills, reproducible agent benchmarking, and bounded PPTX/OOXML automation.
+  - Reuse rule: semantic dedupe against agent-skills/SOAT/API Factory; upgrade existing contracts rather than duplicate systems.
+
 ## Additional account targets discovered
 - sherlock-project — https://github.com/sherlock-project
   - Account-wide source discovered and enumerated: 5 public repositories.
