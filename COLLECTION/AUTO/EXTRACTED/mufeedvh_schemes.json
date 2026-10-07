@@ -57,6 +57,13 @@
       "content": "# Scripts\n\n## Remove symbols from word frequency report\n\nThis script removes VST symbols from a word frequency report file.\n\nSometimes frequency report will have items like \"ലൂ\", \"ഓ\" which is unnecessary because tokenizer can make these on its own.\n\nGoVarnam won't learn single conjuncts anyway, so why keep it in report ? Remove them with :\n\n```bash\npython3 frequency-report-remove-symbols.py scheme.vst wordFrequencyReport.txt outputFile.txt\n```\n\n### Word Frequency Report File\n\nA word frequency report file has this format :\n```\nword frequency\n```\nExample:\n```\nഎന്ത് 14569\nഇത് 2045\nവർഗ്ഗം 254\nഎന്ന 254\nഒരു 254\nതാളിലേക്ക് 254\nഫലകം 254\n```\n\nThis file is made from analysing usage of words in internet. [This repo](https://github.com/AI4Bharat/indicnlp_corpus#text-corpora) has a premade vocab frequency file for some Indian languages. [Indic Keyboard](https://gitlab.com/indicproject/dictionaries) also has one.\n\n### Normalize Frequency\n\nA frequency report may have large difference between the first word and last word like this :\n\n```\nഎന്ത് 14569000\n...\n...\nഫലകം 254\n```\n\nThis is bad because suggestions can come out wrong. We need to normalize these values between a min and max.\n\nTo normalize frequency of words between a min value (15) and max value (255), we can use this :\n\n```\nperl frequency-normalizer.pl frequencyReport.txt 15 255 > output-report.txt\n```\n\n## Populate weight column in VST\n\nIn GoVarnam's VST, we will have a weight for each possibility symbol. This is to make the tokenizer output better for possible suggestions. More a symbol is in popular usage, the more that word have greater weight in tokenizer output.\n\n* Get a word frequency report file (explained at the top of this README)\n\nSuch a file helps to calculate symbol frequency very easy. We just need to make a hashmap of each symbols in a word and add the corresponding word frequency value.\n\nAfter we go through the entire list of words, we will have a hashmap of symbol frequency.\n\n* Make the symbol frequency report :\n```\npython3 symbol-frequency-maker.py scheme.vst word-frequency.txt symbol-frequency.txt\n```\n\nNow the output file will have a similar content:\n```\nഅ 951134\nഎ 763499\nവ 739865\nനി 710719\nക 500238\nരു 478358\n```\n\n* Normalize the frequency :\n\n```\nperl frequency-normalizer.pl symbol-frequency.txt 0 100 > symbol-frequency-normalized.txt\n```\n\n* Now, use this file to populate the weight column in VST :\n```\npython3 symbol-weight-update-in-vst.py ml.vst symbol-frequency-normalized.txt\n```\n"
     },
     {
+      "path": "test/hi.rb",
+      "sha": "10586e85772687bd838a922e4b4767fa654c070a",
+      "content_sha256": "5da2ed5e4b963b3cc55f40482c39cc012325b6d400839b36f15a3dc256c11e4d",
+      "score": 93,
+      "content": "# encoding: utf-8\n\nclass TestHi < Minitest::Test\n  def setup\n    @varnam = get_varnam_handle('hi')\n    @varnam.config(Varnam::VARNAM_CONFIG_SET_TOKENIZER_SUGGESTIONS_LIMIT, 30)\n  end\n\n  def test_words\n    list = {\n      'kitaab' => 'किताब',\n      'pitaa' => 'पिता'\n    }\n    list.each do |pattern, expected|\n      # TODO assert length of result array too\n      assert_equal expected, @varnam.transliterate(pattern)[0].Word\n    end\n  end\nend\n"
+    },
+    {
       "path": "test/run.rb",
       "sha": "3b1faccd10b8fc296e3349b1d10ae27413241b78",
       "content_sha256": "70da04cdb301196ccc6e98381023c9f138c307185f7118943b1e0cb948c47718",
@@ -71,13 +78,6 @@
       "content": "# encoding: utf-8\n\nclass TestNe < Minitest::Test\n  def setup\n    @varnam = get_varnam_handle('ne')\n    @varnam.config(Varnam::VARNAM_CONFIG_SET_TOKENIZER_SUGGESTIONS_LIMIT, 30)\n  end\n\n  def test_words\n    list = {\n      'kitaab' => 'किताब',\n      'pitaa' => 'पिता',\n      'prastuti' => 'प्रस्तुति',\n      'kaaThamaanDau' => 'काठमान्डौ',\n      # half letters\n      'purva' => 'पुर्व',\n      'hunchha' => 'हुन्छ',\n      'dantya' => 'दन्त्य',\n      # change half letters to full at word end\n      'asar' => 'असर',\n      'pasal' => 'पसल',\n      'baagh' => 'बाघ' # multi letter consonant not working. still need to type \"baagha\"\n    }\n    list.each do |pattern, expected|\n      # TODO assert length of result array too\n      assert_equal expected, @varnam.transliterate(pattern)[0].Word\n    end\n  end\nend\n"
     },
     {
-      "path": "test/hi.rb",
-      "sha": "10586e85772687bd838a922e4b4767fa654c070a",
-      "content_sha256": "5da2ed5e4b963b3cc55f40482c39cc012325b6d400839b36f15a3dc256c11e4d",
-      "score": 93,
-      "content": "# encoding: utf-8\n\nclass TestHi < Minitest::Test\n  def setup\n    @varnam = get_varnam_handle('hi')\n    @varnam.config(Varnam::VARNAM_CONFIG_SET_TOKENIZER_SUGGESTIONS_LIMIT, 30)\n  end\n\n  def test_words\n    list = {\n      'kitaab' => 'किताब',\n      'pitaa' => 'पिता'\n    }\n    list.each do |pattern, expected|\n      # TODO assert length of result array too\n      assert_equal expected, @varnam.transliterate(pattern)[0].Word\n    end\n  end\nend\n"
-    },
-    {
       "path": "test/ml.rb",
       "sha": "7abe5db4d81446dfdde600c6d4bb1b16e95b13ed",
       "content_sha256": "d38202761406aed7d80fac9860b3964182c99c0be777f14f3af2fb3c9d30be95",
@@ -85,11 +85,32 @@
       "content": "# encoding: utf-8\n\nclass TestML < Minitest::Test\n  def setup\n    @varnam = get_varnam_handle('ml')\n    @varnam.config(Varnam::VARNAM_CONFIG_SET_TOKENIZER_SUGGESTIONS_LIMIT, 30)\n  end\n\n  def test_words\n    list = {\n      'peN' => 'പെൺ',\n\n      # BEGIN Anusvara <-> ma complications\n      'am_bEdkar' => 'അംബേദ്കർ',\n      'manam_pOle' => 'മനംപോലെ',\n      'kunnamkuLam' => 'കുന്നംകുളം',\n      'pamkthi' => 'പംക്തി',\n      'kambiyil' => 'കമ്പിയിൽ',\n      'mvOnE' => 'മ്വോനേ',\n      'mvOnoossE' => 'മ്വോനൂസ്സേ',\n      'manushyan' => 'മനുഷ്യൻ',\n      'mlEchcham' => 'മ്ലേച്ചം',\n      # END Anusvara <-> ma complications\n\n      'kiLivaathil' => 'കിളിവാതിൽ',\n      'kiLivaathilil' => 'കിളിവാതിലിൽ',\n      'thaazhvara' => 'താഴ്വര',\n      'thaazh_vara' => 'താഴ്‌വര',\n      'ANkiLi' => 'ആൺകിളി'\n    }\n    list.each do |pattern, expected|\n      # TODO assert length of result array too\n      assert_equal expected, @varnam.transliterate(pattern)[0].Word\n    end\n  end\n\n  def test_reverse_transliteration\n    list = {\n      'മലയാളം' => %w[malayaaLam malayaaLam_ malayALam malayALam_ malayaalam malayaalam_ malayAlam malayAlam_ malayaLam malayaLam_ malayalam malayalam_]\n    }\n\n    list.each do |word, expected|\n      assert_equal expected, @varnam.reverse_transliterate(word)\n    end\n  end\nend\n"
     },
     {
+      "path": "build_all_schemes.sh",
+      "sha": "fd193364e5829aff63d5a5b72ed6be0a8a047c2d",
+      "content_sha256": "2edaffd5546d024d6f1705fc215aaab4cfa3b3fb5d26d2b3e5e2781960b2c84e",
+      "score": 35,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\nschemes=(\"as\" \"bn\" \"gu\" \"hi\" \"kn\" \"ml\" \"ml-inscript\" \"mr\" \"ne\" \"or\" \"pa\" \"sa\" \"ta\" \"te\")\nfor f in ${schemes[@]}; do\n  ./build_scheme.sh $f\ndone\n"
+    },
+    {
+      "path": "build_all_packs.sh",
+      "sha": "985944c2dfe6a7502d9907ffb552e62b8d205297",
+      "content_sha256": "6120201e38646374781bc1a31a6d05486affd13fac6af1d8e5f13f7ddfef62d6",
+      "score": 35,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\nschemes=(\"as\" \"bn\" \"gu\" \"hi\" \"kn\" \"ml\" \"ml-inscript\" \"mr\" \"ne\" \"or\" \"pa\" \"sa\" \"ta\" \"te\")\nfor schemeID in ${schemes[@]}; do\n  for packDir in schemes/$schemeID/*/ ; do\n    if [ -d \"$packDir\" ]; then\n      echo \"$packDir\"\n      python3 scripts/make-pack.py $schemeID $packDir\n    fi\n  done\ndone\n"
+    },
+    {
       "path": "build_source_with_lfs_zip.sh",
       "sha": "d62c97106f36bbedb7fbdb020cc1fc8abaf1bedf",
       "content_sha256": "8eb394c3c443a669dcb78b9b4b13ea87d68ccb5b4fea04b1bd70e05e61768f84",
       "score": 35,
       "content": "set -e\n\ngit lfs fetch\nzip -r source-with-lfs.zip . -x '.git'\n"
+    },
+    {
+      "path": "build_zips.sh",
+      "sha": "4b2225a8bb2958427ed6f2e02158e262e5cce81c",
+      "content_sha256": "cefefc0c61dd98187391e17d6ee3badb3778c4373d58ec19272c5c4aa949c5d2",
+      "score": 35,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\ncd schemes\n\nschemes=(\"as\" \"bn\" \"gu\" \"hi\" \"kn\" \"ml\" \"ml-inscript\" \"mr\" \"ne\" \"or\" \"pa\" \"sa\" \"ta\" \"te\")\nfor schemeID in ${schemes[@]}; do\n  cp ../install.sh.in $schemeID/install.sh\n  sed -i \"s#@INSTALL_PREFIX@#/usr/local#g\" $schemeID/install.sh\n  chmod +x $schemeID/install.sh\n\n  cp ../import.sh.in $schemeID/import.sh\n  chmod +x $schemeID/import.sh\n\n  cp ../README.txt.in $schemeID/README.md\n\n  zip -r ../$schemeID.zip $schemeID -x '*.scheme' -x '*.txt' -x '*.vst.learnings*'\ndone"
     },
     {
       "path": "install_all_schemes.sh",
@@ -104,28 +125,7 @@
       "content_sha256": "ef853c6da439c75cde19bad0d02d311c7ca229701bee5dfe815cec25696fa5a5",
       "score": 35,
       "content": "#!/usr/bin/env bash\n\nset -e\n\nf=$1\nvst=schemes/$f/$f.vst\n./compile-scheme.rb -s schemes/$f/$f.scheme -o $vst\nif [ -f schemes/$f/symbol-frequency-report.txt ]; then\n  python3 scripts/symbol-weight-update-in-vst.py $vst schemes/$f/symbol-frequency-report.txt\n  echo \"Populated weight column in $vst\"\nfi\n"
-    },
-    {
-      "path": "build_all_packs.sh",
-      "sha": "985944c2dfe6a7502d9907ffb552e62b8d205297",
-      "content_sha256": "6120201e38646374781bc1a31a6d05486affd13fac6af1d8e5f13f7ddfef62d6",
-      "score": 35,
-      "content": "#!/usr/bin/env bash\n\nset -e\n\nschemes=(\"as\" \"bn\" \"gu\" \"hi\" \"kn\" \"ml\" \"ml-inscript\" \"mr\" \"ne\" \"or\" \"pa\" \"sa\" \"ta\" \"te\")\nfor schemeID in ${schemes[@]}; do\n  for packDir in schemes/$schemeID/*/ ; do\n    if [ -d \"$packDir\" ]; then\n      echo \"$packDir\"\n      python3 scripts/make-pack.py $schemeID $packDir\n    fi\n  done\ndone\n"
-    },
-    {
-      "path": "build_zips.sh",
-      "sha": "4b2225a8bb2958427ed6f2e02158e262e5cce81c",
-      "content_sha256": "cefefc0c61dd98187391e17d6ee3badb3778c4373d58ec19272c5c4aa949c5d2",
-      "score": 35,
-      "content": "#!/usr/bin/env bash\n\nset -e\n\ncd schemes\n\nschemes=(\"as\" \"bn\" \"gu\" \"hi\" \"kn\" \"ml\" \"ml-inscript\" \"mr\" \"ne\" \"or\" \"pa\" \"sa\" \"ta\" \"te\")\nfor schemeID in ${schemes[@]}; do\n  cp ../install.sh.in $schemeID/install.sh\n  sed -i \"s#@INSTALL_PREFIX@#/usr/local#g\" $schemeID/install.sh\n  chmod +x $schemeID/install.sh\n\n  cp ../import.sh.in $schemeID/import.sh\n  chmod +x $schemeID/import.sh\n\n  cp ../README.txt.in $schemeID/README.md\n\n  zip -r ../$schemeID.zip $schemeID -x '*.scheme' -x '*.txt' -x '*.vst.learnings*'\ndone"
-    },
-    {
-      "path": "build_all_schemes.sh",
-      "sha": "fd193364e5829aff63d5a5b72ed6be0a8a047c2d",
-      "content_sha256": "2edaffd5546d024d6f1705fc215aaab4cfa3b3fb5d26d2b3e5e2781960b2c84e",
-      "score": 35,
-      "content": "#!/usr/bin/env bash\n\nset -e\n\nschemes=(\"as\" \"bn\" \"gu\" \"hi\" \"kn\" \"ml\" \"ml-inscript\" \"mr\" \"ne\" \"or\" \"pa\" \"sa\" \"ta\" \"te\")\nfor f in ${schemes[@]}; do\n  ./build_scheme.sh $f\ndone\n"
     }
   ],
-  "generated_at": "2026-10-07T00:59:35.956350+00:00"
+  "generated_at": "2026-10-07T01:30:09.594894+00:00"
 }
