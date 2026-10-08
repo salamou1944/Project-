@@ -9,7 +9,7 @@ Design goals:
 - parallelize account, repo, and file work while keeping bounded worker pools
 - preserve provenance; never claim readiness from collection alone
 """
-import base64, datetime, hashlib, json, os, re, urllib.error, urllib.parse, urllib.request
+import datetime, hashlib, json, os, re, time, urllib.error, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -40,7 +40,29 @@ def api(path):
     except urllib.error.HTTPError as ex:
         body = ex.read().decode("utf-8", "replace")
         if ex.code == 403 and "rate limit" in body.lower():
-            raise RuntimeError(f"github_rate_limit_exhausted:{path}") from ex
+            reset = ex.headers.get("X-RateLimit-Reset")
+            remaining = ex.headers.get("X-RateLimit-Remaining")
+            for attempt in range(6):
+                if remaining == "0" and reset:
+                    delay = max(1, min(60, int(reset) - int(time.time()) + 1))
+                else:
+                    delay = min(30, 2 ** attempt)
+                time.sleep(delay)
+                try:
+                    retry_req = urllib.request.Request(API + path, headers={
+                        "Authorization": f"Bearer {TOKEN}",
+                        "Accept": "application/vnd.github+json",
+                        "X-GitHub-Api-Version": "2022-11-28",
+                        "User-Agent": "collection-bot"})
+                    with urllib.request.urlopen(retry_req, timeout=30) as resp:
+                        data = json.load(resp)
+                    _cache[path] = data
+                    return data
+                except urllib.error.HTTPError as retry_ex:
+                    retry_body = retry_ex.read().decode("utf-8", "replace")
+                    if retry_ex.code != 403 or "rate limit" not in retry_body.lower():
+                        raise RuntimeError(f"github_api_http_{retry_ex.code}:{path}") from retry_ex
+            raise RuntimeError(f"github_rate_limit_exhausted_after_backoff:{path}") from ex
         raise RuntimeError(f"github_api_http_{ex.code}:{path}") from ex
     _cache[path] = data
     return data
@@ -95,15 +117,17 @@ def discover():
     accounts = discover_accounts()
 
     def enumerate_owner(owner):
+        encoded = urllib.parse.quote(owner, safe="")
         try:
-            items = list(paged(f"/users/{urllib.parse.quote(owner, safe='')}/repos?type=all"))
-            return owner, items, "user", None
-        except RuntimeError as first:
-            try:
-                items = list(paged(f"/orgs/{urllib.parse.quote(owner, safe='')}/repos?type=all"))
-                return owner, items, "org", None
-            except RuntimeError as second:
-                return owner, [], "unknown", f"user={first}; org={second}"
+            identity = api(f"/users/{encoded}")
+            kind = "org" if identity.get("type") == "Organization" else "user"
+            items = list(paged(
+                f"/orgs/{encoded}/repos?type=all" if kind == "org"
+                else f"/users/{encoded}/repos?type=all"
+            ))
+            return owner, items, kind, None
+        except RuntimeError as error:
+            return owner, [], "unknown", str(error)
 
     with ThreadPoolExecutor(max_workers=min(API_WORKERS, max(1, len(accounts)))) as ex:
         futures = [ex.submit(enumerate_owner, owner) for owner in accounts]
