@@ -1,0 +1,57 @@
+{
+  "canonical_source": "github:cryptocontrol/terminal-firefox-addon",
+  "repo": "cryptocontrol/terminal-firefox-addon",
+  "revision_sha": "6bdc8bedac6d91fcda044ff62b245ded6584d91b",
+  "default_branch": "master",
+  "pushed_at": "2019-07-17T16:40:02Z",
+  "repo_updated_at": "2019-11-29T06:44:48Z",
+  "license": "GPL-3.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "28746af62d1e97ff8ca9ad055fe672ee27d1f569273a4973e8274c38c9009a8c",
+      "score": 100,
+      "content": "# terminal-firefox-plugin\nThe firefox plugin to be used with the CryptoControl Terminal\n"
+    },
+    {
+      "path": "background.js",
+      "sha": null,
+      "content_sha256": "3e1ba1652c8a20ff8b505353286811ea70f0348dc4025b16583b27234d8b97d9",
+      "score": 35,
+      "content": "const allowedOrigins = [\r\n\t'https://terminal-test.cryptocontrol.io',\r\n\t'https://terminal.cryptocontrol.io',\r\n\t'http://localhost:3000'\r\n]\r\n\r\n\r\nconst corsEverywhere = {\r\n    enabled: false,\r\n    activationWhitelistEnabled: false,\r\n    transactions: {},\r\n\r\n    init: function() {\r\n        corsEverywhere.toggle(true);\r\n        corsEverywhere.updateButton();\r\n        return this;\r\n    },\r\n\r\n\r\n    toggle: function(state) {\r\n        // set state by input\r\n        if (typeof state === 'boolean') corsEverywhere.enabled = state;\r\n\r\n        // set state by toggle\r\n        else corsEverywhere.enabled = !corsEverywhere.enabled;\r\n\r\n        // update button\r\n        corsEverywhere.updateButton();\r\n\r\n        // clear transactions\r\n        corsEverywhere.transactions = {};\r\n\r\n        // add observer, observe http responses\r\n        if (corsEverywhere.enabled) {\r\n            browser.webRequest.onBeforeSendHeaders.addListener(\r\n                corsEverywhere.requestHandler, {urls: [\"<all_urls>\"]}, [\"blocking\", \"requestHeaders\"]\r\n            );\r\n\r\n            browser.webRequest.onHeadersReceived.addListener(\r\n                corsEverywhere.responseHandler, {urls: [\"<all_urls>\"]}, [\"blocking\", \"responseHeaders\"]\r\n            );\r\n        }\r\n\r\n        // remove observer\r\n        else {\r\n            browser.webRequest.onBeforeSendHeaders.removeListener(corsEverywhere.requestHandler);\r\n            browser.webRequest.onHeadersReceived.removeListener(corsEverywhere.responseHandler);\r\n        }\r\n\r\n        return this;\r\n    },\r\n\r\n\r\n    updateButton: function() {\r\n        // icon\r\n        let buttonStatus = corsEverywhere.enabled ? 'on': 'off';\r\n\r\n        // tooltip text\r\n        let buttonTitle = corsEverywhere.enabled\r\n            ? 'Plugin enabled, CORS rules are bypassed'\r\n        : 'Plugin disabled, CORS rules are followed';\r\n\r\n        // using activation whitelist while enabled\r\n        if (corsEverywhere.enabled && corsEverywhere.activationWhitelistEnabled) {\r\n            buttonStatus =  'on-filter';\r\n            buttonTitle  += ' (using activation whitelist)';\r\n        }\r\n\r\n        // proceed\r\n        browser.browserAction.setIcon({path:{48:'media/image-'+buttonStatus+'.png'}});\r\n        browser.browserAction.setTitle({title:buttonTitle});\r\n\r\n        return this;\r\n    },\r\n\r\n\r\n    requestHandler: function(request) {\r\n        // prepare transaction, store transaction request\r\n        let transaction = {\r\n            request: request,\r\n            requestHeaders: {},\r\n            response: {},\r\n            responseHeaders: {}\r\n        };\r\n\r\n        // shorthand access to request headers\r\n        for (let header of request.requestHeaders) {\r\n            transaction.requestHeaders[header.name.toLowerCase()] = header;\r\n        }\r\n\r\n        // store transaction\r\n        corsEverywhere.transactions[request.requestId] = transaction;\r\n\r\n        // force origin based on prefs\r\n        // if (bg.prefs.staticOrigin) transaction.requestHeaders['origin'].value = bg.prefs.staticOrigin;\r\n\r\n        // apply modifications\r\n        return { requestHeaders: transaction.request.requestHeaders };\r\n    },\r\n\r\n\r\n    responseHandler: function(response) {\r\n        // get transaction\r\n        let tx = corsEverywhere.transactions[response.requestId];\r\n\r\n        // processing flag\r\n        let doProcess = false;\r\n\r\n        allowedOrigins.forEach((obj) => {\r\n          if (tx.request.originUrl.indexOf(obj) === 0) doProcess = true;\r\n        })\r\n\r\n        // modify the headers\r\n        if (doProcess) {\r\n            // store transaction response\r\n            tx.response = response;\r\n\r\n            // shorthand access to response headers\r\n            for (let header of response.responseHeaders) {\r\n                tx.responseHeaders[header.name.toLowerCase()] = header;\r\n            }\r\n\r\n            // create response headers if necessary\r\n            for (let name of ['access-control-allow-origin', 'access-control-allow-methods',\r\n                'access-control-allow-headers', 'access-control-allow-credentials']) {\r\n                // header exists, skip\r\n                if (tx.responseHeaders[name]) continue;\r\n\r\n                // create header\r\n                let header = { name: name, value: \"null\" };\r\n\r\n                // update response\r\n                tx.response.responseHeaders.push(header)\r\n\r\n                // update shorthand\r\n                tx.responseHeaders[name] = header;\r\n            }\r\n\r\n            // set \"access-control-allow-origin\", prioritize \"origin\" else \"*\"\r\n            tx.responseHeaders['access-control-allow-origin'].value =\r\n                tx.requestHeaders['origin']\r\n                && tx.requestHeaders['origin'].value !== null\r\n                    ? tx.requestHeaders['origin'].value\r\n                : '*';\r\n\r\n            // set \"access-control-allow-methods\"\r\n            if (\r\n                tx.requestHeaders['access-control-request-method']\r\n                && tx.requestHeaders['access-control-request-method'].value !== null\r\n            ) {\r\n                tx.responseHeaders['access-control-allow-methods'].value =\r\n                    tx.requestHeaders['access-control-request-method'].value\r\n            }\r\n\r\n            // set \"access-control-allow-headers\"\r\n            if (\r\n                tx.requestHeaders['access-control-request-headers']\r\n                && tx.requestHeaders['access-control-request-headers'].value !== null\r\n            ) {\r\n                tx.responseHeaders['access-control-allow-headers'].value =\r\n                    tx.requestHeaders['access-control-request-headers'].value\r\n            }\r\n\r\n            // set \"access-control-allow-credentials\"\r\n            tx.responseHeaders['access-control-allow-credentials'].value = \"true\";\r\n        }\r\n\r\n        // delete transaction\r\n        delete corsEverywhere.transactions[response.requestId];\r\n\r\n        // return headers\r\n        return {\r\n            responseHeaders: tx.response.responseHeaders\r\n        };\r\n    }\r\n};\r\n\r\n\r\nconst bg = corsEverywhere.init();\r\n"
+    },
+    {
+      "path": "content-script.js",
+      "sha": null,
+      "content_sha256": "9a3a3de1349a1ae643e13b976cc120f6917f7ad475a51bd21e724302fecc0121",
+      "score": 35,
+      "content": "/**\n * This let's the cryptocontrol plugin know that the extension has been installed.\n */\nlet beacon = document.createElement(\"div\");\nbeacon.id = \"ccio-firefox-ext-beacon\"\nbeacon.className = browser.runtime.id;\ndocument.body.appendChild(beacon);\n"
+    },
+    {
+      "path": "manifest.json",
+      "sha": null,
+      "content_sha256": "0a4daaf19a0280fa962a46ecbe0522922d723c602b9b177c5ea408ff99a5cfce",
+      "score": 35,
+      "content": "{\r\n    \"manifest_version\": 2,\r\n    \"name\": \"CryptoControl Plugin\",\r\n    \"version\": \"1.1.0\",\r\n    \"author\": \"developers@cryptocontrol.io\",\r\n    \"description\": \"Addon to be used for the for the CryptoControl terminal.\",\r\n    \"icons\": {\r\n      \"16\": \"cryptocontrol.png\",\r\n      \"48\": \"cryptocontrol.png\",\r\n      \"128\": \"cryptocontrol.png\"\r\n    },\r\n    \"permissions\": [\r\n        \"webRequest\",\r\n        \"webRequestBlocking\",\r\n        \"storage\",\r\n        \"<all_urls>\"\r\n    ],\r\n    \"background\": {\r\n        \"scripts\": [\r\n            \"background.js\"\r\n        ]\r\n    },\r\n    \"content_scripts\": [\r\n      {\r\n        \"run_at\": \"document_end\",\r\n        \"matches\": [\"*://cryptocontrol.io/*\", \"*://*.cryptocontrol.io/*\", \"*://localhost/*\"],\r\n        \"js\": [\"content-script.js\"]\r\n      }\r\n    ],\r\n    \"browser_action\": {\r\n        \"default_title\": \"CryptoControl Plugin\",\r\n        \"default_icon\": {\r\n            \"48\": \"media/image-on.png\"\r\n        }\r\n    },\r\n    \"applications\": {}\r\n}\r\n"
+    },
+    {
+      "path": "build.sh",
+      "sha": null,
+      "content_sha256": "2389e8262435266c80be8e0c865a7b7ccf9e5ebdb7b3b6e277b476e510db3008",
+      "score": 35,
+      "content": "zip plugin.zip media/* *.js *.json"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:44.408321+00:00"
+}

@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:rohitg00/kubernetes-in-production-examples",
+  "repo": "rohitg00/kubernetes-in-production-examples",
+  "revision_sha": "bf6da21f069a247afc62f35ccdc41e8f0fb59966",
+  "default_branch": "main",
+  "pushed_at": "2024-07-30T16:02:37Z",
+  "repo_updated_at": "2024-08-06T22:07:05Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "rbac/in-cluster/setup.sh",
+      "sha": null,
+      "content_sha256": "eedbab3822610a748f7b8561721842a22c4be232701f5edd3565f631ac87296a",
+      "score": 193,
+      "content": "# Service Account\nkubectl create sa podcreator\n\n# Get Service Account\nkubectl get sa podcreator\n\n```\nkubectl apply -f - <<EOF\nkind: Role\napiVersion: rbac.authorization.k8s.io/v1\nmetadata:\n  name: podcreator\nrules:\n- apiGroups: [\"\"]\n  resources: [\"pods\", \"deployments\"]\n  verbs: [\"get\", \"update\", \"list\", \"create\"]\nEOF\n```\n\n```\nkubectl apply -f - <<EOF\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: write-pod-default\n  namespace: default\nsubjects:\n- kind: ServiceAccount\n  name: podcreator\n  apiGroup: \"\"\n  namespace: default\nroleRef:\n  kind: Role\n  name: writer\n  apiGroup: rbac.authorization.k8s.io\nEOF\n```\n\nCreate a Pod with the service account\n```\nkubectl apply -f - <<EOF\napiVersion: v1\nkind: Pod\nmetadata:\n  name: nginxpod\nspec:\n  containers:\n  - image: nginx:latest\n    name: nginxpod\n  serviceAccountName: podcreator\n  automountServiceAccountToken: false\nEOF\n```"
+    },
+    {
+      "path": "kubernetes-cluster-installation/kubeadm/installation.sh",
+      "sha": null,
+      "content_sha256": "c6bffbd5de2cb85b9f84131307a821bfbb80c447d331634463a9fb44affe5a3c",
+      "score": 185,
+      "content": "#!/bin/bash\nsudo apt update -y\n\n# Install transport layer\nsudo apt-get install -y apt-transport-https curl\n\n# Add Kubernetes Signing Key\ncurl -fsSL https://pkgs.k8s.io/core:/stable:/v1.29/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg\n\n# Add Software Repositories\necho 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list\n\nsudo apt update -y \n\nsudo su -\n\n# Install and configure the CRI-O container runtime\nOS=xUbuntu_22.04\nVERSION=1.22\n\necho \"deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list\necho \"deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$VERSION/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$VERSION.list\n\ncurl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$VERSION/$OS/Release.key | apt-key add -\ncurl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | apt-key add -\n\nexit\n\nsudo apt update -y\nsudo apt install cri-o cri-o-runc -y\n\nsudo systemctl daemon-reload\nsudo systemctl enable crio --now\n\n# Check to see CRI-O is installed properly\napt-cache policy cri-o\n\n# Turn off swap\nsudo swapoff -a\n\n# sysctl settings and ip tables\nsudo modprobe overlay\nsudo modprobe br_netfilter\n\nsudo tee /etc/sysctl.d/kubernetes.conf<<EOF\nnet.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nnet.ipv4.ip_forward = 1\nEOF\n\nsudo sysctl --system\n\n# Install and configure Kubeadm with the latest version of Kubernetes.\nsudo apt-get install -y kubelet kubeadm kubectl\n\n# To install a specific version of Kubernetes (not the latest), you can use the following...\n# Example: sudo apt-get install -qy kubelet=1.25.5-00 kubectl=1.25.5-00 kubeadm=1.25.5-00\n\n# You can see all Kubernetes versions available for Kubeadm like this: `apt list -a kubeadm`\n\nsudo apt-get install -qy kubelet=<version> kubectl=<version> kubeadm=<version>\n\nsudo apt-mark hold kubelet kubeadm kubectl\n"
+    },
+    {
+      "path": "virtualized-kubernetes/kubeadm/serversetup.sh",
+      "sha": null,
+      "content_sha256": "703010eab36f2c0cc24b2126cadffa52399976073a371b9bba9c59b218980993",
+      "score": 185,
+      "content": "#!/bin/bash\nsudo apt update -y\n\n# Install transport layer\nsudo apt-get install -y apt-transport-https curl\n\n# Add Kubernetes Signing Key\ncurl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg\n\n# Add Software Repositories\necho 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.29/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list\n\nsudo apt update -y \n\nsudo su -\n\n\n# Install and configure the CRI-O container runtime\nOS=xUbuntu_22.04\nVERSION=1.22\n\necho \"deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list\necho \"deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$VERSION/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$VERSION.list\n\ncurl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$VERSION/$OS/Release.key | apt-key add -\ncurl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | apt-key add -\n\nexit\n\nsudo apt update -y\nsudo apt install cri-o cri-o-runc -y\n\nsudo systemctl daemon-reload\nsudo systemctl enable crio --now\n\n# Check to see CRI-O is installed properly\napt-cache policy cri-o\n\n# Turn off swap\nsudo swapoff -a\n\n# sysctl settings and ip tables\nsudo modprobe overlay\nsudo modprobe br_netfilter\n\nsudo tee /etc/sysctl.d/kubernetes.conf<<EOF\nnet.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nnet.ipv4.ip_forward = 1\nEOF\n\nsudo sysctl --system\n\n# Install and configure Kubeadm with the latest version of Kubernetes.\nsudo apt-get install -y kubelet kubeadm kubectl\n\n# To install a specific version of Kubernetes (not the latest), you can use the following...\n# Example: sudo apt-get install -qy kubelet=1.25.5-00 kubectl=1.25.5-00 kubeadm=1.25.5-00\n\n# You can see all Kubernetes versions available for Kubeadm like this: `apt list -a kubeadm`\n\n# sudo apt-get install -qy kubelet=<version> kubectl=<version> kubeadm=<version>\n\nsudo apt-mark hold kubelet kubeadm kubectl\n"
+    },
+    {
+      "path": "AI-and-ML/deployKF/install.yaml",
+      "sha": null,
+      "content_sha256": "e3852bef37dfcf3dfe80583ebecfb51529663a444a948c07ca7b6f010a2a6514",
+      "score": 185,
+      "content": "apiVersion: argoproj.io/v1alpha1\nkind: Application\nmetadata:\n  name: deploykf-app-of-apps\n  namespace: argocd\n  labels:\n    app.kubernetes.io/name: deploykf-app-of-apps\n    app.kubernetes.io/part-of: deploykf\nspec:\n  project: \"default\"\n  source:\n    repoURL: \"https://github.com/deployKF/deployKF.git\"\n    targetRevision: \"v0.1.4\"\n    path: \".\"\n    plugin:\n      name: \"deploykf\"\n      parameters:\n        - name: \"source_version\"\n          string: \"0.1.4\"\n        - name: \"values_files\"\n          array:\n            - \"./sample-values.yaml\"\n  destination:\n    server: \"https://kubernetes.default.svc\"\n    namespace: \"argocd\""
+    },
+    {
+      "path": "virtualized-kubernetes/kubevirt/install.sh",
+      "sha": null,
+      "content_sha256": "c260a2eb138109c68fe91671051969fd5ae3e16cae6ddcfec448217de94221f3",
+      "score": 185,
+      "content": "## To Add Specific Version\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.2.1/kubevirt-operator.yaml\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/v1.2.1/kubevirt-cr.yaml\n\n\n## To Add The Latest Version\nexport VERSION=$(curl -s https://api.github.com/repos/kubevirt/kubevirt/releases | grep tag_name | grep -v -- '-rc' | sort -r | head -1 | awk -F': ' '{print $2}' | sed 's/,//' | xargs)\n\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/$VERSION/kubevirt-operator.yaml\nkubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/$VERSION/kubevirt-cr.yaml\n\n\n## To Delete\nkubectl delete -f https://github.com/kubevirt/kubevirt/releases/download/v1.2.0/kubevirt-operator.yaml\nkubectl delete -f https://github.com/kubevirt/kubevirt/releases/download/v1.2.0/kubevirt-cr.yaml\n\n\n## Delete All CRDs\nMATCH_STRING=\"kubevirt\"\nkubectl get crds -oname | grep \"$MATCH_STRING\" | xargs kubectl delete"
+    },
+    {
+      "path": "virtualized-kubernetes/talos/setup.sh",
+      "sha": null,
+      "content_sha256": "48671f5560c429379850057dd87c234667e35affcc226932766308f4a9134005",
+      "score": 185,
+      "content": "1. download the Talos ISO\n\n```\ncurl https://github.com/siderolabs/talos/releases/download/v1.7.5/metal-amd64.iso -L -o talos.iso\n```\n\n2. Deploy the ISO as a VM\n\n3. Pull down the Kubernetes config.\n\n```\ntalosctl gen config talos-proxmox-cluster https://IP_OF_CONTROL_PLANE_VM:6443 --output-dir _out\n```\n\n4. Create the control plane from the output of the `gen config` command.\n```\nexport CONTROL_PLANE_IP=\ntalosctl apply-config --insecure --nodes $CONTROL_PLANE_IP --file _out/controlplane.yaml\n```\n\n5. Create the worker node from the output of the `gen config` command.\n```\nexport WORKER_NODE_IP=\ntalosctl apply-config --insecure --nodes $WORKER_NODE_IP --file _out/worker.yaml\n```\n\n6. Set the API Server via a Config for Kubeconfig\n```\nexport TALOSCONFIG=\"_out/talosconfig\"\n\ntalosctl config endpoint $CONTROL_PLANE_IP\n\ntalosctl config node $CONTROL_PLANE_IP\n\n```\n\n7. Bootstrap Etcd\n```\ntalosctl bootstrap\n```\n\n8. Get the Kubeconfig\n```\ntalosctl kubeconfig .\n```\n\n9. Test to confirm that the Kubeconfig is valid.\n```\nkubectl get nodes --kubeconfig=kubeconfig\n```\n\n10. You can see the Pod output to confirm that the cluster is running as expected.\n```\nkubectl get pods -n kube-system --kubeconfig=kubeconfig\n```\n\nOutput should look similiar to the below:\n```\ncoredns-64b67fc8fd-crkx6                1/1     Running   0              7m39s\ncoredns-64b67fc8fd-nfzh7                1/1     Running   0              7m39s\nkube-apiserver-talos-up7-feu            1/1     Running   0              7m3s\nkube-controller-manager-talos-up7-feu   1/1     Running   1 (8m3s ago)   6m47s\nkube-flannel-g5kwz                      1/1     Running   0              7m38s\nkube-flannel-jhtwm                      1/1     Running   0              7m37s\nkube-proxy-brjg9                        1/1     Running   0              7m37s\nkube-proxy-hrcb9                        1/1     Running   0              7m38s\nkube-scheduler-talos-up7-feu            1/1     Running   1 (8m3s ago)   6m46s\n```\n"
+    },
+    {
+      "path": "kubernetes-cluster-installation/kubeadm/cpsetup.sh",
+      "sha": null,
+      "content_sha256": "3dda076b463e148e542191ea7ada2a703de8b47c0e1c9d08116fc34ff0a599db",
+      "score": 185,
+      "content": "sudo su -\n\nuser=k8stest\npass='Password12!@'\nsudo useradd -m -d /home/$user $user\nsudo echo \"$user:$pass\" | chpasswd\nusermod -aG sudo $user\n\nexit\n\n\n#######\nDepending on where you are deploying, you could either have just a public subnet, or a public and private subnet\nIf you have just a public subnet, use the same value for the ip_address and publicIP, along with the CIDR range\nIf you have a private and public subnet, use the public IP for the publicIP, the private IP for the ip_address, and the private IP range for the CIDR\n#######\nip_address=172.17.0.4\ncidr=172.17.0.0/16\npublicIP=40.117.168.164\n\nsudo kubeadm init --control-plane-endpoint $publicIP --apiserver-advertise-address $ip_address --pod-network-cidr=$cidr --upload-certs\n\n#######\n\nIf you are deploying in the cloud, you may find yourself in a situation where the init fails because the Kubelet connect communicate with the API server\n\nThis typically happens in public clouds due to network restrictions\n\nIf it happens to you, open up the following ports: https://kubernetes.io/docs/reference/ports-and-protocols/\n\n#######\n\n# To start using your Kubernetes cluster, you need to configure your home user settings\nsu -l k8stest\nmkdir -p $HOME/.kube\nsudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config\nsudo chown $(id -u):$(id -g) $HOME/.kube/config\n\n# Networking: Weave\n# If you don't want to use Weave, you can see the network frameworks listed here: https://kubernetes.io/docs/concepts/cluster-administration/addons/\nkubectl apply -f https://github.com/weaveworks/weave/releases/download/v2.8.1/weave-daemonset-k8s.yaml"
+    },
+    {
+      "path": "virtualized-kubernetes/talos/network_configs/firewall/defaultAction.yaml",
+      "sha": null,
+      "content_sha256": "3b8016b8e5ccb73034b8fd6f247b02cb5a7b1041a1f8e075dfd3ca9b0da6369e",
+      "score": 181,
+      "content": "apiVersion: v1alpha1\nkind: NetworkDefaultActionConfig\ningress: accept"
+    },
+    {
+      "path": "storage/NFS/install.sh",
+      "sha": null,
+      "content_sha256": "d697c1f0025eb0f9943aa8405f8ee7714a78be26f52dc257cbe59bd9558802b6",
+      "score": 173,
+      "content": "helm repo add csi-driver-nfs https://raw.githubusercontent.com/kubernetes-csi/csi-driver-nfs/master/charts\nhelm install csi-driver-nfs csi-driver-nfs/csi-driver-nfs --namespace kube-system"
+    },
+    {
+      "path": "security/SecurityContext/nginx-test/wontwork.yaml",
+      "sha": null,
+      "content_sha256": "64fae5640db88755ba21db74172749d5d43874511501c20694ada68f7458af44",
+      "score": 169,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: nginx-deployment\nspec:\n  selector:\n    matchLabels:\n      app: nginxdeployment\n  replicas: 2\n  template:\n    metadata:\n      namespace: webapp\n      labels:\n        app: nginxdeployment\n    spec:\n      containers:\n      - name: nginxdeployment\n        image: nginx:latest\n        securityContext:\n          allowPrivilegeEscalation: false\n          readOnlyRootFilesystem: true\n          privileged: false\n        resources:\n          requests:\n            memory: \"64Mi\"\n            cpu: \"250m\"\n          limits:\n            memory: \"128Mi\"\n        ports:\n        - containerPort: 80"
+    },
+    {
+      "path": "testYAML/deploymentandsvc.yaml",
+      "sha": null,
+      "content_sha256": "9cfbee15222aa52eb7ec66c61cafa7d0a544f2da495187b9f746fb1be1a2c470",
+      "score": 165,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: nginx-deployment\nspec:\n  selector:\n    matchLabels:\n      app: nginxdeployment\n  replicas: 2\n  template:\n    metadata:\n      labels:\n        app: nginxdeployment\n    spec:\n      containers:\n      - name: nginxdeployment\n        image: nginx:latest\n        ports:\n        - containerPort: 80\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: nginxservice\nspec:\n  selector:\n    app: nginxdeployment\n  ports:\n    - protocol: TCP\n      port: 80\n  type: NodePort\n"
+    },
+    {
+      "path": "monitoring-and-observability/EFK-Stack/elasticsearch/svc.yaml",
+      "sha": null,
+      "content_sha256": "604237acd4be86e6625b5288b736f47d5e0468ffbc4fcba2b0ca7f95b7dcab86",
+      "score": 164,
+      "content": "kind: Service\napiVersion: v1\nmetadata:\n  name: elasticsearch\n  labels:\n    app: elasticsearch\nspec:\n  selector:\n    app: elasticsearch\n  clusterIP: None\n  ports:\n    - port: 9200\n      name: rest\n    - port: 9300\n      name: inter-node"
+    },
+    {
+      "path": "monitoring-and-observability/EFK-Stack/elasticsearch/statefulset.yaml",
+      "sha": null,
+      "content_sha256": "52e9bdd592e5b118d42e6c54829a7c5469f704fe306290c51538f59b53dede36",
+      "score": 164,
+      "content": "apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: es-cluster\nspec:\n  serviceName: elasticsearch\n  replicas: 3\n  selector:\n    matchLabels:\n      app: elasticsearch\n  template:\n    metadata:\n      labels:\n        app: elasticsearch\n    spec:\n      containers:\n      - name: elasticsearch\n        image: docker.elastic.co/elasticsearch/elasticsearch:7.5.0\n        resources:\n            limits:\n              cpu: 1000m\n            requests:\n              cpu: 100m\n        ports:\n        - containerPort: 9200\n          name: rest\n          protocol: TCP\n        - containerPort: 9300\n          name: inter-node\n          protocol: TCP\n        volumeMounts:\n        - name: data\n          mountPath: /usr/share/elasticsearch/data\n        env:\n          - name: cluster.name\n            value: k8s-logs\n          - name: node.name\n            valueFrom:\n              fieldRef:\n                fieldPath: metadata.name\n          - name: discovery.seed_hosts\n            value: \"es-cluster-0.elasticsearch,es-cluster-1.elasticsearch,es-cluster-2.elasticsearch\"\n          - name: cluster.initial_master_nodes\n            value: \"es-cluster-0,es-cluster-1,es-cluster-2\"\n          - name: ES_JAVA_OPTS\n            value: \"-Xms512m -Xmx512m\"\n      initContainers:\n      - name: fix-permissions\n        image: busybox\n        command: [\"sh\", \"-c\", \"chown -R 1000:1000 /usr/share/elasticsearch/data\"]\n        securityContext:\n          privileged: true\n        volumeMounts:\n        - name: data\n          mountPath: /usr/share/elasticsearch/data\n      - name: increase-vm-max-map\n        image: busybox\n        command: [\"sysctl\", \"-w\", \"vm.max_map_count=262144\"]\n        securityContext:\n          privileged: true\n      - name: increase-fd-ulimit\n        image: busybox\n        command: [\"sh\", \"-c\", \"ulimit -n 65536\"]\n        securityContext:\n          privileged: true\n  volumeClaimTemplates:\n  - metadata:\n      name: data\n      labels:\n        app: elasticsearch\n    spec:\n      accessModes: [ \"ReadWriteOnce\" ]\n      # storageClassName: \"\"\n      resources:\n        requests:\n          storage: 3Gi"
+    },
+    {
+      "path": "database/GKE/database-connect-kubernetes/storage.yaml",
+      "sha": null,
+      "content_sha256": "a4f455db0c79cc67d629684172ce8bf8f39df62bb9b247a4b485beae2d2a4610",
+      "score": 161,
+      "content": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: mysql-pv-claim\nspec:\n  accessModes:\n    - ReadWriteOnce\n  resources:\n    requests:\n      storage: 30Gi\n  storageClassName: standard-rwo\n"
+    },
+    {
+      "path": "database/GKE/database-connect-kubernetes/statefulset.yaml",
+      "sha": null,
+      "content_sha256": "d67b97ebee0a978b5047ac5d92b3c0f61e8b0e7e209196b3b9c44ab7a231e4de",
+      "score": 161,
+      "content": "apiVersion: v1\nkind: Service\nmetadata:\n  name: mysql\nspec:\n  ports:\n  - port: 3306\n  selector:\n    app: mysql\n  clusterIP: None\n---\napiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: mysql\nspec:\n  selector:\n    matchLabels:\n      app: mysql\n  serviceName: mysql\n  template:\n    metadata:\n      labels:\n        app: mysql\n    spec:\n      containers:\n      - image: mysql:latest\n        name: mysql\n        env:\n          # Use secret in real usage\n        - name: MYSQL_ROOT_PASSWORD\n          value: Password1\n        - name: MYSQL_ROOT_USER\n          value: root\n        - name: MYSQL_DATABASE\n          value: k8stest\n        - name: MYSQL_HOST\n          value: gold-mode-297211:northamerica-northeast1:test\n        ports:\n        - containerPort: 3306\n          name: mysql\n        volumeMounts:\n        - name: mysql-persistent-storage\n          mountPath: /var/lib/mysql\n      volumes:\n      - name: mysql-persistent-storage\n        persistentVolumeClaim:\n          claimName: mysql-pv-claim"
+    },
+    {
+      "path": "monitoring-and-observability/EFK-Stack/kibana/deployment.yaml",
+      "sha": null,
+      "content_sha256": "7da009602a3802598936e93d45862c7fa25679dfd50609a5a5b27b24697f590e",
+      "score": 161,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: kibana\n  labels:\n    app: kibana\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: kibana\n  template:\n    metadata:\n      labels:\n        app: kibana\n    spec:\n      containers:\n      - name: kibana\n        image: docker.elastic.co/kibana/kibana:7.5.0\n        resources:\n          limits:\n            cpu: 1000m\n          requests:\n            cpu: 100m\n        env:\n          - name: ELASTICSEARCH_URL\n            value: http://elasticsearch:9200\n        ports:\n        - containerPort: 5601"
+    },
+    {
+      "path": "storage/azure/config/deployment.yaml",
+      "sha": null,
+      "content_sha256": "9bcd9c61f1e8c6454597b819def0ac4adea2bc1681bdad5f9f46f10bb823b6ff",
+      "score": 161,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: nginxdeployment\nspec:\n  selector:\n    matchLabels:\n      app: nginxdeployment\n  replicas: 2\n  template:\n    metadata:\n      labels:\n        app: nginxdeployment\n    spec:\n      containers:\n      - image: nginx:latest\n        name: nginx\n        volumeMounts:\n          - mountPath: /mnt/azure\n            name: azure\n      volumes:\n      - name: azure\n        persistentVolumeClaim:\n          claimName: azurefile"
+    },
+    {
+      "path": "security/kubescape/install.md",
+      "sha": null,
+      "content_sha256": "1a25a987a09e392983c3b39be1504df56161b9744c7b457eb2c4c430e5db8f85",
+      "score": 158,
+      "content": "## Implementing cluster scanning with Kubescape\n\n1. Sign up for the Kubescape Forever Free editor: https://cloud.armosec.io/account/sign-up\n\n2. Install the Kubescape CLI: https://github.com/kubescape/kubescape\n\n3. Log into the Kubescape UI, and under the dashboard, you’ll see an option to add cluster scans. Click the Add cluster scans button.\n\n4. Next, you have two options to choose from to deploy cluster scanning:\n\n- In Cluster Deployment, which is a Helm Chart that you deploy inside of your cluster.\n- With the Kubescape CLI, which you can use locally or even in an automated fashion with a CICD pipeline.\n\nUse the Helm Option. You can copy the code from the Kubescape UI as it'll automatically have your account GUID. \n\n5. Now that the cluster exists, click on CONFIGURATION SCANNING in the left pane and then click on AllControls.\n\n\n7. Click the \"scan\" button on the top right and run a scan of ALL. Ensure that cluster scanning is enabled on the bottom left.\n\n\nYou'll see a ton of results on the bottom. You can go through each to get an idea of what they look like."
+    },
+    {
+      "path": "clusterAPI/installation.md",
+      "sha": null,
+      "content_sha256": "b3e1298d56b821274b708927e2756217f5bfbae26e55466e47bddf55a61b60c3",
+      "score": 155,
+      "content": "download clusterctl\n```\ncurl -L https://github.com/kubernetes-sigs/cluster-api/releases/download/v1.7.2/clusterctl-linux-amd64 -o clusterctl\n```"
+    },
+    {
+      "path": "storage/azure/database/readme.md",
+      "sha": null,
+      "content_sha256": "fd66d74480cfd0d9f3697c89313cbc146a51fc79d6996f8dec63b941654a1c42",
+      "score": 154,
+      "content": "1. Create an Azure MySQL Database: https://portal.azure.com/#create/Microsoft.SQLDatabase\n- Ensure to name the MySQL DB **k8stest**\n- Use the username: root1\n- Use the password: Password1\n- Ensure to set up a public endpoint under the **Connectivity method** section of the **Networking** section\nEnsure to enable the **Add current client IP address**  under the **Connectivity method** section of the **Networking** section\n\n### Local DB\n1. Create a local Volume\n```\ndocker volume create testvolume\n```\n\n2. Test running a local database in Docker\n```\ndocker run -tid -v testvolume --name mysql -e MYSQL_ROOT_PASSWORD=Password12 mysql:latest\n```\n\n3. Look at the connection\n```\ndocker container inspect mysql\n```\n\n### Azure DB\n```\ndocker run --name mysqlcontainer -p 3306:3306 -e MYSQL_ROOT_USER=root1 -e MYSQL_ROOT_PASSWORD=Password1 -e MYSQL_DATABASE=k8stest -e MYSQL_HOST=k8stesteveryday.database.windows.net mysql:latest\n```\n\n### Docker Compose Settings\n```\nversion: '3'\n\nservices:\n  database:\n    image: mysql:latest\n    volumes:\n      - mysql_data:/var/lib/mysql\n    restart: always\n    container_name: mysql_container\n    environment:\n      - MYSQL_ROOT_PASSWORD=Password1\n      - MYSQL_DATABASE=k8stest\n      - MYSQL_ROOT_USER=root1\n      - MYSQL_HOST=k8stesteveryday.database.windows.net mysql:latest\n```"
+    },
+    {
+      "path": "storage/aws/databases/readme.md",
+      "sha": null,
+      "content_sha256": "9b2325896ad2aa1b7b504a713c08c33fbc26cafe09afe1423864313b7f46de3b",
+      "score": 154,
+      "content": "1. Create an RDS database. ONLY go through step 2 and ensure you use the FREE TIER.\nhttps://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_GettingStarted.CreatingConnecting.MySQL.html#CHAP_GettingStarted.Creating.MySQL\n\n```\ndocker volume create testvolume\n```\n\n```\ndocker run -tid -v testvolume --name mysql -e MYSQL_ROOT_PASSWORD=Password12 mysql:latest\n```\n\n```\ndocker container inspect mysql\n```\n\n```\ndocker run --name mysqlcontainer -p 3306:3306 -e MYSQL_ROOT_USER=root -e MYSQL_ROOT_PASSWORD=Password1 -e MYSQL_DATABASE=awsfest0101 -e MYSQL_HOST=awsfest0101.csx4hqzfwtj2.us-east-1.rds.amazonaws.com mysql:latest\n```\n\n```\nversion: '3'\n\nservices:\n  database:\n    image: mysql:latest\n    volumes:\n      - mysql_data:/var/lib/mysql\n    restart: always\n    container_name: mysql_container\n    environment:\n      - MYSQL_ROOT_PASSWORD=Password1\n      - MYSQL_DATABASE=awsfest1010\n      - MYSQL_ROOT_USER=root\n      - MYSQL_HOST=awsfest0101.csx4hqzfwtj2.us-east-1.rds.amazonaws.com\n```"
+    },
+    {
+      "path": "clusterAPI/gcp/setup.md",
+      "sha": null,
+      "content_sha256": "03a55fee3c7ce3cb7c1618c83645ad73c049196e830a8323ee3de80cb90b26b6",
+      "score": 153,
+      "content": "# Create the base64 encoded credentials by catting your credentials json.\n# This command uses your environment variables and encodes\n# them in a value to be stored in a Kubernetes Secret.\nexport GCP_B64ENCODED_CREDENTIALS=$( cat /path/to/gcp-credentials.json | base64 | tr -d '\\n' )\n\n# Finally, initialize the management cluster\nclusterctl init --infrastructure gcp\n\n\n```\n# Name of the GCP datacenter location. Change this value to your desired location\nexport GCP_REGION=\"<GCP_REGION>\"\nexport GCP_PROJECT=\"<GCP_PROJECT>\"\n# Make sure to use same Kubernetes version here as building the GCE image\nexport KUBERNETES_VERSION=1.23.3\n# This is the image you built. See https://github.com/kubernetes-sigs/image-builder\nexport IMAGE_ID=projects/$GCP_PROJECT/global/images/<built image>\nexport GCP_CONTROL_PLANE_MACHINE_TYPE=n1-standard-2\nexport GCP_NODE_MACHINE_TYPE=n1-standard-2\nexport GCP_NETWORK_NAME=<GCP_NETWORK_NAME or default>\nexport CLUSTER_NAME=\"<CLUSTER_NAME>\"\n```\n\n```\nclusterctl generate cluster capi-quickstart --flavor development \\\n  --kubernetes-version v1.30.0 \\\n  --control-plane-machine-count=3 \\\n  --worker-machine-count=3 \\\n  > capi-quickstart.yaml\n```"
+    },
+    {
+      "path": "gitops/argocdinstallation.md",
+      "sha": null,
+      "content_sha256": "0790c0817bb6a817d09a4c7cc0bc4f3e961dfe7ed433363da1d992c0ab3b221f",
+      "score": 152,
+      "content": "## ArgoCD\n1. First, add the Helm repo for ArgoCD.\n\n```\nhelm repo add argo https://argoproj.github.io/argo-helm\n```\n\n2. Next, deploy ArgoCD with Helm.\n\n**if you aren't running a cluster with 3 or more Worker Nodes, run the following Helm Chart**\n\n```\nhelm install argocd -n argocd argo/argo-cd --create-namespace\n```\n\nYou'll need to run a `port-forward` command on the ArgoCD service if you aren't running in HA.\n\n**if you are running a cluster with 3 or more Worker Nodes, run the following Helm Chart**\n\n```\nhelm install argocd -n argocd argo/argo-cd \\\n--set redis-ha.enabled=true \\\n--set controller.replicas=1 \\\n--set server.autoscaling.enabled=true \\\n--set server.autoscaling.minReplicas=2 \\\n--set repoServer.autoscaling.enabled=true \\\n--set repoServer.autoscaling.minReplicas=2 \\\n--set applicationSet.replicaCount=2 \\\n--set server.service.type=LoadBalancer \\\n--create-namespace\n```\n\nGet the initial ArgoCD UI admin password\n```\nkubectl get secret -n argocd argocd-initial-admin-secret -o jsonpath=\"{.data.password}\" | base64 -d\n```\n\n\n## Log Into Argo\n1. Log into the server via the CLI.\n`argocd login localipORloadbalancer:argocd_port_here`\n\n## Update Password\n1. In the Argo CD UI, go to User Info --> Update Password\n\n2. Change the password from the initial admin password to a password of your choosing"
+    },
+    {
+      "path": "backup/volumesnapshot/pvctest.yaml",
+      "sha": null,
+      "content_sha256": "18a11a29cc8a69d36c479503de4ee80cacfb46abb74018df28491960d73e25ad",
+      "score": 151,
+      "content": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: pvc-test\nspec:\n  accessModes:\n    - ReadWriteMany\n  storageClassName: azurefile-csi\n  resources:\n    requests:\n      storage: 1Gi"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:06.814056+00:00"
+}

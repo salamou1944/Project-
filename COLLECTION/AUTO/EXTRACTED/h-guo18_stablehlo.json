@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:h-guo18/stablehlo",
+  "repo": "h-guo18/stablehlo",
+  "revision_sha": "e67fc40611bfa20ce5b7809433258743b287f8e7",
+  "default_branch": "main",
+  "pushed_at": "2024-04-24T03:00:01Z",
+  "repo_updated_at": "2024-04-24T02:56:17Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/buildAndTestCMake.yml",
+      "sha": null,
+      "content_sha256": "b4fa01b857b0a7280b2c276fd18e493caa62f2960dbde562f774b92e712c5d46",
+      "score": 186,
+      "content": "# Copyright 2023 The StableHLO Authors.\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      https://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nname: CMake Build\n\non:\n  pull_request:\n    branches: [ main ]\n  push:\n    branches: [ main ]\n  schedule:\n    # Run once every 6hr building against llvm-project@HEAD\n    - cron:  '0 */6 * * *'\n  workflow_dispatch:\n\n# Ensure that only a single job or workflow using the same\n# concurrency group will run at a time. This would cancel\n# any in-progress jobs in the same github workflow and github\n# ref (e.g. refs/heads/main or refs/pull/<pr_number>/merge).\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n\njobs:\n  cmake-build:\n    # Only run scheduled CI on main repo\n    if: (github.repository == 'openxla/stablehlo' || github.event_name != 'schedule')\n    name: \"cmake-build ${{ github.event_name == 'schedule' && '(llvm-project@HEAD)' || ''}}\"\n    env:\n      LLVM_PROJECT_DIR: \"llvm-project\"\n      LLVM_BUILD_DIR: \"llvm-build\"\n      STABLEHLO_BUILD_DIR: \"stablehlo-build\"\n      STABLEHLO_PYTHON_BUILD_DIR: \"stablehlo-python-build\"\n    strategy:\n      fail-fast: false\n    runs-on: ${{ github.repository == 'openxla/stablehlo' && 'ubuntu-22.04-64core' ||  'ubuntu-22.04'  }}\n\n    steps:\n    - name: Checkout StableHLO\n      uses: actions/checkout@v4\n\n    - name: Get LLVM Version\n      id: llvm-version\n      shell: bash\n      run: |\n        USE_LLVM_HEAD=${{ github.event_name == 'schedule' }}\n        if [[ $USE_LLVM_HEAD = true ]]; then\n          echo \"version=main\" >> $GITHUB_OUTPUT\n        else\n          echo \"version=$(cat ${{ github.workspace }}/build_tools/llvm_version.txt)\" >> $GITHUB_OUTPUT\n        fi;\n\n    - name: Setup workspace\n      uses: ./.github/actions/setup-build\n      with:\n        llvm-version: ${{ steps.llvm-version.outputs.version }}\n\n    - name: Configure and Build LLVM\n      shell: bash\n      run: |\n        ./build_tools/github_actions/ci_build_cmake_llvm.sh \"$LLVM_PROJECT_DIR\" \"$LLVM_BUILD_DIR\"\n      env:\n          CMAKE_BUILD_TYPE: Release\n          MLIR_ENABLE_BINDINGS_PYTHON: ON\n\n    - name: Fix kernel mmap rnd bits\n      # Asan in llvm 14 provided in ubuntu 22.04 is incompatible with\n      # high-entropy ASLR in much newer kernels that GitHub runners are\n      # using leading to random crashes: https://reviews.llvm.org/D148280\n      # TODO: remove this once https://github.com/actions/runner-images/issues/9491 is fixed\n      run: sudo sysctl vm.mmap_rnd_bits=28\n\n    - name: Build and Test StableHLO (with AddressSanitizer)\n      shell: bash\n      run: |\n        ./build_tools/github_actions/ci_build_cmake.sh \"$LLVM_BUILD_DIR\" \"$STABLEHLO_BUILD_DIR\"\n      env:\n          CMAKE_BUILD_TYPE: Release\n          STABLEHLO_ENABLE_BINDINGS_PYTHON: OFF\n          STABLEHLO_ENABLE_SANITIZER: address\n\n    - name: Build and Test StableHLO (with Python bindings)\n      shell: bash\n      run: |\n        ./build_tools/github_actions/ci_build_cmake.sh \"$LLVM_BUILD_DIR\" \"$STABLEHLO_BUILD_DIR\"\n      env:\n          CMAKE_BUILD_TYPE: Release\n          STABLEHLO_ENABLE_BINDINGS_PYTHON: ON\n"
+    },
+    {
+      "path": ".github/workflows/buildAndTestBazel.yml",
+      "sha": null,
+      "content_sha256": "fad87d9bc606c63fbe0583ffa1578f0cef582c192ae31e8e9344496b3c495687",
+      "score": 186,
+      "content": "# Copyright 2023 The StableHLO Authors.\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      https://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nname: Bazel Build\n\non:\n  pull_request:\n    branches: [ main ]\n  push:\n    branches: [ main ]\n  schedule:\n    # Run once a day\n    - cron:  '0 12 * * *'\n  workflow_dispatch:\n\n# Ensure that only a single job or workflow using the same\n# concurrency group will run at a time. This would cancel\n# any in-progress jobs in the same github workflow and github\n# ref (e.g. refs/heads/main or refs/pull/<pr_number>/merge).\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n\njobs:\n  bazel-build:\n    strategy:\n      fail-fast: false\n    runs-on: ${{ github.repository == 'openxla/stablehlo' && 'ubuntu-22.04-64core' ||  'ubuntu-22.04'  }}\n\n    steps:\n    - name: Checkout StableHLO\n      uses: actions/checkout@v4\n\n    - name: Validate LLVM Commit\n      run: |\n        ./build_tools/github_actions/lint_llvm_commit.sh .\n\n    - name: Get LLVM Version\n      id: llvm-version\n      shell: bash\n      run: |\n        echo \"version=$(cat ${{ github.workspace }}/build_tools/llvm_version.txt)\" >> $GITHUB_OUTPUT\n\n    - name: Setup Bazelisk\n      uses: bazelbuild/setup-bazelisk@v2\n\n    - name: Mount Bazel Cache\n      uses: actions/cache@v3\n      with:\n        path: \"~/.cache/bazel\"\n        key: ${{ runner.os }}-stablehlo_bazelbuild-${{ hashFiles('.bazelversion', '.bazelrc', 'WORKSPACE', 'WORKSPACE.bazel', 'MODULE.bazel') }}\n        restore-keys: |\n          ${{ runner.os }}-stablehlo_bazelbuild-\n\n    - name: Build StableHLO\n      shell: bash\n      run: |\n        ./build_tools/github_actions/ci_build_bazel.sh\n"
+    },
+    {
+      "path": "build_tools/github_actions/ci_build_cmake.sh",
+      "sha": null,
+      "content_sha256": "96ae709da0b56daa94521d91237eaa874ab9293a3b4b0c192fbbced6d67d9da4",
+      "score": 185,
+      "content": "#!/bin/bash\n# Copyright 2020 The TensorFlow Authors. All Rights Reserved.\n# Copyright 2022 The StableHLO Authors.\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n# This file is similar to build_mlir.sh, but passes different flags for\n# caching in GitHub Actions.\n\n# This file gets called on build directory where resources are placed\n# during `ci_configure`, and builds stablehlo in the directory specified\n# by the second argument.\n\nset -o errexit\nset -o nounset\nset -o pipefail\n\nif [[ $# -ne 2 ]] ; then\n  echo \"Usage: $0 <llvm_build_dir> <stablehlo_build_dir>\"\n  exit 1\nfi\n\nLLVM_BUILD_DIR=\"$1\"\nSTABLEHLO_BUILD_DIR=\"$2\"\nCMAKE_BUILD_TYPE=\"${CMAKE_BUILD_TYPE:-RelWithDebInfo}\"\n\n# Turn on building Python bindings\nSTABLEHLO_ENABLE_BINDINGS_PYTHON=\"${STABLEHLO_ENABLE_BINDINGS_PYTHON:-OFF}\"\n# Turn on building Sanitizers\n# Note: This is not congruent with building python bindings\nSTABLEHLO_ENABLE_SANITIZER=\"${STABLEHLO_ENABLE_SANITIZER:-OFF}\"\n\n# Configure StableHLO\n# CMAKE_PLATFORM_NO_VERSIONED_SONAME Disables generation of \"version soname\"\n#                         (i.e. libFoo.so.<version>), which causes pure\n#                         duplication of various shlibs for Python wheels.\ncmake -GNinja \\\n  -B\"$STABLEHLO_BUILD_DIR\" \\\n  -DLLVM_ENABLE_LLD=ON \\\n  -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \\\n  -DLLVM_ENABLE_ASSERTIONS=ON \\\n  -DMLIR_DIR=\"$LLVM_BUILD_DIR/lib/cmake/mlir\" \\\n  -DCMAKE_CXX_COMPILER=clang++ \\\n  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \\\n  -DCMAKE_C_COMPILER=clang \\\n  -DCMAKE_C_COMPILER_LAUNCHER=ccache \\\n  -DSTABLEHLO_ENABLE_STRICT_BUILD=ON \\\n  -DCMAKE_PLATFORM_NO_VERSIONED_SONAME:BOOL=ON \\\n  -DSTABLEHLO_ENABLE_SANITIZER=\"$STABLEHLO_ENABLE_SANITIZER\" \\\n  -DSTABLEHLO_ENABLE_BINDINGS_PYTHON=\"$STABLEHLO_ENABLE_BINDINGS_PYTHON\"\n\n# Build and Test StableHLO\ncd \"$STABLEHLO_BUILD_DIR\" || exit\nninja check-stablehlo-ci\n"
+    },
+    {
+      "path": "build_tools/github_actions/ci_build_cmake_llvm.sh",
+      "sha": null,
+      "content_sha256": "d1153711328a13906e7d31f99e9659a101099a478dabd1b6ede3b13a40ab8528",
+      "score": 185,
+      "content": "#!/bin/bash\n# Copyright 2020 The TensorFlow Authors. All Rights Reserved.\n# Copyright 2022 The StableHLO Authors.\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n# This file is similar to build_mlir.sh, but passes different flags for\n# caching in GitHub Actions to improve build speeds.\n\nset -o errexit\nset -o nounset\nset -o pipefail\n\nif [[ $# -ne 2 ]] ; then\n  echo \"Usage: $0 <path/to/llvm> <build_dir>\"\n  exit 1\nfi\n\n# LLVM source\nLLVM_SRC_DIR=\"$1\"\nLLVM_BUILD_DIR=\"$2\"\n\nCMAKE_BUILD_TYPE=\"${CMAKE_BUILD_TYPE:-RelWithDebInfo}\"\n# Turn on building Python bindings\nMLIR_ENABLE_BINDINGS_PYTHON=\"${MLIR_ENABLE_BINDINGS_PYTHON:-OFF}\"\n\n# Configure LLVM\n# LLVM_VERSION_SUFFIX to get rid of that annoying af git on the end of .17git\n# CMAKE_PLATFORM_NO_VERSIONED_SONAME Disables generation of \"version soname\"\n#                         (i.e. libFoo.so.<version>), which causes pure\n#                         duplication of various shlibs for Python wheels.\ncmake -GNinja \\\n  \"-H$LLVM_SRC_DIR/llvm\" \\\n  \"-B$LLVM_BUILD_DIR\" \\\n  -DLLVM_INSTALL_UTILS=ON \\\n  -DLLVM_ENABLE_LLD=ON \\\n  -DLLVM_ENABLE_PROJECTS=mlir \\\n  -DLLVM_TARGETS_TO_BUILD=host \\\n  -DLLVM_INCLUDE_TOOLS=ON \\\n  -DMLIR_ENABLE_BINDINGS_PYTHON=\"${MLIR_ENABLE_BINDINGS_PYTHON}\" \\\n  -DLLVM_ENABLE_BINDINGS=OFF \\\n  -DLLVM_BUILD_TOOLS=OFF \\\n  -DLLVM_INCLUDE_TESTS=OFF \\\n  -DCMAKE_BUILD_TYPE=\"$CMAKE_BUILD_TYPE\" \\\n  -DLLVM_ENABLE_ASSERTIONS=On \\\n  -DLLVM_VERSION_SUFFIX=\"\" \\\n  -DCMAKE_PLATFORM_NO_VERSIONED_SONAME:BOOL=ON \\\n  -DCMAKE_CXX_COMPILER=clang++ \\\n  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \\\n  -DCMAKE_C_COMPILER=clang \\\n  -DCMAKE_C_COMPILER_LAUNCHER=ccache\n\n# Build LLVM/MLIR\ncmake --build \"$LLVM_BUILD_DIR\" --target all\n"
+    },
+    {
+      "path": "build_tools/github_actions/ci_build_cmake_code_coverage.sh",
+      "sha": null,
+      "content_sha256": "a73cb2b019448bd4eed841c4b408690d3f9c6bf84be9ea4df768d3779968054b",
+      "score": 185,
+      "content": "#!/bin/bash\n# Copyright 2023 The StableHLO Authors.\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nset -o errexit\nset -o nounset\nset -o pipefail\n\nprint_usage() {\n  echo \"Usage:\"\n  echo \"$0 [-g][-o output_dir] <llvm_build_dir> <stablehlo_build_dir>\"\n  echo \"    -g               Generate HTML report (default false)\"\n  echo \"    -o <output_dir>  Set the output to generate report (default /tmp/ccov)\"\n}\n\nOUTPUT_DIR=\"/tmp/ccov\"\nGENERATE_HTML=false\nwhile getopts 'go:' flag; do\n  case \"${flag}\" in\n    g) GENERATE_HTML=true ;;\n    o) OUTPUT_DIR=\"$OPTARG\" ;;\n    *) print_usage\n       exit 1 ;;\n  esac\ndone\nshift $(( OPTIND - 1 ))\n\nif [[ $# -ne 2 ]] ; then\n  print_usage\n  exit 1\nfi\n\nLLVM_BUILD_DIR=\"$1\"\nSTABLEHLO_BUILD_DIR=\"$2\"\n\n# Check for lcov\nif ! command -v lcov &> /dev/null\nthen\n    echo \"lcov could not be found\"\n    echo \"$ sudo apt install lcov\"\n    exit\nfi\n\n# Configure StableHLO\ncmake -GNinja \\\n  -B\"$STABLEHLO_BUILD_DIR\" \\\n  -DLLVM_ENABLE_LLD=ON \\\n  -DCMAKE_BUILD_TYPE=Release \\\n  -DLLVM_ENABLE_ASSERTIONS=On \\\n  -DMLIR_DIR=\"$LLVM_BUILD_DIR/lib/cmake/mlir\" \\\n  -DCMAKE_CXX_COMPILER=clang++ \\\n  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \\\n  -DCMAKE_CXX_FLAGS=\"${CMAKE_CXX_FLAGS} -fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping\" \\\n  -DCMAKE_C_COMPILER=clang \\\n  -DCMAKE_C_COMPILER_LAUNCHER=ccache \\\n  -DCMAKE_C_FLAGS=\"${CMAKE_C_FLAGS} -fprofile-instr-generate -fprofile-arcs -ftest-coverage -fcoverage-mapping\"\n\n# Build and Check StableHLO\n(cd \"$STABLEHLO_BUILD_DIR\" && ninja check-stablehlo-ci)\n\nBUILD_TOOLS_DIR=\"$(dirname \"$(readlink -f \"$0\")\")\"\n\nREPORT_DATE=\"$(date +'%Y_%m_%d_%H-%M-%S')\"\nREPORT_DIR=\"$OUTPUT_DIR/ccov_$REPORT_DATE\"\nLCOV_DATA=\"$REPORT_DIR/cov.info\"\n\nmkdir -p \"$REPORT_DIR\"\n\nlcov --directory \"$STABLEHLO_BUILD_DIR\"  \\\n     --base-directory \"stablehlo\" \\\n     --gcov-tool \"$BUILD_TOOLS_DIR/llvm_gcov.sh\" \\\n     --capture -o \"$LCOV_DATA\" \\\n     --no-external \\\n     --exclude \"*.inc\" \\\n     --exclude \"llvm-project/*\" \\\n     --quiet\n\n# Capture code coverage output\nif [[ $GENERATE_HTML == true ]]; then\n  exec 5>&1\n  genhtml \"$LCOV_DATA\" \\\n    --output-directory \"$REPORT_DIR\" \\\n    --ignore-errors source \\\n    --show-details \\\n    --sort \\\n    --prefix \"$(pwd)\" | tee /dev/fd/5\n  echo \"HTML report at:\"\n  echo \"  $REPORT_DIR\"\nfi\n\necho \"LCOV data at:\"\necho \"  $LCOV_DATA\"\necho\necho \"Summary:\"\nlcov -l \"$LCOV_DATA\"\n"
+    },
+    {
+      "path": "build_tools/github_actions/ci_build_python_wheel.sh",
+      "sha": null,
+      "content_sha256": "aba1cf2ad20115240a37e1eabaee82af0cfb7f544e13bf82714313e8a1eca018",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n# Copyright 2024 The StableHLO Authors.\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n# This runs the necessary step to build a Python wheel for StableHLO\n# At the moment it only builds a Linux variant of Python wheel for the\n# default python3 version present on the system (set via GitHub action typically)\n# TODO: Incorporate cibuildwheel and build manylinux wheels\n\nset -o errexit\nset -o nounset\nset -o pipefail\n\n# Collect the root of the project directory relative to this file\nPROJECT_DIR=\"$(realpath \"$(dirname \"$0\")\"/../../)\"\n\n# Set the source directory and destination directory for the distribution\nSRC_DIR=\"${PROJECT_DIR}/stablehlo/integrations/python\"\nOUT_DIR=\"${1:-$SRC_DIR/dist}\"\n\necho \"Building python wheel. You will find it at ${OUT_DIR}\"\npython3 -m build -w --outdir \"${OUT_DIR}\" \"${SRC_DIR}\"\n\necho \"Testing that the python wheel works correctly\"\n# Create a new virtual environment\npython3 -m venv venv\n# Activate the virtual environment\n# shellcheck disable=SC1091\nsource venv/bin/activate\n# Install the wheel\npip install --no-index --find-links=\"${OUT_DIR}\" stablehlo\n# Run the smoke test script\npython \"${SRC_DIR}/tests/smoketest.py\"\n\n"
+    },
+    {
+      "path": "build_tools/github_actions/ci_build_bazel.sh",
+      "sha": null,
+      "content_sha256": "19b06bd73752e146ac44499c399a115d58e1da1e94ccbdcbf1cb6bfdde6d7bf4",
+      "score": 185,
+      "content": "#!/bin/bash\n# Copyright 2023 The StableHLO Authors.\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nset -o errexit\nset -o nounset\nset -o pipefail\n\nif [[ $# -ne 0 ]] ; then\n  echo \"Usage: $0\"\n  exit 1\nfi\n\n# Build and Test StableHLO\nbazel build --lockfile_mode=error //...\nbazel test //...\n"
+    },
+    {
+      "path": "stablehlo/testdata/einsum_multiple_contractions_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "28481cc24339c1a78e1ce1eecbcf866aacab9a487f30126600eedabcf11e3368",
+      "score": 138,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule @jit_fun_flat_jax {\n  func.func public @main(%arg0: tensor<i64>, %arg1: tensor<?x2xf32> {mhlo.sharding = \"\"}, %arg2: tensor<2x3xf32> {mhlo.sharding = \"\"}, %arg3: tensor<3x4xf32> {mhlo.sharding = \"\"}) -> tensor<?x4xf32> {\n    %0 = call @_einsum(%arg0, %arg1, %arg2, %arg3) : (tensor<i64>, tensor<?x2xf32>, tensor<2x3xf32>, tensor<3x4xf32>) -> tensor<?x4xf32>\n    return %0 : tensor<?x4xf32>\n  }\n  func.func private @_einsum(%arg0: tensor<i64>, %arg1: tensor<?x2xf32>, %arg2: tensor<2x3xf32>, %arg3: tensor<3x4xf32>) -> tensor<?x4xf32> {\n    %0 = \"stablehlo.dot_general\"(%arg3, %arg2) {dot_dimension_numbers = #stablehlo.dot<lhs_contracting_dimensions = [0], rhs_contracting_dimensions = [1]>} : (tensor<3x4xf32>, tensor<2x3xf32>) -> tensor<4x2xf32>\n    %1 = \"stablehlo.dot_general\"(%arg1, %0) {dot_dimension_numbers = #stablehlo.dot<lhs_contracting_dimensions = [1], rhs_contracting_dimensions = [1]>} : (tensor<?x2xf32>, tensor<4x2xf32>) -> tensor<?x4xf32>\n    return %1 : tensor<?x4xf32>\n  }\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cumlogsumexp_axis_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cummax_dtype_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cummin_axis_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cummax_axis_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cumprod_dtype_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cumlogsumexp_dtype_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cumsum_dtype_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_reduce_precision_in_bfloat16___out_float32_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "1238cb59cd0b185927db9812bb2fe3eb9d82f0124d0ad852fcd56dcc151f30aa",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule @jit_fun_flat_jax {\n  func.func public @main(%arg0: tensor<i64>, %arg1: tensor<?xbf16> {mhlo.sharding = \"\"}) -> tensor<?xbf16> {\n    %0 = stablehlo.reduce_precision %arg1, format = e8m23 : tensor<?xbf16>\n    return %0 : tensor<?xbf16>\n  }\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_reduce_precision_in_bfloat16_5_7__out_float32_5_7_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "faad5c32fc9cb21a2462aa92655b3932997561392c38519c0ed6276e637fbd87",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule @jit_fun_flat_jax {\n  func.func public @main(%arg0: tensor<i64>, %arg1: tensor<?x5x7xbf16> {mhlo.sharding = \"\"}) -> tensor<?x5x7xbf16> {\n    %0 = stablehlo.reduce_precision %arg1, format = e8m23 : tensor<?x5x7xbf16>\n    return %0 : tensor<?x5x7xbf16>\n  }\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_reduce_precision_in_bfloat16___out_float64_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "845609dfb1ce3ace577e4ce15249c1b3db7f6bc5c46bb6d8a2c77309ede6310e",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule @jit_fun_flat_jax {\n  func.func public @main(%arg0: tensor<i64>, %arg1: tensor<?xbf16> {mhlo.sharding = \"\"}) -> tensor<?xbf16> {\n    %0 = stablehlo.reduce_precision %arg1, format = e11m52 : tensor<?xbf16>\n    return %0 : tensor<?xbf16>\n  }\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_dot_general_dtypes_and_precision_lhs_float32_7_3_4__rhs_float32_7_4__dimensionnumbers____2____1______0____0_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "afd57411439ee6da800d384cc53eda0dc3237631b8d2fae64fcfc2c080abf517",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule @jit_fun_flat_jax {\n  func.func public @main(%arg0: tensor<i64>, %arg1: tensor<?x7x3x4xf32> {mhlo.sharding = \"\"}, %arg2: tensor<?x7x4xf32> {mhlo.sharding = \"\"}) -> tensor<?x7x3xf32> {\n    %0 = \"stablehlo.dot_general\"(%arg1, %arg2) {dot_dimension_numbers = #stablehlo.dot<lhs_batching_dimensions = [0, 1], rhs_batching_dimensions = [0, 1], lhs_contracting_dimensions = [3], rhs_contracting_dimensions = [2]>} : (tensor<?x7x3x4xf32>, tensor<?x7x4xf32>) -> tensor<?x7x3xf32>\n    return %0 : tensor<?x7x3xf32>\n  }\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_dot_general_dtypes_and_precision_lhs_float32_3_4__rhs_float32_4_2__dimensionnumbers____1____0_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "7aaeca4d578ef049f9da10dbaa2e0e76daf162279ad171a0fb95b77b5b650db2",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule @jit_fun_flat_jax {\n  func.func public @main(%arg0: tensor<i64>, %arg1: tensor<?x3x4xf32> {mhlo.sharding = \"\"}, %arg2: tensor<?x4x2xf32> {mhlo.sharding = \"\"}) -> tensor<?x3x2xf32> {\n    %0 = \"stablehlo.dot_general\"(%arg1, %arg2) {dot_dimension_numbers = #stablehlo.dot<lhs_batching_dimensions = [0], rhs_batching_dimensions = [0], lhs_contracting_dimensions = [2], rhs_contracting_dimensions = [1]>} : (tensor<?x3x4xf32>, tensor<?x4x2xf32>) -> tensor<?x3x2xf32>\n    return %0 : tensor<?x3x2xf32>\n  }\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_reduce_precision_in_bfloat16_5_7__out_float64_5_7_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "80026800bee6765bc589bcb108d0ed32d3cc1b52ca6e4c5d7c54acb901b97147",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule @jit_fun_flat_jax {\n  func.func public @main(%arg0: tensor<i64>, %arg1: tensor<?x5x7xbf16> {mhlo.sharding = \"\"}) -> tensor<?x5x7xbf16> {\n    %0 = stablehlo.reduce_precision %arg1, format = e11m52 : tensor<?x5x7xbf16>\n    return %0 : tensor<?x5x7xbf16>\n  }\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cumprod_axis_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cumsum_axis_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    },
+    {
+      "path": "stablehlo/testdata/vmap_cummin_dtype_by_fun_shape_float32_8_9__associative_scan_reductions_axis_0_reverse_False_dynamic.mlir",
+      "sha": null,
+      "content_sha256": "74162174dc5305024db791ea4807421909f0c7a471ff88c49a7bc7c3b78bcbdf",
+      "score": 128,
+      "content": "// RUN: stablehlo-translate --serialize --target=current %s | stablehlo-translate --deserialize | stablehlo-opt > %t.0\n// RUN: stablehlo-opt %s > %t.1\n// RUN: diff %t.0 %t.1\n\nmodule {\n}\n\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:20.665203+00:00"
+}

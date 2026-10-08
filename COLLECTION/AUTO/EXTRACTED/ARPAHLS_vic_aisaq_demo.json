@@ -1,0 +1,203 @@
+{
+  "canonical_source": "github:ARPAHLS/vic_aisaq_demo",
+  "repo": "ARPAHLS/vic_aisaq_demo",
+  "revision_sha": "ae4657655e6ffa9fa3558ecffa6c62a38773e979",
+  "default_branch": "main",
+  "pushed_at": "2026-05-09T09:47:26Z",
+  "repo_updated_at": "2026-05-20T04:58:10Z",
+  "license": "MIT",
+  "topics": [
+    "aisaq",
+    "ann",
+    "computational-storage",
+    "diskann",
+    "edge-ai",
+    "ollama",
+    "python",
+    "rag",
+    "retrieval-systems",
+    "semantic-search",
+    "vector-search",
+    "wsl-ubuntu"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "setup.sh",
+      "sha": null,
+      "content_sha256": "6b995f7826d14c4fb7eecfd6b2291c87ffcebcef0c66b9c99cca8226c85f55ef",
+      "score": 117,
+      "content": "#!/usr/bin/env bash\nset -euo pipefail\n\npython -m venv .venv\nsource .venv/bin/activate\npip install -r requirements.txt\n\necho \"Ensure AiSAQ native binaries are built under <aisaq-root>/build/apps\"\necho \"Then run:\"\necho \"python scripts/build_aisaq_index.py --root data/sample_drive --aisaq-root <aisaq-root> --index-dir data/aisaq_index\"\necho \"python scripts/run_query.py \\\"Find the Q3 2025 contract that mentions penalty clauses\\\" --aisaq-root <aisaq-root>\"\n"
+    },
+    {
+      "path": "scripts/setup_wsl_aisaq.sh",
+      "sha": null,
+      "content_sha256": "fd5b45966edbe0c7f9bbb3138dcd94e993c60d80015eabf08cd11fa9b13efd39",
+      "score": 115,
+      "content": "#!/usr/bin/env bash\nset -euo pipefail\n\n# Run this inside WSL Ubuntu.\n# It builds AiSAQ native binaries and leaves artifacts under <AISAQ_ROOT>/build/apps.\n\n: \"${AISAQ_ROOT:=$HOME/aisaq-diskann}\"\n: \"${AISAQ_BRANCH:=aisaq_release}\"\n\nif [ ! -d \"$AISAQ_ROOT/.git\" ]; then\n  git clone --branch \"$AISAQ_BRANCH\" https://github.com/kioxia-jp/aisaq-diskann.git \"$AISAQ_ROOT\"\nfi\n\nsudo apt-get update\nsudo apt-get install -y make cmake g++ libaio-dev libgoogle-perftools-dev clang-format libboost-all-dev liburing-dev libmkl-full-dev\n\ncd \"$AISAQ_ROOT\"\ngit checkout \"$AISAQ_BRANCH\"\ngit pull --ff-only || true\ngit submodule update --init --recursive\n\nmkdir -p build\ncd build\ncmake -DCMAKE_BUILD_TYPE=Release ..\nmake -j\"$(nproc)\"\n\necho \"Build done.\"\necho \"Expected binaries:\"\necho \"  $AISAQ_ROOT/build/apps/build_disk_index\"\necho \"  $AISAQ_ROOT/build/apps/search_disk_index\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "a824a59b787df985c3adfa26c94267c91229c763a426f815f2d712f21a28c586",
+      "score": 100,
+      "content": "<p align=\"center\">\n  <h1 align=\"center\">vic_aisaq_demo</h1>\n  <p align=\"center\">\n    VIC-style tiered retrieval + native KIOXIA AiSAQ backend.\n  </p>\n</p>\n\n<p align=\"center\">\n  <a href=\"https://www.python.org/downloads/release/python-3131/\"><img src=\"https://img.shields.io/badge/Python-3.13-BFD7EA?style=flat-square\" /></a>\n  <a href=\"https://ubuntu.com/\"><img src=\"https://img.shields.io/badge/WSL-Ubuntu-F7D6BF?style=flat-square\" /></a>\n  <a href=\"https://github.com/kioxia-jp/aisaq-diskann\"><img src=\"https://img.shields.io/badge/KIOXIA-AiSAQ%20DiskANN-BFD7EA?style=flat-square\" /></a>\n  <a href=\"https://github.com/ARPAHLS/lc0_vic\"><img src=\"https://img.shields.io/badge/ARPA-LC--0%20VIC-F3C8D9?style=flat-square\" /></a>\n</p>\n<p align=\"center\">\n  <img src=\"assets/charts/01_latency_vs_dataset_size.png\" alt=\"Latency vs Dataset Size\" width=\"100%\" />\n</p>\n\nThis repository is a live demonstration of storage-aware AI retrieval for edge and controller-style environments:\n\n- **L0** metadata filtering over filesystem records\n- **L1** native AiSAQ ANN search (`--use_aisaq`) over flash-first index artifacts\n- **L2** selective deep parsing for ranked evidence snippets\n\nThe idea is straightforward: keep data on disk, narrow candidates cheaply, and only spend memory where it adds value. VIC contributes query planning and tier orchestration, while AiSAQ contributes flash-oriented ANN search for low-DRAM operation. The result is a local-first reference flow that is auditable, reproducible, and easy to present live.\n\nFor broader context on why this direction matters, see the [Computational Storage Landscape report](https://github.com/rosspeili/computational_storage_landscape).\n\n## Overview\n\n`vic_aisaq_demo` combines two proven open-source building blocks:\n\n- [`lc0_vic`](https://github.com/ARPAHLS/lc0_vic): a tiered retrieval controller that plans and orchestrates search in layers.\n- [`aisaq-diskann`](https://github.com/kioxia-jp/aisaq-diskann): a flash-oriented ANN backend optimized for low-DRAM environments.\n\nIn plain terms: metadata narrows the search space first, vector retrieval finds semantic candidates second, and deep parsing is reserved for a small shortlist.\n\n## Execution Flow\n\n1. **Librarian / plan**: turn a natural-language question into retrieval intent.\n2. **L0 metadata filter**: reduce candidate files by extension/size/time/path hints.\n3. **L1 vector search**: run native AiSAQ ANN search over embeddings.\n4. **L2 deep read**: parse only top files and attach snippets/evidence.\n5. **Ranked response**: return paths, scores, tiers, and run metrics.\n\nThe funnel below shows how the controller keeps deep parsing affordable by reducing the workload at each tier.\n\n![Tier Funnel: L0 to L2](assets/charts/04_tier_funnel.png)\n\n*Starting from a large directory, L0 and L1 progressively reduce candidates so L2 parses only a tiny subset before final ranking.*\n\n## Quick Start\n\n### 1) Build AiSAQ binaries in WSL\n\n```bash\ncd ~/aisaq-diskann\ngit checkout aisaq_release\ngit submodule update --init --recursive\nmkdir -p build && cd build\ncmake -DCMAKE_BUILD_TYPE=Release ..\nmake -j2\nls -l ~/aisaq-diskann/build/apps/build_disk_index ~/aisaq-diskann/build/apps/search_disk_index\n```\n\n### 2) Prepare WSL Python runtime for this repo\n\n```bash\npython3 -m venv ~/venvs/vix_aisaq_demo\nsource ~/venvs/vix_aisaq_demo/bin/activate\ncd <repo-root>\npython3 -m pip install -r requirements.txt\n```\n\n### 3) Set environment\n\n```bash\nGW=$(ip route | awk '/default/ {print $3; exit}')\nexport VIC_OLLAMA_BASE_URL=\"http://$GW:11434\"\nexport VIC_OLLAMA_EMBED_MODEL=\"embeddinggemma\"\nexport VIC_OLLAMA_MODEL=\"qwen2.5:0.5b\"\nexport VIC_PRIVACY_MODE=\"cloud_reasoning_ok\"\n```\n\n### Ollama\n\n<p align=\"left\">\n  <a href=\"https://ollama.com/\"><img src=\"https://img.shields.io/badge/Ollama-runtime-D6C7E8?style=flat-square\" /></a>\n  <a href=\"https://ollama.com/library/embeddinggemma\"><img src=\"https://img.shields.io/badge/embeddinggemma-embed%20model-F5E6A8?style=flat-square\" /></a>\n  <a href=\"https://ollama.com/library/qwen2.5\"><img src=\"https://img.shields.io/badge/qwen2.5:0.5b-planner%20model-C9D8FF?style=flat-square\" /></a>\n</p>\n\n- `VIC_OLLAMA_MODEL` is the **planner model** used by the Librarian step to translate natural-language requests into retrieval intent (filters, semantic focus, tier strategy).\n- `VIC_OLLAMA_EMBED_MODEL` is the **embedding model** used to convert text into vectors for L1 ANN search.\n- `VIC_OLLAMA_BASE_URL` is the Ollama API endpoint used by both planner and embed calls.\n\nRecommended baseline profile for this demo:\n\n- Planner: `qwen2.5:0.5b` (fast, lightweight for local planning)\n- Embeddings: `embeddinggemma` (stable general-purpose embedding model)\n\nTo try alternative models, set the same environment variables before running scripts. For practical model-selection guidance, see `docs/RUNTIME.md`.\n\n### 4) Build index and run query\n\n```bash\nts=$(date +%Y%m%d_%H%M%S)\npython3 scripts/build_aisaq_index.py --root data/sample_drive --aisaq-root /home/$USER/aisaq-diskann --index-dir data/aisaq_index 2>&1 | tee \"audits/demo_index_${ts}.log\"\npython3 scripts/run_query.py \"Find the Q3 2025 contract that mentions penalty clauses\" --aisaq-root /home/$USER/aisaq-diskann 2>&1 | tee \"audits/demo_smoke_${ts}.log\"\n```\n\n### 5) Benchmark\n\n```bash\nts=$(date +%Y%m%d_%H%M%S)\npython3 scripts/compare_backends.py --aisaq-root /home/$USER/aisaq-diskann --out-json docs/benchmarks.json 2>&1 | tee \"audits/demo_bench_${ts}.log\"\n```\n\n## Example Query\n\n```bash\npython3 scripts/run_query.py \\\n  \"Find the Q3 2025 contract that mentions penalty clauses\" \\\n  --aisaq-root /home/$USER/aisaq-diskann\n```\n\nExpected output includes:\n\n- query summary line\n- top ranked files with tier labels\n- per-run metrics (`l0`, `l1`, `l2`, latency, index footprint)\n\nThe composition view below explains why this pipeline surfaces relevant files even when file names are not obvious keyword matches.\n\n![Result Composition: direct vs in-file vs semantic](assets/charts/03_match_type_comparison.png)\n\n*Compared with direct matching baselines, VIC + AiSAQ shifts more results toward in-file and semantic evidence, not only path/name hits.*\n\n## Systems Rationale\n\n- It keeps retrieval local-first and auditable.\n- It separates inexpensive filtering from expensive deep parsing.\n- It makes the core systems trade-off explicit: lower DRAM footprint in exchange for some latency overhead.\n\nThe two charts below summarize that systems trade-off and scaling behavior.\n\n![Query Latency vs Dataset Size](assets/charts/01_latency_vs_dataset_size.png)\n\n*Traditional search can be very fast on tiny directories, while tiered retrieval behavior is more stable as dataset size grows.*\n\n![DRAM Footprint by Retrieval Method](assets/charts/02_dram_footprint_by_method.png)\n\n*AiSAQ-oriented retrieval is designed for low-DRAM environments where memory budget is often the hard constraint.*\n\nFor strategic background, see:\n\n- [Computational Storage Landscape](https://github.com/rosspeili/computational_storage_landscape)\n\n## What is tracked vs generated\n\n- **Tracked**: source code, scripts, docs, notebook, sample input corpus.\n- **Generated (ignored)**: `audits/`, `data/aisaq_index/`, local virtual envs, benchmark JSON outputs.\n\nThis keeps the repo portable while preserving reproducible command flows.\n\n## Documentation Map\n\n- `docs/ARCHITECTURE.md` — runtime/data-flow details\n- `docs/RUNTIME.md` — environment assumptions, network notes, and model selection guide\n- `docs/BENCHMARKS.md` — benchmark interpretation\n- `docs/KIOXIA_CONTEXT.md` — integration framing for storage audiences\n- `docs/RESULTS_SUMMARY.md` — shareable results checklist/template\n- `notebooks/demo_walkthrough.ipynb` — guided runbook\n\n## Script Index\n\n- `scripts/build_aisaq_index.py` — build native AiSAQ index and row/path map\n- `scripts/run_query.py` — execute one natural-language query through L0 -> L1 -> L2\n- `scripts/compare_backends.py` — benchmark baseline vs native AiSAQ path\n- `scripts/metrics.py` — print compact summary from `docs/benchmarks.json`\n- `scripts/demo_session.py` — run a two-query demo sequence for live walkthroughs\n- `scripts/sanitize_audits.py` — scrub local absolute paths from logs before sharing\n- `scripts/setup_wsl_aisaq.sh` — WSL helper to build AiSAQ binaries from source\n- `scripts/run_option_a.ps1` — optional Windows helper that wraps WSL build/index/smoke steps\n\n## Shareable Audit Sanitization\n\nTo sanitize local absolute paths in logs before sharing:\n\n```bash\npython3 scripts/sanitize_audits.py --input-dir audits --output-dir audits/sanitized --glob \"*.log\"\n```\n\n---\n\n<div align=\"center\">\n    <img src=\"https://raw.githubusercontent.com/ARPAHLS/skillware/main/assets/arpalogo.png\" alt=\"ARPA Logo\" width=\"50px\" />\n    <br/>\n    Built & Maintained by ARPA Hellenic Logical Systems & the Community\n</div>\n"
+    },
+    {
+      "path": "data/sample_drive/README.md",
+      "sha": null,
+      "content_sha256": "be3da3b10e4cf26ae20aefd964102310bb0002f96952e438043d26d07a613433",
+      "score": 96,
+      "content": "# Sample Drive\n\nSynthetic local dataset for demo purposes.\n\n- `contracts/`: contract-like files\n- `reports/`: report-like files\n- `emails/`: communication snippets\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "7d4e3dc14aad1f0bb812baff5394f069e82d12397d4194495a144b268f12eb02",
+      "score": 85,
+      "content": "numpy\npsutil\n"
+    },
+    {
+      "path": "setup.ps1",
+      "sha": null,
+      "content_sha256": "21c6309e37e9c11b67554b7264ca484c8e726c1fa6f01cbc1fd4d16aae12c97e",
+      "score": 82,
+      "content": "python -m venv .venv\n.venv\\Scripts\\python -m pip install -r requirements.txt\n\nWrite-Host \"Ensure AiSAQ native binaries are built under <aisaq-root>\\build\\apps\"\nWrite-Host \"Then run:\"\nWrite-Host \"python scripts/build_aisaq_index.py --root data/sample_drive --aisaq-root <aisaq-root> --index-dir data/aisaq_index\"\nWrite-Host \"python scripts/run_query.py `\"Find the Q3 2025 contract that mentions penalty clauses`\" --aisaq-root <aisaq-root>\"\n"
+    },
+    {
+      "path": "docs/RESULTS_SUMMARY.md",
+      "sha": null,
+      "content_sha256": "52ddb09ae890cfe7aa24cae43580b9ffbc0f2449f4ae90a0190c477f50fd95ef",
+      "score": 68,
+      "content": "# Results Summary (Template)\n\nUse this file as a concise, shareable summary after running the demo.\n\n## Run Metadata\n\n- Date (UTC):\n- Operator:\n- Runtime profile: Windows host + WSL Ubuntu\n- AiSAQ repo/branch: `kioxia-jp/aisaq-diskann` / `aisaq_release`\n- Ollama base URL:\n- Privacy mode (`VIC_PRIVACY_MODE`):\n- Planner model: `qwen2.5:0.5b`\n- Embedding model: `embeddinggemma`\n\n## Key Outcomes\n\n- Native AiSAQ index build: PASS/FAIL\n- Native AiSAQ query path reached: PASS/FAIL\n- L1 ANN rows observed:\n- L2 evidence extraction observed: PASS/FAIL\n\n## Benchmark Snapshot\n\nFill from `docs/benchmarks.json` and benchmark terminal output.\n\n- Baseline L0-only latency (ms):\n- AiSAQ-native latency (ms):\n- Baseline DRAM estimate (MB):\n- AiSAQ DRAM estimate (MB):\n\nInterpretation (short):\n\n- Example: AiSAQ shows lower DRAM envelope while accepting higher latency in this constrained demo profile.\n\n## Evidence Files\n\nPoint to the latest artifacts (sanitized if sharing externally):\n\n- Index log:\n- Smoke query log:\n- Benchmark log:\n- Dataset manifest:\n- Bench JSON:\n\n## Notes / Known Caveats\n\n- Tiny sample corpora can produce unstable semantic rankings.\n- Non-business sample files (e.g. dataset README) may appear in top results without stricter L0 filters.\n- Changing embedding model requires index rebuild before comparing results.\n- For external sharing, sanitize logs to remove local absolute paths:\n\n```bash\npython3 scripts/sanitize_audits.py --input-dir audits --output-dir audits/sanitized --glob \"*.log\"\n```\n"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "sha": null,
+      "content_sha256": "d1df26083123d311c311cf7bb4784554155084581607d3fb86336f51419887df",
+      "score": 68,
+      "content": "# Architecture\n\n## Pipeline\n\n1. Librarian converts natural language query to `QueryPlan`.\n2. L0 filters candidate files by metadata.\n3. L1 runs native AiSAQ retrieval over flash index artifacts.\n4. L2 parses top-ranked files for evidence snippets.\n5. Controller returns ranked paths, snippets, warnings, and per-tier metrics.\n\n## Runtime topology\n\n- **Windows host**\n  - Ollama API\n  - Repo workspace and audit artifacts\n- **WSL Ubuntu**\n  - `aisaq-diskann` native binaries\n  - Python runtime used for index/query scripts\n\n## Data contracts\n\n- `QueryPlan`: intent, L0 filters, L1 query text/threshold, L2 requirements.\n- `SearchHit`: path, score, tier, layers, snippet, reasoning.\n- `AskResponse`: query plan + ranked hits + response stats.\n\n## Native AiSAQ integration details\n\n- Index build:\n  - invokes `build_disk_index --use_aisaq`\n  - writes DiskANN-compatible float bin `[npts][dim][data...]`\n  - emits mapping metadata (`row_to_path`) for evidence reconstruction\n- Query:\n  - invokes `search_disk_index`\n  - parses native result binaries (`*_idx_uint32.bin`, `*_dists_float.bin`)\n  - maps vector ids back to filesystem paths\n\n## Tiny dataset safeguards\n\nSmall demo corpora can trigger AiSAQ edge cases. The integration includes:\n\n- pre-build cleanup of stale index artifacts\n- safer tiny-dataset build defaults (no rearrange/entry-point forcing)\n- search retry path when strict AiSAQ tiny-index mode fails\n"
+    },
+    {
+      "path": "docs/KIOXIA_CONTEXT.md",
+      "sha": null,
+      "content_sha256": "087b6e00b783981f096298e8794623a27a5182ec12545a0266e07131652225fc",
+      "score": 68,
+      "content": "# KIOXIA Context\n\nThis demo includes KIOXIA AiSAQ because it is a relevant open implementation of flash-oriented ANN retrieval:\n\n- Build: `--use_aisaq` through native `build_disk_index`\n- Search: native `search_disk_index` with AiSAQ parameters and native result artifacts\n- Native binaries are built from `kioxia-jp/aisaq-diskann` in WSL Ubuntu\n\nWhy this matters in the research logic of this repository:\n\n- It allows testing a realistic low-DRAM vector retrieval layer in a tiered pipeline.\n- It provides a concrete L1 backend for VIC-style planning, filtering, and evidence extraction.\n- It helps evaluate storage-aware trade-offs (latency, memory envelope, and retrieval quality) in one reproducible workflow.\n\n## Current implementation state\n\n- Verified native index creation and native query execution path.\n- Verified auditable benchmark and dataset-manifest outputs.\n- Added tiny-corpus safeguards to keep the demo stable on small sample data while preserving native AiSAQ invocation.\n"
+    },
+    {
+      "path": "docs/BENCHMARKS.md",
+      "sha": null,
+      "content_sha256": "ecb032df0cdb553cea17ca14d2097565cac87d24ede0b54346813a7cb8a174c4",
+      "score": 68,
+      "content": "# Benchmarks\n\nRun benchmark from WSL runtime:\n\n```bash\npython3 scripts/compare_backends.py --aisaq-root /home/$USER/aisaq-diskann --out-json docs/benchmarks.json\n```\n\nArtifacts:\n\n- terminal output table\n- `docs/benchmarks.json`\n- optional `audits/demo_bench_*.log` via `tee`\n\n## Latest observed demo numbers\n\n- Baseline L0-only: ~39 ms, DRAM estimate 80 MB\n- AiSAQ native: ~2179 ms, DRAM estimate 12 MB\n\nThese numbers are from a tiny synthetic corpus and are meant to show the architectural trade-off:\n\n- higher latency in native flash ANN mode\n- much lower DRAM envelope\n\n## Measurement notes\n\n- Keep dataset, models, and query list fixed between runs.\n- Ensure Ollama endpoint and model cache are warm before timed runs.\n- Record the exact `VIC_OLLAMA_MODEL` and `VIC_OLLAMA_EMBED_MODEL` values with each run.\n- Rebuild the index before benchmarking if the embedding model changes.\n- Use audit logs and dataset hash manifest when sharing results externally.\n"
+    },
+    {
+      "path": "docs/RUNTIME.md",
+      "sha": null,
+      "content_sha256": "6fcfd3f4baca99997b276180544825616af1d1c47ef2337fa759bc529e656803",
+      "score": 68,
+      "content": "# Runtime Assumptions\n\n## Preferred deployment for this demo\n\n- Host OS: Windows 10/11\n- WSL distro: Ubuntu\n- AiSAQ binaries: built in WSL from `kioxia-jp/aisaq-diskann` (`aisaq_release`)\n- Ollama: running on Windows host with reachable API from WSL\n\n## Required services and models\n\n- Ollama endpoint reachable from WSL (typically host gateway URL)\n- `embeddinggemma` available for embeddings\n- `qwen2.5:0.5b` available for planner\n- pull models as needed with `ollama pull <model>`\n\n## Required env vars at query/index time\n\n```bash\nVIC_OLLAMA_BASE_URL=http://<reachable-host-ip>:11434\nVIC_OLLAMA_EMBED_MODEL=embeddinggemma\nVIC_OLLAMA_MODEL=qwen2.5:0.5b\nVIC_PRIVACY_MODE=cloud_reasoning_ok\n```\n\n## How Ollama is used in this demo\n\n- **Planner model** (`VIC_OLLAMA_MODEL`): used by the Librarian stage to create a retrieval plan from user intent.\n- **Embedding model** (`VIC_OLLAMA_EMBED_MODEL`): used to embed corpus chunks and query text for L1 ANN retrieval.\n- **Base URL** (`VIC_OLLAMA_BASE_URL`): shared endpoint for both planner and embedding calls.\n\nIn short: planner decides *how to search*; embeddings decide *what is semantically close*.\n\n## Model selection guide\n\n### Recommended baseline profile\n\n- Planner: `qwen2.5:0.5b`\n- Embeddings: `embeddinggemma`\n- Why: reliable local behavior with low resource demand during demo runs.\n\n### When to choose different models\n\n- Prefer a **smaller planner model** when latency and RAM budget matter most.\n- Prefer a **stronger planner model** when query intent is complex or ambiguous.\n- Keep embeddings **consistent between index build and query**; changing embedding model requires rebuilding the index.\n- For multilingual or domain-specific corpora, test an embedding model tuned for that domain and compare recall.\n\n### Suggested operating profiles\n\n- **Fast demo profile**: very small planner + lightweight embedding model.\n- **Balanced profile**: `qwen2.5:0.5b` + `embeddinggemma`.\n- **Quality-first profile**: larger planner model (if host resources allow) + a tested embedding model.\n\n## Switching models safely\n\n1. Pull the target models:\n\n```bash\nollama pull qwen2.5:0.5b\nollama pull embeddinggemma\n```\n\n2. Set environment variables:\n\n```bash\nexport VIC_OLLAMA_MODEL=\"qwen2.5:0.5b\"\nexport VIC_OLLAMA_EMBED_MODEL=\"embeddinggemma\"\n```\n\n3. Rebuild index whenever embedding model changes:\n\n```bash\npython3 scripts/build_aisaq_index.py --root data/sample_drive --aisaq-root /home/$USER/aisaq-diskann --index-dir data/aisaq_index\n```\n\n4. Run query and benchmark again for apples-to-apples comparison.\n\n## Windows host networking note\n\nIf WSL cannot reach Ollama on port `11434`:\n\n- run Ollama with `OLLAMA_HOST=0.0.0.0:11434`\n- ensure inbound firewall rule allows TCP/11434\n\nQuick check from WSL:\n\n```bash\ncurl -sS \"$VIC_OLLAMA_BASE_URL/api/tags\"\n```\n\n## Fallback behavior\n\nIf native AiSAQ query path is unavailable at runtime, controller falls back to deterministic L0/L2 ranking so the pipeline remains demonstrable with warnings attached.\n\n## Common model/runtime issues\n\n- **Planner timeout or refusal**: verify `VIC_OLLAMA_BASE_URL` and Ollama process status.\n- **Model not found**: run `ollama pull <model>` and re-check `/api/tags`.\n- **Weak relevance after model swap**: confirm index was rebuilt after embedding model change.\n"
+    },
+    {
+      "path": "data/sample_drive/emails/thread_penalty_clause.txt",
+      "sha": null,
+      "content_sha256": "29f5d2746175886b54b2efb917aca623c324b589562503482acdd20ae55ac957",
+      "score": 54,
+      "content": "Follow-up email regarding contract penalties and revised delivery clauses.\n"
+    },
+    {
+      "path": "data/sample_drive/emails/ops_alert.log",
+      "sha": null,
+      "content_sha256": "5ac229ff473af10f4aa73208005e2bfa228a3dbfa868d3c2494356fa6d44213a",
+      "score": 54,
+      "content": "2025-09-11 09:20:17 WARN Contract pipeline delayed, penalty clause triggered\n2025-09-11 09:21:11 INFO Escalation sent to legal team\n"
+    },
+    {
+      "path": "scripts/run_query.py",
+      "sha": null,
+      "content_sha256": "02a1c069e7b29dde23587c8e247a2ec58115e822b7a5a19241cf38e38c377271",
+      "score": 33,
+      "content": "#!/usr/bin/env python3\nfrom __future__ import annotations\n\nimport argparse\nfrom pathlib import Path\nimport sys\n\nsys.path.insert(0, str(Path(__file__).resolve().parents[1] / \"src\"))\n\nfrom vic_aisaq_demo.controller.pipeline import ask\n\n\ndef main() -> int:\n    ap = argparse.ArgumentParser(description=\"Run single VIC+AiSAQ query.\")\n    ap.add_argument(\"query\", help=\"Natural language question\")\n    ap.add_argument(\"--root\", default=\"data/sample_drive\")\n    ap.add_argument(\"--aisaq-root\", required=True)\n    ap.add_argument(\"--index-dir\", default=\"data/aisaq_index\")\n    ap.add_argument(\"--index-prefix\", default=\"vic_aisaq\")\n    args = ap.parse_args()\n\n    root = Path(args.root).resolve()\n    index_dir = Path(args.index_dir).resolve()\n    resp = ask(\n        args.query,\n        warehouse_root=root,\n        aisaq_root=Path(args.aisaq_root).resolve(),\n        index_prefix=index_dir / args.index_prefix,\n        mapping_path=index_dir / \"mapping.json\",\n        work_dir=index_dir / \"query_work\",\n    )\n\n    print(\"=\" * 70)\n    print(f\"QUERY: {args.query}\")\n    print(\"=\" * 70)\n    print(resp.answer_summary)\n    for w in resp.warnings:\n        print(f\"Warning: {w}\")\n    print()\n    for i, hit in enumerate(resp.hits[:3], 1):\n        print(f\"{i}. {hit.path}\")\n        print(f\"   score={hit.score:.3f} tier={hit.tier} layers={','.join(hit.layers)}\")\n        if hit.excerpt:\n            print(f\"   snippet={hit.excerpt[:220].replace(chr(10), ' ')}...\")\n    print()\n    print(\n        \"metrics:\"\n        f\" l0={resp.stats.l0_candidates},\"\n        f\" l1={resp.stats.l1_candidates},\"\n        f\" l2={resp.stats.l2_files_parsed},\"\n        f\" latency_ms={resp.stats.latency_ms},\"\n        f\" index_size_mb={resp.stats.index_size_mb},\"\n        f\" dram_est_mb={resp.stats.index_dram_estimate_mb}\"\n    )\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "path": "scripts/compare_backends.py",
+      "sha": null,
+      "content_sha256": "4b4eedca7e84f1fbc6e5ac5a22c6d872338820be24b71cb8730daf0c4f051999",
+      "score": 33,
+      "content": "#!/usr/bin/env python3\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport time\nfrom pathlib import Path\nimport sys\n\nsys.path.insert(0, str(Path(__file__).resolve().parents[1] / \"src\"))\n\nfrom vic_aisaq_demo.controller.pipeline import ask\n\nQUERIES = [\n    \"contracts with penalty clauses from 2025\",\n    \"medical reports mentioning blood pressure\",\n    \"financial statements over 10M revenue\",\n]\n\n\ndef bench_aisaq(root: Path, aisaq_root: Path, index_dir: Path, index_prefix: str) -> dict:\n    t0 = time.perf_counter()\n    lats = []\n    for q in QUERIES:\n        r = ask(\n            q,\n            warehouse_root=root,\n            aisaq_root=aisaq_root,\n            index_prefix=index_dir / index_prefix,\n            mapping_path=index_dir / \"mapping.json\",\n            work_dir=index_dir / \"query_work\",\n        )\n        lats.append(r.stats.latency_ms)\n    elapsed = (time.perf_counter() - t0) * 1000.0\n    return {\n        \"avg_latency_ms\": round(sum(lats) / max(1, len(lats)), 3),\n        \"total_ms\": round(elapsed, 3),\n        \"dram_estimate_mb\": 12.0,\n    }\n\n\ndef bench_baseline(root: Path) -> dict:\n    # Lightweight baseline: metadata+filename scoring only.\n    t0 = time.perf_counter()\n    files = [p for p in root.rglob(\"*\") if p.is_file()]\n    for q in QUERIES:\n        for p in files[: min(1000, len(files))]:\n            _ = q.lower() in p.name.lower()\n    elapsed = (time.perf_counter() - t0) * 1000.0\n    return {\n        \"avg_latency_ms\": round(elapsed / max(1, len(QUERIES)), 3),\n        \"total_ms\": round(elapsed, 3),\n        \"dram_estimate_mb\": 80.0,\n    }\n\n\ndef main() -> int:\n    ap = argparse.ArgumentParser()\n    ap.add_argument(\"--root\", default=\"data/sample_drive\")\n    ap.add_argument(\"--aisaq-root\", required=True)\n    ap.add_argument(\"--index-dir\", default=\"data/aisaq_index\")\n    ap.add_argument(\"--index-prefix\", default=\"vic_aisaq\")\n    ap.add_argument(\"--out-json\", default=\"docs/benchmarks.json\")\n    args = ap.parse_args()\n\n    root = Path(args.root).resolve()\n    aisaq = bench_aisaq(root, Path(args.aisaq_root).resolve(), Path(args.index_dir).resolve(), args.index_prefix)\n    base = bench_baseline(root)\n    rows = {\"baseline_l0_only\": base, \"aisaq_native\": aisaq}\n    Path(args.out_json).write_text(json.dumps(rows, indent=2), encoding=\"utf-8\")\n\n    print(f\"{'Backend':<24} {'Latency':>12} {'DRAM est':>12}\")\n    print(\"-\" * 52)\n    print(f\"{'Baseline L0 only':<24} {base['avg_latency_ms']:>10.2f}ms {base['dram_estimate_mb']:>10.1f}MB\")\n    print(f\"{'AiSAQ native':<24} {aisaq['avg_latency_ms']:>10.2f}ms {aisaq['dram_estimate_mb']:>10.1f}MB\")\n    print(f\"\\nSaved: {args.out_json}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "path": "scripts/build_aisaq_index.py",
+      "sha": null,
+      "content_sha256": "96e2c2ed2e2d2f17fe12674b06f07911d5b26210b1bdf1f0f2c524ce2506d44b",
+      "score": 33,
+      "content": "#!/usr/bin/env python3\nfrom __future__ import annotations\n\nimport argparse\nimport json\nimport sys\nfrom pathlib import Path\n\nsys.path.insert(0, str(Path(__file__).resolve().parents[1] / \"src\"))\n\nfrom vic_aisaq_demo.backends.aisaq_native import AiSAQBuildConfig, AiSAQNativeBackend, embed_text_ollama, write_fvecs\n\n\ndef _read_text(path: Path, max_chars: int = 1500) -> str:\n    if path.suffix.lower() not in {\".txt\", \".md\", \".log\", \".csv\"}:\n        return path.name\n    try:\n        return path.read_text(encoding=\"utf-8\", errors=\"replace\")[:max_chars]\n    except OSError:\n        return path.name\n\n\ndef main() -> int:\n    ap = argparse.ArgumentParser(description=\"Build AiSAQ native index from local files.\")\n    ap.add_argument(\"--root\", required=True, help=\"Data root with files\")\n    ap.add_argument(\"--aisaq-root\", required=True, help=\"Path to aisaq-diskann repo root\")\n    ap.add_argument(\"--index-dir\", required=True, help=\"Output index directory\")\n    ap.add_argument(\"--index-prefix\", default=\"vic_aisaq\", help=\"Index file prefix\")\n    args = ap.parse_args()\n\n    root = Path(args.root).resolve()\n    index_dir = Path(args.index_dir).resolve()\n    index_dir.mkdir(parents=True, exist_ok=True)\n    index_prefix = index_dir / args.index_prefix\n\n    files = [p for p in root.rglob(\"*\") if p.is_file()]\n    vectors: list[list[float]] = []\n    row_to_path: dict[int, str] = {}\n    for i, p in enumerate(files):\n        vec = embed_text_ollama(_read_text(p))\n        vectors.append(vec)\n        row_to_path[i] = str(p.resolve())\n\n    vectors_bin = index_dir / \"vectors.fvecs\"\n    write_fvecs(vectors_bin, vectors)\n    (index_dir / \"mapping.json\").write_text(\n        json.dumps({\"row_to_path\": row_to_path, \"count\": len(files)}, indent=2),\n        encoding=\"utf-8\",\n    )\n\n    backend = AiSAQNativeBackend(aisaq_root=Path(args.aisaq_root).resolve(), index_prefix=index_prefix)\n    backend.build_index(vectors_bin, AiSAQBuildConfig())\n\n    print(f\"Built AiSAQ index at: {index_prefix}\")\n    print(f\"Mapped rows: {len(files)}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "path": "scripts/demo_session.py",
+      "sha": null,
+      "content_sha256": "923d624c962f9af29f63732733060259c41929e7938efd9f634c995b73d2373c",
+      "score": 33,
+      "content": "#!/usr/bin/env python3\nfrom __future__ import annotations\n\nimport subprocess\nimport sys\n\n\ndef run(query: str, aisaq_root: str) -> None:\n    cmd = [\n        sys.executable,\n        \"scripts/run_query.py\",\n        query,\n        \"--aisaq-root\",\n        aisaq_root,\n    ]\n    subprocess.run(cmd, check=True)\n    print()\n\n\ndef main() -> int:\n    if len(sys.argv) < 2:\n        print(\"Usage: python scripts/demo_session.py <aisaq-root>\")\n        return 1\n    aisaq_root = sys.argv[1]\n    run(\"Find the Q3 2025 contract that mentions penalty clauses\", aisaq_root)\n    run(\"What are the blood pressure trends in the 2024 medical reports?\", aisaq_root)\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "path": "scripts/sanitize_audits.py",
+      "sha": null,
+      "content_sha256": "b8e4b0809e330be250fcae86972d0a4d1ce3543f82676268994ffab904038e18",
+      "score": 33,
+      "content": "#!/usr/bin/env python3\nfrom __future__ import annotations\n\nimport argparse\nimport re\nfrom pathlib import Path\n\n\ndef _sanitize_text(content: str, repo_root: Path) -> str:\n    out = content\n\n    # Normalize separators for replacement patterns.\n    repo_posix = repo_root.as_posix()\n    repo_win = str(repo_root)\n\n    # Replace absolute repo paths with portable token.\n    out = out.replace(repo_posix, \"<repo-root>\")\n    out = out.replace(repo_win, \"<repo-root>\")\n\n    # Replace WSL user-home absolute path prefixes.\n    out = re.sub(r\"/home/[^/\\s]+/aisaq-diskann\", \"<aisaq-root>\", out)\n    out = re.sub(r\"\\\\\\\\wsl\\.localhost\\\\[^\\\\\\s]+\\\\home\\\\[^\\\\\\s]+\\\\aisaq-diskann\", \"<aisaq-root>\", out)\n\n    # Replace Windows user home prefixes where they leak in logs.\n    out = re.sub(r\"[A-Za-z]:\\\\Users\\\\[^\\\\\\s]+\", \"<user-home>\", out)\n\n    return out\n\n\ndef sanitize_file(path: Path, repo_root: Path, out_dir: Path) -> Path:\n    raw = path.read_text(encoding=\"utf-8\", errors=\"replace\")\n    sanitized = _sanitize_text(raw, repo_root=repo_root)\n    out_dir.mkdir(parents=True, exist_ok=True)\n    out_path = out_dir / path.name\n    out_path.write_text(sanitized, encoding=\"utf-8\")\n    return out_path\n\n\ndef main() -> int:\n    ap = argparse.ArgumentParser(description=\"Sanitize audit/log files for external sharing.\")\n    ap.add_argument(\"--input-dir\", default=\"audits\", help=\"Directory containing raw audit logs\")\n    ap.add_argument(\"--output-dir\", default=\"audits/sanitized\", help=\"Directory for sanitized copies\")\n    ap.add_argument(\n        \"--glob\",\n        default=\"*.log\",\n        help=\"Glob pattern inside input dir (example: '*.log' or '*.*')\",\n    )\n    args = ap.parse_args()\n\n    repo_root = Path.cwd().resolve()\n    input_dir = Path(args.input_dir).resolve()\n    out_dir = Path(args.output_dir).resolve()\n\n    if not input_dir.exists():\n        print(f\"Input directory does not exist: {input_dir}\")\n        return 1\n\n    files = sorted(input_dir.glob(args.glob))\n    if not files:\n        print(f\"No files matched pattern '{args.glob}' under {input_dir}\")\n        return 0\n\n    written = []\n    for f in files:\n        if not f.is_file():\n            continue\n        out = sanitize_file(f, repo_root=repo_root, out_dir=out_dir)\n        written.append(out)\n\n    print(f\"Sanitized {len(written)} file(s) into: {out_dir}\")\n    for w in written:\n        print(f\"- {w}\")\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "path": "scripts/metrics.py",
+      "sha": null,
+      "content_sha256": "5f498fc1dee67fcc2bdeec310cfd3609adf561cbc065579e5ec2adecbb5069f1",
+      "score": 33,
+      "content": "#!/usr/bin/env python3\nfrom __future__ import annotations\n\nimport argparse\nimport json\nfrom pathlib import Path\n\n\ndef main() -> int:\n    ap = argparse.ArgumentParser(description=\"Print latest benchmark metrics\")\n    ap.add_argument(\"--bench-json\", default=\"docs/benchmarks.json\")\n    args = ap.parse_args()\n    p = Path(args.bench_json)\n    if not p.exists():\n        print(f\"Metrics file not found: {p}\")\n        return 1\n    data = json.loads(p.read_text(encoding=\"utf-8\"))\n    for name, row in data.items():\n        print(\n            f\"{name}: latency={row.get('avg_latency_ms')}ms \"\n            f\"dram_est={row.get('dram_estimate_mb')}MB total={row.get('total_ms')}ms\"\n        )\n    return 0\n\n\nif __name__ == \"__main__\":\n    raise SystemExit(main())\n"
+    },
+    {
+      "path": "src/vic_aisaq_demo/__init__.py",
+      "sha": null,
+      "content_sha256": "810c93868263e9d48244085b9409f1b650f60408caca475254cf918552d4a6bc",
+      "score": 31,
+      "content": "\"\"\"VIC + AiSAQ native demo package.\"\"\"\n\n__all__ = [\"__version__\"]\n__version__ = \"0.1.0\"\n"
+    },
+    {
+      "path": "src/vic_aisaq_demo/schemas.py",
+      "sha": null,
+      "content_sha256": "2f0c4b7af0de5b99e0e550a6088d8224861e199ec62f0b1256fc7976e542c830",
+      "score": 31,
+      "content": "from __future__ import annotations\n\nfrom dataclasses import dataclass, field\nfrom typing import Any\n\n\n@dataclass\nclass L0Filters:\n    extensions: list[str] | None = None\n    modified_after: str | None = None\n    modified_before: str | None = None\n    min_size: int | None = None\n    max_size: int | None = None\n\n\n@dataclass\nclass QueryPlan:\n    intent: str\n    l0_filters: L0Filters | None\n    l1_query_text: str\n    l1_threshold: float\n    requires_l2: bool\n    l2_skills: list[str]\n    l2_top_k: int\n    privacy_mode: str\n    raw_user_text: str\n    planner_model_id: str\n\n\n@dataclass\nclass SearchHit:\n    path: str\n    score: float\n    tier: str\n    layers: list[str] = field(default_factory=list)\n    excerpt: str = \"\"\n    metadata: dict[str, Any] = field(default_factory=dict)\n    reasoning: str = \"\"\n\n\n@dataclass\nclass ResponseStats:\n    pipeline: str\n    latency_ms: float\n    l0_candidates: int\n    l1_candidates: int\n    l2_files_parsed: int\n    index_size_mb: float\n    index_dram_estimate_mb: float\n\n\n@dataclass\nclass AskResponse:\n    query_plan: QueryPlan\n    hits: list[SearchHit]\n    answer_summary: str\n    warnings: list[str]\n    stats: ResponseStats\n"
+    },
+    {
+      "path": "src/vic_aisaq_demo/tiers/__init__.py",
+      "sha": null,
+      "content_sha256": "0ba3900176697de6ca27a0937f2322da45394fc759485b70df2afed14ed23ca1",
+      "score": 29,
+      "content": "\"\"\"Tier helpers (L0 and L2).\"\"\"\n"
+    },
+    {
+      "path": "src/vic_aisaq_demo/backends/__init__.py",
+      "sha": null,
+      "content_sha256": "66bac1da57311d3b2c5e95db6ce0a7fa9d6cb8c67e1f25bb25e6b95293737801",
+      "score": 29,
+      "content": "\"\"\"Backend implementations.\"\"\"\n"
+    },
+    {
+      "path": "src/vic_aisaq_demo/librarian/__init__.py",
+      "sha": null,
+      "content_sha256": "6d83f448bf42adad2c9b8ce5a7f7172c3a0c9fd91de06cd810accbd5602bbf09",
+      "score": 29,
+      "content": "\"\"\"Librarian planning backends.\"\"\"\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:01.787209+00:00"
+}

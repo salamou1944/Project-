@@ -1,0 +1,99 @@
+{
+  "canonical_source": "github:NVIDIA/ansible-role-enroot",
+  "repo": "NVIDIA/ansible-role-enroot",
+  "revision_sha": "6462e096450f3fca58314166e68b747d719fda6b",
+  "default_branch": "master",
+  "pushed_at": "2022-01-05T17:05:41Z",
+  "repo_updated_at": "2026-07-21T12:27:38Z",
+  "license": "BSD-3-Clause",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/molecule.yml",
+      "sha": null,
+      "content_sha256": "52ff9be6bf23c8ae7572f1410a1d2491b5ddf7f6b107423b4891216e7f81347d",
+      "score": 126,
+      "content": "---\non:\n  - push\n  - pull_request\n\njobs:\n  build:\n    runs-on: ubuntu-20.04\n    steps:\n      - name: checkout\n        uses: actions/checkout@v2\n        with:\n          path: \"${{ github.repository }}\"\n      - name: molecule\n        uses: robertdebock/molecule-action@2.7.2\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b742fcaa1021f56c7e24359be94703a7407224c929ad435bcec72a0a34e421ee",
+      "score": 100,
+      "content": "An ansible role to install enroot.\n"
+    },
+    {
+      "path": "tasks/ubuntu.yml",
+      "sha": null,
+      "content_sha256": "aa0f5f9888f8ffcf44a9df5d0f7e8ed0e760d14a38c00b8161ab62b0c19effb5",
+      "score": 33,
+      "content": "---\n- name: enroot dependency packages\n  apt:\n    update_cache: yes\n    name:\n      - bash-completion\n      - pigz\n\n- name: repo key\n  apt_key:\n    url: \"{{ enroot_ubuntu_repo_key_url }}\"\n    id: \"{{ enroot_ubuntu_repo_key_id }}\"\n  when: enroot_ubuntu_repo is defined\n\n- name: repo\n  apt_repository:\n    repo: \"{{ enroot_ubuntu_repo }}\"\n  when: enroot_ubuntu_repo is defined\n\n# We need to do a remove/install dance due to dependency conflicts\n# when installing raw packages from Github\n- name: Correctly install and/or upgrade Enroot packages from deb\n  when: enroot_ubuntu_repo is not defined\n  block:\n  - name: gather package facts for comparison\n    package_facts:\n      manager: apt\n  - name: remove existing enroot package if we are changing version\n    apt:\n      name: \"{{ enroot_packages }}\"\n      state: \"absent\"\n    when:\n    - \"'enroot' in ansible_facts.packages\"\n    - \"ansible_facts.packages['enroot'][0]['version'] != enroot_version_string\"\n  - name: enroot deb packages\n    apt:\n      deb: \"{{ item }}\"\n      state: \"{{ enroot_package_state }}\"\n    with_items: \"{{ enroot_deb_packages }}\"\n    environment: \"{{proxy_env if proxy_env is defined else {}}}\"\n\n- name: Install enroot packages from repos\n  apt:\n    name: \"{{ enroot_packages }}\"\n    state: \"{{ enroot_package_state }}\"\n  when: enroot_ubuntu_repo is defined\n  \n"
+    },
+    {
+      "path": "meta/main.yml",
+      "sha": null,
+      "content_sha256": "cbcbba63946754da4d712c79d1a1607075c3c8f3d81529fcb5731d31159dae12",
+      "score": 33,
+      "content": "galaxy_info:\n  role_name: enroot\n  namespace: nvidia\n  author: Luke Yeager\n  company: NVIDIA\n  description: Install enroot\n  license: 3-Clause BSD\n  min_ansible_version: 2.7\n\n  platforms:\n    - name: Ubuntu\n      versions:\n        - 'bionic'\n        - 'focal'\n    - name: EL\n      versions:\n        - '7'\n        - '8'\n\n  galaxy_tags:\n    - 'nvidia'\n    - 'enroot'\n"
+    },
+    {
+      "path": "tasks/main.yml",
+      "sha": null,
+      "content_sha256": "e31c8fbc98a9dec72f72169eb2c0bc6c556da6ac113ffe561d25b10d0431d868",
+      "score": 33,
+      "content": "---\n- name: ubuntu tasks\n  include_tasks: ubuntu.yml\n  when: ansible_distribution == 'Ubuntu'\n\n- name: rhel tasks\n  include_tasks: redhat.yml\n  when: ansible_os_family == 'RedHat'\n\n- name: ensure bash completion dir exists\n  file:\n    path: /etc/bash_completion.d\n    owner: root\n    group: root\n    mode: 755\n    state: directory\n\n- name: install bash completions\n  file:\n    path: /etc/bash_completion.d/enroot.bash_completion\n    state: link\n    src: /usr/share/enroot/bash_completion\n\n- name: configure enroot.conf\n  blockinfile:\n    path: /etc/enroot/enroot.conf\n    block: \"{{ enroot_config }}\"\n    marker: \"# {mark} ANSIBLE MANAGED BLOCK (ansible-role-enroot)\"\n\n- name: configure environ.d/\n  copy:\n    dest: \"/etc/enroot/environ.d/{{ item.filename }}\"\n    content: \"{{ item.content }}\"\n  loop: \"{{ enroot_environ_config_files }}\"\n\n- name: configure hooks.d/\n  copy:\n    dest: \"/etc/enroot/hooks.d/{{ item.filename }}\"\n    content: \"{{ item.content }}\"\n    mode: '0755'\n  loop: \"{{ enroot_hook_config_files }}\"\n\n- name: configure mounts.d/\n  copy:\n    dest: \"/etc/enroot/mounts.d/{{ item.filename }}\"\n    content: \"{{ item.content }}\"\n  loop: \"{{ enroot_mount_config_files }}\"\n"
+    },
+    {
+      "path": "handlers/main.yml",
+      "sha": null,
+      "content_sha256": "62516d9aaaa596c759ec351f481cb8ff86193684b8e4a30894f26b9a4e04efa1",
+      "score": 33,
+      "content": "---\n- name: reboot node\n  reboot:\n    reboot_timeout: \"{{ enroot_reboot_timeout }}\" \n"
+    },
+    {
+      "path": "tasks/redhat.yml",
+      "sha": null,
+      "content_sha256": "7735c1eb797fe630928be077e3ec986644ab1f31b27018a9019389bb34a84191",
+      "score": 33,
+      "content": "---\n- name: install gpg key for epel repository\n  rpm_key:\n    key: \"{{ epel_gpg_key }}\"\n    state: present\n\n- name: install epel repository\n  yum:\n    name: \"{{ epel_package }}\"\n    state: present\n\n- name: install enroot dependency packages\n  yum:\n    name: \"{{ item }}\"\n  with_items:\n  - \"bash-completion\"\n  - \"jq\"\n  - \"parallel\"\n  - \"pigz\"\n  - \"zstd\"\n\n- name: set up yum repository (if defined)\n  yum_repository:\n    name: enroot\n    description: enroot\n    baseurl: \"{{ enroot_rhel_repo }}\"\n    gpgkey: \"{{ enroot_rhel_repo_gpgkey }}\"\n  when: enroot_rhel_repo is defined\n\n- name: install packages from repo (if defined)\n  yum:\n    name: \"{{ item }}\"\n    state: \"{{ enroot_package_state }}\"\n  with_items: \"{{ enroot_packages }}\"\n  when: enroot_rhel_repo is defined\n\n- name: Correctly install and/or upgrade Enroot packages from rpm\n  when: enroot_rhel_repo is not defined\n  block:\n  - name: gather package facts for comparison\n    package_facts:\n      manager: rpm\n  - name: remove existing enroot package if we are changing version\n    yum:\n      name: \"{{ enroot_packages }}\"\n      state: \"absent\"\n    when:\n    - \"'enroot' in ansible_facts.packages\"\n    - \"ansible_facts.packages['enroot'][0]['version'] != enroot_version_string.split('-')[0]\"\n  - name: enroot rpm packages\n    yum:\n      name: \"{{ item }}\"\n      state: \"{{ enroot_package_state }}\"\n      disable_gpg_check: true\n    with_items: \"{{ enroot_rpm_packages }}\"\n    environment: \"{{proxy_env if proxy_env is defined else {}}}\"\n\n- name: check if kernel unpriv enabled\n  shell: \"cat /proc/cmdline | grep 'namespace.unpriv_enable=1'\"\n  register: kernel_unpriv_enable\n  failed_when: kernel_unpriv_enable.rc == 127\n  tags:\n  - molecule-notest\n\n- name: check if user namespaces enabled\n  shell: \"cat /proc/cmdline | grep 'user_namespace.enable=1'\"\n  register: kernel_user_namespace\n  failed_when: kernel_user_namespace.rc == 127\n  tags:\n  - molecule-notest\n\n- name: install grubby if needed\n  yum:\n    name: \"grubby\"\n    state: \"present\"\n  when: ((kernel_unpriv_enable.rc == 1) or (kernel_user_namespace.rc == 1)) and enroot_configure_kernel_options\n  tags:\n  - molecule-notest\n\n- name: add kernel options to use enroot\n  command: \"grubby --update-kernel={{ enroot_configure_kernel_options_versions }} --args={{ item }}\"\n  when: ((kernel_unpriv_enable.rc == 1) or (kernel_user_namespace.rc == 1)) and enroot_configure_kernel_options\n  with_items:\n    - \"namespace.unpriv_enable=1\"\n    - \"user_namespace.enable=1\"\n  notify:\n  - reboot node\n  tags:\n  - molecule-notest\n\n- name: set max_user_namespaces \n  sysctl:\n    name: user.max_user_namespaces\n    value: \"{{ enroot_max_user_namespaces }}\"\n    state: present\n  tags:\n  - molecule-notest\n\n- name: set max_mnt_namespaces\n  sysctl:\n    name: user.max_mnt_namespaces\n    value: \"{{ enroot_max_mnt_namespaces }}\"\n    state: present\n  tags:\n  - molecule-notest\n\n"
+    },
+    {
+      "path": "defaults/main.yml",
+      "sha": null,
+      "content_sha256": "dba3424959020644c19c876ad430707769e1350a66cf3b7fc4c8e6b63416838a",
+      "score": 33,
+      "content": "---\n# Optional: Variables needed for interacting with an HTTP proxy\n# (Values are an example)\n#\n# http_proxy: http://10.0.2.5:3128\n# https_proxy: http://10.0.2.5:3128\n# no_proxy: localhost,cluster.local,127.0.0.1,::1,10.0.2.10,10.0.2.20,10.0.2.30\n# proxy_env:\n      # http_proxy: '{{ http_proxy }}'\n      # https_proxy: '{{ https_proxy }}'\n      # no_proxy: '{{ no_proxy }}'\n\n# Names of packages to install\nenroot_packages:\n  - enroot\n  - 'enroot+caps'\nenroot_package_state: present\nenroot_version: \"3.2.0\"\nenroot_release: \"1\"\nenroot_version_string: \"{{ enroot_version }}-{{ enroot_release }}\"\n\n# Install option 1 (default): provide direct URLs to debs or rpms\nenroot_deb_packages:\n  - 'https://github.com/NVIDIA/enroot/releases/download/v{{ enroot_version }}/enroot_{{ enroot_version_string }}_amd64.deb'\n  - 'https://github.com/NVIDIA/enroot/releases/download/v{{ enroot_version }}/enroot+caps_{{ enroot_version_string }}_amd64.deb'\nenroot_rpm_packages:\n  - 'https://github.com/NVIDIA/enroot/releases/download/v{{ enroot_version }}/enroot-{{ enroot_version_string }}.el7.x86_64.rpm'\n  - 'https://github.com/NVIDIA/enroot/releases/download/v{{ enroot_version }}/enroot+caps-{{ enroot_version_string }}.el7.x86_64.rpm'\n\nepel_package: \"https://dl.fedoraproject.org/pub/epel/epel-release-latest-{{ ansible_distribution_major_version }}.noarch.rpm\"\nepel_gpg_key: \"https://dl.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-{{ ansible_distribution_major_version }}\"\n\n# Install option 2: provide repo, key, and list of packages\n# No default repositories exist, so this will need to refer to repos you set up\n#\n#enroot_ubuntu_repo_key_url: ''\n#enroot_ubuntu_repo_key_id: ''\n#enroot_ubuntu_repo: ''\n#enroot_rhel_repo_gpgkey: ''\n#enroot_rhel_repo: ''\n\n\n# a block of lines to add to enroot.conf\nenroot_config: ''\n\n# lists of { filename: '', content: '' }\nenroot_environ_config_files: []  # filenames should end with .env\nenroot_hook_config_files: []     # filenames should end with .sh\nenroot_mount_config_files: []    # filenames should end with .fstab\n\n# Should we configure kernel on RedHat systems and reboot?\nenroot_configure_kernel_options: true\nenroot_configure_kernel_options_versions: \"ALL\"\nenroot_reboot_timeout: 900\nenroot_max_user_namespaces: 65536\nenroot_max_mnt_namespaces: 65536\n"
+    },
+    {
+      "path": "molecule/default/molecule.yml",
+      "sha": null,
+      "content_sha256": "0761586fd0332ad21a958f80f9b6fca47237a955f17869d25b96fffe42827126",
+      "score": 31,
+      "content": "---\ndependency:\n  name: galaxy\ndriver:\n  name: docker\nplatforms:\n  - name: ubuntu-1804\n    image: geerlingguy/docker-ubuntu1804-ansible\n    pre_build_image: true\n  - name: ubuntu-2004\n    image: geerlingguy/docker-ubuntu2004-ansible\n    pre_build_image: true\n  - name: centos-7\n    image: geerlingguy/docker-centos7-ansible\n    pre_build_image: true\n  - name: centos-8\n    image: geerlingguy/docker-centos8-ansible\n    pre_build_image: true\nprovisioner:\n  name: ansible\nverifier:\n  name: ansible\n"
+    },
+    {
+      "path": "molecule/default/verify.yml",
+      "sha": null,
+      "content_sha256": "0ce38efcbc7f709a867144477c9a748cd906f4895a8137b9bf7b2929c463febd",
+      "score": 31,
+      "content": "---\n- name: Verify\n  hosts: all\n  tasks:\n  - name: gather package facts\n    package_facts:\n\n  - name: check that enroot is installed\n    assert:\n      that:\n      - \"'enroot' in ansible_facts.packages\"\n      - \"'enroot+caps' in ansible_facts.packages\"\n\n  - name: check for path to enroot\n    command: which enroot\n    register: which_enroot\n    changed_when: which_enroot.rc != 0\n\n  - name: verify path to enroot\n    assert:\n      that:\n      - \"'/usr/bin/enroot' in which_enroot.stdout\"\n\n  - name: check that bash completion is present\n    command: ls /etc/bash_completion.d/enroot.bash_completion\n\n  - name: check that enroot.conf is present\n    command: ls /etc/enroot/enroot.conf\n"
+    },
+    {
+      "path": "molecule/default/converge.yml",
+      "sha": null,
+      "content_sha256": "f9fc1c7a40dcf5cae5f118af364520b8429949bb0da8202142f7e40d00882eef",
+      "score": 31,
+      "content": "---\n- name: Converge\n  hosts: all\n  tasks:\n    - name: \"Include ansible-role-enroot\"\n      include_role:\n        name: \"ansible-role-enroot\"\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:16.474472+00:00"
+}

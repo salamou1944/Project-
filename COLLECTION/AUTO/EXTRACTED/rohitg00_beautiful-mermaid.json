@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:rohitg00/beautiful-mermaid",
+  "repo": "rohitg00/beautiful-mermaid",
+  "revision_sha": "31f495f27bc5ff3ef59de17de69e47bb89658697",
+  "default_branch": "main",
+  "pushed_at": "2026-02-02T17:48:12Z",
+  "repo_updated_at": "2026-03-15T01:25:12Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "271c5da7f8bb825684d020f699cd78fdcab7cbe3d81b7ca5d68ec216fae6dd8c",
+      "score": 198,
+      "content": "name: CI\n\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v1\n        with:\n          bun-version: latest\n\n      - name: Install dependencies\n        run: bun install\n\n      - name: Run tests\n        run: bun test\n\n      - name: Type check\n        run: bun x tsc --noEmit\n"
+    },
+    {
+      "path": "src/__tests__/ascii.test.ts",
+      "sha": null,
+      "content_sha256": "d0c56ec329e6f7f20f14872f77a1e2809e07f1138a7ba16f8541375da27158d5",
+      "score": 163,
+      "content": "/**\n * Golden-file tests for the ASCII/Unicode renderer.\n *\n * Ported from AlexanderGrooff/mermaid-ascii cmd/graph_test.go.\n * Each .txt file contains mermaid input above a `---` separator\n * and the expected ASCII/Unicode output below it.\n *\n * Test data: 44 ASCII files + 22 Unicode files = 66 total.\n */\nimport { describe, it, expect } from 'bun:test'\nimport { renderMermaidAscii } from '../ascii/index.ts'\nimport { readdirSync, readFileSync } from 'node:fs'\nimport { join } from 'node:path'\n\n// ============================================================================\n// Test case parser — matches Go's testutil.ReadTestCase format\n// ============================================================================\n\ninterface TestCase {\n  mermaid: string\n  expected: string\n  paddingX: number\n  paddingY: number\n}\n\n/**\n * Parse a golden test file into its components.\n * Format:\n *   [paddingX=N]     (optional)\n *   [paddingY=N]     (optional)\n *   <mermaid code>\n *   ---\n *   <expected output>\n */\nfunction parseTestCase(content: string): TestCase {\n  const tc: TestCase = { mermaid: '', expected: '', paddingX: 5, paddingY: 5 }\n  const lines = content.split('\\n')\n  const paddingRegex = /^(?:padding([xy]))\\s*=\\s*(\\d+)\\s*$/i\n\n  let inMermaid = true\n  let mermaidStarted = false\n  const mermaidLines: string[] = []\n  const expectedLines: string[] = []\n\n  for (const line of lines) {\n    if (line === '---') {\n      inMermaid = false\n      continue\n    }\n\n    if (inMermaid) {\n      const trimmed = line.trim()\n\n      // Before mermaid code starts, parse padding directives and skip blanks\n      if (!mermaidStarted) {\n        if (trimmed === '') continue\n        const match = trimmed.match(paddingRegex)\n        if (match) {\n          const value = parseInt(match[2]!, 10)\n          if (match[1]!.toLowerCase() === 'x') {\n            tc.paddingX = value\n          } else {\n            tc.paddingY = value\n          }\n          continue\n        }\n      }\n\n      mermaidStarted = true\n      mermaidLines.push(line)\n    } else {\n      expectedLines.push(line)\n    }\n  }\n\n  tc.mermaid = mermaidLines.join('\\n') + '\\n'\n\n  // Strip final trailing newline (matches Go's strings.TrimSuffix(expected, \"\\n\"))\n  let expected = expectedLines.join('\\n')\n  if (expected.endsWith('\\n')) {\n    expected = expected.slice(0, -1)\n  }\n  tc.expected = expected\n\n  return tc\n}\n\n// ============================================================================\n// Whitespace normalization — matches Go's testutil.NormalizeWhitespace\n// ============================================================================\n\n/**\n * Normalize whitespace for comparison:\n * - Trim trailing spaces from each line\n * - Remove leading/trailing blank lines\n */\nfunction normalizeWhitespace(s: string): string {\n  const lines = s.split('\\n')\n  let normalized = lines.map(l => l.trimEnd())\n\n  // Remove leading blank lines\n  while (normalized.length > 0 && normalized[0] === '') {\n    normalized.shift()\n  }\n  // Remove trailing blank lines\n  while (normalized.length > 0 && normalized[normalized.length - 1] === '') {\n    normalized.pop()\n  }\n\n  return normalized.join('\\n')\n}\n\n/** Replace spaces with middle dots for clearer diff output. */\nfunction visualizeWhitespace(s: string): string {\n  return s.replaceAll(' ', '·')\n}\n\n// ============================================================================\n// Test runner — dynamically loads all golden files from testdata directories\n// ============================================================================\n\nfunction runGoldenTests(dir: string, useAscii: boolean): void {\n  const files = readdirSync(dir).filter(f => f.endsWith('.txt')).sort()\n\n  for (const file of files) {\n    const testName = file.replace('.txt', '')\n\n    it(testName, () => {\n      const content = readFileSync(join(dir, file), 'utf-8')\n      const tc = parseTestCase(content)\n\n      const actual = renderMermaidAscii(tc.mermaid, {\n        useAscii,\n        paddingX: tc.paddingX,\n        paddingY: tc.paddingY,\n      })\n\n      const normalizedExpected = normalizeWhitespace(tc.expected)\n      const normalizedActual = normalizeWhitespace(actual)\n\n      if (normalizedExpected !== normalizedActual) {\n        const expectedVis = visualizeWhitespace(normalizedExpected)\n        const actualVis = visualizeWhitespace(normalizedActual)\n        expect(actualVis).toBe(expectedVis)\n      }\n    })\n  }\n}\n\n// ============================================================================\n// Test suites\n// ============================================================================\n\nconst testdataDir = join(import.meta.dir, 'testdata')\n\ndescribe('ASCII rendering', () => {\n  runGoldenTests(join(testdataDir, 'ascii'), true)\n})\n\ndescribe('Unicode rendering', () => {\n  runGoldenTests(join(testdataDir, 'unicode'), false)\n})\n\n// ============================================================================\n// Config behavior tests — ported from Go's TestGraphUseAsciiConfig\n// ============================================================================\n\ndescribe('Config behavior', () => {\n  const mermaidInput = 'graph LR\\nA --> B'\n\n  it('ASCII and Unicode outputs should differ', () => {\n    const asciiOutput = renderMermaidAscii(mermaidInput, { useAscii: true })\n    const unicodeOutput = renderMermaidAscii(mermaidInput, { useAscii: false })\n    expect(asciiOutput).not.toBe(unicodeOutput)\n  })\n\n  it('ASCII output should not contain Unicode box-drawing characters', () => {\n    const output = renderMermaidAscii(mermaidInput, { useAscii: true })\n    expect(output).not.toContain('┌')\n    expect(output).not.toContain('─')\n    expect(output).not.toContain('│')\n  })\n\n  it('Unicode output should contain Unicode box-drawing characters', () => {\n    const output = renderMermaidAscii(mermaidInput, { useAscii: false })\n    const hasUnicode = output.includes('┌') || output.includes('─') || output.includes('│')\n    expect(hasUnicode).toBe(true)\n  })\n})\n"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "sha": null,
+      "content_sha256": "a48488021a529b0cf5beb6b4c21de8608ced41dbd9d84a2fa9282532a569daf3",
+      "score": 126,
+      "content": "name: Publish to npm\n\non:\n  release:\n    types: [published]\n\njobs:\n  publish:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v1\n        with:\n          bun-version: latest\n\n      - name: Setup Node.js (for npm publish)\n        uses: actions/setup-node@v4\n        with:\n          node-version: '20'\n          registry-url: 'https://registry.npmjs.org'\n\n      - name: Install dependencies\n        run: bun install\n\n      - name: Run tests\n        run: bun test\n\n      - name: Publish to npm\n        run: npm publish --access public\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/two_nodes_linked.txt",
+      "sha": null,
+      "content_sha256": "29cde98983bda47c92241c9815e6681ae79ec8a630113239e3bdedfe06261b7f",
+      "score": 124,
+      "content": "graph LR\nA --> B\n---\n+---+     +---+\n|   |     |   |\n| A |---->| B |\n|   |     |   |\n+---+     +---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/cls_association.txt",
+      "sha": null,
+      "content_sha256": "270d750ac8c4c566a0c3ded0cd26e9415b5029f766511f22eb0c79afe80bbd9d",
+      "score": 124,
+      "content": "classDiagram\n  Student --> Course : enrolls\n---\n+---------+\n| Student |\n+---------+\n     |\n  enrolls\n     v\n+--------+\n| Course |\n+--------+\n\n\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/single_node_longer_name.txt",
+      "sha": null,
+      "content_sha256": "6789bce521908e3c3b9d4781120ba3220c372de86dd77bd61036666bdf0781c2",
+      "score": 124,
+      "content": "graph LR\nLongerName\n---\n+------------+\n|            |\n| LongerName |\n|            |\n+------------+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/subgraph_single_node.txt",
+      "sha": null,
+      "content_sha256": "085816503137ed6852dd05bc9ac789bdaeea6c255edb5f0758e8e0e56b720c83",
+      "score": 124,
+      "content": "graph LR\nsubgraph one\n    A\nend\n---\n+-------+\n|  one  |\n|       |\n|       |\n| +---+ |\n| |   | |\n| | A | |\n| |   | |\n| +---+ |\n|       |\n+-------+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/custom_padding.txt",
+      "sha": null,
+      "content_sha256": "476be9a0619a28e013afb7096d6588e48dd6dd60255d5ef84dd1815c0aa9000e",
+      "score": 124,
+      "content": "paddingX=2\npaddingY=1\ngraph LR\nA --> B\n---\n+---+  +---+\n|   |  |   |\n| A |->| B |\n|   |  |   |\n+---+  +---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/three_nodes.txt",
+      "sha": null,
+      "content_sha256": "40f05f6161f30d0922ea162f09cbc08f6c077b877851c9294e2c9763e28cd345",
+      "score": 124,
+      "content": "graph LR\nA --> B\nB --> C\n---\n+---+     +---+     +---+\n|   |     |   |     |   |\n| A |---->| B |---->| C |\n|   |     |   |     |   |\n+---+     +---+     +---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/single_node.txt",
+      "sha": null,
+      "content_sha256": "7d1c2fe6e421b5671be49a92b2c7559894ca0fd79115971b0b98790922e37659",
+      "score": 124,
+      "content": "graph LR\nA\n---\n+---+\n|   |\n| A |\n|   |\n+---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/graph_bt_direction.txt",
+      "sha": null,
+      "content_sha256": "baabc41e936d45517920a24022a806a799897f262286391ed914e1fcfdb8319c",
+      "score": 124,
+      "content": "graph BT\n  A --> B --> C\n---\n+---+\n|   |\n| C |\n|   |\n+---+\n  ^\n  |\n  |\n  |\n  |\n+---+\n|   |\n| B |\n|   |\n+---+\n  ^\n  |\n  |\n  |\n  |\n+---+\n|   |\n| A |\n|   |\n+---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/flowchart_tb_simple.txt",
+      "sha": null,
+      "content_sha256": "55245fc13d5bb8e43e9d71335b43cf7791f2c7bdafb015a3a0d731d48b4a13e0",
+      "score": 124,
+      "content": "flowchart TB\n    A --> B\n    B --> C\n---\n+---+\n|   |\n| A |\n|   |\n+---+\n  |  \n  |  \n  |  \n  |  \n  v  \n+---+\n|   |\n| B |\n|   |\n+---+\n  |  \n  |  \n  |  \n  |  \n  v  \n+---+\n|   |\n| C |\n|   |\n+---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/er_basic.txt",
+      "sha": null,
+      "content_sha256": "c9ae9f577c28099d8d87d1418d13803b2b2e335f7e139030f4b8c8b6da8cd902",
+      "score": 124,
+      "content": "erDiagram\n  CUSTOMER ||--o{ ORDER : places\n---\n+----------+places+-------+    \n| CUSTOMER |||--o{| ORDER |    \n+----------+      +-------+    \n                               \n                               \n"
+    },
+    {
+      "path": "src/__tests__/testdata/unicode/cls_association.txt",
+      "sha": null,
+      "content_sha256": "f2be376dba11593689578c8b72a10a901fd6606172259e16a5432447b1ab4fc3",
+      "score": 124,
+      "content": "classDiagram\n  Student --> Course : enrolls\n---\n┌─────────┐\n│ Student │\n└─────────┘\n     │\n  enrolls\n     ▼\n┌────────┐\n│ Course │\n└────────┘\n\n\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/self_reference_with_edge.txt",
+      "sha": null,
+      "content_sha256": "0801bc25eb34812bb39d255a43d8c32118dc2372cc59d3e128e3cd0b37ef4dc7",
+      "score": 124,
+      "content": "graph LR\nA --> A & B\n---\n+---+     +---+\n|   |     |   |\n| A |--+->| B |\n|   |  |  |   |\n+---+  |  +---+\n  ^    |       \n  +----+       \n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/graph_tb_direction.txt",
+      "sha": null,
+      "content_sha256": "f3a9a37ce07bd1d9d4e026db3c77e4781b07d6129dc346650ac0c212b6e1e0d3",
+      "score": 124,
+      "content": "graph TB\nsubgraph one\n    A --> B\nend\n---\n+-------+\n|  one  |\n|       |\n|       |\n| +---+ |\n| |   | |\n| | A | |\n| |   | |\n| +---+ |\n|   |   |\n|   |   |\n|   |   |\n|   |   |\n|   v   |\n| +---+ |\n| |   | |\n| | B | |\n| |   | |\n| +---+ |\n|       |\n+-------+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/subgraph_empty.txt",
+      "sha": null,
+      "content_sha256": "f7cfb2b40f1bcb04a4d4d70716fdb21dc9add9ecbb6c2ec5691b67a3bcd67593",
+      "score": 124,
+      "content": "graph LR\nsubgraph one\nend\nA --> B\n---\n+---+     +---+\n|   |     |   |\n| A |---->| B |\n|   |     |   |\n+---+     +---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/three_nodes_single_line.txt",
+      "sha": null,
+      "content_sha256": "79199982f65f966c1c0b29fd3af1ad10d7a8670053337ae3f17385eadbca5894",
+      "score": 124,
+      "content": "graph LR\nA --> B --> C\n---\n+---+     +---+     +---+\n|   |     |   |     |   |\n| A |---->| B |---->| C |\n|   |     |   |     |   |\n+---+     +---+     +---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/cls_dependency.txt",
+      "sha": null,
+      "content_sha256": "9f80f353ed0f75b1ddf97bf294e3f11ae84b9e5d633405691c1aa4b98f9762df",
+      "score": 124,
+      "content": "classDiagram\n  Client ..> Server : uses\n---\n+--------+\n| Client |\n+--------+\n     :\n   uses\n     v\n+--------+\n| Server |\n+--------+\n\n\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/ampersand_without_edge.txt",
+      "sha": null,
+      "content_sha256": "625e6ed58727697b0e8dd96990898b41b6aa7b25e05e9ff43137e41635a82480",
+      "score": 124,
+      "content": "graph LR\nA & B\n---\n+---+\n|   |\n| A |\n|   |\n+---+\n     \n     \n     \n     \n     \n+---+\n|   |\n| B |\n|   |\n+---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/two_single_root_nodes.txt",
+      "sha": null,
+      "content_sha256": "58d958cc0499e8f26908b7bf2d72f3645e0f0f1cdb193c0c054e0a589fec2af6",
+      "score": 124,
+      "content": "graph LR\nA\nB\n---\n+---+\n|   |\n| A |\n|   |\n+---+\n     \n     \n     \n     \n     \n+---+\n|   |\n| B |\n|   |\n+---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/self_reference.txt",
+      "sha": null,
+      "content_sha256": "1686a417deb81f540db347b8f487ecc3b00aaaa92d621425b3b77c81a8f88f6a",
+      "score": 124,
+      "content": "graph LR\nA --> A\n---\n+---+  \n|   |  \n| A |-+\n|   | |\n+---+ |\n  ^   |\n  +---+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/two_nodes_longer_names.txt",
+      "sha": null,
+      "content_sha256": "0d492d15e0550bf2bd09202e9aa912f13312757d8780fec85e922f4ae4da06df",
+      "score": 124,
+      "content": "graph LR\nLongerName1 --> LongerName2\n---\n+-------------+     +-------------+\n|             |     |             |\n| LongerName1 |---->| LongerName2 |\n|             |     |             |\n+-------------+     +-------------+\n"
+    },
+    {
+      "path": "src/__tests__/testdata/ascii/back_reference_from_child.txt",
+      "sha": null,
+      "content_sha256": "0f511e5a781f5d7bbfc44e2b16943088b5a202ee14c33fc471389302c7598adf",
+      "score": 124,
+      "content": "graph LR\nA --> B --> C --> A\n---\n+---+     +---+     +---+\n|   |     |   |     |   |\n| A |---->| B |---->| C |\n|   |     |   |     |   |\n+---+     +---+     +---+\n  ^                   |  \n  +-------------------+  \n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:00.444298+00:00"
+}

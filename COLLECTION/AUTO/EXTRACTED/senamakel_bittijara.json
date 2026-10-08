@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:senamakel/bittijara",
+  "repo": "senamakel/bittijara",
+  "revision_sha": "9fcf9c9483c848869627ce4e5c07e7dde98df937",
+  "default_branch": "stable",
+  "pushed_at": "2018-03-17T17:23:09Z",
+  "repo_updated_at": "2018-03-17T17:23:10Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "spec/models/payment_transaction_spec.rb",
+      "sha": null,
+      "content_sha256": "9cc046ca7e1d00759d53ddd8c6d27e534f0e7fe577723bcf8c1e505a30c342dd",
+      "score": 308,
+      "content": "require 'spec_helper'\n\ndescribe PaymentTransaction do\n  it \"expect state transfer\" do\n    tx = create(:payment_transaction, deposit: create(:deposit))\n    tx.stubs(:refresh_confirmations)\n\n    tx.stubs(:min_confirm?).returns(false)\n    tx.stubs(:max_confirm?).returns(false)\n\n    expect(tx.unconfirm?).to be_true\n    expect(tx.check).to be_false\n    expect(tx.check).to be_false\n    expect(tx.check).to be_false\n    expect(tx.unconfirm?).to be_true\n\n    tx.stubs(:min_confirm?).returns(true)\n    tx.stubs(:max_confirm?).returns(false)\n\n    expect(tx.check).to be_true\n    expect(tx.confirming?).to be_true\n\n    tx.stubs(:min_confirm?).returns(false)\n    tx.stubs(:max_confirm?).returns(true)\n\n    expect(tx.check).to be_true\n    expect(tx.confirmed?).to be_true\n    expect(tx.check).to be_true\n  end\n\nend\n"
+    },
+    {
+      "path": "app/models/payment_transaction.rb",
+      "sha": null,
+      "content_sha256": "c2014d684b97824cd7a26360dd6a51ce17c1a3c6f651b573404ec89c89e30f2f",
+      "score": 248,
+      "content": "class PaymentTransaction < ActiveRecord::Base\n  extend Enumerize\n\n  include AASM\n  include AASM::Locking\n  include Currencible\n\n  STATE = [:unconfirm, :confirming, :confirmed]\n  enumerize :aasm_state, in: STATE, scope: true\n\n  validates_presence_of :txid\n\n  has_one :deposit\n  belongs_to :payment_address, foreign_key: 'address', primary_key: 'address'\n  has_one :account, through: :payment_address\n  has_one :member, through: :account\n\n  after_update :sync_update\n\n  aasm :whiny_transitions => false do\n    state :unconfirm, initial: true\n    state :confirming, after_commit: :deposit_accept\n    state :confirmed, after_commit: :deposit_accept\n\n    event :check do |e|\n      before :refresh_confirmations\n\n      transitions :from => [:unconfirm, :confirming], :to => :confirming, :guard => :min_confirm?\n      transitions :from => [:unconfirm, :confirming, :confirmed], :to => :confirmed, :guard => :max_confirm?\n    end\n  end\n\n  def min_confirm?\n    deposit.min_confirm?(confirmations)\n  end\n\n  def max_confirm?\n    deposit.max_confirm?(confirmations)\n  end\n\n  def refresh_confirmations\n    raw = CoinRPC[deposit.currency].gettransaction(txid)\n    self.confirmations = raw[:confirmations]\n    save!\n  end\n\n  def deposit_accept\n    if deposit.may_accept?\n      deposit.accept! \n    end\n  end\n\n  private\n\n  def sync_update\n    if self.confirmations_changed?\n      ::Pusher[\"private-#{deposit.member.sn}\"].trigger_async('deposits', { type: 'update', id: self.deposit.id, attributes: {confirmations: self.confirmations}})\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/models/payment_transaction/normal.rb",
+      "sha": null,
+      "content_sha256": "616a11852633fdf8dd90ac075e2d6c1a907e0a67a0e389927de30043e78bbbbd",
+      "score": 246,
+      "content": "class PaymentTransaction::Normal < PaymentTransaction\n  # Default payment transaction captures all bitcoin-like transactions.\n\n  validates_presence_of :txout\n  validates_uniqueness_of :txout, scope: :txid\n\nend\n"
+    },
+    {
+      "path": "spec/api/api_v2/auth/utils_spec.rb",
+      "sha": null,
+      "content_sha256": "c22bd6b771cd2207dacc2c03abe6874aa0a50189a951ef65050bcf5c400d9257",
+      "score": 242,
+      "content": "require 'spec_helper'\n\ndescribe APIv2::Auth::Utils do\n  Utils = APIv2::Auth::Utils\n\n  context '.generate_access_key' do\n    it \"should be a string longer than 40 characters\" do\n      Utils.generate_access_key.should match(/^[a-zA-Z0-9]{40}$/)\n    end\n  end\n\n  context '.generate_secret_key' do\n    it \"should be a string longer than 40 characters\" do\n      Utils.generate_secret_key.should match(/^[a-zA-Z0-9]{40}$/)\n    end\n  end\nend\n"
+    },
+    {
+      "path": "spec/api/api_v2/auth/authenticator_spec.rb",
+      "sha": null,
+      "content_sha256": "e5edb9adb966d1d847cea0fd451f820c397051ed124a8a0cdd33efffdd42c58d",
+      "score": 242,
+      "content": "require 'spec_helper'\n\ndescribe APIv2::Auth::Authenticator do\n  Authenticator = APIv2::Auth::Authenticator\n\n  let(:token) { create(:api_token) }\n  let(:tonce) { time_to_milliseconds }\n\n  let(:endpoint) { stub('endpoint', options: {route_options: {scopes: ['identity']}})}\n  let(:request) { stub('request', request_method: 'GET', path_info: '/', env: {'api.endpoint' => endpoint}) }\n  let(:payload) { \"GET|/api/|access_key=#{token.access_key}&foo=bar&hello=world&tonce=#{tonce}\" }\n\n  let(:params) do\n    Hashie::Mash.new({\n      \"access_key\" => token.access_key,\n      \"tonce\"      => tonce,\n      \"foo\"        => \"bar\",\n      \"hello\"      => \"world\",\n      \"route_info\" => Grape::Route.new,\n      \"signature\"  => APIv2::Auth::Utils.hmac_signature(token.secret_key, payload)\n    })\n  end\n\n  subject { Authenticator.new(request, params) }\n\n  its(:authenticate!)          { should == token }\n  its(:token)                  { should == token }\n  its(:canonical_verb)         { should == 'GET' }\n  its(:canonical_uri)          { should == '/' }\n  its(:canonical_query)        { should == \"access_key=#{token.access_key}&foo=bar&hello=world&tonce=#{tonce}\" }\n\n  it \"should not be authentic without access key\" do\n    params[:access_key] = ''\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::InvalidAccessKeyError)\n  end\n\n  it \"should not be authentic without signature\" do\n    subject\n    params[:signature] = nil\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::IncorrectSignatureError)\n  end\n\n  it \"should not be authentic without tonce\" do\n    params[:tonce] = nil\n    params[:signature] = APIv2::Auth::Utils.hmac_signature(token.secret_key, \"GET|/|access_key=#{token.access_key}&foo=bar&hello=world&tonce=\")\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::InvalidTonceError)\n  end\n\n  it \"should return false on unmatched signature\" do\n    params[:signature] = 'fake'\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::IncorrectSignatureError)\n  end\n\n  it \"should be invalid if tonce is not within 30s\" do\n    params[:tonce] = time_to_milliseconds(31.seconds.ago)\n    lambda {\n      Authenticator.new(request, params).check_tonce!\n    }.should raise_error(APIv2::InvalidTonceError)\n\n    params[:tonce] = time_to_milliseconds(31.seconds.since)\n    lambda {\n      Authenticator.new(request, params).check_tonce!\n    }.should raise_error(APIv2::InvalidTonceError)\n  end\n\n  it \"should not be authentic on repeated tonce\" do\n    params[:tonce] = time_to_milliseconds(Time.now)\n    subject.check_tonce!\n\n    lambda {\n      subject.check_tonce!\n    }.should raise_error(APIv2::TonceUsedError)\n  end\n\n  it \"should not be authentic for invalid token\" do\n    params[:access_key] = 'fake'\n    subject.token.should be_nil\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::InvalidAccessKeyError)\n  end\n\n  it \"should be authentic if associated member is disabled\" do\n    token.member.update_attributes disabled: true\n    lambda {\n      subject.token.should_not be_nil\n      subject.authenticate!\n    }.should_not raise_error\n  end\n\n  it \"should not be authentic if api access is disabled\" do\n    token.member.update_attributes api_disabled: true\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::DisabledAccessKeyError)\n  end\n\n  it \"should not be authentic if token is expired\" do\n    token.update_attributes expire_at: 1.second.ago\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::ExpiredAccessKeyError)\n  end\n\n  it \"should not be authentic if token is soft deleted\" do\n    token.destroy\n    APIToken.find_by_id(token.id).should be_nil\n    APIToken.with_deleted.find_by_id(token.id).should == token\n    lambda {\n      subject.authenticate!\n    }.should raise_error(APIv2::InvalidAccessKeyError)\n  end\nend\n"
+    },
+    {
+      "path": "spec/api/api_v2/auth/middleware_spec.rb",
+      "sha": null,
+      "content_sha256": "7234dcf85a92c4a82bb2a99b3afccb19f2d7081eb62443d3af16155557a95a15",
+      "score": 242,
+      "content": "require 'spec_helper'\n\ndescribe APIv2::Auth::Middleware do\n\n  class TestApp < Grape::API\n    helpers APIv2::Helpers\n    use APIv2::Auth::Middleware\n\n    get '/' do\n      authenticate!\n      current_user.email\n    end\n  end\n\n  let(:app) do\n    TestApp.new\n  end\n\n  let(:token) { create(:api_token) }\n\n  it \"should refuse request without credentials\" do\n    get '/'\n    response.code.should == '401'\n    response.body.should == \"{\\\"error\\\":{\\\"code\\\":2001,\\\"message\\\":\\\"Authorization failed\\\"}}\"\n  end\n\n  it \"should refuse request with incorrect credentials\" do\n    get '/', access_key: token.access_key, tonce: time_to_milliseconds, signature: 'wrong'\n    response.code.should == '401'\n    response.body.should == \"{\\\"error\\\":{\\\"code\\\":2005,\\\"message\\\":\\\"Signature wrong is incorrect.\\\"}}\"\n  end\n\n  it \"should authorize request with correct param credentials\" do\n    signed_get '/', token: token\n    response.should be_success\n    response.body.should == token.member.email\n  end\n\nend\n"
+    },
+    {
+      "path": "spec/factories/payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "a7ce00be2b7fdf63f02dbd5a62becbd599045d4dacb16545f13e022ac471fd29",
+      "score": 233,
+      "content": "FactoryGirl.define do\n  factory :payment_transaction do\n    txid { Faker::Lorem.characters(16) }\n    txout 0\n    currency { 'btc' }\n    amount { 10.to_d }\n    payment_address\n  end\nend\n"
+    },
+    {
+      "path": "spec/controllers/authentications/emails_controller_spec.rb",
+      "sha": null,
+      "content_sha256": "bd1664ae76df81f9c137c05207446d9415050d1bda450a23b8117c8ada924c9c",
+      "score": 229,
+      "content": "require 'spec_helper'\n\nmodule Authentications\n  describe EmailsController do\n    let(:member) { create(:member, email: nil, activated: false) }\n    before { session[:member_id] = member.id }\n\n    describe 'GET new' do\n      subject { get :new }\n\n      it { should be_success }\n\n      it  do\n        get :new\n        flash[:info].should == t('authentications.emails.new.setup_email')\n      end\n    end\n\n    describe 'POST create' do\n      let(:data) {\n        { email: { address: 'xman@xman.com', user_id: '2' } }\n      }\n\n      it \"should update current_user's email\" do\n        post :create, data\n        member.reload\n        member.email.should == 'xman@xman.com'\n        member.activated.should be_false\n      end\n    end\n\n  end\nend\n"
+    },
+    {
+      "path": "spec/models/payment_address_spec.rb",
+      "sha": null,
+      "content_sha256": "ac3637df452ee086d5c5cf2c9506921feb781fbdc2dcbed8fb641f926544938e",
+      "score": 226,
+      "content": "require 'spec_helper'\n\ndescribe PaymentAddress do\n\n  context \".create\" do\n    before do\n      PaymentAddress.any_instance.stubs(:id).returns(1)\n    end\n\n    it \"generate address after commit\" do\n      AMQPQueue.expects(:enqueue)\n        .with(:deposit_coin_address,\n              {payment_address_id: 1, currency: 'btc'},\n              {persistent: true})\n\n      PaymentAddress.create currency: :btc\n    end\n  end\n\nend\n"
+    },
+    {
+      "path": "spec/support/api_helper.rb",
+      "sha": null,
+      "content_sha256": "b3dada5a7996bef5ab924414816c343d662276075f626fb94c1cac2e76d25d48",
+      "score": 226,
+      "content": "def time_to_milliseconds(t=Time.now)\n  (t.to_f*1000).to_i\nend\n\ndef sign(secret_key, method, uri, params)\n  req = mock('request', request_method: method.to_s.upcase, path_info: uri)\n  auth = APIv2::Auth::Authenticator.new(req, params)\n  APIv2::Auth::Utils.hmac_signature(secret_key, auth.payload)\nend\n\ndef signed_request(method, uri, opts={})\n  token = opts[:token] || create(:api_token)\n  path  = uri.sub(/^\\/api/, '')\n\n  params = opts[:params] || {}\n  params[:access_key] = token.access_key\n  params[:tonce]      = time_to_milliseconds\n  params[:signature]  = sign(token.secret_key, method, path, params)\n\n  send method, uri, params\nend\n\ndef signed_get(uri, opts={})\n  signed_request :get, uri, opts\nend\n\ndef signed_post(uri, opts={})\n  signed_request :post, uri, opts\nend\n\ndef signed_delete(uri, opts={})\n  signed_request :delete, uri, opts\nend\n"
+    },
+    {
+      "path": "db/migrate/20141105090746_add_oauth_columns_to_api_tokens.rb",
+      "sha": null,
+      "content_sha256": "54f0e671b3f2196ab8ce166e8c6647609bdb47f9fcf7cfd6f6968d1945e3664f",
+      "score": 186,
+      "content": "class AddOauthColumnsToAPITokens < ActiveRecord::Migration\n  def change\n    add_column :api_tokens, :oauth_access_token_id, :integer\n    add_column :api_tokens, :expire_at, :datetime\n    add_column :api_tokens, :scopes, :string\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20141107031140_add_deleted_at_to_api_tokens_and_oauth_tokens.rb",
+      "sha": null,
+      "content_sha256": "5120c71ca283e6a039e8c6744d571f06ab31258a6afbddaacb2ca08b98910828",
+      "score": 186,
+      "content": "class AddDeletedAtToAPITokensAndOauthTokens < ActiveRecord::Migration\n  def change\n    add_column :api_tokens, :deleted_at, :datetime\n    add_column :oauth_access_tokens, :deleted_at, :datetime\n  end\nend\n"
+    },
+    {
+      "path": "app/models/authentication.rb",
+      "sha": null,
+      "content_sha256": "63f0ffa767e4deecfeb168bdd50ca169b455a750eb1688b37742a7f854c4d11e",
+      "score": 186,
+      "content": "class Authentication < ActiveRecord::Base\n  belongs_to :member\n\n  validates :provider, presence: true, uniqueness: { scope: :member_id }\n  validates :uid,      presence: true, uniqueness: { scope: :provider }\n\n  class << self\n    def locate(auth)\n      uid      = auth['uid'].to_s\n      provider = auth['provider']\n      find_by_provider_and_uid provider, uid\n    end\n\n    def build_auth(auth)\n      new \\\n        uid:      auth['uid'],\n        provider: auth['provider'],\n        token:    auth['credentials'].try(:[], 'token'),\n        secret:   auth['credentials'].try(:[], 'secret'),\n        nickname: auth['info'].try(:[], 'nickname')\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/api/api_v2/auth/middleware.rb",
+      "sha": null,
+      "content_sha256": "e059cb3ff2f9de521d033b5aa4e7a2abc8c0dd262c12351ad98e77a485031df7",
+      "score": 182,
+      "content": "module APIv2\n  module Auth\n    class Middleware < ::Grape::Middleware::Base\n\n      def before\n        if provided?\n          auth = Authenticator.new(request, params)\n          @env['api_v2.token'] = auth.authenticate!\n        end\n      end\n\n      def provided?\n        params[:access_key] && params[:tonce] && params[:signature]\n      end\n\n      def request\n        @request ||= ::Grape::Request.new(env)\n      end\n\n      def params\n        @params ||= request.params\n      end\n\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/api/api_v2/auth/authenticator.rb",
+      "sha": null,
+      "content_sha256": "e00932aeb3f36dc9c5ee34784ea02973cb571654a9237d2ea2c0e9f99ae35e4a",
+      "score": 182,
+      "content": "module APIv2\n  module Auth\n    class Authenticator\n\n      def initialize(request, params)\n        @request = request\n        @params  = params\n      end\n\n      def authenticate!\n        check_token!\n        check_tonce!\n        check_signature!\n        token\n      end\n\n      def token\n        @token ||= APIToken.joins(:member).where(access_key: @params[:access_key]).first\n      end\n\n      def check_token!\n        raise InvalidAccessKeyError, @params[:access_key] unless token\n        raise DisabledAccessKeyError, @params[:access_key] if token.member.api_disabled\n        raise ExpiredAccessKeyError, @params[:access_key] if token.expired?\n        raise OutOfScopeError unless token.in_scopes?(route_scopes)\n      end\n\n      def check_signature!\n        if @params[:signature] != Utils.hmac_signature(token.secret_key, payload)\n          Rails.logger.warn \"APIv2 auth failed: signature doesn't match. token: #{token.access_key} payload: #{payload}\"\n          raise IncorrectSignatureError, @params[:signature]\n        end\n      end\n\n      def check_tonce!\n        key = \"api_v2:tonce:#{token.access_key}:#{tonce}\"\n        if Utils.cache.read(key)\n          Rails.logger.warn \"APIv2 auth failed: used tonce. token: #{token.access_key} payload: #{payload} tonce: #{tonce}\"\n          raise TonceUsedError.new(token.access_key, tonce)\n        end\n        Utils.cache.write key, tonce, 61 # forget after 61 seconds\n\n        now = Time.now.to_i*1000\n        if tonce < now-30000 || tonce > now+30000 # within 30 seconds\n          Rails.logger.warn \"APIv2 auth failed: invalid tonce. token: #{token.access_key} payload: #{payload} tonce: #{tonce} current timestamp: #{now}\"\n          raise InvalidTonceError.new(tonce, now)\n        end\n      end\n\n      def tonce\n        @tonce ||= @params[:tonce].to_i\n      end\n\n      def payload\n        \"#{canonical_verb}|#{APIv2::Mount::PREFIX}#{canonical_uri}|#{canonical_query}\"\n      end\n\n      def canonical_verb\n        @request.request_method\n      end\n\n      def canonical_uri\n        @request.path_info\n      end\n\n      def canonical_query\n        hash = @params.select {|k,v| !%w(route_info signature format).include?(k) }\n        URI.unescape(hash.to_param)\n      end\n\n      def endpoint\n        @request.env['api.endpoint']\n      end\n\n      def route_scopes\n        endpoint.options[:route_options][:scopes]\n      end\n\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/api/api_v2/auth/utils.rb",
+      "sha": null,
+      "content_sha256": "dfabd40a872a6080fe8fe997f1d188fe53d59153bc5d0dc76fd16432efe8364e",
+      "score": 182,
+      "content": "module APIv2\n  module Auth\n    module Utils\n      class <<self\n\n        def cache\n          # Simply use rack-attack cache wrapper\n          @cache ||= Rack::Attack::Cache.new\n        end\n\n        def urlsafe_string_40\n          # 30 is picked so generated string length is 40\n          SecureRandom.urlsafe_base64(30).tr('_-', 'xx')\n        end\n\n        alias :generate_access_key :urlsafe_string_40\n        alias :generate_secret_key :urlsafe_string_40\n\n        def hmac_signature(secret_key, payload)\n          OpenSSL::HMAC.hexdigest 'SHA256', secret_key, payload\n        end\n\n      end\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/models/concerns/hash_currencible.rb",
+      "sha": null,
+      "content_sha256": "58b4a81cae9fc67c4d8e1a9155471c69f96482d32383d3b1efde5fb3c3270d2c",
+      "score": 176,
+      "content": "module HashCurrencible\n  extend ActiveSupport::Concern\n\n  included do\n    def currency_obj\n      Currency.find_by_code(attributes[:currency])\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/models/concerns/currencible.rb",
+      "sha": null,
+      "content_sha256": "218c5bf775741de288171f5ccad7e2d174071b8d5122ce7e15c958ed3f60b407",
+      "score": 176,
+      "content": "module Currencible\n  extend ActiveSupport::Concern\n\n  included do\n    extend Enumerize\n    enumerize :currency, in: Currency.enumerize, scope: true\n    belongs_to_active_hash :currency_obj, class_name: 'Currency', foreign_key: 'currency_value'\n    delegate :key_text, to: :currency_obj, prefix: true\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20141003040822_add_payment_transaction_id_to_deposits.rb",
+      "sha": null,
+      "content_sha256": "8aa349cf746de23c66420a916d88c96cdd712badcd2adce79bfd37cece3c9387",
+      "score": 173,
+      "content": "class AddPaymentTransactionIdToDeposits < ActiveRecord::Migration\n  def change\n    add_column :deposits, :payment_transaction_id, :integer\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20131110214254_add_currency_to_payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "fb3d7c4261a97f57a5f37f7f520a8bec148bff34487b4b2bce42762dd605ba34",
+      "score": 173,
+      "content": "class AddCurrencyToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :currency, :integer\n  end\nend\n\n"
+    },
+    {
+      "path": "db/migrate/20130926011813_change_to_enumerize_in_payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "0f654a4ef471034bea330f12b87847b35599f8dd43fa4e5a6cdcbf28bca6c145",
+      "score": 173,
+      "content": "class ChangeToEnumerizeInPaymentTransactions < ActiveRecord::Migration\n  def up\n    change_column :payment_transactions, :state, :integer\n  end\n\n  def down\n    change_column :payment_transactions, :state, :string\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20141002075102_add_tx_out_to_payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "b681074e14f788aa55b473afcda25ddb8620a89149f8f6da0951185486989b14",
+      "score": 173,
+      "content": "class AddTxOutToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :txout, :integer\n    add_index :payment_transactions, [:txid, :txout]\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20140326191837_add_deposit_id_to_payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "f07c56bc05b8881b934a61f56275bac1e270f8bbc04f89656bb40cd4d7e730a6",
+      "score": 173,
+      "content": "class AddDepositIdToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :aasm_state, :string, :after => :state\n    add_column :payment_transactions, :channel_id, :integer, :after => :aasm_state\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20130912144526_add_receive_at_to_payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "666823dc1de1ee2d44081facb72984f5e7a9bf6210b779a2257347bb9c57d1de",
+      "score": 173,
+      "content": "class AddReceiveAtToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :receive_at, :datetime\n  end\nend\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:45.716794+00:00"
+}

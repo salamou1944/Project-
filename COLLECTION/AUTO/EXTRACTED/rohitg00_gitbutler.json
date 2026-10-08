@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:rohitg00/gitbutler",
+  "repo": "rohitg00/gitbutler",
+  "revision_sha": "79b1e2fb94802e182b273d5fdbb38001a8f7460d",
+  "default_branch": "master",
+  "pushed_at": "2026-04-10T08:55:39Z",
+  "repo_updated_at": "2026-05-11T15:41:30Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "crates/but-api-macros/tests/Cargo.toml",
+      "sha": null,
+      "content_sha256": "88b10d6f4b7b4e49c28110053e14c9acbc27763776dfe365e6069f00c5e37c3d",
+      "score": 249,
+      "content": "[package]\nname = \"but-api-macros-tests\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\n\n[lib]\ndoctest = false\n\n[features]\ndefault = []\nlegacy = [\"but-ctx/legacy\"]\ntauri = [\"dep:tauri\", \"legacy\"]\nnapi = [\"dep:napi\", \"dep:napi-derive\", \"dep:tokio\", \"legacy\"]\n\n[dependencies]\nbut-api-macros = { path = \"..\" }\nbut-error.workspace = true \nbut-ctx.workspace = true\nanyhow.workspace = true\nserde.workspace = true\nserde_json.workspace = true\ngix.workspace = true\nfutures.workspace = true\nbstr = { workspace = true, features = [\"serde\"] }\ntauri = { version = \"^2.10.3\", features = [\"unstable\"], optional = true }\nnapi = { version = \"3.0.0\", features = [\"serde-json\", \"tokio_rt\"], optional = true }\nnapi-derive = { version = \"3.0.0\", optional = true }\ntokio = { workspace = true, optional = true, features = [\"rt\"] }\n\n[dev-dependencies]\ntrybuild = \"1.0.114\"\n\n[lints]\nworkspace = true\n\n[package.metadata.cargo-machete]\nignored = [\"futures\", \"napi\", \"napi-derive\", \"tauri\", \"but-error\", \"tokio\"]\n"
+    },
+    {
+      "path": "crates/gitbutler-branch-actions/tests/fixtures/dependencies.sh",
+      "sha": null,
+      "content_sha256": "3e6e2e7e7df6d15730cbc4576eaab187ca12453d0f1c3929d49f2a7ac690cf2a",
+      "score": 241,
+      "content": "#!/usr/bin/env bash\nset -eu -o pipefail\nCLI=${1:?The first argument is the GitButler CLI}\n\n# Add change ID to a commit.\n#\n# Example usage:\n# set_change_id adbb3234 \"change-id-1\" \"my_stack\"\nset_change_id() {\n    local commit_hash=$1\n    local change_id=$2\n    local branch_name=$3\n\n    local change_id_key=\"gitbutler-change-id\"\n    local gitbutler_header_version_key=\"gitbutler-headers-version\"\n    local gitbutler_header_version_value=\"2\"\n\n    if [ -z \"$commit_hash\" ] || [ -z \"$change_id\" ] || [ -z \"$branch_name\" ]; then\n        echo \"Usage: set_change_id <commit_hash> <change_id> <branch_name>\"\n        return 1\n    fi\n\n    local tree=$(git cat-file -p \"$commit_hash\" | grep \"^tree\" | awk '{print $2}')\n    local parent=$(git cat-file -p \"$commit_hash\" | grep \"^parent\" | awk '{print $2}')\n    local author=$(git cat-file -p \"$commit_hash\" | grep \"^author\" | cut -d' ' -f2-)\n    local committer=$(git cat-file -p \"$commit_hash\" | grep \"^committer\" | cut -d' ' -f2-)\n\n    local message_start=$(git cat-file -p \"$commit_hash\" | grep -n '^$' | head -n 1 | cut -d: -f1)\n    local message=$(git cat-file -p \"$commit_hash\" | tail -n +\"$((message_start + 1))\")\n\n    {\n        echo \"tree $tree\"\n        if [ -n \"$parent\" ]; then\n            echo \"parent $parent\"\n        fi\n        echo \"author $author\"\n        echo \"committer $committer\"\n        echo \"$gitbutler_header_version_key $gitbutler_header_version_value\"\n        echo \"$change_id_key $change_id\"\n        echo \"\"\n        echo \"$message\"\n    } > new_commit\n\n    local new_commit_hash=$(git hash-object -t commit -w new_commit)\n\n    git update-ref \"refs/heads/$branch_name\" \"$new_commit_hash\"\n\n    rm new_commit\n}\n\n\n\ngit init remote\n(cd remote\n  echo first > file\n  git add . && git commit -m \"init\"\n)\n\nexport GITBUTLER_CLI_DATA_DIR=../user/gitbutler/app-data\ngit clone remote independent-commits\n(cd independent-commits\n  git branch existing-branch\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n\n\n  $CLI branch create --set-default my_stack\n  echo \"this is a\" >> a\n  $CLI branch commit my_stack -m \"add a\"\n  echo \"this is b\" >> b\n  $CLI branch commit my_stack -m \"add b\"\n  echo \"this is c\" >> c\n  $CLI branch commit my_stack -m \"add c\"\n\n  $CLI branch series my_stack -s \"top-series\"\n  echo \"this is d\" >> d\n  $CLI branch commit my_stack -m \"add d\"\n  echo \"this is e\" >> e\n  $CLI branch commit my_stack -m \"add e\"\n  echo \"this is f\" >> f\n  $CLI branch commit my_stack -m \"add f\"\n)\n\ngit clone remote independent-commits-multi-stack\n(cd independent-commits-multi-stack\n  git branch existing-branch\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n\n\n  $CLI branch create --set-default other_stack\n  echo \"this is a\" >> a\n  $CLI branch commit other_stack -m \"add a\"\n  echo \"this is b\" >> b\n  $CLI branch commit other_stack -m \"add b\"\n  echo \"this is c\" >> c\n  $CLI branch commit other_stack -m \"add c\"\n\n  $CLI branch series other_stack -s \"other-top-series\"\n  echo \"this is d\" >> d\n  $CLI branch commit other_stack -m \"add d\"\n  echo \"this is e\" >> e\n  $CLI branch commit other_stack -m \"add e\"\n  echo \"this is f\" >> f\n  $CLI branch commit other_stack -m \"add f\"\n\n\n  $CLI branch create --set-default my_stack\n  echo \"this is g\" >> g\n  $CLI branch commit my_stack -m \"add g\"\n  echo \"this is h\" >> h\n  $CLI branch commit my_stack -m \"add h\"\n  echo \"this is i\" >> i\n  $CLI branch commit my_stack -m \"add i\"\n\n  $CLI branch series my_stack -s \"top-series\"\n  echo \"this is j\" >> j\n  $CLI branch commit my_stack -m \"add j\"\n  echo \"this is k\" >> k\n  $CLI branch commit my_stack -m \"add k\"\n  echo \"this is l\" >> l\n  $CLI branch commit my_stack -m \"add l\"\n)\n\ngit clone remote sequentially-dependent-commits\n(cd sequentially-dependent-commits\n  git branch existing-branch\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n\n\n  $CLI branch create --set-default my_stack\n  echo \"this is a\" > file\n  $CLI branch commit my_stack -m \"add file\"\n  echo \"this is b\" > file\n  $CLI branch commit my_stack -m \"overwrite file with b\"\n  echo \"this is c\" > file\n  $CLI branch commit my_stack -m \"overwrite file with c\"\n\n  $CLI branch series my_stack -s \"top-series\"\n  echo \"this is d\" > file\n  $CLI branch commit my_stack -m \"overwrite file with d\"\n  echo \"this is e\" > file\n  $CLI branch commit my_stack -m \"overwrite file with e\"\n  echo \"this is f\" > file\n  $CLI branch commit my_stack -m \"overwrite file with f\"\n)\n\ngit clone remote sequentially-dependent-commits-muli-stack\n(cd sequentially-dependent-commits-muli-stack\n  git branch existing-branch\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n\n\n  $CLI branch create --set-default other_stack\n  echo \"this is a\" > file\n  $CLI branch commit other_stack -m \"add file\"\n  echo \"this is b\" > file\n  $CLI branch commit other_stack -m \"overwrite file with b\"\n  echo \"this is c\" > file\n  $CLI branch commit other_stack -m \"overwrite file with c\"\n\n  $CLI branch series other_stack -s \"other-top-series\"\n  echo \"this is d\" > file\n  $CLI branch commit other_stack -m \"overwrite file with d\"\n  echo \"this is e\" > file\n  $CLI branch commit other_stack -m \"overwrite file with e\"\n  echo \"this is f\" > file\n  $CLI branch commit other_stack -m \"overwrite file with f\"\n\n  $CLI branch create --set-default my_stack\n  echo \"this is a\" > file_2\n  $CLI branch commit my_stack -m \"add file_2\"\n  echo \"this is b\" > file_2\n  $CLI branch commit my_stack -m \"overwrite file_2 with b\"\n  echo \"this is c\" > file_2\n  $CLI branch commit my_stack -m \"overwrite file_2 with c\"\n\n  $CLI branch series my_stack -s \"top-series\"\n  echo \"this is d\" > file_2\n  $CLI branch commit my_stack -m \"overwrite file_2 with d\"\n  echo \"this is e\" > file_2\n  $CLI branch commit my_stack -m \"overwrite file_2 with e\"\n  echo \"this is f\" > file_2\n  $CLI branch commit my_stack -m \"overwrite file_2 with f\"\n)\n\ngit clone remote delete-and-recreate-file-multi-stack\n(cd delete-and-recreate-file-multi-stack\n  git branch existing-branch\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n\n\n  $CLI branch create --set-default other_stack\n  echo \"this is a\" > file\n  $CLI branch commit other_stack -m \"add file\"\n  echo \"this is b\" > file\n  $CLI branch commit other_stack -m \"overwrite file with b\"\n  rm -rf file\n  $CLI branch commit other_stack -m \"remove file\"\n\n  $CLI branch series other_stack -s \"other-top-series\"\n  echo \"this is d\" > file\n  $CLI branch commit other_stack -m \"recreate file with d\"\n  rm -rf file\n  $CLI branch commit other_stack -m \"remove file again\"\n  echo \"this is f\" > file\n  $CLI branch commit other_stack -m \"recreate file with f\"\n\n  $CLI branch create --set-default my_stack\n  echo \"this is a\" > file_2\n  $CLI branch commit my_stack -m \"add file_2\"\n  rm -rf file_2\n  $CLI branch commit my_stack -m \"remove file_2\"\n  echo \"this is c\" > file_2\n  $CLI branch commit my_stack -m \"recreate file_2 with c\"\n\n  $CLI branch series my_stack -s \"top-series\"\n  rm -rf file_2\n  $CLI branch commit my_stack -m \"remove file_2 again\"\n  echo \"this is e\" > file_2\n  $CLI branch commit my_stack -m \"recreate file_2 with e\"\n  rm -rf file_2\n  $CLI branch commit my_stack -m \"remove file_2 one last time\"\n)\n\ngit clone remote complex-file-manipulation\n(cd complex-file-manipulation\n  git branch existing-branch\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n\n  $CLI branch create --set-default my_stack\n  echo \"1\n2\n3\n4\n5\n6\n7\n8\n9\n\" > file\n  echo \"a\nb\nc\nd\ne\nf\ng\nh\ni\n\" > file_2\n  $CLI branch commit my_stack -m \"add file\"\n  echo \"1\n2\n3\n4\n__update1__\n6\n7\n8\n9\n\" > file\n  $CLI branch commit my_stack -m \"modify line 5\"\n  echo \"1\n2\n3\n7\n8\n9\n\" > file\n  echo \"a\nb\nc\nd\ne\nf\n\" > file_2\n  $CLI branch commit my_stack -m \"file: delete lines 4, 5 and 6 | file_2: delete lines g, h and i\"\n  rm -rf file\n  $CLI branch commit my_stack -m \"remove file\"\n\n  $CLI branch series my_stack -s \"top-series\"\n  echo \"1\n2\n3\n7\n8\n9\n\" > file\n  $CLI branch commit my_stack -m \"recreate file\"\n  echo \"1\n2\n3\n7\n8\n9\na\nb\nc\" > file\n  $CLI branch commit my_stack -m \"add lines a, b and c at the end\"\n  echo \"d\ne\n1\n2\n3\n7\n8\n9\na\nb\nc\" > file\n  echo \"1\nb\nc\nd\ne\nf\n\" > file_2\n  $CLI branch commit my_stack -m \"file: add lines d and e at the beginning | file_2: modify line 1\"\n)\n\ngit clone remote complex-file-manipulation-multiple-hunks\n(cd complex-file-manipulation-multiple-hunks\n  git branch existing-branch\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n\n  $CLI branch create --set-default my_stack\n\n  echo \"1\n2\n3\n4\n5\n6\n7\n8\n9\n\" > file\n  $CLI branch commit my_stack -m \"create file\"\n  echo \"1\n2\n3\nupdate 4\n5\n6\n7\nupdate 8\n9\n\" > file\n  $CLI branch commit my_stack -m \"modify lines 4 and 8\"\n  echo \"1\n2\ninsert line\ninsert line\n3\nupdate 4 again\n5\n7\nupdate 8\n9\n\" > file\n  $CLI branch commit my_stack -m \"insert 2 lines after 2, modify line 4 and remove line 6\"\n  echo \"added at the top\n1\n2\n3\nupdate 4 again\n5\nupdate 7\nupdate 8\n9\nadded at the bottom\n\" > file\n  $CLI branch commit my_stack -m \"insert 1 line at the top and bottom, remove lines 3 and 4 and update line 7\"\n)\n\ngit clone remote complex-branch-checkout\n(cd complex-branch-checkout\n  git switch -c my_stack\n  echo \"this is a\" > a\n  git add a && git commit -m \"add a\" --trailer \"\"\n  set_change_id \"$(git rev-parse HEAD)\" \"change-id-1\" \"my_stack\"\n\n  echo \"this is b\" > b\n  git add b && git commit -m \"add b\"\n  set_change_id \"$(git rev-parse HEAD)\" \"change-id-2\" \"my_stack\"\n\n  echo \"this updates a\" > a\n  git add . && git commit -m \"update a\"\n  set_change_id \"$(git rev-parse HEAD)\" \"change-id-3\" \"my_stack\"\n\n  git switch -c delete-b\n  rm -rf b\n  git add . && git commit -m \"delete b\"\n  set_change_id \"$(git rev-parse HEAD)\" \"change-id-4\" \"delete-b\"\n\n  git checkout my_stack\n  git merge delete-b --no-edit --no-ff\n  git branch -D delete-b\n\n  echo \"this is c\" > c\n  git add c && git commit -m \"add c\"\n  set_change_id \"$(git rev-parse HEAD)\" \"change-id-5\" \"my_stack\"\n\n  echo \"update a again\" > a\n  git add . && git commit -m \"update a again\"\n  set_change_id \"$(git rev-parse HEAD)\" \"change-id-6\" \"my_stack\"\n\n  git checkout main\n\n  $CLI project add --switch-to-workspace \"$(git rev-parse --symbolic-full-name @{u})\"\n  $CLI branch apply -b my_stack\n)\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/pass/legacy_permission_params.rs",
+      "sha": null,
+      "content_sha256": "f1fbee7d03c3bdcb9c13162672f2564660d0eaeff757b42339dd5f25cfdfa97a",
+      "score": 238,
+      "content": "// Case: explicit repository permission tokens are hidden from generated legacy wrappers.\n// It verifies:\n// - `&mut RepoExclusive` acquires exclusive access internally\n// - `&RepoShared` acquires shared access internally\n// - generated `_json` and `_cmd` entrypoints do not expose the permission parameter\n\nuse but_api_macros::but_api;\n\npub use but_api_macros_tests::{json, panic_capture};\n\n#[but_api]\npub fn exclusive_surface(\n    _ctx: &mut but_ctx::Context,\n    value: i32,\n    _perm: &mut but_ctx::access::RepoExclusive,\n) -> anyhow::Result<i32> {\n    Ok(value)\n}\n\n#[but_api]\npub fn shared_surface(\n    _perm: &but_ctx::access::RepoShared,\n    _ctx: &but_ctx::Context,\n    value: i32,\n) -> anyhow::Result<i32> {\n    Ok(value)\n}\n\nfn main() {\n    let project_id: but_ctx::LegacyProjectId =\n        \"d7377618-b9cd-4964-a3c3-05c58ed5602b\".parse().unwrap();\n    let project = but_ctx::ProjectHandleOrLegacyProjectId::LegacyProjectId(project_id.clone());\n\n    let _ = exclusive_surface_json(project.clone(), 1);\n    let _ = shared_surface_json(project.clone(), 2);\n\n    let _ = exclusive_surface_cmd(\n        serde_json::json!({ \"projectId\": project_id.to_string(), \"value\": 1 }),\n    );\n    let _ = shared_surface_cmd(serde_json::json!({ \"projectId\": project_id.to_string(), \"value\": 2 }));\n}\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_requires_context.rs",
+      "sha": null,
+      "content_sha256": "59ec6c1c428bfc80ec905d8a69ee65213d6bd424eb1ba6666e6b24622420f5e7",
+      "score": 238,
+      "content": "use but_api_macros::but_api;\n\npub use but_api_macros_tests::panic_capture;\n\n#[but_api]\npub fn missing_context(_perm: &mut but_ctx::access::RepoExclusive) -> anyhow::Result<()> {\n    Ok(())\n}\n\nfn main() {}\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_repoexclusive_shared_ref.rs",
+      "sha": null,
+      "content_sha256": "3978f19bf1631eb368857e7cabd2c5bdb06ce129a00fb8ceaf9bd49e74a773b3",
+      "score": 238,
+      "content": "use but_api_macros::but_api;\n\npub use but_api_macros_tests::panic_capture;\n\n#[but_api]\npub fn invalid_exclusive_form(\n    _ctx: &mut but_ctx::Context,\n    _perm: &but_ctx::access::RepoExclusive,\n) -> anyhow::Result<()> {\n    Ok(())\n}\n\nfn main() {}\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_reposhared_mut_ref.rs",
+      "sha": null,
+      "content_sha256": "3d18d34fab30a4aea557caa50d00b5168b968005c7929831678b9ecabfa2ea8a",
+      "score": 238,
+      "content": "use but_api_macros::but_api;\n\npub use but_api_macros_tests::panic_capture;\n\n#[but_api]\npub fn invalid_shared_form(\n    _ctx: &but_ctx::Context,\n    _perm: &mut but_ctx::access::RepoShared,\n) -> anyhow::Result<()> {\n    Ok(())\n}\n\nfn main() {}\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_thread_safe_context.rs",
+      "sha": null,
+      "content_sha256": "fa6a4060de93a20ccf9b7449dc1c57254ee0bc0861235179d18453b16a3198e1",
+      "score": 238,
+      "content": "use but_api_macros::but_api;\n\npub use but_api_macros_tests::panic_capture;\n\n#[but_api]\npub fn thread_safe_context(\n    _ctx: but_ctx::ThreadSafeContext,\n    _perm: &but_ctx::access::RepoShared,\n) -> anyhow::Result<()> {\n    Ok(())\n}\n\nfn main() {}\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/pass/napi_permission_params.rs",
+      "sha": null,
+      "content_sha256": "635f2bbb50c3620bfd7a03796b41e3c572bca2db80e730a98d72138fcd53b6d2",
+      "score": 238,
+      "content": "// Case: `#[but_api(napi)]` generation hides explicit repository permission tokens.\n// It verifies napi wrapper generation when the annotated function takes `RepoExclusive`.\n\nuse but_api_macros::but_api;\n\npub use but_api_macros_tests::{json, panic_capture};\n\n#[but_api(napi)]\npub fn napi_surface_with_perm(\n    _ctx: &mut but_ctx::Context,\n    _perm: &mut but_ctx::access::RepoExclusive,\n    value: i32,\n) -> anyhow::Result<i32> {\n    Ok(value)\n}\n\nfn main() {\n    let _ = napi_surface_with_perm_napi;\n    let _ = napi_napi_surface_with_perm::napi_surface_with_perm;\n}\n"
+    },
+    {
+      "path": "crates/but-testsupport/Cargo.toml",
+      "sha": null,
+      "content_sha256": "94ec0cf1b37fa5c3b482c84418dd2b4295d9344ac91543e360ff1b007ea1d73a",
+      "score": 236,
+      "content": "[package]\nname = \"but-testsupport\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\n\n[lib]\n# Unit-tests are disabled as there are none right now.\ntest = false\ndoctest = false\n\n[features]\n## Make `snapbox` utilities available, generally useful for CLI testing.\nsnapbox = [\"dep:snapbox\"]\n## Provide a writable sandbox for testing of higher-level functions, with everything *but* the `Context`, useful even for plumbing.\nsandbox = [\n    \"snapbox\",\n    \"dep:shell-words\",\n    \"dep:but-meta\",\n]\n## Activate API testing support, so the sandbox is made so it can also isolate a GitButler application for use with the `but-api`.\nsandbox-but-api = [\n    \"sandbox\",\n    \"dep:but-ctx\",\n    \"dep:but-settings\",\n]\n\n[dependencies]\nbut-graph.workspace = true\nbut-core.workspace = true\nbut-db.workspace = true\nbut-settings = { workspace = true, optional = true }\nbut-meta = { workspace = true, optional = true, features = [\"legacy\"] }\nbut-ctx = { workspace = true, optional = true }\n\nshell-words = {  workspace = true, optional = true }\n\ngix-testtools.workspace = true\ngix.workspace = true\nanyhow.workspace = true\ntermtree = \"0.5.1\"\nregex = { workspace = true }\nsnapbox = { workspace = true, optional = true, features = [\"regex\"] }\n\n[dev-dependencies]\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/gitbutler-branch-actions/tests/branch-actions/support.rs",
+      "sha": null,
+      "content_sha256": "adea5393a739a302594579a9e4de3395021e5249dc6478946c76fdfb001d1bab",
+      "score": 229,
+      "content": "use anyhow::Result;\nuse but_ctx::{Context, RepoOpenMode};\nuse but_settings::AppSettings;\nuse but_testsupport::gix_testtools::{Creation, scripted_fixture_writable_with_args};\nuse but_workspace::{legacy::StacksFilter, ui::StackDetails};\nuse gitbutler_stack::StackId;\nuse tempfile::{TempDir, tempdir};\n\npub struct HookCase {\n    pub ctx: Context,\n    _app_data_dir: TempDir,\n    _repo_dir: TempDir,\n}\n\npub fn hook_case() -> Result<HookCase> {\n    let repo_dir = scripted_fixture_writable_with_args(\n        \"scenario/repo-with-origin.sh\",\n        None::<String>,\n        Creation::Execute,\n    )\n    .map_err(anyhow::Error::from_boxed)?;\n    let local_repo_dir = repo_dir.path().join(\"local\");\n    let app_data_dir = tempdir()?;\n    let project = gitbutler_project::add_at_app_data_dir(app_data_dir.path(), &local_repo_dir)?\n        .unwrap_project();\n    let ctx = Context::new_from_legacy_project_and_settings_with_repo_open_mode(\n        &project,\n        AppSettings::default(),\n        RepoOpenMode::Isolated,\n    )?;\n    Ok(HookCase {\n        ctx,\n        _app_data_dir: app_data_dir,\n        _repo_dir: repo_dir,\n    })\n}\n\npub fn stack_details(ctx: &Context) -> Vec<(StackId, StackDetails)> {\n    let repo = ctx.clone_repo_for_merging_non_persisting().unwrap();\n    let stacks = {\n        let meta = ctx.legacy_meta().unwrap();\n        let mut cache = ctx.cache.get_cache_mut().unwrap();\n        but_workspace::legacy::stacks_v3(&repo, &meta, StacksFilter::default(), None, &mut cache)\n    }\n    .unwrap();\n\n    stacks\n        .into_iter()\n        .map(|stack| {\n            let stack_id = stack\n                .id\n                .expect(\"BUG(opt-stack-id): test code shouldn't trigger this\");\n            let details = {\n                let meta = ctx.legacy_meta().unwrap();\n                let mut cache = ctx.cache.get_cache_mut().unwrap();\n                but_workspace::legacy::stack_details_v3(stack_id.into(), &repo, &meta, &mut cache)\n            }\n            .unwrap();\n            (stack_id, details)\n        })\n        .collect()\n}\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/napi_list_attr_unsupported.rs",
+      "sha": null,
+      "content_sha256": "0e4be34e68f6598cfeed3050d7dd7b5427787db62384927eb24dccb2a18533d5",
+      "score": 218,
+      "content": "// Case: list-form `napi` with an unsupported key should fail macro option parsing.\n// Extend when: accepted list-form keys for `napi` change.\n\nuse but_api_macros::but_api;\n\npub use but_api_macros_tests::{json, panic_capture};\n\n#[but_api(napi, from = json::HexHash)]\npub fn invalid_napi_attr_list_key() -> anyhow::Result<json::HexHash> {\n    Ok(json::HexHash(\n        \"0123456789abcdef0123456789abcdef01234567\".into(),\n    ))\n}\n\nfn main() {}\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_reposhared_mut_ref.stderr",
+      "sha": null,
+      "content_sha256": "2300e447e49249293871480149dfdfec2feff18282dd0313692e8eee41d1a142",
+      "score": 203,
+      "content": "error: Explicit repository permission parameters must use `&RepoShared` for shared access\n --> tests/ui/fail/base_permission_param_reposhared_mut_ref.rs:8:12\n  |\n8 |     _perm: &mut but_ctx::access::RepoShared,\n  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_requires_context.stderr",
+      "sha": null,
+      "content_sha256": "e0a5ed075b2fb34eb71cd6861e40ef5eb272e6ec368882b1b8e099c5164dc5cc",
+      "score": 203,
+      "content": "error: Explicit repository permission parameters require a `Context`, `&Context`, or `&mut Context` parameter\n --> tests/ui/fail/base_permission_param_requires_context.rs:6:31\n  |\n6 | pub fn missing_context(_perm: &mut but_ctx::access::RepoExclusive) -> anyhow::Result<()> {\n  |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_repoexclusive_shared_ref.stderr",
+      "sha": null,
+      "content_sha256": "631ece3be9e415ca975fc20d2c33b3b16b84eed0fd31b0c3c036d76e656cab64",
+      "score": 203,
+      "content": "error: Explicit repository permission parameters must use `&mut RepoExclusive` for exclusive access\n --> tests/ui/fail/base_permission_param_repoexclusive_shared_ref.rs:8:12\n  |\n8 |     _perm: &but_ctx::access::RepoExclusive,\n  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
+    },
+    {
+      "path": "crates/but-api-macros/tests/tests/ui/fail/base_permission_param_thread_safe_context.stderr",
+      "sha": null,
+      "content_sha256": "d8353fe926b1dfdd476938d02152abfa670655f47976c0a596e9fa41f6b965d8",
+      "score": 203,
+      "content": "error: Explicit repository permission parameters are not supported with `ThreadSafeContext`; convert it to `Context` before locking\n --> tests/ui/fail/base_permission_param_thread_safe_context.rs:8:12\n  |\n8 |     _perm: &but_ctx::access::RepoShared,\n  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"
+    },
+    {
+      "path": "crates/gitbutler-repo-actions/Cargo.toml",
+      "sha": null,
+      "content_sha256": "6c1cd9e3754673dab513c799dee264d20b54578ec71e86afeb89efeeb98ca279",
+      "score": 198,
+      "content": "[package]\nname = \"gitbutler-repo-actions\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\n\n[lib]\ndoctest = false\n\n[dependencies]\nbut-error.workspace = true\nbut-core.workspace = true\nbut-ctx.workspace = true\n\ngitbutler-stack.workspace = true\ngitbutler-git.workspace = true\ngitbutler-project.workspace = true\ngitbutler-reference.workspace = true\ngitbutler-repo.workspace = true\n\ngit2.workspace = true\ngix.workspace = true\nserde.workspace = true\ntokio = { workspace = true, features = [\n    \"rt-multi-thread\",\n    \"rt\",\n    \"macros\",\n    \"sync\",\n] }\nlog = \"^0.4\"\nanyhow.workspace = true\ntracing.workspace = true\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/but-installer/Cargo.toml",
+      "sha": null,
+      "content_sha256": "bcbb8ae5bd606af32b3b76b4fdf9ba2b392e1da86cf5385d49891172e4bbb0be",
+      "score": 198,
+      "content": "[package]\nname = \"but-installer\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\ndescription = \"GitButler installation binary\"\n\n[lib]\ndoctest = true\n\n[[bin]]\nname = \"but-installer\"\npath = \"src/main.rs\"\n\n# This binary is currently 1MB in size. Since this is an installer, let's keep it slim.\n[dependencies]\nanyhow.workspace = true\nserde.workspace = true\nserde_json.workspace = true\ntempfile.workspace = true\ndirs.workspace = true\nurl.workspace = true\n\n# HTTP client using system libcurl (zero binary size impact)\ncurl = { version = \"0.4.49\", default-features = false }\n\n# For archive extraction\nflate2 = \"1.0\"\ntar = \"0.4\"\n\n# For colored terminal output\nowo-colors = { version = \"4.1.0\", features = [\"supports-colors\"] }\n\n# For signature verification\nminisign-verify = \"0.2.5\"\nbase64 = \"0.22.1\"\n\n[target.'cfg(target_os = \"macos\")'.dependencies]\n# For removing quarantine attribute on macOS\nxattr = \"1.6.1\"\n\n[target.'cfg(target_os = \"linux\")'.dependencies]\n# I couldn't make it work without the ssl feature enabled, it doesn't dynamically link to libssl without it so https just doesn't work\ncurl = { version = \"0.4.49\", default-features = false, features = [\"ssl\"] }\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/but-action/Cargo.toml",
+      "sha": null,
+      "content_sha256": "45de3039b94b4a5f7a65c16c332a77ae175faa299339b5382c1028581c061340",
+      "score": 198,
+      "content": "[package]\nname = \"but-action\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\n\n[lib]\ndoctest = false\ntest = false\n\n[features]\n## If enabled, we will let the current executable (gitbutler-tauri) be the source for the `but` link.\nbuiltin-but = []\nexport-ts = [\"dep:ts-rs\", \"but-core/export-ts\"]\n\n[dependencies]\nbut-serde.workspace = true\nbut-db.workspace = true\nbut-core.workspace = true\nbut-workspace = { workspace = true, features = [\"legacy\"] }\nbut-hunk-assignment.workspace = true\nbut-tools.workspace = true\nbut-ctx = { workspace = true, features = [\"legacy\"] }\nbut-llm.workspace = true\n\ngitbutler-stack.workspace = true\ngitbutler-operating-modes.workspace = true\ngitbutler-branch-actions.workspace = true\ngitbutler-branch.workspace = true\ngitbutler-oplog.workspace = true\ngitbutler-reference.workspace = true\n\nserde.workspace = true\nserde-error = \"0.1.3\"\nschemars.workspace = true\nserde_json.workspace = true\nanyhow.workspace = true\nchrono.workspace = true\nitertools.workspace = true\nuuid = { workspace = true }\nstrum = { version = \"0.27\", features = [\"derive\"] }\ngix.workspace = true\nrmcp.workspace = true\ntracing.workspace = true\nbstr = { workspace = true }\nts-rs = { workspace = true, optional = true }\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/gitbutler-branch-actions/Cargo.toml",
+      "sha": null,
+      "content_sha256": "029c91b712a827f3a3120bdfa2c2fb4c848e6af1e40c3c25521e4ec2dc5f9ade",
+      "score": 198,
+      "content": "[package]\nname = \"gitbutler-branch-actions\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\n\n[lib]\ndoctest = false\n\n[features]\nexport-schema = [\n  \"but-workspace/export-schema\",\n  \"gitbutler-project/export-schema\",\n  \"gitbutler-branch/export-schema\",\n  \"dep:schemars\",\n  \"dep:but-schemars\",\n]\n\n[dependencies]\nbut-error.workspace = true\nbut-serde = { workspace = true, features = [\"legacy\"] }\nbut-meta = { workspace = true, features = [\"legacy\"] }\nbut-settings.workspace = true\nbut-gerrit.workspace = true\nbut-workspace = { workspace = true, features = [\"legacy\"] }\nbut-rebase.workspace = true\nbut-core = { workspace = true, features = [\"legacy\"] }\nbut-project-handle.workspace = true\nbut-graph.workspace = true\nbut-oxidize.workspace = true\nbut-forge.workspace = true\nbut-ctx = { workspace = true, features = [\"legacy\"] }\nchrono.workspace = true\n\ngitbutler-oplog.workspace = true\ngitbutler-repo.workspace = true\ngitbutler-repo-actions.workspace = true\ngitbutler-branch.workspace = true\ngitbutler-reference.workspace = true\ngitbutler-commit.workspace = true\ngitbutler-url.workspace = true\ngitbutler-operating-modes.workspace = true\ngitbutler-cherry-pick.workspace = true\ngitbutler-stack.workspace = true\ngitbutler-workspace.workspace = true\ngitbutler-project.workspace = true\n\ntracing.workspace = true\nanyhow.workspace = true\ngit2.workspace = true\ngit2-hooks.workspace = true\ngix = { workspace = true, features = [\"blob-diff\", \"revision\", \"merge\"] }\nuuid = { workspace = true }\nserde.workspace = true\nbstr.workspace = true\nurl = { version = \"2.5.4\", features = [\"serde\"] }\nmd5.workspace = true\nitertools.workspace = true\nschemars = { workspace = true, optional = true }\nbut-schemars = { workspace = true, optional = true }\n\n[dev-dependencies]\npretty_assertions = \"1.4\"\nbut-graph.workspace = true\nbut-testsupport.workspace = true\ngitbutler-workspace.workspace = true\ngix = { workspace = true, features = [] }\nglob = \"0.3.3\"\ntempfile.workspace = true\nbut-hunk-assignment.workspace = true\nctor = \"0.6.3\"\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/but-secret/Cargo.toml",
+      "sha": null,
+      "content_sha256": "a5171d1c4589269cd5976655a736fd75440211f80cffc084da5206083a612778",
+      "score": 196,
+      "content": "[package]\nname = \"but-secret\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\n\n[lib]\ndoctest = false\n\n[dependencies]\nbut-error.workspace = true\n\nanyhow.workspace = true\ntracing.workspace = true\nserde.workspace = true\ngix = { workspace = true, features = [\"dirwalk\", \"credentials\", \"parallel\"] }\nkeyring.workspace = true\n\n[dev-dependencies]\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/but-llm/Cargo.toml",
+      "sha": null,
+      "content_sha256": "c0ace8634231938a85fffc9e6fe68c77973dd2ead842d4a8d4fd7040c9b72c74",
+      "score": 191,
+      "content": "[package]\nname = \"but-llm\"\nversion = \"0.1.0\"\nrepository.workspace = true\nauthors.workspace = true\nedition.workspace = true\npublish = false\nrust-version.workspace = true\ndescription = \"LLM client interface\"\n\n[dependencies]\nbut-secret.workspace = true\nbut-tools.workspace = true\nasync-openai.workspace = true\nserde.workspace = true\nfutures = \"0.3.31\"\ntracing.workspace = true\ntokio = { workspace = true, features = [\"rt-multi-thread\", \"io-std\"] }\nschemars.workspace = true\nserde_json.workspace = true\nanyhow.workspace = true\nstrum = { version = \"0.27\", features = [\"derive\"] }\ngix.workspace = true\nreqwest.workspace = true\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/but-napi/Cargo.toml",
+      "sha": null,
+      "content_sha256": "269bc6d1b500fdc113f4d3b5c1de55e06bc085ce6f895c132ff7289d0f855453",
+      "score": 191,
+      "content": "[package]\nname = \"but-napi\"\nversion = \"0.0.0\"\nedition.workspace = true\nrepository.workspace = true\nlicense-file = \"../../LICENSE.md\"\ndescription = \"GitButler Node.js SDK via napi-rs\"\nauthors.workspace = true\nreadme = \"../../README.md\"\npublish = false\nrust-version.workspace = true\n\n[package.metadata.cargo-machete]\nignored = [\n    # Consumed via napi attribute macros and generated bindings that machete misses.\n    \"napi\",\n    # Consumed via napi attribute macros and generated bindings that machete misses.\n    \"napi-derive\",\n]\n\n[lib]\ncrate-type = [\"cdylib\"]\n\n[features]\ndefault = [\"legacy\", \"napi-auto\"]\n## Make legacy functionality available - required for most operations.\nlegacy = [\"but-api/legacy\"]\n## Enable auto-generated napi functions from the `#[but_api]` macro.\nnapi-auto = [\"but-api/napi\"]\n\n[dependencies]\nanyhow.workspace = true\nbut-api.workspace = true\nbut-ctx.workspace = true\nbut-path.workspace = true\nbut-settings.workspace = true\ngitbutler-watcher.workspace = true\nnapi = { version = \"3\", features = [\"serde-json\", \"async\"] }\nnapi-derive = \"3\"\nserde_json.workspace = true\ntracing.workspace = true\n\n[build-dependencies]\nnapi-build = \"2\"\n"
+    },
+    {
+      "path": "crates/gitbutler-branch-actions/src/author.rs",
+      "sha": null,
+      "content_sha256": "042669bb157ececf859fff38be81345ed0d36d839b6f5158a85e41c0af84579b",
+      "score": 191,
+      "content": "use bstr::ByteSlice;\nuse serde::Serialize;\n\nuse crate::gravatar::gravatar_url_from_email;\n\n#[derive(Debug, Serialize, Hash, Clone, PartialEq, Eq)]\n#[serde(rename_all = \"camelCase\")]\npub struct Author {\n    pub name: String,\n    pub email: String,\n    pub gravatar_url: url::Url,\n}\n\nimpl From<gix::actor::SignatureRef<'_>> for Author {\n    fn from(value: gix::actor::SignatureRef<'_>) -> Self {\n        let gravatar_url = gravatar_url_from_email(&value.email.to_str_lossy()).unwrap();\n\n        Author {\n            name: value.name.to_owned().to_string(),\n            email: value.email.to_owned().to_string(),\n            gravatar_url,\n        }\n    }\n}\n"
+    },
+    {
+      "path": "crates/but-api-macros/Cargo.toml",
+      "sha": null,
+      "content_sha256": "4ca8aeb24e973c94a6e1c530fad43c55f3382d6bf35b800a66cfaa1dfcfdf1ca",
+      "score": 191,
+      "content": "[package]\nname = \"but-api-macros\"\nversion = \"0.0.0\"\nedition.workspace = true\nauthors.workspace = true\npublish = false\nrust-version.workspace = true\n\n[lib]\nproc-macro = true\ndoctest = false\n\n[dependencies]\nsyn = { version = \"2\", features = [\"full\", \"extra-traits\"] }\nquote = \"1\"\nproc-macro2 = \"1\"\nconvert_case = \"0.10.0\"\n\n[lints]\nworkspace = true\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:05.616790+00:00"
+}

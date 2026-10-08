@@ -1,0 +1,198 @@
+{
+  "canonical_source": "github:shihabshahrier/iptv-platform",
+  "repo": "shihabshahrier/iptv-platform",
+  "revision_sha": "cae15f8cdb40e37b6d634a572cf8304edb137f8e",
+  "default_branch": "main",
+  "pushed_at": "2026-06-26T20:16:25Z",
+  "repo_updated_at": "2026-07-02T17:17:04Z",
+  "license": null,
+  "topics": [
+    "cloudflare-workers",
+    "fifa-world-cup-2026",
+    "hls",
+    "iptv",
+    "live-streaming",
+    "nextjs",
+    "world-cup"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "9e4c4771515389fd62fbbc38b35ee80c4433ca2e8fc54c51276ac05df81e1d83",
+      "score": 120,
+      "content": "{\n  \"name\": \"iptv-platform\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build\",\n    \"start\": \"next start\",\n    \"lint\": \"eslint\",\n    \"seed\": \"npx tsx lib/seedWorldCup.ts\",\n    \"schema\": \"psql $DATABASE_URL < schema.sql\"\n  },\n  \"dependencies\": {\n    \"@neondatabase/serverless\": \"^1.1.0\",\n    \"@upstash/redis\": \"^1.38.0\",\n    \"clsx\": \"^2.1.1\",\n    \"dotenv\": \"^17.4.2\",\n    \"hls.js\": \"^1.6.16\",\n    \"lucide-react\": \"^1.20.0\",\n    \"next\": \"16.2.9\",\n    \"react\": \"19.2.4\",\n    \"react-dom\": \"19.2.4\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20\",\n    \"@types/react\": \"^19\",\n    \"@types/react-dom\": \"^19\",\n    \"eslint\": \"^9\",\n    \"eslint-config-next\": \"16.2.9\",\n    \"typescript\": \"^5\"\n  }\n}\n"
+    },
+    {
+      "path": "app/api/active-users/route.ts",
+      "sha": null,
+      "content_sha256": "88c974bcd5772d5fd4cfd7284079bb1dc1f9caeef5a102658dae76946f8e6c09",
+      "score": 104,
+      "content": "import { NextResponse } from 'next/server'\nimport { redis } from '@/lib/redis'\n\nexport const runtime = 'edge'\n\nconst HEURISTIC_MIN = 122\nconst HEURISTIC_MAX = 192\nconst HEURISTIC_TTL = 35 // seconds — slightly longer than client poll interval\n\n// GET /api/active-users\n// Returns: { count: number }\n// Count = heuristic baseline (122-192) + real users from heartbeat in last 60s\nexport async function GET() {\n  try {\n    // 1. Heuristic baseline — refresh if expired\n    let base = await redis.get<number>('active:heuristic-base')\n    if (base === null) {\n      base = Math.floor(Math.random() * (HEURISTIC_MAX - HEURISTIC_MIN + 1)) + HEURISTIC_MIN\n      await redis.set('active:heuristic-base', base, { ex: HEURISTIC_TTL })\n    }\n\n    // 2. Real active users in last 60s\n    const cutoff = Date.now() - 60_000\n    const real = await redis.zcount('active:users', cutoff, '+inf')\n\n    return NextResponse.json({ count: Number(base) + real })\n  } catch {\n    // Fallback: pure heuristic\n    return NextResponse.json({ count: Math.floor(Math.random() * 71) + 122 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/vote/route.ts",
+      "sha": null,
+      "content_sha256": "8379a7ccadfd085318c11126e2a6f3822ca8f43101db6ba8dec28292376dd229",
+      "score": 104,
+      "content": "import { NextResponse } from 'next/server'\nimport { redis } from '@/lib/redis'\nimport { VOTE_LUA } from '@/lib/vote'\nimport { getLiveMatches } from '@/lib/matches'\n\nexport const runtime = 'edge'\n\nconst VOTE_TTL = 3 * 60 * 60 // 3 hours (match + buffer)\n\nfunction getClientIp(req: Request): string {\n  return (\n    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||\n    req.headers.get('cf-connecting-ip') ||\n    'unknown'\n  )\n}\n\n// POST /api/vote — cast a vote\n// Body: { matchId: string, channelId: string }\n// Returns: { ok, alreadyVoted?, votedFor? }\nexport async function POST(req: Request) {\n  try {\n    const { matchId, channelId } = await req.json()\n    if (!matchId || !channelId) {\n      return NextResponse.json({ error: 'matchId and channelId required' }, { status: 400 })\n    }\n\n    // Verify match is live right now\n    const liveMatches = getLiveMatches()\n    if (!liveMatches.find(m => m.id === matchId)) {\n      return NextResponse.json({ error: 'Match is not currently live' }, { status: 400 })\n    }\n\n    const ip = getClientIp(req)\n    const voteKey = `vote:${matchId}:${ip}`\n    const tallyKey = `votes:match:${matchId}`\n\n    const result: [number, string] = await redis.eval(\n      VOTE_LUA,\n      [voteKey, tallyKey],\n      [channelId, String(VOTE_TTL)],\n    )\n\n    const [isNew, channel] = result\n    if (isNew === 0) {\n      return NextResponse.json({ ok: false, alreadyVoted: true, votedFor: channel })\n    }\n\n    return NextResponse.json({ ok: true, alreadyVoted: false })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message || 'Vote failed' }, { status: 500 })\n  }\n}\n\n// GET /api/vote?match={matchId} — get vote counts\nexport async function GET(req: Request) {\n  try {\n    const matchId = new URL(req.url).searchParams.get('match')\n    if (!matchId) {\n      return NextResponse.json({ error: 'match query param required' }, { status: 400 })\n    }\n\n    const tallyKey = `votes:match:${matchId}`\n    const counts: Record<string, string> | null = await redis.hgetall(tallyKey)\n    const entries = Object.entries(counts || {}).map(([channelId, count]) => ({\n      channelId,\n      votes: Number(count),\n    }))\n    entries.sort((a, b) => b.votes - a.votes)\n\n    return NextResponse.json({ matchId, channels: entries, total: entries.reduce((s, e) => s + e.votes, 0) })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/matches/route.ts",
+      "sha": null,
+      "content_sha256": "930a22a738a43fd8baeb6a86b830a6b9b4102aadef743f7e1698e359be53a9e4",
+      "score": 104,
+      "content": "import { NextResponse } from 'next/server'\nimport { getMatches, getLiveMatches, getTodayMatches, getStandings, getUpcomingMatches } from '@/lib/matches'\n\nexport const runtime = 'edge'\n\nexport async function GET(req: Request) {\n  const { searchParams } = new URL(req.url)\n  const type = searchParams.get('type') || 'all'\n\n  let data: any\n  switch (type) {\n    case 'live':\n      data = getLiveMatches()\n      break\n    case 'today':\n      data = getTodayMatches()\n      break\n    case 'upcoming':\n      data = getUpcomingMatches(Number(searchParams.get('limit')) || 10)\n      break\n    case 'standings':\n      data = getStandings(searchParams.get('group') || undefined)\n      break\n    default:\n      data = getMatches()\n  }\n\n  return NextResponse.json(data, {\n    headers: { 'Cache-Control': 'public, max-age=60, s-maxage=60' },\n  })\n}\n"
+    },
+    {
+      "path": "app/api/sync/route.ts",
+      "sha": null,
+      "content_sha256": "87c7bd0242e0519ca9ab35bde1d2cbf1290c8ff1fe3e1a80066fc9e951713a5b",
+      "score": 104,
+      "content": "import { NextResponse } from 'next/server'\n\nexport const runtime = 'edge'\n\n// General iptv-org sync is disabled — we only use manually curated World Cup channels.\n// World Cup sources are added via the seed script or admin API.\nexport async function GET(req: Request) {\n  return NextResponse.json({ ok: true, message: 'Global sync disabled. World Cup channels only.' })\n}\n"
+    },
+    {
+      "path": "app/api/healthcheck/route.ts",
+      "sha": null,
+      "content_sha256": "ae42f40a0714bf8b27e3def9a558f624c5c7fef5b4ddb1254e2727abf722aff8",
+      "score": 104,
+      "content": "import { db } from '@/lib/db'\nimport { redis } from '@/lib/redis'\nimport { verifyStream } from '@/lib/health'\nimport { NextResponse } from 'next/server'\n\nexport const runtime = 'edge'\n\n// Only check World Cup channels — curated list is small enough to check every time.\nexport async function GET(req: Request) {\n  const secret = req.headers.get('x-cron-secret')\n  if (secret !== process.env.CRON_SECRET) {\n    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })\n  }\n\n  try {\n    const wcResult = await db.query('SELECT id, stream_url FROM channels WHERE is_worldcup = true')\n    const wcChannels = wcResult.rows\n\n    await Promise.all(wcChannels.map(async (ch) => {\n      const live = await verifyStream(ch.stream_url)\n      await redis.set(`health:${ch.id}`, live ? 'live' : 'dead', { ex: 3600 })\n      await db.query('UPDATE channels SET is_live = $1, last_checked = now() WHERE id = $2', [live, ch.id])\n    }))\n\n    return NextResponse.json({ ok: true, checked: wcChannels.length })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/heartbeat/route.ts",
+      "sha": null,
+      "content_sha256": "99b4638410e69f78a6401ad25a5cd6f0c3913bedc8a9f2f36fb53065efd4c6dc",
+      "score": 104,
+      "content": "import { NextResponse } from 'next/server'\nimport { redis } from '@/lib/redis'\n\nexport const runtime = 'edge'\n\nconst HEARTBEAT_WINDOW_MS = 60_000 // count users active within last 60s\n\n// POST /api/heartbeat — record user presence\nexport async function POST(req: Request) {\n  try {\n    const ip =\n      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||\n      req.headers.get('cf-connecting-ip') ||\n      'unknown'\n\n    const now = Date.now()\n    await redis.zadd('active:users', { score: now, member: ip })\n    // Trim entries older than 2 minutes to keep set small\n    await redis.zremrangebyscore('active:users', 0, now - HEARTBEAT_WINDOW_MS * 2)\n\n    return NextResponse.json({ ok: true })\n  } catch {\n    return NextResponse.json({ ok: true }) // silent fail — non-critical\n  }\n}\n"
+    },
+    {
+      "path": "app/api/proxy/route.ts",
+      "sha": null,
+      "content_sha256": "87cc2b54da1f51d1a5bb8a352df238caeb8f3385f838d1eb22e7a01faf795c33",
+      "score": 104,
+      "content": "import { NextRequest } from 'next/server'\n\nexport const runtime = 'edge'\nexport const dynamic = 'force-dynamic'\n\n// HLS relay proxy — rewrites manifests and streams segments via our origin.\n// Mitigates CORS and prevents SSRF by only allowing http/https URLs.\n\nconst PROXY_TIMEOUT_MS = 15000\n\nexport async function GET(req: NextRequest) {\n  const target = req.nextUrl.searchParams.get('url')\n  if (!target) return new Response('Missing url param', { status: 400 })\n\n  // Basic SSRF guard — only allow http/https\n  let parsed: URL\n  try {\n    parsed = new URL(target)\n  } catch {\n    return new Response('Invalid URL', { status: 400 })\n  }\n  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {\n    return new Response('Only http/https URLs are allowed', { status: 400 })\n  }\n\n  let upstream: Response\n  try {\n    upstream = await fetch(target, {\n      signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),\n      headers: {\n        'User-Agent': 'Mozilla/5.0',\n        'Referer': parsed.origin + '/',\n      },\n    })\n  } catch (err: any) {\n    const msg = err?.name === 'TimeoutError' ? 'Upstream timed out' : 'Upstream fetch failed'\n    return new Response(msg, { status: 502 })\n  }\n\n  const contentType = upstream.headers.get('content-type') || ''\n  const isManifest =\n    /mpegurl|m3u8/i.test(contentType) || target.split('?')[0].endsWith('.m3u8')\n\n  const proxyPath = req.nextUrl.pathname\n  const wrap = (raw: string) => {\n    try {\n      const abs = new URL(raw, target).toString()\n      return `${proxyPath}?url=${encodeURIComponent(abs)}`\n    } catch {\n      return raw\n    }\n  }\n\n  if (isManifest) {\n    const text = await upstream.text()\n    const rewritten = text\n      .split('\\n')\n      .map((line) => {\n        const t = line.trim()\n        if (!t) return line\n        if (t.startsWith('#')) {\n          return line.replace(/URI=\"([^\"]+)\"/g, (_m, uri) => `URI=\"${wrap(uri)}\"`)\n        }\n        return wrap(t)\n      })\n      .join('\\n')\n\n    return new Response(rewritten, {\n      status: upstream.status,\n      headers: {\n        'Content-Type': 'application/vnd.apple.mpegurl',\n        'Access-Control-Allow-Origin': '*',\n        'Cache-Control': 'no-cache',\n      },\n    })\n  }\n\n  const headers = new Headers()\n  const ct = upstream.headers.get('content-type')\n  if (ct) headers.set('Content-Type', ct)\n  headers.set('Access-Control-Allow-Origin', '*')\n  headers.set('Cache-Control', 'public, max-age=5')\n  return new Response(upstream.body, { status: upstream.status, headers })\n}\n"
+    },
+    {
+      "path": "app/api/flush-views/route.ts",
+      "sha": null,
+      "content_sha256": "437f9173ff7cd3c88a562ab38b4b9235a9e750c54f8270d8587edac19c478f00",
+      "score": 104,
+      "content": "import { flushViewCounts } from '@/lib/flushViews'\nimport { NextResponse } from 'next/server'\n\nexport const runtime = 'edge'\n\nexport async function GET(req: Request) {\n  const secret = req.headers.get('x-cron-secret')\n  if (secret !== process.env.CRON_SECRET) {\n    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })\n  }\n  \n  try {\n    await flushViewCounts()\n    return NextResponse.json({ ok: true })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/seed-category/route.ts",
+      "sha": null,
+      "content_sha256": "16cde66cf742c17f8020429d133ffb83962880aec1f6033e64ebf2a30f42450e",
+      "score": 104,
+      "content": "import { NextResponse } from 'next/server'\nimport { db } from '@/lib/db'\n\nexport const runtime = 'edge'\n\nconst AUTH_HEADER = 'x-api-key'\n\nfunction isAuthorized(req: Request): boolean {\n  const secret = req.headers.get(AUTH_HEADER) || req.headers.get('x-cron-secret')\n  return secret === process.env.CRON_SECRET\n}\n\nconst SUPPORTED_CATEGORIES = [\n  'movies', 'news', 'entertainment', 'music', 'documentary',\n  'kids', 'science', 'general', 'sports', 'business', 'education',\n  'culture', 'lifestyle', 'travel', 'religious', 'comedy',\n  'anime', 'series', 'shop', 'outdoor', 'legislative',\n]\n\ninterface ParsedChannel {\n  tvg_id: string\n  name: string\n  logo_url: string\n  stream_url: string\n  category: string\n  country_code: string\n  language: string\n}\n\nfunction parseM3U(m3uText: string): ParsedChannel[] {\n  const lines = m3uText.split('\\n')\n  const channels: ParsedChannel[] = []\n  let current: Partial<ParsedChannel> = {}\n\n  for (let i = 0; i < lines.length; i++) {\n    const line = lines[i].trim()\n    if (!line) continue\n\n    if (line.startsWith('#EXTINF:')) {\n      const tvgIdMatch = line.match(/tvg-id=\"([^\"]*)\"/)\n      const logoMatch = line.match(/tvg-logo=\"([^\"]*)\"/)\n      const groupMatch = line.match(/group-title=\"([^\"]*)\"/)\n      const countryMatch = line.match(/tvg-country=\"([^\"]*)\"/)\n      const langMatch = line.match(/tvg-language=\"([^\"]*)\"/)\n\n      const commaSplit = line.split(',')\n      const name = commaSplit.length > 1 ? commaSplit[commaSplit.length - 1].trim() : 'Unknown'\n\n      current = {\n        tvg_id: tvgIdMatch?.[1] || '',\n        name,\n        logo_url: logoMatch?.[1] || '',\n        category: groupMatch?.[1] || '',\n        country_code: countryMatch?.[1] || '',\n        language: langMatch?.[1] || '',\n        stream_url: '',\n      }\n    } else if (!line.startsWith('#') && current.name) {\n      current.stream_url = line\n      channels.push({\n        tvg_id: current.tvg_id! || current.name.toLowerCase().replace(/[^a-z0-9]/g, ''),\n        name: current.name,\n        logo_url: current.logo_url || '',\n        category: current.category || 'General',\n        country_code: current.country_code || '',\n        language: current.language || '',\n        stream_url: line,\n      })\n      current = {}\n    }\n  }\n  return channels\n}\n\nfunction chunk<T>(arr: T[], size: number): T[][] {\n  return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>\n    arr.slice(i * size, i * size + size)\n  )\n}\n\nexport async function GET(req: Request) {\n  if (!isAuthorized(req)) {\n    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })\n  }\n\n  const { searchParams } = new URL(req.url)\n  const category = searchParams.get('category')?.toLowerCase()\n  const country = searchParams.get('country')?.toLowerCase()\n  const limit = Math.min(Number(searchParams.get('limit')) || 200, 1000)\n\n  if (!category && !country) {\n    return NextResponse.json({ error: 'Must provide category or country' }, { status: 400 })\n  }\n\n  const url = country \n    ? `https://iptv-org.github.io/iptv/countries/${country}.m3u`\n    : `https://iptv-org.github.io/iptv/categories/${category}.m3u`\n\n  try {\n    const res = await fetch(url, { signal: AbortSignal.timeout(30000) })\n    if (!res.ok) return NextResponse.json({ error: `Failed to fetch: ${res.status}` }, { status: 502 })\n\n    const text = await res.text()\n    const allChannels = parseM3U(text)\n    const channels = allChannels.slice(0, limit)\n\n    // Deduplicate by tvg_id\n    const unique = Array.from(new Map(channels.map(c => [c.tvg_id, c])).values())\n\n    let inserted = 0\n    for (const batch of chunk(unique, 200)) {\n      let paramIndex = 1\n      const values: any[] = []\n      const placeholders = batch.map(c => {\n        const p = `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`\n        const cat = c.category || category || 'General'\n        const cCode = c.country_code || country || ''\n        values.push(c.tvg_id, c.name, c.logo_url, c.stream_url, cat, cCode, false)\n        return p\n      }).join(',')\n\n      const result = await db.query(`\n        INSERT INTO channels (tvg_id, name, logo_url, stream_url, category, country_code, is_worldcup)\n        VALUES ${placeholders}\n        ON CONFLICT (tvg_id) DO UPDATE SET\n          stream_url = EXCLUDED.stream_url,\n          logo_url   = EXCLUDED.logo_url,\n          category   = EXCLUDED.category,\n          updated_at = now()\n        RETURNING id\n      `, values)\n      inserted += result.rows.length\n    }\n\n    // Flush cache\n    const { redis } = await import('@/lib/redis')\n    await redis.del('channels:nonwc:all')\n\n    return NextResponse.json({\n      ok: true,\n      category,\n      country,\n      total: allChannels.length,\n      imported: unique.length,\n      inserted,\n    })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/channels/route.ts",
+      "sha": null,
+      "content_sha256": "e5ea457ebec0102641a1b1641fd66e45c6da059766042cbae0554df83eedcb05",
+      "score": 104,
+      "content": "import { NextResponse } from 'next/server'\nimport { db } from '@/lib/db'\n\nexport const runtime = 'edge'\n\nexport async function GET(req: Request) {\n  try {\n    const { searchParams } = new URL(req.url)\n    const worldcup = searchParams.get('worldcup')\n    const category = searchParams.get('category')\n\n    let query: string\n    let params: any[] = []\n    let cacheKey: string\n\n    if (worldcup && worldcup !== 'all') {\n      cacheKey = `channels:wc:${worldcup}`\n      query = `SELECT * FROM channels WHERE is_worldcup = true AND wc_lang = $1 ORDER BY name`\n      params = [worldcup]\n    } else if (worldcup === 'all') {\n      cacheKey = `channels:wc:all`\n      query = `SELECT * FROM channels WHERE is_worldcup = true ORDER BY wc_lang, name`\n      params = []\n    } else if (category) {\n      cacheKey = `channels:cat:${category}`\n      query = `SELECT * FROM channels WHERE is_worldcup = false AND category = $1 ORDER BY name`\n      params = [category]\n    } else {\n      cacheKey = `channels:nonwc:all`\n      query = `SELECT * FROM channels WHERE is_worldcup = false ORDER BY category, name`\n      params = []\n    }\n\n    let cached = null\n    try {\n      const { redis } = await import('@/lib/redis')\n      if (process.env.UPSTASH_REDIS_REST_URL) {\n        cached = await redis.get(cacheKey)\n      }\n    } catch (e) {\n      console.warn('Redis GET failed:', e)\n    }\n\n    if (cached) {\n      return NextResponse.json(typeof cached === 'string' ? JSON.parse(cached) : cached)\n    }\n\n    const result = await db.query(query, params)\n    \n    try {\n      const { redis } = await import('@/lib/redis')\n      if (process.env.UPSTASH_REDIS_REST_URL) {\n        await redis.set(cacheKey, JSON.stringify(result.rows), { ex: 21600 })\n      }\n    } catch (e) {\n      console.warn('Redis SET failed:', e)\n    }\n\n    return NextResponse.json(result.rows)\n  } catch (err: any) {\n    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/watch/[id]/route.ts",
+      "sha": null,
+      "content_sha256": "1603b068ad82a6355e23e17e1187783352bdf8a00217327dd86cc1cb82c367d6",
+      "score": 102,
+      "content": "import { redis } from '@/lib/redis'\nimport { NextResponse } from 'next/server'\n\nexport const runtime = 'edge'\n\nexport async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {\n  const { id } = await params\n  \n  try {\n    // Increment Redis buffer counter (atomic, instant)\n    await redis.incr(`views:buffer:${id}`)\n    return NextResponse.json({ ok: true })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/channels/[id]/route.ts",
+      "sha": null,
+      "content_sha256": "d26d1e9d6ac027e7dc2bbbe5012d0d9467162e74c8b26a41862ce72dd920188a",
+      "score": 102,
+      "content": "import { db } from '@/lib/db'\nimport { redis } from '@/lib/redis'\nimport { verifyStream } from '@/lib/health'\nimport { NextResponse } from 'next/server'\n\nexport const runtime = 'edge'\n\nexport async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {\n  const { id } = await params\n\n  \n  try {\n    const result = await db.query('SELECT * FROM channels WHERE id = $1', [id])\n    const channel = result.rows[0]\n    \n    if (!channel) {\n      return NextResponse.json({ error: 'Channel not found' }, { status: 404 })\n    }\n\n    // Check Redis health cache first\n    const cached = await redis.get(`health:${id}`)\n    if (cached) {\n      return NextResponse.json({ ...channel, is_live: cached === 'live' })\n    }\n\n    // Verify live right now\n    const live = await verifyStream(channel.stream_url)\n\n    // Cache result for 1 hour (popular) or 24 hours (normal)\n    const ttl = channel.is_popular ? 3600 : 86400\n    await redis.set(`health:${id}`, live ? 'live' : 'dead', { ex: ttl })\n\n    // Update DB if status changed\n    if (live !== channel.is_live) {\n      await db.query('UPDATE channels SET is_live = $1 WHERE id = $2', [live, id])\n    }\n\n    return NextResponse.json({ ...channel, is_live: live })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/vote/status/route.ts",
+      "sha": null,
+      "content_sha256": "226c185a561e85563478d46da38ad3708bb409eecb78cc6b99dc97ec5ef6faee",
+      "score": 102,
+      "content": "import { NextResponse } from 'next/server'\nimport { redis } from '@/lib/redis'\n\nexport const runtime = 'edge'\n\n// GET /api/vote/status?match={matchId}\n// Returns: { voted: boolean, channelId?: string }\nexport async function GET(req: Request) {\n  try {\n    const matchId = new URL(req.url).searchParams.get('match')\n    if (!matchId) {\n      return NextResponse.json({ error: 'match query param required' }, { status: 400 })\n    }\n\n    const ip =\n      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||\n      req.headers.get('cf-connecting-ip') ||\n      'unknown'\n\n    const votedFor = await redis.get<string>(`vote:${matchId}:${ip}`)\n    return NextResponse.json({ voted: !!votedFor, channelId: votedFor || null })\n  } catch (err: any) {\n    return NextResponse.json({ error: err.message }, { status: 500 })\n  }\n}\n"
+    },
+    {
+      "path": "app/api/matches/[id]/route.ts",
+      "sha": null,
+      "content_sha256": "d272e85a7af8c5d9449c80f3e93016880b55f47d962082a4cd47f80b95af96f3",
+      "score": 102,
+      "content": "import { NextResponse } from 'next/server'\nimport { getMatches } from '@/lib/matches'\n\nexport const runtime = 'edge'\n\nexport async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {\n  const { id } = await params\n  const match = getMatches().find(m => m.id === id)\n  if (!match) return NextResponse.json({ error: 'Match not found' }, { status: 404 })\n  return NextResponse.json(match)\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "60b55ff7df79af72590f9524208e46642bc32bdc175cdad41349681c0e2f958f",
+      "score": 100,
+      "content": "This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).\n\n## Getting Started\n\nFirst, run the development server:\n\n```bash\nnpm run dev\n# or\nyarn dev\n# or\npnpm dev\n# or\nbun dev\n```\n\nOpen [http://localhost:3000](http://localhost:3000) with your browser to see the result.\n\nYou can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.\n\nThis project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.\n\n## Learn More\n\nTo learn more about Next.js, take a look at the following resources:\n\n- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.\n- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.\n\nYou can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!\n\n## Deploy on Vercel\n\nThe easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.\n\nCheck out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.\n"
+    },
+    {
+      "path": "lib/redis.ts",
+      "sha": null,
+      "content_sha256": "c1ef5dfdb5dec00809e4ae0809353431c3a15745e4510ecf5f783be10cf3f242",
+      "score": 93,
+      "content": "import { Redis } from '@upstash/redis'\n\nexport const redis = new Redis({\n  url: process.env.UPSTASH_REDIS_REST_URL || '',\n  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',\n})\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha": null,
+      "content_sha256": "e3447d84251880fb34cfae09131cb4c57471529bbfe60976a3245793cf621627",
+      "score": 75,
+      "content": "<!-- BEGIN:nextjs-agent-rules -->\n# This is NOT the Next.js you know\n\nThis version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.\n<!-- END:nextjs-agent-rules -->\n"
+    },
+    {
+      "path": "public/vercel.svg",
+      "sha": null,
+      "content_sha256": "f081337b2fee635b455b63275406a3e7f39d6a014e25ad90dab5a67e62a12ac4",
+      "score": 70,
+      "content": "<svg fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1155 1000\"><path d=\"m577.3 0 577.4 1000H0z\" fill=\"#fff\"/></svg>"
+    },
+    {
+      "path": "wrangler.toml",
+      "sha": null,
+      "content_sha256": "81e707b47c609fc175bf3777d789bed177fdfa88f7f0ff7af4b64165feceec84",
+      "score": 35,
+      "content": "name = \"wc26-stream-proxy\"\nmain = \"workers/stream-proxy/index.ts\"\ncompatibility_date = \"2024-12-01\"\n\n# Production URL for the Worker — set this after first deploy\n# env = { NEXT_PUBLIC_EDGE_PROXY_URL = \"https://wc26-stream-proxy.your-subdomain.workers.dev\" }\n"
+    },
+    {
+      "path": "fix-css.js",
+      "sha": null,
+      "content_sha256": "394648dec38f636fbb72c7f11cf6d37bdff0c40ebf6ec1c385a81aac53049214",
+      "score": 35,
+      "content": "const fs = require('fs')\nlet css = fs.readFileSync('app/globals.css', 'utf-8')\n\n// Fix touch targets\ncss = css.replace('.player-nav-btn {', '.player-nav-btn {\\n  min-width: 44px;\\n  min-height: 44px;')\ncss = css.replace('.player-ctrl-btn {', '.player-ctrl-btn {\\n  min-width: 44px;\\n  min-height: 44px;')\ncss = css.replace('.live-ch-card {', '.live-ch-card {\\n  min-height: 44px;')\ncss = css.replace('.all-cat-item {', '.all-cat-item {\\n  min-height: 44px;')\n\n// Safe area insets\ncss = css.replace('padding: 0 1rem;', 'padding: env(safe-area-inset-top, 0) max(1rem, env(safe-area-inset-right, 0)) 0 max(1rem, env(safe-area-inset-left, 0));')\ncss = css.replace('padding: 0 1.5rem;', 'padding: env(safe-area-inset-top, 0) max(1.5rem, env(safe-area-inset-right, 0)) 0 max(1.5rem, env(safe-area-inset-left, 0));')\n\n// Match row responsive\nconst matchRowMobile = `\n@media (max-width: 768px) {\n  .match-row {\n    grid-template-columns: 1fr;\n    gap: 0.5rem;\n    padding: 1rem;\n  }\n}\n`\ncss += matchRowMobile\n\nfs.writeFileSync('app/globals.css', css)\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2017\",\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"allowJs\": true,\n    \"skipLibCheck\": true,\n    \"strict\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"react-jsx\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ],\n    \"paths\": {\n      \"@/*\": [\"./*\"]\n    }\n  },\n  \"include\": [\n    \"next-env.d.ts\",\n    \"**/*.ts\",\n    \"**/*.tsx\",\n    \".next/types/**/*.ts\",\n    \".next/dev/types/**/*.ts\",\n    \"**/*.mts\"\n  ],\n  \"exclude\": [\"node_modules\"]\n}\n"
+    },
+    {
+      "path": "schema.sql",
+      "sha": null,
+      "content_sha256": "d7ae6059926f85f7116e7e7c2f0ee025d3e84ddf297017c7ca3bb8fa275c5848",
+      "score": 35,
+      "content": "-- FIFA World Cup 26 — curated broadcaster channels only.\n-- This replaces the old iptv-org general sync.\n\nCREATE TABLE IF NOT EXISTS channels (\n  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  tvg_id        TEXT UNIQUE,\n  name          TEXT NOT NULL,\n  logo_url      TEXT,\n  stream_url    TEXT NOT NULL,\n  stream_urls   TEXT[],                    -- fallback URLs (optional)\n  category      TEXT DEFAULT 'Sports',\n  country_code  TEXT,                      -- ISO 3166-1 alpha-2\n  is_live       BOOLEAN DEFAULT true,\n  is_popular    BOOLEAN DEFAULT false,\n  last_checked  TIMESTAMPTZ,\n  view_count    BIGINT DEFAULT 0,\n  is_worldcup   BOOLEAN DEFAULT true,      -- all channels are WC now\n  wc_lang       TEXT,                      -- en|es|de|fr|it|pt\n  created_at    TIMESTAMPTZ DEFAULT now(),\n  updated_at    TIMESTAMPTZ DEFAULT now()\n);\n\nCREATE INDEX IF NOT EXISTS idx_channels_wc_lang ON channels(wc_lang);\nCREATE INDEX IF NOT EXISTS idx_channels_country ON channels(country_code);\nCREATE INDEX IF NOT EXISTS idx_channels_live ON channels(is_live);\nCREATE INDEX IF NOT EXISTS idx_channels_category ON channels(category);\nCREATE INDEX IF NOT EXISTS idx_channels_worldcup ON channels(is_worldcup);\nCREATE INDEX IF NOT EXISTS idx_channels_worldcup_lang_name ON channels(is_worldcup, wc_lang, name);\n"
+    },
+    {
+      "path": "next.config.ts",
+      "sha": null,
+      "content_sha256": "1fa498819f41efaefa451914704b6fa672e7d42091edae2242cbeb81da47d329",
+      "score": 35,
+      "content": "import type { NextConfig } from \"next\";\n\nconst nextConfig: NextConfig = {\n  images: {\n    remotePatterns: [\n      { protocol: \"https\", hostname: \"**\" },\n      { protocol: \"http\", hostname: \"**\" },\n    ],\n  },\n};\n\nexport default nextConfig;\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:54.450741+00:00"
+}

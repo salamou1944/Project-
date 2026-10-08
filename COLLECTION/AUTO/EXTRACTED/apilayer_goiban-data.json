@@ -1,0 +1,57 @@
+{
+  "canonical_source": "github:apilayer/goiban-data",
+  "repo": "apilayer/goiban-data",
+  "revision_sha": "ad39e148bb3377ca9a33e88e3bb7b0d37b3ca5a3",
+  "default_branch": "master",
+  "pushed_at": "2018-05-15T15:19:27Z",
+  "repo_updated_at": "2025-10-22T06:17:08Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "1468fce911c560f158ae192f90a9242e1bbab3e8aede0711c80e8d0624b728d9",
+      "score": 100,
+      "content": "# goiban-data\n\nLibrary for storage and retrieval of goiban data structures."
+    },
+    {
+      "path": "in_memory_store_test.go",
+      "sha": null,
+      "content_sha256": "471485b7c7aff19f7ddc6cfab730d52b6d2ac82629e8321589d89b4dfdd150d3",
+      "score": 95,
+      "content": "package data_test\n\nimport (\n\t\"testing\"\n\n\tdata \"github.com/fourcube/goiban-data\"\n)\n\nfunc TestStoreInMemory(t *testing.T) {\n\tstore := data.NewInMemoryStore()\n\tdata := data.BankInfo{Bankcode: \"12345\", Country: \"DE\"}\n\n\tok, err := store.Store(data)\n\n\tif !ok || err != nil {\n\t\tt.Errorf(\"Test failed: %v %v\", ok, err)\n\t}\n\n\trecord, _ := store.Find(\"DE\", \"12345\")\n\n\tif *record != data {\n\t\tt.Errorf(\"Failed to find data in store\")\n\t}\n}\n\nfunc TestClearInMemory(t *testing.T) {\n\tstore := data.NewInMemoryStore()\n\tdata := data.BankInfo{Bankcode: \"12345\", Country: \"DE\", Source: \"Foo\"}\n\n\tok, err := store.Store(data)\n\n\tif !ok || err != nil {\n\t\tt.Errorf(\"Test failed: %v %v\", ok, err)\n\t}\n\n\tstore.Clear(\"Foo\")\n\n\trecord, _ := store.Find(\"DE\", \"12345\")\n\n\tif record != nil {\n\t\tt.Errorf(\"Data not deleted!\")\n\t}\n}\n"
+    },
+    {
+      "path": "sql_store.go",
+      "sha": null,
+      "content_sha256": "14c3d54a96a36e9fb03e557de6596981c628a465f09b9d8e96b73e7fadba5a26",
+      "score": 35,
+      "content": "package data\n\nimport (\n\t\"database/sql\"\n\t\"log\"\n)\n\nvar (\n\tINSERT_BANK_DATA             *sql.Stmt\n\tSELECT_SOURCE_ID             *sql.Stmt\n\tSELECT_BANK_INFORMATION      = \"SELECT bankcode, name, zip, city, bic FROM BANK_DATA WHERE bankcode = ? AND country = ?;\"\n\tSELECT_BANK_INFORMATION_STMT *sql.Stmt\n)\n\ntype SQLStore struct {\n\tdb *sql.DB\n}\n\nfunc NewSQLStore(dbType string, url string) *SQLStore {\n\tdb, err := sql.Open(dbType, url)\n\tif err != nil {\n\t\tlog.Fatalf(\"DB Connection error: %v\", err)\n\t\treturn nil\n\t}\n\n\terr = prepareStatements(db)\n\n\tif err != nil {\n\t\tlog.Fatalf(\"DB Prepare Statement error: %v\", err)\n\t\treturn nil\n\t}\n\n\treturn &SQLStore{\n\t\tdb,\n\t}\n}\n\nfunc (s *SQLStore) Find(countryCode string, bankCode string) (*BankInfo, error) {\n\tvar dbBankcode, dbName, dbZip, dbCity, dbBic string\n\n\terr := SELECT_BANK_INFORMATION_STMT.QueryRow(bankCode, countryCode).Scan(&dbBankcode, &dbName, &dbZip, &dbCity, &dbBic)\n\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\treturn &BankInfo{\n\t\tBankcode: dbBankcode,\n\t\tName:     dbName,\n\t\tZip:      dbZip,\n\t\tCity:     dbCity,\n\t\tBic:      dbBic,\n\t}, nil\n}\n\nfunc (s *SQLStore) Store(data BankInfo) (bool, error) {\n\t_, err := INSERT_BANK_DATA.Exec(\n\t\tdata.Source,\n\t\tdata.Bankcode,\n\t\tdata.Name,\n\t\tdata.Zip,\n\t\tdata.City,\n\t\tdata.Bic,\n\t\tdata.Country,\n\t\tdata.CheckAlgo)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to insert %v: %v\", err, data)\n\t}\n\n\treturn true, nil\n}\n\nfunc (s *SQLStore) Clear(source string) (int, error) {\n\tsourceID, err := getDataSourceId(source)\n\n\tlog.Printf(\"Removing entries for source '%v' (%v)\", source, sourceID)\n\tresult, err := s.db.Exec(\"DELETE FROM BANK_DATA WHERE source = ?;\", source)\n\n\tif err != nil {\n\t\treturn -1, err\n\t}\n\n\tn, err := result.RowsAffected()\n\tif err != nil {\n\t\treturn -1, err\n\t}\n\n\treturn int(n), nil\n}\n\nfunc getDataSourceId(sourceName string) (int, error) {\n\tvar id int\n\tresult := SELECT_SOURCE_ID.QueryRow(sourceName)\n\n\terr := result.Scan(&id)\n\n\tif err != nil {\n\t\tlog.Fatalf(\"Data source %v not found: %v\", sourceName, err)\n\t\treturn -1, err\n\t}\n\n\treturn id, nil\n}\n\nfunc prepareStatements(db *sql.DB) error {\n\tvar err error\n\n\tINSERT_BANK_DATA, err = db.Prepare(`INSERT INTO BANK_DATA\n\t\t(id, source, bankcode, name, zip, city, bic, country, algorithm, created, last_update)\n\t\tVALUES\n\t\t(NULL, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL);`)\n\n\tif err != nil {\n\t\tlog.Fatalf(\"Error while preparing statement: %v\", err)\n\t\treturn err\n\t}\n\n\tSELECT_SOURCE_ID, err = db.Prepare(`SELECT id FROM DATA_SOURCE where name = ?`)\n\n\tif err != nil {\n\t\tlog.Fatalf(\"Error while preparing statement: %v\", err)\n\t\treturn err\n\t}\n\n\tSELECT_BANK_INFORMATION_STMT, err = db.Prepare(SELECT_BANK_INFORMATION)\n\n\tif err != nil {\n\t\tlog.Fatalf(\"Error while preparing statement: %v\", err)\n\t\treturn err\n\t}\n\n\treturn nil\n}\n"
+    },
+    {
+      "path": "lib.go",
+      "sha": null,
+      "content_sha256": "277a12f814f18af0cfc2f316139168fb7a1ba6450671ef81dc364094184d6d90",
+      "score": 35,
+      "content": "package data\n\n// BankInfo describes data associated with an IBAN\ntype BankInfo struct {\n\tBankcode string `json:\"bankCode\"`\n\tName     string `json:\"name\"`\n\tZip      string `json:\"zip,omitempty\"`\n\tCity     string `json:\"city,omitempty\"`\n\tBic      string `json:\"bic,omitempty\"`\n\n\tCountry   string `json:\"-\"`\n\tCheckAlgo string `json:\"-\"`\n\tSource    string `json:\"-\"`\n}\n\n// BankDataRepository provides storage mechanisms\ntype BankDataRepository interface {\n\t// Find an entry\n\tFind(countryCode string, bankCode string) (*BankInfo, error)\n\n\t// Store bank info\n\tStore(data BankInfo) (bool, error)\n\n\t// Clear all entries from a specific source\n\t//\n\t// Returns the number of removed entries and an optional error\n\tClear(source string) (int, error)\n}\n"
+    },
+    {
+      "path": "in_memory_store.go",
+      "sha": null,
+      "content_sha256": "3211c0692f09470fd4797ebf9fa30e7ed06b8c4e509caf15d4e3c3045a167933",
+      "score": 35,
+      "content": "package data\n\ntype Query struct {\n\tCountry  string\n\tBankCode string\n}\n\ntype InMemoryStore struct {\n\trecords map[Query]*BankInfo\n}\n\nfunc NewInMemoryStore() *InMemoryStore {\n\treturn &InMemoryStore{\n\t\trecords: make(map[Query]*BankInfo),\n\t}\n}\n\nfunc (s *InMemoryStore) Find(country string, bankCode string) (*BankInfo, error) {\n\tkey := Query{country, bankCode}\n\n\treturn s.records[key], nil\n}\n\nfunc (s *InMemoryStore) Store(data BankInfo) (bool, error) {\n\tkey := Query{data.Country, data.Bankcode}\n\n\ts.records[key] = &data\n\n\treturn true, nil\n}\n\nfunc (s *InMemoryStore) Clear(source string) (int, error) {\n\tdeleted := 0\n\tfor k, v := range s.records {\n\t\tif v.Source == source {\n\t\t\tdelete(s.records, k)\n\t\t\tdeleted++\n\t\t}\n\t}\n\n\treturn deleted, nil\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:15.559286+00:00"
+}

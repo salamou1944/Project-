@@ -1,0 +1,43 @@
+{
+  "canonical_source": "github:senamakel/grafana-mongodb",
+  "repo": "senamakel/grafana-mongodb",
+  "revision_sha": "aa4a3f0b7e458ff6bf3e136fbf8987283de79a5e",
+  "default_branch": "master",
+  "pushed_at": "2018-09-17T19:13:29Z",
+  "repo_updated_at": "2018-09-17T19:13:30Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "Grafana-Mongo.Dockerfile",
+      "sha": null,
+      "content_sha256": "5691c0c7849c02458d61284e425d5467f05a98d3350114bd8ec6dee94664b3d5",
+      "score": 145,
+      "content": "FROM grafana/grafana:latest\n\nUSER root\nRUN apt-get update && apt-get install -y unzip wget\n\nRUN apt-get install -y gnupg\n\n# Install Nodejs\nRUN curl -sL https://deb.nodesource.com/setup_8.x -o /tmp/nodesource_setup.sh\nRUN bash /tmp/nodesource_setup.sh\nRUN apt-get install -y nodejs\n\n# Download the mongo plugin\nRUN wget https://github.com/JamesOsgood/mongodb-grafana/archive/master.zip -O /var/lib/grafana/plugins/grafana-mongodb.zip\nRUN (cd /var/lib/grafana/plugins/; unzip /var/lib/grafana/plugins/grafana-mongodb.zip)\n\n# Install dependencies\nRUN (cd /var/lib/grafana/plugins/mongodb-grafana-master; npm install)\n\n# Installing supervisord\nRUN apt-get install -y supervisor\nADD supervisord.conf /etc/supervisor/conf.d/supervisord.conf\n\nRUN chown -R grafana:grafana \"$GF_PATHS_DATA\" \"$GF_PATHS_HOME/.aws\" \"$GF_PATHS_LOGS\" \"$GF_PATHS_PLUGINS\" && \\\n    chmod 777 \"$GF_PATHS_DATA\" \"$GF_PATHS_HOME/.aws\" \"$GF_PATHS_LOGS\" \"$GF_PATHS_PLUGINS\"\n\n# COPY run.sh /run.sh\n# USER grafana\nENTRYPOINT [\"/usr/bin/supervisord\"]"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha": null,
+      "content_sha256": "a18841ab86227247f10cd6ef931b01e75f914d5430490d1dfe5a9bb7536639a9",
+      "score": 120,
+      "content": "version: '3'\n\nservices:\n  influxdb:\n    image: influxdb:latest\n    ports:\n      - \"8086:8086\"\n    environment:\n      - INFLUX_USERNAME=USERNAME_GOES_HERE\n      - INFLUX_PASSWORD=PASSWORD_GOES_HERE\n      - INFLUXDB_DATA_ENGINE=tsm1\n      - INFLUXDB_REPORTING_DISABLED=false\n    volumes:\n      - influxdb:/var/lib/influxdb\n    logging:\n      driver: none\n\n  influxdb_telegraf:\n    image: telegraf:latest\n    links:\n      - influxdb\n    volumes:\n      - ./telegraf.conf:/etc/telegraf/telegraf.conf:ro\n    logging:\n      driver: none\n\n\n  influxdb_grafana:\n    build:\n      context: .\n      dockerfile: Grafana-Mongo.Dockerfile\n    ports:\n      - \"3000:3000\"\n    environment:\n      - GF_INSTALL_PLUGINS=grafana-piechart-panel\n    volumes:\n      - grafana:/var/lib/grafana\n    links:\n      - influxdb\n    # logging:\n    #   driver: none\n\n\nvolumes:\n  grafana:\n  influxdb:"
+    },
+    {
+      "path": "run.sh",
+      "sha": null,
+      "content_sha256": "9bd092f8a8dd05c1834622d20ae6e5b4b6974a44a90e574f7865fcb658b46087",
+      "score": 35,
+      "content": "#!/bin/bash -e\n\nPERMISSIONS_OK=0\n\nif [ ! -r \"$GF_PATHS_CONFIG\" ]; then\n    echo \"GF_PATHS_CONFIG='$GF_PATHS_CONFIG' is not readable.\"\n    PERMISSIONS_OK=1\nfi\n\nif [ ! -w \"$GF_PATHS_DATA\" ]; then\n    echo \"GF_PATHS_DATA='$GF_PATHS_DATA' is not writable.\"\n    PERMISSIONS_OK=1\nfi\n\nif [ ! -r \"$GF_PATHS_HOME\" ]; then\n    echo \"GF_PATHS_HOME='$GF_PATHS_HOME' is not readable.\"\n    PERMISSIONS_OK=1\nfi\n\nif [ $PERMISSIONS_OK -eq 1 ]; then\n    echo \"You may have issues with file permissions, more information here: http://docs.grafana.org/installation/docker/#migration-from-a-previous-version-of-the-docker-container-to-5-1-or-later\"\nfi\n\nif [ ! -d \"$GF_PATHS_PLUGINS\" ]; then\n    mkdir \"$GF_PATHS_PLUGINS\"\nfi\n\nif [ ! -z ${GF_AWS_PROFILES+x} ]; then\n    > \"$GF_PATHS_HOME/.aws/credentials\"\n\n    for profile in ${GF_AWS_PROFILES}; do\n        access_key_varname=\"GF_AWS_${profile}_ACCESS_KEY_ID\"\n        secret_key_varname=\"GF_AWS_${profile}_SECRET_ACCESS_KEY\"\n        region_varname=\"GF_AWS_${profile}_REGION\"\n\n        if [ ! -z \"${!access_key_varname}\" -a ! -z \"${!secret_key_varname}\" ]; then\n            echo \"[${profile}]\" >> \"$GF_PATHS_HOME/.aws/credentials\"\n            echo \"aws_access_key_id = ${!access_key_varname}\" >> \"$GF_PATHS_HOME/.aws/credentials\"\n            echo \"aws_secret_access_key = ${!secret_key_varname}\" >> \"$GF_PATHS_HOME/.aws/credentials\"\n            if [ ! -z \"${!region_varname}\" ]; then\n                echo \"region = ${!region_varname}\" >> \"$GF_PATHS_HOME/.aws/credentials\"\n            fi\n        fi\n    done\n\n    chmod 600 \"$GF_PATHS_HOME/.aws/credentials\"\nfi\n\n# Convert all environment variables with names ending in __FILE into the content of\n# the file that they point at and use the name without the trailing __FILE.\n# This can be used to carry in Docker secrets.\nfor VAR_NAME in $(env | grep '^GF_[^=]\\+__FILE=.\\+' | sed -r \"s/([^=]*)__FILE=.*/\\1/g\"); do\n    VAR_NAME_FILE=\"$VAR_NAME\"__FILE\n    if [ \"${!VAR_NAME}\" ]; then\n        echo >&2 \"ERROR: Both $VAR_NAME and $VAR_NAME_FILE are set (but are exclusive)\"\n        exit 1\n    fi\n    echo \"Getting secret $VAR_NAME from ${!VAR_NAME_FILE}\"\n    export \"$VAR_NAME\"=\"$(< \"${!VAR_NAME_FILE}\")\"\n    unset \"$VAR_NAME_FILE\"\ndone\n\nexport HOME=\"$GF_PATHS_HOME\"\n\nif [ ! -z \"${GF_INSTALL_PLUGINS}\" ]; then\n  OLDIFS=$IFS\n  IFS=','\n  for plugin in ${GF_INSTALL_PLUGINS}; do\n    IFS=$OLDIFS\n    echo installing $GF_INSTALL_PLUGINS\n    grafana-cli --pluginsDir \"${GF_PATHS_PLUGINS}\" plugins install ${plugin}\n  done\nfi\n\necho running server\nexec grafana-server                                         \\\n  --homepath=\"$GF_PATHS_HOME\"                               \\\n  --config=\"$GF_PATHS_CONFIG\"                               \\\n  cfg:default.log.mode=\"console\"                            \\\n  cfg:default.paths.data=\"$GF_PATHS_DATA\"                   \\\n  cfg:default.paths.logs=\"$GF_PATHS_LOGS\"                   \\\n  cfg:default.paths.plugins=\"$GF_PATHS_PLUGINS\""
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:46.041762+00:00"
+}

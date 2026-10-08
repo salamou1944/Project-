@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:amardeeplakshkar/register",
+  "repo": "amardeeplakshkar/register",
+  "revision_sha": "2fdeb3353fb0e8b6647a5ff19b6a0a70a22c1717",
+  "default_branch": "main",
+  "pushed_at": "2025-01-30T15:35:57Z",
+  "repo_updated_at": "2025-01-30T15:36:12Z",
+  "license": "GPL-3.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/raw-api.yml",
+      "sha": null,
+      "content_sha256": "ee5e79205db1d9df2d4581c78ec559ba896366bbe911118ee23b2cd3905cadbf",
+      "score": 201,
+      "content": "name: Raw API\n\non:\n    push:\n        branches: [main]\n        paths:\n            - \"domains/*\"\n            - \".github/workflows/raw-api.yml\"\n\n    workflow_dispatch:\n\nconcurrency:\n    group: ${{ github.ref }}-raw-api\n    cancel-in-progress: true\n\njobs:\n    update:\n        name: Update\n        runs-on: ubuntu-latest\n\n        steps:\n            - uses: actions/checkout@v4\n\n            - uses: actions/checkout@v4\n              with:\n                  repository: is-a-dev/raw-api\n                  path: raw-api\n                  token: ${{ secrets.BOT }}\n\n            - uses: actions/setup-node@v4\n              with:\n                  node-version: 20.x\n\n            - name: Update Data\n              run: node raw-api/scripts/update.js\n\n            - name: Commit\n              uses: cpina/github-action-push-to-another-repository@main\n              with:\n                  source-directory: \"raw-api\"\n                  destination-github-username: is-a-dev\n                  destination-repository-name: raw-api\n                  user-email: \"actions@github.com\"\n                  user-name: \"GitHub Actions\"\n              env:\n                  API_TOKEN_GITHUB: ${{ secrets.BOT }}\n"
+    },
+    {
+      "path": ".github/workflows/validation.yml",
+      "sha": null,
+      "content_sha256": "9d83cd5c4369c0748c228a410d1aae5cae9bf85d1079944ed651dcf1f5509e0c",
+      "score": 184,
+      "content": "name: Validation\n\non:\n    pull_request:\n\n    push:\n        branches: [main]\n        paths:\n            - \"domains/*\"\n            - \"tests/*\"\n            - \"util/*\"\n            - \".github/workflows/validation.yml\"\n            - \"dnsconfig.js\"\n\n    workflow_dispatch:\n\nconcurrency:\n    group: ${{ github.ref }}-validation\n    cancel-in-progress: true\n\njobs:\n    dnscontrol:\n        name: DNSControl\n        runs-on: ubuntu-latest\n        steps:\n            - uses: actions/checkout@v4\n\n            - uses: is-a-dev/dnscontrol-action@main\n              with:\n                  args: check\n\n    tests:\n        name: Tests\n        runs-on: ubuntu-latest\n        steps:\n            - uses: actions/checkout@v4\n\n            - run: npm install\n\n            - run: npx ava tests/*.test.js\n"
+    },
+    {
+      "path": "tests/special.test.js",
+      "sha": null,
+      "content_sha256": "0166c74d369fcd5ae6f05efaba1d8d103f3cb23278b77dc4a1bede9ee2849eee",
+      "score": 165,
+      "content": "const t = require(\"ava\");\nconst fs = require(\"fs-extra\");\nconst path = require(\"path\");\n\nconst domainsPath = path.resolve(\"domains\");\nconst files = fs.readdirSync(domainsPath).filter((file) => file.endsWith(\".json\"));\n\nconst bypassedUsernames = require(\"../util/bypassed.json\").map((username) => username.toLowerCase());\n\nfunction getDomainData(subdomain) {\n    try {\n        const data = fs.readJsonSync(path.join(domainsPath, `${subdomain}.json`));\n        return data;\n    } catch (error) {\n        throw new Error(`Failed to read JSON for ${subdomain}: ${error.message}`);\n    }\n}\n\nt(\"Users are limited to one single character subdomain\", (t) => {\n    const results = [];\n\n    files.forEach((file) => {\n        const subdomain = file.replace(/\\.json$/, \"\");\n        const data = getDomainData(subdomain);\n\n        if (subdomain.length === 1 && !bypassedUsernames.includes(data.owner.username.toLowerCase())) {\n            results.push({\n                subdomain,\n                owner: data.owner.username.toLowerCase()\n            });\n        }\n    });\n\n    const duplicates = results.filter((result) => results.filter((r) => r.owner === result.owner).length > 1);\n    const output = duplicates.reduce((acc, curr) => {\n        if (!acc[curr.owner]) {\n            acc[curr.owner] = [];\n        }\n\n        acc[curr.owner].push(`${curr.subdomain}.is-a.dev`);\n        return acc;\n    }, {});\n\n    t.is(\n        duplicates.length,\n        0,\n        Object.keys(output)\n            .map((owner) => `${owner} - ${output[owner].join(\", \")}`)\n            .join(\"\\n\")\n    );\n\n    t.pass();\n});\n"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "sha": null,
+      "content_sha256": "1d87049b5c12d2b0db446721ba9c76ea42e0f92ba1d3a6883c126c0342f23b50",
+      "score": 126,
+      "content": "name: Publish\n\non:\n    push:\n        branches: [main]\n        paths:\n            - \"domains/*\"\n            - \".github/workflows/publish.yml\"\n            - \"dnsconfig.js\"\n\n    workflow_dispatch:\n\nconcurrency:\n    group: ${{ github.ref }}-publish\n    cancel-in-progress: false\n\njobs:\n    dns:\n        name: DNS\n        runs-on: ubuntu-latest\n        steps:\n            - uses: actions/checkout@v4\n\n            - name: Run tests\n              run: |\n                  npm install\n                  npx ava tests/*.test.js\n\n            - name: Generate creds.json\n              run: echo '{\"cloudflare\":{\"TYPE\":\"CLOUDFLAREAPI\",\"apitoken\":\"$CLOUDFLARE_API_TOKEN\"}}' > ./creds.json\n\n            - name: Push DNS records\n              uses: is-a-dev/dnscontrol-action@main\n              env:\n                  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n              with:\n                  args: push\n"
+    },
+    {
+      "path": ".github/workflows/stale.yml",
+      "sha": null,
+      "content_sha256": "a998a5efe82f09da898284675fda475003f376cc9cbc77f58f99f96371f5441d",
+      "score": 126,
+      "content": "name: StaleBOT\n\non:\n    workflow_dispatch:\n    schedule:\n        - cron: \"30 14 * * *\"\n\njobs:\n    stale:\n        runs-on: ubuntu-latest\n        steps:\n            - uses: actions/stale@v3\n              with:\n                  repo-token: ${{ secrets.GITHUB_TOKEN }}\n                  days-before-stale: 7\n                  days-before-close: 3\n                  stale-issue-message: \"This issue has been marked as stale due to inactivity and will be closed. Comment anything on this issue to prevent it\"\n                  stale-pr-message: \"This pull request has been marked as stale due to inactivity and will be closed. Comment anything on this PR to prevent it\"\n                  exempt-issue-labels: \"no-stale\"\n                  exempt-pr-labels: \"no-stale\"\n"
+    },
+    {
+      "path": ".github/workflows/label.yml",
+      "sha": null,
+      "content_sha256": "d46fb4ce26615dcbe00ff6c0393c13333c33c4229d60edcc58b01a348cde3c90",
+      "score": 126,
+      "content": "name: Pull Request Labeler\non:\n  schedule:\n    - cron: '*/10 * * * *'\njobs:\n  labeler:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: docker://docker.io/ilyam8/periodic-pr-labeler:v0.1.1\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          GITHUB_REPOSITORY: ${{ github.repository }}\n          LABEL_MAPPINGS_FILE: .github/labeler.yml\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "ce8bfa4b9addd804a533601f906c779d1932b9c9a7f969a84d97b72af7b83fc8",
+      "score": 120,
+      "content": "{\n  \"devDependencies\": {\n    \"ava\": \"^6.2.0\",\n    \"fs-extra\": \"^11.2.0\"\n  },\n  \"scripts\": {\n    \"test\": \"npx ava tests/*.test.js\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/linstall.json",
+      "sha": null,
+      "content_sha256": "7e75557c822651f53388976ac3a889f82b5c9ec45c03ef63a7545ae2a7151e32",
+      "score": 115,
+      "content": "{\n  \"owner\": {\n    \"username\": \"riotoff\",\n    \"discord\": \"1040929084684902460\"\n  },\n  \"record\": {\n    \"CNAME\": \"riotoff.github.io\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/kokoauth.json",
+      "sha": null,
+      "content_sha256": "281a3cb3b1e2e24007eb3bef252096634d7eb62ce5b0c6fabad556dc107f2c15",
+      "score": 113,
+      "content": "{\n  \"owner\": {\n    \"username\": \"kokofixcomputers\",\n    \"discord\": \"1096839213313446019\",\n    \"OWL\": \"eyJlbmMiOiJBMTI4Q0JDLUhTMjU2IiwiYWxnIjoiUlNBLU9BRVAiLCJraWQiOiJaa1VsRmRqVThiUEstLXVVM2JJR09PVHFYYVFFS1ZINFVXOW53MTR6WTJnIn0.siGn-NNc3J0a5tP-qPXfUiXXiLIVsc0rU0Xd0LJ2zn1pvgeLu42wC5CVbz2mPW9PvsxmeOF2FdX4W1ki8dkzxI5tZO3CljQWLsKq26TpVGTApDCXDUEFk80WpmvQK_uBajVrL-0Jaq_teH1coNYFPbH5dp9WmOV3ckgCkqwqP7alY4klkZ9A6GsdkcJ51gbQ1qHp1qZIX7jwBNcOXE0WR5KTNXKeeOGSvHbAGEWhLc96y6TzokyZsC71pkTF0UjrLfB4uylcD0UfEONiwDKc8jjXR3Jz3GnfzgaSqPjRNYqMjXQ5XxPXwjv8t4iCP3cBRNEMM70pFXneFWt3defrMQ.6dpv7unaFwIz_IkI7VerwA.P9NXfPTD2LDNEdOFa-roPC1NDB1WvFiX8Giai3cjpNFYcYHJyH7_7lOV6o4zUoN83Ttt1VaukQKLsMk2kaVedZUPPryAhzVLMJiG7-GiJlW22PgcTkjB67jRjqEdoSo_zS70y1C7KeiLv7ZyY_koGg.2NwhAegHA2i-6E9hhzlXfQ\"\n  },\n  \"record\": {\n    \"A\": [\"45.90.12.32\"]\n  }\n}\n"
+    },
+    {
+      "path": "domains/gautham.json",
+      "sha": null,
+      "content_sha256": "7455148cd733b169f628e27c93600e1e562d0a706356e4863e117f232be9ae38",
+      "score": 113,
+      "content": "{\n  \"owner\": {\n    \"username\": \"inkilu\",\n    \"email\": \"gauthamgkm@gmail.com\"\n  },\n  \"record\": {\n    \"CNAME\": \"inkilu.is-a.dev\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/_serveo-authkey.pds.hcj.json",
+      "sha": null,
+      "content_sha256": "d2efe38551b7f82c402b5b7b05598b4b7556198e27a35ee3c0a41c7b08fdd2fd",
+      "score": 113,
+      "content": "{\n  \"owner\": {\n    \"username\": \"TheHCJ\",\n    \"bluesky\": \"did:plc:5f2c6awh4ffekm7srmi4d6zg\"\n  },\n  \"record\": {\n    \"TXT\": \"SHA256:KFRJFKicG2rnITzSxLQn62svO68oydMpEDpQ6yRbtR0\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/_github-pages-challenge-inkilu.gautham.json",
+      "sha": null,
+      "content_sha256": "21a088dc2c9622443bc20d396bcd2186201c3265288987ebbdd1257fd2478b26",
+      "score": 113,
+      "content": "{\n  \"owner\": {\n    \"username\": \"inkilu\",\n    \"email\": \"gauthamgkm@gmail.com\"\n  },\n  \"record\": {\n    \"TXT\": \"c49ff3bbd82885e942c6785d410fd0\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/vishwapinnawala.json",
+      "sha": null,
+      "content_sha256": "b5a0f72ec54db449d5c0b60884aa3d7d863099acd15d69281aeb04b0dc250028",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"vishwapinnawala\",\n    \"email\": \"vishwaspinnawala@gmail.com\"\n  },\n  \"record\": {\n    \"A\": [\"198.91.81.12\"]\n  }\n}\n"
+    },
+    {
+      "path": "domains/magenta.json",
+      "sha": null,
+      "content_sha256": "b4e54daf34cbb749311313f3dd804d699b591406b16fb9caebc3dfa3b5948260",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"EddieCherian\",\n    \"email\": \"eddiecherianj@gmail.com\"\n  },\n  \"record\": {\n    \"URL\": \"https://magenta.com\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/api.shockbs.json",
+      "sha": null,
+      "content_sha256": "5768fe62393314005ee26c68f9135ae94dfda02318a6495ca6f1a1e5e0a0e9ee",
+      "score": 108,
+      "content": "{\n    \"owner\": {\n        \"username\": \"shockbs\",\n        \"discord\": \"880084860327313459\"\n    },\n    \"record\": {\n        \"A\": [\n            \"69.30.249.53\"\n        ]\n    }\n}"
+    },
+    {
+      "path": "domains/llm.fawwaz.json",
+      "sha": null,
+      "content_sha256": "6de431cc3a66233d9366b27197cc6f70ab270b2a125ee7599a857e68f9f90bd3",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"fawwazanvilen\",\n    \"email\": \"fawwazanvi@gmail.com\"\n  },\n  \"record\": {\n    \"A\": [\"103.16.117.247\"]\n  }\n}\n"
+    },
+    {
+      "path": "domains/api.formuna.json",
+      "sha": null,
+      "content_sha256": "974644bab3b525fc456b02eca5cd0c26edf5e34e4eb93b968b40ff726c5a0be0",
+      "score": 108,
+      "content": "{\n    \"owner\": {\n        \"username\": \"FormunaGit\"\n    },\n    \"record\": {\n        \"CNAME\": \"formuna-api.vercel.app\"\n    }\n}"
+    },
+    {
+      "path": "domains/capivara.json",
+      "sha": null,
+      "content_sha256": "d159a59031e2914b45469d5b088e4b56d2c2384962d37f7456cf8b77715ba5e8",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"gabrielasants\",\n    \"email\": \"gabrielasantos030@gmail.com\"\n  },\n  \"record\": {\n    \"CNAME\": \"gabrielasants.github.io\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/apigeon.json",
+      "sha": null,
+      "content_sha256": "a04627cf0d1cc860dcd492ea325ab8bd14101605f1764058e68add98b590888f",
+      "score": 108,
+      "content": "{\n    \"owner\": {\n        \"username\": \"mepuntojr1\",\n        \"email\": \"eepuntojr@gmail.com\"\n    },\n    \"record\": {\n        \"CNAME\": \"sites.bootstrapstudio.io\"\n    }\n}"
+    },
+    {
+      "path": "domains/raw-api.json",
+      "sha": null,
+      "content_sha256": "38baa1ee689f0cb61de110d210759a271f7ae27dbf78608eb5bcb3a931ec4f81",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"is-a-dev\",\n    \"email\": \"admin@is-a.dev\"\n  },\n  \"record\": {\n    \"CNAME\": \"is-a.dev\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/_discord.capivara.json",
+      "sha": null,
+      "content_sha256": "4759c3f65bd9addfe6ad1877da501f88fc3b513fafafa13091ef50311b5dda1d",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"gabrielasants\",\n    \"email\": \"gabrielasantos030@gmail.com\"\n  },\n  \"record\": {\n    \"TXT\": \"dh=a755ef48b5344a0fb3b986db5b0e2304caced68c\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/mikapikazo.json",
+      "sha": null,
+      "content_sha256": "343d5b0af2014f9846e0ee28cbc846fff9daafb201bfd882551c4d4496ade05e",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"rinxyzz\",\n    \"email\": \"putriimuttzz.cantikk@gmail.com\"\n  },\n  \"record\": {\n    \"CNAME\": \"rinxyzz-github-io.pages.dev\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/_github-pages-challenge-is-a-dev.raw-api.json",
+      "sha": null,
+      "content_sha256": "a97c1b0392b2c8c2d0cdc9a35d5837ba086a0f0f15263577949e61e3bd81135f",
+      "score": 108,
+      "content": "{\n  \"owner\": {\n    \"username\": \"is-a-dev\",\n    \"email\": \"admin@is-a.dev\"\n  },\n  \"record\": {\n    \"TXT\": \"22bbab4068a6c51de6df06aac442d5\"\n  }\n}\n"
+    },
+    {
+      "path": "domains/api.namkun.json",
+      "sha": null,
+      "content_sha256": "90433247f2cc79f089319b48b174cece13cae453f8582c9529390cbe17ff0fcd",
+      "score": 108,
+      "content": "{\n    \"owner\": {\n        \"username\": \"beocaca\",\n        \"email\": \"namdev1402@gmail.com\"\n    },\n    \"record\": {\n        \"CNAME\": \"a.namkun.workers.dev\"\n    }\n}"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:44.630508+00:00"
+}

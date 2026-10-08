@@ -1,0 +1,194 @@
+{
+  "canonical_source": "github:OpenCut-app/OpenCut",
+  "repo": "OpenCut-app/OpenCut",
+  "revision_sha": "e668010778568641babef2cc40be4703ae6916d6",
+  "default_branch": "main",
+  "pushed_at": "2026-09-24T09:24:44Z",
+  "repo_updated_at": "2026-10-08T02:18:52Z",
+  "license": "MIT",
+  "topics": [
+    "editor",
+    "oss",
+    "videoeditor"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/bun-ci.yml",
+      "sha": null,
+      "content_sha256": "74d52bfb8f8981e27da6c5e2cc014b95fc620aad9bdd60fcbe2ca5de485cf339",
+      "score": 198,
+      "content": "name: Bun CI\r\n\r\nconcurrency:\r\n  group: bun-ci-${{ github.ref }}\r\n  cancel-in-progress: true\r\n\r\non:\r\n  push:\r\n    branches: [main]\r\n    paths-ignore:\r\n      - \"*.md\"\r\n  pull_request:\r\n    branches: [main]\r\n    paths-ignore:\r\n      - \"*.md\"\r\n\r\njobs:\r\n  ci:\r\n    runs-on: ${{ matrix.os }}\r\n    strategy:\r\n      matrix:\r\n        os: [ubuntu-latest, windows-latest, macos-latest]\r\n\r\n    steps:\r\n      - name: Checkout repository\r\n        uses: actions/checkout@v4\r\n        with:\r\n          fetch-depth: 0\r\n\r\n      - name: Setup toolchain\r\n        uses: moonrepo/setup-toolchain@v0\r\n        with:\r\n          auto-install: true\r\n          auto-setup: true\r\n\r\n      - name: Run CI\r\n        run: moon ci\r\n"
+    },
+    {
+      "path": "apps/api/package.json",
+      "sha": null,
+      "content_sha256": "047997b496ea0173b45bb1f76a4e208d8953825f7c963517657eafa4ebb6c461",
+      "score": 191,
+      "content": "{\n  \"name\": \"@opencut/api\",\n  \"private\": true,\n  \"version\": \"0.0.1\",\n  \"scripts\": {\n    \"dev\": \"wrangler dev\",\n    \"deploy\": \"wrangler deploy\",\n    \"build\": \"wrangler deploy --dry-run\"\n  },\n  \"dependencies\": {\n    \"elysia\": \"latest\"\n  },\n  \"devDependencies\": {\n    \"@cloudflare/workers-types\": \"latest\",\n    \"wrangler\": \"latest\"\n  }\n}\n"
+    },
+    {
+      "path": ".github/workflows/media-deps.yml",
+      "sha": null,
+      "content_sha256": "351797c5787b2aefd4510fbb143a9442f7c24e125dfafdfccd85abd84a7de684",
+      "score": 126,
+      "content": "name: Media dependencies\n\n# Builds the FFmpeg that `media` decodes with, for every platform, from the\n# pinned source in crates/media/setup/ffmpeg.json, and publishes the builds\n# as a release. Then `bun run crates/media/setup/pin.ts <tag>` points\n# ffmpeg.json at them. Run it by hand when the pinned version changes.\n\non:\n  workflow_dispatch:\n    inputs:\n      build:\n        description: \"Build number for this FFmpeg version (bump it to rebuild the same version)\"\n        required: true\n        default: \"1\"\n\npermissions:\n  contents: write\n\nenv:\n  LLVM_MINGW: llvm-mingw-20260922-ucrt-ubuntu-22.04-x86_64\n  LLVM_MINGW_URL: https://github.com/mstorsjo/llvm-mingw/releases/download/20260922/llvm-mingw-20260922-ucrt-ubuntu-22.04-x86_64.tar.xz\n  LLVM_MINGW_SHA256: bb7bb7654b33d5aa8712acb837c963b2e0c56352560c76105270a3268c665c21\n\njobs:\n  build:\n    name: ${{ matrix.platform }}\n    runs-on: ${{ matrix.runner }}\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          # Linux builds on the oldest supported Ubuntu, so the libraries run\n          # on distributions with glibc 2.35 or newer.\n          - { platform: linux-x86_64, runner: ubuntu-22.04 }\n          - { platform: linux-aarch64, runner: ubuntu-22.04-arm }\n          # Windows cross-compiles from Linux with llvm-mingw.\n          - { platform: windows-x86_64, runner: ubuntu-22.04 }\n          - { platform: windows-aarch64, runner: ubuntu-22.04 }\n          # Both Mac architectures build on Apple silicon.\n          - { platform: macos-aarch64, runner: macos-15 }\n          - { platform: macos-x86_64, runner: macos-15 }\n\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Read the pinned versions\n        id: pins\n        shell: bash\n        run: |\n          echo \"ffmpeg=$(jq -r .version crates/media/setup/ffmpeg.json)\" >> \"$GITHUB_OUTPUT\"\n          echo \"bun=$(sed -n 's/^bun *= *\"\\(.*\\)\"/\\1/p' .prototools)\" >> \"$GITHUB_OUTPUT\"\n\n      - uses: oven-sh/setup-bun@v2\n        with:\n          bun-version: ${{ steps.pins.outputs.bun }}\n\n      - name: Install nasm (Linux)\n        if: runner.os == 'Linux' && endsWith(matrix.platform, 'x86_64')\n        run: sudo apt-get update && sudo apt-get install -y nasm\n\n      - name: Install nasm (macOS)\n        if: matrix.platform == 'macos-x86_64'\n        run: brew install nasm\n\n      - name: Install llvm-mingw\n        if: startsWith(matrix.platform, 'windows-')\n        shell: bash\n        run: |\n          curl -fsSL -o \"$RUNNER_TEMP/llvm-mingw.tar.xz\" \"$LLVM_MINGW_URL\"\n          echo \"$LLVM_MINGW_SHA256  $RUNNER_TEMP/llvm-mingw.tar.xz\" | sha256sum -c -\n          tar -xf \"$RUNNER_TEMP/llvm-mingw.tar.xz\" -C \"$RUNNER_TEMP\"\n          echo \"$RUNNER_TEMP/$LLVM_MINGW/bin\" >> \"$GITHUB_PATH\"\n\n      - name: Build\n        run: bun run crates/media/setup/setup.ts --from-source --target ${{ matrix.platform }}\n\n      - name: Package\n        shell: bash\n        run: |\n          name=\"ffmpeg-${{ steps.pins.outputs.ffmpeg }}-${{ matrix.platform }}\"\n          tar --exclude=.complete -czf \"$name.tar.gz\" -C .cache/media \"$name\"\n\n      - uses: actions/upload-artifact@v4\n        with:\n          name: ffmpeg-${{ matrix.platform }}\n          path: ffmpeg-*.tar.gz\n          if-no-files-found: error\n\n  release:\n    needs: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n      - uses: actions/download-artifact@v4\n        with:\n          path: dist\n          merge-multiple: true\n\n      - name: Publish\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          version=\"$(jq -r .version crates/media/setup/ffmpeg.json)\"\n          tag=\"ffmpeg-$version-${{ inputs.build }}\"\n          source=\"$(jq -r .source.url crates/media/setup/ffmpeg.json)\"\n          cd dist\n          sha256sum ffmpeg-*.tar.gz > checksums.sha256\n          # A prerelease, so it never shows as the app's latest release.\n          gh release create \"$tag\" ffmpeg-*.tar.gz checksums.sha256 \\\n            --repo \"$GITHUB_REPOSITORY\" \\\n            --target \"$GITHUB_SHA\" \\\n            --prerelease \\\n            --title \"FFmpeg $version (build ${{ inputs.build }})\" \\\n            --notes \"Shared LGPL builds of FFmpeg $version for OpenCut's media crate, built from $source by the Media dependencies workflow. Each archive holds the exact configure flags (BUILD.md) and FFmpeg's licence. Pin them with \\`bun run crates/media/setup/pin.ts $tag\\`.\"\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "c33e17dcd91e28ae1f86cd00f34799f2528b5586c7f089b34c86d815259bc54c",
+      "score": 120,
+      "content": "[workspace]\nresolver = \"3\"\nmembers = [\n  'apps/desktop',\n  # 'crates/*',\n]\n\n[workspace.package]\nversion = \"0.1.0\"\nedition = \"2024\"\nlicense = \"MIT\"\n\n[workspace.dependencies]\ngpui = \"0.2.2\"\n"
+    },
+    {
+      "path": "apps/desktop/Cargo.toml",
+      "sha": null,
+      "content_sha256": "afcbfe7288b16e761cf3d2fb4e588cd04f8605b5e170ee5c6afb961b536da462",
+      "score": 116,
+      "content": "[package]\nname = \"opencut-desktop\"\ndescription = \"OpenCut desktop app, built with GPUI\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\n\n[[bin]]\nname = \"opencut-desktop\"\npath = \"src/main.rs\"\n\n[dependencies]\ngpui = { workspace = true }\n"
+    },
+    {
+      "path": "apps/web/package.json",
+      "sha": null,
+      "content_sha256": "fa0267776e850317041686c04ab456d28d734cbdea13c5aa384342b1d324b56c",
+      "score": 116,
+      "content": "{\n  \"name\": \"@opencut/web\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"imports\": {\n    \"#/*\": \"./src/*\"\n  },\n  \"scripts\": {\n    \"dev\": \"vite dev --port 5173\",\n    \"build\": \"vite build\",\n    \"preview\": \"vite preview\",\n    \"test\": \"vitest run\",\n    \"deploy\": \"bun run build && wrangler deploy\"\n  },\n  \"dependencies\": {\n    \"@base-ui/react\": \"^1.4.1\",\n    \"@cloudflare/vite-plugin\": \"^1.26.0\",\n    \"@fontsource-variable/inter\": \"^5.2.8\",\n    \"@hookform/resolvers\": \"^5.2.2\",\n    \"@hugeicons/core-free-icons\": \"^4.1.2\",\n    \"@hugeicons/react\": \"^1.1.6\",\n    \"@tailwindcss/vite\": \"^4.1.18\",\n    \"@tanstack/react-devtools\": \"latest\",\n    \"@tanstack/react-router\": \"latest\",\n    \"@tanstack/react-router-devtools\": \"latest\",\n    \"@tanstack/react-router-ssr-query\": \"latest\",\n    \"@tanstack/react-start\": \"latest\",\n    \"@tanstack/router-plugin\": \"^1.132.0\",\n    \"class-variance-authority\": \"^0.7.1\",\n    \"clsx\": \"^2.1.1\",\n    \"cmdk\": \"^1.1.1\",\n    \"date-fns\": \"^4.1.0\",\n    \"embla-carousel-react\": \"^8.6.0\",\n    \"input-otp\": \"^1.4.2\",\n    \"lucide-react\": \"^1.14.0\",\n    \"next-themes\": \"^0.4.6\",\n    \"radix-ui\": \"^1.4.3\",\n    \"react\": \"^19.2.0\",\n    \"react-day-picker\": \"^10.0.0\",\n    \"react-dom\": \"^19.2.0\",\n    \"react-hook-form\": \"^7.75.0\",\n    \"react-resizable-panels\": \"^4.11.0\",\n    \"recharts\": \"3.8.0\",\n    \"shadcn\": \"^4.7.0\",\n    \"sonner\": \"^2.0.7\",\n    \"tailwind-merge\": \"^3.5.0\",\n    \"tailwindcss\": \"^4.1.18\",\n    \"tw-animate-css\": \"^1.4.0\",\n    \"vaul\": \"^1.1.2\",\n    \"zod\": \"^4.4.3\"\n  },\n  \"devDependencies\": {\n    \"@tailwindcss/typography\": \"^0.5.16\",\n    \"@tanstack/devtools-vite\": \"latest\",\n    \"@testing-library/dom\": \"^10.4.1\",\n    \"@testing-library/react\": \"^16.3.0\",\n    \"@types/node\": \"^22.10.2\",\n    \"@types/react\": \"^19.2.0\",\n    \"@types/react-dom\": \"^19.2.0\",\n    \"@vitejs/plugin-react\": \"^6.0.1\",\n    \"jsdom\": \"^28.1.0\",\n    \"typescript\": \"^6.0.2\",\n    \"vite\": \"^8.0.0\",\n    \"vitest\": \"^4.1.5\",\n    \"wrangler\": \"^4.70.0\"\n  },\n  \"pnpm\": {\n    \"onlyBuiltDependencies\": [\n      \"esbuild\",\n      \"lightningcss\"\n    ]\n  }\n}"
+    },
+    {
+      "path": "crates/media/setup/setup.ts",
+      "sha": null,
+      "content_sha256": "3c1b8a68cb3300ba09e79503295c3ffbb7ba9d7e900a80b7ebff4ae2dc145f91",
+      "score": 111,
+      "content": "// Puts the pinned FFmpeg build this crate decodes with into\n// `.cache/media/`, where `build.rs` finds it. Safe to run again: a build\n// already in place is left alone.\n//\n//   moon run media:setup                    # the pinned prebuilt for this machine\n//   moon run media:setup -- --from-source   # build the pinned source here instead\n//   bun run setup/setup.ts --target <platform>   # build for another platform\n//\n// The prebuilts are these same source builds, made for every platform by\n// .github/workflows/media-deps.yml and pinned in ffmpeg.json. Cross builds\n// need the target's toolchain on PATH: llvm-mingw for Windows (built from\n// Linux), Xcode for the other Mac architecture.\n\nimport { createHash } from \"node:crypto\";\nimport { availableParallelism } from \"node:os\";\nimport {\n  copyFileSync,\n  existsSync,\n  mkdirSync,\n  readdirSync,\n  renameSync,\n  rmSync,\n  writeFileSync,\n} from \"node:fs\";\nimport { join, resolve } from \"node:path\";\n\nimport manifest from \"./ffmpeg.json\";\n\ntype Download = { url: string; sha256: string };\ntype Platform = { os: \"windows\" | \"macos\" | \"linux\"; arch: \"x86_64\" | \"aarch64\" };\n\nconst root = resolve(import.meta.dir, \"../../..\");\nconst cache = join(root, \".cache\", \"media\");\n\nfunction hostPlatform(): Platform {\n  const os = ({ win32: \"windows\", darwin: \"macos\", linux: \"linux\" } as const)[process.platform as string];\n  const arch = ({ x64: \"x86_64\", arm64: \"aarch64\" } as const)[process.arch as string];\n  if (!os || !arch) throw new Error(`unsupported platform ${process.platform}-${process.arch}`);\n  return { os, arch };\n}\n\nfunction parsePlatform(key: string): Platform {\n  const [os, arch] = key.split(\"-\");\n  if (![\"windows\", \"macos\", \"linux\"].includes(os) || ![\"x86_64\", \"aarch64\"].includes(arch)) {\n    throw new Error(`unknown platform ${key}: expected e.g. linux-x86_64`);\n  }\n  return { os, arch } as Platform;\n}\n\nconst keyOf = (platform: Platform) => `${platform.os}-${platform.arch}`;\n\nfunction option(name: string): string | undefined {\n  const index = process.argv.indexOf(name);\n  return index === -1 ? undefined : process.argv[index + 1];\n}\n\nasync function download({ url, sha256 }: Download, to: string) {\n  console.log(`downloading ${url}`);\n  const response = await fetch(url);\n  if (!response.ok) throw new Error(`download failed: ${response.status} ${url}`);\n  const bytes = new Uint8Array(await response.arrayBuffer());\n  const actual = createHash(\"sha256\").update(bytes).digest(\"hex\");\n  if (actual !== sha256) {\n    throw new Error(`checksum mismatch for ${url}\\n  expected ${sha256}\\n  got      ${actual}`);\n  }\n  await Bun.write(to, bytes);\n}\n\nfunction run(command: string[], cwd?: string) {\n  const result = Bun.spawnSync(command, { cwd, stdio: [\"ignore\", \"inherit\", \"inherit\"] });\n  if (result.exitCode !== 0) throw new Error(`failed: ${command.join(\" \")}`);\n}\n\nfunction extract(archive: string, into: string) {\n  mkdirSync(into, { recursive: true });\n  // bsdtar (Windows 10+, macOS) and GNU tar (Linux) both detect the format.\n  // On Windows, the system's own: a GNU tar from Git Bash may come first on\n  // PATH, and it reads \"C:\" as a remote host.\n  const tar =\n    process.platform === \"win32\" ? join(process.env.SystemRoot ?? \"C:\\\\Windows\", \"System32\", \"tar.exe\") : \"tar\";\n  run([tar, \"-xf\", archive, \"-C\", into]);\n}\n\n/// Configure flags for building FFmpeg for `target` on `host`. The same\n/// everywhere but for what a platform needs, so every platform decodes the\n/// same formats: shared LGPL libraries only, nothing picked up from\n/// whatever else the building machine has installed.\nfunction configureFlags(target: Platform, host: Platform): string[] {\n  const flags = [\n    \"--enable-shared\",\n    \"--disable-static\",\n    \"--disable-programs\",\n    \"--disable-doc\",\n    \"--disable-avdevice\",\n    \"--disable-avfilter\",\n    \"--disable-network\",\n    \"--disable-autodetect\",\n  ];\n  const cross = target.os !== host.os || target.arch !== host.arch;\n\n  switch (target.os) {\n    case \"windows\": {\n      if (host.os !== \"linux\") throw new Error(\"Windows builds are cross-compiled from Linux with llvm-mingw\");\n      const prefix = `${target.arch}-w64-mingw32-`;\n      if (!Bun.which(`${prefix}clang`)) throw new Error(`${prefix}clang not on PATH: add llvm-mingw's bin/`);\n      flags.push(\n        \"--target-os=mingw32\",\n        `--arch=${target.arch}`,\n        `--cross-prefix=${prefix}`,\n        \"--enable-cross-compile\",\n        // Windows' own threads, so the DLLs need nothing but the system.\n        \"--disable-pthreads\",\n        \"--enable-w32threads\",\n      );\n      break;\n    }\n    case \"macos\": {\n      if (host.os !== \"macos\") throw new Error(\"macOS builds need a Mac\");\n      const arch = target.arch === \"aarch64\" ? \"arm64\" : \"x86_64\";\n      const machine = `-arch ${arch} -mmacosx-version-min=11.0`;\n      // Found through the app's rpath: beside it in development, in the\n      // bundle's Frameworks when shipped.\n      flags.push(\"--install-name-dir=@rpath\", `--extra-cflags=${machine}`, `--extra-ldflags=${machine}`);\n      if (cross) flags.push(\"--enable-cross-compile\", \"--target-os=darwin\", `--arch=${target.arch}`);\n      break;\n    }\n    case \"linux\":\n      if (cross) throw new Error(\"Linux builds are made on a machine of the same architecture\");\n      break;\n  }\n\n  if (target.arch === \"x86_64\" && !Bun.which(\"nasm\")) {\n    console.warn(\"nasm not found: building without x86 assembly, so decoding is slower\");\n    flags.push(\"--disable-x86asm\");\n  }\n  return flags;\n}\n\n/// Builds the pinned source for `target` into `prefix`, with the licence\n/// and the exact recipe beside the libraries, as the LGPL asks of anyone\n/// who ships them.\nasync function buildFromSource(staging: string, target: Platform, flags: string[]): Promise<string> {\n  const archive = join(staging, \"source.tar.xz\");\n  await download(manifest.source, archive);\n  extract(archive, staging);\n  const source = join(staging, readdirSync(staging).find((name) => name !== \"source.tar.xz\")!);\n  const prefix = join(staging, `ffmpeg-${manifest.version}-${keyOf(target)}`);\n\n  console.log(`building FFmpeg ${manifest.version} for ${keyOf(target)}; this takes a few minutes`);\n  run([\"./configure\", `--prefix=${prefix}`, ...flags], source);\n  run([\"make\", `-j${availableParallelism()}`], source);\n  run([\"make\", \"install\"], source);\n  // Example programs; nothing the libraries need.\n  rmSync(join(prefix, \"share\"), { recursive: true, force: true });\n\n  if (target.os === \"windows\") {\n    // DLLs stay in bin/; the import libraries MSVC links against go in lib/.\n    for (const name of readdirSync(join(prefix, \"bin\")).filter((name) => name.endsWith(\".lib\"))) {\n      renameSync(join(prefix, \"bin\", name), join(prefix, \"lib\", name));\n    }\n  }\n\n  copyFileSync(join(source, \"COPYING.LGPLv2.1\"), join(prefix, \"COPYING.LGPLv2.1\"));\n  copyFileSync(join(source, \"LICENSE.md\"), join(prefix, \"LICENSE.md\"));\n  writeFileSync(\n    join(prefix, \"BUILD.md\"),\n    [\n      `# FFmpeg ${manifest.version} for ${keyOf(target)}`,\n      \"\",\n      `Built from ${manifest.source.url}`,\n      `(SHA-256 ${manifest.source.sha256}), unmodified, configured with:`,\n      \"\",\n      \"```\",\n      ...flags,\n      \"```\",\n      \"\",\n      \"Licensed under the LGPL 2.1 or later: see COPYING.LGPLv2.1 and LICENSE.md.\",\n      \"\",\n    ].join(\"\\n\"),\n  );\n  return prefix;\n}\n\n/// Unpacks a prebuilt archive: one top-level folder with include/, lib/\n/// and, on Windows, bin/.\nasync function installPrebuilt(prebuilt: Download, staging: string): Promise<string> {\n  const archive = join(staging, \"archive\");\n  await download(prebuilt, archive);\n  extract(archive, staging);\n  rmSync(archive);\n  return join(staging, readdirSync(staging)[0]);\n}\n\nasync function main() {\n  const host = hostPlatform();\n  const target = option(\"--target\") ? parsePlatform(option(\"--target\")!) : host;\n  const key = keyOf(target);\n  const prebuilt = (manifest.platforms as Record<string, Download | undefined>)[key];\n  const fromSource = process.argv.includes(\"--from-source\") || key !== keyOf(host) || !prebuilt;\n\n  // What this build is made of: a different pin or recipe rebuilds it.\n  const flags = fromSource ? configureFlags(target, host) : [];\n  const stamp = fromSource\n    ? `source ${manifest.source.sha256} ${createHash(\"sha256\").update(flags.join(\" \")).digest(\"hex\")}`\n    : `prebuilt ${prebuilt!.sha256}`;\n\n  const destination = join(cache, `ffmpeg-${manifest.version}-${key}`);\n  const marker = join(destination, \".complete\");\n  if (existsSync(marker) && (await Bun.file(marker).text()).trim() === stamp) {\n    console.log(`FFmpeg ${manifest.version} for ${key} is ready in ${destination}`);\n    return;\n  }\n\n  // Made beside the destination and moved in whole, so an interrupted run\n  // never leaves a half-finished build that looks complete.\n  const staging = `${destination}.partial`;\n  rmSync(staging, { recursive: true, force: true });\n  mkdirSync(staging, { recursive: true });\n  const built = fromSource\n    ? await buildFromSource(staging, target, flags)\n    : await installPrebuilt(prebuilt!, staging);\n\n  rmSync(destination, { recursive: true, force: true });\n  renameSync(built, destination);\n  rmSync(staging, { recursive: true, force: true });\n  writeFileSync(marker, `${stamp}\\n`);\n  console.log(`FFmpeg ${manifest.version} for ${key} is ready in ${destination}`);\n}\n\nmain().catch((error) => {\n  console.error(error instanceof Error ? error.message : error);\n  process.exit(1);\n});\n"
+    },
+    {
+      "path": "crates/media/setup/ffmpeg.json",
+      "sha": null,
+      "content_sha256": "ef00496ff46b06a1bc89f9e35b6bb6a2af0a375b7b94ab3f6dca2e6a992f4519",
+      "score": 111,
+      "content": "{\n  \"version\": \"8.1.3\",\n  \"license\": \"LGPL-2.1-or-later\",\n  \"source\": {\n    \"url\": \"https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz\",\n    \"sha256\": \"7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3\"\n  },\n  \"platforms\": {\n    \"windows-x86_64\": {\n      \"url\": \"https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-23-14-55/ffmpeg-n8.1.3-win64-lgpl-shared-8.1.zip\",\n      \"sha256\": \"60a055792e88524db437a78c2fcd4471536abf3b30d34fae1249591c00e13432\"\n    },\n    \"windows-aarch64\": {\n      \"url\": \"https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-23-14-55/ffmpeg-n8.1.3-winarm64-lgpl-shared-8.1.zip\",\n      \"sha256\": \"c6db6e038130559fca5ff838a3bfd7d8bcc364234dc85377c732350b2b201fea\"\n    },\n    \"linux-x86_64\": {\n      \"url\": \"https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-23-14-55/ffmpeg-n8.1.3-linux64-lgpl-shared-8.1.tar.xz\",\n      \"sha256\": \"703d321cbdd00e8579c708cdd58eda223db266598c8200091bc525abca154cd6\"\n    },\n    \"linux-aarch64\": {\n      \"url\": \"https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-23-14-55/ffmpeg-n8.1.3-linuxarm64-lgpl-shared-8.1.tar.xz\",\n      \"sha256\": \"71386055106cb180e736ca027752771f32d1ee3cafec336a467d09a3c468be8b\"\n    }\n  }\n}\n"
+    },
+    {
+      "path": "apps/api/moon.yml",
+      "sha": null,
+      "content_sha256": "a35936684b6e75805ea675f028dd0208a367c9d89b996d2cd25135130843a4cb",
+      "score": 106,
+      "content": "$schema: 'https://moonrepo.dev/schemas/project.json'\n\nlanguage: 'typescript'\nlayer: 'application'\n\ntasks:\n  dev:\n    command: 'bun run dev'\n    options:\n      runInCI: false  # dev server: skipped in CI, never cached\n\n  build:\n    command: 'bun run build'\n    inputs:\n      - 'src/**/*'\n      - 'wrangler.jsonc'\n      - 'package.json'\n    outputs:\n      - 'dist'\n\n  deploy:\n    command: 'bun run deploy'\n    deps:\n      - '~:build'\n"
+    },
+    {
+      "path": "apps/api/src/index.ts",
+      "sha": null,
+      "content_sha256": "1f2f2139b61f284bd6b779371f02fde1bc1008f0771ea424c91f8912a349daa8",
+      "score": 104,
+      "content": "import { Elysia, t } from \"elysia\";\nimport { CloudflareAdapter } from \"elysia/adapter/cloudflare-worker\";\n\nexport default new Elysia({ adapter: CloudflareAdapter })\n  .get(\"/\", () => ({ status: \"ok\" }))\n  .get(\"/health\", () => ({ healthy: true, timestamp: new Date().toISOString() }))\n  .post(\n    \"/echo\",\n    ({ body }) => body,\n    {\n      body: t.Object({ message: t.String() }),\n    }\n  )\n  // .compile() is required, it triggers AoT compilation at startup\n  .compile();\n"
+    },
+    {
+      "path": "apps/desktop/src/panels/browser.rs",
+      "sha": null,
+      "content_sha256": "9d45ad4ee5fec6b60f1fe284dd0236a8fdcea35ca63ab55193671d1c9167f5ed",
+      "score": 102,
+      "content": "use gpui::{div, prelude::*, Context, Window};\n\nuse crate::theme::ActiveTheme;\n\npub(crate) struct Browser;\n\nimpl Render for Browser {\n    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {\n        let colors = window.theme().colors;\n\n        div()\n            .flex()\n            .w_1_4()\n            .h_full()\n            .items_center()\n            .justify_center()\n            .border_r_1()\n            .border_color(colors.sidebar_border)\n            .bg(colors.sidebar)\n            .text_color(colors.sidebar_foreground)\n            .child(\"Browser\")\n    }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "95ccfeb63ebca77afdde080e2923b5f29b680db6b42a9be8b9098ea7ba25c050",
+      "score": 100,
+      "content": "<table width=\"100%\">\n  <tr>\n    <td align=\"left\" width=\"120\">\n      <img src=\"https://assets.opencut.app/branding/symbol.svg\" alt=\"OpenCut Logo\" width=\"100\" />\n    </td>\n    <td align=\"right\">\n      <h1>OpenCut</h1>\n      <h3 style=\"margin-top: -10px;\">A free and open source video editor for web, desktop, and mobile.</h3>\n    </td>\n  </tr>\n</table>\n\n[![Discord](https://img.shields.io/discord/1386309140057690133?label=Discord&logo=discord&logoColor=fff&color=5865F2&style=flat)](https://discord.gg/zmR9N35cjK)\n[![X](https://img.shields.io/badge/follow-%40opencutapp-000?logo=x&logoColor=fff&style=flat)](https://x.com/opencutapp)\n[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat)](LICENSE)\n\n## Status\n\n**OpenCut is being rewritten from the ground up.** What's coming:\n\n- An Editor API\n- First-class third party plugins (made possible by a plugin-first architecture)\n- Desktop, mobile, and browser from one codebase (Rust core)\n- MCP server (for AI agents)\n- Headless mode (automation, batch rendering)\n- A scripting tab directly in the editor\n\nYou can still find the previous version at [opencut-app/opencut-classic](https://github.com/opencut-app/opencut-classic), which is the one to reach for today. [opencut.app](https://opencut.app) still runs the classic version. The rewrite will live at [new.opencut.app](https://new.opencut.app) until it's ready to take over.\n\n## Development\n\nInstall [proto](https://moonrepo.dev/proto) if you haven't already:\n\n**Linux, macOS, WSL:**\n\n```sh\nbash <(curl -fsSL https://moonrepo.dev/install/proto.sh)\n```\n\n**Windows (PowerShell):**\n\n```powershell\nirm https://moonrepo.dev/install/proto.ps1 | iex\n```\n\nIf shims fail to run, allow local scripts for your user:\n\n```powershell\nSet-ExecutionPolicy -Scope CurrentUser RemoteSigned\n```\n\nFrom the repo root:\n\n```sh\nproto use    # installs the tools pinned in .prototools\n```\n\n```sh\nmoon run web:dev       # localhost:5173\nmoon run api:dev       # localhost:8787\nmoon run desktop:dev   # see apps/desktop/README.md\n```\n\n## Contributing\n\nWe're not set up to take outside contributions yet while the architecture is being designed. If you want to follow along, ask questions, or just hang out, [join the Discord](https://discord.gg/zmR9N35cjK) or [open an issue](https://github.com/opencut-app/opencut/issues).\n\n## Sponsors\n\nOpenCut is supported by companies that believe in open source creator tools.\n\n- [**fal.ai**](https://fal.ai?utm_source=github-opencut&utm_campaign=oss): Generative image, video, and audio models all in one place.\n\nWant your logo here? Reach out at [sponsor@opencut.app](mailto:sponsor@opencut.app).\n\n## License\n\n[MIT](LICENSE)\n"
+    },
+    {
+      "path": "apps/desktop/README.md",
+      "sha": null,
+      "content_sha256": "043012bfdcdb8bfa9d258b426b05e4be8487ce845117b4d32848241676e4d195",
+      "score": 96,
+      "content": "# OpenCut Desktop\n\nBuilt with [GPUI](https://www.gpui.rs).\n\n> [!WARNING]\n> Very early. Right now this is just a window that opens.\n\n## Running\n\nRust is pinned in `.prototools` at the repo root (`proto use` installs it).\n\n```sh\nmoon run desktop:dev     # cargo run\nmoon run desktop:check   # cargo check\nmoon run desktop:build   # cargo build --release\n```\n\nThe first build compiles GPUI from source and takes a while. The root `Cargo.lock` is committed.\n\n## Platform requirements\n\n- **macOS**: Xcode command line tools (Metal renderer).\n- **Windows**: no extra dependencies (Win32 + DirectWrite).\n- **Linux**: renders via Vulkan (Blade), windows via Wayland or X11 (both enabled by default). System packages (Debian/Ubuntu names): `libvulkan1` + working Vulkan drivers, `libwayland-dev`, `libx11-xcb-dev`, `libxkbcommon-x11-dev`, `libfontconfig-dev`, plus a C toolchain and `cmake`.\n- **WSL2/WSLg**: uses XWayland automatically when available. GPUI 0.2.2 requires `xdg_wm_base` v2–5, while WSLg advertises v1.\n"
+    },
+    {
+      "path": "apps/desktop/src/panels/inspector.rs",
+      "sha": null,
+      "content_sha256": "5bd24974482a86ce9a2bf120380b152667bdaa702ffbc6b76b52378bb20a55de",
+      "score": 87,
+      "content": "use gpui::{div, prelude::*, Context, Window};\n\nuse crate::theme::ActiveTheme;\n\npub(crate) struct Inspector;\n\nimpl Render for Inspector {\n    fn render(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {\n        let colors = window.theme().colors;\n\n        div()\n            .flex()\n            .w_1_4()\n            .h_full()\n            .items_center()\n            .justify_center()\n            .border_l_1()\n            .border_color(colors.border)\n            .bg(colors.card)\n            .text_color(colors.card_foreground)\n            .child(\"Inspector\")\n    }\n}\n"
+    },
+    {
+      "path": "apps/web/src/components/ui/aspect-ratio.tsx",
+      "sha": null,
+      "content_sha256": "5765a2909a3c5fd0715c41b0c93b7ba28d264677a39fa4a1c1fdd44eaeaae2b1",
+      "score": 85,
+      "content": "import { cn } from \"#/lib/utils.ts\"\n\nfunction AspectRatio({\n  ratio,\n  className,\n  ...props\n}: React.ComponentProps<\"div\"> & { ratio: number }) {\n  return (\n    <div\n      data-slot=\"aspect-ratio\"\n      style={\n        {\n          \"--ratio\": ratio,\n        } as React.CSSProperties\n      }\n      className={cn(\"relative aspect-(--ratio)\", className)}\n      {...props}\n    />\n  )\n}\n\nexport { AspectRatio }\n"
+    },
+    {
+      "path": ".github/SECURITY.md",
+      "sha": null,
+      "content_sha256": "99a5ecdd6bd2e6cdfe15c2ed313795fdfa54305aede8ce55fc932b4c81e5fc92",
+      "score": 78,
+      "content": "# Security Policy\r\n\r\n## Supported Versions\r\n\r\n| Version | Supported          |\r\n| ------- | ------------------ |\r\n| 1.x.x   | :white_check_mark: |\r\n\r\n## Reporting a Vulnerability\r\n\r\nWe take security vulnerabilities seriously. If you discover a security vulnerability within OpenCut, please send an email to security@opencut.app. All security vulnerabilities will be promptly addressed.\r\n\r\nPlease do not report security vulnerabilities through public GitHub issues.\r\n\r\n### What to include in your report\r\n\r\n- Description of the vulnerability\r\n- Steps to reproduce\r\n- Potential impact\r\n- Any suggested fixes\r\n\r\n### Response timeline\r\n\r\n- We will acknowledge receipt within 48 hours\r\n- We will provide a detailed response within 5 business days\r\n- We will keep you updated on our progress\r\n\r\nThank you for helping keep OpenCut secure!\r\n"
+    },
+    {
+      "path": "apps/api/wrangler.jsonc",
+      "sha": null,
+      "content_sha256": "54133554e76e1f623289639d684ad9a8caa58f9d4dfd87c940a4feb30072c96f",
+      "score": 71,
+      "content": "{\n  \"$schema\": \"node_modules/wrangler/config-schema.json\",\n  \"name\": \"opencut-api\",\n  \"main\": \"src/index.ts\",\n  // Minimum date required for CloudflareAdapter AoT support\n  \"compatibility_date\": \"2025-06-01\"\n}\n"
+    },
+    {
+      "path": ".github/SUPPORT.md",
+      "sha": null,
+      "content_sha256": "6db3e8bb191ac6c6f59bf5d615c02ff1b78b646ad51501e35f5839494797da17",
+      "score": 58,
+      "content": "# Getting Help\r\n\r\nThanks for using OpenCut! If you need help, here are your options:\r\n\r\n## Documentation\r\n\r\n- Check our [README](../README.md) for basic setup instructions\r\n- Review the [Contributing Guidelines](CONTRIBUTING.md) for development setup\r\n\r\n## Issues\r\n\r\n- **Bug reports**: Use the bug report template\r\n- **Feature requests**: Use the feature request template\r\n- **Questions**: Use GitHub Discussions for general questions\r\n\r\n## Community\r\n\r\n- Join our discussions on GitHub\r\n- Follow the [Code of Conduct](CODE_OF_CONDUCT.md)\r\n\r\n## Response Times\r\n\r\n- Issues are typically triaged within 2-3 business days\r\n- Feature requests may take longer to evaluate\r\n- Security issues are handled with priority\r\n\r\nWe appreciate your patience and contributions to making OpenCut better!\r\n"
+    },
+    {
+      "path": "bunfig.toml",
+      "sha": null,
+      "content_sha256": "a4ac418d98ed835569b0a048e155d5413d2016df7bc03a947fdb50fe5db0a532",
+      "score": 35,
+      "content": "[install]\nminimumReleaseAge = 604800 # 7d\n"
+    },
+    {
+      "path": "moon.yml",
+      "sha": null,
+      "content_sha256": "7ec4c9936cd562528b217ed9e7ddc0f99f191b9e45dc900807aec43c58676b69",
+      "score": 35,
+      "content": "$schema: 'https://moonrepo.dev/schemas/project.json'\n\ntasks:\n  upload-logos:\n    script: |\n      set -eu\n      root=\"$(pwd)\"\n\n      if [ ! -f \"$root/.env.local\" ]; then\n        echo 'Missing .env.local. Copy .env.example to .env.local first.' >&2\n        exit 1\n      fi\n\n      set -a\n      . \"$root/.env.local\"\n      set +a\n      : \"${R2_BUCKET:?Set R2_BUCKET in .env.local}\"\n\n      for file in \"$root\"/brand/marks/*.svg; do\n        bun run --cwd apps/web wrangler r2 object put \\\n          \"$R2_BUCKET/${file##*/}\" \\\n          --file \"$file\" \\\n          --content-type 'image/svg+xml' \\\n          --remote\n      done\n    inputs:\n      - 'brand/marks/*.svg'\n      - 'apps/web/package.json'\n      - '.env.example'\n    options:\n      cache: false\n      runInCI: false\n"
+    },
+    {
+      "path": ".moon/toolchains.yml",
+      "sha": null,
+      "content_sha256": "0b80e616a009c94a2cf5989e0c8612fb1e35e3379816167094929874d9734460",
+      "score": 33,
+      "content": "$schema: 'https://moonrepo.dev/schemas/toolchains.json'\n\njavascript:\n  packageManager: 'bun'\n\nbun:\n  version: '1.3.11'\n\nrust: {}\n"
+    },
+    {
+      "path": ".moon/workspace.yml",
+      "sha": null,
+      "content_sha256": "8e360846878956aafc1539cc379ff4db966cf3fcff6827d389596aad0d9c3d38",
+      "score": 33,
+      "content": "$schema: 'https://moonrepo.dev/schemas/workspace.json'\n\nprojects:\n  globs:\n    - 'apps/*'\n    - 'crates/*'\n  sources:\n    root: '.'\n"
+    },
+    {
+      "path": ".vscode/settings.json",
+      "sha": null,
+      "content_sha256": "e9a2ced156cca142794d4ab4ef1366c5a8f295046c548b7dee7306ded54fdd68",
+      "score": 33,
+      "content": "{\r\n\t\"editor.defaultFormatter\": \"esbenp.prettier-vscode\",\r\n\t\"[javascript][typescript][javascriptreact][typescriptreact][json][jsonc][css][graphql]\": {\r\n\t\t\"editor.defaultFormatter\": \"esbenp.prettier-vscode\"\r\n\t},\r\n\t\"typescript.tsdk\": \"node_modules/typescript/lib\",\r\n\t\"editor.formatOnSave\": true,\r\n\t\"editor.formatOnPaste\": true,\r\n\t\"editor.codeActionsOnSave\": {\r\n\t\t\"source.fixAll.biome\": \"explicit\",\r\n\t\t\"source.organizeImports.biome\": \"explicit\"\r\n\t},\r\n\t\"emmet.showExpandedAbbreviation\": \"never\",\r\n\t\"[typescriptreact]\": {\r\n\t\t\"editor.defaultFormatter\": \"biomejs.biome\"\r\n\t},\r\n\t\"[typescript]\": {\r\n\t\t\"editor.defaultFormatter\": \"biomejs.biome\"\r\n\t}\r\n}\r\n"
+    },
+    {
+      "path": "apps/web/.cta.json",
+      "sha": null,
+      "content_sha256": "ee132ddd7adda8e324ab223ea9afad61e862dfdb70534fd6e80e7cdb5f9d1882",
+      "score": 31,
+      "content": "{\n  \"projectName\": \"web\",\n  \"mode\": \"file-router\",\n  \"typescript\": true,\n  \"packageManager\": \"npm\",\n  \"includeExamples\": false,\n  \"tailwind\": true,\n  \"addOnOptions\": {},\n  \"envVarValues\": {},\n  \"git\": false,\n  \"install\": true,\n  \"routerOnly\": false,\n  \"version\": 1,\n  \"framework\": \"react\",\n  \"chosenAddOns\": [\n    \"cloudflare\",\n    \"shadcn\"\n  ]\n}"
+    }
+  ],
+  "generated_at": "2026-10-08T02:24:59.976945+00:00"
+}

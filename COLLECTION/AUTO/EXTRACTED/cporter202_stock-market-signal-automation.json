@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:cporter202/stock-market-signal-automation",
+  "repo": "cporter202/stock-market-signal-automation",
+  "revision_sha": "c7c4b898e293c5388b4e78f81a61d58d5bddab8f",
+  "default_branch": "main",
+  "pushed_at": "2026-06-24T03:36:16Z",
+  "repo_updated_at": "2026-10-04T19:51:16Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "examples/ai-agent-prompt-builder/README.md",
+      "sha": null,
+      "content_sha256": "760d33ad9899867cfe62c3f70c9fce25ee9cc4cea73b0b16c47eb5bd8f757956",
+      "score": 171,
+      "content": "# AI Agent Prompt Builder\n\nThis example converts a webhook payload into a safe AI-agent prompt.\n\nIt is designed for summaries, dashboards, and workflow routing. It does not tell the agent to make trading decisions or invent missing data.\n\n## Run\n\n```bash\nnode prompt-builder.js ../payloads/confirmed-buys.json\nnode prompt-builder.js ../payloads/no-picks.json\n```\n\n## Use Cases\n\n- daily signal summary\n- Discord explanation\n- personal watch note\n- trade journal draft\n- AI agent routing input\n\nKeep broker execution behind separate risk controls and human approval.\n"
+    },
+    {
+      "path": "docs/security-and-signing.md",
+      "sha": null,
+      "content_sha256": "16fc6e1c4905756488efda39aec67b9036480cdfb07ca7e21957e6a6e576db04",
+      "score": 148,
+      "content": "# Security and Signing\n\nWebhook signing lets your receiver confirm that a payload came from KamdenAI and was not modified in transit.\n\n## Headers\n\nKamdenAI sends these headers with signed deliveries:\n\n```text\nX-KamdenAI-Event\nX-KamdenAI-Delivery\nX-KamdenAI-Timestamp\nX-KamdenAI-Signature\n```\n\n## Verification Concept\n\nThe exact signing string should match the Developer API documentation inside the product. A common pattern is:\n\n```text\ntimestamp.rawBody\n```\n\nThen compute an HMAC SHA-256 signature using the signing secret.\n\n## Node Example\n\n```js\nimport crypto from \"node:crypto\";\n\nfunction verifySignature({ rawBody, timestamp, signature, secret }) {\n  const payload = `${timestamp}.${rawBody}`;\n  const expected = crypto\n    .createHmac(\"sha256\", secret)\n    .update(payload)\n    .digest(\"hex\");\n\n  return crypto.timingSafeEqual(\n    Buffer.from(signature, \"hex\"),\n    Buffer.from(expected, \"hex\")\n  );\n}\n```\n\n## Python Example\n\n```python\nimport hmac\nimport hashlib\n\ndef verify_signature(raw_body: bytes, timestamp: str, signature: str, secret: str) -> bool:\n    payload = timestamp.encode(\"utf-8\") + b\".\" + raw_body\n    expected = hmac.new(secret.encode(\"utf-8\"), payload, hashlib.sha256).hexdigest()\n    return hmac.compare_digest(signature, expected)\n```\n\n## Replay Protection\n\nReject old timestamps. A common tolerance is 5 minutes.\n\n## Secret Storage\n\nStore secrets in environment variables:\n\n```text\nKAMDENAI_SIGNING_SECRET=whsec_example_do_not_commit\n```\n\nNever commit real secrets to GitHub.\n"
+    },
+    {
+      "path": "docs/ai-agents.md",
+      "sha": null,
+      "content_sha256": "360bb8ab1fdee2a384407dd323db6a95d2319f7864ea98ba854b2f58b0fcc3cc",
+      "score": 143,
+      "content": "# AI Agent Workflows\n\nSignal webhooks can be used as inputs for custom AI agents, Hermes agents, or other agentic workflows.\n\n## Good Agent Use Cases\n\n- Summarize daily signal payloads.\n- Convert raw payloads into plain-English alerts.\n- Compare today's signals against your journal.\n- Prepare a pre-market watch note.\n- Route signals into a dashboard.\n- Tag signals by sector or risk size.\n- Create personal reminders.\n\n## Risky Agent Use Cases\n\nBe careful with:\n\n- fully autonomous live trade execution\n- account-level position sizing\n- order cancellation logic\n- stop movement decisions\n- options routing\n- margin workflows\n\nAgents can hallucinate, misread fields, or make assumptions. Use guardrails and manual approval.\n\n## Recommended Architecture\n\n```text\nKamdenAI webhook\n  -> verified receiver\n  -> normalized event queue\n  -> AI summarizer or agent\n  -> human review\n  -> optional broker workflow\n```\n\n## Agent Prompt Pattern\n\n```text\nYou are analyzing a stock signal webhook payload.\nSummarize the tickers, entry, stop, target, and risk/reward.\nDo not invent missing fields.\nDo not provide financial advice.\nIf there are no signals, say the scan had no qualifying picks.\n```\n"
+    },
+    {
+      "path": "docs/automation-recipes.md",
+      "sha": null,
+      "content_sha256": "78d21a089365d0f482b4f9c36e7b8d41c71f768c40c5aec5c48458061a59fbca",
+      "score": 140,
+      "content": "# Automation Recipes\n\nThese are public-safe ways to build around signal webhooks without exposing private strategy logic.\n\n## Discord Alert Channel\n\n```text\nWebhook received\n  -> if data.confirmedBuys has rows\n  -> format message\n  -> post to #confirmed-buys\n```\n\nBest for: community alerts, private groups, personal signal rooms.\n\n## Google Sheets Signal Log\n\n```text\nWebhook received\n  -> choose event rows\n  -> for plans use data.scan.buySignals/watchSignals\n  -> for buys use data.confirmedBuys\n  -> for exits use data.quickExitResults\n  -> append row to sheet\n  -> include delivery ID\n```\n\nBest for: tracking, audits, trade review, no-code history.\n\n## AI Agent Brief\n\n```text\nWebhook received\n  -> build prompt from payload\n  -> ask agent to summarize without financial advice\n  -> send summary to email or Discord\n```\n\nBest for: plain-English daily summaries, personal prep notes, searchable context.\n\n## Private Dashboard\n\n```text\nWebhook received\n  -> save raw payload in database\n  -> normalize latest signals\n  -> frontend reads normalized rows\n```\n\nBest for: custom UI, advanced filtering, result review.\n\n## Broker Workflow Helper\n\n```text\nWebhook received\n  -> verify signature\n  -> calculate user sizing\n  -> create draft order ticket\n  -> require manual approval\n```\n\nBest for: experienced builders. Start with paper trading.\n\n## No-Pick Day Logger\n\n```text\nWebhook received\n  -> if confirmedBuys is empty or noConfirmedBuys is true\n  -> log scan ran successfully\n  -> send optional \"no picks today\" note\n```\n\nBest for: proving your automation is working even when the market gives no setups.\n"
+    },
+    {
+      "path": "examples/node-webhook-receiver/package.json",
+      "sha": null,
+      "content_sha256": "761c2c0df84858735373e8fb57cc25ba1955ea909049d2ca8817cd685ca2afe9",
+      "score": 116,
+      "content": "{\n  \"name\": \"kamdenai-node-webhook-receiver\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"start\": \"node server.js\"\n  },\n  \"dependencies\": {\n    \"express\": \"^4.19.2\"\n  }\n}\n"
+    },
+    {
+      "path": "examples/ai-agent-prompt-builder/prompt-builder.js",
+      "sha": null,
+      "content_sha256": "d06a3e1486def28099e9375e7f3aa9a3f74674d2fd4a370f6b53d23de6ad25fd",
+      "score": 106,
+      "content": "const fs = require(\"node:fs\");\nconst path = require(\"node:path\");\n\nconst inputPath = process.argv[2];\n\nif (!inputPath) {\n  console.error(\"Usage: node prompt-builder.js ../payloads/confirmed-buys.json\");\n  process.exit(1);\n}\n\nconst payload = JSON.parse(fs.readFileSync(path.resolve(inputPath), \"utf8\"));\nconst data = payload.data || {};\nconst rows = rowsForPayload(payload);\n\nfunction rowsForPayload(payload) {\n  const eventData = payload.data || {};\n  if (Array.isArray(eventData.confirmedBuys)) return eventData.confirmedBuys;\n  if (Array.isArray(eventData.quickExitResults)) return eventData.quickExitResults;\n  if (eventData.scan) {\n    return [\n      ...(eventData.scan.buySignals || []),\n      ...(eventData.scan.watchSignals || [])\n    ];\n  }\n  return [];\n}\n\nconst prompt = [\n  \"You are reviewing a stock signal webhook payload.\",\n  \"Summarize the event in plain English for a trader.\",\n  \"Do not provide financial advice.\",\n  \"Do not invent missing fields.\",\n  \"If there are no rows, say that the event ran with no official picks.\",\n  \"\",\n  `Event: ${payload.event || \"unknown\"}`,\n  `Date: ${payload.dateKey || \"unknown\"}`,\n  `Count: ${data.confirmedBuyCount ?? rows.length}`,\n  \"\",\n  \"Payload:\",\n  JSON.stringify(payload, null, 2)\n].join(\"\\n\");\n\nconsole.log(prompt);\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "2e9f0126994e901675dbd195147624a75797741af926f3230fb88af1ad07e76b",
+      "score": 100,
+      "content": "<div align=\"center\">\n\n# Stock Market Signal Automation\n\nBuild your own data-driven market edge with swing-trade signal webhooks, dashboards, alerts, AI agents, and automation examples.\n\n<img src=\"assets/kamdenai-homepage.png\" alt=\"KamdenAI homepage preview\" width=\"100%\" />\n\n<br />\n<br />\n\n![API](https://img.shields.io/badge/API-Signal_Webhooks-0ea5e9?style=for-the-badge)\n![Category](https://img.shields.io/badge/Category-Trading_Automation-22c55e?style=for-the-badge)\n![Status](https://img.shields.io/badge/Status-Active-16a34a?style=for-the-badge)\n![Updated](https://img.shields.io/badge/Updated-Daily-facc15?style=for-the-badge)\n![Examples](https://img.shields.io/badge/Examples-Ready-8b5cf6?style=for-the-badge)\n![License](https://img.shields.io/badge/License-MIT-64748b?style=for-the-badge)\n\n</div>\n\nThis repo is a public starter kit for traders, builders, and developers who want to route stock market signal data into their own tools. It shows how to receive signal webhooks, verify webhook signatures, format alerts, log payloads, and build simple automations around signal events.\n\nLive signal access is available through KamdenAI memberships at https://kamdenai.com. This repo uses sample data only.\n\n## Why This Exists\n\nMost trading signal products stop at alerts. This repo shows what becomes possible when signal data can move into your own workflow:\n\n- send alerts to Discord, Slack, email, or SMS\n- log every event into Google Sheets\n- build private dashboards\n- route signals into AI agents\n- summarize daily setups automatically\n- create personal trade review workflows\n- connect supported broker workflow tools with manual approval\n- store delivery logs for research and review\n\nThe signal engine stays private. The integration layer is public so members can build around it.\n\n## What You Can Build\n\n| Build | What It Does |\n| --- | --- |\n| Discord alert channel | Posts plan scans, confirmed buys, quick-exit results, and no-pick days into private channels |\n| Google Sheets journal | Logs every signal, result, and delivery ID |\n| Private dashboard | Displays active signals and historical performance examples |\n| Make/Zapier workflow | Routes payloads into tools without writing code |\n| AI agent summary | Converts raw signal payloads into plain-English trade notes |\n| Broker workflow helper | Prefills or queues possible orders for human review |\n| Research database | Stores payloads for later analysis and reporting |\n\n## How It Works\n\nKamdenAI publishes signal events during the trading day. A member can add an HTTPS webhook endpoint inside their account. When selected events are released, KamdenAI sends a JSON payload to that endpoint.\n\n```text\nKamdenAI signal release\n  -> signed webhook delivery\n  -> your HTTPS endpoint\n  -> Discord / Sheets / dashboard / AI agent / workflow tools\n```\n\nTypical event schedule:\n\n| Time | Event | Purpose |\n| --- | --- | --- |\n| 9:28 AM ET | `morning_scan.created` | Morning plan scan with entry, stop, target, and sizing context |\n| 9:30 AM ET | `confirmed_buys.created` | Official top-two confirmed buys ranked by opening strength |\n| 10:05 AM ET | `quick_exit_results.created` | Official morning quick-exit result for the confirmed-buy list |\n\nIf no picks qualify, the webhook can still send an event with an empty `confirmedBuys` or `quickExitResults` list. That lets your automation know the workflow ran successfully.\n\n## Historical Example\n\nThe live product now uses a focused morning model: 9:28 plan, 9:30 top-two confirmation, and 10:05 quick-exit result. A public-safe historical notes page is included so builders can see how to structure result tracking without exposing private scan logic.\n\nRead the assumptions and disclaimers in [Historical Account Examples](docs/historical-results.md). Past performance does not guarantee future results.\n\n## Start Here\n\n1. Read [Getting Started](docs/getting-started.md).\n2. Review the [Webhook Events](docs/webhook-events.md).\n3. Review the [Historical Account Examples](docs/historical-results.md).\n4. Learn [Security and Signing](docs/security-and-signing.md).\n5. Understand the [Architecture](docs/architecture.md).\n6. Review the [Payload Field Reference](docs/payload-field-reference.md).\n7. Pick a recipe from [Automation Recipes](docs/automation-recipes.md).\n8. Run a local receiver:\n   - [Node webhook receiver](examples/node-webhook-receiver/README.md)\n   - [Python webhook receiver](examples/python-webhook-receiver/README.md)\n\n## Example Payload\n\n```json\n{\n  \"event\": \"confirmed_buys.created\",\n  \"dateKey\": \"2026-06-22\",\n  \"sentAt\": \"2026-06-22T13:30:15.000Z\",\n  \"data\": {\n    \"confirmedBuys\": [\n      {\n        \"ticker\": \"SOFI\",\n        \"name\": \"SoFi Technologies\",\n        \"entry\": 24.5,\n        \"stop\": 23.95,\n        \"target\": 25.6,\n        \"shares\": 181,\n        \"riskDollars\": 99.55,\n        \"openingConfirmation\": {\n          \"status\": \"confirmed_buy\",\n          \"statusLabel\": \"Top 1 confirmed buy\",\n          \"entryDistanceR\": 0.42,\n          \"windowEnd\": \"9:30 AM\"\n        }\n      }\n    ]\n  }\n}\n```\n\nSee more examples in [examples/payloads](examples/payloads).\n\n## Runnable Examples\n\n| Example | Purpose |\n| --- | --- |\n| [Node webhook receiver](examples/node-webhook-receiver/README.md) | Receive and verify signed webhooks |\n| [Python webhook receiver](examples/python-webhook-receiver/README.md) | Receive and verify signed webhooks with Flask |\n| [Discord formatter](examples/discord-formatter/README.md) | Convert payloads into alert text |\n| [AI prompt builder](examples/ai-agent-prompt-builder/README.md) | Turn payloads into AI-agent prompts |\n| [Risk sizing calculator](examples/risk-sizing-calculator/README.md) | Model generic account risk sizing |\n| [Simple dashboard](examples/simple-dashboard/README.md) | Paste payloads and preview a dashboard |\n| [Google Sheets logger](examples/google-sheets-logger/README.md) | Plan a sheet-based signal log |\n\n## Important Boundaries\n\nThis repo does not include:\n\n- KamdenAI proprietary scan logic\n- Internal scoring formulas\n- Private infrastructure code\n- Firebase configuration\n- API keys\n- Signing secrets\n- Live paid signal data\n- Guaranteed trading outcomes\n\nThis is a consumer-side starter kit. It teaches people how to receive, verify, route, and build around webhook data.\n\n## Safety Notes\n\nTrading involves risk. Signals, alerts, dashboards, and automation examples are educational tools. They are not financial advice and are not instructions to buy, sell, hold, short, or trade any security.\n\nIf you build broker-connected workflows, test in paper trading first, understand your broker API, add manual approval where appropriate, and never risk money you cannot afford to lose.\n\nRead [DISCLAIMER.md](DISCLAIMER.md) before using or modifying these examples.\n\n## Repo Structure\n\n```text\nassets/\n  kamdenai-homepage.png\ndocs/\n  ai-agents.md\n  architecture.md\n  automation-recipes.md\n  broker-automation.md\n  discord.md\n  getting-started.md\n  google-sheets.md\n  historical-results.md\n  launch-checklist.md\n  make-com.md\n  payload-field-reference.md\n  security-and-signing.md\n  troubleshooting.md\n  webhook-events.md\nexamples/\n  ai-agent-prompt-builder/\n  csv-templates/\n  discord-formatter/\n  google-sheets-logger/\n  node-webhook-receiver/\n  payloads/\n  python-webhook-receiver/\n  risk-sizing-calculator/\n  simple-dashboard/\ntemplates/\n  make-scenario-checklist.md\n  webhook-consumer-checklist.md\n```\n\n## License\n\nMIT. See [LICENSE](LICENSE).\n"
+    },
+    {
+      "path": "examples/google-sheets-logger/README.md",
+      "sha": null,
+      "content_sha256": "b172b1b74919fabd11f87277ddbd35afd46f7a718890562a0eaffb4f6270c066",
+      "score": 96,
+      "content": "# Google Sheets Logger\n\nThis example is a no-code pattern for logging signal events into Google Sheets.\n\n## Sheet Columns\n\nCreate a sheet with these columns:\n\n```text\nReceived At\nDate Key\nEvent\nTicker\nCompany\nEntry\nStop\nTarget\nRisk Per Share\nReward Per Share\nTarget R\nStatus\nDelivery ID\nMessage\n```\n\n## Make.com Scenario\n\n1. Webhooks: Custom webhook\n2. Router:\n   - Route A: rows exist for the selected event\n   - Route B: no official picks or `data.noConfirmedBuys = true`\n3. Route A:\n   - Iterator over `data.scan.buySignals[]`, `data.scan.watchSignals[]`, `data.confirmedBuys[]`, or `data.quickExitResults[]`\n   - Google Sheets: Add a row\n4. Route B:\n   - Google Sheets: Add a no-pick row\n\n## Why This Works\n\nYou get a full event history, including days where no signals qualified.\n"
+    },
+    {
+      "path": "examples/simple-dashboard/README.md",
+      "sha": null,
+      "content_sha256": "43a7fc99d9a99399d8f9f029cc79c38c05ee422ae4544520c31608954ae45fdb",
+      "score": 96,
+      "content": "# Simple Dashboard\n\nThis is a static demo dashboard. It does not receive live webhooks by itself. Paste a sample payload into the textarea to preview how signal data could be displayed.\n\nOpen `index.html` in a browser.\n\nFor a real dashboard, connect your webhook receiver to a database and have the frontend read normalized events from that database.\n"
+    },
+    {
+      "path": "examples/python-webhook-receiver/README.md",
+      "sha": null,
+      "content_sha256": "7a68c9bf13fe21bc60aa1f9f9c912166f2ebe5c6cbcf1359cf794b306cab367c",
+      "score": 96,
+      "content": "# Python Webhook Receiver\n\nMinimal Flask receiver for KamdenAI-style signal webhooks.\n\n## Setup\n\n```bash\npython -m venv .venv\n.venv\\Scripts\\activate\npip install -r requirements.txt\ncopy .env.example .env\npython app.py\n```\n\nUse an HTTPS tunnel for local testing, then paste the public URL plus `/webhook` into your Developer API page.\n"
+    },
+    {
+      "path": "examples/risk-sizing-calculator/README.md",
+      "sha": null,
+      "content_sha256": "bd5be3267091bf71f21baa45dcd926048e43315829d4620a26b328a2888494e1",
+      "score": 96,
+      "content": "# Risk Sizing Calculator\n\nGeneric risk sizing example for builders.\n\nThis does not include KamdenAI private signal logic. It simply shows how a user could size a position from public fields like entry and stop.\n\n## Run\n\n```bash\nnode risk-sizing.js --cash=5000 --risk=1 --entry=24.50 --stop=23.95\nnode risk-sizing.js --cash=10000 --risk=1 --entry=24.50 --stop=23.95\n```\n\n## Output\n\nThe script prints:\n\n- planned risk dollars\n- risk per share\n- shares\n- estimated position cost\n\nAlways verify sizing with your broker and your own risk rules.\n"
+    },
+    {
+      "path": "examples/discord-formatter/README.md",
+      "sha": null,
+      "content_sha256": "5333c4f66647e8c31374b983c1be347dcd031dbd67fd65924229c94fe66ce1da",
+      "score": 96,
+      "content": "# Discord Formatter\n\nThis example turns a signal payload into a simple Discord-ready message.\n\n## Run\n\n```bash\nnode format-discord-message.js ../payloads/confirmed-buys.json\nnode format-discord-message.js ../payloads/no-picks.json\n```\n\nUse the output as the message body in Discord, Make.com, Zapier, or your own bot.\n"
+    },
+    {
+      "path": "examples/node-webhook-receiver/README.md",
+      "sha": null,
+      "content_sha256": "ca86c836bd5056fefcac5d14f7a8265289f51da6e02ceb36c33badae8bec0105",
+      "score": 96,
+      "content": "# Node Webhook Receiver\n\nMinimal Express receiver for KamdenAI-style signal webhooks.\n\n## Setup\n\n```bash\nnpm install\ncp .env.example .env\nnpm start\n```\n\nThen expose the local server with an HTTPS tunnel:\n\n```bash\nngrok http 3000\n```\n\nPaste the HTTPS forwarding URL plus `/webhook` into your Developer API page.\n\n## Environment\n\n```text\nKAMDENAI_SIGNING_SECRET=whsec_example_do_not_commit\nPORT=3000\n```\n\n## Endpoint\n\n```text\nPOST /webhook\n```\n\nThe example logs the event, delivery ID, and signal count.\n"
+    },
+    {
+      "path": "examples/payloads/webhook-test.json",
+      "sha": null,
+      "content_sha256": "4f6f83998bb70be149e5918922819b1ec8cc774a20b9261e78dc6db968150e6f",
+      "score": 91,
+      "content": "{\n  \"event\": \"webhook.test\",\n  \"dateKey\": \"2026-06-12\",\n  \"sentAt\": \"2026-06-12T23:25:00.000Z\",\n  \"data\": {\n    \"message\": \"KamdenAI webhook test delivery for the current morning execution system.\",\n    \"currentEvents\": [\n      \"morning_scan.created\",\n      \"confirmed_buys.created\",\n      \"quick_exit_results.created\"\n    ]\n  }\n}\n"
+    },
+    {
+      "path": "examples/python-webhook-receiver/requirements.txt",
+      "sha": null,
+      "content_sha256": "fc62a20c932a071263b1464a5a4dcc01faf248d036addde717963a795bf52690",
+      "score": 81,
+      "content": "Flask==3.0.3\npython-dotenv==1.0.1\n"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha": null,
+      "content_sha256": "aea5d7b6dd4b9457eb2a52321aebc0104ddd1117d16a01ce14b62b47dc62fc02",
+      "score": 80,
+      "content": "# Security\n\nThis public repo should never contain production secrets, private keys, paid signal data, Firebase config, webhook signing secrets, or proprietary scan logic.\n\n## If You Find a Secret\n\nIf you believe a secret was accidentally committed, immediately rotate the secret in the owning platform and remove it from git history before relying on the new value.\n\n## Webhook Security Basics\n\n- Use HTTPS endpoints only.\n- Keep signing secrets private.\n- Verify signatures before trusting payloads.\n- Reject old timestamps to reduce replay risk.\n- Never expose broker API keys in frontend code.\n- Use paper trading before any live execution workflow.\n- Add manual confirmation for broker-connected automations.\n- Log delivery IDs so duplicate events can be ignored.\n\n## Public Repo Boundary\n\nThis repo is intentionally limited to consumer-side examples:\n\n- webhook receiver examples\n- signature verification examples\n- payload formatting examples\n- dashboard examples\n- automation checklists\n\nIt does not include internal signal generation rules or private platform code.\n"
+    },
+    {
+      "path": "docs/getting-started.md",
+      "sha": null,
+      "content_sha256": "e3d1644df0591e09eb69ee08e46894581aeda45eacb759f3d4337925f4329861",
+      "score": 68,
+      "content": "# Getting Started\n\nThis guide explains the basic flow for building around stock market signal webhooks.\n\n## The Big Idea\n\nSignal events are posted inside the KamdenAI member community. Members can also send those same signal events to their own HTTPS webhook endpoint.\n\nThat means your endpoint can receive events and then route them wherever you want:\n\n- Discord\n- Slack\n- email\n- SMS\n- Google Sheets\n- dashboards\n- AI agents\n- internal apps\n- broker workflow tools\n\n## Basic Flow\n\n1. Create an HTTPS endpoint.\n2. Paste the endpoint URL into the Developer API page.\n3. Select the event types you want.\n4. Generate and save your signing secret.\n5. Send a test webhook.\n6. Verify the payload in your app or automation tool.\n7. Build your workflow around the event data.\n\n## Recommended First Integration\n\nStart with Make.com or Zapier if you do not want to write code.\n\nStart with the Node or Python receiver if you want full control.\n\n## Local Testing\n\nMost webhook providers require a public HTTPS URL. If you are testing locally, use a tunnel such as ngrok or Cloudflare Tunnel.\n\nExample flow:\n\n```text\nKamdenAI -> HTTPS tunnel -> local webhook receiver -> logs/dashboard/Discord\n```\n\n## Production Checklist\n\n- Verify webhook signatures.\n- Store the signing secret in an environment variable.\n- Log each delivery ID.\n- Ignore duplicate delivery IDs.\n- Add alerts for failed webhook processing.\n- Keep broker keys separate from signal ingestion.\n- Use manual confirmation before any live broker order.\n\n## What Not To Do\n\n- Do not put secrets in frontend JavaScript.\n- Do not hard-code signing secrets into GitHub.\n- Do not auto-trade real money without extensive testing.\n- Do not assume every signal has picks.\n- Do not assume a webhook delivery means you should enter a trade.\n"
+    },
+    {
+      "path": "docs/launch-checklist.md",
+      "sha": null,
+      "content_sha256": "f4656f5b097a8b616c0e31b65100c6c73d4bf37a814a82d5c196b66fb7f3d96d",
+      "score": 68,
+      "content": "# Launch Checklist\n\nUse this before sharing a webhook integration with other people.\n\n## Public Repo Safety\n\n- [ ] No API keys\n- [ ] No signing secrets\n- [ ] No broker credentials\n- [ ] No Firebase config\n- [ ] No paid signal data\n- [ ] No private scoring or scan rules\n\n## Webhook Receiver\n\n- [ ] HTTPS endpoint\n- [ ] Signature verification\n- [ ] Timestamp replay protection\n- [ ] Delivery ID duplicate protection\n- [ ] 2xx response on success\n- [ ] Error logging\n\n## Automation Behavior\n\n- [ ] Handles no-pick days\n- [ ] Handles empty arrays\n- [ ] Handles missing optional fields\n- [ ] Handles retries\n- [ ] Stores raw payload when needed\n\n## Trading Safety\n\n- [ ] No promise of profit\n- [ ] Clear educational disclaimer\n- [ ] Paper trading first for broker workflows\n- [ ] Manual approval before live orders\n- [ ] User controls risk and execution\n\n## Funnel Setup\n\n- [ ] README explains what can be built\n- [ ] README links to live KamdenAI access\n- [ ] Examples are easy to run\n- [ ] Historical examples include assumptions\n- [ ] Disclaimers are visible\n"
+    },
+    {
+      "path": "docs/google-sheets.md",
+      "sha": null,
+      "content_sha256": "196b7ab173a3909e2701842d08639f7996853a2806f811d5a55605220c92bada",
+      "score": 68,
+      "content": "# Google Sheets Logging\n\nGoogle Sheets is useful for keeping a clean signal history.\n\n## Suggested Columns\n\n- Date\n- Event\n- Ticker\n- Company\n- Entry\n- Stop\n- Target\n- Risk per share\n- Reward per share\n- Target R\n- Status\n- Notes\n- Delivery ID\n- Received at\n\n## Make.com Flow\n\n```text\nWebhook trigger -> pick rows by event -> Google Sheets Add Row\n```\n\nUse `data.scan.buySignals[]` and `data.scan.watchSignals[]` for the 9:28 plan scan, `data.confirmedBuys[]` for the 9:30 official buys, and `data.quickExitResults[]` for the 10:05 result.\n\nFor no-pick days, add a single row with:\n\n- Event\n- Date\n- Count: 0 or noConfirmedBuys: true\n- Message\n\n## Why Log No-Pick Days?\n\nNo-pick rows prove the scan ran. That makes your logs cleaner because you can distinguish \"nothing qualified\" from \"the webhook broke.\"\n\n## Template\n\nSee [examples/google-sheets-logger](../examples/google-sheets-logger).\n"
+    },
+    {
+      "path": "docs/broker-automation.md",
+      "sha": null,
+      "content_sha256": "5487da28222411eb2ec80c0511a07ef3cbe6493c59424230ec2fe48a5aff1eb6",
+      "score": 68,
+      "content": "# Broker Automation\n\nYou can use signal webhooks as inputs for broker-connected workflows, but this should be handled with extreme care.\n\n## Safer First Steps\n\nStart with:\n\n- alerts\n- dashboards\n- paper trading\n- manual approval buttons\n- order ticket prefill\n- position sizing calculators\n\nAvoid jumping directly to live automatic execution.\n\n## Suggested Flow\n\n```text\nWebhook received\n  -> verify signature\n  -> validate signal fields\n  -> calculate user-specific sizing\n  -> show human approval\n  -> send order to broker API\n  -> log broker response\n```\n\n## Broker API Notes\n\nEvery broker is different. You need to understand:\n\n- supported order types\n- market hours\n- extended-hours behavior\n- buying power rules\n- margin restrictions\n- stop order behavior\n- rate limits\n- API permission scopes\n- paper trading availability\n\n## Hard Rule\n\nNever store broker API keys in frontend code or public GitHub repos.\n\nUse backend secrets, least-privilege keys, and paper trading first.\n"
+    },
+    {
+      "path": "docs/make-com.md",
+      "sha": null,
+      "content_sha256": "b6140f6651d8f4d9a96deecddb6f1d2cd771e0799690e4025bc652ae58f1cf20",
+      "score": 68,
+      "content": "# Make.com Guide\n\nMake.com is one of the easiest ways to turn signal webhooks into automations without writing code.\n\n## Basic Setup\n\n1. Create a new scenario.\n2. Add the Webhooks app.\n3. Choose Custom webhook.\n4. Create a webhook.\n5. Copy the Make webhook URL.\n6. Paste it into the KamdenAI Developer API page.\n7. Select the events you want.\n8. Click Send Test.\n\nIf Make shows the test payload, the connection works.\n\n## Common Automations\n\n- Send the 9:28 plan scan, 9:30 confirmed buys, and 10:05 quick-exit results to Discord.\n- Add rows to Google Sheets.\n- Send yourself an SMS when `confirmed_buys.created` has picks.\n- Create a daily Notion page.\n- Feed payloads into an AI summarizer.\n- Store all events in Airtable.\n\n## Filter Example\n\nOnly continue if a confirmed-buy event has official picks:\n\n```text\nlength(data.confirmedBuys) > 0\n```\n\nRoute no-pick days separately:\n\n```text\nlength(data.confirmedBuys) = 0\n```\n\n## Useful Fields\n\nIn Make, you can map:\n\n- `event`\n- `dateKey`\n- `sentAt`\n- `data.scan.buySignals[]`\n- `data.scan.watchSignals[]`\n- `data.confirmedBuys[]`\n- `data.quickExitResults[]`\n- `data.message`\n\n## Signing Secret\n\nMake can receive the webhook without signature verification, but production workflows should verify signatures if possible.\n\nIf you cannot verify signatures inside Make directly, keep the webhook URL private and consider routing through your own small receiver first.\n"
+    },
+    {
+      "path": "docs/discord.md",
+      "sha": null,
+      "content_sha256": "58e9423c64c6cb2eef9f5439601342284d449f615150f66b4af9b09c5b5b7e1f",
+      "score": 68,
+      "content": "# Discord Integration\n\nDiscord is a strong first use case for signal webhooks. You can create a private channel that receives formatted signal alerts automatically.\n\n## Simple Flow\n\n```text\nKamdenAI -> Make/Zapier/custom receiver -> Discord channel\n```\n\n## Recommended Channels\n\n- `#plan-scan`\n- `#confirmed-buys`\n- `#quick-exit-results`\n- `#no-picks-log`\n\n## Message Format\n\nExample confirmed buy message:\n\n```text\nConfirmed Buy Signals - 2026-06-22\n\nSOFI\nEntry: $24.50\nStop: $23.95\nTarget: $25.60\n9:30: Top 1 confirmed buy\n\nEducational signal only. Trade at your own risk.\n```\n\n## No-Pick Message\n\n```text\nNo official top-two confirmed buys at 9:30.\nPlan scan ran successfully for 2026-06-22.\n```\n\n## Example Formatter\n\nSee [examples/discord-formatter](../examples/discord-formatter).\n"
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "sha": null,
+      "content_sha256": "2c35e3dea88e5a9ed3527fe64a5e1efcc0f04ae3499df8ae15f7a5fc10ced645",
+      "score": 68,
+      "content": "# Troubleshooting\n\n## My Test Webhook Works, But My Automation Does Nothing\n\nCheck whether your filter is looking at the current event field. The current rows live in `data.scan.buySignals`, `data.scan.watchSignals`, `data.confirmedBuys`, or `data.quickExitResults` depending on the event.\n\n## I Got A No-Pick Payload\n\nThat is normal. It means the scan ran but no official top-two buys qualified, or the 10:05 result event had no confirmed buys to report.\n\n## I See Duplicate Events\n\nStore `X-KamdenAI-Delivery` and ignore delivery IDs you already processed.\n\n## Signature Verification Fails\n\nCommon causes:\n\n- you parsed JSON before capturing the raw body\n- wrong signing secret\n- wrong signing string\n- timestamp included incorrectly\n- uppercase/lowercase header mismatch\n\n## Make.com Says Internal Error\n\nCheck:\n\n- the webhook URL starts with `https://`\n- the webhook URL is copied completely\n- the Make scenario is turned on or listening\n- the endpoint returns a 2xx response\n\n## Nothing Shows In My Delivery Log\n\nCheck that the webhook is saved, active, and tied to the correct signed-in account. Also confirm your membership is active.\n"
+    },
+    {
+      "path": "docs/architecture.md",
+      "sha": null,
+      "content_sha256": "4870aa4584def55fe8fa868af573579ea00017f56c43e1256349f2c4a461c455",
+      "score": 68,
+      "content": "# Architecture\n\nThis repo focuses on the public integration layer around signal webhooks.\n\nIt does not expose KamdenAI's private signal generation logic, scoring rules, data provider setup, production infrastructure, or paid member data.\n\n## Basic Flow\n\n```mermaid\nflowchart LR\n  A[\"KamdenAI signal release\"] --> B[\"Signed webhook payload\"]\n  B --> C[\"Your HTTPS endpoint\"]\n  C --> D[\"Signature verification\"]\n  D --> E[\"Normalize event\"]\n  E --> F[\"Discord / Slack / SMS\"]\n  E --> G[\"Google Sheets / database\"]\n  E --> H[\"Private dashboard\"]\n  E --> I[\"AI agent summary\"]\n  E --> J[\"Broker workflow with human approval\"]\n```\n\n## Recommended Production Pattern\n\nUse a small backend receiver between KamdenAI and your tools.\n\n```text\nWebhook receiver\n  -> verifies signature\n  -> rejects old timestamps\n  -> stores delivery ID\n  -> ignores duplicates\n  -> saves raw payload\n  -> sends normalized events to your tools\n```\n\n## Why Not Send Everything Directly To Every Tool?\n\nNo-code tools are great, but a receiver gives you:\n\n- signature verification\n- duplicate handling\n- retries\n- raw payload storage\n- cleaner debugging\n- one endpoint instead of many exposed URLs\n\n## Safe Automation Layers\n\nStart with alerts and logs first:\n\n1. Receive webhook.\n2. Verify delivery.\n3. Send alert.\n4. Log signal.\n5. Review result.\n\nOnly after that should you consider more advanced workflows like broker API integration, and even then, use paper trading and manual approval.\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:04.299009+00:00"
+}

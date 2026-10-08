@@ -1,0 +1,78 @@
+{
+  "canonical_source": "github:NVIDIA/dgx-selinux",
+  "repo": "NVIDIA/dgx-selinux",
+  "revision_sha": "b988ea65e7b43009a705eb5e5d7e94048f916734",
+  "default_branch": "master",
+  "pushed_at": "2024-04-12T17:59:00Z",
+  "repo_updated_at": "2026-07-21T12:26:37Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "src/nvidia-dgxcache-selinux/README.md",
+      "sha": null,
+      "content_sha256": "47082957e4e95d84a3c0afea213f335038efb92f7ad54987facfa9f8396173d4",
+      "score": 154,
+      "content": "# nvidia-dgxcache-selinux\n\n## Building\nAssuming all required packages have been installed:\n\n    make -f /usr/share/selinux/devel/Makefile\n\nIf successful, this should generate a .pp file that can be installed on the system.\n\n    sudo semodule -i nvidia-dgxcache.pp\n\n## Information\nDGX systems create a large RAID array that gets mounted to /raid.  The cachefile daemon is then configured to use this mountpoint as its data cache.  To allow for the data cache to be moved this way, we create the nvidia-dgxcache policy module.  This module labels all contents in /raid with cachefilesd_var_t.\n\n## Disclaimer\nThese SELinux policies have only been verified on DGX-1 and DGX-2 on RHEL 7.5 and 7.6.  They are meant to be used as a reference for RHEL-based non-DGX platforms, not verbatim.\n"
+    },
+    {
+      "path": "src/nvidia-dgxcache-selinux/Makefile",
+      "sha": null,
+      "content_sha256": "becd4e43bbc5e1d2b7d72786fe5bea341a2a570cd8b317f964b5aabc4309ecd5",
+      "score": 139,
+      "content": "TARGET?=nvidia-dgxcache\nMODULES?=${TARGET:=.pp.bz2}\nSHAREDIR?=/usr/share\n\nall: ${TARGET:=.pp.bz2}\n\n%.pp.bz2: %.pp\n\t@echo Compressing $^ -\\> $@\n\tbzip2 -9 $^\n\n%.pp: %.te\n\tmake -f ${SHAREDIR}/selinux/devel/Makefile $@\n\nclean:\n\trm -f *~  *.tc *.pp *.pp.bz2\n\trm -rf tmp *.tar.gz\n\nman: install-policy\n\tsepolicy manpage --path . --domain ${TARGET}_t\n\ninstall-policy: all\n\tsemodule -i ${TARGET}.pp.bz2\n\ninstall: man\n\tinstall -D -m 644 ${TARGET}.pp.bz2 ${DESTDIR}${SHAREDIR}/selinux/packages/${TARGET}.pp.bz2\n\tinstall -D -m 644 ${TARGET}_selinux.8 ${DESTDIR}${SHAREDIR}/man/man8/\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "7569e5bd5e5c9297f0b87af3a4bfb90a20a0966fafb4671b337e46a5363ff480",
+      "score": 100,
+      "content": "# dgx-selinux\n\n## Introduction\nThis project contains the SELinux policies used in DGX products.\n\n## Building and debugging\nThe policy module builds require that the following packages are installed:\n\n    # RHEL7\n    sudo yum install -y findutils \\\n                        selinux-policy \\\n                        selinux-policy-devel \\\n                        selinux-policy-base \\\n                        libselinux-utils \\\n                        policycoreutils \\\n                        policycoreutils-python\n\n    # RHEL8/RHEL9\n    sudo dnf install -y findutils \\\n                        selinux-policy \\\n                        selinux-policy-devel \\\n                        selinux-policy-base \\\n                        libselinux-utils \\\n                        policycoreutils \\\n                        policycoreutils-python3\n\nWhile this is not required, it may be useful for debugging or just evaluating the various policies on the system.\n\n    sudo yum install -y setools-console\n\nsetools-console provides the sesearch utility, which is very useful for querying installed modules and such:\n\n    sesearch --help\n    sesearch --allow | grep nvidia\n\nPre-compiled policy modules are also included in this project under the bin/ directory.  Users can install these without having to compile the policy themselves if they so desired:\n\n    sudo semodule -i nvidia-container.pp\n\n## Information\nThe src/\\<policy-module-name\\> directories contain the source, Makefiles, and READMEs for each policy module.  Definitions for the macros used in this project can be found in /usr/share/selinux/devel/include.\n\n## Disclaimer\nThese SELinux policies have only been verified on DGX-1 and DGX-2 on RHEL 7.5 and 7.6.  They are meant to be used as a reference for RHEL-based non-DGX platforms, not verbatim.\n"
+    },
+    {
+      "path": "src/nvidia-container-selinux/README.md",
+      "sha": null,
+      "content_sha256": "291b4ed1f0986d621266b05debf6e67284b2a788a49e20be5950397d85beb0e4",
+      "score": 96,
+      "content": "# nvidia-container-selinux\n\n## Building\nAssuming all required packages have been installed:\n\n    make -f /usr/share/selinux/devel/Makefile\n\nIf successful, this should generate a .pp file that can be installed on the system.\n\n    sudo semodule -i nvidia-container.pp\n\n## Information\nThis policy module allows GPU-aware containers to access the files they need.  It assumes that the system is using the default (Red Hat-provided) labeling, and creates a new domain -- nvidia_container_t -- that can be used when starting containers.\n\nnvidia_container_t is then associated with a handful of previously declared attributes and given permissions to container_runtime_tmpfs_t directories.  Lastly, it is allowed to access device nodes that have been labeled with xserver_exec_t and/or xserver_misc_device_t (mainly /dev/nvidia*).\n\nNow with the policy installed, one can use nvidia_container_t to run GPU-aware containers:\n\n    sudo docker run --security-opt label=type:nvidia_container_t --rm nvcr.io/nvidia/cuda nvidia-smi\n\n## Disclaimer\nThese SELinux policies have only been verified on DGX-1 and DGX-2 on RHEL 7.5 and 7.6.  They are meant to be used as a reference for RHEL-based non-DGX platforms, not verbatim.\n"
+    },
+    {
+      "path": "src/nvidia-container-selinux/Makefile",
+      "sha": null,
+      "content_sha256": "c32d9d3c09ce1b9c3feeefe58685fe9c183d4c8d8ba3e1e5c32c0dcf1f3824ac",
+      "score": 81,
+      "content": "TARGET?=nvidia-container\nMODULES?=${TARGET:=.pp.bz2}\nSHAREDIR?=/usr/share\n\nall: ${TARGET:=.pp.bz2}\n\n%.pp.bz2: %.pp\n\t@echo Compressing $^ -\\> $@\n\tbzip2 -9 $^\n\n%.pp: %.te\n\tmake -f ${SHAREDIR}/selinux/devel/Makefile $@\n\nclean:\n\trm -f *~  *.tc *.pp *.pp.bz2\n\trm -rf tmp *.tar.gz\n\nman: install-policy\n\tsepolicy manpage --path . --domain ${TARGET}_t\n\ninstall-policy: all\n\tsemodule -i ${TARGET}.pp.bz2\n\ninstall: man\n\tinstall -D -m 644 ${TARGET}.pp.bz2 ${DESTDIR}${SHAREDIR}/selinux/packages/${TARGET}.pp.bz2\n\tinstall -D -m 644 ${TARGET}.if ${DESTDIR}${SHAREDIR}/selinux/devel/include/contrib/${TARGET}.if\n\tinstall -D -m 644 ${TARGET}_selinux.8 ${DESTDIR}${SHAREDIR}/man/man8/\n"
+    },
+    {
+      "path": "src/nvidia-dgxcache-selinux/nvidia-dgxcache.te",
+      "sha": null,
+      "content_sha256": "87cd7549e43a578534f1b20ed96fd7643f2f89879810e9828644bfdd2989910c",
+      "score": 54,
+      "content": "# /usr/share/selinux/devel/include\n\npolicy_module(nvidia-dgxcache, 1.0)\nrequire { type cachefiles_var_t; }\n\n"
+    },
+    {
+      "path": "src/nvidia-dgxcache-selinux/nvidia-dgxcache.if",
+      "sha": null,
+      "content_sha256": "448717b73253768708a65b5d3835fb78df1f3f40921eee02923424390532eeca",
+      "score": 54,
+      "content": "##\nMy app service.\n"
+    },
+    {
+      "path": "src/nvidia-dgxcache-selinux/nvidia-dgxcache.fc",
+      "sha": null,
+      "content_sha256": "4f45a9ae09195ffd18559006e482eb0a6f50c3a9a023ecd41925a0b786a2fb6d",
+      "score": 54,
+      "content": "/raid(/.*)? gen_context(system_u:object_r:cachefiles_var_t,s0)\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:24.694434+00:00"
+}

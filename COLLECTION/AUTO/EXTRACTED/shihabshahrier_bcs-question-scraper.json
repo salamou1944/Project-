@@ -1,0 +1,52 @@
+{
+  "canonical_source": "github:shihabshahrier/bcs-question-scraper",
+  "repo": "shihabshahrier/bcs-question-scraper",
+  "revision_sha": "20a42630ef58952e770b4edd4479357697579519",
+  "default_branch": "master",
+  "pushed_at": "2025-05-03T12:31:09Z",
+  "repo_updated_at": "2026-06-02T18:47:29Z",
+  "license": null,
+  "topics": [
+    "bangladesh",
+    "bcs",
+    "csv",
+    "dataset",
+    "education",
+    "exam-questions",
+    "python",
+    "web-scraping"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "a6d37f336a02bc3ceecf3573dd744d863241f624b9866efbbe8c55931350dcd7",
+      "score": 100,
+      "content": "# BCS Question Scraper\n\nA Python script to scrape BCS (Bangladesh Civil Service) preliminary exam questions from 10minuteschool.com. The script downloads questions from BCS 10th to 43rd and saves them in a structured CSV format.\n\n## Features\n\n- Downloads question pages for BCS exams (10th to 43rd)\n- Handles different URL slug patterns\n- Parses questions, options, correct answers, and explanations\n- Saves data in CSV format with structured columns\n- Includes retry logic for different URL patterns\n- Respects rate limiting with delays between requests\n\n## Requirements\n\n```\nrequests\nbeautifulsoup4\npandas\n```\n\nInstall dependencies using:\n\n```sh\npip install -r requirements.txt\n```\n\n## Usage\n\n1. Run the script:\n```sh\npython main.py\n```\n\n2. The script will:\n   - Create a `downloaded_html` directory for cached HTML files\n   - Download question pages for each BCS exam\n   - Parse the content and extract structured data\n   - Save results to `bcs_10_to_43.csv`\n\n## Output Format\n\nThe generated CSV file contains the following columns:\n- bcs_number: The BCS exam number\n- question: The question text\n- option_a: First option\n- option_b: Second option\n- option_c: Third option\n- option_d: Fourth option\n- correct_option: The correct answer (A, B, C, or D)\n- explanation: Explanation for the correct answer\n\n## Notes\n\n- The script uses a delay between requests to avoid overwhelming the server\n- Already downloaded files are skipped to avoid unnecessary requests\n- Multiple URL patterns are tried for each exam year"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "6ca44435be156d6311aedf4bdf53b46c4275475216e40278dfd60a6d15e837eb",
+      "score": 85,
+      "content": "beautifulsoup4==4.13.4\ncertifi==2025.4.26\ncharset-normalizer==3.4.2\nidna==3.10\nlxml==5.4.0\nnumpy==2.2.5\npandas==2.2.3\npython-dateutil==2.9.0.post0\npytz==2025.2\nrequests==2.32.3\nsix==1.17.0\nsoupsieve==2.7\ntyping_extensions==4.13.2\ntzdata==2025.2\nurllib3==2.4.0\n"
+    },
+    {
+      "path": "main.py",
+      "sha": null,
+      "content_sha256": "fa85bafb3e2edf84992d70db41e51ee1abf4d1f14259117468e2c327f5848be4",
+      "score": 35,
+      "content": "import os\nimport time\nimport requests\nfrom bs4 import BeautifulSoup\nimport pandas as pd\n\n# 1. CONFIGURATION\n\n# Years to scrape\nYEARS = list(range(10, 44))  # 10 through 43\nBASE_URL = \"https://10minuteschool.com/content/{slug}/\"\nDOWNLOAD_DIR = \"downloaded_html\"\nOUTPUT_CSV = \"bcs_10_to_43.csv\"\n\nHEADERS = {\n    \"User-Agent\": (\n        \"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \"\n        \"AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15\"\n    )\n}\n\nos.makedirs(DOWNLOAD_DIR, exist_ok=True)\n\n\ndef ordinal_suffix(n):\n    if 11 <= n % 100 <= 13:\n        return \"th\"\n    return {1: \"st\", 2: \"nd\", 3: \"rd\"}.get(n % 10, \"th\")\n\n\ndef try_download(year):\n    \"\"\"\n    Try slug variants for a given year:\n    1) question-bank\n    2) preli-question-bank\n    3) mcq-question-bank \n    Returns the slug used or None.\n    \"\"\"\n    suffix = ordinal_suffix(year)\n    base = f\"{year}{suffix}-bcs\"\n    candidates = [\n        f\"{base}-question-bank\",\n        f\"{base}-preli-question-bank\",\n        f\"{base}-mcq-question-bank\"\n    ]\n    if year == 33:\n        candidates.append(f\"33nd-bcs-mcq-question-bank\")\n    if year == 39:\n        candidates.append(f\"39st-bcs-preli-question-bank\")\n    if year == 41:\n        candidates.append(f\"41st-bcs-mcq-qbank\")\n\n    for slug in candidates:\n        url = BASE_URL.format(slug=slug)\n        local_path = os.path.join(DOWNLOAD_DIR, f\"{year}.html\")\n\n        if os.path.exists(local_path):\n            print(f\"[SKIP] {year}.html already exists (slug `{slug}`)\")\n            return slug\n\n        print(f\"[TRY] Download BCS {year} with slug `{slug}` → {url}\")\n        resp = requests.get(url, headers=HEADERS)\n        if resp.status_code == 200:\n            with open(local_path, \"w\", encoding=\"utf-8\") as f:\n                f.write(resp.text)\n            print(f\"[OK]  Saved as {year}.html\")\n            time.sleep(2)\n            return slug\n        else:\n            print(f\"  ↳ Failed ({resp.status_code}) with `{slug}`\")\n\n    print(f\"[ERROR] Could not download BCS {year} with any slug\")\n    return None\n\n\ndef download_all():\n    used = {}\n    for year in YEARS:\n        slug = try_download(year)\n        if slug:\n            used[year] = slug\n    return used\n\n\ndef parse_all(used_slugs):\n    records = []\n    for year in sorted(used_slugs):\n        path = os.path.join(DOWNLOAD_DIR, f\"{year}.html\")\n        if not os.path.exists(path):\n            continue\n\n        print(f\"[PARSE] {year}.html\")\n        soup = BeautifulSoup(open(path, encoding=\"utf-8\"), \"html.parser\")\n        table = soup.find(\"table\")\n        if not table:\n            print(f\"  → No <table> found in {year}.html\")\n            continue\n\n        rows = table.find_all(\"tr\")\n        question, options, correct = None, [], None\n\n        for row in rows:\n            cols = row.find_all(\"td\")\n            # Single-cell: question or explanation\n            if len(cols) == 1 and cols[0].get(\"colspan\") == \"4\":\n                text = cols[0].get_text(strip=True)\n                if text.startswith(\"Explanation\"):\n                    records.append({\n                        \"bcs_number\": year,\n                        \"question\": question,\n                        \"option_a\": options[0] if len(options)>0 else \"\",\n                        \"option_b\": options[1] if len(options)>1 else \"\",\n                        \"option_c\": options[2] if len(options)>2 else \"\",\n                        \"option_d\": options[3] if len(options)>3 else \"\",\n                        \"correct_option\": correct,\n                        \"explanation\": text.replace(\"Explanation :\", \"\").strip(),\n                    })\n                    question, options, correct = None, [], None\n                else:\n                    question = text\n            # Four-cell row: options\n            elif len(cols) == 4:\n                for idx, col in enumerate(cols):\n                    opt = col.get_text(strip=True)\n                    options.append(opt)\n                    if col.find(\"strong\"):\n                        correct = [\"A\",\"B\",\"C\",\"D\"][idx]\n\n    return records\n\n\nif __name__ == \"__main__\":\n    slugs_used = download_all()\n    data = parse_all(slugs_used)\n    df = pd.DataFrame(data)\n    df.to_csv(OUTPUT_CSV, index=False, encoding=\"utf-8\")\n    print(f\"\\nDone: {len(df)} questions saved to {OUTPUT_CSV}\")\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:51.876872+00:00"
+}

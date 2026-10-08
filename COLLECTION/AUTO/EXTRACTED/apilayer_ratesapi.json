@@ -1,0 +1,72 @@
+{
+  "canonical_source": "github:apilayer/ratesapi",
+  "repo": "apilayer/ratesapi",
+  "revision_sha": "28ab63ccd4881cc8a3c280c0d58efc37d5e43791",
+  "default_branch": "master",
+  "pushed_at": "2024-04-08T16:09:53Z",
+  "repo_updated_at": "2026-08-20T11:20:39Z",
+  "license": "MIT",
+  "topics": [
+    "api",
+    "currency-conversion",
+    "currency-converter",
+    "currency-exchange",
+    "currency-exchange-rates",
+    "currency-rates",
+    "forex"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "eeee1072d93f540ef2db44de2587836364e7ee33546f2474224d0619db7ccde6",
+      "score": 120,
+      "content": "{\n  \"name\": \"ratesapi.io\",\n  \"version\": \"1.0.0\",\n  \"description\": \"\",\n  \"main\": \"api.js\",\n  \"scripts\": {\n    \"test\": \"echo \\\"Error: no test specified\\\" && exit 1\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git@git.micropyramid.com:mp/pricesapi.io.git\"\n  },\n  \"author\": \"\",\n  \"license\": \"ISC\",\n  \"dependencies\": {\n    \"mongodb\": \"^3.0.7\",\n    \"nodemon\": \"^1.17.5\"\n  }\n}\n"
+    },
+    {
+      "path": "api.js",
+      "sha": null,
+      "content_sha256": "6b174be6b46e971d0a9d49dd1bdb345f02fcc97a9d4af29d935a33b448d8fe00",
+      "score": 110,
+      "content": "var MongoClient = require('mongodb').MongoClient;\nvar http = require('http');\nvar url = require('url');\nvar fs = require('fs');\n\nvar db_url = \"mongodb://localhost:27017/currency\";\n\nhttp.createServer(function (req, res) {\n    var q = url.parse(req.url, true);\n    pathname = url.parse(req.url).pathname;\n    if (pathname.match(/^\\/style.css\\/$/) || pathname.match(/^\\/style.css$/)) {\n        res.writeHead(200, {'Content-type' : 'text/css'});\n        var fileContents = fs.readFileSync('./style.css', {encoding: 'utf8'});\n        res.write(fileContents);\n        res.end();\n    }\n    else if (req.url === '/'){\n        fs.readFile('./home.html', null, function(err, data){\n            if(err){\n                res.writeHead(404);\n                res.write('Contents you are looking are Not Found');\n                res.end();\n            }else{\n                res.write(data);\n                res.end();\n            }\n        });\n    }\n    else if (pathname.match(/^\\/api\\/latest\\/$/) || pathname.match(/^\\/api\\/latest$/)){\n        MongoClient.connect(db_url, function(err, dbo) {\n        var db = dbo.db(\"currency\");\n        var collection = db.collection('prices');\n        fields = {base:1, date:1, _id:0, rates: 1}\n        query = {'base': \"EUR\"}\n\n        if(q.query['base']){\n            query = {'base': q.query['base'].toUpperCase()}\n        }\n        if(q.query['symbols']){\n            fields = {base:1, date:1, _id:0}\n            symbols = q.query['symbols'].split(',')\n            for (each in symbols){\n                symbol = 'rates.' + symbols[each].toUpperCase()\n                fields[symbol] = 1;\n            }\n        }\n        var cursor = collection.find(query, {fields: fields}).sort({\"date\": -1}).limit(1).toArray(function(err, result) {\n            if (err) throw err;\n            dbo.close();\n            if(result[0]){\n                res.writeHead(200, {'Content-Type': 'text/json'});\n                res.write(JSON.stringify(result[0]));\n            }else{\n                res.writeHead(400, {'Content-Type': 'text/json'});\n                res.write(JSON.stringify({\"error\":\"Invalid base or symbols\"}))\n            }\n            res.end();\n            });\n        });\n\n    }else if (pathname.match(/^\\/api\\/\\d{4}([./-])\\d{2}\\1\\d{2}$/)){\n        MongoClient.connect(db_url, function(err, dbo) {\n          var db = dbo.db(\"currency\");\n          var collection = db.collection('prices');\n            fields = {base:1, date:1, _id:0, rates: 1}\n            query = {'base': \"EUR\", 'date': { $lte: req.url.split('/api/')[1].split('?')[0].toString() } }\n            if(q.query['base']){\n                query['base']= q.query['base'].toUpperCase()\n            }\n            if(q.query['symbols']){\n                fields = {base:1, date:1, _id:0}\n                symbols = q.query['symbols'].split(',')\n                for (each in symbols){\n                    symbol = 'rates.' + symbols[each].toUpperCase()\n                    fields[symbol] = 1;\n                }\n            }\n          var cursor = collection.find(query, {fields: fields}).sort({date: -1}).toArray(function(err, result) {\n            if (err){\n                throw err;\n            }\n            dbo.close();\n            if(result[0]){\n                res.writeHead(200, {'Content-Type': 'application/json'});\n                res.write(JSON.stringify(result[0]));\n            }else{\n                res.writeHead(400, {'Content-Type': 'application/json'});\n                res.write(JSON.stringify({\"error\":\"Invalid base or symbols\"}))\n            }\n            res.end();\n          });\n        });\n    }else{\n        res.writeHead(404);\n        res.write('Contents you are looking are Not Found');\n        res.end();\n  }\n}).listen(8080);\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "066ae7305750f35ca113b435c2d8d89419c65fcc2cbcdc2ffc649e0d56e71907",
+      "score": 100,
+      "content": "# foreign exchange rates api\n\nratesapi is a free API for present and historical foreign exchange rates. We developed this service by reading public data from [European Central Bank](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html).\n\n**Note**: The reference rates are usually updated around 16:00 CET on every working day.\n\n## Usage\n\n* Latest Rates based on EUR\n```\nURL: https://ratesapi.io/api/latest\n\n{\"base\":\"EUR\",\"date\":\"2018-04-20\",\"rates\":{\"AUD\":1.5983,\"BGN\":1.9558,\"BRL\":4.1892,\"CAD\":1.5557,\"CHF\":1.197,\"CNY\":7.7449,\"CZK\":25.34,\"DKK\":7.4477,\"GBP\":0.87608,\"HKD\":9.6568,\"HRK\":7.411,\"HUF\":310.52,\"IDR\":17142.74,\"ILS\":4.3435,\"INR\":81.39,\"ISK\":123.3,\"JPY\":132.41,\"KRW\":1316.26,\"MXN\":22.7424,\"MYR\":4.7924,\"NOK\":9.605,\"NZD\":1.7032,\"PHP\":64.179,\"PLN\":4.1677,\"RON\":4.6586,\"RUB\":75.7375,\"SEK\":10.3703,\"SGD\":1.6172,\"THB\":38.552,\"TRY\":4.9803,\"USD\":1.2309,\"ZAR\":14.8008}}%                       \n```\n\n* Latest Rates based on USD\n```\nURL: https://ratesapi.io/api/latest?base=USD\n\n{\"base\":\"USD\",\"date\":\"2018-04-20\",\"rates\":{\"AUD\":1.2985,\"BGN\":1.5889,\"BRL\":3.4034,\"CAD\":1.2639,\"CHF\":0.9725,\"CNY\":6.2921,\"CZK\":20.5866,\"DKK\":6.0506,\"EUR\":0.8124,\"GBP\":0.7117,\"HKD\":7.8453,\"HRK\":6.0208,\"HUF\":252.2707,\"IDR\":13926.9965,\"ILS\":3.5287,\"INR\":66.1223,\"ISK\":100.1706,\"JPY\":107.5717,\"KRW\":1069.3476,\"MXN\":18.4762,\"MYR\":3.8934,\"NOK\":7.8032,\"NZD\":1.3837,\"PHP\":52.1399,\"PLN\":3.3859,\"RON\":3.7847,\"RUB\":61.5302,\"SEK\":8.425,\"SGD\":1.3138,\"THB\":31.3202,\"TRY\":4.0461,\"ZAR\":12.0244}}\n```\n\n* Get Rates based on Date\n```\nURL https://ratesapi.io/api/2008-12-10\n\n{\"base\":\"EUR\",\"date\":\"2008-12-10\",\"rates\":{\"AUD\":3.2406,\"BRL\":1.6295,\"CAD\":8.8708,\"CNY\":10.0171,\"CYP\":25.9,\"CZK\":7.4499,\"DKK\":15.6466,\"EEK\":0.87325,\"GBP\":263.75,\"HKD\":14185.19,\"HRK\":36.0941,\"HUF\":3.4528,\"INR\":1790.76,\"ISK\":9.1285,\"JPY\":1.9558,\"KRW\":17.4681,\"LTL\":0.7092,\"MTL\":3.9566,\"MXN\":4.6724,\"MYR\":2.3696,\"NOK\":7.1923,\"NZD\":62.47,\"PHP\":1.9393,\"ROL\":3.878,\"RON\":10.567,\"SGD\":45.748,\"SIT\":30.189,\"SKK\":1.5587,\"TRL\":2.028,\"TRY\":1.9665,\"USD\":119.77}}\n```\n\n* Get Rates using base and symbol\n\n```\nhttps://ratesapi.io/api/latest?base=USD&symbols=INR,GBP\n\n{\"base\":\"USD\",\"date\":\"2018-04-20\",\"rates\":{\"GBP\":0.7117,\"INR\":66.1223}}\n```\n\n# Support and feature requests:\n\nWe welcome your feedback and support, raise [github ticket](https://github.com/MicroPyramid/ratesapi/issues) if you want to report a bug. Need new features? Contact us [here](https://micropyramid.com/contact-usa/)\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "f2029e3a82f15dfeb1c03daa3fa1acb4844fe5b9455b2cef7e0f8ca7465a0eb1",
+      "score": 85,
+      "content": "pkg-resources==0.0.0\npymongo==3.6.1\n"
+    },
+    {
+      "path": "scripts/fetcher.py",
+      "sha": null,
+      "content_sha256": "46b8990f914b9fb8894eb436e5a0f2f98f65e90873ac60a754bf328a36c6b57c",
+      "score": 33,
+      "content": "import urllib2\nfrom xml.dom.minidom import parse\nimport json\nfrom collections import OrderedDict\nfrom pymongo import MongoClient\n\nclient = MongoClient('localhost', 27017)\ndb = client['currency']\ndb_prices = db['prices']\n\nu1 = urllib2.urlopen('http://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml')\ndom = parse(u1)\n\nitemlist = dom.getElementsByTagName('Cube')\ncur = []\nrates = []\nfor s in itemlist:\n    try:\n        cur.append(str(s.attributes['currency'].value))\n        rates.append(float(s.attributes['rate'].value))\n    except:\n        try:\n            rates.remove(float(s.attributes['currency'].value))\n        except:\n            pass\n\nfor s in itemlist:\n    try:\n        date = (str(s.attributes['time'].value))\n    except:\n        pass\n\n\ndef my_price(source, target):\n    my = float(target) / float(source)\n    return float(\"{0:.4f}\".format(my))\n\n\ndef dict_gen(row, currency, currency_codes, date):\n    d = OrderedDict()\n\n    d['base'] = currency\n    d['date'] = date\n    rates = OrderedDict()\n    i = 0\n\n    if currency == \"EUR\":\n        for code in currency_codes:\n            rates[code] = float(row[i])\n            i += 1\n\n    else:\n        currency_index = currency_codes.index(currency)\n        rates['EUR'] = my_price(row[currency_index], 1)\n        for code in currency_codes:\n\n            if code == currency:\n                i += 1\n                continue\n            rates[code] = my_price(row[currency_index], row[i])\n            i += 1\n\n    rates = OrderedDict(sorted(rates.iteritems()))\n    d['rates'] = rates\n    return d\n\n\nif not db_prices.find({\"date\": date}).count():\n\n    new_line, new_codes = rates[:], cur[:]\n\n    #  for EUR\n    eur_new_line, eur_new_codes = rates[:], cur[:]\n\n    eur_ = dict_gen(eur_new_line, currency=\"EUR\", currency_codes=eur_new_codes, date=date)\n    print (json.dumps(eur_))\n    db_prices.insert_one(eur_)\n    #  end EUR block\n\n    for code in new_codes:\n        temp_row = new_line[:]\n        record = dict_gen(temp_row, currency=code, currency_codes=new_codes, date=date)\n        db_prices.insert_one(record)\n"
+    },
+    {
+      "path": "scripts/pusher.py",
+      "sha": null,
+      "content_sha256": "c7f865c54f46a232d7f696a8f07286ecc789e6e4a4bf2dcd4054af070604a91c",
+      "score": 33,
+      "content": "import csv\nimport json\nfrom collections import OrderedDict\nfrom pymongo import MongoClient\n\nclient = MongoClient('localhost', 27017)\ndb = client['currency']\ndb_prices = db['prices']\n\ncodes = ['USD', 'JPY', 'BGN', 'CYP', 'CZK', 'DKK', 'EEK', 'GBP', 'HUF', 'LTL', 'LVL', 'MTL', 'PLN', 'ROL', 'RON', 'SEK', 'SIT', 'SKK',\n         'CHF', 'ISK', 'NOK', 'HRK', 'RUB', 'TRL', 'TRY', 'AUD', 'BRL', 'CAD', 'CNY', 'HKD', 'IDR', 'ILS', 'INR', 'KRW', 'MXN', 'MYR',\n         'NZD', 'PHP', 'SGD', 'THB', 'ZAR']\n\n\ndef get_cleaned(line, codes, date):\n    i = 0\n    new_line = []\n    new_codes = []\n    if not date:\n        del line[0]\n    del line[-1]\n    for x in line:\n        if x != 'N/A':\n            new_codes.append(codes[i])\n            new_line.append(line[i])\n\n        i += 1\n    return new_line, new_codes\n\n\ndef my_price(source, target):\n    my = float(target) / float(source)\n    return float(\"{0:.4f}\".format(my))\n\n\ndef dict_gen(row, currency, currency_codes, date):\n    d = OrderedDict()\n\n    d['base'] = currency\n    d['date'] = date\n    rates = OrderedDict()\n    i = 0\n\n    if currency == \"EUR\":\n        for code in currency_codes:\n            rates[code] = float(row[i])\n            i += 1\n\n    else:\n        currency_index = currency_codes.index(currency)\n        rates['EUR'] = my_price(row[currency_index], 1)\n        for code in currency_codes:\n\n            if code == currency:\n                i += 1\n                continue\n            rates[code] = my_price(row[currency_index], row[i])\n            i += 1\n\n    rates = OrderedDict(sorted(rates.iteritems()))\n    d['rates'] = rates\n    return d\n\n\nwith open('eurofxref-hist.csv', 'rb') as csvfile:\n    spamreader = csv.reader(csvfile, delimiter=',', quotechar='|')\n    x = 0\n    for row in spamreader:\n        date = row[0]\n        new_line, new_codes = get_cleaned(row, codes, '')\n\n        if x == 0:\n            x += 1\n            continue\n\n        #  for EUR\n\n        eur_new_line, eur_new_codes = get_cleaned(row[:], codes[:], date)\n        eur_ = dict_gen(eur_new_line, currency=\"EUR\", currency_codes=eur_new_codes, date=date)\n\n        db_prices.insert_one(eur_)\n        #  end EUR block\n\n        for code in new_codes:\n            temp_row = new_line[:]\n            record = dict_gen(temp_row, currency=code, currency_codes=new_codes, date=date)\n            db_prices.insert_one(record)\n\n        x += 1\n        # if x == 2:\n        #     break\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:16.665244+00:00"
+}

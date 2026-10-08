@@ -1,0 +1,78 @@
+{
+  "canonical_source": "github:apilayer/pdfinfo",
+  "repo": "apilayer/pdfinfo",
+  "revision_sha": "5196aa0c41523fdc09c7c89a467d7cc0a7b9729e",
+  "default_branch": "master",
+  "pushed_at": "2019-05-27T11:22:29Z",
+  "repo_updated_at": "2025-01-10T14:33:59Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "composer.json",
+      "sha": null,
+      "content_sha256": "5b8b0c916a098748a723d9cc93e817dff3fcbb53dcf5e958ceeb3b8874d8055f",
+      "score": 120,
+      "content": "{\n    \"name\": \"apilayer/pdfinfo\",\n    \"type\": \"library\",\n    \"description\": \"pdfinfo PHP wrapper\",\n    \"keywords\": [\"pdf\", \"pdfinfo\"],\n    \"license\": \"MIT\",\n    \"autoload\": {\n        \"psr-4\": {\n            \"apilayer\\\\PDFInfo\\\\\": \"src/\"\n        }\n    }\n}\n"
+    },
+    {
+      "path": "src/Exceptions/PDFPermissionException.php",
+      "sha": null,
+      "content_sha256": "f9813a620bbbee649184402f12cc3714cd2b631842761cfa825680485d954613",
+      "score": 111,
+      "content": "<?php\nnamespace apilayer\\PDFInfo\\Exceptions;\n\nuse \\Exception;\n\nclass PDFPermissionException extends Exception{};\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "2806d6b3fb35a35b6e02619b4406c3d55c79ac67cf784018209e3551c6d8cb57",
+      "score": 100,
+      "content": "Simple PHP wrapper to the pdfinfo unix tool.\n\nInspired by http://stackoverflow.com/questions/14644353/get-the-number-of-pages-in-a-pdf-document/14644354\n\n# What is pdfinfo\n\npdfinfo is an unix tool helping extract information from pdf files.\n\nhttp://linuxcommand.org/man_pages/pdfinfo1.html\n\nYou can get metadata, page count and rotation for every page, etc.\n\n# Installation\n\n## 1. Install pdfinfo\n\nFirst you need to have pdfinfo in your system.\n\nFor ubuntu, there's an easy way for doing this:\n```\nsudo apt-get install poppler-utils\n```\n\n## 2. Install the library\nYou can just download the file to your project, or install it via composer:\n```\ncomposer require apilayer/pdfinfo\n```\n\n# Usage\nJust pass the path to the pdf file to the constructor, and you can get metadata from its properties immediately:\n\n```php\n$pdf = new PDFInfo('path/to/the/pdf');\necho $pdf->title; // Get the title\necho $pdf->pages; // Get the number of pages\n```\n\n# Exceptions\nThis library throws 4 kind of exceptions to represent the official exit codes.\n* OpenPDFException    \n* OpenOutputException\n* PDFPermissionException\n* OtherException\n\nCheck the [official documentation](https://www.xpdfreader.com/pdfinfo-man.html) for more information.\n\n\n\n# Reference\n\nCurrently this library supports the following metadata:\n\n* title\n* author\n* creator\n* producer\n* creationDate\n* modDate\n* tagged\n* form\n* pages\n* encrypted\n* pageSize\n* pageSizes\n* fileSize\n* optimized\n* PDFVersion\n* pageRot\n* pageRots\n\nEnvironment variables configuration:\n\n* `PDFINFO_BIN` - location of PDFInfo executable\n* `PDFINFO_PAGE_LIMIT` - last page to process, defaults to 999\n"
+    },
+    {
+      "path": "src/PDFInfo.php",
+      "sha": null,
+      "content_sha256": "8532ab30c1c540ea878ff5801abb8588cd1ac2c474fabc2c53b4cc6077522b7e",
+      "score": 33,
+      "content": "<?php\n\nnamespace apilayer\\PDFInfo;\n\n/*\n* Inspired by http://stackoverflow.com/questions/14644353/get-the-number-of-pages-in-a-pdf-document/14644354\n* @author howtomakeaturn\n*/\n\nuse stdClass;\n\nclass PDFInfo\n{\n    protected $file;\n    public $attributes, $output;\n    public static $bin;\n\n    /**\n     * PDFInfo constructor.\n     * @param $file\n     * @throws Exceptions\\OpenOutputException\n     * @throws Exceptions\\OpenPDFException\n     * @throws Exceptions\\OtherException\n     * @throws Exceptions\\PDFPermissionException\n     */\n    public function __construct($file)\n    {\n        $this->attributes = new stdClass;\n        $this->file = $file;\n\n        $this->loadOutput();\n\n        $this->parseOutput();\n    }\n\n    public function __get($field)\n    {\n        return property_exists($this->attributes, $field) ?\n            $this->attributes->{$field} :\n            null;\n    }\n\n    public function getBinary()\n    {\n        if (empty(static::$bin)) {\n            static::$bin = trim(trim(getenv('PDFINFO_BIN'), '\\\\/\" \\'')) ?: 'pdfinfo';\n        }\n\n        return static::$bin;\n    }\n\n    /**\n     * @throws Exceptions\\OpenOutputException\n     * @throws Exceptions\\OpenPDFException\n     * @throws Exceptions\\OtherException\n     * @throws Exceptions\\PDFPermissionException\n     */\n    private function loadOutput()\n    {\n        $cmd = escapeshellarg($this->getBinary()); // escapeshellarg to work with Windows paths with spaces.\n\n        $file = escapeshellarg($this->file);\n\n        $page_limit = intval(getenv('PDFINFO_PAGE_LIMIT')) ?: 999;\n\n        // Parse entire output\n        // Surround with double quotes if file name has spaces\n        exec(\"$cmd -l $page_limit $file\", $output, $returnVar);\n\n        if ($returnVar === 1) {\n            throw new Exceptions\\OpenPDFException();\n        } elseif ($returnVar === 2) {\n            throw new Exceptions\\OpenOutputException();\n        } elseif ($returnVar === 3) {\n            throw new Exceptions\\PDFPermissionException();\n        } elseif ($returnVar === 99) {\n            throw new Exceptions\\OtherException();\n        }\n\n        $this->output = $output;\n    }\n\n    private function parseOutput()\n    {\n        foreach ($this->output as $output_line) {\n            list($key, $value) = explode(':', $output_line, 2);\n\n            if (preg_match('/\\b(?<number>\\d+)\\b/', $key, $key_matches)) {\n                $key = str_replace($key_matches['number'], '', $key);\n            }\n\n            $key = $this->formatKey($key);\n            $value = $this->formatValue($value);\n\n            // Only set attributes once\n            if (!property_exists($this->attributes, $key)) {\n                $this->attributes->{$key} = $value;\n            }\n\n            // Attributes for multiple pages\n            if (isset($key_matches['number'])) {\n                if (!property_exists($this->attributes, \"${key}s\")) {\n                    $this->attributes->{\"${key}s\"} = new stdClass;\n                }\n                $this->attributes->{\"${key}s\"}->{$key_matches['number']} = $value;\n            }\n        }\n\n        // Compatibility with version 4.0 which has page rotation data inside of page size\n        $rot_pattern = '/\\(rot\\w+\\s(?<degrees>\\d+)\\s\\w+\\)$$/';\n        $rot_replace = '/\\s+\\([^\\)]+\\)$/';\n\n        if (is_null($this->pageRot) && $this->pageSize && preg_match($rot_pattern, $this->pageSize, $rot_matches)) {\n            $this->attributes->{'pageRot'} = $rot_matches['degrees'];\n            $this->attributes->{'pageSize'} = preg_replace($rot_replace, '', $this->pageSize);\n\n            // Also process attributes for all pages\n            if (property_exists($this->attributes, 'pageSizes')) {\n                foreach ($this->pageSizes as $page_number => $page_size) {\n                    preg_match($rot_pattern, $page_size, $page_matches);\n                    if (isset($page_matches['degrees'])) {\n                        if (!property_exists($this->attributes, 'pageRots')) {\n                            $this->attributes->{'pageRots'} = new stdClass;\n                        }\n                        $this->attributes->{'pageRots'}->{$page_number} = $page_matches['degrees'];\n                        $this->attributes->{'pageSizes'}->{$page_number} = preg_replace($rot_replace, '',\n                            $this->pageSizes->{$page_number});\n                    }\n                }\n            }\n        }\n    }\n\n    private function formatKey($string)\n    {\n        return preg_replace_callback('/^([A-Z])(?![A-Z])/', function ($m) {\n            return strtolower($m[1]);\n        }, preg_replace('/\\s+/', '', ucwords($string)));\n    }\n\n    private function formatValue($string)\n    {\n        return trim(preg_replace('/\\s+/', ' ', $string));\n    }\n}\n"
+    },
+    {
+      "path": "examples/example.php",
+      "sha": null,
+      "content_sha256": "50c5f9a775b144aa885702af19f641cf76fa5732fcc818e8fe54d537bcb207bb",
+      "score": 33,
+      "content": "<?php\nrequire_once('../vendor/autoload.php');\n\nuse apilayer\\PDFInfo\\PDFInfo;\n\n$pdf = new PDFInfo('files/Sample.pdf');\n\necho 'Title: ', $pdf->title, '<hr />', PHP_EOL;\necho 'Author: ', $pdf->author, '<hr />', PHP_EOL;\necho 'Creator: ', $pdf->creator, '<hr />', PHP_EOL;\necho 'Producer: ', $pdf->producer, '<hr />', PHP_EOL;\necho 'Creation date: ', $pdf->creationDate, '<hr />', PHP_EOL;\necho 'Last modified date: ', $pdf->modDate, '<hr />', PHP_EOL;\necho 'Tagged: ', $pdf->tagged, '<hr />', PHP_EOL;\necho 'Form: ', $pdf->form, '<hr />', PHP_EOL;\necho 'Pages: ', $pdf->pages, '<hr />', PHP_EOL;\necho 'Encrypted: ', $pdf->encrypted, '<hr />', PHP_EOL;\necho 'Page size: ', $pdf->pageSize, '<hr />', PHP_EOL;\necho 'Page rotation: ', $pdf->pageRot, '<hr />', PHP_EOL;\necho 'File size: ', $pdf->fileSize, '<hr />', PHP_EOL;\necho 'Optimized: ', $pdf->optimized, '<hr />', PHP_EOL;\necho 'PDF Version: ', $pdf->PDFVersion, '<hr />', PHP_EOL;\n"
+    },
+    {
+      "path": "src/Exceptions/OpenOutputException.php",
+      "sha": null,
+      "content_sha256": "419e0d55dd3e74636de47e67aba826ff37ae01afe8bf89f093cee3f712c7bb97",
+      "score": 31,
+      "content": "<?php\nnamespace apilayer\\PDFInfo\\Exceptions;\n\nuse \\Exception;\n\nclass OpenOutputException extends Exception{};\n"
+    },
+    {
+      "path": "src/Exceptions/OpenPDFException.php",
+      "sha": null,
+      "content_sha256": "08fbfefee30fde91860a5204373fa457ed99aa2ea1de2ed50bb358ecbe3778a9",
+      "score": 31,
+      "content": "<?php\nnamespace apilayer\\PDFInfo\\Exceptions;\n\nuse \\Exception;\n\nclass OpenPDFException extends Exception{};\n"
+    },
+    {
+      "path": "src/Exceptions/OtherException.php",
+      "sha": null,
+      "content_sha256": "efa1214c0addda28ee7978276c728f4fabc81f9feb999721789f97d9c2f7159f",
+      "score": 31,
+      "content": "<?php\nnamespace apilayer\\PDFInfo\\Exceptions;\n\nuse \\Exception;\n\nclass OtherException extends Exception{};\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:16.702412+00:00"
+}

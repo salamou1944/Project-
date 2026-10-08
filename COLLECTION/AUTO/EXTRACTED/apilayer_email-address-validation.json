@@ -1,0 +1,127 @@
+{
+  "canonical_source": "github:apilayer/email-address-validation",
+  "repo": "apilayer/email-address-validation",
+  "revision_sha": "547ac31aea98dae02031b4ca4b977f45458ddae1",
+  "default_branch": "master",
+  "pushed_at": "2016-02-10T17:05:18Z",
+  "repo_updated_at": "2024-06-20T17:00:31Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "3494b7b8fdacfa320c0e6a56311e4785e9e0ace904cdffb415fb46d9fbde984c",
+      "score": 120,
+      "content": "{\n  \"name\": \"email-address-validation\",\n  \"version\": \"0.2.1\",\n  \"description\": \"Email Validation & Verification JSON API for Developers. Simple REST API measuring email deliverability & quality\",\n  \"main\": \"index.js\",\n  \"scripts\": {\n    \"test\": \"mocha test\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/apilayer/email-address-validation.git\"\n  },\n  \"keywords\": [\n    \"email validation\",\n    \"email validation api\",\n    \"email verify api\"\n  ],\n  \"author\": \"Peter Andreas Moelgaard <admin@petermolgard.com> (http://petermolgaard.com/)\",\n  \"license\": \"MIT\",\n  \"bugs\": {\n    \"url\": \"https://github.com/apilayer/email-address-validation/issues\"\n  },\n  \"homepage\": \"https://github.com/apilayer/email-address-validation#readme\",\n  \"devDependencies\": {\n    \"mocha\": \"^2.3.4\",\n    \"chai\": \"^3.4.1\",\n    \"dotenv\": \"^2.0.0\"\n  },\n  \"dependencies\": {\n    \"async\": \"^1.5.2\",\n    \"lodash\": \"^4.0.1\",\n    \"promise\": \"^7.1.1\",\n    \"request\": \"^2.69.0\"\n  },\n  \"tonicExampleFilename\": \"example/preview.js\"\n}\n"
+    },
+    {
+      "path": "api/index.js",
+      "sha": null,
+      "content_sha256": "0f05dde7ac6a74614519ba2df0c8cd3543020c5b1bc30e30f6ef4fec0b42df33",
+      "score": 108,
+      "content": "'use strict';\n\nvar _ = require('lodash');\n\nvar API = {};\n\nAPI.check = require('./check');\n\nAPI.get = function (name) {\n    var api = _.get(this, name);\n    return api;\n};\n\n/**\n * Exports the APIs\n * @type {Object}\n */\nmodule.exports = API;"
+    },
+    {
+      "path": "api/check.js",
+      "sha": null,
+      "content_sha256": "0fc1e903507487fcc92a6f0a6291bcb642e52cdd6fe31a9847800e6ed5fbbf78",
+      "score": 108,
+      "content": "'use strict';\n\nvar async = require('async');\nvar path = require('path');\nvar utils = require('../lib/utils');\nvar Promise = require('../lib/promise');\nvar APIError = require('../lib/apirequest-error');\n\n\n// Declare our main module scope\nvar API;\n\n\n/**\n * Check Email\n *\n * @param  {object} params - Parameters for request\n * @param  {callback} callback - The callback that handles the response.\n * @return {object} Result\n */\nAPI = function (params, callback, options) {\n\n\n    options = utils.defaults({}, options, this.options, {\n            service: API.SERVICE_NAME,\n            method: API.SERVICE_METHOD\n        }\n    );\n\n\n    // Declare the promise we will use to wrap the request call\n    var promise = new Promise(function (resolve, reject) {\n\n        // Input Validation (we only do the most basic, and let the server do the most so validation will always be up to date)\n        if (!params) {\n            return reject(new APIError.MissingArgumentError(API.SERVICE_NAME, 'params'));\n        }\n        else if (!utils.has(params, API.PARAM_EMAIL)) {\n            return reject(new APIError.MissingArgumentError(API.SERVICE_NAME, 'params.' + API.PARAM_EMAIL));\n        }\n\n        // Prepare Parameters and prepare it for the Request modus\n        var query = {\n            options: options,\n            params: {\n                json: true,\n                qs: params\n            }\n        };\n\n\n        var APIRequest = require('../lib/apirequest');\n        APIRequest.request(query, function (err, result) {\n\n            if (utils.isNull(err) && utils.has(result, 'error')) {\n                err = utils.get(result, 'error');\n            }\n\n            // If an error happens, we return early\n            if (err) {\n                return reject(err);\n            }\n\n            return resolve(result);\n        });\n    });\n\n\n    // Ensure callback is set to make the main functions slightly simpler by avoiding nested conditionals\n    callback = callback || utils.noop;\n\n    // We offer callback support in addition to promise style (we know callback is set as we default it in the beginning)\n    promise\n        .then(function (result) {\n            callback(null, result);\n        })\n        .catch(function (err) {\n            callback(err);\n        });\n\n\n    // return the promise to the caller\n    return promise;\n};\n\n\nvar CheckQuery = function (email) {\n    this.email = email;\n};\nAPI.CheckQuery = CheckQuery;\n\n\nAPI.SERVICE_NAME = 'check';\nAPI.SERVICE_METHOD = 'GET';\n\nAPI.PARAM_EMAIL = 'email';\nAPI.PARAM_SMTP = 'smtp';\nAPI.PARAM_SMTP_TRUE = 1;\nAPI.PARAM_SMTP_FALSE = 0;\nAPI.PARAM_DID_YOU_MEAN = 'did_you_mean';\nAPI.PARAM_USER = 'user';\nAPI.PARAM_DOMAIN = 'domain';\nAPI.PARAM_FORMAT_VALID = 'format_valid';\nAPI.PARAM_MX_FOUND = 'mx_found';\nAPI.PARAM_SMTP_CHECK = 'smtp_check';\nAPI.PARAM_CATCH_ALL = 'catch_all';\nAPI.PARAM_CATCH_ALL_TRUE = 1;\nAPI.PARAM_CATCH_ALL_FALSE = 0;\nAPI.PARAM_ROLE = 'role';\nAPI.PARAM_DISPOSABLE = 'disposable';\nAPI.PARAM_FREE = 'free';\nAPI.PARAM_SCORE = 'score';\n\n\n/**\n * Exports the APIs\n * @type {Object}\n */\nmodule.exports = API;"
+    },
+    {
+      "path": "lib/apirequest-result.js",
+      "sha": null,
+      "content_sha256": "6291f1a41d393eed1a8c78cf18f1ce1d8eca432c329410621a9908d71d53cd10",
+      "score": 108,
+      "content": "'use strict';\n\nvar ResultStatus = {};\n\nResultStatus.OK = 200;\nResultStatus.NOT_CHANGED = 304;\n\nResultStatus.BODY_EXPR = 'body';\nResultStatus.BODY_RESULTS_EXPR = 'body.results';\nResultStatus.BODY_SUCCESS_EXPR = 'body.success';\nResultStatus.BODY_ERROR_EXPR = 'body.error';\n\n/**\n * Exports ResultStatus\n * @type {Function}\n */\nmodule.exports = ResultStatus;"
+    },
+    {
+      "path": "lib/apirequest-error.js",
+      "sha": null,
+      "content_sha256": "c2eafdb6beb0eec9623727f281e27698594b00a5e97477767e8ce5271da7e490",
+      "score": 108,
+      "content": "'use strict';\n\nvar Errors = {};\n\nErrors.MissingArgumentError = function(contextName, argumentName) {\n    this.message = 'The following argument is required for the `'+ contextName +'` function: '+ argumentName;\n};\n\nErrors.MissingRecommendedArgumentError = function(contextName, argumentName) {\n    this.message = 'The following argument is recommended for the `'+ contextName +'` function: '+ argumentName;\n};\n\nErrors.NotSupportedArgumentError = function(contextName, argumentName) {\n    this.message = 'The following argument is not yet supported for the `'+ contextName +'` function: '+ argumentName;\n};\n\nErrors.InvalidArgumentError = function(contextName, argumentName, errorLabel) {\n    this.message = 'The '+ argumentName +' argument is invalid for the `'+ contextName +'` function: '+ errorLabel;\n};\n\nErrors.APIError = {\n    MISSING_ACCESS_KEY: 101,\n    INVALID_ACCESS_KEY: 101,\n    INVALID_API_FUNCTION: 103,\n    USAGE_LIMIT_REACHED: 104,\n    HTTPS_ACCESS_RESTRICTED: 105,\n    FUNCTION_ACCESS_RESTRICTED: 106,\n    INACTIVE_USER: 102,\n    QUERY_TEXT_IS_ARRAY: 211,\n    QUERY_TEXT_NO_ARRAY: 212,\n    TOO_MANY_QUERIES: 221,\n    DETECTION_FAILED: 910,\n    BATCH_DETECTION_FAILED: 911,\n    NO_QUERY_TEXT_PROVIDED: 210,\n    '404_NOT_FOUND': 404\n};\n\n/**\n * Exports ResultStatus\n * @type {Function}\n */\nmodule.exports = Errors;"
+    },
+    {
+      "path": "lib/apirequest.js",
+      "sha": null,
+      "content_sha256": "478b9f718740814ac74ad5a18910bb91f2c6a1cfb7c6f0149695dabe5ff10261",
+      "score": 108,
+      "content": "'use strict';\n\nvar _ = require('lodash');\nvar Transporter = require('./transporter');\nvar APIResult = require('./apirequest-result');\n\n\nvar APIRequest = {};\n\n\n/**\n * Create and send request to the API\n * @param  {object}   parameters Parameters used to form request\n * @param  {Function} callback   Callback when request finished or error found\n * @return {Request}             Returns Request object or null\n */\nvar requestFn = function (parameters, callback) {\n\n    var url = parameters.options.secure ? 'https' : 'http';\n    url += '://';\n    url += parameters.options.host;\n    url += '/';\n    url += parameters.options.context;\n    url += '/';\n    url += parameters.options.service;\n    url += '?' + parameters.options.key_type + '=' + parameters.options.access_key;\n\n    parameters.options.url = url;\n\n    // We need to be able to support using native HTTP since the Live endpoint is causing errors on the 304 which cant be handled by request.js library\n    // Refer: https://github.com/request/request/issues/2048\n\n    var transporter = new Transporter(parameters.options);\n    transporter.req = transporter.request(parameters.params, function (err, result, response) {\n\n        if (err) {\n            return callback(err);\n        }\n        else if (response.statusCode != APIResult.OK || !result) {\n            err = _.get(response, APIResult.BODY_ERROR_EXPR);\n            return callback(err, result, response);\n        }\n\n        result = result || _.get(result, APIResult.BODY_EXPR) || null;\n\n        return callback(null, result, response);\n    });\n    return transporter;\n};\nAPIRequest.request = requestFn;\n\n\n/**\n * Exports APIRequest\n * @type {Function}\n */\nmodule.exports = APIRequest;"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "df3b1148fffbebed12d28705c574388dc6da69079ad6d13cc03bf2a09fe18e1d",
+      "score": 100,
+      "content": "\n[![Travis](https://travis-ci.org/apilayer/email-address-validation.svg)](Travis)\n\nNode JavaScript wrapper for [the mailboxlayer API](https://mailboxlayer.com/).\n\nSupports both traditional callbacks and Promises/A+.\n\n---\n\n## Installation\n\tnpm install email-address-validation [--save]\n\n\n## Configuration\n\nBefore using the mailboxlayer API client you have to setup your account and obtain your API Access Key.  \nYou can get it by signing up at [https://mailboxlayerlayer.com/product](https://mailboxlayer.com/product).\n\n---\n\n## Usage\n\nThe general API is documented here: [https://mailboxlayer.com/documentation](https://mailboxlayer.com/documentation).  \nYou can find parameters, result set definitions and status codes documented here as well.\n\n\n### Setup\n\n\tvar API = require('email-address-validation');\n\tvar api = new API({\n    \taccess_key: [ACCESS_KEY],\n    \tsecure: [true|false] (Optional, defaults to false)\n\t});\n\n#### Optional Parameters\n\n##### secure (only available for Basic, Pro and Enterprise accounts)\nBoolean value to indicate if the calls to the API should use a secure protocol or insecure (HTTP/HTTPS). Defaults to false (HTTP, insecure).\n\n---\n\n## Callbacks vs. Promises\n\nThe Promises/A+ implementation used for this is this excellent bare bones library:  \n[https://www.npmjs.com/package/promise](https://www.npmjs.com/package/promise)\n\nThe language-detection library supports either mode and use of either one is not mutually exclusive to the alternative, so it's possible to use one exclusively or a combination, even in the same call, both the callback will be called and the promise handlers invoked.\n\n---\n\n## API Overview\nAll endpoints in the public API is available through this library.\n\n- check\n\n---\n\n## Check\nTakes an email  and checks the email against the API.\n\n###### Define Query\n\n\tvar query = {\n    \temail: 'this.is.a@test.io',\n    \tcatch_all: [0|1] (Optional, defaults to 1)\n\t};\n\n###### Simple Request (using Callback)\n\n\tapi.check(query, function (err, result) {\n    \tif (err) {\n        \treturn console.log('Check Callback (Error): ' + JSON.stringify(err));\n    \t}\n\t    console.log('Check Callback (Result): ' + result.length);\n\t});\n    \n###### Response\n```\n{\n  \"email\": \"this.is.a@test.io\",\n  \"did_you_mean\": \"\",\n  \"user\": \"this.is.a\",\n  \"domain\": \"test.io\",\n  \"format_valid\": true,\n  \"mx_found\": true,\n  \"smtp_check\": true,\n  \"catch_all\": false,\n  \"role\": true,\n  \"disposable\": false,\n  \"free\": false,\n  \"score\": 0.96\n}  \n```\n\n#### Optional Parameters\n\n##### catch_all (only available for Basic, Pro and Enterprise accounts)\nBoolean value to indicate if checks should also include checks for catch all.\n\n---\n\n## Example Application\n\nIn the [rootdir]/example directory there is a fully functional application which runs all requests against all the endpoints in the API, the examples above can be seen there as source code.\n\nThe example application uses a process.env variable to hold the access key.\n\nFor running in development environments, it's easy to use the [https://www.npmjs.com/package/dotenv](https://www.npmjs.com/package/dotenv) to load variables from a local file into the environment.\n\n---\n\n## Tests\n\nThe tests are written for any NodeJS testing library, but has been run and targeted at the [https://mochajs.org/](https://mochajs.org/) testing library.\n\nIn order to run the tests, the following environment variables needs to be set:\n\n```\nACCESS_KEY = [access_key] (This account needs to be Basic, Pro or Enterprise)\nACCESS_KEY_FREE = [access_key_for_a_free_account]\n```\n\n---\n\n## Customer Support\n\nNeed any assistance? [Get in touch with Customer Support](mailto:support@apilayer.net?subject=%mailboxlayer%5D).\n\n---\n\n## Updates\nStay up to date by following [@apilayernet](https://twitter.com/apilayernet) on Twitter.\n\n---\n\n## Legal\n\nAll usage of the mailboxlayer website, API, and services is subject to the [mailboxlayer Terms & Conditions](https://mailboxlayer.com/terms) and all annexed legal documents and agreements.\n\n---\n\n## Author\nPeter Andreas Moelgaard ([GitHub](https://github.com/pmoelgaard), [Twitter](https://twitter.com/petermoelgaard))\n\n---\n\n## License\nLicensed under the The MIT License (MIT)\n\nCopyright (&copy;) 2016 Peter Andreas Moelgaard & apilayer\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \"Software\"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE."
+    },
+    {
+      "path": "test/check.js",
+      "sha": null,
+      "content_sha256": "b9c1eb29ae3f85bcf7b57e6b2eafc64848a6972a038d7c3a18cdc0679e2358a2",
+      "score": 93,
+      "content": "var path = require('path');\n\nvar APIPath = path.join(__dirname, '../', 'index');\nvar API = require(APIPath);\n\n// TEST START\nvar chai = require('chai');\nvar expect = chai.expect;\nvar assert = require('assert');\n\ndescribe('#check()', function () {\n\n    this.timeout(20000);\n\n    var user = 'this.is.a';\n    var domain = 'test.io';\n    var email = ''+ user +'@'+ domain;\n\n    it('basic', function (done) {\n\n        var api = new API({\n            access_key: process.env.ACCESS_KEY\n        });\n\n        // Check Query\n        var query = {\n            email: email\n        };\n\n        api.check(query)\n            .then(function (result) {\n\n                expect(result).is.not.null;\n                expect(result).property(api.check.PARAM_USER).equals(user);\n                expect(result).property(api.check.PARAM_DOMAIN).equals(domain);\n                expect(result).property(api.check.PARAM_CATCH_ALL).to.be.null;\n\n                done(null, result);\n            })\n            .catch(function (err) {\n                done(err);\n            });\n    });\n\n\n    it('basic - w. catch-all', function (done) {\n\n        var api = new API({\n            access_key: process.env.ACCESS_KEY\n        });\n\n        // Check Query\n        var query = {\n            email: email,\n            catch_all: api.check.PARAM_CATCH_ALL_TRUE\n        };\n\n        api.check(query)\n            .then(function (result) {\n\n                expect(result).is.not.null;\n                expect(result).property(api.check.PARAM_USER).equals(user);\n                expect(result).property(api.check.PARAM_DOMAIN).equals(domain);\n                expect(result).property(api.check.PARAM_CATCH_ALL).to.be.a('boolean');\n\n                done(null, result);\n            })\n            .catch(function (err) {\n                done(err);\n            });\n    });\n\n\n    it('basic - w. catch-all on free account', function (done) {\n\n        var api = new API({\n            access_key: process.env.ACCESS_KEY_FREE\n        });\n\n        // Check Query\n        var query = {\n            email: email,\n            catch_all: api.check.PARAM_CATCH_ALL_TRUE\n        };\n\n        api.check(query)\n            .then(function (result) {\n                expect(result).is.null;\n                done(result);\n            })\n            .catch(function (err) {\n                expect(err).property('code').equals(310);\n                done(null, err);\n            });\n    });\n});"
+    },
+    {
+      "path": "index.js",
+      "sha": null,
+      "content_sha256": "82bac104a02acab97db5775a141c3a86fb6f7929e1e6e0d11fed2c4e7d2be5b5",
+      "score": 35,
+      "content": "'use strict';\n\nvar _ = require('lodash');\nvar utils = require('./lib/utils');\n\n/**\n * A module for interacting with mailboxlayer API\n * @module mailboxlayer\n */\n\n/**\n * mailboxlayer constructor.\n * @param {object} options Options to be passed in\n * @constructor\n */\nfunction API(options) {\n\n    this.options = utils.extend(\n        {},\n        options,\n        {\n            host: 'apilayer.net',\n            context: 'api',\n            key_type: 'access_key',\n            secure: false\n        }\n    );\n\n    /**\n     * Load the apis from apis directory\n     * This file holds all version information\n     * @private\n     */\n    var apis = require('./api');\n    this.addAPIs(apis);\n}\n\n/**\n * Add API endpoints to object\n *\n * @param {Array} api Api to be added\n * @private\n */\nAPI.prototype.addAPIs = function (apis) {\n\n    for (var apiName in apis) {\n\n        var API = apis[apiName];\n        var api = API.bind(this);\n        _.extend(api, API);\n\n        this[apiName] = api;\n    }\n};\n\n/**\n * Export API\n */\nmodule.exports = API;"
+    },
+    {
+      "path": ".travis.yml",
+      "sha": null,
+      "content_sha256": "60952f5f2102c3268333c86ce411a1bd1374dfd16e9fd7d26b3167ef4e66f6eb",
+      "score": 35,
+      "content": "language: node_js\nnode_js:\n  - node"
+    },
+    {
+      "path": "example/preview.js",
+      "sha": null,
+      "content_sha256": "a9ad540dc8d7e7c881a309c7e0e6bf24e16dc03959b889e149d23d76083e55c8",
+      "score": 33,
+      "content": "var API = require('email-address-validation');\nvar api = new API({\n    access_key: 'access_key'\n});\n\nvar checkQuery = {\n    email: 'this.is.a@test.io'\n};\n\napi.check(checkQuery)\n    .then(function (result) {\n        console.log('Check Promise Resolve' + JSON.stringify(result));\n    })\n    .catch(function (err) {\n        console.log('Check Promise Reject: ' + JSON.stringify(err));\n    });"
+    },
+    {
+      "path": "lib/transporter.js",
+      "sha": null,
+      "content_sha256": "c8ac74f66607a19eb615a4ec257a078cd13dc472163620307685600a6be75020",
+      "score": 33,
+      "content": "'use strict';\n\nvar request = require('request');\nvar _ = require('lodash');\n\nvar utils = require('./utils');\nvar pkg = require('../package.json');\n\n\n/**\n * Default transporter constructor.\n * Wraps request and callback functions.\n */\nfunction Transporter(options) {\n    this.options = options;\n}\n\n/**\n * Default user agent.\n */\nTransporter.prototype.USER_AGENT = pkg.name + '.' + pkg.version;\n\n/**\n * Configures request options before making a request.\n * @param {object} opts Options to configure.\n * @return {object} Configured options.\n */\nTransporter.prototype.configure = function (args) {\n\n    // set transporter user agent\n    var headers = this.options.headers || {};\n    headers['User-Agent'] = this.USER_AGENT;\n\n    args = utils.extend(\n        this.options,\n        args,\n        {headers: headers}\n    );\n\n    return args;\n};\n\n/**\n * Makes a request with given options and invokes callback.\n * @param {object} opts Options.\n * @param {Function=} opt_callback Optional callback.\n * @return {Request} Request object\n */\nTransporter.prototype.request = function (args, callback) {\n\n    args = this.configure(args);\n\n    var req = request(args, function (err, response, body) {\n        if (err) {\n            return callback(err);\n        }\n        callback(null, body, response)\n    });\n    return req;\n};\n\n/**\n * Exports Transporter.\n */\nmodule.exports = Transporter;"
+    },
+    {
+      "path": "lib/promise.js",
+      "sha": null,
+      "content_sha256": "c9a8f81ce023668cc65a3fa1ef66605e6c77f3d7d579b7a56c2bc7ae5281319f",
+      "score": 33,
+      "content": "'use strict';\n\nvar Promise = require('promise');\n\n/**\n * Exports Promise Factory\n * @type {Function}\n */\nmodule.exports = Promise;"
+    },
+    {
+      "path": "lib/utils.js",
+      "sha": null,
+      "content_sha256": "f5bc21d84b92d092eae5a1ebca1ab1f22859dbdbb6082d7583bc7fc00f4d801a",
+      "score": 33,
+      "content": "'use strict';\n\nvar _ = require('lodash');\n\n/**\n * Export extend\n * @type {Object}\n */\nmodule.exports = _;"
+    },
+    {
+      "path": "example/index.js",
+      "sha": null,
+      "content_sha256": "382b30a4846d8cfc458998068d7d6851ac093a41a9fee8fc6d2c6312b1dc9080",
+      "score": 33,
+      "content": "var path = require('path');\n\nvar APIPath = path.join(__dirname, '../', 'index');\nvar API = require(APIPath);\n\nvar api = new API({\n    access_key: process.env.ACCESS_KEY\n});\n\nvar email = 'this.is.a@test.io';\n\nvar checkQuery = {\n    email: email\n};\n\napi.check(checkQuery, function (err, result) {\n    if (err) {\n        return console.log('Check Callback (Error): ' + JSON.stringify(err));\n    }\n    console.log('Check Callback (Success): '+ JSON.stringify(result));\n});"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:15.066743+00:00"
+}

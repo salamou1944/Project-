@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:rohitg00/LinkFree",
+  "repo": "rohitg00/LinkFree",
+  "revision_sha": "33c0bc55afc6c3b1e74b2b0bf83e32648b422f0f",
+  "default_branch": "main",
+  "pushed_at": "2023-02-07T03:56:42Z",
+  "repo_updated_at": "2023-02-10T07:40:39Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/deploy.yml",
+      "sha": null,
+      "content_sha256": "e4f677f0344fdf687511710bf4261c8fdf1aeb43f0cb064947456ef6304557e7",
+      "score": 198,
+      "content": "name: Deploy\non:\n  release:\n    types: [published]\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-node@v3\n        with:\n          node-version: \"18\"\n          cache: \"npm\"\n      - name: install dependencies\n        run: npm ci\n      - name: run build\n        run: npm run build\n      - uses: actions/upload-artifact@main\n        with:\n          name: artifacts\n          path: build/\n\n  push_to_registry:\n    name: Push Docker image to GitHub Packages\n    needs: build\n    permissions:\n      contents: read\n      packages: write\n    runs-on: ubuntu-latest\n    steps:\n      - name: check out the repo\n        uses: actions/checkout@v3\n      - name: get-npm-version\n        id: package-version\n        uses: martinbeentjes/npm-get-version-action@master\n      - name: set up Docker builder\n        uses: docker/setup-buildx-action@v2\n      - name: log into GitHub Container Registry\n        uses: docker/login-action@v2\n        with:\n          registry: ghcr.io\n          username: ${{ github.repository_owner }}\n          password: ${{ secrets.CR_PAT }}\n      - name: push to Github Container Registry\n        uses: docker/build-push-action@v3\n        with:\n          context: .\n          push: true\n          secrets: |\n            'GH_TOKEN=${{ secrets.GITHUB_TOKEN }}'\n          build-args: \"github_token=${{ secrets.GITHUB_TOKEN }}\"\n          tags: |\n            ghcr.io/eddiehubcommunity/linkfree:v${{ steps.package-version.outputs.current-version}}\n            ghcr.io/eddiehubcommunity/linkfree:latest\n\n#   deploy:\n#     name: deploy to kube cluster\n#     needs: push_to_registry\n#     runs-on: ubuntu-latest\n#     steps:\n#       - name: check out the repo\n#         uses: actions/checkout@v2\n#       - name: get-npm-version\n#         id: package-version\n#         uses: martinbeentjes/npm-get-version-action@master\n#       - uses: Azure/k8s-set-context@v1\n#         with:\n#           kubeconfig: ${{ secrets.KUBE_CONFIG }}\n#       - uses: Azure/k8s-deploy@v1.4\n#         with:\n#           namespace: 'default'\n#           manifests: kubernetes/deployment.yaml\n#           images: 'ghcr.io/eddiehubcommunity/linkfree:v${{ steps.package-version.outputs.current-version}}'\n#           kubectl-version: 'latest'\n"
+    },
+    {
+      "path": ".github/workflows/testimonial.yml",
+      "sha": null,
+      "content_sha256": "716dedb15f95a2e6f1e77977b4c5a2b90008a4b168f30b3a44e091660e488876",
+      "score": 186,
+      "content": "name: Testimonial\n\non:\n  workflow_dispatch:\n  issues:\n    types: [opened, edited]\n\nconcurrency:\n  group: \"main-branch\"\n\njobs:\n  create-testimonial:\n    if: contains(github.event.issue.labels.*.name, 'testimonial')\n    runs-on: ubuntu-latest\n    name: Create Testimonial\n    steps:\n      # Create a temporary, uniquely named branch to push release info to\n      - name: create temporary branch\n        uses: peterjgrainger/action-create-branch@v2.4.0\n        id: create-branch\n        with:\n          branch: \"testimonial-from-${{ github.sha }}\"\n          sha: \"${{ github.sha }}\"\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      - uses: actions/checkout@v3\n      - uses: actions/setup-node@v3\n        with:\n          node-version: \"18\"\n\n      # fetch branches and switch to the temporary branch\n      - name: switch to new branch\n        run: git fetch --all && git checkout --track origin/testimonial-from-${{ github.sha }}\n\n      # parse issue\n      - uses: stefanbuck/github-issue-parser@v3\n        id: issue-parser\n        with:\n          template-path: .github/ISSUE_TEMPLATE/testimonial.yml\n          issue-body: ${{ github.event.issue.body }}\n      - name: current date\n        id: date\n        uses: Kaven-Universe/github-action-current-date-time@v1\n        with:\n          format: \"YYYY-MM-DD\"\n      - name: create folder\n        run: |\n          mkdir -p data/${{ steps.issue-parser.outputs.issueparser_name }}/testimonials\n      - name: create json file\n        run: |\n          node .github/scripts/testimonial.mjs\n        env:\n          FILE_NAME: \"data/${{ steps.issue-parser.outputs.issueparser_name }}/testimonials/${{ github.actor }}.json\"\n          DATA_TITLE: ${{ steps.issue-parser.outputs.issueparser_title }}\n          DATA_DESCRIPTION: ${{ steps.issue-parser.outputs.issueparser_description}}\n          DATA_DATE: ${{ steps.date.outputs.time }}\n      - name: validate JSON\n        run: jq . \"data/${{ steps.issue-parser.outputs.issueparser_name }}/testimonials/${{ github.actor }}.json\"\n      - uses: stefanzweifel/git-auto-commit-action@v4\n        with:\n          commit_message: \"Testimonial for '${{ steps.issue-parser.outputs.issueparser_name }}' by '${{ github.actor }}'\"\n\n      # create PR using GitHub CLI\n      - name: create PR with testimonial info\n        id: create-pr\n        run: gh pr create --base main --head testimonial-from-${{ github.sha }} --title 'Merge testimonial into main' --body 'Created by Github action'\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      # merge PR using GitHub CLI\n      - name: merge PR with testimonial info\n        id: merge-pr\n        run: gh pr merge --admin --merge --subject 'Merge testimonial info' --delete-branch\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      # close issue\n      - name: Close Issue\n        uses: YiiGuxing/close-issue@v2.1.0\n        with:\n          comment: |\n            Testimonial added for @${{ steps.issue-parser.outputs.issueparser_name }}. Thank you for your contribution! @${{ steps.issue-parser.outputs.issueparser_name }} if you wish to add it your LinkFree profile please follow the instructions in the docs https://linkfree.eddiehub.io/docs/how-to-guides/testimonials\n"
+    },
+    {
+      "path": "tests/setup/global-teardown.js",
+      "sha": null,
+      "content_sha256": "1f2a3d356f97a39cd1acaa2bf436164e5edd62c25904b7ea055fe435be3e48ed",
+      "score": 173,
+      "content": "import { chromium } from \"@playwright/test\";\nimport fs from \"fs\";\nimport * as dotenv from \"dotenv\";\n\nimport connectMongo from \"../../config/mongo\";\nimport { USERS } from \"./test-users.js\";\nimport Profile from \"../../models/Profile\";\nimport Link from \"../../models/Link\";\n\ndotenv.config();\n\nmodule.exports = async (config) => {\n  // remove test file data\n  USERS.forEach((username) => fs.unlinkSync(`./data/${username}.json`));\n  fs.unlinkSync(`./data/_test-wcag-user.json`)\n\n  // remove test data in database\n  await connectMongo();\n\n  // get IDs with `_tests-*`\n  const testUsers = await Profile.find({ username: /_test-/ });\n  const testLinks = await Link.find({ username: /_test-/ });\n\n  // delete test documents\n  testUsers.map(\n    async (user) => await Profile.deleteOne({ username: user.username })\n  );\n  testLinks.map(\n    async (user) => await Link.deleteOne({ username: user.username })\n  );\n};\n"
+    },
+    {
+      "path": "tests/setup/test-users.js",
+      "sha": null,
+      "content_sha256": "7ff6fb73de81cd5709d987dc37f70e8bd8cd126dbae12022b7cdbbccc0e11a41",
+      "score": 173,
+      "content": "export const USERS = [\n  \"_test-profile-user-1\",\n  \"_test-profile-user-2\",\n  \"_test-profile-user-3\",\n  \"_test-profile-user-4\",\n];\n"
+    },
+    {
+      "path": "tests/setup/global-setup.js",
+      "sha": null,
+      "content_sha256": "4307b8e6c42af48e4c4afd10c915469ebd6f236bfdd0bea6c9287ac033d86dce",
+      "score": 173,
+      "content": "import { chromium } from \"@playwright/test\";\nimport fs from \"fs\";\n\nconst { USERS } = require(\"./test-users.js\");\nimport icons from '../../config/icons.json';\nconst links = Object.keys(icons).map((icon, index) => {\n  return {\n    name: `Link ${index} - ${icon} icon`,\n    url: \"https://github.com/EddieHubCommunity/LinkFree\",\n    icon: icon\n  }\n})\n\nconst wcagUser = {\n  name: \"_TEST-WCAG-USER\",\n  displayStatsPublic: true,\n  type: \"personal\",\n  bio: `Bio for _test-wcag-user`,\n  avatar: \"https://github.com/eddiejaoude.png\",\n  links: links\n}\n\nconst user = (username) => {\n  return {\n    name: username.toUpperCase(),\n    displayStatsPublic: true,\n    type: \"personal\",\n    bio: `Bio for ${username}`,\n    avatar: \"https://github.com/eddiejaoude.png\",\n    links: [\n      {\n        name: \"Link 1\",\n        url: \"http://eddiejaoude.io\",\n        icon: \"FaBad-Icon\",\n      },\n      {\n        name: \"Link 2\",\n        url: \"http://eddiehub.org\",\n        icon: \"link\",\n      },\n    ],\n  };\n};\n\nmodule.exports = async (config) => {\n  USERS.forEach((username) => {\n    const data = user(username);\n\n    try {\n      fs.writeFileSync(`./data/${username}.json`, JSON.stringify(data));\n    } catch (e) {\n      console.log(e);\n      throw new Error(`Test data \"${username}\" not created`);\n    }\n  });\n\n  try {\n    fs.writeFileSync(`./data/_test-wcag-user.json`, JSON.stringify(wcagUser));\n  } catch (e) {\n    console.log(e);\n    throw new Error(`Test data \"_test-wcag-user\" not created`);\n  }\n};\n"
+    },
+    {
+      "path": "tests/search.spec.js",
+      "sha": null,
+      "content_sha256": "d7a013566b3ce38d694da2a7db1a5acf40ce387a6188e54991932f4736759c27",
+      "score": 168,
+      "content": "// @ts-check\nimport { test, expect } from \"@playwright/test\";\nconst AxeBuilder = require(\"@axe-core/playwright\").default;\n\ntest(\"Search has title\", async ({ page }) => {\n  await page.goto(\"/search\");\n  await expect(page).toHaveTitle(/Search/);\n});\n\ntest(\"Navigate to the Search page\", async ({ page }) => {\n  await page.goto(\"/\");\n  await page.locator(\"a:visible\", { hasText: \"Search\" }).click();\n  await expect(page.locator(\"h1\")).toHaveText(\"Search\");\n});\n\ntest(\"Search works correctly\", async ({ page }) => {\n  // 1. navigate to search page\n  await page.goto(\"/search\");\n\n  // 2. show no users are listed\n  await expect(page.locator(\"li\")).toHaveCount(0);\n\n  // 3. type in search and check that user with the name exist and check a name doesn't exist\n  const input = page.locator(\"[name='keyword']\");\n  await input.type(\"_test-profile-user-1\");\n\n  await expect(page.locator(\"li\")).toHaveCount(1);\n});\n\ntest(\"Search page has no results when no search term used\", async ({\n  page,\n}) => {\n  await page.goto(\"/search\");\n\n  const input = page.locator(\"[name='keyword']\");\n  await input.type(\"\");\n\n  await expect(page.locator(\"li\")).toHaveCount(0);\n});\n\ntest(\"Search page shows no results after typing 2 characters\", async ({\n  page,\n}) => {\n  await page.goto(\"/search\");\n\n  const input = page.locator(\"[name='keyword']\");\n  await input.type(\"ed\");\n\n  await expect(page.locator(\"li\")).toHaveCount(0);\n});\n\ntest(\"Search page shows results after typing 3 characters\", async ({\n  page,\n}) => {\n  await page.goto(\"/search\");\n\n  const input = page.locator(\"[name='keyword']\");\n  await input.type(\"aka\");\n\n  await expect(page.locator(\"li\")).toContainText([\"aka\"]);\n});\n\ntest.fixme(\"After search click profile\", async ({ page }) => {\n  // 1. perform search\n  // 2. click on searched profile\n  // 3. check profile is displayed\n});\n\ntest.fixme(\n  \"find the profile after providing concise name\",\n  async ({ page }) => {\n    // 1. click on search profile\n    // 2. type the whole name\n    // 3. Display the profile if the name is correct\n  }\n);\n\ntest(\"should pass axe wcag accessibility tests\", async ({ page }) => {\n  await page.goto(\"/search\");\n  const accessibilityScanResults = await new AxeBuilder({ page })\n    .withTags([\"wcag2a\", \"wcag2aa\", \"wcag21a\", \"wcag21aa\"])\n    .analyze();\n  expect(accessibilityScanResults.violations).toEqual([]);\n});\n"
+    },
+    {
+      "path": "data/CodingSpecies.json",
+      "sha": null,
+      "content_sha256": "782a0b064b59c92e1c8486abdb13211d53079fbde95b0abfd2175a2fe620e7d5",
+      "score": 165,
+      "content": "{\n  \"name\": \"CodingSpecies\",\n  \"type\": \"personal\",\n  \"displayStatsPublic\": true,\n  \"bio\": \"Making Apps using React.js | Working on web and software engineering 👩‍💻 | Maintaining my organisation, App-Choreography 📛\",\n\n  \"tags\": [\n    \"javascript\",\n    \"react.js\",\n    \"HTML\",\n    \"CSS\",\n    \"typescript\",\n    \"python\",\n    \"graphic design\"\n  ],\n  \"socials\": [\n    { \"icon\": \"FaGithub\", \"url\": \"https://github.com/CodingSpecies\" }\n  ],\n  \"links\": [\n    {\n      \"name\": \"Follow me on GitHub\",\n      \"url\": \"https://github.com/CodingSpecies\",\n      \"icon\": \"FaGithub\"\n    },\n    {\n      \"name\": \"Check out my website 🌐\",\n      \"url\": \"https://codingspecies.github.io/MyPortfolio/\",\n      \"icon\": \"FaLink\"\n    }\n  ],\n  \"milestones\": [\n    {\n      \"title\": \"Joined the world of Software Development\",\n      \"date\": \"June 2020\",\n      \"icon\": \"FaBook\",\n      \"color\": \"grey\",\n      \"description\": \"Began learning front-end development\"\n    },\n    {\n      \"title\": \"Joined GitHub\",\n      \"date\": \"September 2020\",\n      \"icon\": \"FaGithub\",\n      \"color\": \"blue\",\n      \"description\": \"Began the journey of Open Source\"\n    },\n    {\n      \"title\": \"App-Choreography\",\n      \"date\": \"June 2021\",\n      \"icon\": \"FaGithub\",\n      \"color\": \"grey\",\n      \"description\": \"Established my GitHub organisation!\"\n    },\n    {\n      \"title\": \"Hacktoberfest 2021\",\n      \"date\": \"October 2021\",\n      \"icon\": \"FaBook\",\n      \"color\": \"blue\",\n      \"description\": \"Successfully participated in Hacktoberfest 2021\"\n    },\n    {\n      \"title\": \"Hacktoberfest 2022\",\n      \"date\": \"October 2022\",\n      \"icon\": \"FaBook\",\n      \"color\": \"grey\",\n      \"description\": \"Successfully participated in Hacktoberfest 2022\"\n    }\n  ]\n}\n"
+    },
+    {
+      "path": "tests/docs/docs.spec.js",
+      "sha": null,
+      "content_sha256": "e549ccafd5164938b56268acc512683c32cd51acb81c991f1104b2b7093247a5",
+      "score": 161,
+      "content": "// @ts-check\nimport { test, expect } from \"@playwright/test\";\nconst AxeBuilder = require('@axe-core/playwright').default;\n\ntest(\"docs page has title\", async ({ page }) => {\n  await page.goto(\"/docs\");\n  await expect(page).toHaveTitle(/Documentation/);\n});\n\ntest(\"docs has quickstart link\", async ({ page }) => {\n  await page.goto(\"/docs\");\n  const getStarted = page.locator('h3:has-text(\"Quickstart\")');\n\n  await getStarted.click();\n\n  await expect(page).toHaveURL(/quickstart/);\n});\n\ntest(\"docs has github ui link\", async ({ page }) => {\n  await page.goto(\"/docs\");\n  const getStarted = page.locator('h3:has-text(\"GitHub UI\")');\n\n  await getStarted.click();\n\n  await expect(page).toHaveURL(/github-ui/);\n});\n\ntest(\"docs has gitpod link\", async ({ page }) => {\n  await page.goto(\"/docs\");\n  const getStarted = page.locator('h3:has-text(\"Gitpod\")');\n\n  await getStarted.click();\n\n  await expect(page).toHaveURL(/gitpod/);\n});\n\ntest('should pass axe wcag accessibility tests', async ({ page }) => {\n  await page.goto('/docs');\n  const accessibilityScanResults = await new AxeBuilder({ page })\n    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])\n    .analyze();\n  expect(accessibilityScanResults.violations).toEqual([]);\n});\n"
+    },
+    {
+      "path": "tests/docs/quickstart.spec.js",
+      "sha": null,
+      "content_sha256": "1f7f2e7c34a36c7028e595f693b21c50c821f26d22c51fa3825ed85bd7181fb2",
+      "score": 161,
+      "content": "// @ts-check\nimport { test, expect } from \"@playwright/test\";\n\ntest(\"quickstart has title\", async ({ page }) => {\n  await page.goto(\"/docs/quickstart\");\n  await expect(page).toHaveTitle(/QuickStart/);\n});\n"
+    },
+    {
+      "path": "pages/docs/environments/local-development-docker-compose.mdx",
+      "sha": null,
+      "content_sha256": "22d4c7c736e4390f0968e92de152e249a8c190f1a963b21857274ec0425edf84",
+      "score": 149,
+      "content": "import DocsLayout from \"../../../components/layouts/DocsLayout.js\";\nimport Link from \"../../../components/Link\";\n\n## Local development with Docker Compose\n\nThis environment will allow you tu run the application locally with Docker Compose. Everything will be run in containers (for example MongoDB), so you don't need to install anything on your machine.\n\n### Prerequisites\n\nYou will need <Link href=\"https://docs.docker.com/compose/\">Docker and Docker Compose v2</Link> installed.\n\n### Setup\n\n1) Make sure you have cloned the repository and are in the root of the project.\n\n2) Execute the following command, this will build the images and start the containers.\n\n```bash\ndocker compose up\n```\n\n3) You can now access the application at `http://localhost:3000`.\n\n4) If you making any changes to the dependencies, it's recommended to rebuild the images with the following command. \n\n```bash\ndocker compose up --build\n```\n\n5) If you want to stop the containers, you can use the following command.\n\n```bash\ndocker compose down\n```\n\n### Troubleshooting\n\nIf you getting an error, first try to rebuild the images with `docker compose up --build`. If that doesn't work, stop the containers with `docker compose down` and then remove the stopped linkfree container with `docker rm linkfree`. Then remove the images with `docker rmi linkfree-app`. Then rebuild the images with `docker compose up --build`.\n\nexport default ({ children }) => (\n  <DocsLayout title=\"LinkFree Local Development with Docker Compose Documentation\">\n    {children}\n  </DocsLayout>\n);\n"
+    },
+    {
+      "path": "pages/docs/how-to-guides/socials-shortcuts.mdx",
+      "sha": null,
+      "content_sha256": "a51d526a0d88de832428d4aa2b6a4b0ebab5b3e84a27f87d8874f728c33c7cab",
+      "score": 136,
+      "content": "import DocsLayout from \"../../../components/layouts/DocsLayout.js\";\nimport ClipboardCopy from \"../../../components/ClipboardCopy\";\nimport Link from \"../../../components/Link\";\n\n## Social shortcuts\n\nAdd a shortcut to your favourite social media accounts at the top of your Profile.\n\n![Example of LinkFree Social Shortcut icons](https://user-images.githubusercontent.com/624760/208973239-cc6a8541-3e34-47fd-8f76-104a3cf6ee4f.png)\n\n### Add Social shortcuts\n\n1. Find your `json` file in the `data` folder using your GitHub username, for example `data/sarajaoude.json`\n\n_If you need help on how to edit this file, please see the <Link href=\"/docs/how-to-guides/editing\">Editing Guide</Link>_\n\n2. Add a collection called `socials` at the root of your json file which will contain one or more social objects. Each social object must have two fields, `platform` and `url`, which will look like this:\n\n<ClipboardCopy>\n```js\n{\n  \"icon\": \"FaTwitter\",\n  \"url\": \"https://twitter.com/eddiejaoude\"\n}\n```\n</ClipboardCopy>\n\nThis is what a complete example looks like:\n\n<ClipboardCopy>\n```js\n\"socials\": [\n  { \"icon\": \"FaTwitter\", \"url\": \"https://twitter.com/eddiejaoude\" },\n  { \"icon\": \"FaGithub\", \"url\": \"https://github.com/eddiejaoude\" },\n  { \"icon\": \"FaYoutube\", \"url\": \"https://youtube.com/eddiejaoude\" }\n]\n```\n</ClipboardCopy>\n\n3. Now you can commit your file and create a Pull Request, for more details please see <Link href=\"/docs/how-to-guides/editing\">Editing Guide</Link>\n\nThe icon you would like displayed. We support the following icon sets: **Fa** and **Si** from React Icons.\n\n_Clicks on these social shortcuts that match any of your links will also increment their respective counters_\n\nexport default ({ children }) => (\n  <DocsLayout title=\"LinkFree Social Shortcuts Documentation\">\n    {children}\n  </DocsLayout>\n);\n"
+    },
+    {
+      "path": ".github/workflows/json-check.yml",
+      "sha": null,
+      "content_sha256": "03238ee65da03e6339f754759a55d4841ce7cb6f542449918c5a67a1f42e173f",
+      "score": 126,
+      "content": "name: JSON check\n\non:\n  pull_request:\n    paths:\n      - \"data/**.json\"\n\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - name: json-syntax-check\n        uses: limitusus/json-syntax-check@v2\n        with:\n          pattern: \"\\\\.json$\"\n"
+    },
+    {
+      "path": ".github/workflows/reviewpad.yml",
+      "sha": null,
+      "content_sha256": "d6ce66d55f017f411f9fe5ba14b539f5fdd990c69e5a2a4ad6ee4bd50ec1b0ef",
+      "score": 126,
+      "content": "# This file configures Reviewpad action to run on Issues and Pull Requests! 🦄\nname: Reviewpad\n\non:\n  issues:\n    types:\n      - opened\n      - edited\n  issue_comment:\n  pull_request_target:\n    types:\n      - opened\n      - synchronize\n      - edited\n\n# These permissions are necessary to automate pull requests from forks.\npermissions:\n  pull-requests: write\n  issues: write\n\njobs:\n  reviewpad_job:\n    runs-on: ubuntu-latest\n    name: Reviewpad\n    # Don't run reviewpad on automated PRs\n    if: |\n      github.event_name != 'pull_request_target' ||\n      (github.event.pull_request.title != 'Merge new release into main' &&\n      github.event.pull_request.title != 'Merge testimonial into main' &&\n      github.event.pull_request.title != 'Merge formatting into main')\n    steps:\n      - name: Reviewpad\n        uses: reviewpad/action@v3.x\n        with:\n          # Uncomment next line to use your own configuration file 💪\n          file: reviewpad.yml\n"
+    },
+    {
+      "path": ".github/workflows/storybook.yml",
+      "sha": null,
+      "content_sha256": "ca3dbc710c8b73a488ffc596a2d1f200a09637a00bc314a6171f71e3b3ab0938",
+      "score": 126,
+      "content": "name: Storybook\non:\n  push:\n    branches:\n      - main\n    paths:\n      - pages/**\n      - components/**\n      - stories/**\n  pull_request:\n    paths:\n      - pages/**\n      - components/**\n      - stories/**\n\npermissions:\n  contents: read\n  pages: write\n  id-token: write\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-node@v3\n        with:\n          node-version: \"18\"\n          cache: \"npm\"\n          \n      - name: Setup Pages\n        uses: actions/configure-pages@v3\n\n      - name: install dependencies\n        run: npm ci\n      - name: run build\n        run: npm run build-storybook\n\n      - name: Upload artifact\n        if: github.event_name == 'push'\n        uses: actions/upload-pages-artifact@v1\n        with:\n          path: './storybook-static'\n\n# Deployment job\n  deploy:\n    environment:\n      name: github-pages\n      url: ${{ steps.deployment.outputs.page_url }}\n    runs-on: ubuntu-latest\n    if: github.event_name == 'push'\n    needs: build\n    steps:\n      - name: Deploy to GitHub Pages\n        id: deployment\n        uses: actions/deploy-pages@v1\n\n"
+    },
+    {
+      "path": ".github/workflows/community.yml",
+      "sha": null,
+      "content_sha256": "eefd3010dbeecf45cc3699b8932f0c9cff28131933d573fe008cab4b473b3fd4",
+      "score": 126,
+      "content": "name: Greeting\non:\n  fork:\n  issues:\n    types: [opened]\n  issue_comment:\n    types: [created]\n  pull_request_target:\n    types: [opened]\n  pull_request_review_comment:\n    types: [created]\n\njobs:\n  welcome:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: EddieHubCommunity/gh-action-community/src/welcome@main\n        with:\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n          issue-message: \"<h1>It's great having you contribute to this project</h1> Welcome to the community :nerd_face:\"\n          pr-message: \"<h1>It's great having you contribute to this project</h1> Welcome to the community :nerd_face:\"\n          footer: 'If you would like to continue contributing to open source and would like to do it with an awesome inclusive community, you should join our <a href=\"http://discord.eddiehub.org\">Discord</a> chat and our <a href=\"http://github.eddiehub.org\">GitHub Organisation</a> - we help and encourage each other to contribute to open source little and often 🤓 . Any questions let us know.'\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "28e981aa5b32baefe53e77b4d6e56951f3593fd565490b28f28552069b2bb0b2",
+      "score": 126,
+      "content": "name: Releases\non:\n  push:\n    branches:\n      - main\n    paths-ignore:\n      - \"data/**\"\n\nconcurrency:\n  group: \"main-branch\"\n\njobs:\n  changelog:\n    runs-on: ubuntu-latest\n\n    steps:\n      # Create a temporary, uniquely named branch to push release info to\n      - name: create temporary branch\n        uses: peterjgrainger/action-create-branch@v2.3.0\n        id: create-branch\n        with:\n          branch: \"release-from-${{ github.sha }}\"\n          sha: \"${{ github.sha }}\"\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      # check out the repository afterwards\n      - uses: actions/checkout@v3\n\n      # fetch branches and switch to the temporary branch\n      - name: switch to new branch\n        run: git fetch --all && git checkout --track origin/release-from-${{ github.sha }}\n\n      # create release info and push it upstream\n      - name: conventional Changelog Action\n        id: changelog\n        uses: TriPSs/conventional-changelog-action@v3\n        with:\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n          version-file: \"./package.json,./package-lock.json\"\n          git-branch: \"release-from-${{ github.sha }}\"\n          skip-on-empty: false\n          skip-git-pull: true\n\n      # create PR using GitHub CLI\n      - name: create PR with release info\n        id: create-pr\n        run: gh pr create --base main --head release-from-${{ github.sha }} --title 'Merge new release into main' --body 'Created by Github action'\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      # merge PR using GitHub CLI\n      - name: merge PR with release info\n        id: merge-pr\n        run: gh pr merge --admin --merge --subject 'Merge release info' --delete-branch\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      # release info is now in main so we can continue as before\n      - name: create release with last commit\n        uses: actions/create-release@v1\n        if: steps.changelog.outputs.skipped == 'false'\n        env:\n          GITHUB_TOKEN: ${{ secrets.CHANGELOG_RELEASE }}\n        with:\n          tag_name: ${{ steps.changelog.outputs.tag }}\n          release_name: ${{ steps.changelog.outputs.tag }}\n          body: ${{ steps.changelog.outputs.clean_changelog }}\n"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "sha": null,
+      "content_sha256": "cb18899f1429efd5326c7757255ff307d1abb15f9486fa452bdeea83a33bb420",
+      "score": 126,
+      "content": "name: Build\non:\n  pull_request:\n    paths:\n      - pages/**\n      - tests/**\n      - components/**\n      - config/**\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        step: [lint, build]\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-node@v3\n        with:\n          node-version: \"18\"\n          cache: \"npm\"\n      - name: install dependencies\n        run: npm ci\n      - name: run ${{ matrix.step }}\n        run: npm run ${{ matrix.step }}\n\n  tests:\n    needs: build\n    runs-on: ubuntu-latest\n    services:\n      mongo:\n        image: mongo\n        ports:\n          - 27017:27017\n    strategy:\n      fail-fast: false\n      matrix:\n        shardIndex: [1, 2, 3, 4]\n        shardTotal: [4]\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-node@v3\n        with:\n          node-version: \"18\"\n          cache: \"npm\"\n      - name: install dependencies\n        run: npm ci\n      - name: Install Playwright's dependencies\n        run: npx playwright install chromium\n      - name: run tests\n        run: npx playwright test --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}\n      - uses: test-summary/action@v2.0\n        with:\n          paths: \"results.xml\"\n"
+    },
+    {
+      "path": ".github/workflows/prettier.yml",
+      "sha": null,
+      "content_sha256": "88b7927690d2320944f9fd2aca0f6a83070e6b607d4201002dfda2d353a62767",
+      "score": 126,
+      "content": "name: Format\non:\n  workflow_dispatch:\n  #Run every day at midnight UTC\n  schedule:\n    - cron: \"0 0 * * *\"\n\nconcurrency:\n  group: \"main-branch\"\n\njobs:\n  format:\n    runs-on: ubuntu-latest\n    name: Format Files\n    steps:\n      - uses: actions/checkout@v3\n\n      - uses: actions/setup-node@v3\n        with:\n          node-version: \"18\"\n          cache: \"npm\"\n\n      - run: npm ci\n\n      - name: Prettier\n        run: npx prettier --write data/*.json\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      - uses: stefanzweifel/git-auto-commit-action@v4\n        id: format-files\n        with:\n          commit_message: \"style: format files\"\n          skip_checkout: true\n          branch: \"formatting-${{ github.sha }}\"\n          create_branch: true\n\n      # create PR using GitHub CLI if files were formatted\n      - name: create PR with formatted files\n        if: steps.format-files.outputs.changes_detected == 'true'\n        id: create-pr\n        run: git checkout formatting-${{ github.sha }} && gh pr create --base main --head formatting-${{ github.sha }} --title 'Merge formatting into main' --body 'Created by Github action'\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      # merge PR using GitHub CLI\n      - name: merge PR with adjusted formatting\n        if: steps.format-files.outputs.changes_detected == 'true'\n        id: merge-pr\n        run: gh pr merge --admin --merge --subject 'Merge formatting' --delete-branch\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
+    },
+    {
+      "path": ".github/workflows/data-filenames.yml",
+      "sha": null,
+      "content_sha256": "ac4f1ecd53c58edca2cc5e4b77571f5ffd435e14de77323c38f3c1bdadebfe27",
+      "score": 126,
+      "content": "name: Data Filenames Check\r\n\r\non:\r\n  pull_request:\r\n    paths:\r\n      - \"data/**\"\r\n\r\njobs:\r\n  build:\r\n    runs-on: ubuntu-latest\r\n    name: Test changed-files\r\n    steps:\r\n      - uses: actions/checkout@v3\r\n\r\n      - name: Setup Node\r\n        uses: actions/setup-node@v3\r\n        with:\r\n          node-version: \"18\"\r\n\r\n      - name: Get changed files\r\n        id: changed-files\r\n        uses: tj-actions/changed-files@v35\r\n\r\n      - name: Get changed files between base & head\r\n        id: base-changed-files\r\n        uses: tj-actions/changed-files@v35\r\n        with:\r\n          base_sha: ${{ github.event.pull_request.head.sha }}\r\n\r\n      - name: Check changed files\r\n        env:\r\n          BASE_FILENAMES: ${{ steps.base-changed-files.outputs.all_changed_files }}\r\n          FILENAMES: ${{ steps.changed-files.outputs.all_changed_files }}\r\n          USERNAME: ${{ github.actor }}\r\n        run: |\r\n          node .github/scripts/check-filenames.js\r\n"
+    },
+    {
+      "path": ".github/workflows/kubescape.yml",
+      "sha": null,
+      "content_sha256": "d592a110f376bb69c4f56b777a5ef96a7d84480e3ab8f97b9baca5cbb6673f34",
+      "score": 126,
+      "content": "name: Kubescape\non:\n  push:\n    paths:\n      - \"kubernetes/**\"\n  pull_request:\n    paths:\n      - \"kubernetes/**\"\n\njobs:\n  security:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-node@v3\n        with:\n          node-version: \"18\"\n      - name: Install Kubescape\n        run: curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash\n      - name: Kubescape\n        run: kubescape scan kubernetes/*.yaml -v --fail-threshold 40\n"
+    },
+    {
+      "path": "pages/docs/how-to-guides/testimonials.mdx",
+      "sha": null,
+      "content_sha256": "5a07ad18a2084a651ee420b39bddb643f49eefa3676ff6da728bda424943d11f",
+      "score": 124,
+      "content": "import DocsLayout from \"../../../components/layouts/DocsLayout.js\";\nimport ClipboardCopy from \"../../../components/ClipboardCopy\";\nimport Link from \"../../../components/Link\";\n\n## Testimonials\n\nShow off the great feedback you have received.\n\n![LinkFree Testimonial Profile example](https://user-images.githubusercontent.com/624760/210418401-3337352a-ee07-4b38-b929-f62209e27be4.png)\n\n### Giving a Testimonial\n\nYou can give a Testimonial for another LinkFree user by going to their Profile and clicking on the \"Add testimonial\" button. This will take you to GitHub issue with the fields pre-populated for that user and you can fill in your testimonial.\n\nThe issue will look like this:\n\n![LinkFree testimonial issue](https://user-images.githubusercontent.com/624760/210427249-25848dd6-463a-4748-aa60-45c6e53f49a8.png)\n\n**NOTE**: Don't have a LinkFree account but want to give a testimonial? Do not worry! Log in to your GitHub account (if you don't have one, check out <Link href=\"https://www.eddiejaoude.io/course-github-profile-landing\">Eddie's Course</Link> to help you) and follow the steps above.\n\n### Manually adding a Testimonial\n\nAlso you can add a Testimonial manually by creating the `json` file `data/<username>/testimonials/<your-username>.json` with the content:\n\n<ClipboardCopy>\n```js\n{\n  \"title\": \"Founder of an Amazing Community\",\n  \"description\": \"Eddie founded EddieHub, an opensource community, which sparked my interest in all things FOSS and FOSH. Eddie's YouTube videos are also inspiring, especially the livestreams, where one can really see the community come together. My number one reccommendation to anyone who's starting thier opensource jouney :sparkles:\",\n  \"date\": \"2022-26-11\"\n}\n```\n</ClipboardCopy>\n\n### Including a Testimonial on your Profile\n\nIf you receive a Testimonial, you can include this in the Testimonial section of your Profile.\n\nYou can do this by including the usernames of the testimonials you wish to show on your profile with the following `json` code:\n\n```js\n\"testimonials\": [\n  \"CBID2\",\n  \"Akshu-on-github\",\n  \"ZeeMonk-pixel\",\n  \"krupalitrivedi\"\n]\n```\n\nexport default ({ children }) => (\n  <DocsLayout title=\"LinkFree Testimonials Documentation\">\n    {children}\n  </DocsLayout>\n);\n"
+    },
+    {
+      "path": "pages/docs/contributing/automated-tests.mdx",
+      "sha": null,
+      "content_sha256": "f82d77ad651245e0d31bec1b2c9eea517222b781c91893766859ffe9831064f4",
+      "score": 124,
+      "content": "import DocsLayout from \"../../../components/layouts/DocsLayout.js\";\nimport Link from \"../../../components/Link\";\n\n## Automated Tests\n\nWe use <Link href=\"http://playwright.dev\">Playwright</Link> for writing automated end to end (e2e) tests.\n\n1. Install Playwright dependencies `npx playwright install --with-deps`\n1. Run tests `npm run test`\n\n```bash\nnpm run test\n\n> linkfree@1.0.0 test\n> npx playwright test\n\n\nRunning 18 tests using 4 workers\n\n  10 skipped\n  8 passed (13s)\n\nTo open last HTML report run:\n\n  npx playwright show-report\n```\n\nexport default ({ children }) => (\n  <DocsLayout title=\"LinkFree Automated Tests Documentation\">\n    {children}\n  </DocsLayout>\n);\n"
+    },
+    {
+      "path": "mongo-compose.yml",
+      "sha": null,
+      "content_sha256": "211b333674a9aee7b12a517de822f3bca36676130df1bee41fea1c027185e20d",
+      "score": 120,
+      "content": "# docker compose -f mongo-compose.yml up\nversion: \"3.9\"\nservices:\n  mongodb:\n    image: mongo\n    ports:\n      - \"27017:27017\"\n"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha": null,
+      "content_sha256": "b4747ce4dd623512d6240f922e4282aec9b8e1ad68baee28aa53a9355a902532",
+      "score": 120,
+      "content": "version: \"3.9\"\n\nservices:\n  linkfree:\n    container_name: linkfree\n    build: \n      context: .\n      dockerfile: Dockerfile\n      args:\n        - NODE_ENV=development\n    image: linkfree-app\n    ports:\n      - \"3000:3000\"\n    depends_on:\n      - mongodb\n    command: npm run dev:docker\n    volumes:\n      - .:/usr/src/app\n      - /usr/src/app/node_modules\n    networks:\n      - linkfree-network\n\n  mongodb:\n    image: mongo:5.0\n    container_name: mongodb\n    networks:\n      - linkfree-network\n    volumes:\n      - mongodb:/data/db\n\nnetworks:\n  linkfree-network:\n    driver: bridge\n\nvolumes:\n  mongodb:\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:07.607802+00:00"
+}

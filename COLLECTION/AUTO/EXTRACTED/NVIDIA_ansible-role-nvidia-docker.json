@@ -1,0 +1,113 @@
+{
+  "canonical_source": "github:NVIDIA/ansible-role-nvidia-docker",
+  "repo": "NVIDIA/ansible-role-nvidia-docker",
+  "revision_sha": "02baa2ce29abb0a93345b90d44ecff322e611415",
+  "default_branch": "master",
+  "pushed_at": "2026-08-14T19:21:12Z",
+  "repo_updated_at": "2026-09-10T17:43:39Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "tests/README.md",
+      "sha": null,
+      "content_sha256": "6d5fc1762f9e04a938927d6a97aaef0f624078958a1d89c21abcfbe98ad6f185",
+      "score": 158,
+      "content": "Test like this:\n```\nansible-playbook --inventory tests/inventory.yml tests/playbook.yml\n```\nBy default, the test inventory operates on the localhost.\nYou may want to change this.\n"
+    },
+    {
+      "path": "tasks/ubuntu-pre-install.yml",
+      "sha": null,
+      "content_sha256": "44ed3c31375071e8324f45fb73aaf69483118dc3f5c073bfb9be795321862616",
+      "score": 115,
+      "content": "---\n- name: Remove packages\n  ansible.builtin.apt:\n    name:\n      - nvidia-docker\n      - nvidia-docker2\n    state: absent\n    autoremove: true\n    purge: true\n  become: true\n\n- name: Add key\n  ansible.builtin.apt_key:\n    url: \"{{ nvidia_docker_repo_gpg_url }}\"\n    state: present\n  when: nvidia_docker_add_repo\n  environment: \"{{ proxy_env if proxy_env is defined else {} }}\"\n  become: true\n\n- name: Add repo\n  ansible.builtin.get_url:\n    url: \"{{ nvidia_docker_repo_base_url }}/{{ ansible_local['nv_os_release']['nv_os_release'] }}/{{ _ubuntu_repo_file_name }}\"\n    dest: \"{{ _ubuntu_repo_file_path }}\"\n    mode: \"0644\"\n    owner: root\n    group: root\n  when: nvidia_docker_add_repo\n  environment: \"{{ proxy_env if proxy_env is defined else {} }}\"\n  become: true\n\n- name: Install packages\n  ansible.builtin.apt:\n    name: nvidia-container-runtime\n    state: present\n    update_cache: true\n  notify: Restart docker\n  environment: \"{{ proxy_env if proxy_env is defined else {} }}\"\n  become: true\n"
+    },
+    {
+      "path": "tasks/redhat-pre-install.yml",
+      "sha": null,
+      "content_sha256": "606935d9ecfc74dc3c07475ac40031e747394bea6f2e87eb35a38bb4eef4e027",
+      "score": 115,
+      "content": "---\n- name: Remove packages\n  ansible.builtin.yum:\n    name:\n      - nvidia-docker\n      - nvidia-docker2\n    state: absent\n    autoremove: true\n\n- name: Add repo\n  ansible.builtin.get_url:\n    url: \"{{ nvidia_docker_repo_base_url }}/{{ ansible_local['nv_os_release']['nv_os_release'] }}/{{ _rhel_repo_file_name }}\"\n    dest: \"{{ _rhel_repo_file_path }}\"\n    mode: \"0644\"\n    owner: root\n    group: root\n  when: nvidia_docker_add_repo\n  environment: \"{{ proxy_env if proxy_env is defined else {} }}\"\n\n\n- name: Install packages\n  ansible.builtin.yum:\n    name: nvidia-container-runtime\n    state: present\n    update_cache: true\n  notify: Restart docker\n  environment: \"{{ proxy_env if proxy_env is defined else {} }}\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "e97cbbd1c8a4bbd2c84a830eab3073bd33f59c964e7ccd9bdfbefc32864f8be7",
+      "score": 100,
+      "content": "An ansible role to install nvidia-docker.\n"
+    },
+    {
+      "path": "tests/test_handler_name_case.py",
+      "sha": null,
+      "content_sha256": "7655d4b46eeead23e3d58dd66de6d75d9228353f670326d8c4bbdbadf5b60401",
+      "score": 93,
+      "content": "\"\"\"Regression test: handler notifications must match handler names exactly.\n\nAnsible handler name lookup is a case-sensitive exact string match. Two\ntasks notified `restart docker` while the handler in handlers/main.yml is\nnamed `Restart docker`, so the notification resolved to no handler and\nDocker was never restarted after changing /etc/docker/daemon.json or\ninstalling nvidia-container-runtime. This test cross-checks every\n`notify:` in tasks/*.yml against the handler names defined in\nhandlers/*.yml.\n\"\"\"\n\nfrom pathlib import Path\n\nimport yaml\n\nROLE_ROOT = Path(__file__).resolve().parent.parent\n\n\ndef _handler_names():\n    names = set()\n    for path in sorted((ROLE_ROOT / \"handlers\").glob(\"*.yml\")):\n        with open(path) as f:\n            for task in yaml.safe_load(f) or []:\n                if isinstance(task, dict) and \"name\" in task:\n                    names.add(task[\"name\"])\n    return names\n\n\ndef _notifications():\n    notified = []\n    for path in sorted((ROLE_ROOT / \"tasks\").glob(\"*.yml\")):\n        with open(path) as f:\n            for task in yaml.safe_load(f) or []:\n                if isinstance(task, dict) and \"notify\" in task:\n                    notify = task[\"notify\"]\n                    values = notify if isinstance(notify, list) else [notify]\n                    for value in values:\n                        notified.append((path.name, task.get(\"name\"), value))\n    return notified\n\n\ndef test_every_notify_matches_a_handler_name_case_sensitively():\n    handler_names = _handler_names()\n    notifications = _notifications()\n    assert notifications, \"expected at least one notify in tasks/*.yml\"\n    unresolved = [\n        f\"{file}: task {task_name!r} notifies {value!r}\"\n        for file, task_name, value in notifications\n        if value not in handler_names\n    ]\n    assert not unresolved, (\n        \"notify names must exactly (case-sensitively) match a handler \"\n        f\"name in handlers/*.yml ({sorted(handler_names)}); unresolved: \"\n        + \"; \".join(unresolved)\n    )\n"
+    },
+    {
+      "path": "tests/playbook.yml",
+      "sha": null,
+      "content_sha256": "285dd76a7230b0a7f89334d84d6955e0233769dda2a7f5c30873757399673a1e",
+      "score": 93,
+      "content": "---\n- hosts: all\n  become: true\n  roles:\n    - ../..\n"
+    },
+    {
+      "path": "files/etc/ansible/facts.d/nv_os_release.fact",
+      "sha": null,
+      "content_sha256": "c517129f10abcf92dcfc6e16508fee059ef8d2f031206eb70b1a26eb1a41a71e",
+      "score": 64,
+      "content": "#!/bin/bash\n#\n# The URL for the nvidia-docker repository depends on the Linux distribution\n# name and version, according to the contents of /etc/os-release:\n#\n#  distribution=$(. /etc/os-release;echo $ID_VERSION_ID)\n#  url=\"https://nvidia.github.io/nvidia-docker/${distribution}/\"\n#\n# Unfortunately, the results of this particular check aren't found in the\n# existing Ansible facts, so we'll define a custom fact to get this\n# distribution name.\n\nset -eu\n\nsource /etc/os-release\n\nnv_os_release=\"${ID}${VERSION_ID}\"\n\ncat <<EOF\n{\n  \"nv_os_release\": \"${nv_os_release}\"\n}\nEOF\n"
+    },
+    {
+      "path": "tests/inventory",
+      "sha": null,
+      "content_sha256": "d906aecb61d076a967d9ffe8821c7b04b063f72df9d9e35b33ef36b1c0d98f16",
+      "score": 58,
+      "content": "localhost\n"
+    },
+    {
+      "path": "defaults/main.yml",
+      "sha": null,
+      "content_sha256": "639a84d7183a0da8dce89ae5b8681c6a11e2a0cc0dd4c3453f810161c6cecf70",
+      "score": 33,
+      "content": "nvidia_container_runtime_package_version: ''\n\ndocker_daemon_json:\n  # Set default runtime (required for kubernetes)\n  runtimes:\n    nvidia:\n      path: /usr/bin/nvidia-container-runtime\n      runtimeArgs: []\n  default-runtime: nvidia\n\n  # Reference for these limits: https://docs.nvidia.com/deeplearning/dgx/user-guide/index.html\n  default-shm-size: 1G\n  default-ulimits:\n    memlock:\n      name: memlock\n      hard: -1\n      soft: -1\n    stack:\n      name: stack\n      hard: 67108864\n      soft: 67108864\n\nnvidia_docker_repo_base_url: \"https://nvidia.github.io/nvidia-docker\"\nnvidia_docker_repo_gpg_url: \"{{ nvidia_docker_repo_base_url }}/gpgkey\"\nnvidia_docker_wrapper_url: https://raw.githubusercontent.com/NVIDIA/nvidia-docker/master/nvidia-docker\nnvidia_docker_add_repo: true\nnvidia_docker_install_wrapper: true\nnvidia_docker_skip_docker_reload: false\n\n# Replacing the reload var with the restart var, using this by default for\n# backward compatibility\nnvidia_docker_skip_docker_restart: \"{{ nvidia_docker_skip_docker_reload }}\"\n"
+    },
+    {
+      "path": "meta/main.yml",
+      "sha": null,
+      "content_sha256": "e3ac9b4f43b7ebc708c81374a49ebec66e8def410d4540e82c7443169c9a1063",
+      "score": 33,
+      "content": "galaxy_info:\n  role_name: nvidia_docker\n  author: Luke Yeager\n  company: NVIDIA\n  description: Install nvidia-docker\n  license: 3-Clause BSD\n  min_ansible_version: \"2.0\"\n\n  platforms:\n    - name: Ubuntu\n      versions:\n        - 'xenial'\n        - 'bionic'\n    - name: EL\n      versions:\n        - '7'\n\n  galaxy_tags:\n    - 'nvidia'\n    - 'docker'\n"
+    },
+    {
+      "path": "vars/main.yml",
+      "sha": null,
+      "content_sha256": "3746dbae48ca3c1935cb55f5d6c279862bf0cb7b38d16a15e6b05c44f541aafa",
+      "score": 33,
+      "content": "_ubuntu_repo_file_name: \"nvidia-docker.list\"\n_ubuntu_repo_file_path: \"/etc/apt/sources.list.d/{{ _ubuntu_repo_file_name }}\"\n\n_rhel_repo_file_name: \"nvidia-docker.repo\"\n_rhel_repo_file_path: \"/etc/yum.repos.d/{{ _rhel_repo_file_name }}\"\n"
+    },
+    {
+      "path": "tasks/main.yml",
+      "sha": null,
+      "content_sha256": "440c7ef50c52f508a9134b12c5490e78c456b11e19fa895121ee921b64eaad9e",
+      "score": 33,
+      "content": "---\n- name: Ensure facts directory exists\n  ansible.builtin.file:\n    path: \"/etc/ansible/facts.d\"\n    state: directory\n    owner: \"root\"\n    group: \"root\"\n    mode: \"755\"\n  become: true\n\n- name: Setup custom facts\n  ansible.builtin.copy:\n    src: \"etc/ansible/facts.d/nv_os_release.fact\"\n    dest: \"/etc/ansible/facts.d/nv_os_release.fact\"\n    owner: \"root\"\n    group: \"root\"\n    mode: \"0755\"\n  become: true\n\n- name: Re-gather facts\n  ansible.builtin.setup:\n    filter:\n      - ansible_local\n\n- name: Check distro\n  ansible.builtin.fail:\n    msg: \"distro {{ ansible_facts['distribution'] }} not supported\"\n  when: ansible_facts['distribution'] != 'Ubuntu' and ansible_os_family != 'RedHat'\n\n- name: Ubuntu pre-install tasks\n  ansible.builtin.include_tasks: ubuntu-pre-install.yml\n  when: ansible_distribution == 'Ubuntu'\n\n- name: Redhat family pre-install tasks\n  ansible.builtin.include_tasks: redhat-pre-install.yml\n  when: ansible_os_family == 'RedHat'\n\n- name: Create /etc/docker\n  ansible.builtin.file:\n    path: /etc/docker\n    state: directory\n    mode: '0755'\n  become: true\n\n- name: Set docker daemon configuration\n  ansible.builtin.copy:\n    content: \"{{ docker_daemon_json | to_nice_json }}\"\n    dest: /etc/docker/daemon.json\n    owner: root\n    group: root\n    mode: \"0644\"\n  notify: Restart docker\n  become: true\n\n# We could use the \"nvidia-docker2\" package to install this wrapper for us.\n# Instead, we grab the wrapper directly to avoid packaging issues stemming from\n#   docker version pinning in the nvidia-docker2 package.\n- name: Grab nvidia-docker wrapper\n  ansible.builtin.get_url:\n    url: \"{{ nvidia_docker_wrapper_url }}\"\n    dest: /usr/local/bin/nvidia-docker\n    mode: \"0755\"\n    owner: root\n    group: root\n  environment: \"{{ proxy_env if proxy_env is defined else {} }}\"\n  when: nvidia_docker_install_wrapper\n  become: true\n"
+    },
+    {
+      "path": "handlers/main.yml",
+      "sha": null,
+      "content_sha256": "712064c2dcf464e72dfec7797ffec2233c22ff753c2f9d51dbdce1f452952a12",
+      "score": 33,
+      "content": "---\n- name: Restart docker\n  ansible.builtin.systemd:\n    name: docker\n    daemon_reload: true\n    state: restarted\n  when: not nvidia_docker_skip_docker_restart\n  become: true\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:16.604684+00:00"
+}

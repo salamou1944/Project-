@@ -1,0 +1,141 @@
+{
+  "canonical_source": "github:amardeeplakshkar/mediDev",
+  "repo": "amardeeplakshkar/mediDev",
+  "revision_sha": "c536575125eff8bfd5afe1803706a339f269aeb2",
+  "default_branch": "main",
+  "pushed_at": "2025-03-30T03:55:52Z",
+  "repo_updated_at": "2025-04-11T09:34:54Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "src/models/authModel.js",
+      "sha": null,
+      "content_sha256": "c17141c6346eb7d62c73fe4c655a6d95e72972754a7cd9391d74654c650a4b3a",
+      "score": 186,
+      "content": "import mongoose from \"mongoose\";\nimport passportLocalMongoose from \"passport-local-mongoose\";\nimport bcrypt from \"bcrypt\";\n\n// Common options\nconst options = { timestamps: true };\n\n// Base User Schema\nconst userSchema = new mongoose.Schema(\n  {\n    fullName: { type: String, required: true },\n    email: { type: String, required: true, unique: true },\n    password: { type: String },\n    role: { type: String, required: true, enum: [\"patient\", \"doctor\", \"ngo\"] },\n  },\n  options\n);\n\nuserSchema.plugin(passportLocalMongoose, { usernameField: \"email\" });\n\nconst User = mongoose.model(\"User\", userSchema);\n\n// Patient Schema\nconst patientSchema = new mongoose.Schema(\n  {\n    fullName: { type: String, required: true },\n    email: { type: String, required: true, unique: true },\n    password: { type: String },\n    phoneNumber: String,\n    age: Number,\n    gender: String,\n    doctor: { type: mongoose.Schema.Types.ObjectId, ref: \"Doctor\" },\n    illness: [String],\n    symptoms: [String],\n    location: String,\n  },\n  options\n);\n\npatientSchema.methods.isValidPassword = async function (password) {\n  return await bcrypt.compare(password, this.password);\n};\n\npatientSchema.plugin(passportLocalMongoose, { usernameField: \"email\" });\nconst Patient = mongoose.model(\"Patient\", patientSchema);\n\n// Doctor Schema\nconst doctorSchema = new mongoose.Schema(\n  {\n    fullName: { type: String  },\n    email: { type: String, required: true, unique: true },\n    password: { type: String},\n    licenseNumber: { type: String },\n    verified: { type: Boolean, default: false },\n    specialization: [String],\n    experience: String,\n  },\n  options\n);\n\ndoctorSchema.plugin(passportLocalMongoose, { usernameField: \"email\" });\nconst Doctor = mongoose.model(\"Doctor\", doctorSchema);\n\n// NGO Schema\nconst ngoSchema = new mongoose.Schema(\n  {\n    orgName: { type: String},\n    email: { type: String, required: true, unique: true },\n    password: { type: String },\n    missionStatement: String,\n    address: String,\n    websiteUrl: String,\n    verified: { type: Boolean, default: false },\n    certifications: [String],\n  },\n  options\n);\n\n\nngoSchema.plugin(passportLocalMongoose, { usernameField: \"email\" });\nconst NGO = mongoose.model(\"NGO\", ngoSchema);\n\nexport { User, Patient, Doctor, NGO };\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "6e3f250712bc9b1d3b91088e8c2499198f0168fa7974957232dfb91f5274fd0f",
+      "score": 120,
+      "content": "{\n  \"name\": \"DevSummit_server\",\n  \"version\": \"1.0.0\",\n  \"main\": \"server.js\",\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"echo \\\"Error: no test specified\\\" && exit 1\"\n  },\n  \"author\": \"Javed Ansari\",\n  \"license\": \"ISC\",\n  \"description\": \"\",\n  \"dependencies\": {\n    \"bcrypt\": \"^5.1.1\",\n    \"cloudinary\": \"^2.6.0\",\n    \"cors\": \"^2.8.5\",\n    \"dotenv\": \"^16.4.7\",\n    \"express\": \"^4.21.2\",\n    \"express-session\": \"^1.18.1\",\n    \"jsonwebtoken\": \"^9.0.2\",\n    \"mongoose\": \"^8.13.1\",\n    \"multer\": \"^1.4.5-lts.2\",\n    \"passport\": \"^0.7.0\",\n    \"passport-local\": \"^1.0.0\",\n    \"passport-local-mongoose\": \"^8.0.0\"\n  }\n}\n"
+    },
+    {
+      "path": "src/middlewares/isAuthenticated.js",
+      "sha": null,
+      "content_sha256": "72c1226cf4011e50ab39e8fac7fb47643857724172710337f018befb2d618473",
+      "score": 111,
+      "content": "import jwt from \"jsonwebtoken\";\n\nconst SECRET_KEY = \"your_secret_key\"; \n\nexport const authenticateUser = (req, res, next) => {\n  const token = req.headers.authorization?.split(\" \")[1];\n\n  if (!token) {\n    return res.status(401).json({ message: \"Unauthorized: No token provided\" });\n  }\n\n  try {\n    const decoded = jwt.verify(token, SECRET_KEY);\n    req.user = decoded; \n    console.log(req.user); \n    next();\n  } catch (error) {\n    res.status(401).json({ message: \"Invalid or expired token\" });\n  }\n};\n"
+    },
+    {
+      "path": "src/routes/authRoutes.js",
+      "sha": null,
+      "content_sha256": "c99e54cde5fb48a3f8debb17e6b82719339e447004fe86ae42928be6f9d3617d",
+      "score": 111,
+      "content": "import express from 'express';\n// import { registerUser, loginUser, logoutUser, loginDoctor, loginPatient, loginNgo } from '../controllers/authController.js';\nimport { iam, login, logout, signup } from '../controllers/authSimple.js';\nimport { authenticateUser } from '../middlewares/isAuthenticated.js';\n\nconst authRoutes = express.Router();\n\nauthRoutes.post('/singup', signup);\nauthRoutes.post('/login', login);\nauthRoutes.post('/logout', logout);\nauthRoutes.get('/iam',authenticateUser , iam);\n\nexport default authRoutes;\n\n\n"
+    },
+    {
+      "path": "src/controllers/authSimple.js",
+      "sha": null,
+      "content_sha256": "df059c2f885ab928a025a0704f0ce0a9e75f0c1be94ca57dc19e94cc09e4a248",
+      "score": 111,
+      "content": "import jwt from \"jsonwebtoken\";\nimport bcrypt from \"bcrypt\";\nimport { User, Patient, Doctor, NGO } from \"../models/authModel.js\";\n\nconst SECRET_KEY = \"your_secret_key\"; // Use an environment variable in production\n\n\nexport const signup = async (req, res) => {\n  try {\n    const { fullName, email, password, role  } = req.body;\n\n    console.log(fullName, email, password, role);\n\n    if (!fullName || !email || !password || !role) {\n      return res.status(400).json({ message: \"All fields are required.\" });\n    }\n\n    let UserModel, userData;\n    if (role === \"patient\") {\n      UserModel = Patient;\n      userData = { fullName, email, role};\n      const { age, gender, location } = req.body;\n\n      if(age){\n        userData.age = age;\n      }\n      if(gender){\n        userData.gender = gender;\n      }\n      if(location){\n        userData.location = location;\n      }\n\n      console.log(userData, \"userData in patient signup controller\");\n\n    } else if (role === \"doctor\") {\n      UserModel = Doctor;\n      userData = { fullName, email, role};\n      const { licenseNumber, specialization, experience } = req.body;\n\n      if(licenseNumber){\n        userData.licenseNumber = licenseNumber;\n      }\n      if(specialization){\n        userData.specialization = specialization;\n      }\n      if(experience){\n        userData.experience = experience;\n      }\n\n      console.log(userData, \"userData in Doctor signup controller\");\n\n    } else if (role === \"ngo\") {\n      UserModel = NGO;\n    \n      // ✅ Initialize userData before assigning properties\n      userData = { fullName, email, role };\n    \n      const { missionStatement, certifications, address, websiteUrl } = req.body;\n      console.log(certifications, address, websiteUrl);\n    \n      if (missionStatement && missionStatement.length > 0) {\n        userData.missionStatement = missionStatement;\n      }\n    \n      if (certifications && certifications.length > 0) {\n        userData.certifications = certifications;\n      }\n      \n      if (address && address.trim() !== \"\") {\n        userData.address = address;\n      }\n      \n      if (websiteUrl && websiteUrl.trim() !== \"\") {\n        userData.websiteUrl = websiteUrl;\n      }\n    \n      console.log(userData, \"userData in NGO signup controller\");\n    } else {\n      return res.status(400).json({ message: \"Invalid role provided.\" });\n    }\n\n\n    const existingUser = await UserModel.findOne({ email });\n    if (existingUser) {\n      return res.status(400).json({ message: \"Email already exists.\" });\n    }\n\n    // Hash password\n    const hashedPassword = await bcrypt.hash(password, 10);\n    userData.password = hashedPassword;\n\n    // Create user\n    // const newUser = new UserModel({\n    //   fullName,\n    //   email,\n    //   password: hashedPassword,\n    //   role,\n    // });\n    const newUser = new UserModel(userData);\n\n    await newUser.save();\n\n    // Generate JWT Token\n    const token = jwt.sign({ id: newUser._id, role: newUser.role }, SECRET_KEY, { expiresIn: \"7d\" });\n\n    res.status(201).json({ message: \"Signup successful!\", token, user: newUser });\n  } catch (error) {\n    console.error(\"Signup error:\", error);\n    res.status(500).json({ message: \"Internal Server Error\" });\n  }\n};\n\n\n// export const signup = async (req, res) => {\n//   try {\n//     const { fullName, email, password, role } = req.body;\n\n//     console.log(fullName, email, password, role);\n\n//     if (!fullName || !email || !password || !role) {\n//       return res.status(400).json({ message: \"All fields are required.\" });\n//     }\n\n//     let UserModel;\n//     if (role === \"patient\") {\n//       UserModel = Patient;\n//     } else if (role === \"doctor\") {\n//       UserModel = Doctor;\n//     } else if (role === \"ngo\") {\n//       UserModel = NGO;\n//     } else {\n//       return res.status(400).json({ message: \"Invalid role provided.\" });\n//     }\n\n\n//     const existingUser = await UserModel.findOne({ email });\n//     if (existingUser) {\n//       return res.status(400).json({ message: \"Email already exists.\" });\n//     }\n\n//     // Hash password\n//     const hashedPassword = await bcrypt.hash(password, 10);\n\n//     // Create user\n//     const newUser = new UserModel({\n//       fullName,\n//       email,\n//       password: hashedPassword,\n//       role,\n//     });\n\n//     await newUser.save();\n\n//     // Generate JWT Token\n//     const token = jwt.sign({ id: newUser._id, role: newUser.role }, SECRET_KEY, { expiresIn: \"7d\" });\n\n//     res.status(201).json({ message: \"Signup successful!\", token, user: newUser });\n//   } catch (error) {\n//     console.error(\"Signup error:\", error);\n//     res.status(500).json({ message: \"Internal Server Error\" });\n//   }\n// };\n\n\n\n\nexport const login = async (req, res) => {\n  try {\n    const { email, password, role } = req.body;\n\n    if (!email || !password || !role) {\n      return res.status(400).json({ message: \"All fields are required.\" });\n    }\n\n    let UserModel;\n    if (role === \"patient\") {\n      UserModel = Patient;\n    } else if (role === \"doctor\") {\n      UserModel = Doctor;\n    } else if (role === \"ngo\") {\n      UserModel = NGO;\n    } else {\n      return res.status(400).json({ message: \"Invalid role provided.\" });\n    }\n\n    const user = await UserModel.findOne({ email });\n    if (!user) {\n      return res.status(401).json({ message: \"User not found.\" });\n    }\n\n    const isMatch = await bcrypt.compare(password, user.password);\n    if (!isMatch) {\n      return res.status(401).json({ message: \"Invalid email or password.\" });\n    }\n\n    // Generate JWT Token\n    const token = jwt.sign({ id: user._id, role: user.role }, SECRET_KEY, { expiresIn: \"7d\" });\n\n    res.status(200).json({ message: \"Login successful!\", token, user });\n  } catch (error) {\n    console.error(\"Login error:\", error);\n    res.status(500).json({ message: \"Internal Server Error Here\" });\n  }\n\n\n};\n\n\n\n\n\nexport const logout = (req, res) => {\n  res.status(200).json({ message: \"Logged out successfully!\" });\n};\n\n\nexport const iam = (req, res) => {\n  const { user } = req; // Extract user from request object\n  console.log(\"Iam :\", user);\n  if (!user) {\n    return res.status(401).json({ message: \"Unauthorized\" });\n  }\n\n  // Return user information\n  res.status(200).json({ message: \"User information\", user });\n}\n\n\n\n/** Middleware to Protect Routes */\nexport const authenticateToken = (req, res, next) => {\n  const token = req.header(\"Authorization\");\n  if (!token) return res.status(403).json({ message: \"Access denied. No token provided.\" });\n\n  try {\n    const decoded = jwt.verify(token.replace(\"Bearer \", \"\"), SECRET_KEY);\n    req.user = decoded;\n    console.log(req.user);\n    next();\n  } catch (error) {\n    res.status(401).json({ message: \"Invalid or expired token.\" });\n  }\n};\n"
+    },
+    {
+      "path": "src/models/listModel.js",
+      "sha": null,
+      "content_sha256": "b4a67c95a73b6a01e60aa0c33a1baa44e86dbbbee295ac420c5f8c66feaaf91c",
+      "score": 106,
+      "content": "import mongoose from \"mongoose\";\n\nconst postSchema = new mongoose.Schema(\n  {\n\n    content: {\n      type: String,\n    },\n    imageUrl: {\n      type: [String], // Array of image URLs\n      default: [],\n    },\n    reportUrl: {\n      type: [String], // Array of report URLs\n      default: [],\n    },\n    patientId: {\n      type: mongoose.Schema.Types.ObjectId,\n      ref: \"Patient\",\n    },\n    verifiedBy: [{\n      type: mongoose.Schema.Types.ObjectId,\n      ref: \"NGO\",\n      default: null, // Optional, as NGO verification is not always required\n    }],\n    verified: {\n      type: Boolean,\n      default: false, // Default: not verified\n    },\n    medicalHistory: {\n      type: String,\n    },\n  },\n  {\n    timestamps: true, // Automatically add createdAt and updatedAt fields\n  }\n);\n\nconst Post = mongoose.model(\"Post\", postSchema);\nexport default Post;\n"
+    },
+    {
+      "path": "server.js",
+      "sha": null,
+      "content_sha256": "be9985c1a484c5965646e02aac134e5def33266b57d82466dcd96248d0e13bec",
+      "score": 35,
+      "content": "import express from \"express\";\nimport dotenv from \"dotenv\";\nimport app from \"./src/app.js\";\nimport connectDB from \"./src/config/dbConfig.js\";\n\n\n\ndotenv.config();\nconnectDB();\n\n\n\nconst PORT = process.env.PORT || 3000;\napp.listen(PORT, () => {\n  console.log(`Server is running on port ${PORT}`);\n});\n"
+    },
+    {
+      "path": "src/app.js",
+      "sha": null,
+      "content_sha256": "1e78dbff5a53f457a56415dd56514a10c2f074a33a631f31a335b394e9584baf",
+      "score": 33,
+      "content": "import express from \"express\";\nimport session from \"express-session\";\nimport bodyParser from \"body-parser\"; \nimport cors from \"cors\";\nimport passport from 'passport';\nimport { Strategy as LocalStrategy } from 'passport-local';\nimport { User, Patient, Doctor, NGO } from \"./models/authModel.js\";\nimport authRoutes from \"./routes/authRoutes.js\";\nimport patientRoutes from \"./routes/patientRoute.js\";\n\n\nconst app = express();\n\n\napp.use(\n  cors({\n    origin: \"*\", // Allow all origins (not recommended for production)\n    methods: [\"GET\", \"POST\", \"PUT\", \"DELETE\"],\n    credentials: true, // Allow cookies if needed\n  })\n);\n\n\napp.use(bodyParser.json()); \napp.use(bodyParser.urlencoded({ extended: true })); \n\n\napp.use(express.json());\napp.use(\n  session({\n    secret: \"secretKey\",\n    resave: false,\n    saveUninitialized: false,\n  })\n);\napp.use(passport.initialize());\napp.use(passport.session());\n\npassport.use(User.createStrategy());\npassport.serializeUser(User.serializeUser());\npassport.deserializeUser(User.deserializeUser());\n\npassport.use('multi-role-local', new LocalStrategy({\n  usernameField: 'email',\n  passwordField: 'password',\n  passReqToCallback: true\n}, async (req, email, password, done) => {\n  try {\n    const { role } = req.body;\n    \n    let user;\n    switch(role) {\n      case 'doctor':\n        user = await Doctor.findOne({ email });\n        break;\n      case 'patient':\n        user = await Patient.findOne({ email });\n        break;\n      case 'ngo':\n        user = await NGO.findOne({ email });\n        break;\n      default:\n        return done(null, false, { message: 'Invalid role' });\n    }\n    \n    if (!user) return done(null, false, { message: `${role} not found` });\n    \n    const isValid = await user.isValidPassword(password);\n    if (!isValid) return done(null, false, { message: 'Incorrect password' });\n    \n    // Add role to user object\n    user.role = role;\n    return done(null, user, { message: `Logged in successfully as ${role}` });\n  } catch (error) {\n    return done(error);\n  }\n}));\n\n\npassport.serializeUser((user, done) => {\n  done(null, { id: user.id, role: user.role });\n});\n\npassport.deserializeUser(async (obj, done) => {\n  try {\n    let user;\n    switch(obj.role) {\n      case 'doctor':\n        user = await Doctor.findById(obj.id);\n        break;\n      case 'patient':\n        user = await Patient.findById(obj.id);\n        break;\n      case 'ngo':\n        user = await NGO.findById(obj.id);\n        break;\n      default:\n        return done(new Error('Invalid role'));\n    }\n    done(null, user);\n  } catch (error) {\n    done(error);\n  }\n});\n\n\n\n\napp.use(\"/api/auth\",authRoutes);\napp.use(\"/api/patient\",patientRoutes);\n\n\n\nexport default app;"
+    },
+    {
+      "path": "src/middlewares/multerMiddleware.js",
+      "sha": null,
+      "content_sha256": "a0d52ab2a3209db707b922b3d3138f27f2e681013d8be649d815a185d6e69707",
+      "score": 31,
+      "content": "import multer from \"multer\";\nimport path from \"path\";\nimport crypto from \"crypto\";\nimport { __dirname } from \"../utils/pathUtils.js\";\n\nconst storage = multer.diskStorage({\n    destination: function (req, file, cb) {\n      cb(null, path.join(__dirname, \"../../public/upload/images\"));\n    },\n\n    filename: function (req, file, cb) {\n      crypto.randomBytes(12, (error, name)=>{\n        const fileName = name.toString(\"hex\") + path.extname(file.originalname);\n        cb(null, fileName);\n      });\n    }\n  });\n  \n  const uploadFile = multer({ storage: storage });\n\n  export default uploadFile;\n"
+    },
+    {
+      "path": "src/config/passportConfig.js",
+      "sha": null,
+      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "score": 31,
+      "content": ""
+    },
+    {
+      "path": "src/routes/doctorRoutes.js",
+      "sha": null,
+      "content_sha256": "5156f416e287d4d6215b79bf20e7d17f5d5070e9242b9d386719adae03894d48",
+      "score": 31,
+      "content": "import express from 'express';\n\n\nconst doctorRoutes = express.Router();\n\n\n\n\nexport default doctorRoutes;\n"
+    },
+    {
+      "path": "src/config/cloudinary.js",
+      "sha": null,
+      "content_sha256": "170ac3e164ae5cde00736702961a084dd92f9eebcd37297f3b1acd330fe40d2a",
+      "score": 31,
+      "content": "import { v2 as cloudinary } from \"cloudinary\";\n\n\ncloudinary.config({ \n    cloud_name: process.env.CLOUDINARY_CLOUD_NAME, \n    api_key: process.env.CLOUDINARY_API_KEY, \n    api_secret: process.env.CLOUDINARY_API_SECRET \n});\n    \n\nexport default cloudinary;"
+    },
+    {
+      "path": "src/utils/pathUtils.js",
+      "sha": null,
+      "content_sha256": "efbe64363dd1c0411a61fbb1e5be0fc8fa3d8a07f74f4b6663ae3ed76f2b60fc",
+      "score": 31,
+      "content": "import path from \"path\";\nimport { fileURLToPath } from \"url\";\n\nexport const __filename = fileURLToPath(import.meta.url);\nexport const __dirname = path.dirname(__filename);\n"
+    },
+    {
+      "path": "src/controllers/doctorController.js",
+      "sha": null,
+      "content_sha256": "7b81f97c24d0e68985a83c200de4a575ba64b49bca92f6eb327b82dcf69777d1",
+      "score": 31,
+      "content": "\n\n\n\nexport const postList = async (req, res) => {\n\n    try{\n\n\n\n    }catch(err){\n        console.error(\"Signup error:\", err);\n        res.status(500).json({ message: \"Internal Server Error\" });\n    }\n\n\n}"
+    },
+    {
+      "path": "src/routes/patientRoute.js",
+      "sha": null,
+      "content_sha256": "591ab8d9e9efa8134406ade6845be90fae9541ccb0cb944ee1f4be3d8dea417c",
+      "score": 31,
+      "content": "import express from 'express';\nimport { createPost, getAllPosts } from '../controllers/patientCotroller.js';\n\nconst patientRoutes = express.Router();\n\npatientRoutes.get('/posts', getAllPosts);\npatientRoutes.post('/posts', createPost);\n// patientRoutes.post('/singup', signup);\n\nexport default patientRoutes;\n\n\n"
+    },
+    {
+      "path": "src/controllers/patientCotroller.js",
+      "sha": null,
+      "content_sha256": "aedc2e96117ec9ac979421b9656ba78d783c733bef112a7748b3af6eca1d472a",
+      "score": 31,
+      "content": "// import Post from \"../models/postModel.js\"; // Ensure this is the correct path\nimport Post from \"../models/listModel.js\";\nimport { Patient } from \"../models/authModel.js\";\n\n\n\nexport const createPost = async (req, res) => {\n  try {\n    const { content, imageUrl, reportUrl, medicalHistory } = req.body;\n\n    console.log(content, imageUrl, reportUrl, medicalHistory);\n\n    if (!content || !medicalHistory) {\n      return res.status(400).json({ message: \"Content and Medical History are required.\" });\n    }\n\n    let dataObj = {\n      content,\n      imageUrl,\n      reportUrl,\n      medicalHistory,\n    };\n\n    const newPost = new Post(dataObj); // \n    await newPost.save();\n    res.status(201).json({ message: \"Post created successfully\", post: newPost });\n\n  } catch (error) {\n    console.error(\"Error creating post:\", error);\n    res.status(500).json({ message: \"Internal Server Error\" });\n  }\n};\n\n\nexport const getAllPosts = async (req, res) => {\n  try {\n    const posts = await Post.find().populate(\"patientId\", \"fullName email\").populate(\"verifiedBy\", \"fullName\");\n    console.log(posts);\n    res.status(200).json(posts);\n  } catch (error) {\n    console.error(\"Error fetching posts:\", error);\n    res.status(500).json({ message: \"Internal Server Error\" });\n  }\n};\n\n\n\n// ✅ Get Posts by a Specific Patient\nexport const getPatientPosts = async (req, res) => {\n  try {\n    const { patientId } = req.params;\n    const posts = await Post.find({ patientId }).populate(\"verifiedBy\", \"fullName\");\n\n    if (!posts.length) {\n      return res.status(404).json({ message: \"No posts found for this patient.\" });\n    }\n\n    res.status(200).json(posts);\n  } catch (error) {\n    console.error(\"Error fetching patient posts:\", error);\n    res.status(500).json({ message: \"Internal Server Error\" });\n  }\n};\n\n// ✅ Verify a Post (Only by NGO)\nexport const verifyPost = async (req, res) => {\n  try {\n    const { postId } = req.params;\n    const ngoId = req.user.id; // Assuming `req.user` is set via authentication middleware\n\n    const post = await Post.findById(postId);\n    if (!post) {\n      return res.status(404).json({ message: \"Post not found.\" });\n    }\n\n    if (post.verifiedBy.includes(ngoId)) {\n      return res.status(400).json({ message: \"Post already verified by this NGO.\" });\n    }\n\n    post.verifiedBy.push(ngoId);\n    post.verified = true; // Mark post as verified\n\n    await post.save();\n    res.status(200).json({ message: \"Post verified successfully\", post });\n  } catch (error) {\n    console.error(\"Error verifying post:\", error);\n    res.status(500).json({ message: \"Internal Server Error\" });\n  }\n};\n\n// ✅ Delete a Post (Only by the Patient)\nexport const deletePost = async (req, res) => {\n  try {\n    const { postId } = req.params;\n    const patientId = req.user.id; // Ensure the logged-in user is the owner\n\n    const post = await Post.findById(postId);\n    if (!post) {\n      return res.status(404).json({ message: \"Post not found.\" });\n    }\n\n    if (post.patientId.toString() !== patientId) {\n      return res.status(403).json({ message: \"Unauthorized to delete this post.\" });\n    }\n\n    await Post.findByIdAndDelete(postId);\n    res.status(200).json({ message: \"Post deleted successfully\" });\n  } catch (error) {\n    console.error(\"Error deleting post:\", error);\n    res.status(500).json({ message: \"Internal Server Error\" });\n  }\n};\n"
+    },
+    {
+      "path": "src/config/dbConfig.js",
+      "sha": null,
+      "content_sha256": "87b7b03d3bd963408680633d9ca7f6c3dfebabc9bab7b1d25d2377e2a8d3a6c7",
+      "score": 31,
+      "content": "import mongoose from \"mongoose\";\nimport dotenv from 'dotenv';\ndotenv.config();\n// import 'dotenv/config';  \n\n\nconst connectDB = async () => {\n\n    mongoose.connection.on(\"connected\", () => {\n        console.log(\"Database Connected...\");\n    });\n\n    mongoose.connection.on(\"error\", (error) => {\n        console.error(\"Database connection error: \", error.message);\n    });\n\n\n    try {\n        console.log(process.env.MONGODB_URI);\n        await mongoose.connect(process.env.MONGODB_URI);\n        // await mongoose.connect(`mongodb://localhost:27017/medic`);\n    } catch (error) {\n        console.error(\"Database connection failed: \", error.message);\n        process.exit(1);\n    }\n};\n\nexport default connectDB;\n\n\n\n\n\n\n\n\n\n\n\n\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:43.114609+00:00"
+}

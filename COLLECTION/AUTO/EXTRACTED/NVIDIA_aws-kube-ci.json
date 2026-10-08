@@ -1,0 +1,120 @@
+{
+  "canonical_source": "github:NVIDIA/aws-kube-ci",
+  "repo": "NVIDIA/aws-kube-ci",
+  "revision_sha": "c5abf698b3259b6ca9f36ed992f0b7d1025b95d5",
+  "default_branch": "main",
+  "pushed_at": "2024-07-11T13:12:49Z",
+  "repo_updated_at": "2026-09-02T18:50:38Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "config/install_kubernetes.sh",
+      "sha": null,
+      "content_sha256": "4deaef6b5a684669c61867dc2f75a2b9a569f1566efff5dd3d4c52bf579a5e7c",
+      "score": 187,
+      "content": "#! /usr/bin/env bash\nset -xe\n\nCONFIG_DIR=\"$( cd \"$( dirname \"${BASH_SOURCE[0]}\" )\" && pwd )\"\n\nsource ${CONFIG_DIR}/common.sh\n\n# Install kubeadm, kubectl, and k8s-cni\n: ${K8S_VERSION:=v1.27.6}\n: ${CNI_PLUGINS_VERSION:=v1.3.0}\n: ${CALICO_VERSION:=v3.26.1}\n: ${CRICTL_VERSION:=v1.27.1}\n\n# Configure persistent loading of modules\ntee /etc/modules-load.d/k8s.conf <<EOF\noverlay\nbr_netfilter\nEOF\n\n# Ensure you load modules\nmodprobe overlay\nmodprobe br_netfilter\n\n# Set up required sysctl params\ntee /etc/sysctl.d/kubernetes.conf<<EOF\nnet.bridge.bridge-nf-call-ip6tables = 1\nnet.bridge.bridge-nf-call-iptables = 1\nnet.ipv4.ip_forward = 1\nEOF\n\n# Reload sysctl\nsysctl --system\n\n# Install CNI plugins (required for most pod network):\nDEST=\"/opt/cni/bin\"\nmkdir -p \"$DEST\"\ncurl -L \"https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-${ARCH}-${CNI_PLUGINS_VERSION}.tgz\" | tar -C \"$DEST\" -xz\n\n#Install crictl (required for kubeadm / Kubelet Container Runtime Interface (CRI))\nDOWNLOAD_DIR=\"/usr/local/bin\"\nmkdir -p \"$DOWNLOAD_DIR\"\n\ncurl -L \"https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-${ARCH}.tar.gz\" | tar -C $DOWNLOAD_DIR -xz\n\n# Install kubeadm, kubelet, kubectl\ncd $DOWNLOAD_DIR\ncurl -L --remote-name-all https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/${ARCH}/{kubeadm,kubelet}\nchmod +x {kubeadm,kubelet}\n\n# add a kubelet systemd service \n# see https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl\nRELEASE_VERSION=\"v0.15.1\"\ncurl -sSL \"https://raw.githubusercontent.com/kubernetes/release/${RELEASE_VERSION}/cmd/kubepkg/templates/latest/deb/kubelet/lib/systemd/system/kubelet.service\" | sed \"s:/usr/bin:${DOWNLOAD_DIR}:g\" | tee /etc/systemd/system/kubelet.service\nmkdir -p /etc/systemd/system/kubelet.service.d\ncurl -sSL \"https://raw.githubusercontent.com/kubernetes/release/${RELEASE_VERSION}/cmd/kubepkg/templates/latest/deb/kubeadm/10-kubeadm.conf\" | sed \"s:/usr/bin:${DOWNLOAD_DIR}:g\" | tee /etc/systemd/system/kubelet.service.d/10-kubeadm.conf\n\nsystemctl enable --now kubelet\n\ncurl -LO https://dl.k8s.io/release/${K8S_VERSION}/bin/linux/amd64/kubectl\nchmod +x kubectl\n\n# Start kubernetes\nKUBEADMIN_OPTIONS=\"--pod-network-cidr=192.168.0.0/16 --ignore-preflight-errors=all --control-plane-endpoint=${K8S_ENDPOINT_HOST:?K8S_ENDPOINT_HOST must be set}:6443\"\n# If K8S_FEATURE_GATES is set and not empty, add it to the kubeadm init options\nif [ -n \"${K8S_FEATURE_GATES}\" ]; then\n  KUBEADMIN_OPTIONS=\"${KUBEADMIN_OPTIONS} --feature-gates=${K8S_FEATURE_GATES}\"\nfi\nwith_retry 2 5s kubeadm init ${KUBEADMIN_OPTIONS} \nmkdir -p /home/ubuntu/.kube\ncp /etc/kubernetes/admin.conf /home/ubuntu/.kube/config\nchown ubuntu:ubuntu /home/ubuntu/.kube/config\nexport KUBECONFIG=\"/home/ubuntu/.kube/config\"\n\n# give it room for all the pods and control plane components to start\napt install -y jq\nsleep 5\n\n# Install Calico\n# based on https://docs.tigera.io/calico/latest/getting-started/kubernetes/quickstart\nwith_retry 2 5s kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/tigera-operator.yaml\nkubectl create -f https://raw.githubusercontent.com/projectcalico/calico/${CALICO_VERSION}/manifests/custom-resources.yaml\n# Make single-node cluster schedulable\nkubectl taint nodes --all node-role.kubernetes.io/control-plane:NoSchedule-\nkubectl label node --all node-role.kubernetes.io/worker=\n"
+    },
+    {
+      "path": "tests/test_setup.sh",
+      "sha": null,
+      "content_sha256": "656161c6a376c5de2df9de98790f14c4f68494acbbe87c521907d95fa3a99a9a",
+      "score": 175,
+      "content": "#!/bin/sh\nset -xe\nsource ../aws-kube-ci/hostname\n\nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"containerd --version\"  \nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"kubectl version --client\"\nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"kubectl cluster-info\"\nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"kubectl get nodes -o json | jq '.items[].status.nodeInfo.containerRuntimeVersion'\"  \n"
+    },
+    {
+      "path": "config/install_crio.sh",
+      "sha": null,
+      "content_sha256": "1e8a7203fc92179b454aca516f282ba07b644715b6229ea763fab411299f9484",
+      "score": 115,
+      "content": "#! /usr/bin/env bash\nset -xe\n\nsource ${CONFIG_DIR}/common.sh\n\n: ${CRIO_VERSION:=v1.6}\n\n# Add Cri-o repo\necho \"deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list\necho \"deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$RUNTIME_VERSION/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$VERSION.list\ncurl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$RUNTIME_VERSION/$OS/Release.key | apt-key add -\ncurl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | apt-key add -\n\n# Install CRI-O\napt update\napt install cri-o cri-o-runc\n\n# Start and enable Service\nsystemctl daemon-reload\nsystemctl restart crio\nsystemctl enable crio\n"
+    },
+    {
+      "path": "config/install_docker.sh",
+      "sha": null,
+      "content_sha256": "745481b5144dc775dbd5f5a0aa93b8b7f66c4d4728fa5442d0ce5515ada9ee34",
+      "score": 115,
+      "content": "#! /usr/bin/env bash\nset -xe\n\nsource ${CONFIG_DIR}/common.sh\n\n# Based on https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository\n: ${DOCKER_VERSION:=latest}\n\n# Add repo and Install packages\napt update\napt install -y curl gnupg software-properties-common apt-transport-https ca-certificates\ninstall -m 0755 -d /etc/apt/keyrings\ncurl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg\nchmod a+r /etc/apt/keyrings/docker.gpg\necho \\\n  \"deb [arch=\"$(dpkg --print-architecture)\" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \\\n  \"$(. /etc/os-release && echo \"$VERSION_CODENAME\")\" stable\" | \\\n  tee /etc/apt/sources.list.d/docker.list > /dev/null\napt update\n\n# if DOCKER_VERSION is latest, then install latest version, else install specific version\nif [ \"$DOCKER_VERSION\" = \"latest\" ]; then\n  apt install -y docker-ce docker-ce-cli containerd.io\nelse\n  apt install -y docker-ce=${DOCKER_VERSION} docker-ce-cli=${DOCKER_VERSION} containerd.io\nfi\n\n# Create required directories\nmkdir -p /etc/systemd/system/docker.service.d\n\n# Create daemon json config file\ntee /etc/docker/daemon.json <<EOF\n{\n  \"exec-opts\": [\"native.cgroupdriver=systemd\"],\n  \"log-driver\": \"json-file\",\n  \"log-opts\": {\n    \"max-size\": \"100m\"\n  },\n  \"storage-driver\": \"overlay2\"\n}\nEOF\n\n# Start and enable Services\nsystemctl daemon-reload \nsystemctl enable docker\nsystemctl restart docker\n"
+    },
+    {
+      "path": "config/install_container_runtime.sh",
+      "sha": null,
+      "content_sha256": "c74547d42294bef2ee7a16d9630c1ea635662e4dad35439d996bf748620a220e",
+      "score": 115,
+      "content": "#! /usr/bin/env bash\nset -xe\n\nCONFIG_DIR=\"$( cd \"$( dirname \"${BASH_SOURCE[0]}\" )\" && pwd )\"\n\nsource ${CONFIG_DIR}/common.sh\n\nexec ${CONFIG_DIR}/install_${CONTAINER_RUNTIME}.sh \n"
+    },
+    {
+      "path": "config/install_containerd.sh",
+      "sha": null,
+      "content_sha256": "3c1f230dbf8da08e460cc157ce8e0fea8b65be973cfbb68be51a074f1e6549e5",
+      "score": 115,
+      "content": "#! /usr/bin/env bash\nset -xe\n\nCONFIG_DIR=\"$( cd \"$( dirname \"${BASH_SOURCE[0]}\" )\" && pwd )\"\n\nsource ${CONFIG_DIR}/common.sh\n\n: ${CONTAINERD_VERSION:=1.6.21}\n\n# Install required packages\napt update\napt install -y curl gnupg2 software-properties-common apt-transport-https ca-certificates\n\n# Add Docker repo\ncurl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -\nadd-apt-repository \"deb [arch=${ARCH}] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable\"\n\n# Install containerd\napt update\napt install -y containerd.io=${CONTAINERD_VERSION}-1\n\n# Configure containerd and start service\nmkdir -p /etc/containerd\ncontainerd config default>/etc/containerd/config.toml\n\n# restart containerd\nsystemctl restart containerd\nsystemctl enable containerd\n"
+    },
+    {
+      "path": "aws-kube-ci.yml",
+      "sha": null,
+      "content_sha256": "bf5c9e6bce5bdb8eb0be35c4f6f4630d5901bda16259af1dcacd8277f373874a",
+      "score": 107,
+      "content": ".aws_kube_setup:\n  stage: aws_kube_setup\n  image:\n    name: hashicorp/terraform:light\n    entrypoint: [\"/usr/bin/env\"]\n  variables:\n    GIT_SUBMODULE_STRATEGY: recursive\n  script:\n    - apk add --no-cache openssh-keygen openssh-client\n    - cd aws-kube-ci\n    - echo \"ci_pipeline_id=\\\"$CI_PIPELINE_ID\\\"\" >> terraform.tfvars\n    - echo \"setup_params=\\\"$AWS_KUBE_CI_PARAMS\\\"\" >> terraform.tfvars\n    - ssh-keygen -t rsa -f key\n    - terraform init\n    - terraform apply -auto-approve -var-file=$TF_VAR_FILE\n    - s=$(terraform output)\n    - echo \"export ${s//[[:blank:]]/}\" > hostname\n  artifacts:\n    when: always\n    paths:\n      - aws-kube-ci/key\n      - aws-kube-ci/key.pub\n      - aws-kube-ci/.terraform\n      - aws-kube-ci/.terraform.lock.hcl\n      - aws-kube-ci/terraform.tfstate\n      - aws-kube-ci/hostname\n\n.aws_kube_clean:\n  stage: aws_kube_clean\n  image:\n    name: hashicorp/terraform:light\n    entrypoint: [\"/usr/bin/env\"]\n  variables:\n    GIT_SUBMODULE_STRATEGY: recursive\n  script:\n    - cd aws-kube-ci\n    - echo \"ci_pipeline_id=$CI_PIPELINE_ID\" >> terraform.tfvars\n    - terraform destroy -auto-approve -var-file=$TF_VAR_FILE\n  when: always\n  dependencies:\n    - aws_kube_setup\n"
+    },
+    {
+      "path": ".gitlab-ci.yml",
+      "sha": null,
+      "content_sha256": "aec637ef4cb3076a953c4142c4e22eb21e8250cd24163d4857e8c6c48fc2c392",
+      "score": 107,
+      "content": "variables:\n  TF_VAR_FILE: \"$CI_PROJECT_DIR/tests/variables.tfvars\"\n  AWS_KUBE_CI_PARAMS: \"--driver --k8s-plugin --nvcr\"\n\nimage: alpine\n\nstages:\n  - aws_kube_setup\n  - test_setup\n  - aws_kube_clean\n  - test_cleanup\n\nbefore_script:\n  - mkdir -p aws-kube-ci\n  - cp * aws-kube-ci/ || true\n  - cp -R config aws-kube-ci/config\n\naws_kube_setup:\n  extends: .aws_kube_setup\n  except:\n    - schedules\n\n\ntest_setup:\n  stage: test_setup\n  except:\n    - schedules\n  script:\n    - apk add openssh-client\n    - cd tests && ./test_setup.sh\n\naws_kube_clean:\n  extends: .aws_kube_clean\n  except:\n    - schedules\n\ntest_cleanup:\n  stage: test_cleanup\n  except:\n    - schedules\n  script:\n    - apk add openssh-client\n    - cd tests && ./test_cleanup.sh\n\ninclude:\n  - local: 'aws-kube-ci.yml'\n\ncleanup:\n  stage: test_cleanup\n  only:\n    - schedules\n  image:\n    name: amazon/aws-cli\n    entrypoint: [\"/bin/bash\", \"-c\"]\n  script:\n    - export AWS_DEFAULT_REGION=\"us-west-2\"\n    - bash -x cleanup/run.sh\n\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "d7fc524b9b5eae1e4b176d690e587a86b3e7ef39e8969e52fddf89c12c7426f6",
+      "score": 100,
+      "content": "# AWS Kube CI\n\n## Overview\n\nThis CI tool aims to create a virtual machine on AWS with a GPU enabled Kubernetes\nmaster/node. It uses Terraform, Docker, Kubeadm, the driver container and the device\nplugin to setup the VM.\n\n**WARNING:** This tool is in alpha version\n\n## Getting started\n\n### Creating a dev instance\n\nThis repository can be used to create and configure a development instance that mirrors the configuration used in CI. Run\n\n```bash\nterraform init\n```\n\nTo initialize the local terraform environment the variables for the `plan`, `apply`, and `destroy` commands are explicitly overridden.\n\nThis can be done using the command line as shown below, or by creating a `.local-dev.auto.tfvars` file with ther required overrides as terraform automatically includes `*.auto.tfvars` files.\n\nIf running outside of the corp VPN, you need to add your IP to the list `ingress_ip_ranges` at the `local-dev.tfvars` file first then, Run `plan` to check that everything is ready:\n\n```bash\nterraform plan \\\n  -var \"region=us-east-2\" \\\n  -var \"key_name=elezar\" \\\n  -var \"private_key=/Users/elezar/.ssh/elezar.pem\" \\\n    -var-file=local-dev.tfvars\n```\nwill preview the changes that will be applied. Note this assumes that valid AWS credentials have been configured. This also assumes that an AWS key has already been created with a name `elezar` using the public key associated with the private key `/Users/elezar/.ssh/elezar.pem`, so please change accordingly, then create the instance by running `apply`:\n\n```bash\nterraform apply \\\n  -auto-approve \\\n  -var \"region=us-east-2\" \\\n  -var \"key_name=elezar\" \\\n  -var \"private_key=/Users/elezar/.ssh/elezar.pem\" \\\n    -var-file=local-dev.tfvars\n```\nWill proceed to create the required resources.\n\nOnce this is complete, the instance hostname can be obtained using:\n\n```bash\nexport instance_hostname=$(terraform output -raw instance_hostname)\n```\nAnd assuming that the private key specified during creation is added to the ssh agent:\n\n```bash\neval $(ssh-agent)\nssh-add /Users/elezar/.ssh/elezar.pem\n```\n\nrunning:\n\n```bash\nssh ${instance_hostname}\n```\n\nshould connect to the created instance. Alternatively, the identity can be explicitly specified:\n\n```bash\nssh -i /Users/elezar/.ssh/elezar.pem ${instance_hostname}\n```\n\nTo start using the Kubernetes cluster first we retrieve the Kubeconfig file:\n\n```bash\nscp -i /Users/elezar/.ssh/elezar.pem ${instance_hostname}:/home/ubuntu/.kube/config kubeconfig\n```\n\nNow we can use the kubernetes clusters from our host:\n\n```bash\nkubectl --kubeconfig kubeconfig get node\nip-10-0-0-14   Ready    control-plane,master   7m51s   v1.23.10\n```\n\n#### Cleaning up\n\nIn order to remove the created resources, run:\n\n```bash\nterraform destroy \\\n  -auto-approve \\\n  -var \"region=us-east-2\" \\\n    -var-file=local-dev.tfvars\n```\n\n#### Specifying the container runtime\n\nBy using the `container_runtime` variable the provisioned node can be set up to run either docker or\ncontainerd as the container runtime. The default is `docker` and can be changed using the `-var \"legacy_setup=false\" -var \"container_runtime=containerd\"` command line arguments when running `terraform apply` (or `destroy`).\n\n### Using the CI tool\nTo use this CI tool, you need to:\n\n- Place this directory at the root of your repo, with `aws-kube-ci` as name (you\n    may want to use submodules). For example:\n\n```yaml\ngit submodule add https://gitlab.com/nvidia/container-infrastructure/aws-kube-ci.git\n```\n\n- In your `.gitlab-ci.yml`, define the stages `aws_kube_setup` and `aws_kube_clean`\n- In your `.gitlab-ci.yml`, include the `aws-kube-ci.yml` file. It is strongly\n  recommended to include a specific version. The version must be a git ref. For example:\n\n```yaml\ninclude:\n  project: nvidia/container-infrastructure/aws-kube-ci\n  file: aws-kube-ci.yml\n  ref: vX.Y\n```\n\n- In your `.gitlab-ci.yml`, extends the `.aws_kube_setup` and `.aws_kube_clean`\n  jobs. For example:\n\n```yaml\naws_kube_setup:\n  extends: .aws_kube_setup\n\naws_kube_clean:\n  extends: .aws_kube_clean\n```\n\n_Note that we include project rather than file here because gitlab doesn't support including local files from submodules_\n\n- Write a terraform variable file with these variables:\n  - `instance_type`: The AWS instance type\n  - `project_name`: The name of your project\n\nFor example:\n\n```\ninstance_type = \"g2.2xlarge\"\nproject_name = \"my-project\"\n```\n- In your .gitlab-ci.yml, set the `TF_VAR_FILE` to the path of the previous file.\n- Write your ci task. You should write your tasks in a stage which is between `aws_kube_setup` and `aws_kube_clean`.\n- Set the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` variables in CI/CD\n  settings of the projet\n\nThe `aws_kube_setup` job will expose different files as artifacts:\n- The private key to connect to the VM using ssh: `aws-kube-ci/key`\n- The associated public key: `aws-kube-ci/key.pub`\n- A file to source to get the `user@hostname` in the env: `aws-kube-ci/hostname`. The env\nvariable is `instance_hostname`.\n\nA docker registry is running on the VM once the setup is done. You can access it\nusing `127.0.0.1:5000`. It could be useful if you need to build a local image\nand use it in the Kubernetes cluster.\n\nA simple `.gitlab-ci.yml` could be:\n\n```yaml\nvariables:\n  GIT_SUBMODULE_STRATEGY: recursive\n  TF_VAR_FILE: \"$CI_PROJECT_DIR/variables.tfvars\"\n\nstages:\n  - aws_kube_setup\n  - my_stage\n  - aws_kube_clean\n\naws_kube_setup:\n  extends: .aws_kube_setup\n\njob:\n  stage: my_stage\n  script:\n    - source aws-kube-ci/hostname\n    - ssh -i aws-kube-ci/key $instance_hostname \"echo Hello world!\"\n    - ssh -i aws-kube-ci/key $instance_hostname \"docker push 127.0.0.1:5000/my_image\"\n  dependencies:\n    - aws_kube_setup\n\naws_kube_clean:\n  extends: .aws_kube_clean\n\ninclude:\n  project: nvidia/container-infrastructure/aws-kube-ci\n  file: aws-kube-ci.yml\n  ref: vX.Y\n```\n"
+    },
+    {
+      "path": "tests/test_cleanup.sh",
+      "sha": null,
+      "content_sha256": "bf39b9ac34539ccf501867473d69c333579c924f5cf42c2414c441009cea70b6",
+      "score": 93,
+      "content": "#!/bin/sh\n\nsource ../aws-kube-ci/hostname\nif ssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname};\nthen\n\texit 1\nfi\nexit 0\n"
+    },
+    {
+      "path": "tests/variables.tfvars",
+      "sha": null,
+      "content_sha256": "5539eefaf89dc8f183f6da311ae9aa512434c35dd0e82b7210ab1c46111f419c",
+      "score": 58,
+      "content": "instance_type = \"p2.xlarge\"\nproject_name = \"aws-kube-ci-tests\"\n"
+    },
+    {
+      "path": "cleanup/run.sh",
+      "sha": null,
+      "content_sha256": "f81f22e658d63a27128191384a818533be73e3a53d53db85907a8c5ad3db4717",
+      "score": 33,
+      "content": "#! /bin/bash\n\ninstances() {\n\taws ec2 describe-instances --filters \"Name=tag:product,Values=cloud-native\" \\\n\t\t\t\t\t     \"Name=tag:environment,Values=cicd\" \\\n\t\t--query \"Reservations[].Instances[?LaunchTime<='$(date --date='-2 hours' '+%Y-%m-%dT%H:%M')'].InstanceId\" \\\n\t\t--output text\n}\n\ninstances=\"$(instances)\"\necho \"Found the following instances to cleanup: $instances\"\n\nfor instance in $instances; do\n\t# Note we don't filter out terminated instances, so the above command can fail\n\techo \"Deleting instance: $instance\"\n\taws ec2 terminate-instances --instance-ids \"$instance\" || true\ndone\n"
+    },
+    {
+      "path": "config/daemon.json",
+      "sha": null,
+      "content_sha256": "47135af7571b86ede0fd217a53138170bea44f63019194815f0a5bfb6690a641",
+      "score": 33,
+      "content": "{\n    \"default-runtime\": \"nvidia\",\n    \"runtimes\": {\n        \"nvidia\": {\n            \"path\": \"/usr/bin/nvidia-container-runtime\",\n            \"runtimeArgs\": []\n        }\n    }\n}\n"
+    },
+    {
+      "path": "config/common.sh",
+      "sha": null,
+      "content_sha256": "45e6dabe87a024ab5edb772343edf716067dff41778763674dfc3e88c2d1c11a",
+      "score": 33,
+      "content": "#!/bin/bash\n\nset -xe\n\nwith_retry() {\n\tlocal max_attempts=\"$1\"\n\tlocal delay=\"$2\"\n\tlocal count=0\n\tlocal rc\n\tshift 2\n\n\twhile true; do\n\t\tset +e\n\t\t\"$@\"\n\t\trc=\"$?\"\n\t\tset -e\n\n\t\tcount=\"$((count+1))\"\n\n\t\tif [[ \"${rc}\" -eq 0 ]]; then\n\t\t\treturn 0\n\t\tfi\n\n\t\tif [[ \"${max_attempts}\" -le 0 ]] || [[ \"${count}\" -lt \"${max_attempts}\" ]]; then\n\t\t\tsleep \"${delay}\"\n\t\telse\n\t\t\tbreak\n\t\tfi\n\tdone\n\n\treturn 1\n}\n\n# Detect architecture\narchitecture=$(uname -m)\nif [[ $architecture == \"x86_64\" || $architecture == \"amd64\" ]]; then\n    ARCH=\"amd64\"\nelif [[ $architecture == \"aarch64\" || $architecture == \"arm64\" ]]; then\n    ARCH=\"arm64\"\nelse\n    echo \"Unknown architecture: $architecture\"\n    exit 1\nfi\n\n# Check if the operating system is Ubuntu\nif [ -f \"/etc/os-release\" ]; then\n    source \"/etc/os-release\"\n\n    # Format the OS version string\n    os_version=\"${NAME}_${VERSION_ID}\"\n    # if NAME is Ubuntu, then prefix with x\n    if [ \"${NAME}\" == \"Ubuntu\" ]; then\n        os_version=\"x${os_version}\"\n    fi\n\n    # Set the environment variable\n    OS=\"$os_version\"\nelse\n    # Set a default value if we can't read /etc/os-release\n\techo \"Unknown OS: can't read /etc/os-release\"\n    exit 1\nfi\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:17.243747+00:00"
+}

@@ -1,0 +1,139 @@
+{
+  "canonical_source": "github:shihabshahrier/Comikola_test_backend",
+  "repo": "shihabshahrier/Comikola_test_backend",
+  "revision_sha": "929466fcba2f87df7b0e2c1f14ae619fb75ffa5d",
+  "default_branch": "master",
+  "pushed_at": "2025-01-20T23:18:03Z",
+  "repo_updated_at": "2026-06-02T18:49:08Z",
+  "license": null,
+  "topics": [
+    "api",
+    "backend",
+    "comikola",
+    "go"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "server/models/Interaction.js",
+      "sha": null,
+      "content_sha256": "a3aee1af7b463aab230a20b283c9dfc16516046a88a449a8ab4ae4cd331a3c9c",
+      "score": 188,
+      "content": "const { getFirestore } = require(\"firebase-admin/firestore\");\nconst db = getFirestore();\n\nconst Interaction = {\n    likeComic: async (userId, comicId) => {\n        const likeRef = db.collection(\"likes\").doc(`${userId}_${comicId}`);\n        await likeRef.set({ userId, comicId, createdAt: new Date() });\n        return { success: true, message: \"Comic liked\" };\n    },\n\n    commentOnComic: async (userId, comicId, comment) => {\n        const newCommentRef = db.collection(\"comments\").doc();\n        const commentData = {\n            id: newCommentRef.id,\n            userId,\n            comicId,\n            comment,\n            createdAt: new Date(),\n        };\n        await newCommentRef.set(commentData);\n        return { success: true, message: \"Comment added\", comment: commentData };\n    },\n\n    bookmarkComic: async (userId, comicId) => {\n        const bookmarkRef = db.collection(\"bookmarks\").doc(`${userId}_${comicId}`);\n        await bookmarkRef.set({ userId, comicId, createdAt: new Date() });\n        return { success: true, message: \"Comic bookmarked\" };\n    },\n};\n\nmodule.exports = Interaction;\n"
+    },
+    {
+      "path": "server/package.json",
+      "sha": null,
+      "content_sha256": "5aef6e3b2db34a3c9c90524285ad49f3e36542f60565ad0f08a3d64c4750c532",
+      "score": 118,
+      "content": "{\n  \"name\": \"server\",\n  \"version\": \"1.0.0\",\n  \"main\": \"index.js\",\n  \"scripts\": {\n    \"test\": \"echo \\\"Error: no test specified\\\" && exit 1\",\n    \"dev\": \"nodemon server.js\"\n  },\n  \"keywords\": [],\n  \"author\": \"\",\n  \"license\": \"ISC\",\n  \"type\": \"commonjs\",\n  \"description\": \"\",\n  \"dependencies\": {\n    \"bcryptjs\": \"^2.4.3\",\n    \"body-parser\": \"^1.20.3\",\n    \"cors\": \"^2.8.5\",\n    \"dotenv\": \"^16.4.7\",\n    \"express\": \"^4.21.2\",\n    \"firebase\": \"^11.2.0\",\n    \"firebase-admin\": \"^13.0.2\",\n    \"joi\": \"^17.13.3\",\n    \"jsonwebtoken\": \"^9.0.2\",\n    \"moment\": \"^2.30.1\",\n    \"multer\": \"^1.4.5-lts.1\",\n    \"socket.io\": \"^4.8.1\"\n  },\n  \"devDependencies\": {\n    \"nodemon\": \"^3.1.9\"\n  }\n}\n"
+    },
+    {
+      "path": "server/controllers/interactionController.js",
+      "sha": null,
+      "content_sha256": "0516c6cf5e8043e86186dfe7ec9998ac8bd687c9f0771b37c33e259b252c940c",
+      "score": 113,
+      "content": "const { db } = require('../utils/firebase');\nconst { FieldValue } = require('firebase-admin/firestore');\n\n// Like a comic\nconst likeComic = async (req, res) => {\n  const { comicId } = req.body;\n  const userId = req.userId;\n\n  try {\n    const likeRef = db.collection('likes').doc(`${userId}_${comicId}`);\n    const doc = await likeRef.get();\n\n    if (doc.exists) {\n      // Unlike if already liked\n      await likeRef.delete();\n      await db.collection('comics').doc(comicId).update({\n        likeCount: FieldValue.increment(-1)\n      });\n      return res.json({ message: 'Like removed' });\n    } else {\n      // Add new like\n      await likeRef.set({\n        userId,\n        comicId,\n        createdAt: FieldValue.serverTimestamp()\n      });\n      await db.collection('comics').doc(comicId).update({\n        likeCount: FieldValue.increment(1)\n      });\n      return res.json({ message: 'Comic liked' });\n    }\n  } catch (err) {\n    return res.status(500).json({ error: err.message });\n  }\n};\n\n// Comment on a comic (renamed from addComment to match route)\nconst commentOnComic = async (req, res) => {\n  const { comicId, text } = req.body;\n  const userId = req.userId;\n\n  try {\n    const newComment = {\n      comicId,\n      userId,\n      text,\n      createdAt: FieldValue.serverTimestamp(),\n    };\n\n    const commentRef = await db.collection('comments').add(newComment);\n    return res.status(201).json({ message: 'Comment added', commentId: commentRef.id });\n  } catch (err) {\n    return res.status(500).json({ error: err.message });\n  }\n};\n\n// Bookmark a comic\nconst bookmarkComic = async (req, res) => {\n  const { comicId } = req.body;\n  const userId = req.userId;\n\n  try {\n    const bookmarkRef = db.collection('bookmarks').doc(`${userId}_${comicId}`);\n    const doc = await bookmarkRef.get();\n\n    if (doc.exists) {\n      // Remove bookmark if exists\n      await bookmarkRef.delete();\n      await db.collection('comics').doc(comicId).update({\n        bookmarkCount: FieldValue.increment(-1)\n      });\n      return res.json({ message: 'Bookmark removed' });\n    } else {\n      // Add new bookmark\n      await bookmarkRef.set({\n        userId,\n        comicId,\n        createdAt: FieldValue.serverTimestamp()\n      });\n      await db.collection('comics').doc(comicId).update({\n        bookmarkCount: FieldValue.increment(1)\n      });\n      return res.json({ message: 'Comic bookmarked' });\n    }\n  } catch (err) {\n    return res.status(500).json({ error: err.message });\n  }\n};\n\nmodule.exports = {\n  likeComic,\n  commentOnComic,\n  bookmarkComic\n};"
+    },
+    {
+      "path": "server/routes/interactionRoutes.js",
+      "sha": null,
+      "content_sha256": "ffc74c6bb738b70064351cb9be214a278d6b30a37a6345236faaac123837fbd0",
+      "score": 113,
+      "content": "const express = require('express');\nconst { likeComic, commentOnComic, bookmarkComic } = require('../controllers/interactionController');\nconst authMiddleware = require('../middleware/authMiddleware');\nconst router = express.Router();\n\nrouter.post('/like', authMiddleware, likeComic);\nrouter.post('/comment', authMiddleware, commentOnComic);\nrouter.post('/bookmark', authMiddleware, bookmarkComic);\n\nmodule.exports = router;\n"
+    },
+    {
+      "path": "server/routes/authRoutes.js",
+      "sha": null,
+      "content_sha256": "5c97a4d601b66f68abd4e0b468763ec964c91687cd8831d82e1a4adf2cd74bde",
+      "score": 111,
+      "content": "const express = require(\"express\");\nconst router = express.Router();\nconst authController = require(\"../controllers/authController\"); // Make sure this path is correct!\n\nrouter.post(\"/signup\", authController.signup);\nrouter.post(\"/signin\", authController.signin);\nrouter.post(\"/logout\", authController.logout);\n\nmodule.exports = router;\n"
+    },
+    {
+      "path": "server/controllers/authController.js",
+      "sha": null,
+      "content_sha256": "b3f1fc4c6ed47e509ca864febfc801bb37b974a4f11446cbfa9dc534cc0349a9",
+      "score": 111,
+      "content": "const { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } = require('firebase/auth');\nconst app = require('../utils/firebase');\n\nconst auth = getAuth(app);\n\nconst authController = {\n  // Sign up new user\n  signup: async (req, res) => {\n    try {\n      const { email, password } = req.body;\n\n      const userCredential = await createUserWithEmailAndPassword(auth, email, password);\n      const user = userCredential.user;\n\n      res.status(201).json({\n        message: 'User created successfully',\n        user: {\n          uid: user.uid,\n          email: user.email\n        }\n      });\n    } catch (error) {\n      let errorMessage = 'Error creating user';\n\n      switch (error.code) {\n        case 'auth/email-already-in-use':\n          errorMessage = 'Email already in use';\n          break;\n        case 'auth/invalid-email':\n          errorMessage = 'Invalid email address';\n          break;\n        case 'auth/weak-password':\n          errorMessage = 'Password is too weak';\n          break;\n      }\n\n      res.status(400).json({ message: errorMessage, error: error.code });\n    }\n  },\n\n  // Sign in existing user\n  signin: async (req, res) => {\n    try {\n      const { email, password } = req.body;\n\n      const userCredential = await signInWithEmailAndPassword(auth, email, password);\n      const user = userCredential.user;\n\n      // Get the ID token\n      const idToken = await user.getIdToken();\n\n      res.json({\n        message: 'Login successful',\n        user: {\n          uid: user.uid,\n          email: user.email\n        },\n        token: idToken\n      });\n    } catch (error) {\n      let errorMessage = 'Error signing in';\n\n      switch (error.code) {\n        case 'auth/user-not-found':\n          errorMessage = 'User not found';\n          break;\n        case 'auth/wrong-password':\n          errorMessage = 'Invalid password';\n          break;\n        case 'auth/invalid-email':\n          errorMessage = 'Invalid email address';\n          break;\n      }\n\n      res.status(400).json({ message: errorMessage, error: error.code });\n    }\n  },\n\n  // Logout user\n  logout: async (req, res) => {\n    try {\n      await signOut(auth);\n      res.json({ message: 'Logged out successfully' });\n    } catch (error) {\n      res.status(500).json({ message: 'Error logging out', error: error.code });\n    }\n  }\n};\n\nmodule.exports = authController;"
+    },
+    {
+      "path": "server/middleware/authMiddleware.js",
+      "sha": null,
+      "content_sha256": "4cb29af1d719372cde20dab3562a9d6e6557fa8b010eb43898b3c45323aaaee7",
+      "score": 111,
+      "content": "const { admin } = require('../utils/firebase');\n\nconst authMiddleware = async (req, res, next) => {\n  try {\n    const token = req.header('Authorization')?.replace('Bearer ', '');\n    if (!token) {\n      return res.status(401).json({ message: 'No token, authorization denied' });\n    }\n\n    const decodedToken = await admin.auth().verifyIdToken(token);\n    req.userId = decodedToken.uid;\n    next();\n  } catch (error) {\n    res.status(401).json({ message: 'Invalid token' });\n  }\n};\n\nmodule.exports = authMiddleware;\n"
+    },
+    {
+      "path": "server/models/User.js",
+      "sha": null,
+      "content_sha256": "7adb29b11973f47fb9ff4b3cfa58f17e5637c189ab4b1e20b2d0a516d261e98f",
+      "score": 106,
+      "content": "const { getFirestore } = require(\"firebase-admin/firestore\");\nconst db = getFirestore();\n\nconst User = {\n    create: async (uid, email, username) => {\n        try {\n            const userRef = db.collection(\"users\").doc(uid);\n            await userRef.set({\n                uid,\n                email,\n                username,\n                createdAt: new Date(),\n            });\n            return { success: true, message: \"User created successfully\" };\n        } catch (error) {\n            return { success: false, error: error.message };\n        }\n    },\n\n    getById: async (uid) => {\n        const userRef = db.collection(\"users\").doc(uid);\n        const doc = await userRef.get();\n        return doc.exists ? doc.data() : null;\n    },\n\n    updateProfile: async (uid, updates) => {\n        const userRef = db.collection(\"users\").doc(uid);\n        await userRef.update(updates);\n        return { success: true, message: \"Profile updated successfully\" };\n    },\n};\n\nmodule.exports = User;\n"
+    },
+    {
+      "path": "server/models/Comic.js",
+      "sha": null,
+      "content_sha256": "cb6fed86f3d82b5c1dfe55c364493e7eb69c7d120cadd45a006ea3f437a64c64",
+      "score": 106,
+      "content": "const { getFirestore } = require(\"firebase-admin/firestore\");\nconst db = getFirestore();\n\nconst Comic = {\n    create: async (userId, title, imageUrl, description) => {\n        try {\n            const newComicRef = db.collection(\"comics\").doc();\n            const comicData = {\n                id: newComicRef.id,\n                userId,\n                title,\n                imageUrl,\n                description,\n                createdAt: new Date(),\n                likes: 0,\n                comments: 0,\n            };\n            await newComicRef.set(comicData);\n            return { success: true, message: \"Comic uploaded successfully\", comic: comicData };\n        } catch (error) {\n            return { success: false, error: error.message };\n        }\n    },\n\n    getAll: async () => {\n        const comicsRef = db.collection(\"comics\");\n        const snapshot = await comicsRef.get();\n        return snapshot.docs.map((doc) => doc.data());\n    },\n\n    getById: async (id) => {\n        const comicRef = db.collection(\"comics\").doc(id);\n        const doc = await comicRef.get();\n        return doc.exists ? doc.data() : null;\n    },\n};\n\nmodule.exports = Comic;\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3075f05d38bb85159eba3fceb7e45386789770d70335afe251b1b416d31157ec",
+      "score": 100,
+      "content": "# Comikola"
+    },
+    {
+      "path": "server/server.js",
+      "sha": null,
+      "content_sha256": "614e7481b398fbca81791c3032068795a398b7d6eae1f303bc30e9def52996f1",
+      "score": 33,
+      "content": "const express = require('express');\nconst bodyParser = require('body-parser');\nconst authRoutes = require('./routes/authRoutes');\nconst comicRoutes = require('./routes/comicRoutes');\nconst interactionRoutes = require('./routes/interactionRoutes');\nconst cors = require('cors');\nrequire('dotenv').config();\n\nconst app = express();\n\n// Middleware\napp.use(cors());\napp.use(bodyParser.json());\napp.use(bodyParser.urlencoded({ extended: true }));\n\n// Test route to verify server is working\napp.get('/test', (req, res) => {\n  res.json({ message: 'Server is working!' });\n});\n\n// Routes\napp.use('/api/auth', authRoutes);\napp.use('/api/comics', comicRoutes);\napp.use('/api/interactions', interactionRoutes);\n\n// Root route\napp.get('/', (req, res) => {\n  res.json({ message: 'Welcome to Comikola API' });\n});\n\n// Error handling middleware\napp.use((err, req, res, next) => {\n  console.error(err.stack);\n  res.status(500).json({ message: 'Something broke!', error: err.message });\n});\n\nconst PORT = process.env.PORT || 8000;\napp.listen(PORT, () => {\n  console.log(`Server running on port ${PORT}`);\n});"
+    },
+    {
+      "path": "server/routes/comicRoutes.js",
+      "sha": null,
+      "content_sha256": "cc7fefe9a030a07ac3a9548161ee9b5e0f0d3c5de3a7799f18048f9da04d8e4e",
+      "score": 31,
+      "content": "// routes/comicRoutes.js\nconst express = require('express');\nconst { uploadComic } = require('../controllers/comicController');\nconst authMiddleware = require('../middleware/authMiddleware');\nconst router = express.Router();\nconst multer = require('multer');\nconst upload = multer({\n    storage: multer.memoryStorage(),\n    limits: {\n        fileSize: 5 * 1024 * 1024 // 5MB limit\n    }\n});\n\nrouter.post('/upload',\n    authMiddleware,\n    upload.fields([\n        { name: 'cover', maxCount: 1 },\n        { name: 'pages', maxCount: 50 }\n    ]),\n    uploadComic\n);\n\nmodule.exports = router;\n"
+    },
+    {
+      "path": "server/controllers/userController.js",
+      "sha": null,
+      "content_sha256": "d7b0235b8eb1661395f3dc08c7fc950591951488fecbdf7f49cc41c94100f13d",
+      "score": 31,
+      "content": "const jwt = require('jsonwebtoken');\nconst JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';\n\nconst generateToken = (email) => {\n  return jwt.sign({ email }, JWT_SECRET, { expiresIn: '1d' });\n};\n\nconst verifyToken = (token) => {\n  try {\n    return jwt.verify(token, JWT_SECRET);\n  } catch (error) {\n    return null;\n  }\n};\n\nmodule.exports = { generateToken, verifyToken };\n"
+    },
+    {
+      "path": "server/utils/firebase.js",
+      "sha": null,
+      "content_sha256": "5267b49d6ce5a23bb9421c7a0d16b0e13b04a36eebba9352052353ddf49eaac9",
+      "score": 31,
+      "content": "const { initializeApp } = require('firebase/app');\nconst { getAuth } = require('firebase/auth');\nconst admin = require('firebase-admin');\n\n// Your web app's Firebase configuration\nconst firebaseConfig = {\n  apiKey: process.env.FIREBASE_API_KEY,\n  authDomain: process.env.FIREBASE_AUTH_DOMAIN,\n  projectId: process.env.FIREBASE_PROJECT_ID,\n  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,\n  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,\n  appId: process.env.FIREBASE_APP_ID\n};\n\n// Initialize Firebase Admin\nadmin.initializeApp({\n  projectId: process.env.FIREBASE_PROJECT_ID,\n  storageBucket: process.env.FIREBASE_STORAGE_BUCKET\n});\n\n// Initialize Firebase\nconst app = initializeApp(firebaseConfig);\nconst auth = getAuth(app);\nconst db = admin.firestore();\nconst storage = admin.storage();\n\nmodule.exports = { auth, db, admin, storage };"
+    },
+    {
+      "path": "server/utils/jwt.js",
+      "sha": null,
+      "content_sha256": "71968f0003a219f671ce756ef220175d5cac545c80fc94f86170a0c679a4dc66",
+      "score": 31,
+      "content": "const jwt = require('jsonwebtoken');\nconst JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';\n\nconst generateToken = (userId) => {\n    return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1d' });\n};\n\nconst verifyToken = (token) => {\n    try {\n        return jwt.verify(token, JWT_SECRET);\n    } catch (error) {\n        return null;\n    }\n};\n\nmodule.exports = { generateToken, verifyToken };\n"
+    },
+    {
+      "path": "server/controllers/comicController.js",
+      "sha": null,
+      "content_sha256": "76c6b5addf3a83e64ecb8cf43074c402e799a7c971a49343a51f019bd67d4e33",
+      "score": 31,
+      "content": "// controllers/comicController.js\nconst { db, storage, admin } = require('../utils/firebase');\nconst Comic = require('../models/Comic');\n\nconst uploadComic = async (req, res) => {\n  try {\n    const { title, genre } = req.body;\n    const coverImage = req.files['cover'][0];\n    const comicPages = req.files['pages'];\n\n    if (!coverImage || !comicPages || comicPages.length === 0) {\n      return res.status(400).json({ message: 'Cover image and comic pages are required' });\n    }\n\n    // Check if user uploaded a comic today\n    const userComics = await db.collection('comics')\n      .where('authorId', '==', req.userId)\n      .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(new Date(new Date().setHours(0, 0, 0, 0))))\n      .get();\n\n    if (!userComics.empty) {\n      return res.status(400).json({ message: 'You can upload only one comic per day.' });\n    }\n\n    // Upload images to Firebase Storage\n    const coverImageUrl = await uploadImage(coverImage);\n    const comicPageUrls = await Promise.all(comicPages.map(page => uploadImage(page)));\n\n    const newComic = {\n      title,\n      genre,\n      coverImage: coverImageUrl,\n      pages: comicPageUrls,\n      authorId: req.userId,\n      createdAt: admin.firestore.Timestamp.now(),\n      likesCount: 0,\n      commentsCount: 0,\n      bookmarksCount: 0\n    };\n\n    const comicRef = await db.collection('comics').add(newComic);\n    return res.status(201).json({\n      message: 'Comic uploaded successfully',\n      comicId: comicRef.id,\n      comic: newComic\n    });\n  } catch (err) {\n    console.error('Upload error:', err);\n    return res.status(500).json({ message: 'Error uploading comic', error: err.message });\n  }\n};\n\nconst uploadImage = async (file) => {\n  const bucket = storage.bucket();\n  const fileName = `${Date.now()}_${file.originalname}`;\n  const fileUpload = bucket.file(fileName);\n\n  const blobStream = fileUpload.createWriteStream({\n    metadata: {\n      contentType: file.mimetype\n    }\n  });\n\n  return new Promise((resolve, reject) => {\n    blobStream.on('error', (error) => reject(error));\n    blobStream.on('finish', async () => {\n      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;\n      resolve(publicUrl);\n    });\n    blobStream.end(file.buffer);\n  });\n};\n\nmodule.exports = { uploadComic };\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:52.563992+00:00"
+}

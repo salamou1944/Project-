@@ -1,0 +1,107 @@
+{
+  "canonical_source": "github:shihabshahrier/claude-antigravity-orchestrator",
+  "repo": "shihabshahrier/claude-antigravity-orchestrator",
+  "revision_sha": "5b49bdf6cbc5b2da1fa964abc946c00c5f58cc3b",
+  "default_branch": "main",
+  "pushed_at": "2026-06-15T08:39:11Z",
+  "repo_updated_at": "2026-06-15T09:24:39Z",
+  "license": "MIT",
+  "topics": [
+    "agent-skills",
+    "agy",
+    "ai-agents",
+    "ai-orchestration",
+    "anthropic",
+    "antigravity",
+    "antigravity-cli",
+    "claude",
+    "claude-code",
+    "code-generation",
+    "gemini-3",
+    "llm",
+    "model-routing",
+    "token-optimization"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "install.sh",
+      "sha": null,
+      "content_sha256": "4cd8260b3a1a3872d11224f4c36b20968c75b296d84cf3f56889a678ad1f57f1",
+      "score": 117,
+      "content": "#!/bin/bash\nset -e\nSKILL=\"antigravity-delegate\"\nSCRIPT_DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nSKILL_SRC=\"$SCRIPT_DIR/skills/$SKILL\"\n\ninstall_to() {\n  local dest=\"${1}/$SKILL\"\n  mkdir -p \"$dest\"\n  cp -r \"$SKILL_SRC/.\" \"$dest/\"\n  chmod +x \"$dest/scripts/\"*.sh 2>/dev/null || true\n  echo \"  ✓ $dest\"\n}\n\necho \"Installing $SKILL skill...\"\ninstall_to \"${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills\"          # Claude Code\ninstall_to \"$HOME/.agents/skills\"                                # Codex, Amp, Goose\ninstall_to \"${XDG_CONFIG_HOME:-$HOME/.config}/opencode/skills\"   # opencode\ninstall_to \"$HOME/.gemini/antigravity/skills\"                    # Antigravity / Gemini\ninstall_to \"$HOME/.openclaw/workspace/skills\"                    # OpenClaw\n\necho \"\"\necho \"Done. Invoke with: /$SKILL\"\necho \"Requires: Antigravity CLI (agy). Install: curl -fsSL https://antigravity.google/cli/install.sh | bash\"\necho \"If the Antigravity IDE shadows 'agy', rename the CLI to agy-cli (the skill prefers it).\"\necho \"Reinstall anytime: bash install.sh\"\n"
+    },
+    {
+      "path": "agents/openai.yaml",
+      "sha": null,
+      "content_sha256": "ae675eae6e1aeb62a5680b8f5672350eb30c67832ddd43f1081bd09e576afdee",
+      "score": 108,
+      "content": "interface:\n  display_name: \"Antigravity Delegate\"\n  short_description: \"Offload token-heavy grunt work to the Antigravity CLI (agy); Claude stays orchestrator.\"\npolicy:\n  allow_implicit_invocation: true\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "dd015a76beec5dd428196007dc323cb2413cdb358b376977181c509cccc063ef",
+      "score": 100,
+      "content": "# antigravity-delegate\n\nMake **Claude the orchestrator** and the **Antigravity CLI (`agy`) the worker**. Offload\ntoken-heavy, low-judgment grunt work — web search, downloads, scanning big logs/codebases,\nrunning validators — to the local `agy` CLI in headless mode. `agy` eats the volume; Claude\ngets back only the small distilled answer and keeps the reasoning.\n\nBuilt for workflows like benchmarking a context-heavy system against competitors, where the\nsearch / download / validate legwork would otherwise burn a pile of Claude Opus tokens while\n`agy` sits idle.\n\n> `agy` is Google's official replacement for the Gemini CLI, which sunsets for individual /\n> Google One / AI Pro / Ultra tiers on **2026-06-18**. It authenticates via the system keyring\n> and exposes Gemini 3.x, Claude, and open-weight models.\n\n```\nyou ──▶ Claude (orchestrator, keeps judgment)\n            │  delegates closed, bulky subtask\n            ▼\n        agy -p \"<task>\" --model \"Gemini 3.5 Flash (Low)\"   (eats search/download/scan tokens)\n            │  returns ONLY the distilled answer (plain text)\n            ▼\n        Claude reads the answer ──▶ decision\n```\n\n## Install\n\n```bash\n# 1. Antigravity CLI (the worker)\ncurl -fsSL https://antigravity.google/cli/install.sh | bash\n\n# 2. the skill\nbash install.sh\n```\n\nInstalls to every Agent-Skills path (Claude Code, Codex/Amp/Goose, opencode, Antigravity,\nOpenClaw). Manual: copy `skills/antigravity-delegate/` into your agent's skills dir.\n\n## Requirements\n\n- **Antigravity CLI (`agy`)** — `curl -fsSL https://antigravity.google/cli/install.sh | bash`\n- That's it — `agy` prints plain text, so no `jq` needed.\n\n> **Name clash:** the Antigravity IDE ships its own `agy` launcher. If both are installed, keep\n> the IDE launcher as `agy` and rename the CLI to `agy-cli`\n> (`mv ~/.local/bin/agy ~/.local/bin/agy-cli`). The wrapper prefers `agy-cli`, then `agy`, and\n> honors `AGY_BIN=/full/path/to/cli`.\n\n## Usage\n\n```\n/antigravity-delegate \"<task>\" [--model \"Gemini 3.5 Flash (Low)\"] [--mode search|read|write] [--out FILE]\n```\n\nOr call the helper directly:\n\n```bash\nskills/antigravity-delegate/scripts/agy-run.sh \"<task>\" --mode search --model \"Gemini 3.5 Flash (Low)\"\n```\n\n| Arg | Default | Meaning |\n|-----|---------|---------|\n| task | required | one closed, self-contained instruction with a bounded deliverable |\n| `--mode` | `search` | `search`/`read` = read-only intent; `write` = auto-approve tools |\n| `--model` | `\"Gemini 3.5 Flash (Low)\"` | run `agy models` for the list; use a Pro/Thinking variant for reasoning |\n| `--dir` | — | scope tool access to a directory (`--add-dir`) |\n| `--out` | — | agy writes full output to FILE; stdout is a one-line summary |\n| `--timeout` | `5m` | print-mode wait timeout |\n\nModels on tap (via `agy models`): Gemini 3.5 Flash, Gemini 3.1 Pro, Claude Sonnet/Opus 4.6,\nGPT-OSS 120B — pick per subtask.\n\n## When to delegate\n\n`agy` runs on your Google One / Antigravity quota — **separate from Claude's tokens** — so\nanything it does well is tokens Claude never spends. Two buckets:\n\n| Delegate ✅ | Keep in Claude ❌ |\n|------------|------------------|\n| web search → answer | architecture / trade-off decisions |\n| download files/datasets | security-sensitive code or review |\n| grep huge logs/codebases | shipping code with no review |\n| run benchmark/validator → PASS/FAIL | synthesizing the final result |\n| summarize a giant file | anything tiny (overhead not worth it) |\n| **frontend/UI scaffold, boilerplate, codemod** (draft) | |\n| **generate unit tests** (draft) | |\n\nRule: delegate when the cost is *volume* or the value is a *reviewable draft*. Keep it when the\nvalue is a *final decision*. A draft from `agy` is an input to Claude's judgment, not a\nsubstitute — Claude reviews before anything ships.\n\n## Which model?\n\n`agy models` lists what your account can use. Route by subtask (quote the exact name):\n\n| Subtask | Model |\n|---------|-------|\n| search / download / scan / validate | `Gemini 3.5 Flash (Low)` — cheapest, fastest |\n| frontend/UI drafts, code-gen, multimodal | `Gemini 3.5 Flash (High)` |\n| deep reasoning / long-context | `Gemini 3.1 Pro (High)` |\n| correctness-sensitive code, test gen | `Claude Sonnet 4.6 (Thinking)` |\n| hardest reasoning / knowledge | `Claude Opus 4.6 (Thinking)` |\n| open-weight fallback | `GPT-OSS 120B (Medium)` |\n\nCheapest-capable wins; escalate only when the worker must reason or the draft must be high quality.\n\n## How it works\n\n`scripts/agy-run.sh` runs `agy -p \"<task>\" --model \"<name>\"` (adding\n`--dangerously-skip-permissions` in `write` mode, `--add-dir` to scope), and prints agy's\nplain-text answer to stdout. Exit codes pass through from agy; the wrapper adds `2` for bad\ninput and `1` for an empty response.\n\nSee `skills/antigravity-delegate/references/agy-cli.md` for the verified headless CLI reference.\n\n## Agent support\n\nShips Agent-Skills `SKILL.md` plus rule mirrors for Cursor, Windsurf, Cline, Copilot, and\nCodex. Edit only `skills/` — the rest mirror it.\n\n## Contributing\n\nSee [CONTRIBUTING.md](CONTRIBUTING.md). License: MIT.\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha": null,
+      "content_sha256": "292ad067edeec15a4e01c5ca09b23b7a9f058a18f7ed0e6b099e7df244622073",
+      "score": 75,
+      "content": "@./skills/antigravity-delegate/SKILL.md\n"
+    },
+    {
+      "path": ".claude-plugin/plugin.json",
+      "sha": null,
+      "content_sha256": "8efde7838dbe9d235d8e9ef46a5943d5dd3908de8c1a71c9f0ae06ae0ff39ec9",
+      "score": 33,
+      "content": "{\n  \"name\": \"antigravity-delegate\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Offload token-heavy grunt work (search, download, scan, validate) to the Antigravity CLI (agy) so Claude stays the orchestrator.\",\n  \"author\": \"shihabshahrier\",\n  \"license\": \"MIT\"\n}\n"
+    },
+    {
+      "path": ".codex/hooks.json",
+      "sha": null,
+      "content_sha256": "527e053b72e46170cb29e433b17d7144482f5185c1f0ea81feb4689fb166e801",
+      "score": 33,
+      "content": "{\n  \"hooks\": []\n}\n"
+    },
+    {
+      "path": ".github/FUNDING.yml",
+      "sha": null,
+      "content_sha256": "19b96f0c730bcc6554b54ff1804631f58b78c6280c0da2c59b5e40aefc26c59b",
+      "score": 33,
+      "content": "github: [shihabshahrier]\n"
+    },
+    {
+      "path": ".codex/config.toml",
+      "sha": null,
+      "content_sha256": "ab93227408596487e99ed33cf18ed225685f2f8cc1d7f88b87126233d5a9b619",
+      "score": 33,
+      "content": "# Codex display config for the antigravity-delegate skill.\n[skill]\nname = \"antigravity-delegate\"\ndisplay_name = \"Antigravity Delegate\"\ndescription = \"Offload token-heavy grunt work to the Antigravity CLI (agy); Claude stays orchestrator.\"\nallow_implicit_invocation = true\n"
+    },
+    {
+      "path": ".claude-plugin/marketplace.json",
+      "sha": null,
+      "content_sha256": "9a8c0db9172fdc1ec0256382fea224c48fbeac6f4a68d02eb4d0ac1bc63ec341",
+      "score": 33,
+      "content": "{\n  \"name\": \"antigravity-delegate-marketplace\",\n  \"owner\": \"shihabshahrier\",\n  \"plugins\": [\n    {\n      \"name\": \"antigravity-delegate\",\n      \"source\": \"./\",\n      \"description\": \"Claude orchestrates; the Antigravity CLI (agy) does the token-heavy grunt work.\"\n    }\n  ]\n}\n"
+    },
+    {
+      "path": "skills/antigravity-delegate/scripts/agy-run.sh",
+      "sha": null,
+      "content_sha256": "9dddc566aae5046c27daa5cbefd01083e0d4ab7e6ff27273a5927a70ce0533c0",
+      "score": 29,
+      "content": "#!/usr/bin/env bash\n# agy-run.sh — delegate one closed task to the Antigravity CLI (agy) in headless mode.\n# Claude (orchestrator) calls this; only agy's plain-text answer comes back on stdout.\n#\n# Usage:\n#   agy-run.sh \"<task prompt>\" [--mode search|read|write] [--model \"<display name>\"] \\\n#              [--dir DIR] [--out FILE] [--timeout 5m]\n#\n# Modes:\n#   search (default) : read-only intent; no tool auto-approval\n#   read             : read-only intent; no tool auto-approval\n#   write            : pass --dangerously-skip-permissions (downloads/builds/validators\n#                      in a scoped --dir). Only for expected, reversible actions.\n#\n# agy prints plain text to stdout (no JSON), so the answer needs no extraction.\n# Default model \"Gemini 3.5 Flash (Low)\" — cheap/fast grunt work. List: `agy models`.\nset -euo pipefail\n\nPROMPT=\"${1:-}\"\n[ -n \"$PROMPT\" ] || { echo \"error: missing task prompt\" >&2; exit 2; }\nshift || true\n\nMODE=\"search\"\nMODEL=\"Gemini 3.5 Flash (Low)\"\nDIR=\"\"\nOUT=\"\"\nTIMEOUT=\"5m\"\n\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    --mode)    MODE=\"${2:-}\"; shift 2 ;;\n    --model)   MODEL=\"${2:-}\"; shift 2 ;;\n    --dir)     DIR=\"${2:-}\"; shift 2 ;;\n    --out)     OUT=\"${2:-}\"; shift 2 ;;\n    --timeout) TIMEOUT=\"${2:-}\"; shift 2 ;;\n    *) echo \"error: unknown arg '$1'\" >&2; exit 2 ;;\n  esac\ndone\n\ncase \"$MODE\" in\n  search|read|write) : ;;\n  *) echo \"error: --mode must be search|read|write\" >&2; exit 2 ;;\nesac\n\n# Resolve the Antigravity CLI binary. Note: the IDE ships an `agy` launcher that opens the\n# editor, so a bare `agy` can be shadowed. Prefer an explicit AGY_BIN, then `agy-cli`\n# (recommended name when the IDE is also installed), then plain `agy`.\nAGY=\"\"\nfor cand in \"${AGY_BIN:-}\" agy-cli agy \"$HOME/.local/bin/agy-cli\" \"$HOME/.local/bin/agy\"; do\n  [ -n \"$cand\" ] || continue\n  if command -v \"$cand\" >/dev/null 2>&1 || [ -x \"$cand\" ]; then AGY=\"$cand\"; break; fi\ndone\n[ -n \"$AGY\" ] || {\n  echo \"error: Antigravity CLI not found (looked for agy-cli, agy). Install: curl -fsSL https://antigravity.google/cli/install.sh | bash\" >&2\n  echo \"  If the IDE shadows 'agy', rename the CLI to agy-cli or set AGY_BIN=/path/to/agy.\" >&2\n  exit 1\n}\n\n# If --out, instruct agy to write the bulk there and keep the response a one-line summary.\n# Writing a file is a tool action, so --out implies write intent: auto-approve tools and,\n# unless --dir was given, scope the workspace to the output file's directory.\nFULL_PROMPT=\"$PROMPT\"\nif [ -n \"$OUT\" ]; then\n  FULL_PROMPT=\"$PROMPT\n\nWrite the full output to the file: $OUT . In your reply, output ONLY a one-line summary (what you wrote + size).\"\n  MODE=\"write\"\n  [ -n \"$DIR\" ] || DIR=\"$(dirname -- \"$OUT\")\"\nfi\n\nARGS=( -p \"$FULL_PROMPT\" --model \"$MODEL\" --print-timeout \"$TIMEOUT\" )\n[ -n \"$DIR\" ] && ARGS+=( --add-dir \"$DIR\" )\n[ \"$MODE\" = \"write\" ] && ARGS+=( --dangerously-skip-permissions )\n\nset +e\nANSWER=\"$(\"$AGY\" \"${ARGS[@]}\")\"\nCODE=$?\nset -e\n\nif [ \"$CODE\" -ne 0 ]; then\n  echo \"agy exited $CODE for mode=$MODE model=$MODEL\" >&2\n  exit \"$CODE\"\nfi\n\nif [ -z \"${ANSWER//[[:space:]]/}\" ]; then\n  echo \"error: empty response from agy (model may have refused or hit a tool-permission wall; try --mode write for tasks needing tools)\" >&2\n  exit 1\nfi\n\nprintf '%s\\n' \"$ANSWER\"\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:52.350684+00:00"
+}

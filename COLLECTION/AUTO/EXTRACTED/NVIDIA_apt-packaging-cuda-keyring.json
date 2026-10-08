@@ -1,0 +1,43 @@
+{
+  "canonical_source": "github:NVIDIA/apt-packaging-cuda-keyring",
+  "repo": "NVIDIA/apt-packaging-cuda-keyring",
+  "revision_sha": "1f6469f225a49c22ba791028cd0588a6eeb5895b",
+  "default_branch": "main",
+  "pushed_at": "2023-04-14T20:08:33Z",
+  "repo_updated_at": "2026-07-21T12:32:20Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "8e42020e091361c53300db9a18666393665783bcd6089115a84a77d8e9f006d0",
+      "score": 100,
+      "content": "# cuda-keyring\n\n[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT-license)\n[![Contributing](https://img.shields.io/badge/Contributing-Developer%20Certificate%20of%20Origin-violet)](https://developercertificate.org)\n\n\n## Overview\n\nPackaging for cuda-keyring\n\n1. Install GPG public key in `/usr/share/keyrings/`\n2. Set repository priority with apt pinning\n3. Enable Nvidia's CUDA repository with `.list` for `apt-get`\n\n### Note on enabling a repository\n\n```shell\ndeb [signed-by=/path/to/keyring] https://$repositoryURL $suite\n```\n\n> ex: `debian11/x86_64`\n```\ndeb [signed-by=/usr/share/keyrings/cuda-archive-keyring.gpg] https://developer.download.nvidia.com/compute/cuda/repos/debian11/x86_64/ /\n``` \n\n### Blog post\n[https://developer.nvidia.com/blog/updating-the-cuda-linux-gpg-repository-key/](https://developer.nvidia.com/blog/updating-the-cuda-linux-gpg-repository-key/)\n\n\n## Deliverables\n\n```shell\n - cuda-keyring\n```\n\n## Prerequisites\n\n### Download GPG public key\n\nThe `apt-key` command is deprecated in Debian 12, Ubuntu 21.10 and derivative distros.\nNVIDIA provides the repo GPG keys in both `*.pub` and encapsulated keyring formats.\n\n```shell\nwget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-archive-keyring.gpg\n```\n\n**OR**\n\n```shell\nwget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/$shortname.pub\ncat $shortname.pub | gpg --dearmor > cuda-archive.keyring.gpg\n```\n> note: replace `$shortname` with `3bf863cc`\n\n\n### Download priority pin\n\nRepositories maintained by different organizations may contain packages with the same name.\nTo ensure `apt` selects software from one repository over another, priority pinning may be used.\n\n```shell\nwget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin\nmv cuda-ubuntu2204.pin cuda.pin\n```\n\n`cat cuda.pin`\n\n```shell\nPackage: nsight-compute\nPin: origin *ubuntu.com*\nPin-Priority: -1\n\nPackage: nsight-systems\nPin: origin *ubuntu.com*\nPin-Priority: -1\n\nPackage: *\nPin: release l=NVIDIA CUDA\nPin-Priority: 600\n```\n\n\n### Install build dependencies\n> *note:* these are only needed for building not installation\n\n```shell\napt-get install debhelper devscripts dpkg-dev make\n```\n\n\n## Usage\n\n```shell\nusage: build.sh <keyring.gpg> [priority.pin]\n       DISTRO=[ubuntu2204|ubuntu2004] ARCH=[x86_64|sbsa|arm64] build.sh\n       DISTRO=[ubuntu2204|ubuntu2004] ARCH=[cross-linux-sbsa|cross-linux-aarch64] build.sh\n       DISTRO=[ubuntu1804|ubuntu1604] ARCH=[x86_64|ppc64el|sbsa] build.sh\n       DISTRO=[debian11|debian10|wsl-ubuntu] ARCH=x86_64 build.sh\n```\n\n### Example\n\n```shell\nwget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-archive-keyring.gpg\nwget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin\nmv cuda-ubuntu2204.pin cuda.pin\n```\n\n```shell\nDISTRO=ubuntu2204 ARCH=x86_64 ./build.sh cuda-archive-keyring.gpg cuda.pin\n```\n\n```shell\nls cuda-keyring*_all.deb\nsudo dpkg --install cuda-keyring*_all.deb\nsudo apt-get update\n```\n\n\n## Contributing\n\nSee [CONTRIBUTING.md](CONTRIBUTING.md)\n"
+    },
+    {
+      "path": "debian/templates/cuda-keyring.install.in",
+      "sha": null,
+      "content_sha256": "a33e8853e5ff93feaa10b83e283b8ff60fa2f631914c15ddb8d9e74343323c6b",
+      "score": 78,
+      "content": "debian/cuda-archive-keyring.gpg             /usr/share/keyrings/\ndebian/cuda-#DISTRO#-#ARCH#.list            /etc/apt/sources.list.d/\n#PRIORITY#debian/cuda-repository-pin-600    /etc/apt/preferences.d/\n"
+    },
+    {
+      "path": "build.sh",
+      "sha": null,
+      "content_sha256": "885e14abfe3d27928fdd455f4066aeb6acfff1eb4db1412d7914d48cd4b39a70",
+      "score": 35,
+      "content": "#!/usr/bin/env bash\n# Copyright 2022, NVIDIA Corporation\n# SPDX-License-Identifier: MIT\n\nerr() { echo \"ERROR: $*\"; exit 1; }\n\nmake_clean() {\n    rm -rf debian/.debhelper/ debian/files debian/changelog debian/control debian/cuda-keyring/\n    rm -f debian/cuda-keyring.debhelper.log debian/cuda-keyring.install debian/cuda-keyring.postinst debian/cuda-keyring.substvars\n    rm -f debian/cuda*.list debian/cuda*.gpg debian/cuda*pin*\n}\n\nmake_clean\n[[ -f \"$1\" ]] || err \"USAGE: $0 [keyring] [pin file]\"\n[[ -f \"$1\" ]] && [[ \"$1\" =~ \\.gpg ]] && cp -v \"$1\" debian/\n[[ -f \"$2\" ]] && [[ \"$2\" =~ \\.pin ]] && cp -v \"$2\" debian/cuda-repository-pin-600\n\nmake -i -f debian/rules fill_templates || err \"make\"\ndpkg-buildpackage -b -kcudatools@nvidia.com || err \"dpkg-buildpackage\"\n\nmake_clean\nmv -v ../cuda-keyring*.deb .\nrm -f ../cuda-keyring_*\n\ndpkg -I ./cuda-keyring*.deb\ndpkg -c ./cuda-keyring*.deb\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:16.749448+00:00"
+}

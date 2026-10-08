@@ -1,0 +1,61 @@
+{
+  "canonical_source": "github:shihabshahrier/Crypto-Price-Alert-Bot",
+  "repo": "shihabshahrier/Crypto-Price-Alert-Bot",
+  "revision_sha": "3669082a27c9405458c1c612c06b822409c41770",
+  "default_branch": "master",
+  "pushed_at": "2025-05-02T21:07:30Z",
+  "repo_updated_at": "2026-06-02T18:46:43Z",
+  "license": null,
+  "topics": [
+    "alerts",
+    "bitcoin",
+    "bot",
+    "crypto",
+    "cryptocurrency",
+    "ethereum",
+    "price-alert",
+    "python",
+    "twilio",
+    "web-app"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "bd3c7a05ebc8f7a626158cc5509cc902f72c532298d8ff61d6f0f2da431b89fa",
+      "score": 100,
+      "content": "# Crypto Price Alert Bot\n\nA web application that monitors cryptocurrency prices and sends phone call alerts when target prices are reached using Twilio.\n\n## Features\n\n- Real-time cryptocurrency price monitoring\n- Support for multiple popular cryptocurrencies (BTC, ETH, XRP, etc.)\n- Customizable price alerts (above/below target price)\n- Phone call notifications via Twilio\n- User-friendly web interface\n\n## Prerequisites\n\n- Python 3.8 or higher\n- Twilio account with:\n  - Account SID\n  - Auth Token\n  - Phone Number\n  - Studio Flow SID\n\n## Installation\n\n1. Clone the repository:\n```bash\ngit clone [your-repo-url]\ncd Crypto-Price-Alert-Bot\n```\n\n2. Install required dependencies:\n```bash\npip install -r requirements.txt\n```\n\n3. Create a `.env` file based on `.env.example`:\n```bash\ncp .env.example .env\n```\n\n4. Configure your `.env` file with your Twilio credentials:\n```\nACCOUNT_SID=your_account_sid\nAUTH_TOKEN=your_auth_token\nTWILIO_PHONE_NUMBER=your_twilio_phone\nSTUDIO_FLOW_SID=your_studio_flow_sid\n```\n\n## Running the Application\n\nStart the server using uvicorn:\n\n```bash\nuvicorn asgi:asgi_app --host 0.0.0.0 --port 8000\n```\n\nAccess the web interface at: `http://localhost:8000`\n\n## Usage\n\n1. Select a cryptocurrency from the dropdown menu\n2. Enter your target price in USD\n3. Choose whether to alert when price goes above or below target\n4. Enter your phone number (in international format: +1234567890)\n5. Set the price check interval (in seconds)\n6. Click \"Start Price Alert Bot\" to begin monitoring\n\n## API Endpoints\n\n- `POST /api/start-monitor`: Start price monitoring\n- `POST /api/stop-monitor/<monitor_id>`: Stop price monitoring\n- `GET /api/status/<monitor_id>`: Get monitor status\n- `POST /api/make-test-call`: Make a test call\n\n## Tech Stack\n\n- Backend: Flask/ASGI\n- Frontend: HTML, CSS, JavaScript\n- Price Data: CoinGecko API\n- Notifications: Twilio API\n\n## Security Notes\n\n- Keep your `.env` file secure and never commit it to version control\n- Use environment variables for sensitive credentials in production\n- Implement rate limiting and authentication for production use\n\n\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "022650e9ad97de12e0bb702b29760a69f5a3f593d7eb86630accd7b70e0c55e4",
+      "score": 85,
+      "content": "aiohappyeyeballs==2.6.1\naiohttp==3.11.18\naiohttp-retry==2.9.1\naiosignal==1.3.2\nasgiref==3.8.1\nattrs==25.3.0\nblinker==1.9.0\ncertifi==2025.4.26\ncharset-normalizer==3.4.2\nclick==8.1.8\nFlask==3.1.0\nflask-cors==5.0.1\nfrozenlist==1.6.0\nh11==0.16.0\nidna==3.10\nitsdangerous==2.2.0\nJinja2==3.1.6\nMarkupSafe==3.0.2\nmultidict==6.4.3\npropcache==0.3.1\nPyJWT==2.10.1\npython-dotenv==1.1.0\nrequests==2.32.3\ntwilio==9.5.2\nurllib3==2.4.0\nuvicorn==0.34.2\nWerkzeug==3.1.3\nyarl==1.20.0\n"
+    },
+    {
+      "path": "app.py",
+      "sha": null,
+      "content_sha256": "0b577bdbdb1e7b4cde96af16476e0c636d6b07bf8837a1e95d9cd2a398344b12",
+      "score": 35,
+      "content": "from flask import Flask, request, jsonify, send_from_directory\nimport os\nimport requests\nimport time\nimport threading\nfrom twilio.rest import Client\nfrom dotenv import load_dotenv\nfrom flask_cors import CORS\n\n\napp = Flask(__name__, static_folder='static')\nCORS(app)  # Enable CORS for all routes\n\n# Store active price monitors\nactive_monitors = {}\n\nclass PriceMonitor:\n    def __init__(self, crypto_id, target_price, check_above, interval, twilio_config):\n        self.crypto_id = crypto_id\n        self.target_price = target_price\n        self.check_above = check_above\n        self.interval = interval\n        self.twilio_config = twilio_config\n        self.running = True\n        self.thread = threading.Thread(target=self.monitor_price)\n        self.last_price = None\n        self.last_updated = None\n    \n    def start(self):\n        self.thread.start()\n        return self.thread.ident\n    \n    def stop(self):\n        self.running = False\n        if self.thread.is_alive():\n            self.thread.join(timeout=2)\n    \n    def get_crypto_price(self):\n        try:\n            url = f\"https://api.coingecko.com/api/v3/simple/price?ids={self.crypto_id}&vs_currencies=usd\"\n            response = requests.get(url)\n            if response.status_code == 200:\n                data = response.json()\n                if self.crypto_id in data:\n                    self.last_price = data[self.crypto_id]['usd']\n                    self.last_updated = time.strftime(\"%Y-%m-%d %H:%M:%S\")\n                    return self.last_price\n            return None\n        except Exception as e:\n            print(f\"Error fetching price: {e}\")\n            return None\n    \n    def check_price(self, current_price):\n        if self.check_above:\n            return current_price >= self.target_price\n        else:\n            return current_price <= self.target_price\n    \n    def make_twilio_call(self):\n        try:\n            account_sid = self.twilio_config['account_sid']\n            auth_token = self.twilio_config['auth_token']\n            studio_flow_sid = self.twilio_config['studio_flow_sid']\n            call_from = self.twilio_config['call_from']\n            call_to = self.twilio_config['call_to']\n            \n            client = Client(account_sid, auth_token)\n            execution = client.studio.v2.flows(\n                studio_flow_sid\n            ).executions.create(to=call_to, from_=call_from)\n            \n            print(f\"Called {execution.sid}\")\n            return True\n        except Exception as e:\n            print(f\"Error making Twilio call: {e}\")\n            return False\n    \n    def monitor_price(self):\n        while self.running:\n            current_price = self.get_crypto_price()\n            if current_price is not None:\n                print(f\"Current {self.crypto_id} price: ${current_price}\")\n                \n                if self.check_price(current_price):\n                    print(f\"Target price {'above' if self.check_above else 'below'} ${self.target_price} reached!\")\n                    self.make_twilio_call()\n                    self.running = False\n                    break\n                else:\n                    print(f\"Target price not reached. Waiting...\")\n            \n            time.sleep(self.interval)\n\n@app.route('/api/start-monitor', methods=['POST'])\ndef start_monitor():\n    data = request.json\n    \n    # Validate required fields\n    required_fields = ['cryptoId', 'targetPrice', 'checkAbove', 'interval', 'callTo']\n    for field in required_fields:\n        if field not in data:\n            return jsonify({'error': f'Missing required field: {field}'}), 400\n    \n    # Load Twilio config from .env\n    load_dotenv()\n    twilio_config = {\n        'account_sid': os.environ['ACCOUNT_SID'],\n        'auth_token': os.environ['AUTH_TOKEN'],\n        'studio_flow_sid': os.environ['STUDIO_FLOW_SID'],\n        'call_from': os.environ['TWILIO_PHONE_NUMBER'],\n        'call_to': data['callTo']\n    }\n    \n    # Create and start price monitor\n    monitor = PriceMonitor(\n        crypto_id=data['cryptoId'],\n        target_price=float(data['targetPrice']),\n        check_above=data['checkAbove'],\n        interval=int(data['interval']),\n        twilio_config=twilio_config\n    )\n    \n    # Start the monitor and get its ID\n    monitor_id = monitor.start()\n    active_monitors[monitor_id] = monitor\n    \n    return jsonify({\n        'status': 'success',\n        'message': 'Price monitor started',\n        'monitorId': monitor_id\n    })\n\n@app.route('/api/stop-monitor/<int:monitor_id>', methods=['POST'])\ndef stop_monitor(monitor_id):\n    if monitor_id in active_monitors:\n        active_monitors[monitor_id].stop()\n        del active_monitors[monitor_id]\n        return jsonify({\n            'status': 'success',\n            'message': 'Price monitor stopped'\n        })\n    else:\n        return jsonify({\n            'status': 'error',\n            'message': 'Monitor not found'\n        }), 404\n\n@app.route('/api/status/<int:monitor_id>', methods=['GET'])\ndef get_status(monitor_id):\n    if monitor_id in active_monitors:\n        monitor = active_monitors[monitor_id]\n        return jsonify({\n            'status': 'running' if monitor.running else 'stopped',\n            'lastPrice': monitor.last_price,\n            'lastUpdated': monitor.last_updated,\n            'cryptoId': monitor.crypto_id,\n            'targetPrice': monitor.target_price,\n            'checkAbove': monitor.check_above\n        })\n    else:\n        return jsonify({\n            'status': 'error',\n            'message': 'Monitor not found'\n        }), 404\n\n@app.route('/api/make-test-call', methods=['POST'])\ndef make_test_call():\n    data = request.json\n    \n    # Validate required fields\n    if 'callTo' not in data:\n        return jsonify({'error': 'Missing required field: callTo'}), 400\n    \n    try:\n        # Load Twilio config from .env\n        load_dotenv()\n        account_sid = os.environ['ACCOUNT_SID']\n        auth_token = os.environ['AUTH_TOKEN']\n        studio_flow_sid = os.environ['STUDIO_FLOW_SID']\n        call_from = os.environ['TWILIO_PHONE_NUMBER']\n        call_to = data['callTo']\n        \n        client = Client(account_sid, auth_token)\n        execution = client.studio.v2.flows(\n            studio_flow_sid\n        ).executions.create(to=call_to, from_=call_from)\n        \n        return jsonify({\n            'status': 'success',\n            'message': 'Test call made successfully',\n            'executionSid': execution.sid\n        })\n    except Exception as e:\n        return jsonify({\n            'status': 'error',\n            'message': str(e)\n        }), 500\n\n# Serve static files for frontend\n@app.route('/', defaults={'path': ''})\n@app.route('/<path:path>')\ndef serve(path):\n    if path == \"\":\n        # Return index.html\n        return send_from_directory(app.static_folder, 'index.html')\n    else:\n        # Try to serve the static file\n        try:\n            return send_from_directory(app.static_folder, path)\n        except:\n            # If not found, return index.html (for SPA)\n            return send_from_directory(app.static_folder, 'index.html')\n\nif __name__ == \"__main__\":\n    app.run(debug=True, port=5000)"
+    },
+    {
+      "path": "asgi.py",
+      "sha": null,
+      "content_sha256": "2a4c770d1b419c40a9fe4317d56e403565d9818f3bf269406a51eb56fff96cb4",
+      "score": 35,
+      "content": "from app import app\nfrom werkzeug.middleware.dispatcher import DispatcherMiddleware\nfrom werkzeug.wrappers import Response\nfrom flask import Response as FlaskResponse\nfrom asgiref.wsgi import WsgiToAsgi\n\nasgi_app = WsgiToAsgi(app)\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:52.761379+00:00"
+}

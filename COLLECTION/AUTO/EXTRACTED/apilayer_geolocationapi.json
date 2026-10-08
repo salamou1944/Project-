@@ -1,0 +1,71 @@
+{
+  "canonical_source": "github:apilayer/geolocationapi",
+  "repo": "apilayer/geolocationapi",
+  "revision_sha": "ae1f92b280038d977cadd95ccb453a68e735ab36",
+  "default_branch": "master",
+  "pushed_at": "2022-12-08T01:27:47Z",
+  "repo_updated_at": "2026-07-23T05:09:38Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "08fb15e6415b8ea8666951a0e69574149d3fbebf0e3d75f5ef6136274a6d9585",
+      "score": 100,
+      "content": "# IP Geolocation API\n\nIP Geolocation API is a free service for geocoding requests.\n\n[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/madisvain/geolocationapi)\n\nRequest geocoding is done via [CloudFlare IP Geolocation](https://support.cloudflare.com/hc/en-us/articles/200168236-What-does-Cloudflare-IP-Geolocation-do-) to which additional information about the geolocated country is provided.\n\n\n## Stack\n\nIP Geolocation API is built upon Starlette to achieve high throughput. The current setup can asyncronously handle thousands of requests per second with very low system requirements.\n\n#### Libraries used\n* [Starlette](https://www.starlette.io/)\n* [Uvicorn](https://www.uvicorn.org/)\n* [uvloop](https://github.com/MagicStack/uvloop)\n* [ultraJSON](https://github.com/esnme/ultrajson)\n\n\n## Development\n#### Install packages\n```shell\npipenv install\n```\n\n#### Running the server\n```shell\ngunicorn app:app -k uvicorn.workers.UvicornWorker --reload\n```\n\n## Contributing\nThanks for your interest in the project! All pull requests are welcome from developers of all skill levels. To get started, simply fork the master branch on GitHub to your personal account and then clone the fork into your development environment.\n\nMadis Väin (madisvain on Github, Twitter) is the original creator of the IP Geolocation API framework.\n\n## License\nMIT"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "b3f36c64d7b5d1782580f8ac5499cea25d8fd708d6f2278e7861507de54f9dd9",
+      "score": 85,
+      "content": "run:\n\tpipenv run gunicorn app:app -k uvicorn.workers.UvicornWorker --reload"
+    },
+    {
+      "path": "static/favicon/browserconfig.xml",
+      "sha": null,
+      "content_sha256": "8e332d23c87b873e5cc518e932df5b76197fe9c87bdad8691d138d39003fa52c",
+      "score": 71,
+      "content": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<browserconfig>\n    <msapplication>\n        <tile>\n            <square150x150logo src=\"/static/favicon/mstile-150x150.png\"/>\n            <TileColor>#ffc40d</TileColor>\n        </tile>\n    </msapplication>\n</browserconfig>\n"
+    },
+    {
+      "path": "middleware.py",
+      "sha": null,
+      "content_sha256": "5e0f1107e64f165192d9caf4c97d3368a83ba9b64352838014ee8702631ced48",
+      "score": 35,
+      "content": "from starlette.datastructures import URL\nfrom starlette.responses import RedirectResponse\nfrom starlette.types import ASGIApp, ASGIInstance, Scope\n\n\nclass WWWRedirectMiddleware:\n    def __init__(self, app: ASGIApp) -> None:\n        self.app = app\n\n    def __call__(self, scope: Scope) -> ASGIInstance:\n        if scope[\"type\"] in (\"http\"):\n\n            host = None\n            for key, value in scope[\"headers\"]:\n                if key == b\"host\":\n                    host = value.decode(\"latin-1\")\n                    break\n\n            if host and not host.startswith(\"www.\"):\n                url = URL(scope=scope)\n                url = url.replace(hostname=f\"www.{host}\")\n                return RedirectResponse(url, status_code=301)\n\n        return self.app(scope)\n"
+    },
+    {
+      "path": "app.py",
+      "sha": null,
+      "content_sha256": "5b950f3ac6b1a8069f6ff50c774b4a74530815c549b807e34eadf907affdf539",
+      "score": 35,
+      "content": "import os\nimport jinja2\nimport ujson\nimport uvicorn\n\nfrom geoip2 import database\nfrom starlette.applications import Starlette\nfrom starlette.middleware.cors import CORSMiddleware\nfrom starlette.staticfiles import StaticFiles\nfrom starlette.responses import HTMLResponse, UJSONResponse\n\nfrom middleware import WWWRedirectMiddleware\n\napp = Starlette()\napp.debug = False\n\n# Middleware\napp.add_middleware(\n    CORSMiddleware, allow_origins=[\"*\"], allow_methods=[\"GET\", \"OPTIONS\"]\n)\napp.add_middleware(WWWRedirectMiddleware)\n\n# Static\napp.mount(\"/static\", StaticFiles(directory=\"static\"))\n\n\n@app.on_event(\"startup\")\nasync def startup():\n    # Open GeoIp2 database\n    app.geoip2 = database.Reader(os.path.join(\"data\", \"GeoLite2-Country.mmdb\"))\n    # Load countries into memory\n    with open(os.path.join(\"data\", \"countries.json\")) as f:\n        app.countries = ujson.loads(f.read())\n\n\n@app.route(\"/\", methods=[\"GET\", \"HEAD\"])\nasync def homepage(request):\n    path = os.path.join(\"templates\", \"index.html\")\n    with open(path, \"r\") as f:\n        template = jinja2.Template(f.read())\n        return HTMLResponse(template.render())\n\n\n@app.route(\"/api/geolocate\", methods=[\"GET\", \"HEAD\"])\nasync def geolocate(request):\n    country_code = request.headers.get(\"CF-IPCountry\", \"\").upper()\n    country = app.countries.get(country_code)\n    if country:\n        return UJSONResponse(country)\n    else:\n        return UJSONResponse({\"message\": \"Could not geocode request.\"})\n\n\n@app.route(\"/api/geolocate/{ip}\", methods=[\"GET\", \"HEAD\"])\nasync def geolocate_ip(request):\n    r = app.geoip2.country(request.path_params[\"ip\"])\n    country = app.countries.get(r.country.iso_code)\n    if country:\n        return UJSONResponse(country)\n    else:\n        return UJSONResponse({\"message\": \"Could not geocode request.\"})\n\n\n@app.route(\"/api/countries\", methods=[\"GET\", \"HEAD\"])\nasync def countries_list(request):\n    return UJSONResponse(app.countries)\n\n\n@app.route(\"/api/countries/{country_code}\", methods=[\"GET\", \"HEAD\"])\nasync def countries_detail(request):\n    country_code = request.path_params[\"country_code\"].upper()\n    country = app.countries.get(country_code)\n    if country:\n        return UJSONResponse(country)\n    else:\n        return UJSONResponse({\"message\": \"Country code not found.\"})\n\n\nif __name__ == \"__main__\":\n    uvicorn.run(app, host=\"0.0.0.0\", port=8000, access_log=False)\n"
+    },
+    {
+      "path": "release.py",
+      "sha": null,
+      "content_sha256": "e3a5142c6a86b2455b800781298b2ffd734265f211eb66058c4a02f9a801c42f",
+      "score": 35,
+      "content": "import io\nimport os\nimport shutil\nimport tarfile\nimport requests\n\nGEOIP2_DB_URL = (\n    \"http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz\"\n)\n\nr = requests.get(GEOIP2_DB_URL)\ntar = tarfile.open(mode=\"r:gz\", fileobj=io.BytesIO(r.content))\nfor member in tar.getmembers():\n    if member.name.endswith(\"GeoLite2-Country.mmdb\"):\n        member.name = os.path.basename(member.name)\n        tar.extract(member, path=\"data\")\n"
+    },
+    {
+      "path": "app.json",
+      "sha": null,
+      "content_sha256": "d0073c3497c2cb7c0002bcc7481a5a898b8458239f90f11e4f5bc773f86f68e9",
+      "score": 35,
+      "content": "{\n    \"name\": \"IP Geolocation API\",\n    \"description\": \"A painless Geolocation API\",\n    \"website\": \"https://ipgeolocationapi.com\",\n    \"repository\": \"https://github.com/madisvain/geolocationapi\",\n    \"logo\": \"https://ipgeolocationapi.io/static/logo.svg\",\n    \"keywords\": [\n      \"python\",\n      \"starlette\",\n      \"api\",\n      \"geolocation\"\n    ],\n    \"env\": {\n      \"GUNICORN_WORKERS\": {\n        \"description\": \"The number of gunicorn workers to run.\",\n        \"value\": \"4\"\n      }\n    }\n  }"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:15.489964+00:00"
+}

@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:rohitg00/mcp-agent",
+  "repo": "rohitg00/mcp-agent",
+  "revision_sha": "160293074d6a2bfae36e391558ef194867e018bd",
+  "default_branch": "main",
+  "pushed_at": "2025-03-15T22:33:30Z",
+  "repo_updated_at": "2026-04-27T21:29:24Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "examples/mcp_root_test/requirements.txt",
+      "sha": null,
+      "content_sha256": "6b843a5198094952bfa13d79c35175263ee4bb1711e90d0df4a490cc843ae0f1",
+      "score": 216,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example\n# Additional dependencies specific to this example\nanthropic\n"
+    },
+    {
+      "path": "examples/mcp_root_test/mcp_agent.secrets.yaml.example",
+      "sha": null,
+      "content_sha256": "362f52829da86088ff9958405b3dddecb2ce863ba11807357e2a7ae6a5988d38",
+      "score": 211,
+      "content": "$schema: ../../schema/mcp-agent.config.schema.json\n\nopenai:\n  api_key: openai_api_key\n\nanthropic:\n  api_key: anthropic_api_key\n"
+    },
+    {
+      "path": "examples/streamlit_mcp_basic_agent/pyproject.toml",
+      "sha": null,
+      "content_sha256": "01cf1ec265fe603b627a5be8ea5eff9d4ae3f6a754ef70925b8cd718e4028ca1",
+      "score": 191,
+      "content": "[project]\nname = \"streamlit-mcp-basic-agent\"\nversion = \"0.1.0\"\ndescription = \"Add your description here\"\nreadme = \"README.md\"\nrequires-python = \">=3.10\"\ndependencies = []\n"
+    },
+    {
+      "path": "src/mcp_agent/logging/tracing.py",
+      "sha": null,
+      "content_sha256": "8d08afc4a625f3bd285da926c9493b4d7b93412bec233a47c1995241fcb86f47",
+      "score": 176,
+      "content": "\"\"\"\nTelemetry manager that defines distributed tracing decorators for OpenTelemetry traces/spans\nfor the Logger module for MCP Agent\n\"\"\"\n\nimport asyncio\nimport functools\nfrom typing import Any, Dict, Callable, Optional, Tuple, TYPE_CHECKING\n\nfrom opentelemetry import trace\nfrom opentelemetry.context import Context as OtelContext\nfrom opentelemetry.propagate import extract as otel_extract\nfrom opentelemetry.trace import set_span_in_context\nfrom opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator\n\nfrom opentelemetry.trace import SpanKind, Status, StatusCode\n\nfrom mcp_agent.context_dependent import ContextDependent\n\nif TYPE_CHECKING:\n    from mcp_agent.context import Context\n\n\nclass TelemetryManager(ContextDependent):\n    \"\"\"\n    Simple manager for creating OpenTelemetry spans automatically.\n    Decorator usage: @telemetry.traced(\"SomeSpanName\")\n    \"\"\"\n\n    def __init__(self, context: Optional[\"Context\"] = None, **kwargs):\n        # If needed, configure resources, exporters, etc.\n        # E.g.: from opentelemetry.sdk.trace import TracerProvider\n        # trace.set_tracer_provider(TracerProvider(...))\n        super().__init__(context=context, **kwargs)\n\n    def traced(\n        self,\n        name: str | None = None,\n        kind: SpanKind = SpanKind.INTERNAL,\n        attributes: Dict[str, Any] = None,\n    ) -> Callable:\n        \"\"\"\n        Decorator that automatically creates and manages a span for a function.\n        Works for both async and sync functions.\n        \"\"\"\n\n        def decorator(func):\n            span_name = name or f\"{func.__module__}.{func.__qualname__}\"\n\n            tracer = self.context.tracer or trace.get_tracer(\"mcp_agent\")\n\n            @functools.wraps(func)\n            async def async_wrapper(*args, **kwargs):\n                with tracer.start_as_current_span(span_name, kind=kind) as span:\n                    if attributes:\n                        for k, v in attributes.items():\n                            span.set_attribute(k, v)\n                    # Record simple args\n                    self._record_args(span, args, kwargs)\n                    try:\n                        res = await func(*args, **kwargs)\n                        return res\n                    except Exception as e:\n                        span.record_exception(e)\n                        span.set_status(Status(StatusCode.ERROR))\n                        raise\n\n            @functools.wraps(func)\n            def sync_wrapper(*args, **kwargs):\n                with tracer.start_as_current_span(span_name, kind=kind) as span:\n                    if attributes:\n                        for k, v in attributes.items():\n                            span.set_attribute(k, v)\n                    # Record simple args\n                    self._record_args(span, args, kwargs)\n                    try:\n                        res = func(*args, **kwargs)\n                        return res\n                    except Exception as e:\n                        span.record_exception(e)\n                        span.set_status(Status(StatusCode.ERROR))\n                        raise\n\n            if asyncio.iscoroutinefunction(func):\n                return async_wrapper\n            else:\n                return sync_wrapper\n\n        return decorator\n\n    def _record_args(self, span, args, kwargs):\n        \"\"\"Optionally record primitive args as span attributes.\"\"\"\n        for i, arg in enumerate(args):\n            if isinstance(arg, (str, int, float, bool)):\n                span.set_attribute(f\"arg_{i}\", str(arg))\n        for k, v in kwargs.items():\n            if isinstance(v, (str, int, float, bool)):\n                span.set_attribute(k, str(v))\n\n\nclass MCPRequestTrace:\n    \"\"\"Helper class for trace context propagation in MCP\"\"\"\n\n    @staticmethod\n    def start_span_from_mcp_request(\n        method: str, params: Dict[str, Any]\n    ) -> Tuple[trace.Span, OtelContext]:\n        \"\"\"Extract trace context from incoming MCP request and start a new span\"\"\"\n        # Extract trace context from _meta if present\n        carrier = {}\n        _meta = params.get(\"_meta\", {})\n        if \"traceparent\" in _meta:\n            carrier[\"traceparent\"] = _meta[\"traceparent\"]\n        if \"tracestate\" in _meta:\n            carrier[\"tracestate\"] = _meta[\"tracestate\"]\n\n        # Extract context and start span\n        ctx = otel_extract(carrier, context=OtelContext())\n        tracer = trace.get_tracer(__name__)\n        span = tracer.start_span(method, context=ctx, kind=SpanKind.SERVER)\n        return span, set_span_in_context(span)\n\n    @staticmethod\n    def inject_trace_context(arguments: Dict[str, Any]) -> Dict[str, Any]:\n        \"\"\"Inject current trace context into outgoing MCP request arguments\"\"\"\n        carrier = {}\n        TraceContextTextMapPropagator().inject(carrier)\n\n        # Create or update _meta with trace context\n        _meta = arguments.get(\"_meta\", {})\n        if \"traceparent\" in carrier:\n            _meta[\"traceparent\"] = carrier[\"traceparent\"]\n        if \"tracestate\" in carrier:\n            _meta[\"tracestate\"] = carrier[\"tracestate\"]\n        arguments[\"_meta\"] = _meta\n\n        return arguments\n\n\ntelemetry = TelemetryManager()\n"
+    },
+    {
+      "path": "examples/mcp_basic_slack_agent/README.md",
+      "sha": null,
+      "content_sha256": "d3f872850c2b3770ae2f73ac3ac92bb865ee767966ac327e51b1585783801a56",
+      "score": 171,
+      "content": "# MCP Slack agent example\n\nThis example shows a \"slack\" Agent which has access to the 'slack' and 'filesystem' MCP servers.\n\nYou can use it to perform read/write actions on your Slack, as well as on your filesystem, including combination\nactions such as writing slack messages to disk or reading files and sending them over slack.\n"
+    },
+    {
+      "path": "examples/mcp_agent_server/README.md",
+      "sha": null,
+      "content_sha256": "874f830a55bd5c1c4549013cf49b2fe5130aa89f4a25bce7c7518ef6debef074",
+      "score": 171,
+      "content": "# MCP Server example\n\nTo use in claude desktop, insert the following in `claude_desktop_config.json` and restart the Claude Desktop client.\n\n```json\n{\n  \"mcpServers\": {\n    \"mcp-agent\": {\n      \"command\": \"uv\",\n      \"args\": [\n        \"--directory\",\n        \"/ABSOLUTE/PATH/TO/PARENT/FOLDER\",\n        \"run\",\n        \"server.py\"\n      ]\n    }\n  }\n}\n```\n\n> [!WARNING]\n> You may need to put the full path to the uv executable in the command field. You can get this by running `which uv` on MacOS/Linux or `where uv` on Windows.\n\n<img width=\"780\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/e4a1b283-c739-43a2-80b8-827adeac9962\" />\n\nTo use the MCP server with a client:\n\n```bash\nuv run client.py server.py\n```\n"
+    },
+    {
+      "path": "examples/mcp_hello_world/README.md",
+      "sha": null,
+      "content_sha256": "000158e9761842b28865909afdbd333c5494b0fef92f8cb4b600d8972921845d",
+      "score": 171,
+      "content": "# Simplest usage of MCP Agent\n"
+    },
+    {
+      "path": "examples/mcp_basic_ollama_agent/README.md",
+      "sha": null,
+      "content_sha256": "5b791e18473d0440e179b8b4f8b6cd195a0a7e1b3146309b5532734eb86d409e",
+      "score": 171,
+      "content": "# MCP Ollama Agent example\n\nThis example shows a \"finder\" Agent using llama models to access the 'fetch' and 'filesystem' MCP servers.\n\nYou can ask it information about local files or URLs, and it will make the determination on what to use at what time to satisfy the request.\n\nMake sure you have Ollama installed. Then pull the required models for the example:\n```bash\nollama run llama3.2:3b\n\nollama run llama3.1:8b\n```\n\n<img width=\"2160\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/14cbfdf4-306f-486b-9ec1-6576acf0aeb7\" />\n"
+    },
+    {
+      "path": "examples/mcp_model_selector/README.md",
+      "sha": null,
+      "content_sha256": "a9999e5cec6eaef8bc27eea148c2d2ae6c68a2d0907f68bfb04d133ac16b5854",
+      "score": 171,
+      "content": "# LLM Selector\n\nThis example shows using MCP's ModelPreferences type to select a model (LLM) based on speed, cost and intelligence priorities.\n\nInteractive mode:\n\n```bash\nuv run interactive.py\n```\n\nhttps://github.com/user-attachments/assets/04257ae4-a628-4c25-ace2-6540620cbf8b\n\nScript mode:\n\n```bash\nuv run main.py\n```\n"
+    },
+    {
+      "path": "examples/streamlit_mcp_basic_agent/README.md",
+      "sha": null,
+      "content_sha256": "a4d8841ce084c3ebfc0fc07d989c6ff1fa9999936dd98de050ad5309e4517387",
+      "score": 171,
+      "content": "# Streamlit MCP Agent example\n\nThis Streamlit example shows a \"finder\" Agent which has access to the 'fetch' and 'filesystem' MCP servers.\n\nYou can ask it information about local files or URLs, and it will make the determination on what to use at what time to satisfy the request.\n\nTo run this example:\n```bash\nstreamlit run main.py\n```\n\nWith uv:\n\n```bash\nuv run streamlit run ./main.py\n```\n\n<img src=\"https://github.com/user-attachments/assets/7ad27d23-9ed6-4e0e-ba7f-2d3b0afef847\" height=\"512\">\n"
+    },
+    {
+      "path": "examples/streamlit_mcp_rag_agent/README.md",
+      "sha": null,
+      "content_sha256": "432297d5bfda82b8a8da0a96e6c25d4ef7f2eb57b5c2288fc87fb6a6d1e3ce25",
+      "score": 171,
+      "content": "# Streamlit MCP RAG Agent example\n\nThis Streamlit example shows a RAG Agent that is able to augment its responses using data from Qdrant vector database.\n\n## Usage\n\nDownload latest Qdrant image from Dockerhub:\n\n```bash\ndocker pull qdrant/qdrant\n```\n\nThen, run the Qdrant server locally with docker:\n\n```bash\ndocker run -p 6333:6333 -v $(pwd)/qdrant_storage:/qdrant/storage qdrant/qdrant\n```\n\nFinally, run the example:\n\n```bash\nuv pip install -r requirements.txt\nuv run streamlit run main.py\n```\n\n<img width=\"834\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/14072029-1f37-4ac5-bccf-a76e726ba9b2\" />\n"
+    },
+    {
+      "path": "examples/mcp_basic_agent/README.md",
+      "sha": null,
+      "content_sha256": "73df8d306e0e4ae2f729c6715c89f3f901f543aec27659c70a6278b3f5e3bf17",
+      "score": 171,
+      "content": "# MCP Agent example\n\nThis example shows a \"finder\" Agent which has access to the 'fetch' and 'filesystem' MCP servers.\n\nYou can ask it information about local files or URLs, and it will make the determination on what to use at what time to satisfy the request.\n\n<img width=\"2160\" alt=\"Image\" src=\"https://github.com/user-attachments/assets/14cbfdf4-306f-486b-9ec1-6576acf0aeb7\" />\n"
+    },
+    {
+      "path": "examples/mcp_server_aggregator/README.md",
+      "sha": null,
+      "content_sha256": "9738041d801075a80748c57e047def2ce1d01e4b59e8e2eac89f44f2adb0fada",
+      "score": 171,
+      "content": "# MCP aggregator example\n\nThis example shows connecting to multiple MCP servers via the MCPAggregator interface\n"
+    },
+    {
+      "path": "examples/marimo_mcp_basic_agent/README.md",
+      "sha": null,
+      "content_sha256": "ade5a736d79b37497a698a53572d307d355c212bff643d072c4a51ca409a8912",
+      "score": 171,
+      "content": "# marimo MCP Agent example\n\nThis example [marimo](https://github.com/marimo-team/marimo) notebook shows a\n\"finder\" Agent which has access to the 'fetch' and 'filesystem' MCP servers.\n\nYou can ask it information about local files or URLs, and it will make the\ndetermination on what to use at what time to satisfy the request.\n\nFirst modify `mcp_agent.config.yaml` to include directories to which\nyou'd like to give the agent access.\n\nThen run with:\n\n```bash\nOPENAI_API_KEY=<your-api-key> uvx marimo edit --sandbox notebook.py\n```\n\nTo serve as a read-only app, use\n\n```\nOPENAI_API_KEY=<your-api-key> uvx marimo run --sandbox notebook.py\n```\n"
+    },
+    {
+      "path": "examples/mcp_root_test/root_test_server.py",
+      "sha": null,
+      "content_sha256": "d8dd6c3dde76c8f21f0ecf4d7c0663e9532294e44ab033ef6ab3ddf0e8f41f9a",
+      "score": 166,
+      "content": "from mcp.server.fastmcp import FastMCP, Context\n\nmcp = FastMCP(\"MCP Root Tester\")\n\n\n@mcp.tool()\nasync def show_roots(ctx: Context) -> str:\n    return await ctx.session.list_roots()\n\n\nif __name__ == \"__main__\":\n    mcp.run()\n"
+    },
+    {
+      "path": "examples/mcp_root_test/main.py",
+      "sha": null,
+      "content_sha256": "afd326e5fcfebe975705208840b14eb13e8455076ae68528b94c8b20ba29694e",
+      "score": 166,
+      "content": "import asyncio\nimport time\n\nfrom mcp_agent.app import MCPApp\nfrom mcp_agent.agents.agent import Agent\nfrom mcp_agent.mcp.mcp_connection_manager import MCPConnectionManager\nfrom mcp_agent.workflows.llm.augmented_llm_anthropic import AnthropicAugmentedLLM  # noqa: F401\nfrom mcp_agent.workflows.llm.augmented_llm_openai import OpenAIAugmentedLLM  # noqa: F401\nfrom mcp_agent.logging.logger import LoggingConfig\nfrom rich import print\n\napp = MCPApp(name=\"Testing MCP Server roots\")\n\n\nasync def example_usage():\n    async with app.run() as agent_app:\n        logger = agent_app.logger\n        context = agent_app.context\n\n        async with MCPConnectionManager(context.server_registry):\n            interpreter_agent = Agent(\n                name=\"analysis\",\n                instruction=\"\"\"You have access to a python interpreter. Pandas, Seaborn and Matplotlib are already installed. You can add further packages if needed.\"\"\",\n                server_names=[\"root_test\", \"interpreter\"],\n            )\n\n            try:\n                llm = await interpreter_agent.attach_llm(AnthropicAugmentedLLM)\n\n                # (claude does not need this signpost - this is where 'available files' pattern would be useful)\n                await llm.generate_str(\n                    \"There is a file named '01_Data_Processed.csv' in the current directory. Use the Python Interpreter to to analyze the file. \"\n                    #                    \"There is a CSV file in the current directory. Use the Python Interpreter to to analyze the file. \"\n                    + \"Produce a detailed description of the data, and any patterns it contains. \"\n                )\n\n                result = await llm.generate_str(\n                    \"Consider the data, and how to usefully group it for presentation to a Human. Find insights, using the Python Interpreter as needed.\\n\"\n                    + \"Use MatPlotLib to produce insightful visualisations. Save them as '.png' files in the current directory. Be sure to run the code and save the files \"\n                )\n                print(result)\n                logger.info(result)\n\n            finally:\n                # Clean up the agent\n                await interpreter_agent.close()\n\n    # Ensure logging is properly shutdown\n    await LoggingConfig.shutdown()\n\n\nif __name__ == \"__main__\":\n    start = time.time()\n    try:\n        asyncio.run(example_usage())\n    except KeyboardInterrupt:\n        print(\"\\nReceived keyboard interrupt, shutting down gracefully...\")\n    except Exception as e:\n        print(f\"Error during execution: {e}\")\n        raise\n    finally:\n        end = time.time()\n        t = end - start\n        print(f\"Total run time: {t:.2f}s\")\n"
+    },
+    {
+      "path": "examples/mcp_root_test/mcp_agent.config.yaml",
+      "sha": null,
+      "content_sha256": "5db82dac486e78943cedfbc18a1714383b419ca277f607031dcb64e9baeb6a42",
+      "score": 166,
+      "content": "$schema: ../../schema/mcp-agent.config.schema.json\n\nexecution_engine: asyncio\nlogger:\n  type: file\n  level: debug\n  path: \"./mcp_root_test.jsonl\"\n\nmcp:\n  servers:\n    root_test:\n      command: \"uv\"\n      args: [\"run\", \"root_test_server.py\"]\n      roots:\n        - uri: \"file:///./test_data/\"\n          name: \"test_data\"\n          server_uri_alias: \"file:///mnt/data/\"\n    interpreter:\n      command: \"docker\"\n      args:\n        [\n          \"run\",\n          \"-i\",\n          \"--rm\",\n          \"--pull=always\",\n          \"-v\",\n          \"./test_data:/mnt/data/\",\n          \"ghcr.io/evalstate/mcp-py-repl:latest\",\n        ]\n      roots:\n        - uri: \"file://./test_data/\"\n          name: \"test_data\"\n          server_uri_alias: \"file:///mnt/data/\"\n\n      # command: \"uv\"\n      # args: [\"run\", \"/home/ssmith/source/mcp-python/src/mcp_python/server.py\"]\n\nopenai:\n  # Secrets (API keys, etc.) are stored in an mcp_agent.secrets.yaml file which can be gitignored\n  default_model: o3-mini\n  reasoning_effort: low\n"
+    },
+    {
+      "path": "examples/mcp_hello_world/requirements.txt",
+      "sha": null,
+      "content_sha256": "73350c0d347d08ac4897e2c0ad794cabdf80948530bccedc8292f9a6adcd6c19",
+      "score": 156,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example"
+    },
+    {
+      "path": "examples/mcp_model_selector/requirements.txt",
+      "sha": null,
+      "content_sha256": "384b89134266241f03c6a9bd49ffcd5639f23df3e2d12e876f846cf60c72bc7e",
+      "score": 156,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example\nrich\ntyper"
+    },
+    {
+      "path": "examples/mcp_basic_slack_agent/requirements.txt",
+      "sha": null,
+      "content_sha256": "0a78f401d6b6f5edaa4491c009e56ef4cd540118bb3a1d5dc8edcfcfbec4945e",
+      "score": 156,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example\nanthropic\nopenai"
+    },
+    {
+      "path": "examples/mcp_basic_agent/requirements.txt",
+      "sha": null,
+      "content_sha256": "0a78f401d6b6f5edaa4491c009e56ef4cd540118bb3a1d5dc8edcfcfbec4945e",
+      "score": 156,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example\nanthropic\nopenai"
+    },
+    {
+      "path": "examples/mcp_basic_ollama_agent/requirements.txt",
+      "sha": null,
+      "content_sha256": "8b7436b303a4cfe5edd21b1812972524ac9c092a6c9558f177595b41a974d9d3",
+      "score": 156,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example\nopenai"
+    },
+    {
+      "path": "examples/mcp_server_aggregator/requirements.txt",
+      "sha": null,
+      "content_sha256": "73350c0d347d08ac4897e2c0ad794cabdf80948530bccedc8292f9a6adcd6c19",
+      "score": 156,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example"
+    },
+    {
+      "path": "examples/streamlit_mcp_basic_agent/requirements.txt",
+      "sha": null,
+      "content_sha256": "bf6009b6e34ae633bbd3f8906b2a25edf83c318a3ef260ba63ce07f2005b631d",
+      "score": 156,
+      "content": "# Core framework dependency\nmcp-agent @ file://../../  # Link to the local mcp-agent project root\n\n# Additional dependencies specific to this example\nopenai\nstreamlit"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:08.376172+00:00"
+}

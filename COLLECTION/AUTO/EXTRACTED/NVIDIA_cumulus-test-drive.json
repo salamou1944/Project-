@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:NVIDIA/cumulus-test-drive",
+  "repo": "NVIDIA/cumulus-test-drive",
+  "revision_sha": "0baa487ba677f0b3b0c37304c6b5f62b4fd01451",
+  "default_branch": "main",
+  "pushed_at": "2026-05-15T16:14:50Z",
+  "repo_updated_at": "2026-08-24T19:04:06Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "cf45a9ee786afc78eb5a1045fe93303e38d4fdc65b0aae4a55903be90b7fa465",
+      "score": 100,
+      "content": "# NVIDIA Cumulus Linux Virtual Workshop (aka Test Drive) Automation - cumulus-test-drive\n\nThis repository holds automation scripts for the NVIDIA Cumulus Linux Virtual Workshop (aka Test Drive) Lab. \n\nThis repository is cloned by the `oob-mgmt-server-customizations.sh` script (located in the repository [here](https://gitlab.com/lsimpson762/virt-workshop-snapshot-creation)) in order to create the `Test-Drive-Automation` directory on the `oob-mgmt-server`. This is done during the CI/CD workflow to create the base snapshot and cloned simulation for testing purposes.\n\nThe attendees of the event use this automation during two steps that are documented in the lab guide. \n\nThe first step in the lab guide is to run the ansible playbook `start-lab.yml` to set up the base configuration for the servers in the lab. The `lab3.yml` is run at the completetion of Lab 2 in order to provide a configuration that removes the interswitch links from leaf01-leaf02 so that BGP routing through the spine01 switch can be configured and tested.\n\nThe lab guide is available upon request and is provided to the attendees of the event through the marketing channel.\n\n## Files/Folders\n| File/Folder Name                    | Description                        |\n| ---------------------------- | ---------------------------------- |\n| lab2-configurations          | Folder for lab2 configs            |\n| lab3-configurations          | Folder for lab3 configs            |\n| lab3.yml                     | lab3 yml file                      |\n| license.lic                  | license file                       |\n| start-lab.yml                | Script for starting the lab        |\n| Workshop-topology.png        | png format topology diagram        |\n| Workshop-topology.json       | Topology file to be used in DSX Air|\n\n\n# Topology Diagram\n![air_simulation-1](https://github.com/NVIDIA/cumulus-test-drive/blob/e5ed9b550e6199761ffc2784fe8ee7a44b701273/Workshop-topology.png)    \n\n# virt-workshop-testing\n\n## Files/Folders\n| File/Folder Name                    | Description                               |\n| ------------------- | --------------------------------------------------------- |\n| .gitignore          | rules for git excemption                                  |\n| lab2config.yml      | lab2 config                                               |\n| lab3config.yml      | lab3 config                                               |\n| runtests.sh         | helath-check script to run after everything is configured |\n| testconfigs         | Config backups                                            |\n\n## Configurations and a script to fully test a new NVIDIA Cumulus Linux Virtual Workshop (aka Test Drive)\n\nThis repository is meant to be cloned into the `/home/ubuntu` directory on the `oob-mgmt-server`. Once cloned, change directories into the `/home/ubuntu/virt-workshop-testing` directory and execute:\n\n`./runtests.sh`\n\nThe script will run and send all output to the console. This output can be checked to see if all `ping`, `traceroute` and other verification steps complete properly.\n\n## Prerequisites\n\n1. Run the CI/CD workflow located [here](https://gitlab.com/lsimpson762/virt-workshop-snapshot-creation).\n2. The CI/CD workflow will create a snapshot and a live simulation (clone) in order to test the snapshot.\n3. Use the live simulation and login to its `oob-mgmt-server`.\n\n\n\n# LICENSE\n[Apache 2.0 License for this project](LICENSE)"
+    },
+    {
+      "path": "runtests.sh",
+      "sha": null,
+      "content_sha256": "f64dd3946197051b9c24bfd605f6828428a422e110ed51d26fbddfc89affc89e",
+      "score": 95,
+      "content": "#!/bin/bash\n\ncheck_state(){\nif [ \"$?\" != \"0\" ]; then\n    echo \"ERROR Could not bring up last series of devices, there was an error of some kind!\"\n    exit 1\nfi\n}\n\necho \"Test Ansible Ping for all nodes\"\nansible spine01:leaf01:leaf02:server01:server02 -m ping\ncheck_state\n\n\n### Lab 1 ###\n\n# initiate the lab steps that students use\n#cd /home/ubuntu/Test-Drive-Automation\n#check_state\n#sudo git pull\n#check_state\nansible-playbook start-lab.yml\ncheck_state\n\n### Lab 2 ###\n\n# initiate testing sequence for Lab 2\n#cd /home/ubuntu\n#git clone https://github.com/berkinkartal/virt-workshop-testing.git\n\n#reset leaf01 and leaf02 to post Lab 2 setup\n#cd /home/ubuntu/virt-workshop-testing\nansible-playbook lab2config.yml\n\n# Lab 2 verify\n\n# ping VRR IP address from server01\nansible server01 -a 'ping -c 4 10.0.10.1'\n\n# ping leaf01 vlan10 IP address from server01\nansible server01 -a 'ping -c 4 10.0.10.2'\n\n# ping leaf02 vlan10 IP address from server01\nansible server01 -a 'ping -c 4 10.0.10.3'\n\n# show server01 neighbor table\nansible server01 -a 'ip neighbor show'\n\n# same as above but from leaf02 side\nansible server02 -a 'ping -c 4 10.0.20.1'\nansible server02 -a 'ping -c 4 10.0.20.2'\nansible server02 -a 'ping -c 4 10.0.20.3'\nansible server02 -a 'ip neighbor show'\n\n# ping from server to server\nansible server01 -a 'ping -c 4 10.0.20.102'\nansible server02 -a 'ping -c 4 10.0.10.101'\n\n# run traceroutes from each server\nansible server01 -a 'traceroute 10.0.20.102'\nansible server02 -a 'traceroute 10.0.10.101'\n\n# show the MAC address table on each server after pings\nansible leaf01 -a 'nv show bridge domain br_default mac-table'\nansible leaf02 -a 'nv show bridge domain br_default mac-table'\n\n### Lab 3 ###\n\n# reset spine01, leaf01 and leaf02 to post Lab 3 setup\nansible-playbook lab3config.yml\n\n# show BGP summaries from spine and leaf nodes\nansible spine01 -a 'sudo vtysh -c \"show ip bgp summary\"'\nansible leaf01 -a 'sudo vtysh -c \"show ip bgp summary\"'\nansible leaf02 -a 'sudo vtysh -c \"show ip bgp summary\"'\n\n# ping server02 from server01 and perform traceroute to verify routing through spine\nansible server01 -a 'ping -c 4 10.0.20.102'\nansible server01 -a 'traceroute 10.0.20.102'\n\n# ping server01 from server02 and perform traceroute to verify routing through spine\nansible server02 -a 'ping -c 4 10.0.10.101'\nansible server02 -a 'traceroute 10.0.10.101'\n"
+    },
+    {
+      "path": "testconfigs/after_lab2/leaf01_config.yaml",
+      "sha": null,
+      "content_sha256": "a5c18b1eef10f0714c07a0a471c271c87e488ccf8f43fd85eb50680fa35c4052",
+      "score": 91,
+      "content": "- set:\n    bridge:\n      domain:\n        br_default:\n          vlan:\n            '10': {}\n            '20': {}\n    router:\n      vrr:\n        enable: on\n    interface:\n      eth0:\n        ip:\n          address:\n            dhcp: {}\n          vrf: mgmt\n        type: eth\n      bond0:\n        bond:\n          member:\n            swp49: {}\n            swp50: {}\n        bridge:\n          domain:\n            br_default: {}\n        type: bond\n      lo:\n        ip:\n          address:\n            10.255.255.1/32: {}\n        type: loopback\n      swp1:\n        bridge:\n          domain:\n            br_default:\n              access: 10\n        type: swp\n      vlan10:\n        ip:\n          address:\n            10.0.10.2/24: {}\n          vrr:\n            address:\n              10.0.10.1/24: {}\n            mac-address: 00:00:00:00:1a:10\n        vlan: 10\n      vlan10,20:\n        ip:\n          vrr:\n            enable: on\n            state:\n              up: {}\n        type: svi\n      vlan20:\n        ip:\n          address:\n            10.0.20.2/24: {}\n          vrr:\n            address:\n              10.0.20.1/24: {}\n            mac-address: 00:00:00:00:1a:20\n        vlan: 20\n\n"
+    },
+    {
+      "path": "testconfigs/after_lab3/spine01_config.yaml",
+      "sha": null,
+      "content_sha256": "af406768a236e4ef148701b3f521c8e0c93e9baa1ef2cd6433e73bc330840fbf",
+      "score": 91,
+      "content": "- set:\n    interface:\n      lo:\n        ip:\n          address:\n            10.255.255.101/32: {}\n        type: loopback\n      swp1-2:\n        link:\n          state:\n            up: {}\n        type: swp\n      swp1.100:\n        base-interface: swp1\n      swp1.100,swp2.100:\n        ip:\n          vrf: RED\n        type: sub\n        vlan: 100\n      swp2.100:\n        base-interface: swp2\n    router:\n      bgp:\n        enable: on\n        router-id: 10.255.255.101\n    vrf:\n      RED:\n        router:\n          bgp:\n            autonomous-system: 65201\n            enable: on\n            neighbor:\n              swp1.100:\n                remote-as: external\n                type: unnumbered\n              swp2.100:\n                remote-as: external\n                type: unnumbered\n            path-selection:\n              multipath:\n                aspath-ignore: on\n        table: auto\n      default:\n        router:\n          bgp:\n            address-family:\n              ipv4-unicast:\n                enable: on\n                network:\n                  10.255.255.101/32: {}\n            autonomous-system: 65201\n            enable: on\n            neighbor:\n              swp1:\n                remote-as: external\n                type: unnumbered\n              swp2:\n                remote-as: external\n                type: unnumbered\n            path-selection:\n              multipath:\n                aspath-ignore: on"
+    },
+    {
+      "path": "testconfigs/after_lab3/leaf01_config.yaml",
+      "sha": null,
+      "content_sha256": "1247e62e3629b8190a6d770b54d5acd464391959a722637cc5bf9c62836b5ac2",
+      "score": 91,
+      "content": "- set:\n    bridge:\n      domain:\n        br_default:\n          vlan:\n            10,100: {}\n    interface:\n      lo:\n        ip:\n          address:\n            10.255.255.1/32: {}\n        type: loopback\n      swp1:\n        bridge:\n          domain:\n            br_default:\n              access: 10\n      swp1-2,51:\n        link:\n          state:\n            up: {}\n      swp1-3,51:\n        type: swp\n      swp3:\n        bridge:\n          domain:\n            br_default:\n              access: 100\n      swp51.100:\n        base-interface: swp51\n        type: sub\n      swp51.100,vlan100:\n        ip:\n          vrf: RED\n        vlan: 100\n      vlan10:\n        ip:\n          address:\n            10.0.10.2/24: {}\n          vrr:\n            address:\n              10.0.10.1/24: {}\n            mac-address: 00:00:00:00:1a:10\n        vlan: 10\n      vlan10,100:\n        ip:\n          vrr:\n            enable: on\n            state:\n              up: {}\n        type: svi\n      vlan100:\n        ip:\n          address:\n            10.100.10.2/24: {}\n          vrr:\n            address:\n              10.100.10.1/24: {}\n            mac-address: 00:00:00:00:2a:10\n    router:\n      bgp:\n        enable: on\n        router-id: 10.255.255.1\n      vrr:\n        enable: on\n    vrf:\n      RED:\n        router:\n          bgp:\n            address-family:\n              ipv4-unicast:\n                enable: on\n                network:\n                  10.100.10.0/24: {}\n            autonomous-system: 65101\n            enable: on\n            neighbor:\n              swp51.100:\n                remote-as: external\n                type: unnumbered\n            path-selection:\n              multipath:\n                aspath-ignore: on\n        table: auto\n      default:\n        router:\n          bgp:\n            address-family:\n              ipv4-unicast:\n                enable: on\n                network:\n                  10.0.10.0/24: {}\n                  10.255.255.1/32: {}\n            autonomous-system: 65101\n            enable: on\n            neighbor:\n              swp51:\n                remote-as: external\n                type: unnumbered\n            path-selection:\n              multipath:\n                aspath-ignore: on"
+    },
+    {
+      "path": "testconfigs/after_lab2/leaf02_config.yaml",
+      "sha": null,
+      "content_sha256": "bba1160c37e26761470460539e4c9844dff6ea6e3e8fa66a376a0a4db466c52b",
+      "score": 91,
+      "content": "- set:\n    bridge:\n      domain:\n        br_default:\n          vlan:\n            '10': {}\n            '20': {}\n    router:\n      vrr:\n        enable: on\n    interface:\n      eth0:\n        ip:\n          address:\n            dhcp: {}\n          vrf: mgmt\n        type: eth\n      bond0:\n        bond:\n          member:\n            swp49: {}\n            swp50: {}\n        bridge:\n          domain:\n            br_default: {}\n        type: bond\n      lo:\n        ip:\n          address:\n            10.255.255.2/32: {}\n        type: loopback\n      swp2:\n        bridge:\n          domain:\n            br_default:\n              access: 20\n        type: swp\n      vlan10:\n        ip:\n          address:\n            10.0.10.3/24: {}\n          vrr:\n            address:\n              10.0.10.1/24: {}\n            mac-address: 00:00:00:00:1a:10\n        vlan: 10\n      vlan10,20:\n        ip:\n          vrr:\n            enable: on\n            state:\n              up: {}\n        type: svi\n      vlan20:\n        ip:\n          address:\n            10.0.20.3/24: {}\n          vrr:\n            address:\n              10.0.20.1/24: {}\n            mac-address: 00:00:00:00:1a:20\n        vlan: 20\n\n"
+    },
+    {
+      "path": "testconfigs/after_lab3/leaf02_config.yaml",
+      "sha": null,
+      "content_sha256": "9d8647dbcfaa613c76c4748f80a333b1186ae3e6e66384b5a4741ef963c7a6c7",
+      "score": 91,
+      "content": "- set:\n    bridge:\n      domain:\n        br_default:\n          vlan:\n            20,100: {}\n    interface:\n      lo:\n        ip:\n          address:\n            10.255.255.2/32: {}\n        type: loopback\n      swp2:\n        bridge:\n          domain:\n            br_default:\n              access: 20\n      swp2,4,51:\n        type: swp\n      swp4:\n        bridge:\n          domain:\n            br_default:\n              access: 100\n      swp51:\n        link:\n          state:\n            up: {}\n      swp51.100:\n        base-interface: swp51\n        type: sub\n      swp51.100,vlan100:\n        ip:\n          vrf: RED\n        vlan: 100\n      vlan20:\n        ip:\n          address:\n            10.0.20.3/24: {}\n          vrr:\n            address:\n              10.0.20.1/24: {}\n            mac-address: 00:00:00:00:1a:20\n        vlan: 20\n      vlan20,100:\n        ip:\n          vrr:\n            enable: on\n            state:\n              up: {}\n        type: svi\n      vlan100:\n        ip:\n          address:\n            10.100.20.2/24: {}\n          vrr:\n            address:\n              10.100.20.1/24: {}\n            mac-address: 00:00:00:00:2a:20\n    router:\n      bgp:\n        enable: on\n        router-id: 10.255.255.2\n      vrr:\n        enable: on\n    vrf:\n      RED:\n        router:\n          bgp:\n            address-family:\n              ipv4-unicast:\n                enable: on\n                network:\n                  10.100.20.0/24: {}\n            autonomous-system: 65102\n            enable: on\n            neighbor:\n              swp51.100:\n                remote-as: external\n                type: unnumbered\n            path-selection:\n              multipath:\n                aspath-ignore: on\n        table: auto\n      default:\n        router:\n          bgp:\n            address-family:\n              ipv4-unicast:\n                enable: on\n                network:\n                  10.0.20.0/24: {}\n                  10.255.255.2/32: {}\n            autonomous-system: 65102\n            enable: on\n            neighbor:\n              swp51:\n                remote-as: external\n                type: unnumbered\n            path-selection:\n              multipath:\n                aspath-ignore: on\n            router-id: 10.255.255.2"
+    },
+    {
+      "path": "ansible.cfg",
+      "sha": null,
+      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "score": 72,
+      "content": ""
+    },
+    {
+      "path": "testconfigs/after_lab2/leaf01_commands.txt",
+      "sha": null,
+      "content_sha256": "f4b848ad49014ca879f77937288a6b2f21e39bb2f3c19ddaff600228b6d7168e",
+      "score": 56,
+      "content": "nv set bridge domain br_default vlan 10\nnv set bridge domain br_default vlan 20\nnv set router vrr enable on\nnv set system hostname leaf01\nnv set interface bond0 bond member swp49\nnv set interface bond0 bond member swp50\nnv set interface bond0 bridge domain br_default\nnv set interface bond0 type bond\nnv set interface lo ip address 10.255.255.1/32\nnv set interface lo type loopback\nnv set interface swp1 bridge domain br_default access 10\nnv set interface swp1 type swp\nnv set interface vlan10 ip address 10.0.10.2/24\nnv set interface vlan10 ip vrr address 10.0.10.1/24\nnv set interface vlan10 ip vrr mac-address 00:00:00:00:1a:10\nnv set interface vlan10 vlan 10\nnv set interface vlan10,20 ip vrr enable on\nnv set interface vlan10,20 ip vrr state up\nnv set interface vlan10,20 type svi\nnv set interface vlan20 ip address 10.0.20.2/24\nnv set interface vlan20 ip vrr address 10.0.20.1/24\nnv set interface vlan20 ip vrr mac-address 00:00:00:00:1a:20\nnv set interface vlan20 vlan 20\n\n"
+    },
+    {
+      "path": "testconfigs/after_lab2/leaf02_commands.txt",
+      "sha": null,
+      "content_sha256": "a13941d9cf533385c501ebbf52969a1a812d98415b694062a0d1965580fe3078",
+      "score": 56,
+      "content": "nv set bridge domain br_default vlan 10\nnv set bridge domain br_default vlan 20\nnv set router vrr enable on\nnv set system hostname leaf02\nnv set interface bond0 bond member swp49\nnv set interface bond0 bond member swp50\nnv set interface bond0 bridge domain br_default\nnv set interface bond0 type bond\nnv set interface lo ip address 10.255.255.2/32\nnv set interface lo type loopback\nnv set interface swp2 bridge domain br_default access 20\nnv set interface swp2 type swp\nnv set interface vlan10 ip address 10.0.10.3/24\nnv set interface vlan10 ip vrr address 10.0.10.1/24\nnv set interface vlan10 ip vrr mac-address 00:00:00:00:1a:10\nnv set interface vlan10 vlan 10\nnv set interface vlan10,20 ip vrr enable on\nnv set interface vlan10,20 ip vrr state up\nnv set interface vlan10,20 type svi\nnv set interface vlan20 ip address 10.0.20.3/24\nnv set interface vlan20 ip vrr address 10.0.20.1/24\nnv set interface vlan20 ip vrr mac-address 00:00:00:00:1a:20\nnv set interface vlan20 vlan 20\n\n"
+    },
+    {
+      "path": "lab2config.yml",
+      "sha": null,
+      "content_sha256": "1d1e064ba040985c77b6e294c386e0f2bc8ee5645fb01f6d0d9053853cac4932",
+      "score": 35,
+      "content": "---\n- name: Configure leaf nodes with saved startup.yaml file\n  hosts: leaf\n  gather_facts: no\n  become: yes\n  tasks:\n    - name: Drop the saved NVUE yaml file\n      copy:\n        src: testconfigs/after_lab2/{{inventory_hostname}}_config.yaml\n        dest: /tmp/config.yaml\n        owner: nvue\n        group: nvue\n        mode: 0644\n      notify:\n        -  nvue config patch\n        -  nvue config apply\n  handlers:\n    - name: nvue config patch\n      command: nv config patch /tmp/config.yaml\n    - name: nvue config apply\n      command: nv config apply -y\n\n"
+    },
+    {
+      "path": "start-lab.yml",
+      "sha": null,
+      "content_sha256": "b0f8048fd5f2811f15d8e6e9e9a349c04b8ed9a6e298b1d9fe56caa8c77e69e1",
+      "score": 35,
+      "content": "---\n#- hosts: localhost:spine:leaf:host\n#  gather_facts: no\n#  tasks:\n#    - name: remove netq\n#      become: yes\n#      apt:\n#        name:\n#          - netq-apps\n#          - netq-agent\n#        state: absent\n- hosts: leaf:spine\n  gather_facts: no\n  become: yes\n  tasks:\n    - name: Drop the saved NVUE yaml file\n      copy:\n        src: lab2-configurations/{{inventory_hostname}}/config.yaml\n        dest: /tmp/config.yaml\n        owner: nvue\n        group: nvue\n        mode: 0644\n      notify:\n        -  nvue config patch\n        -  nvue config apply\n#        - netq config restart agent\n  handlers:\n    - name: nvue config patch\n      command: nv config patch /tmp/config.yaml\n    - name: nvue config apply\n      command: nv config apply -y\n#    - name: netq config restart agent\n#      command: netq config restart agent\n\n- hosts: host\n  gather_facts: no\n  tasks:\n    - name: Setting up the test hosts config\n      become: yes\n      copy:\n        src: lab2-configurations/{{inventory_hostname}}/config.yaml\n        dest: /etc/netplan/config.yaml\n      notify: apply interface config\n\n    - name: install traceroute\n      become: yes\n      apt:\n        name: traceroute\n        state: present\n                \n    - name: flush arp\n      become: yes\n      command: ip -s -s neigh flush all\n      no_log: true\n\n  handlers:\n    - name: apply interface config\n      become: yes\n      command: netplan apply\n"
+    },
+    {
+      "path": "lab3.yml",
+      "sha": null,
+      "content_sha256": "d544cbaf7c38846e231bd8a65e870db8ef22eb1b11eefe978fe9c38ee626705f",
+      "score": 35,
+      "content": "---\n- name: Getting you ready for lab3\n  hosts: host\n  gather_facts: no\n  become: yes\n  tasks:\n    - name: Dropping in config\n      copy:\n        src: lab3-configurations/{{inventory_hostname}}/config.yaml\n        dest: /etc/netplan/config.yaml\n      notify: apply interface config\n\n  handlers:\n    - name: apply interface config\n      become: yes\n      command: netplan apply\n\n- name: Getting you ready for lab3\n  hosts: leaf\n  gather_facts: no\n  become: yes\n  tasks:\n    - name: Drop the nvue yaml\n      copy:\n        src: lab3-configurations/{{inventory_hostname}}/config.yaml\n        dest: /tmp/auto.yaml\n        owner: nvue\n        group: nvue\n        mode: 0644\n      notify:\n        -  nvue config replace\n        -  nvue config apply\n  handlers:\n    - name: nvue config replace\n      command: nv config replace /tmp/auto.yaml\n    - name: nvue config apply\n      command: nv config apply -y"
+    },
+    {
+      "path": "lab3config.yml",
+      "sha": null,
+      "content_sha256": "85de9f77763937a51b102f27b24a8d636f4277a562263c699cf039808b334c54",
+      "score": 35,
+      "content": "---\n- name: Configure leaf and spine nodes with saved startup.yaml file for Lab 3\n  hosts: leaf:spine\n  gather_facts: no\n  become: yes\n  tasks:\n    - name: Drop the saved NVUE yaml file\n      copy:\n        src: testconfigs/after_lab3/{{inventory_hostname}}_config.yaml\n        dest: /tmp/config.yaml\n        owner: nvue\n        group: nvue\n        mode: 0644\n      notify:\n        -  nvue config patch\n        -  nvue config apply\n  handlers:\n    - name: nvue config patch\n      command: nv config patch /tmp/config.yaml\n    - name: nvue config apply\n      command: nv config apply -y\n\n"
+    },
+    {
+      "path": "lab2-configurations/server02/config.yaml",
+      "sha": null,
+      "content_sha256": "0a343a2e0fafa43a969dbbfcd8b5c7520b14755e949eefed1f2804f728eca8f4",
+      "score": 31,
+      "content": "################################################################\n# IMPORTANT: When using NVIDIA Air services,                   #\n#  your Internet-facing interface must include the following:  #\n#   dhcp6: false                                               #\n#   accept-ra: true                                            #\n################################################################\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    eth0:\n      dhcp4: true\n    eth2:\n      addresses:\n        - 10.0.20.102/24\n      routes:\n        - to: 10.0.0.0/8\n          via: 10.0.20.1"
+    },
+    {
+      "path": "lab2-configurations/leaf02/config.yaml",
+      "sha": null,
+      "content_sha256": "d9de08252bf72eb0c4ec90fd6eb6ce6c085a0027601b694e50ecdaf421de95d3",
+      "score": 31,
+      "content": "- set:\n    system:\n      hostname: leaf02"
+    },
+    {
+      "path": "lab2-configurations/leaf01/config.yaml",
+      "sha": null,
+      "content_sha256": "14aea25a9afda1137fbaec28c2c6a1ac7507f9b4b8de58ec68c8232c9612f27c",
+      "score": 31,
+      "content": "- set:\n    system:\n      hostname: leaf01"
+    },
+    {
+      "path": "lab2-configurations/server01/config.yaml",
+      "sha": null,
+      "content_sha256": "3cd7bd61a6fd546d852570a1d5410d0d7b346dbdbfb512b0466c335c2847e8df",
+      "score": 31,
+      "content": "################################################################\n# IMPORTANT: When using NVIDIA Air services,                   #\n#  your Internet-facing interface must include the following:  #\n#   dhcp6: false                                               #\n#   accept-ra: true                                            #\n################################################################\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    eth0:\n      dhcp4: true\n    eth1:\n      addresses:\n        - 10.0.10.101/24\n      routes:\n        - to: 10.0.0.0/8\n          via: 10.0.10.1"
+    },
+    {
+      "path": "lab3-configurations/server02/config.yaml",
+      "sha": null,
+      "content_sha256": "0a343a2e0fafa43a969dbbfcd8b5c7520b14755e949eefed1f2804f728eca8f4",
+      "score": 31,
+      "content": "################################################################\n# IMPORTANT: When using NVIDIA Air services,                   #\n#  your Internet-facing interface must include the following:  #\n#   dhcp6: false                                               #\n#   accept-ra: true                                            #\n################################################################\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    eth0:\n      dhcp4: true\n    eth2:\n      addresses:\n        - 10.0.20.102/24\n      routes:\n        - to: 10.0.0.0/8\n          via: 10.0.20.1"
+    },
+    {
+      "path": "lab2-configurations/spine01/config.yaml",
+      "sha": null,
+      "content_sha256": "92be352a7ad8aff9abda35feb094ab7e1fddf2a8d7fe0e4703648030793ffe7c",
+      "score": 31,
+      "content": "- set:\n    system:\n      hostname: spine01"
+    },
+    {
+      "path": "lab3-configurations/server01/config.yaml",
+      "sha": null,
+      "content_sha256": "3cd7bd61a6fd546d852570a1d5410d0d7b346dbdbfb512b0466c335c2847e8df",
+      "score": 31,
+      "content": "################################################################\n# IMPORTANT: When using NVIDIA Air services,                   #\n#  your Internet-facing interface must include the following:  #\n#   dhcp6: false                                               #\n#   accept-ra: true                                            #\n################################################################\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    eth0:\n      dhcp4: true\n    eth1:\n      addresses:\n        - 10.0.10.101/24\n      routes:\n        - to: 10.0.0.0/8\n          via: 10.0.10.1"
+    },
+    {
+      "path": "lab3-configurations/server03/config.yaml",
+      "sha": null,
+      "content_sha256": "207aae0d706ab5948f773c299c34935a0fdb840c3c423a72cfa2b8bf8e248d8b",
+      "score": 31,
+      "content": "################################################################\n# IMPORTANT: When using NVIDIA Air services,                   #\n#  your Internet-facing interface must include the following:  #\n#   dhcp6: false                                               #\n#   accept-ra: true                                            #\n################################################################\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    eth0:\n      dhcp4: true\n    eth1:\n      addresses:\n        - 10.100.10.103/24\n      routes:\n        - to: 10.0.0.0/8\n          via: 10.100.10.1"
+    },
+    {
+      "path": "lab2-configurations/server03/config.yaml",
+      "sha": null,
+      "content_sha256": "207aae0d706ab5948f773c299c34935a0fdb840c3c423a72cfa2b8bf8e248d8b",
+      "score": 31,
+      "content": "################################################################\n# IMPORTANT: When using NVIDIA Air services,                   #\n#  your Internet-facing interface must include the following:  #\n#   dhcp6: false                                               #\n#   accept-ra: true                                            #\n################################################################\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    eth0:\n      dhcp4: true\n    eth1:\n      addresses:\n        - 10.100.10.103/24\n      routes:\n        - to: 10.0.0.0/8\n          via: 10.100.10.1"
+    },
+    {
+      "path": "lab2-configurations/server04/config.yaml",
+      "sha": null,
+      "content_sha256": "55262b81fdf3c051848af858a5c6ef2808b1da614fedc7f42eb520e0615f0554",
+      "score": 31,
+      "content": "################################################################\n# IMPORTANT: When using NVIDIA Air services,                   #\n#  your Internet-facing interface must include the following:  #\n#   dhcp6: false                                               #\n#   accept-ra: true                                            #\n################################################################\nnetwork:\n  version: 2\n  renderer: networkd\n  ethernets:\n    eth0:\n      dhcp4: true\n    eth2:\n      addresses:\n        - 10.100.20.104/24\n      routes:\n        - to: 10.0.0.0/8\n          via: 10.100.20.1"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:22.338400+00:00"
+}

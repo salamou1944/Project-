@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:senamakel/tinyjuice",
+  "repo": "senamakel/tinyjuice",
+  "revision_sha": "29fb945861ba2ccb390b4abc6ad2d177b02e2e86",
+  "default_branch": "main",
+  "pushed_at": "2026-10-03T12:54:43Z",
+  "repo_updated_at": "2026-07-04T21:54:24Z",
+  "license": "GPL-3.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "2086dfef12155e5790a3645336e0389546457fc029dc4e72776018c51aad2025",
+      "score": 198,
+      "content": "name: CI\n\non:\n  push:\n  pull_request:\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n\npermissions:\n  contents: read\n\njobs:\n  rust-sdk:\n    name: Rust SDK\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          # This job executes repo code (cargo build/test); don't persist the\n          # token in git config.\n          persist-credentials: false\n\n      - uses: dtolnay/rust-toolchain@stable\n        with:\n          components: rustfmt, clippy\n\n      - uses: Swatinem/rust-cache@v2\n        with:\n          workspaces: .\n\n      - name: Check formatting\n        run: cargo fmt --all -- --check\n\n      - name: Clippy\n        run: cargo clippy --all-targets -- -D warnings\n\n      - name: Clippy all features\n        run: cargo clippy --all-targets --all-features -- -D warnings\n\n      - name: Build\n        run: cargo build --all-targets\n\n      - name: Build all features\n        run: cargo build --all-targets --all-features\n\n      - name: Test\n        run: cargo test\n\n      - name: Test all features\n        run: cargo test --all-features\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "fa61198a76ac9170952816fdf23e46e0538b434f01ca0753631e32601705ea21",
+      "score": 126,
+      "content": "name: Release\n\non:\n  workflow_dispatch:\n    inputs:\n      bump:\n        description: Version bump to release\n        type: choice\n        required: true\n        options:\n          - patch\n          - minor\n          - major\n\nconcurrency:\n  group: release-${{ github.ref_name }}\n  cancel-in-progress: false\n\npermissions:\n  contents: write\n\njobs:\n  publish-rust:\n    name: Release Rust Crate\n    if: ${{ github.ref == 'refs/heads/main' }}\n    runs-on: ubuntu-latest\n    environment: Production\n    env:\n      CRATE_NAME: tinyjuice\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n\n      - uses: dtolnay/rust-toolchain@stable\n        with:\n          components: rustfmt, clippy\n\n      - uses: Swatinem/rust-cache@v2\n        with:\n          workspaces: .\n\n      - name: Check formatting\n        run: cargo fmt --all -- --check\n\n      - name: Run clippy\n        run: cargo clippy --all-targets -- -D warnings\n\n      - name: Run tests\n        run: cargo test\n\n      - name: Compute next version\n        id: version\n        shell: bash\n        run: |\n          set -euo pipefail\n\n          current_version=\"$(cargo metadata --format-version 1 --no-deps | jq -r --arg crate \"$CRATE_NAME\" '.packages[] | select(.name == $crate) | .version')\"\n          if [[ -z \"$current_version\" ]]; then\n            echo \"Could not resolve current version for crate $CRATE_NAME\" >&2\n            exit 1\n          fi\n\n          IFS=. read -r major minor patch <<< \"$current_version\"\n          case \"${{ inputs.bump }}\" in\n            major)\n              major=$((major + 1))\n              minor=0\n              patch=0\n              ;;\n            minor)\n              minor=$((minor + 1))\n              patch=0\n              ;;\n            patch)\n              patch=$((patch + 1))\n              ;;\n            *)\n              echo \"Unsupported bump: ${{ inputs.bump }}\" >&2\n              exit 1\n              ;;\n          esac\n\n          next_version=\"${major}.${minor}.${patch}\"\n          tag=\"v${next_version}\"\n\n          git fetch --tags origin\n          if git rev-parse --verify --quiet \"refs/tags/${tag}\"; then\n            echo \"Tag ${tag} already exists\" >&2\n            exit 1\n          fi\n\n          {\n            echo \"current_version=${current_version}\"\n            echo \"next_version=${next_version}\"\n            echo \"tag=${tag}\"\n          } >> \"$GITHUB_OUTPUT\"\n\n      - name: Update crate version\n        env:\n          NEXT_VERSION: ${{ steps.version.outputs.next_version }}\n        run: |\n          perl -0pi -e 's/(\\[package\\][\\s\\S]*?\\nversion = \")[^\"]+(\")/$1$ENV{NEXT_VERSION}$2/' Cargo.toml\n          cargo update -p \"$CRATE_NAME\" --precise \"$NEXT_VERSION\"\n\n      - name: Commit version bump and tag\n        env:\n          NEXT_VERSION: ${{ steps.version.outputs.next_version }}\n          RELEASE_TAG: ${{ steps.version.outputs.tag }}\n        run: |\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"\n          git add Cargo.toml Cargo.lock\n          git commit -m \"Release ${RELEASE_TAG}\"\n          git tag -a \"${RELEASE_TAG}\" -m \"Release ${RELEASE_TAG}\"\n\n      - name: Package crate\n        run: cargo package --locked\n\n      - name: Push release commit and tag\n        env:\n          RELEASE_TAG: ${{ steps.version.outputs.tag }}\n        run: |\n          git push origin \"HEAD:${GITHUB_REF_NAME}\"\n          git push origin \"${RELEASE_TAG}\"\n\n      - name: Publish to crates.io\n        run: cargo publish --locked\n        env:\n          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "cd17141c51edbccdfa96d9f0085c06cbbcbeb0cba42250df5174c32e0d8ad03e",
+      "score": 120,
+      "content": "[package]\nname = \"tinyjuice\"\nversion = \"0.1.0\"\nedition = \"2024\"\nlicense = \"GPL-3.0-only\"\ndescription = \"Pluggable token compression for OpenHuman.\"\nrepository = \"https://github.com/tinyhumansai/tinyjuice\"\nreadme = \"README.md\"\nkeywords = [\"llm\", \"tokens\", \"compression\", \"openhuman\", \"context\"]\ncategories = [\"text-processing\"]\n\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }\nthiserror = \"2\"\n\n[dev-dependencies]\nserde_json = \"1\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "188f910a26eb8e95361f54035d7e592097b196675b7fa31b54eb0b2a8855a04c",
+      "score": 100,
+      "content": "<h1 align=\"center\">TinyJuice</h1>\n\n<p align=\"center\">\n <a href=\"https://crates.io/crates/tinyjuice\"><img src=\"https://img.shields.io/crates/v/tinyjuice.svg\" alt=\"crates.io\" /></a>\n <a href=\"https://docs.rs/tinyjuice\"><img src=\"https://docs.rs/tinyjuice/badge.svg\" alt=\"docs.rs\" /></a>\n <a href=\"https://github.com/tinyhumansai/tinyjuice/actions/workflows/ci.yml\"><img src=\"https://github.com/tinyhumansai/tinyjuice/actions/workflows/ci.yml/badge.svg\" alt=\"CI\" /></a>\n <a href=\"LICENSE\"><img src=\"https://img.shields.io/badge/License-GPLv3-blue.svg\" alt=\"License: GPL v3\" /></a>\n</p>\n\n**TinyJuice is a pluggable token compression crate for OpenHuman.** The goal is\nto provide a small Rust boundary where OpenHuman can route prompt, context, and\nconversation inputs through interchangeable compression strategies before model\nexecution.\n\nThis repository is intentionally blank scaffolding right now. It defines the\ncrate shell, contribution workflow, CI/release scaffolding, and placeholder API\ntypes. Compression algorithms, OpenHuman adapters, and benchmark claims have not\nlanded yet.\n\n## Direction\n\nTinyJuice is intended to support:\n\n- provider-neutral token input compression\n- pluggable compression strategies\n- configurable compression targets, including aggressive 80-90% reduction modes\n- inspectable compression reports for cost, quality, and safety review\n- OpenHuman integration points that can be enabled without coupling the core\n  crate to the full OpenHuman runtime\n\n## Quick Start\n\nAdd TinyJuice to a Rust project once published:\n\n```toml\n[dependencies]\ntinyjuice = \"0.1\"\n```\n\nFor local development:\n\n```sh\ncargo fmt --check\ncargo clippy --all-targets -- -D warnings\ncargo build --all-targets\ncargo test\n```\n\nRun the placeholder example:\n\n```sh\ncargo run --example passthrough\n```\n\n## Crate Layout\n\n```text\nsrc/\n  compressor/   Compression trait and input/output types\n  config/       Compression target and policy configuration\n  openhuman/    Placeholder OpenHuman integration boundary\n  error.rs      Shared error type\n```\n\n## Status\n\nTinyJuice is pre-implementation. The current `PassthroughCompressor` is a\nscaffold implementation that returns input unchanged so downstream wiring can\ncompile while real strategies are designed and tested.\n"
+    },
+    {
+      "path": "tests/scaffold.rs",
+      "sha": null,
+      "content_sha256": "041fe50daf1f3c08bdb3807f79ad7b6d2d68c58a5790d9a963aa78b49634c4be",
+      "score": 93,
+      "content": "use tinyjuice::{CompressionConfig, CompressionInput, Compressor, PassthroughCompressor};\n\n#[test]\nfn public_scaffold_can_compress_through_trait() {\n    let compressor: &dyn Compressor = &PassthroughCompressor;\n    let output = compressor\n        .compress(\n            CompressionInput::new(\"public api smoke test\"),\n            &CompressionConfig::default(),\n        )\n        .expect(\"scaffold compressor should succeed\");\n\n    assert_eq!(output.text, \"public api smoke test\");\n}\n"
+    },
+    {
+      "path": "src/config/test.rs",
+      "sha": null,
+      "content_sha256": "2611bc2de0b28a4297b5734fda4ef27ea02cd26ba8ef67e410d81aa2625c721e",
+      "score": 91,
+      "content": "#[cfg(test)]\nmod tests {\n    use crate::{CompressionConfig, TinyJuiceError};\n\n    #[test]\n    fn default_config_targets_aggressive_compression() {\n        let config = CompressionConfig::default();\n\n        assert_eq!(config.target_ratio, 0.2);\n        assert!(config.preserve_system_instructions);\n    }\n\n    #[test]\n    fn invalid_target_ratio_is_rejected() {\n        let config = CompressionConfig {\n            target_ratio: 0.0,\n            ..CompressionConfig::default()\n        };\n\n        assert_eq!(config.validate(), Err(TinyJuiceError::InvalidTargetRatio));\n    }\n}\n"
+    },
+    {
+      "path": "src/openhuman/test.rs",
+      "sha": null,
+      "content_sha256": "f020575fb9f8cec44011b2917d27f889e520ad63c3124efec392fb5928657d1e",
+      "score": 91,
+      "content": "#[cfg(test)]\nmod tests {\n    use crate::openhuman::OpenHumanCompressionContext;\n\n    #[test]\n    fn openhuman_context_starts_empty() {\n        let context = OpenHumanCompressionContext::default();\n\n        assert_eq!(context.conversation_id, None);\n        assert_eq!(context.model, None);\n    }\n}\n"
+    },
+    {
+      "path": "src/compressor/test.rs",
+      "sha": null,
+      "content_sha256": "88c7e8187e38b05ba28f93b241e36b02e4bcbfeffc8f9c9fe829865719862811",
+      "score": 91,
+      "content": "#[cfg(test)]\nmod tests {\n    use crate::{\n        CompressionConfig, CompressionInput, Compressor, PassthroughCompressor, TinyJuiceError,\n    };\n\n    #[test]\n    fn passthrough_compressor_returns_input_unchanged() {\n        let compressor = PassthroughCompressor;\n        let input = CompressionInput::new(\"alpha beta gamma\");\n\n        let output = compressor\n            .compress(input, &CompressionConfig::default())\n            .expect(\"passthrough compression should succeed\");\n\n        assert_eq!(output.text, \"alpha beta gamma\");\n        assert_eq!(output.report.original_bytes, output.report.compressed_bytes);\n        assert_eq!(output.report.strategy, \"passthrough\");\n    }\n\n    #[test]\n    fn empty_input_is_rejected() {\n        let compressor = PassthroughCompressor;\n        let input = CompressionInput::new(\"   \");\n\n        let error = compressor\n            .compress(input, &CompressionConfig::default())\n            .expect_err(\"empty input should fail\");\n\n        assert_eq!(error, TinyJuiceError::EmptyInput);\n    }\n}\n"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha": null,
+      "content_sha256": "f7876bf0dfe33b6df87272da1c75c71017de9ad8c96ba88047e38743a09e93af",
+      "score": 80,
+      "content": "# Security Policy\n\nTinyJuice is a token compression library. Security-sensitive areas include\nprompt and context handling, sensitive data retention, accidental disclosure in\nreports or logs, policy-preserved instructions, and credentials included in\nmodel-facing context.\n\nReport concerns to `contact@tinyhumans.ai`.\n\n## Supported Versions\n\nTinyJuice is pre-1.0. Security fixes target the `main` branch until the project\nstarts maintaining release branches.\n\n## Reporting A Vulnerability\n\nPlease do not open a public issue for a suspected vulnerability.\n\nReport security concerns by emailing `security@tinyhumans.ai` with:\n\n- a description of the issue\n- affected versions or commits\n- reproduction steps or proof of concept\n- impact assessment\n- any suggested fix or mitigation\n\nWe will acknowledge reports as quickly as practical and coordinate disclosure\nbefore publishing details.\n\n## Scope\n\nExamples of in-scope issues:\n\n- leaking raw prompt, context, or credential material through reports or logs\n- dropping system or safety instructions despite preservation policy\n- cross-conversation context leakage in adapter code\n- unsafe handling of credentials or secrets embedded in model input\n- dependency vulnerabilities with a practical exploit path in TinyJuice\n\nExamples generally out of scope:\n\n- model hallucination or low-quality model output by itself\n- expected information loss from an explicitly selected lossy strategy\n- vulnerabilities in downstream applications that use TinyJuice incorrectly\n\n## Security Design Direction\n\nTinyJuice should treat prompt and context input as sensitive. Compression\nstrategies should avoid logging raw text, make lossy behavior explicit, and\npreserve caller-marked instructions unless the caller opts into a different\npolicy.\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha": null,
+      "content_sha256": "6953ced5c37478bc51ed4c34f09a3e20e2bebf959498482c35628d3085776144",
+      "score": 75,
+      "content": "# Repository Guidelines\n\nTinyJuice is a Rust crate for pluggable token compression in OpenHuman. Keep the\nscaffold small until real compression strategies are ready.\n\n## Development\n\n- Use stable Rust with edition 2024 support.\n- Run `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and\n  `cargo test` before opening a PR.\n- Keep public API changes documented in `README.md` or `docs/`.\n- Prefer small modules with `types.rs` for shared data and `test.rs` for\n  module-local tests.\n\n## Boundaries\n\n- Do not add OpenHuman runtime dependencies to the core crate without an\n  explicit feature or adapter boundary.\n- Do not claim compression percentages until benchmark fixtures exist.\n- Treat prompt and context input as sensitive data. Avoid logging raw content in\n  library code.\n"
+    },
+    {
+      "path": "docs/architecture.md",
+      "sha": null,
+      "content_sha256": "e49d11a74068657c74d397195b2d0afb90fa1fc553e554a3abc50cad880c51bf",
+      "score": 68,
+      "content": "# Architecture\n\nTinyJuice is organized around a small compression boundary:\n\n1. callers provide `CompressionInput`\n2. a `Compressor` strategy produces `CompressionOutput`\n3. the output carries compressed text plus an inspectable `CompressionReport`\n\nThe core crate should remain independent of OpenHuman runtime internals. The\n`openhuman` module is a placeholder for adapter types that can translate between\nOpenHuman request context and TinyJuice inputs.\n"
+    },
+    {
+      "path": "SUPPORT.md",
+      "sha": null,
+      "content_sha256": "06d25ae99fe35129023085b57e1b536a6993bda8abac6f3c1472f5851262478d",
+      "score": 60,
+      "content": "# Support\n\nTinyJuice is an open source project. Use the public GitHub repository for\nnormal support and project discussion.\n\n## Questions\n\nOpen a GitHub discussion or issue for:\n\n- usage questions\n- examples that do not work as documented\n- confusing documentation\n- proposals for compression strategies, OpenHuman adapters, or reporting APIs\n\n## Bugs\n\nOpen a bug report with:\n\n- the TinyJuice commit or version\n- the Rust toolchain version\n- the command that failed\n- a minimal reproduction\n- expected behavior\n- actual behavior\n\n## Security\n\nDo not use public issues for security reports. Follow [SECURITY.md](SECURITY.md).\n"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha": null,
+      "content_sha256": "ebf816a5f9b4ab250440711e3044dd9af91b7730a23594b2246019113c2c31a2",
+      "score": 33,
+      "content": "//! Pluggable token compression scaffolding for OpenHuman.\n//!\n//! TinyJuice currently exposes placeholder types and a passthrough compressor so\n//! integration code can compile while real compression strategies are designed.\n\npub mod compressor;\npub mod config;\nmod error;\npub mod openhuman;\n\npub use compressor::{\n    CompressionInput, CompressionOutput, CompressionReport, Compressor, PassthroughCompressor,\n};\npub use config::CompressionConfig;\npub use error::{TinyJuiceError, TinyJuiceResult};\n"
+    },
+    {
+      "path": "examples/passthrough.rs",
+      "sha": null,
+      "content_sha256": "e8798e332eeb03e873c7be61523dad8d4415d54a33cef37fd7aa676b1735cf62",
+      "score": 33,
+      "content": "use tinyjuice::{CompressionConfig, CompressionInput, Compressor, PassthroughCompressor};\n\nfn main() -> Result<(), tinyjuice::TinyJuiceError> {\n    let compressor = PassthroughCompressor;\n    let input = CompressionInput::new(\"Keep this text unchanged for now.\");\n    let output = compressor.compress(input, &CompressionConfig::default())?;\n\n    println!(\"{}\", output.text);\n    Ok(())\n}\n"
+    },
+    {
+      "path": "src/error.rs",
+      "sha": null,
+      "content_sha256": "25272e83602253222e17b9d9944b31d1131e849cb8d37da9a05056cbd1513d25",
+      "score": 33,
+      "content": "use thiserror::Error;\n\npub type TinyJuiceResult<T> = Result<T, TinyJuiceError>;\n\n#[derive(Debug, Error, PartialEq, Eq)]\npub enum TinyJuiceError {\n    #[error(\"compression input was empty\")]\n    EmptyInput,\n    #[error(\"target ratio must be greater than 0 and at most 1\")]\n    InvalidTargetRatio,\n    #[error(\"compression strategy is not implemented: {0}\")]\n    NotImplemented(&'static str),\n}\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "6a082e0c22e36e7ae754cb611bc1b8cbb96924355b87480dae1cbb7e57a8bcb2",
+      "score": 33,
+      "content": "version: 2\nupdates:\n  - package-ecosystem: cargo\n    directory: /\n    schedule:\n      interval: weekly\n    open-pull-requests-limit: 5\n  - package-ecosystem: github-actions\n    directory: /\n    schedule:\n      interval: weekly\n    open-pull-requests-limit: 5\n"
+    },
+    {
+      "path": "src/openhuman/types.rs",
+      "sha": null,
+      "content_sha256": "427ada7688bfca68481d000dd3d31baf31704aabff5e0cf64106157c2865984c",
+      "score": 31,
+      "content": "use serde::{Deserialize, Serialize};\n\n#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]\npub struct OpenHumanCompressionContext {\n    pub conversation_id: Option<String>,\n    pub model: Option<String>,\n}\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "sha": null,
+      "content_sha256": "86b2314befc97a8facd4481121a605bfe0f1754f7b582a49473129eb54b332ac",
+      "score": 31,
+      "content": "name: Bug Report\ndescription: Report behavior that is broken, surprising, or undocumented.\ntitle: \"Bug: \"\nlabels: [\"bug\"]\nbody:\n  - type: markdown\n    attributes:\n      value: |\n        Thanks for reporting a TinyJuice bug. Please include a minimal reproduction when possible.\n  - type: input\n    id: version\n    attributes:\n      label: TinyJuice version or commit\n      placeholder: \"0.1.0 or commit SHA\"\n    validations:\n      required: true\n  - type: input\n    id: rust\n    attributes:\n      label: Rust toolchain\n      placeholder: \"rustc --version\"\n    validations:\n      required: true\n  - type: textarea\n    id: reproduce\n    attributes:\n      label: Reproduction\n      description: Include code, commands, or a repository link.\n      placeholder: |\n        cargo test ...\n    validations:\n      required: true\n  - type: textarea\n    id: expected\n    attributes:\n      label: Expected behavior\n    validations:\n      required: true\n  - type: textarea\n    id: actual\n    attributes:\n      label: Actual behavior\n    validations:\n      required: true\n  - type: textarea\n    id: context\n    attributes:\n      label: Additional context\n      description: Logs, traces, screenshots, or related docs.\n"
+    },
+    {
+      "path": "src/config/mod.rs",
+      "sha": null,
+      "content_sha256": "49d5b6adf6ca103e8ab1f2e49ee369feaf5e9ca69629bff0a884369aa4cf9a81",
+      "score": 31,
+      "content": "mod test;\nmod types;\n\npub use types::CompressionConfig;\n"
+    },
+    {
+      "path": "src/compressor/mod.rs",
+      "sha": null,
+      "content_sha256": "0e80b54a1316581d1a8fbc02db0668a51d29831a6d45fe12e3f51521557dd589",
+      "score": 31,
+      "content": "mod test;\nmod types;\n\npub use types::{\n    CompressionInput, CompressionOutput, CompressionReport, Compressor, PassthroughCompressor,\n};\n"
+    },
+    {
+      "path": "src/openhuman/mod.rs",
+      "sha": null,
+      "content_sha256": "420a9078d247c68ce1d76f1040e7632e5912bf9a895cd9644d7f04540e390274",
+      "score": 31,
+      "content": "mod test;\nmod types;\n\npub use types::OpenHumanCompressionContext;\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "sha": null,
+      "content_sha256": "d4096934d7b5f98ae29066090dbaef31a88ca92a5713bd40b9260609d2a59dcf",
+      "score": 31,
+      "content": "name: Feature Request\ndescription: Propose a TinyJuice capability, API, module, or workflow.\ntitle: \"Feature: \"\nlabels: [\"enhancement\"]\nbody:\n  - type: textarea\n    id: workflow\n    attributes:\n      label: Compression workflow\n      description: What workflow should this unlock?\n      placeholder: \"I want to compress retrieved context before sending it to a model...\"\n    validations:\n      required: true\n  - type: textarea\n    id: proposal\n    attributes:\n      label: Proposed shape\n      description: Describe the API, module, strategy, or behavior you imagine.\n    validations:\n      required: true\n  - type: textarea\n    id: alternatives\n    attributes:\n      label: Alternatives considered\n      description: What workarounds or other designs have you considered?\n  - type: textarea\n    id: safety\n    attributes:\n      label: Safety, privacy, and quality\n      description: Any implications for instruction preservation, sensitive data, or retained facts?\n  - type: textarea\n    id: docs\n    attributes:\n      label: Related docs\n      description: Link relevant TinyJuice docs or external references.\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "sha": null,
+      "content_sha256": "a2a1fb96252f52767332d966bfd1c178d1943477157b404dc3316a4b5d0e2239",
+      "score": 31,
+      "content": "blank_issues_enabled: true\ncontact_links:\n  - name: Security reports\n    url: https://github.com/tinyhumansai/tinyjuice/security/policy\n    about: Please do not report vulnerabilities through public issues.\n"
+    },
+    {
+      "path": "src/config/types.rs",
+      "sha": null,
+      "content_sha256": "ec2372046c30575a829aa8369eaad59257d8281224dab444dc0c5984aabf8c33",
+      "score": 31,
+      "content": "use serde::{Deserialize, Serialize};\n\nuse crate::{TinyJuiceError, TinyJuiceResult};\n\n#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]\npub struct CompressionConfig {\n    pub target_ratio: f32,\n    pub preserve_system_instructions: bool,\n}\n\nimpl CompressionConfig {\n    pub fn validate(&self) -> TinyJuiceResult<()> {\n        if self.target_ratio <= 0.0 || self.target_ratio > 1.0 {\n            return Err(TinyJuiceError::InvalidTargetRatio);\n        }\n\n        Ok(())\n    }\n}\n\nimpl Default for CompressionConfig {\n    fn default() -> Self {\n        Self {\n            target_ratio: 0.2,\n            preserve_system_instructions: true,\n        }\n    }\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:49.743938+00:00"
+}

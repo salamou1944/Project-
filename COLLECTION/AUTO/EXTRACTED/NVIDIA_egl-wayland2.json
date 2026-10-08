@@ -1,0 +1,36 @@
+{
+  "canonical_source": "github:NVIDIA/egl-wayland2",
+  "repo": "NVIDIA/egl-wayland2",
+  "revision_sha": "ce0eb711fbfb48de7b42bb615847587d15d4bab5",
+  "default_branch": "main",
+  "pushed_at": "2026-09-29T17:04:57Z",
+  "repo_updated_at": "2026-09-29T17:05:09Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "cfd6afb176cc409aaf7f9e9f517f9b0adede5d18df24a54cc788ac6c4370194a",
+      "score": 100,
+      "content": "# Wayland EGL External Platform library, Version 2\n\nThis is a new implementation of the EGL External Platform Library for Wayland\n(`EGL_KHR_platform_wayland`), using the NVIDIA driver's new platform surface\ninterface, which simplifies a lot of the library and improves window resizing.\n\nSee [Implementation Notes](#implementation-notes) for more details.\n\n## Building and Installing\n\nThis library depends on:\n- libgbm, version 21.2.0\n- libdrm, version 2.4.99\n- wayland-protocols, version 1.38 (https://gitlab.freedesktop.org/wayland/wayland-protocols)\n- libwayland-client and wayland-scanner (https://gitlab.freedesktop.org/wayland/wayland)\n- EGL headers (https://www.khronos.org/registry/EGL)\n- EGL External Platform interface, version 1.2 (https://github.com/NVIDIA/eglexternalplatform)\n\nIn addition, this library depends on an interface in the NVIDIA driver which is\nsupported in 560 and later series drivers.\n\nFor full functionality, it also needs a compositor that supports the\nlinux-drm-syncobj-v1 protocol for explicit sync. Without explicit sync, you may\nget reduced performance and out-of-order frames.\n\nTo build and install, use Meson:\n```sh\nmeson builddir\nninja -C builddir\nninja -C builddir install\n```\n\nThis library can be installed alongside the previous egl-wayland implementation\n(https://github.com/NVIDIA/egl-wayland). The new library has a higher selection\npriority by default, so if both are present, then a 560 or later driver will\nselect the new library, and an older driver will fall back to the old library.\n\n## Compositor Requirements\n\nThis library requires a compositor that supports the dma-buf protocols. That\nmeans either of:\n- linux-dmabuf-v1 version >= 4, AND libdrm version >= 2.4.109\n- linux-dmabuf-v1 version 3, AND wl-drm\n\nFor synchronization, it will use the explicit sync protocols if available,\nwhich requires:\n- linux-drm-syncobj-v1\n- libdrm version 2.4.99\n\nWithout implicit sync, the library can still run, but you may get reduced\nperformance and out-of-order frames.\n\nIf available, the library will use the presentation-time, fifo-v1, and\ncommit-timing-v1 protocols for vsync and frame throttling. Without those, a\nswap interval greater than 1 won't work, and eglSwapBuffers may block\nindefinately if the window is not visible (e.g., there's another window in\nfront of it).\n\n## Notes for Application Developers\n\nThis library follows the same general protocol rules as the Wayland WSI for\nVulkan:\n- The `wl_surface.attach` and `wl_surface.commit` requests, along with any\n  other related requests (explicit sync points, damage areas, frame\n  throttling) are sent in `eglSwapBuffers`.\n- The library uses its own `wl_event_queue`s for any proxies that it creates,\n  and handles all events internally.\n\nTo avoid problems, if an EGLSurface for a `wl_surface` exists, then\napplications should not directly send `wl_surface.commit` requests for that\nsurface. If you need to change any other double-buffered state for a surface,\nthen send those requests before calling `eglSwapBuffers`.\n\nIn particular, an application MUST NOT send a `wl_surface.commit` request for\na surface concurrently with an `eglSwapBuffers` call. Due to the lack of\northogonality between surface changes and the lack of any synchronization\nacross multiple requests, surface commits in Wayland are not thread-safe.\n\nEven with a single thread, due to limitations in the fifo-v1 and\npresentation-time protocols, sending a `wl_surface.commit` request at all\noutside of `eglSwapBuffers` will break frame throttling, and may result in\ndiscarded frames.\n\n## Known Issues and Workarounds\n\n### Explicit Sync Compatibility\n\nSome applications can run into problems with the explicit sync protocols,\nespecially if they try to send `wl_surface.commit` requests from multiple\nthreads.\n\nIf that happens, you can disable explicit sync by setting an environment\nvariable `__NV_DISABLE_EXPLICIT_SYNC=1`.\n\n## Implementation Notes\n\nThis implementation uses a new driver interface (added in the 560 series\ndrivers) that allows it to allocate a dma-buf and then attach it as a color\nbuffer for an EGLSurface. Conceptually, it's similar to an FBO.\n\nSee [driver-platform-surface.h](src/wayland/driver-platform-surface.h) for more\ndetails on this interface.\n\nThat provides more direct control over buffer selection and reuse than the\nprevious EGLStream-based implementation.\n\nIn particular, this library should handle window resizing better, especially in\ncases such as calling `wl_egl_window_resize` for a window that isn't the\ncurrent EGLSurface.\n\nBecause EGLStreams are not resizable, resizing a window in the old library\nrequires creating an new EGLSurface internally, and then calling eglMakeCurrent\nto switch to it.\n\nIf the application calls `wl_egl_window_resize` when the window isn't current,\nthen the library can't safely apply the new size until the next eglSwapBuffers\ncall, so you end up with an entire frame with the old size. While that's\ntechnically allowed by the EGL spec, it means that this sequence doesn't work\nthe way you'd expect:\n\n```c\nwindow = wl_egl_window_create(wl_surface, 100, 100);\nEGLSurface surf = eglCreateWindowSurface(dpy, config, window, NULL);\nwl_egl_window_resize(window, 200, 200, 0, 0);\neglMakeCurrent(dpy, surf, surf, ctx);\nglViewport(200, 200);\n/*\n * Draw stuff, but the rendering is distorted because OpenGL's viewport\n * transformation is for 200x200, but the window is still 100x100.\n */\neglSwapBuffers(dpy, surf); // Displays a 100x100 window\n```\n\nWith the new platform surface interface, the driver will call into the platform\nlibrary at certain points to let the platform deal with a window resize. As a\nresult, an application can call `wl_egl_window_resize` from any thread, and\nthe resize will be applied as soon as it calls `glViewport`.\n"
+    },
+    {
+      "path": "src/wayland/09_nvidia_wayland2.json",
+      "sha": null,
+      "content_sha256": "e8eaee4d33797e226fbfb05c523122cffe4d064995d9575bbdc598cc978ed3a4",
+      "score": 31,
+      "content": "{\n    \"file_format_version\" : \"1.0.0\",\n    \"ICD\" : {\n        \"library_path\" : \"libnvidia-egl-wayland2.so.1\"\n    }\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:26.962344+00:00"
+}

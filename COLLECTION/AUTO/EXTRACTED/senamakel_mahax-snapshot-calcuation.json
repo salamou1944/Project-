@@ -1,0 +1,43 @@
+{
+  "canonical_source": "github:senamakel/mahax-snapshot-calcuation",
+  "repo": "senamakel/mahax-snapshot-calcuation",
+  "revision_sha": "aa845af941b10a71d71154ac32d96fdb0ea8ebcf",
+  "default_branch": "master",
+  "pushed_at": "2022-03-04T14:45:37Z",
+  "repo_updated_at": "2022-03-04T14:45:40Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "30de4a1c09bf1928ca6c9e7160c0676dfeaf8fc464c6692c7440a32dede62f6c",
+      "score": 120,
+      "content": "{\n  \"name\": \"staking-fix\",\n  \"version\": \"1.0.0\",\n  \"description\": \"\",\n  \"main\": \"index.js\",\n  \"scripts\": {\n    \"test\": \"echo \\\"Error: no test specified\\\" && exit 1\"\n  },\n  \"author\": \"\",\n  \"license\": \"ISC\",\n  \"dependencies\": {\n    \"bignumber.js\": \"^9.0.2\",\n    \"hardhat\": \"^2.9.0\",\n    \"web3\": \"^1.7.1\"\n  }\n}\n"
+    },
+    {
+      "path": "findweights.js",
+      "sha": null,
+      "content_sha256": "3c39137628f5b7f6961482babae53c4cfb4b2d6cdc2000185e382d57e8c109cc",
+      "score": 35,
+      "content": "const fs = require('fs');\nvar Web3 = require('web3');\n\nconst data = fs.readFileSync('./data.csv');\nconst lines = data.toString().split('\\r\\n');\nconst parsedLines = lines.map(l => l.split(','));\n\nconst finalData = parsedLines.map(l => ({\n    hash: l[0],\n    blockNumber: l[1],\n    ts: l[2],\n    from: l[4],\n    to: l[4],\n    fn: l[15]\n}));\n\n\nvar web3 = new Web3(new Web3.providers.HttpProvider('https://polygon-mainnet.infura.io/v3/3f9967d704884ac0b0136b98e5534f55')); // your web3 provider\nconst wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));\n\nconst parse = async (lines) => {\n    for (let index = 0; index < lines.length; index++) {\n        const line = lines[index];\n        const tx = await web3.eth.getTransaction(line.hash);\n        console.log('fuck', tx, line.hash);\n\n        await wait(1000);\n\n        let tx_data = tx.input;\n        let input_data = '0x' + tx_data.slice(10);  // get only data without function selector\n\n        if (line.fn === 'Create_lock') {\n            let params = web3.eth.abi.decodeParameters(['uint256', 'uint256'], input_data);\n            line.data = {\n                amount: params[0],\n                lock_time: params[1]\n            };\n        }\n\n        if (line.fn === 'Increase_unlock_time') {\n            let params = web3.eth.abi.decodeParameters(['uint256'], input_data);\n            line.data = {\n                lock_time: params[0]\n            };\n        }\n\n        if (line.fn === 'Increase_amount') {\n            let params = web3.eth.abi.decodeParameters(['uint256'], input_data);\n            line.data = {\n                amount: params[0]\n            };\n        }\n\n        fs.writeFileSync(\"out.json\", JSON.stringify(lines, null, 2));\n    }\n\n\n};\n\nparse(finalData);\n"
+    },
+    {
+      "path": "replay.js",
+      "sha": null,
+      "content_sha256": "4bd80ad97a01ae7487398561859c5933f3a8e608a618e622bb0a27e1c4978311",
+      "score": 35,
+      "content": "const BigNumber = require('bignumber.js');\nconst _data = require('./out.json');\n\nconst data = _data.sort((a, b) => a.ts - b.ts);\n\naccounts = {};\n\nconst area = (x1, y1, x2, y2) => {\n    const area1 = 0.5 * x1 * y1;\n    const area2 = 0.5 * x2 * y2;\n\n    // console.log('area', x1, y1, x2, y2, area2 - area1);\n    return area2 - area1;\n};\n\nconst year_4 = 365 * 86400 * 4;\nconst mahax = (amount, start, end) => {\n    if (amount ==0 ) return 0;\n    return amount * ((end - start) / year_4);\n};\n\ndata.forEach(d => {\n    const acct = accounts[d.from] || {};\n\n    if (!acct.lastAmount) acct.lastAmount = 0;\n    if (!acct.area) acct.area = 0;\n    if (!acct.mahax) acct.mahax = 0;\n\n    if (acct.lastTimestamp) {\n        acct.area += (\n            area(\n                acct.lastTimestamp, acct.mahax,\n                d.ts, acct.mahax,\n            )\n        );\n    }\n\n    if (d.fn === 'Create_lock') {\n        acct.startPoint = d.ts;\n\n        acct.lastLockPeriod = Number(d.data.lock_time);\n        acct.lastAmount = Number(d.data.amount) / 1e18;\n\n        acct.lastLockDurationDays = (acct.lastLockPeriod - acct.startPoint) / 86400;\n        acct.mahax = mahax(acct.lastAmount, acct.startPoint, acct.lastLockPeriod);\n    }\n\n    if (d.fn === 'Increase_unlock_time') {\n        acct.lastLockPeriod = Number(d.data.lock_time);\n\n        acct.lastLockDurationDays = (acct.lastLockPeriod - acct.startPoint) / 86400;\n        acct.mahax = mahax(acct.lastAmount, acct.startPoint, acct.lastLockPeriod);\n    }\n\n    if (d.fn === 'Increase_amount') {\n        acct.lastAmount += Number(d.data.amount) / 1e18;\n\n        acct.lastLockDurationDays = (acct.lastLockPeriod - acct.startPoint) / 86400;\n        acct.mahax = mahax(acct.lastAmount, acct.startPoint, acct.lastLockPeriod);\n    }\n\n    if (d.fn === 'Withdraw') {\n        acct.startPoint = 0;\n        acct.lastLockPeriod = 0;\n        acct.lastAmount = 0;\n        acct.lastLockDurationDays = 0;\n        acct.mahax = 0;\n    }\n\n    acct.lastTimestamp = d.ts;\n    accounts[d.from] = acct;\n    // console.log(acct, d.fn);\n});\n\nconst keys = Object.keys(accounts);\nkeys.forEach(key => {\n    const acct = accounts[key] || {};\n    acct.area += (\n        area(\n            acct.lastTimestamp, acct.mahax,\n            1640542375, acct.mahax,\n        )\n    );\n\n    console.log(`${key}, ${acct.mahax}, ${acct.area}`);\n});\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:46.889868+00:00"
+}

@@ -1,0 +1,50 @@
+{
+  "canonical_source": "github:eternity4719/CoreLib",
+  "repo": "eternity4719/CoreLib",
+  "revision_sha": "3d82e79987df7c955e6786334c691afe41180fa1",
+  "default_branch": "main",
+  "pushed_at": "2026-10-07T03:20:05Z",
+  "repo_updated_at": "2026-10-07T03:20:10Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "src/main/kotlin/me/albert/corelib/utils/CDUtil.kt",
+      "sha": null,
+      "content_sha256": "abcc216d677751bd8c70040c116b07e7fafc1c5c4d4109127b026cb7d458e724",
+      "score": 58,
+      "content": "package me.albert.corelib.utils\n\nimport me.albert.corelib.instance\nimport org.bukkit.Bukkit\nimport org.bukkit.entity.Entity\nimport java.util.*\nimport java.util.concurrent.ConcurrentHashMap\nimport java.util.concurrent.atomic.AtomicLong\n\n\nfun UUID.checkCD(key: String, time: Long): Long {\n    return CDUtil.checkCD(this, key, time)\n}\n\nfun Entity.checkCD(key: String, time: Long): Long {\n    return this.uniqueId.checkCD(key, time)\n}\n\nfun UUID.inCD(key: String, time: Long) = checkCD(key, time) > 0\n\nfun Entity.inCD(key: String, time: Long) = checkCD(key, time) > 0\n\nobject CDUtil {\n\n    // 所有的冷却数据：uuid -> (key -> 冷却结束时刻的毫秒时间戳)\n    val cds: ConcurrentHashMap<UUID, ConcurrentHashMap<String, Long>> = ConcurrentHashMap()\n\n    // 内部管理免 CD 的玩家集合（使用 ConcurrentHashMap.newKeySet() 保证多线程并发安全）\n    val noCdPlayers: MutableSet<UUID> = ConcurrentHashMap.newKeySet()\n\n    // 惰性清扫的最小间隔：由 checkCD 顺手触发，不额外占用调度任务\n    private const val SWEEP_INTERVAL = 10_000L\n    private val lastSweep = AtomicLong(0L)\n\n    /**\n     * 检查并处理玩家冷却\n     */\n    @JvmStatic\n    fun checkCD(uuid: UUID, key: String, time: Long): Long {\n        // 1. 优先判定管理员免 CD 逻辑\n        if (noCdPlayers.contains(uuid)) {\n            Bukkit.getPlayer(uuid)?.sendActionBar(\"§c已为您跳过本次冷却(${time}ms)\")\n            return 0L\n        }\n\n        val current = System.currentTimeMillis()\n        sweep(current)\n\n        // 2. 获取或创建该玩家的冷却数据\n        val playerCd = cds.computeIfAbsent(uuid) { ConcurrentHashMap() }\n\n        // 3. 首次触发或冷却已过，重新计时\n        val expireAt = playerCd[key]\n        val remaining = if (expireAt == null) 0L else expireAt - current\n        if (remaining <= 0L) {\n            playerCd[key] = current + time\n            return 0L\n        }\n\n        return remaining\n    }\n\n    /**\n     * 惰性清理：由 [checkCD] 顺手触发，扔到异步线程执行，不占用主线程/区域线程\n     *\n     * 只删过期项，因此对使用方完全透明：这些 key 下次被查到时本来也会判为可用并重新计时\n     * （离线玩家、已销毁的实体不会有人再来查它们，条目就一直留着）\n     */\n    private fun sweep(current: Long) {\n        val last = lastSweep.get()\n        if (current - last < SWEEP_INTERVAL) {\n            return\n        }\n        // CAS 抢占：同一轮只让一个线程清扫\n        if (!lastSweep.compareAndSet(last, current)) {\n            return\n        }\n        instance.launchAsync {\n            cds.forEach { (uuid, keys) ->\n                keys.entries.removeIf { it.value <= current }\n                if (keys.isEmpty()) {\n                    // 判空与写入有竞态，用 computeIfPresent 原子地只删掉仍然为空的表\n                    cds.computeIfPresent(uuid) { _, existing -> existing.ifEmpty { null } }\n                }\n            }\n        }\n    }\n\n    /**\n     * 添加玩家到免 CD 列表\n     */\n    @JvmStatic\n    fun addNoCdUUID(uuid: UUID) {\n        noCdPlayers.add(uuid)\n    }\n\n    /**\n     * 将玩家从免 CD 列表中移除\n     */\n    @JvmStatic\n    fun removeNoCdUUID(uuid: UUID) {\n        noCdPlayers.remove(uuid)\n    }\n\n    /**\n     * 检查玩家是否处于免 CD 状态\n     */\n    @JvmStatic\n    fun isNoCd(uuid: UUID): Boolean {\n        return noCdPlayers.contains(uuid)\n    }\n\n    /**\n     * 清理全服所有的冷却数据（同时清空免 CD 列表）\n     */\n    @JvmStatic\n    fun clearAllCD() {\n        cds.clear()\n        noCdPlayers.clear()\n    }\n}"
+    },
+    {
+      "path": "src/main/resources/config.yml",
+      "sha": null,
+      "content_sha256": "a86a7b056c254a96fa63ecd1f4373f93c39beb2d33701e6d2db5b0bf727478df",
+      "score": 29,
+      "content": "debug: true"
+    },
+    {
+      "path": "src/main/resources/plugin.yml",
+      "sha": null,
+      "content_sha256": "94f356b28b23b9dea3a334df0683a1e9fc5dbe481fdb57cb87e42c58f960601f",
+      "score": 29,
+      "content": "name: CoreLib\nversion: '1.0.0'\nmain: me.albert.corelib.CoreLib\napi-version: '1.13'\nfolia-supported: true\ndepend:\n  - CoreLibRuntime\nsoftdepend:\n  - Vault\n  - PlayerPoints\ncommands:\n  corelib:\n    permission: admin"
+    },
+    {
+      "path": "runtime/src/main/resources/plugin.yml",
+      "sha": null,
+      "content_sha256": "f793d25b027a8fe4642b20ecbc430c63d7f09a939459d8eaf3368f27d8f63f08",
+      "score": 27,
+      "content": "name: CoreLibRuntime\nversion: '${version}'\nmain: me.albert.corelib.runtime.CoreLibRuntime\napi-version: '1.13'\nfolia-supported: true\ndescription: CoreLib 的运行时依赖容器，需先于 CoreLib 加载。\nload: STARTUP\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:08.972438+00:00"
+}

@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:apilayer/fixer",
+  "repo": "apilayer/fixer",
+  "revision_sha": "82e5abf559fe5be2e3e5cd9d358c769d7c7abc45",
+  "default_branch": "master",
+  "pushed_at": "2018-04-05T13:48:09Z",
+  "repo_updated_at": "2024-06-20T12:48:55Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "app/spec/api_spec.rb",
+      "sha": null,
+      "content_sha256": "5fe0b4892789feb60c6350fa544e4c928b4361b765888d5de3ab51039b0f4b86",
+      "score": 166,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'rack/test'\nrequire 'api'\n\ndescribe 'the API' do\n  include Rack::Test::Methods\n\n  let(:app)  { Sinatra::Application }\n  let(:json) { Oj.load(last_response.body) }\n  let(:headers) { last_response.headers }\n\n  it 'describes itself' do\n    get '/'\n    last_response.must_be :ok?\n  end\n\n  it 'returns latest quotes' do\n    get '/latest'\n    last_response.must_be :ok?\n  end\n\n  it 'sets base currency' do\n    get '/latest?base=USD'\n    json['base'].must_equal 'USD'\n  end\n\n  it 'sets base amount' do\n    get '/latest?amount=10'\n    json['rates']['USD'].must_be :>, 10\n  end\n\n  it 'filters symbols' do\n    get '/latest?symbols=USD'\n    json['rates'].keys.must_equal %w[USD]\n  end\n\n  it 'aliases base as from' do\n    get '/latest?from=USD'\n    json['base'].must_equal 'USD'\n  end\n\n  it 'aliases symbols as to' do\n    get '/latest?to=USD'\n    json['rates'].keys.must_equal %w[USD]\n  end\n\n  it 'returns historical quotes' do\n    get '/2012-11-20'\n    json['rates'].wont_be :empty?\n    json['date'].must_equal '2012-11-20'\n  end\n\n  it 'works around holidays' do\n    get '/2010-01-01'\n    json['rates'].wont_be :empty?\n  end\n\n  it 'returns a cache control header' do\n    %w[/ /latest /2012-11-20].each do |path|\n      get path\n      headers['Cache-Control'].wont_be_nil\n    end\n  end\n\n  it 'returns a last modified header' do\n    %w[/latest /2012-11-20].each do |path|\n      get path\n      headers['Last-Modified'].wont_be_nil\n    end\n  end\n\n  it 'allows cross-origin requests' do\n    %w[/ /latest /2012-11-20].each do |path|\n      header 'Origin', '*'\n      get path\n      assert headers.key?('Access-Control-Allow-Methods')\n    end\n  end\n\n  it 'responds to preflight requests' do\n    %w[/ /latest /2012-11-20].each do |path|\n      header 'Origin', '*'\n      header 'Access-Control-Request-Method', 'GET'\n      header 'Access-Control-Request-Headers', 'Content-Type'\n      options path\n      assert headers.key?('Access-Control-Allow-Methods')\n    end\n  end\n\n  it 'converts an amount' do\n    get '/latest?from=GBP&to=USD&amount=100'\n    json['rates']['USD'].must_be :>, 100\n  end\nend\n"
+    },
+    {
+      "path": "docker-compose.prod.yml",
+      "sha": null,
+      "content_sha256": "e5b1af4016e1e967f81eae49593d0c99ddc6b8368ef3cd0044d2ceac8e16666d",
+      "score": 120,
+      "content": "version: '3'\nservices:\n  db:\n    restart: unless-stopped\n  web:\n    env_file: .env\n    image: hakanensari/fixer\n    logging:\n      options:\n        max-size: \"50m\"\n        max-file: \"10\"\n    restart: unless-stopped\n  scheduler:\n    env_file: .env\n    image: hakanensari/fixer\n    logging:\n      options:\n        max-size: \"50m\"\n        max-file: \"10\"\n    restart: unless-stopped\n  nginx-proxy:\n    image: jwilder/nginx-proxy\n    labels:\n      - \"com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy=true\"\n    logging:\n      options:\n        max-size: \"50m\"\n        max-file: \"10\"\n    ports:\n      - \"80:80\"\n      - \"443:443\"\n    restart: unless-stopped\n    volumes:\n      - /etc/nginx/conf.d\n      - /var/run/docker.sock:/tmp/docker.sock:ro\n      - ./limit_req.conf:/etc/nginx/conf.d/limit_req.conf:ro\n      - certs:/etc/nginx/certs:ro\n      - html:/usr/share/nginx/html\n      - vhost.d:/etc/nginx/vhost.d\n  letsencrypt-nginx-proxy-companion:\n    image: jrcs/letsencrypt-nginx-proxy-companion\n    depends_on:\n      - nginx-proxy\n    restart: unless-stopped\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock:ro\n      - certs:/etc/nginx/certs:rw\n      - html:/usr/share/nginx/html\n      - vhost.d:/etc/nginx/vhost.d\nvolumes:\n  certs:\n  html:\n  vhost.d:\n"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha": null,
+      "content_sha256": "be809a304e80e890d796c54b2ecef07427b27fd7ba7550bf6ac931b3c6d3af03",
+      "score": 120,
+      "content": "version: '3'\nservices:\n  db:\n    image: postgres\n    volumes:\n      - data:/var/lib/postgresql/data\n  web:\n    command: unicorn -c config/unicorn.rb\n    entrypoint: bin/wait-for-it.sh db:5432 -s --\n    environment:\n      DATABASE_URL: postgres://postgres@db/postgres\n    expose:\n      - '8080'\n    links:\n      - db\n  scheduler:\n    command: bin/schedule\n    entrypoint: bin/wait-for-it.sh db:5432 -s --\n    environment:\n      DATABASE_URL: postgres://postgres@db/postgres\n    links:\n      - db\nvolumes:\n  data:\n"
+    },
+    {
+      "path": "docker-compose.override.yml",
+      "sha": null,
+      "content_sha256": "b423481fb50a3e7c5ca6f4314a7af9253196237610cc5fa69963bc2cef2b7706",
+      "score": 120,
+      "content": "version: '3'\nservices:\n  web:\n    build:\n      context: ./app\n    environment:\n      RACK_ENV: development\n      VIRTUAL_HOST: localhost\n    ports:\n      - \"8080:8080\"\n  scheduler:\n    build:\n      context: ./app\n    environment:\n      RACK_ENV: development\n"
+    },
+    {
+      "path": "app/lib/api.rb",
+      "sha": null,
+      "content_sha256": "5cc5abee08098d3dea872021176febb86d126b324db2644f583ba57a7ea66c91",
+      "score": 106,
+      "content": "# frozen_string_literal: true\n\nrequire 'oj'\nrequire 'sinatra'\nrequire 'rack/cors'\nrequire 'quote'\n\nuse Rack::Cors do\n  allow do\n    origins '*'\n    resource '*', headers: :any, methods: :get\n  end\nend\n\nconfigure :development do\n  set :show_exceptions, :after_handler\nend\n\nconfigure :production do\n  disable :dump_errors\nend\n\nhelpers do\n  def quote\n    @quote ||= Quote.new(params)\n  end\n\n  def jsonp(data)\n    deprecation_message = 'This API endpoint is deprecated and will stop working on June 1st, 2018. For more information please visit: https://github.com/fixerAPI/fixer#readme'\n    data = {__deprecation_message__: deprecation_message}.merge(data)\n    headers \\\n      'X-Deprecation-Message' => deprecation_message\n\n    json = encode_json(data)\n    callback = params.delete('callback')\n    if callback\n      content_type :js\n      \"#{callback}(#{json})\"\n    else\n      content_type :json\n      json\n    end\n  end\n\n  def encode_json(data)\n    Oj.dump(data, mode: :compat)\n  end\nend\n\noptions '*' do\n  200\nend\n\nget '*' do\n  cache_control :public, :must_revalidate, max_age: 900\n  pass\nend\n\nget '/' do\n  jsonp details: 'http://fixer.io'\nend\n\nget '/latest' do\n  last_modified quote.date\n  jsonp quote.to_h\nend\n\nget '/(?<date>\\d{4}-\\d{2}-\\d{2})', mustermann_opts: { type: :regexp } do\n  last_modified quote.date\n  jsonp quote.to_h\nend\n\nnot_found do\n  halt 404, encode_json(error: 'Not found')\nend\n\nerror Quote::Invalid do |ex|\n  halt 422, encode_json(error: ex.message)\nend\n"
+    },
+    {
+      "path": "app/db/migrate/001_create_currencies.rb",
+      "sha": null,
+      "content_sha256": "df9c8291fbb5a9131b24bbd5a96692c7f0fc2458739111449d16d1b5d6deb3aa",
+      "score": 101,
+      "content": "# frozen_string_literal: true\n\nSequel.migration do\n  change do\n    create_table :currencies do\n      Date    :date\n      String  :iso_code\n      Float   :rate\n\n      index %i[date iso_code], unique: true\n    end\n  end\nend\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "dd8088592bcb810f34a7148b1cd4d93f851fddf9503e2c0c4d84523bd37a0828",
+      "score": 100,
+      "content": "# Fixer -  Important Announcement\n\n[**The old, deprecated Fixer API will be discontinued on June 1st, 2018**]\n\nWe are happy to announce the complete relaunch of fixer.io into a more stable, more secure, and much more advanced currency & exchange rate conversion API platform. While the core structure of our API remains unchanged, all users of the legacy Fixer API will be required to sign up for a free API access key and perform a few simple changes to their integration. To learn more about the changes that are required, please jump to the „Required Changes“ section below.\n\n**Required Changes to Legacy Integrations (api.fixer.io)**\n\nAs of March 6th 2018, the legacy Fixer API (api.fixer.io) is deprecated and a completely re-engineered API is now accessible at https://data.fixer.io/api/ The core structure of the old API has remained unchanged, and you will only need to perform a few simple changes to your integration.\n\n**1. Get a Free Fixer Access Token**\n\nGo to fixer.io and create an account. After signup, you will receive an access token immediately. If you plan on using less than 1000 requests per month, your account will be completely free. If you need more or want to use some of our new features, you’ll need to choose one of the paid options.\n\n**2. Replace API URL and add Access Key**\n\nThe new API comes with a new endpoint and now requires an access key in the GET URL. Please change your API URL from api.fixer.io to https://data.fixer.io/api and attach your newly generated access key to the URL as a GET parameter named „access_key“. \n\n**Example**\n\nIf your old API Call was https://api.fixer.io/latest then your new integration should point to: https://data.fixer.io/api/latest?access_key=YOUR_ACCESS_KEY \n\n**New Features**\n\nAlthough the core structure of the fixer API remains unchanged, we added a whole lot of improvements, 100+ more currencies, and many more features to the new Fixer API. You can read more about all new features on the new fixer.io website. Here’s a list of the most important ones:\n\n- **Fixer is still free!**\nAlthough we now offer a set of premium plans for more advanced users, the basic API features (e.g. getting the latest and historical exchange rates) remain completely free of charge. Minor limitations include our new 1000 requests/month limit and EUR being the only available base currency for customers using a free account. If you need more than 1000 requests per month or want to use all 170 available base currencies, you’ll need to choose one of the paid plans starting at only $10 per month.\n\n- **Over 100 Additional Currencies**\nThe new Fixer API now supports over 100 additional currencies, bumping the total available currencies for conversion to 170.\n\n- **More Reliable Data Sources & Updates every minute**\nThe old Fixer API was limited to currency data from the European Central Bank, which updates only once every day. The new API comes with 16+ connected data sources and data updates every hour, 10-minutes, or even every minute - depending on which subscription plan you choose.\n\n- **More Endpoints**\nThe new fixer API has over 3 new endpoints, including a Direct Conversion endpoint, Time-Series conversion endpoint, and allows you to see the fluctuation of a specfic currency using our new Fluctuation endpoint. To learn more about all the new features, please head over to the API documentation at fixer.io/documentation \n\n**Next Steps**\n\n**- Discontinuation of the old API**\n\nThe old, deprecated Fixer API will be discontinued on **June 1st, 2018**. Please make sure to adjust your existing implementation to point to the new API endpoint (see above) as soon as possible in order to prevent service disruption on the planned shutdown date. In case you have any questions, please feel free to contact us using the email address below. \n\n**- Need help? Please get in touch**\n\nIt’s very important for us to ensure a smooth transition to the new API Endpoint for all of our users. If you are a developer who has published a third-party plugin with Fixer, we recommend you to get in touch and share this announcement with your user base. If you need any help or have questions about the transition, please reach out at support@fixer.io \n\n**- Legacy Plan:**\n\nFor a limited period of time we are also offering a Free Legacy Plan for all legacy users. This plan comes with free SSL support and the ability to change base currency. You can sign up for the Legacy Plan [here](https://fixer.io/signup/legacy). \n\n\n\n\n[![Travis](https://travis-ci.org/hakanensari/fixer.svg)](https://travis-ci.org/hakanensari/fixer)\n\nFixer is a free API for current and historical foreign exchange rates [published by the European Central Bank](https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html).\n\nA public instance of the API lives at [https://api.fixer.io](https://api.fixer.io). Alternatively, you can run  privately with the provided [Docker image](https://hub.docker.com/r/hakanensari/fixer/).\n\nRates are updated around 4PM CET every working day.\n\n## Usage\n\nGet the latest foreign exchange rates.\n\n```http\nGET /latest\n```\n\nGet historical rates for any day since 1999.\n\n```http\nGET /2000-01-03\n```\n\nRates are quoted against the Euro by default. Quote against a different currency by setting the base parameter in your request.\n\n```http\nGET /latest?base=USD\n```\n\nRequest specific exchange rates by setting the symbols parameter.\n\n```http\nGET /latest?symbols=USD,GBP\n```\n\nThe primary use case is client side. For instance, with [money.js](https://openexchangerates.github.io/money.js/) in the browser\n\n```js\nlet demo = () => {\n  let rate = fx(1).from(\"GBP\").to(\"USD\")\n  alert(\"£1 = $\" + rate.toFixed(4))\n}\n\nfetch('https://api.fixer.io/latest')\n  .then((resp) => resp.json())\n  .then((data) => fx.rates = data.rates)\n  .then(demo)\n```\n\n## Installation\n\nI have included a sample Docker Compose configuration in the repo.\n\nTo build locally, type\n\n```bash\ndocker-compose up -d\n```\n\nNow you can access the API at\n\n```\nhttp://localhost:8080\n```\n\nIn production, create a [`.env`](.env.example) file in the project root and run with\n\n```bash\ndocker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d\n```\n"
+    },
+    {
+      "path": "gem/README.md",
+      "sha": null,
+      "content_sha256": "f418c0f83ee2234d822b7212d42ec5b12dac2128a6ab4e38fc2381c50960a740",
+      "score": 98,
+      "content": "# Fixer\n\nFixer wraps the XML feeds of Euro foreign exchange reference provided by the European Central Bank:\n\n```ruby\nFixer.current\nFixer.ninety_days\nFixer.historical\n```\n"
+    },
+    {
+      "path": "gem/spec/fixer_spec.rb",
+      "sha": null,
+      "content_sha256": "cf05681960c8cbb39485e93d80fa4dea1d8baca035a6376c20dd1c77cdc5f7a8",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\n\ndescribe Fixer do\n  before do\n    @mock = MiniTest::Mock.new\n  end\n\n  after do\n    @mock.verify\n  end\n\n  it 'returns current rates' do\n    @mock.expect(:call, nil, [:current])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.current\n    end\n  end\n\n  it 'returns ninety-day rates' do\n    @mock.expect(:call, nil, [:ninety_days])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.ninety_days\n    end\n  end\n\n  it 'returns historical rates' do\n    @mock.expect(:call, nil, [:historical])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.historical\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/spec/currency_spec.rb",
+      "sha": null,
+      "content_sha256": "ad797033bbb8d908726c1b8a8e3cdf06756991b79820917fbb5e7e910ecbe841",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'currency'\n\ndescribe Currency do\n  around do |test|\n    Currency.db.transaction do\n      test.call\n      raise Sequel::Rollback\n    end\n  end\n\n  before do\n    Currency.dataset.delete\n    @first = Currency.create(date: '2014-01-01')\n    @last = Currency.create(date: '2015-01-01')\n  end\n\n  it 'returns current date' do\n    Currency.current_date.must_equal @last.date\n  end\n\n  it 'returns current date before given date' do\n    Currency.current_date_before(@last.date - 1).must_equal @first.date\n  end\n\n  it 'returns nil if there is no current date before given date' do\n    Currency.current_date_before(@first.date - 1).must_be_nil\n  end\n\n  it 'casts to hash' do\n    @first.to_h.must_be_kind_of Hash\n  end\nend\n"
+    },
+    {
+      "path": "app/spec/helper.rb",
+      "sha": null,
+      "content_sha256": "7f038887c11b27eee4465a1fd0207649c406f1434ecbd63fca246c3d2125da36",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nrequire './config/environment'\nrequire 'minitest/autorun'\nrequire 'minitest/around/spec'\n"
+    },
+    {
+      "path": "app/spec/bank_spec.rb",
+      "sha": null,
+      "content_sha256": "cd6dca3ca6bafaf3b76e68dc9a63e26ecdc83c07a9ce17663b56d14fe686e541",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'bank'\n\ndescribe Bank do\n  around do |test|\n    Currency.db.transaction do\n      test.call\n      raise Sequel::Rollback\n    end\n  end\n\n  before do\n    Currency.dataset.delete\n  end\n\n  it 'fetches current rates' do\n    Bank.fetch_current_rates!\n    Currency.count.must_be :positive?\n  end\nend\n"
+    },
+    {
+      "path": "app/spec/edge_cases_spec.rb",
+      "sha": null,
+      "content_sha256": "646bd35d621fda5d1429e2a7204fd358f53bb09ff7f7b31a2443302b63a8453f",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'rack/test'\nrequire 'api'\n\ndescribe 'the API' do\n  include Rack::Test::Methods\n\n  let(:app)  { Sinatra::Application }\n  let(:json) { Oj.load(last_response.body) }\n\n  it 'handles unfound pages' do\n    get '/foo'\n    last_response.status.must_equal 404\n    json.wont_be_empty\n  end\n\n  it 'will not process an invalid date' do\n    get '/2010-31-01'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'will not process a date before 2000' do\n    get '/1999-01-01'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'will not process an invalid base' do\n    get '/latest?base=UAH'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'will not process an invalid amount' do\n    get '/latest?amount=foo'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'handles malformed queries' do\n    get '/latest?base=USD?callback=?'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'returns fresh dates' do\n    Currency.db.transaction do\n      new_date = Currency.current_date + 1\n      Currency.create(date: new_date, iso_code: 'FOO', rate: 1)\n      get '/latest'\n      json['date'].must_equal new_date.to_s\n      raise Sequel::Rollback\n    end\n  end\nend\n"
+    },
+    {
+      "path": "gem/spec/helper.rb",
+      "sha": null,
+      "content_sha256": "2ecdbec51d35c60b2698f33f7f75bc72a29f8e2f936a15a0e618b795f05e89a8",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\n$LOAD_PATH.unshift(File.expand_path('../../lib', __FILE__))\n\nrequire 'minitest/autorun'\nrequire 'vcr'\nrequire 'webmock'\n\nrequire 'fixer'\n\nVCR.configure do |c|\n  c.cassette_library_dir = 'spec/vcr_cassettes'\n  c.hook_into :webmock\nend\n"
+    },
+    {
+      "path": "app/spec/quote_spec.rb",
+      "sha": null,
+      "content_sha256": "6b9bc10e1af794edc916a344f51876d7f009b56d3b6b9046086126580a1e0de0",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'quote'\n\ndescribe Quote do\n  def stub_rates(default_rates = {})\n    quote.stub :find_default_rates, default_rates do\n      yield quote\n    end\n  end\n\n  describe 'by default' do\n    let(:quote) { Quote.new }\n\n    it 'quotes rates against the euro' do\n      stub_rates 'USD' => 1.25 do |quote|\n        rate = quote.rates['USD']\n        rate.must_equal 1.25\n      end\n    end\n\n    it 'does not quote the euro' do\n      stub_rates do |quote|\n        quote.rates.keys.wont_include 'EUR'\n      end\n    end\n\n    it 'casts to hash' do\n      stub_rates do |quote|\n        %i[base date rates].each do |key|\n          quote.to_h.keys.must_include key\n        end\n      end\n    end\n  end\n\n  describe 'when given a custom base' do\n    let(:quote) { Quote.new(base: 'FOO') }\n\n    it 'quotes rates against that currency' do\n      stub_rates 'FOO' => 2 do |quote|\n        quote.rates.keys.must_include 'EUR'\n      end\n    end\n\n    it 'does not quote the base currency' do\n      stub_rates 'FOO' => 2 do |quote|\n        quote.rates.keys.wont_include 'FOO'\n      end\n    end\n\n    it 'rounds to five significant digits' do\n      stub_rates 'FOO' => 0.6995 do |quote|\n        rate = quote.rates['EUR']\n        rate.must_equal 1.4296\n      end\n    end\n\n    it 'returns the currencies sorted' do\n      stub_rates 'BAZ' => 1.5, 'FOO' => 2, 'BAR' => 3, 'QUX' => 4 do |quote|\n        quote.rates.keys.must_equal quote.rates.keys.sort\n      end\n    end\n  end\n\n  describe 'when given an invalid base' do\n    let(:quote) { Quote.new(base: 'FOO') }\n\n    it 'raises validation error' do\n      proc { quote.to_h }.must_raise Quote::Invalid\n    end\n  end\n\n  describe 'when given a date that is too old' do\n    let(:quote) { Quote.new(date: '1900-01-01') }\n\n    it 'raises validation error' do\n      Currency.stub :current_date_before, nil do\n        proc { quote }.must_raise Quote::Invalid\n      end\n    end\n  end\n\n  describe 'when given a bad date' do\n    let(:quote) { Quote.new(date: '2000-31-01') }\n\n    it 'raises validation error' do\n      proc { quote }.must_raise Quote::Invalid\n    end\n  end\n\n  describe 'when given custom symbols' do\n    let(:quote) { Quote.new(symbols: 'FOO,BAR') }\n\n    it 'quotes rates only for given symbols' do\n      stub_rates 'FOO' => 1, 'BAR' => 2, 'BAZ' => 3 do |quote|\n        quote.rates.keys.must_include 'FOO'\n        quote.rates.keys.must_include 'BAR'\n        quote.rates.keys.wont_include 'BAZ'\n      end\n    end\n  end\nend\n"
+    },
+    {
+      "path": "gem/spec/fixer/feed_spec.rb",
+      "sha": null,
+      "content_sha256": "bd5d9bee86db33989a13f948d61844e33a12eb45db237c06e59bd98beeeccd48",
+      "score": 89,
+      "content": "# frozen_string_literal: true\n\nrequire_relative '../helper'\n\nmodule Fixer\n  describe Feed do\n    before { VCR.insert_cassette 'fixer' }\n    after  { VCR.eject_cassette }\n\n    it 'parses the date of a currency' do\n      feed = Feed.new(:current)\n      currency = feed.first\n      currency[:date].must_be_kind_of Date\n    end\n\n    it 'parse the ISO code of a currency' do\n      feed = Feed.new(:current)\n      currency = feed.first\n      currency[:iso_code].must_be_kind_of String\n    end\n\n    it 'parses the rate of a currency' do\n      feed = Feed.new(:current)\n      currency = feed.first\n      currency[:rate].must_be_kind_of Float\n    end\n\n    it 'fetches current rates' do\n      feed = Feed.new(:current)\n      feed.count.must_be :<, 40\n    end\n\n    it 'fetches rates for the past 90 days' do\n      feed = Feed.new(:ninety_days)\n      feed.count.must_be :>, 33 * 60\n    end\n\n    it 'fetches historical rates' do\n      feed = Feed.new(:historical)\n      feed.count.must_be :>, 33 * 3000\n    end\n\n    it 'raises error when scope is not valid' do\n      -> { Feed.new(:invalid) }.must_raise ArgumentError\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/Dockerfile",
+      "sha": null,
+      "content_sha256": "9ab731e9efb4e27cacb9f2bb9bdacd125fe3ccef91235372a6d97b3707a1d7ff",
+      "score": 83,
+      "content": "FROM ruby:2.5.0\n\nRUN mkdir /app\nWORKDIR /app\nADD Gemfile /app/Gemfile\nADD Gemfile.lock /app/Gemfile.lock\nRUN bundle install --jobs=8 --without development\nADD . /app\nCMD [\"unicorn\", \"-c\", \"./config/unicorn.rb\"]\n"
+    },
+    {
+      "path": "gem/fixer.gemspec",
+      "sha": null,
+      "content_sha256": "acf658e9461b626d3702cb0986b03b206003a2aac06688465c1b290c5bedc25d",
+      "score": 58,
+      "content": "# frozen_string_literal: true\n\nlib = File.expand_path('../lib', __FILE__)\n$LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)\nrequire 'fixer/version'\n\nGem::Specification.new do |spec|\n  spec.name          = 'fixer'\n  spec.version       = Fixer::VERSION\n  spec.author        = ['Hakan Ensari']\n  spec.email         = ['hakanensari@gmail.com']\n  spec.summary       = <<-SUMMARY\n    A wrapper to the exchange rate feeds of the European Central Bank\n  SUMMARY\n  spec.homepage      = 'https://github.com/hakanensari/fixer'\n  spec.license       = 'MIT'\n  spec.files         = Dir.glob('lib/**/*') + %w[README.md]\n  spec.require_paths = ['lib']\n\n  spec.add_development_dependency 'bundler'\n  spec.add_development_dependency 'minitest'\n  spec.add_development_dependency 'rake'\n  spec.add_development_dependency 'rubocop'\n  spec.add_development_dependency 'vcr'\n  spec.add_development_dependency 'webmock'\nend\n"
+    },
+    {
+      "path": "app/lib/tasks/test.rake",
+      "sha": null,
+      "content_sha256": "c527ad7074539ec0710e09472213d6c5c225a5a0c318ec2f57f5e11557646d04",
+      "score": 54,
+      "content": "# frozen_string_literal: true\n\nrequire 'rake/testtask'\nbegin\n  require 'rubocop/rake_task'\nrescue LoadError\n  return\nend\n\nRake::TestTask.new(test: :environment) do |t|\n  t.libs.push('lib')\n  t.test_files = FileList['spec/*_spec.rb']\n  t.ruby_opts += ['-W0']\nend\n\nRuboCop::RakeTask.new\n\ntask default: %w[db:setup test rubocop]\n"
+    },
+    {
+      "path": ".travis.yml",
+      "sha": null,
+      "content_sha256": "67de2ff9556a729f2c5cf3b3a1cfebbd0898e0f0798fde1677974208a14a7ec5",
+      "score": 35,
+      "content": "before_install:\n  - gem update --system\n  - gem install bundler\n  - psql -c 'create database fixer_test;' -U postgres\n  - cd app\nenv:\n  - RACK_ENV=test\nrvm:\n  - 2.5.0\nsudo: false\n"
+    },
+    {
+      "path": "gem/.rubocop.yml",
+      "sha": null,
+      "content_sha256": "29c50426c5409d329e48bdb0b564b45fda6ad667e8ee3d762863c3ec98f9324a",
+      "score": 33,
+      "content": "AllCops:\n  TargetRubyVersion: 2.5\nMetrics/BlockLength:\n  Exclude:\n    - 'spec/**/*'\n"
+    },
+    {
+      "path": "app/.rubocop.yml",
+      "sha": null,
+      "content_sha256": "f5cb74659934d590b103f6f41f178bccc0b8086eff2b705002e31ebf95017107",
+      "score": 33,
+      "content": "AllCops:\n  TargetRubyVersion: 2.5\nDocumentation:\n  Enabled: false\nMetrics/BlockLength:\n  Enabled: false\nMetrics/LineLength:\n  Enabled: false\n"
+    },
+    {
+      "path": "app/config/environment.rb",
+      "sha": null,
+      "content_sha256": "f5a21d89c0b58a65183c1d0f36f79080f162713394583345913519510931313a",
+      "score": 31,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'app'\n$LOAD_PATH << App.root.join('lib')\nDir[App.root.join('config/initializers/*.rb')].each { |f| require f }\n"
+    },
+    {
+      "path": "app/config/unicorn.rb",
+      "sha": null,
+      "content_sha256": "8a37ff05c1e43d8c1b4ab072c4117e01cc35200149437b9f6c02cb8d0654199d",
+      "score": 31,
+      "content": "# frozen_string_literal: true\n\nworker_process_count = (ENV['WORKER_PROCESSES'] || 4).to_i\n\npreload_app true\nworker_processes worker_process_count\ntimeout 10\n\nbefore_fork do |_, _|\n  Sequel::DATABASES.each(&:disconnect)\nend\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:25:15.469424+00:00"
+}

@@ -1,0 +1,78 @@
+{
+  "canonical_source": "github:rohitg00/eks-efs-demo",
+  "repo": "rohitg00/eks-efs-demo",
+  "revision_sha": "f4448ad92b6dd38431cb56c039f739ab27c520ee",
+  "default_branch": "main",
+  "pushed_at": "2022-12-10T02:02:52Z",
+  "repo_updated_at": "2023-06-13T10:06:18Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "create-rbac.yaml",
+      "sha": null,
+      "content_sha256": "ac452da9a5824acd0051d5d276e830a54df97804edcb976da657218f898d0016",
+      "score": 115,
+      "content": "---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: nfs-provisioner-role-binding\nsubjects:\n  - kind: ServiceAccount\n    name: default\n    namespace: default\nroleRef:\n  kind: ClusterRole\n  name: cluster-admin\n  apiGroup: rbac.authorization.k8s.io\n"
+    },
+    {
+      "path": "deploy-mysql.yaml",
+      "sha": null,
+      "content_sha256": "d5f4169ade86291e46f344d80a8eca740b506d44f57dbde3ed060e77634ce179",
+      "score": 107,
+      "content": "apiVersion: v1\nkind: Service\nmetadata:\n  name: wordpress-mysql\n  labels:\n    app: wordpress\nspec:\n  ports:\n    - port: 3306\n  selector:\n    app: wordpress\n    tier: mysql\n  clusterIP: None\n---\napiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2\nkind: Deployment\nmetadata:\n  name: wordpress-mysql\n  labels:\n    app: wordpress\nspec:\n  selector:\n    matchLabels:\n      app: wordpress\n      tier: mysql\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: wordpress\n        tier: mysql\n    spec:\n      containers:\n      - image: mysql:5.6\n        name: mysql\n        env:\n        - name: MYSQL_ROOT_PASSWORD\n          valueFrom:\n            secretKeyRef:\n              name: mysql-pass\n              key: password\n        ports:\n        - containerPort: 3306\n          name: mysql\n        volumeMounts:\n        - name: mysql-persistent-storage\n          mountPath: /var/lib/mysql\n      volumes:\n      - name: mysql-persistent-storage\n        persistentVolumeClaim:\n          claimName: efs-mysql\n"
+    },
+    {
+      "path": "deploy-wordpress.yaml",
+      "sha": null,
+      "content_sha256": "ea2bf03cc377a0993f72a17df19823a702fbf254560926bde04f9de302caa062",
+      "score": 107,
+      "content": "apiVersion: v1\nkind: Service\nmetadata:\n  name: wordpress\n  labels:\n    app: wordpress\nspec:\n  ports:\n    - port: 80\n  selector:\n    app: wordpress\n    tier: frontend\n  type: LoadBalancer\n---\napiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2\nkind: Deployment\nmetadata:\n  name: wordpress\n  labels:\n    app: wordpress\nspec:\n  selector:\n    matchLabels:\n      app: wordpress\n      tier: frontend\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: wordpress\n        tier: frontend\n    spec:\n      containers:\n      - image: wordpress:4.8-apache\n        name: wordpress\n        env:\n        - name: WORDPRESS_DB_HOST\n          value: wordpress-mysql\n        - name: WORDPRESS_DB_PASSWORD\n          valueFrom:\n            secretKeyRef:\n              name: mysql-pass\n              key: password\n        ports:\n        - containerPort: 80\n          name: wordpress\n        volumeMounts:\n        - name: wordpress-persistent-storage\n          mountPath: /var/www/html\n      volumes:\n      - name: wordpress-persistent-storage\n        persistentVolumeClaim:\n          claimName: efs-wordpress\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b1207639c447138fb60385fe5428b8cb7c8d9c19de68067d83e10c58bf9f9dfd",
+      "score": 100,
+      "content": "# Deploy your application in one click\n"
+    },
+    {
+      "path": "create-storage.yaml",
+      "sha": null,
+      "content_sha256": "1b4b65174401f956b07b92609a1c244d4abd2f6a488ea2dbdfad5a7fc0e7e3e2",
+      "score": 95,
+      "content": "kind: StorageClass\napiVersion: storage.k8s.io/v1\nmetadata:\n  name: aws-efs-sc\nprovisioner: aws-efs\n---\nkind: PersistentVolumeClaim\napiVersion: v1\nmetadata:\n  name: efs-wordpress\n  # annotations:\n  #   volume.beta.kubernetes.io/storage-class: \"aws-efs\"\nspec:\n  accessModes:\n    - ReadWriteMany\n  resources:\n    requests:\n      storage: 10Gi\n  storageClassName: aws-efs-sc\n\n---\nkind: PersistentVolumeClaim\napiVersion: v1\nmetadata:\n  name: efs-mysql\n  # annotations:\n  #   volume.beta.kubernetes.io/storage-class: \"aws-efs\"\nspec:\n  accessModes:\n    - ReadWriteMany\n  resources:\n    requests:\n      storage: 10Gi\n  storageClassName: aws-efs-sc\n"
+    },
+    {
+      "path": "cluster.yml",
+      "sha": null,
+      "content_sha256": "bb08380f62c6564fd61a942b590e32b050640dc07175a9049a1a59d1d89f64d5",
+      "score": 35,
+      "content": "apiVersion: eksctl.io/v1alpha5\r\nkind: ClusterConfig\r\n\r\nmetadata:\r\n  name: acd-pune\r\n  region: ap-south-1\r\n\r\nnodeGroups:\r\n   - name: ng1\r\n     desiredCapacity: 2\r\n     instanceType: t2.micro\r\n     ssh:\r\n        publicKeyName: eks-key\r\n   - name: ng2\r\n     desiredCapacity: 1\r\n     instanceType: t2.small\r\n     ssh:\r\n        publicKeyName: eks-key\r\n   - name: ng-mixed\r\n     minSize: 2\r\n     maxSize: 5\r\n     instancesDistribution:\r\n       maxPrice: 0.017\r\n       instanceTypes: [\"t3.small\", \"t3.medium\"] # At least one instance type should be specified\r\n       onDemandBaseCapacity: 0\r\n       onDemandPercentageAboveBaseCapacity: 50\r\n       spotInstancePools: 2     \r\n     ssh:\r\n         publicKeyName: eks-key\r\n"
+    },
+    {
+      "path": "create-efs-provisioner.yaml",
+      "sha": null,
+      "content_sha256": "5928fe2f9fc10bec692f4999ae803b99589355626cd93a922bab06937f8f910a",
+      "score": 35,
+      "content": "kind: Deployment\napiVersion: apps/v1\nmetadata:\n  name: efs-provisioner\nspec:\n  selector:\n    matchLabels:\n      app: efs-provisioner\n  replicas: 1\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: efs-provisioner\n    spec:\n      containers:\n        - name: efs-provisioner\n          image: quay.io/external_storage/efs-provisioner:latest\n          env:\n            - name: FILE_SYSTEM_ID\n              value: fs-0080c457b84d690d6\n            - name: AWS_REGION\n              value: ap-south-1\n            - name: PROVISIONER_NAME\n              value: aws-efs\n          volumeMounts:\n            - name: pv-volume\n              mountPath: /persistentvolumes\n      volumes:\n        - name: pv-volume\n          nfs:\n            server: fs-0080c457b84d690d6.efs.ap-south-1.amazonaws.com\n            path: /\n"
+    },
+    {
+      "path": "kustomization.yaml",
+      "sha": null,
+      "content_sha256": "95611475238c5c7282f9d8eb529501186234bdd837999da604f4c62ef2b3cbe7",
+      "score": 35,
+      "content": "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nsecretGenerator:\n- name: mysql-pass\n  literals:\n   - password=root\nresources: \n  - create-rbac.yaml\n  - create-efs-provisioner.yaml\n  - create-storage.yaml\n  - deploy-mysql.yaml\n  - deploy-wordpress.yaml\n\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:03.478472+00:00"
+}

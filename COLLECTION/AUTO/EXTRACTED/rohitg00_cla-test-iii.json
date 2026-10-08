@@ -1,0 +1,43 @@
+{
+  "canonical_source": "github:rohitg00/cla-test-iii",
+  "repo": "rohitg00/cla-test-iii",
+  "revision_sha": "869b3f144ce0cc6fd6d1aca8ce0e4a45d123f001",
+  "default_branch": "main",
+  "pushed_at": "2026-06-10T17:59:39Z",
+  "repo_updated_at": "2026-06-10T17:59:43Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/checklist-checker.yml",
+      "sha": null,
+      "content_sha256": "9f1923d8b286a3ff7b27347b42980d18816daea4144052ea1cecf300efc12a37",
+      "score": 126,
+      "content": "name: License Agreement Check\n\non:\n  pull_request_target:\n    types: [opened, edited, synchronize, reopened, ready_for_review]\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: license-agreement-${{ github.event.pull_request.number }}\n  # Let an in-flight run finish so it can post its final commit status. With\n  # `cancel-in-progress: true` a synchronize event would cancel the prior run\n  # mid-flight, leaving a CANCELLED check on the PR rollup even for team-member\n  # PRs that the script would otherwise mark `success`.\n  cancel-in-progress: false\n\njobs:\n  license-agreement:\n    # Skip bot-authored PRs. Org membership is NOT gated here: the event payload's\n    # author_association conceals private org members, so membership is checked\n    # authoritatively in the script using the App token (which can see them).\n    if: |\n      github.actor != 'github-actions[bot]' &&\n      github.event.pull_request.user.type != 'Bot'\n    runs-on: ubuntu-latest\n    # SECURITY: this is a `pull_request_target` job, so it runs in the base repo\n    # context with access to secrets (APP_PRIVATE_KEY). It is safe ONLY because it\n    # checks out the base branch and runs our own trusted script against the PR as\n    # data. NEVER check out the PR head or execute fork-provided code (npm install,\n    # build, PR-supplied actions) in this job, doing so would expose the secret to\n    # untrusted contributors. Run untrusted PR code in a separate `pull_request` job.\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.repository.default_branch }}\n          persist-credentials: false\n\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n\n      # Mint a short-lived installation token. Unlike GITHUB_TOKEN, an App\n      # installation token can write to the base repo on fork PRs, which is the\n      # only kind of PR this workflow ever processes.\n      - uses: actions/create-github-app-token@v2\n        id: app-token\n        with:\n          app-id: ${{ secrets.III_CI_APP_ID }}\n          private-key: ${{ secrets.III_CI_APP_PRIVATE_KEY }}\n\n      - name: Check license agreement\n        env:\n          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}\n        run: node .github/scripts/license-agreement-check.mjs\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b763439271b6b5849a611b713bf4d816b6d0f30ec5e9171c11b1b3eb95c1daee",
+      "score": 100,
+      "content": "# cla-test-iii\n\nTest repository for the iii contributor license agreement workflow.\n\nPR test\ntest 2\n"
+    },
+    {
+      "path": ".github/scripts/license-agreement-check.test.mjs",
+      "sha": null,
+      "content_sha256": "c2f3f4c92fca610786a964092c09d939bd985d5590c19dc1db2616e68985b8ad",
+      "score": 56,
+      "content": "import assert from 'node:assert/strict';\nimport test from 'node:test';\n\nimport {\n  CHECKBOX_TEXT,\n  buildCommitMessage,\n  buildPendingComment,\n  buildSatisfiedComment,\n  evaluateAgreement,\n  findStickyComment,\n  hasCheckedCheckbox,\n  isInContributorsFile,\n} from './license-agreement-check.mjs';\n\n// ── hasCheckedCheckbox ────────────────────────────────────────────────────────\n\ntest('detects a checked checkbox in the PR body', () => {\n  assert.equal(hasCheckedCheckbox(`- [x] ${CHECKBOX_TEXT}`), true);\n});\n\ntest('detects a checked checkbox regardless of case', () => {\n  assert.equal(hasCheckedCheckbox(`- [X] ${CHECKBOX_TEXT}`), true);\n});\n\ntest('does not treat an unchecked checkbox as checked', () => {\n  assert.equal(hasCheckedCheckbox(`- [ ] ${CHECKBOX_TEXT}`), false);\n});\n\ntest('returns false when the PR body is empty', () => {\n  assert.equal(hasCheckedCheckbox(''), false);\n});\n\n// ── isInContributorsFile ──────────────────────────────────────────────────────\n\ntest('finds a username that appears as a list entry', () => {\n  const content = '# Contributors\\n\\n- @alice\\n- @bob\\n';\n  assert.equal(isInContributorsFile('alice', content), true);\n  assert.equal(isInContributorsFile('bob', content), true);\n});\n\ntest('does not match a partial username', () => {\n  const content = '# Contributors\\n\\n- @alice-bot\\n';\n  assert.equal(isInContributorsFile('alice', content), false);\n});\n\ntest('returns false when the file is empty', () => {\n  assert.equal(isInContributorsFile('alice', ''), false);\n});\n\ntest('returns false when the username is not present', () => {\n  assert.equal(isInContributorsFile('carol', '# Contributors\\n\\n- @alice\\n'), false);\n});\n\n// ── evaluateAgreement ─────────────────────────────────────────────────────────\n\ntest('passes contributors already in contributors.md', () => {\n  const result = evaluateAgreement({ prBody: '', inContributorsFile: true });\n\n  assert.deepEqual(result, {\n    acknowledged: true,\n    checkboxChecked: false,\n    inContributorsFile: true,\n  });\n});\n\ntest('passes contributors who have checked the checkbox', () => {\n  const result = evaluateAgreement({ prBody: `- [x] ${CHECKBOX_TEXT}`, inContributorsFile: false });\n\n  assert.deepEqual(result, {\n    acknowledged: true,\n    checkboxChecked: true,\n    inContributorsFile: false,\n  });\n});\n\ntest('fails contributors without acknowledgement', () => {\n  const result = evaluateAgreement({ prBody: '', inContributorsFile: false });\n\n  assert.deepEqual(result, {\n    acknowledged: false,\n    checkboxChecked: false,\n    inContributorsFile: false,\n  });\n});\n\n// ── findStickyComment ─────────────────────────────────────────────────────────\n\ntest('finds the pending comment when authored by the workflow bot', () => {\n  const comments = [\n    { body: '## License agreement required', user: { login: 'external-user' } },\n    { body: '## License agreement required', user: { login: 'github-actions[bot]' }, id: 123 },\n  ];\n\n  assert.deepEqual(findStickyComment(comments), comments[1]);\n});\n\ntest('recognizes the sticky comment under a GitHub App bot login', () => {\n  const comments = [\n    { body: '## License agreement required', user: { login: 'iii-cla[bot]' }, id: 789 },\n  ];\n\n  assert.deepEqual(findStickyComment(comments), comments[0]);\n});\n\ntest('finds the satisfied comment when authored by the workflow bot', () => {\n  const comments = [\n    { body: '## License agreement recorded', user: { login: 'github-actions[bot]' }, id: 456 },\n  ];\n\n  assert.deepEqual(findStickyComment(comments), comments[0]);\n});\n\ntest('returns undefined when no bot comment exists', () => {\n  const comments = [\n    { body: '## License agreement required', user: { login: 'external-user' } },\n  ];\n\n  assert.equal(findStickyComment(comments), undefined);\n});\n\n// ── buildCommitMessage ────────────────────────────────────────────────────────\n\ntest('buildCommitMessage includes the username', () => {\n  const msg = buildCommitMessage('alice');\n  assert.ok(msg.includes('@alice'));\n  assert.ok(msg.startsWith('docs:'));\n});\n\n// ── buildPendingComment ───────────────────────────────────────────────────────\n\ntest('buildPendingComment includes the checkbox text as a copyable code sample', () => {\n  const comment = buildPendingComment('alice');\n  assert.ok(comment.includes('@alice'));\n  assert.ok(comment.includes('docs: add @alice to contributors.md'));\n  assert.ok(comment.includes('```markdown'));\n  assert.ok(comment.includes(`- [ ] ${CHECKBOX_TEXT}`));\n});\n\n// ── buildSatisfiedComment ─────────────────────────────────────────────────────\n\ntest('buildSatisfiedComment includes the username and contributors.md reference', () => {\n  const comment = buildSatisfiedComment('alice');\n  assert.ok(comment.includes('@alice'));\n  assert.ok(comment.includes('contributors.md'));\n});\n"
+    }
+  ],
+  "generated_at": "2026-10-08T02:26:00.638058+00:00"
+}
