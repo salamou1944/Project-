@@ -1,0 +1,58 @@
+name: Hyperswitch Router Library Smoke
+
+on:
+  push:
+    paths:
+      - ".github/workflows/hyperswitch-router-smoke.yml"
+      - "COLLECTION/INSTALLED/juspay__hyperswitch/crates/router/**"
+      - "COLLECTION/INSTALLED/juspay__hyperswitch/Cargo.lock"
+  workflow_dispatch:
+
+concurrency:
+  group: hyperswitch-router-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+
+      - name: Cargo metadata
+        working-directory: COLLECTION/INSTALLED/juspay__hyperswitch
+        run: cargo metadata --no-deps --format-version 1
+
+      - name: Router library compile and tests
+        working-directory: COLLECTION/INSTALLED/juspay__hyperswitch
+        run: cargo test -p router --lib
+
+      - name: Record router smoke evidence
+        run: |
+          mkdir -p COLLECTION/VERIFICATION
+          cat > COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json <<'EOF'
+          {
+            "schema_version": "collection-hyperswitch-router-smoke/v1",
+            "repo": "juspay/hyperswitch",
+            "revision": "1d71d94d2e2e1c72f3ede13abebc24132997685f",
+            "installed_path": "COLLECTION/INSTALLED/juspay__hyperswitch",
+            "capability": "router_library_execution",
+            "entrypoint": "cargo test -p router --lib",
+            "external_payment_network": false,
+            "secrets_required": false,
+            "execution_status": "PROVEN_CALLABLE_IF_JOB_SUCCEEDS"
+          }
+          EOF
+
+      - name: Commit evidence
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json
+          git diff --cached --quiet || git commit -m "test(collection): record Hyperswitch router smoke evidence"
+          git push
