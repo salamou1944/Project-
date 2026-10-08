@@ -8,6 +8,7 @@
 - License: Apache-2.0
 - Language: Rust
 - Status: PRESERVED / READY_FOR_DEEP_EXTRACTION
+- Installation trigger probe: 2026-10-08 parser-fix verification
 
 ## What it provides
 
