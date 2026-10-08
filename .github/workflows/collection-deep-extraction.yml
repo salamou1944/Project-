@@ -1,0 +1,34 @@
+name: collection-deep-extraction
+
+on:
+  schedule:
+    - cron: "47 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: collection-deep-extraction
+  cancel-in-progress: true
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deep account-wide extraction
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 -m py_compile COLLECTION/AUTO/deep_extract.py COLLECTION/AUTO/validate_deep_extraction.py
+          python3 COLLECTION/AUTO/deep_extract.py
+          python3 COLLECTION/AUTO/validate_deep_extraction.py
+      - name: Commit extraction packets
+        run: |
+          set -euo pipefail
+          git config user.name "collection-bot"
+          git config user.email "collection-bot@users.noreply.github.com"
+          git add COLLECTION/AUTO/DEEP-EXTRACTED
+          git diff --cached --quiet || git commit -m "chore(collection): refresh deep extraction packets"
+          git push
