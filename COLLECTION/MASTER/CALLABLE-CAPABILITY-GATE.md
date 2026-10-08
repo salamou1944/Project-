@@ -30,7 +30,7 @@ Each entry in `COLLECTION/MASTER/CALLABLE-REGISTRY.json` must contain:
 - `source` (repository, revision, license)
 - `our_location` (repository and path)
 - `entrypoint`
-- `invocation`
+- `invocation.argv` and optional `invocation.cwd`
 - `dependencies`
 - `secret_refs` (names only)
 - `status`
@@ -49,3 +49,9 @@ Missing repository/path, entrypoint, invocation, or execution evidence prevents 
 `CALLABLE_ON_DEMAND` / `PROVEN_CALLABLE`.
 
 The registry is an index and contract boundary; it does not replace the actual implementation.
+
+## Runtime boundary
+
+`COLLECTION/AUTO/invoke_capability.py` is the only Collection-level dispatcher.
+It executes registered local commands without a shell, constrains paths to the checked-out repository,
+and refuses entries that are not explicitly promoted to a callable state.
