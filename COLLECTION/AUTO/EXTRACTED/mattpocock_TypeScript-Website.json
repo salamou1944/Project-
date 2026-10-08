@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:mattpocock/TypeScript-Website",
+  "repo": "mattpocock/TypeScript-Website",
+  "revision_sha": "e49d03854f77ce762ee88c08a3a71fc5214012d9",
+  "default_branch": "v2",
+  "pushed_at": "2023-09-18T10:26:56Z",
+  "repo_updated_at": "2026-04-30T22:05:35Z",
+  "license": "CC-BY-4.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/deploy-prod-static.yml",
+      "sha": null,
+      "content_sha256": "c33d870793f8b76f49493ecd290bc2d93a8fa680c8e8161ce00588eba1e74b32",
+      "score": 198,
+      "content": "name: Deploy to Azure Static Web Apps on push\n\non:\n  push:\n    branches:\n      - v2\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v2\n        with:\n          # Fetch the full history, to build attribution.json\n          fetch-depth: 0\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"14.x\"\n          cache: yarn\n\n      # Builds the modules, and boostraps the other modules\n      - name: Build website\n        run: |\n          yarn install\n          yarn docs-sync pull microsoft/TypeScript-Website-localizations#main 1\n          yarn bootstrap\n          yarn workspace typescriptlang-org setup-playground-cache-bust\n          yarn build\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      - name: Makes the site\n        run: |\n          yarn build-site\n          cp -r packages/typescriptlang-org/public site\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      - name: Deploy\n        id: builddeploy\n        uses: Azure/static-web-apps-deploy@v1\n        with:\n          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROD }}\n          repo_token: ${{ secrets.GITHUB_TOKEN }}\n          action: \"upload\"\n          app_location: \"site\"\n          skip_app_build: true\n\n      # Update the site stats\n      - run: node packages/typescriptlang-org/scripts/updateAppInsightsGitHubIssue.js\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_BOT_TOKEN }}\n          APP_INSIGHTS_API_KEY: ${{ secrets.APP_INSIGHTS_API_KEY }}\n          APP_INSIGHTS_ID: ${{ secrets.APP_INSIGHTS_ID }}\n"
+    },
+    {
+      "path": ".github/workflows/deploy-prod.yml",
+      "sha": null,
+      "content_sha256": "9e39891bb03c99cbbbd9f8d7c7668891a1b0f626966a90a6c227c6e0b29699f6",
+      "score": 198,
+      "content": "name: Monday Website Push To Production\n\non:\n  schedule:\n    # https://crontab.guru/#0_12_*_*_1\n    - cron: \"0 12 * * 1\"\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v2\n        with:\n          # Fetch the full history, to build attribution.json\n          fetch-depth: 0\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n          cache: yarn\n\n      - uses: microsoft/playwright-github-action@v1\n\n      # Builds the modules, and boostraps the other modules\n      - name: Build website\n        run: |\n          yarn install\n          yarn docs-sync pull microsoft/TypeScript-Website-localizations#main 1\n          yarn bootstrap\n          yarn workspace typescriptlang-org setup-playground-cache-bust\n          yarn build\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      # Builds the site\n      - name: Makes the site\n        run: |\n          yarn build-site\n          cp -r packages/typescriptlang-org/public site\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      # Deploy to the prod appservice\n      - name: Commit built site to SITE-PRODUCTION branch\n        uses: peaceiris/actions-gh-pages@v1.1.0\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          PUBLISH_BRANCH: \"SITE-PRODUCTION\"\n          PUBLISH_DIR: ./site\n\n      # Update the site stats\n      - run: node packages/typescriptlang-org/scripts/updateAppInsightsGitHubIssue.js\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_BOT_TOKEN }}\n          APP_INSIGHTS_API_KEY: ${{ secrets.APP_INSIGHTS_API_KEY }}\n          APP_INSIGHTS_ID: ${{ secrets.APP_INSIGHTS_ID }}\n\n      - name: Send a message to Microsoft Teams\n        if: ${{ failure() }}\n        uses: aliencube/microsoft-teams-actions@v0.8.0\n        with:\n          webhook_uri: ${{ secrets.TEAMS_WEB_BOT_INCOMING_URL }}\n          title: Prod deploy failed\n          summary: Could not build the site for production\n          actions: '[{ \"@type\": \"OpenUri\", \"name\": \"View Logs\", \"targets\": [{ \"os\": \"default\", \"uri\": \"https://github.com/microsoft/TypeScript-Website/actions/runs/${{ github.run_id }}?check_suite_focus=true\" }] }]'\n"
+    },
+    {
+      "path": ".github/workflows/deploy-preview.yml",
+      "sha": null,
+      "content_sha256": "eb685564d0ca9ddf852d9e56091c22b1cc42813253795465b664abf5b566eea3",
+      "score": 198,
+      "content": "name: Deploy preview environment\non:\n  workflow_run:\n    workflows: [CI]\n    types: [completed]\n  workflow_dispatch:\n    inputs:\n      pr:\n        required: true\n        type: string\n        description: PR number\n  pull_request_target:\n    types: [labeled]\n\njobs:\n  deploy:\n    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'\n    runs-on: ubuntu-latest\n    steps:\n      - name: Download site build\n        if: github.event_name == 'workflow_run'\n        uses: actions/github-script@v6\n        id: download-from-workflow-run\n        with:\n          result-encoding: string\n          script: |\n            const allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({\n               owner: context.repo.owner,\n               repo: context.repo.repo,\n               run_id: context.payload.workflow_run.id,\n            });\n            const artifact = allArtifacts.data.artifacts.find(artifact => {\n              return artifact.name.startsWith('site-');\n            });\n            if (!artifact) {\n              console.log('No site artifact found');\n              return;\n            }\n\n            const prNumber = artifact.name.split('-')[1];\n            console.log('Detected PR number from artifact: ', prNumber);\n\n            // Check if the PR has the \"deploy-preview\" label\n            const pr = (await github.rest.pulls.get({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              pull_number: prNumber,\n            })).data;\n            if (!pr.labels.some(label => label.name === 'deploy-preview')) {\n              console.log('PR does not have the \"deploy-preview\" label');\n              return;\n            }\n\n            const download = await github.rest.actions.downloadArtifact({\n               owner: context.repo.owner,\n               repo: context.repo.repo,\n               artifact_id: artifact.id,\n               archive_format: 'zip',\n            });\n\n            const fs = require('fs');\n            fs.writeFileSync('site.zip', Buffer.from(download.data));\n            return prNumber;\n\n      - name: Download site build\n        if: github.event_name == 'pull_request_target' || github.event_name == 'workflow_dispatch'\n        uses: actions/github-script@v6\n        id: download-from-pr\n        with:\n          result-encoding: string\n          script: |\n            const prNumber = context.eventName === 'pull_request_target'\n              ? context.payload.pull_request.number\n              : context.payload.inputs.pr;\n\n            if (context.eventName === 'pull_request_target' && context.payload.label.name !== 'deploy-preview') {\n              console.log('Label is not \"deploy-preview\"');\n              return;\n            }\n\n            let pr;\n            if (context.eventName === 'workflow_dispatch') {\n              pr = (await github.rest.pulls.get({\n                owner: context.repo.owner,\n                repo: context.repo.repo,\n                pull_number: prNumber,\n              })).data;\n            } else {\n              pr = context.payload.pull_request;\n            }\n\n            // https://github.com/orgs/community/discussions/24709\n            const workflowRun = (await github.rest.actions.listWorkflowRuns({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              workflow_id: 'CI.yml',\n              branch: pr.head.ref,\n              event: 'pull_request',\n              status: 'success',\n              per_page: 1,\n            })).data.workflow_runs[0];\n\n            if (!workflowRun) {\n              console.log('No matching workflow run found from branch ', pr.head.ref);\n              return;\n            }\n\n            const allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({\n               owner: context.repo.owner,\n               repo: context.repo.repo,\n               run_id: workflowRun.id,\n            });\n            const artifact = allArtifacts.data.artifacts.find(artifact => {\n              return artifact.name.startsWith('site-');\n            });\n            if (!artifact) {\n              console.log('No site artifact found');\n              return;\n            }\n\n            const download = await github.rest.actions.downloadArtifact({\n               owner: context.repo.owner,\n               repo: context.repo.repo,\n               artifact_id: artifact.id,\n               archive_format: 'zip',\n            });\n\n            const fs = require('fs');\n            fs.writeFileSync('site.zip', Buffer.from(download.data));\n            return prNumber;\n\n      - name: Unzip site build\n        if: steps.download-from-workflow-run.outputs.result || steps.download-from-pr.outputs.result\n        run: unzip site.zip -d site\n\n      - run: ls -R\n        if: steps.download-from-workflow-run.outputs.result || steps.download-from-pr.outputs.result\n        working-directory: site\n\n      - name: Deploy\n        id: deploy\n        if: steps.download-from-workflow-run.outputs.result || steps.download-from-pr.outputs.result\n        uses: Azure/static-web-apps-deploy@v1\n        with:\n          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROD }}\n          repo_token: ${{ secrets.GITHUB_TOKEN }}\n          action: \"upload\"\n          app_location: \"site\"\n          skip_app_build: true\n          production_branch: v2\n          deployment_environment: ${{ steps.download-from-workflow-run.outputs.result || steps.download-from-pr.outputs.result }}\n\n      - name: Comment on PR\n        # azure/static-web-apps-deploy seems to comment itself when the event is pull_request_target\n        if: github.event_name != 'pull_request_target' && (steps.download-from-workflow-run.outputs.result || steps.download-from-pr.outputs.result)\n        uses: actions/github-script@v6\n        env:\n          PR_NUMBER: ${{ steps.download-from-workflow-run.outputs.result || steps.download-from-pr.outputs.result }}\n          SITE_URL: ${{ steps.deploy.outputs.static_web_app_url }}\n        with:\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n          script: |\n            await github.rest.issues.createComment({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              issue_number: process.env.PR_NUMBER,\n              body: `Azure Static Web Apps: Your stage site is ready! Visit it here: ${process.env.SITE_URL}`\n            });\n"
+    },
+    {
+      "path": ".github/workflows/CI.yml",
+      "sha": null,
+      "content_sha256": "14390965cd26bb90205759187dc273f08d20d825fa62fbd63dad096e87828b72",
+      "score": 198,
+      "content": "name: CI\non:\n  pull_request:\n    types: [opened, synchronize, reopened, closed]\n    branches:\n      - v2\n\njobs:\n  tests:\n    runs-on: ubuntu-latest\n    if: github.event.action != 'closed'\n    steps:\n      # Check out, and set up the node/ruby infra\n      - uses: actions/checkout@v2\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n\n      # Install, should be basically instant if cached\n      - run: yarn install\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      # Verify dependencies are hooked up right\n      - run: node test/verifyPackageVersions.js\n\n      # Grab localizations\n      - run: yarn docs-sync pull microsoft/TypeScript-Website-localizations#main 1\n\n      # Build the packages\n      - run: yarn bootstrap\n      - run: yarn build\n\n      # Verify it compiles\n      - run: yarn build-site\n      - run: cp -r packages/typescriptlang-org/public site\n\n      # Run all the package's tests\n      - run: yarn test\n        env:\n          CI: true\n\n      # Deploy preview environment for non-forks\n      - uses: Azure/static-web-apps-deploy@v1\n        if: github.event.pull_request.base.repo.id == github.event.pull_request.head.repo.id\n        with:\n          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROD }}\n          repo_token: ${{ secrets.GITHUB_TOKEN }}\n          action: upload\n          app_location: site\n          skip_app_build: true\n\n      # Upload site artifact for forks so it can be deployed by a maintainer on-demand\n      - uses: actions/upload-artifact@v3\n        if: github.event.pull_request.base.repo.id != github.event.pull_request.head.repo.id\n        with:\n          name: site-${{ github.event.number }}\n          path: site/\n\n      # danger for PR builds\n      - if: github.event_name == 'pull_request' && github.event.pull_request.base.repo.id == github.event.pull_request.head.repo.id\n        run: \"yarn danger ci\"\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          PR_DEPLOY_URL_ROOT: ${{ steps.deploy.outputs.static_web_app_url }}\n\n  windows:\n    if: github.event.action != 'closed'\n    runs-on: windows-latest\n\n    steps:\n      # Check out, and set up the node infra\n      - uses: actions/checkout@v2\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n\n      # Get local dependencies\n      - run: yarn install\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      - run: yarn bootstrap\n      - run: yarn build\n"
+    },
+    {
+      "path": "docs/README.md",
+      "sha": null,
+      "content_sha256": "68d2f64e4d68a5adb32ef5382083fff1b11dd164bada40286ee37ca0b06eef52",
+      "score": 168,
+      "content": "## Website Docs\n\nThis is for documentation on how the Website works, not documentation for end-users of the TypeScript Website. You can find those back in the [packages folder](../packages)\n"
+    },
+    {
+      "path": "packages/ts-twoslasher/test/README.md",
+      "sha": null,
+      "content_sha256": "1884d36335a21a01bf268537276421762012e510b3335ec65df50ff35452ef16",
+      "score": 154,
+      "content": "### Testing\n\nThere are two types of tests:\n\n- Units which are Jest tests, and not unique to this project\n\n- Integration tests where you place a fixture code sample in the right folder and get a response JSON result. There are three folders for tests:\n  - `test/fixtures` - Any test in this file is shown in the README, so they should showcase features - not bugs\n  - `tests/fixtures/throws` - A test which should correctly raise\n  - `tests/fixtures/tests` - All other tests, repros etc\n"
+    },
+    {
+      "path": "docs/Setup Troubleshooting.md",
+      "sha": null,
+      "content_sha256": "f36972126a70b58921f20494602ddda8b44a28ccc9afb9bddde76286ef7d5e7d",
+      "score": 150,
+      "content": "## Getting this Repo Set Up Troubleshooting\n\n#### Module `x` is not built\n\nSometimes, and it's not been tracked down exactly, some dependencies of the site aren't built even though it says they are. In those cases, re-run `yarn bootstrap` and `yarn build` to re-build all the internal site deps.\n\n#### Windows + Watchman\n\nThe Windows support for watchman is a bit meh. It's not likely to get better, given how well WSL works now. So, you _could_ use WSL to work around that.\n\nThough, for _a lot_ of changes to the site: Watchman is optional. All the watchman script does is run `yarn workspace [xxyy] build` when you save in a package which is not `typescriptlang-org` (the gatsby website).\n\nTo run the site without watchman, use `yarn workspace typescriptlang-org start`.\n"
+    },
+    {
+      "path": "packages/sandbox/test/twoslashSupport.test.ts",
+      "sha": null,
+      "content_sha256": "43924b0cdb2e4ec4588435ac227c73b43d455fd2363699497317e6b5db211e37",
+      "score": 149,
+      "content": "import { extractTwoSlashCompilerOptions } from \"../src/twoslashSupport\"\nimport typescript from \"typescript\"\n\nconst sandboxMock: any = (code: string) => ({\n  getText: () => code,\n  ts: typescript,\n})\n\ndescribe(\"gets twoslash compiler error messages\", () => {\n  it(\"gets the right vars\", () => {\n    const sandbox = sandboxMock(`\n// @noImplicitAny: false\n// @target: ES2015\n\n// This will not throw because of the noImplicitAny\nfunction fn(s) {\n  console.log(s.subtr(3))\n}\n\nfn(42)\n`)\n    const compilerOptions = extractTwoSlashCompilerOptions(sandbox.ts)(sandbox.getText())\n    expect(compilerOptions).toMatchInlineSnapshot(`\n      {\n        \"noImplicitAny\": false,\n        \"target\": 2,\n      }\n    `)\n  })\n\n  it(\"ignores unknown vars\", () => {\n    const sandbox = sandboxMock(`\n// @noImplicny: false\n// @target: ES2015\n\n// This will not throw because of the noImplicitAny\nfunction fn(s) {\n  console.log(s.subtr(3))\n}\n\nfn(42)\n`)\n    const compilerOptions = extractTwoSlashCompilerOptions(sandbox.ts)(sandbox.getText())\n    expect(compilerOptions).toMatchInlineSnapshot(`\n      {\n        \"target\": 2,\n      }\n    `)\n  })\n})\n"
+    },
+    {
+      "path": ".github/workflows/codeql.yml",
+      "sha": null,
+      "content_sha256": "8d5f842ec49cbf85f1ac06d168ad4c7f755aea613412dd1347e178cd68c1019c",
+      "score": 126,
+      "content": "# copied from microsoft/TypeScript and simplified slightly; see that file for boilerplate commentary\n# (which was likely copied from github/codeql-action)\nname: \"Code scanning - action\"\n\non:\n  push:\n  pull_request:\n  schedule:\n    - cron: '0 19 * * 0'\n\njobs:\n  CodeQL-Build:\n\n    runs-on: ubuntu-latest\n\n    steps:\n    - name: Checkout repository\n      uses: actions/checkout@v3\n      with:\n        # We must fetch at least the immediate parents so that if this is\n        # a pull request then we can checkout the head.\n        fetch-depth: 2\n\n    - name: Initialize CodeQL\n      uses: github/codeql-action/init@v2\n      with:\n        config-file: ./.github/codeql/codeql-configuration.yml\n\n    - name: Autobuild\n      uses: github/codeql-action/autobuild@v2\n\n    - name: Perform CodeQL Analysis\n      uses: github/codeql-action/analyze@v2\n"
+    },
+    {
+      "path": ".github/workflows/v2-merged-staging.yml",
+      "sha": null,
+      "content_sha256": "3a991ab03a1648911db5241114d7d52831a7f0a2a195933fd89cb37fd5e941a8",
+      "score": 126,
+      "content": "name: Build Website To Staging\n\non:\n  push:\n    branches: [v2]\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      # Check out, and set up the node/ruby infra\n      - uses: actions/checkout@v2\n        with:\n          # Fetch the full history, to build attribution.json\n          fetch-depth: 0\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n          registry-url: \"https://registry.npmjs.org/\"\n          cache: yarn\n\n      # For Azure uploads\n      - run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\n\n      - name: Prepare website v2\n        run: |\n          yarn install\n          yarn docs-sync pull microsoft/TypeScript-Website-localizations#main 1\n          yarn bootstrap\n          yarn workspace typescriptlang-org setup-playground-cache-bust\n          yarn workspace typescriptlang-org setup-staging\n          yarn build\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      - name: Build website v2\n        run: |\n          yarn build-site\n          cp -r packages/typescriptlang-org/public site\n\n      - name: Deploy + Publish to CDN\n        # You can find these keys here:\n        # https://ms.portal.azure.com/#@microsoft.onmicrosoft.com/resource/subscriptions/57bfeeed-c34a-4ffd-a06b-ccff27ac91b8/resourcegroups/typescriptlang-org/providers/Microsoft.Storage/storageAccounts/typescriptorgstaging/keys\n        env:\n          AZURE_STORAGE_ACCOUNT: \"typescriptorgstaging\"\n          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_CDN_STAGING_CONNECTION_STRING }}\n        run: az storage blob upload-batch --overwrite -s ./site -d \\$web\n\n      - name: Build And Deploy\n        id: builddeploy\n        uses: Azure/static-web-apps-deploy@v1\n        with:\n          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_NICE_MEADOW_0C9756810 }}\n          repo_token: ${{ secrets.GITHUB_TOKEN }}\n          action: \"upload\"\n          app_location: \"site\"\n          skip_app_build: true\n\n      # Deploy\n      - name: Deploy npm Packages\n        run: |\n          yarn pleb publish\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}\n\n      - name: Send a message to Microsoft Teams\n        if: ${{ failure() }}\n        uses: aliencube/microsoft-teams-actions@v0.8.0\n        with:\n          webhook_uri: ${{ secrets.TEAMS_WEB_BOT_INCOMING_URL }}\n          title: Staging deploy failed\n          summary: Could not build the site for staging\n          actions: '[{ \"@type\": \"OpenUri\", \"name\": \"View Logs\", \"targets\": [{ \"os\": \"default\", \"uri\": \"https://github.com/microsoft/TypeScript-Website/actions/runs/${{ github.run_id }}?check_suite_focus=true\" }] }]'\n"
+    },
+    {
+      "path": ".github/workflows/weekly-stats.yml",
+      "sha": null,
+      "content_sha256": "aa47e0bb8e78e5fb3b41d87b1c16716798c7701e48925b0d2f3523deca6fe734",
+      "score": 126,
+      "content": "name: Push AI stats to Teams\n\non:\n  schedule:\n    # https://crontab.guru/#0_12_*_*_1\n    - cron: \"0 12 * * 1\"\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v2\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n          cache: yarn\n\n      # Build v2\n      - name: Deps\n        run: |\n          yarn install\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      # Update the site stats\n      - run: node packages/typescriptlang-org/scripts/pingTeamsWithAppInsightData.js\n        env:\n          APP_INSIGHTS_API_KEY: ${{ secrets.APP_INSIGHTS_API_KEY }}\n          APP_INSIGHTS_ID: ${{ secrets.APP_INSIGHTS_ID }}\n          STATS_WEBHOOK_INCOMING_URL: ${{ secrets.STATS_WEBHOOK_INCOMING_URL }}\n\n      - name: Send a message to Microsoft Teams\n        if: ${{ failure() }}\n        uses: aliencube/microsoft-teams-actions@v0.8.0\n        with:\n          webhook_uri: ${{ secrets.TEAMS_WEB_BOT_INCOMING_URL }}\n          title: Updating site stats failed\n          summary: Something failed in the GitHub Action workflow\n          actions: '[{ \"@type\": \"OpenUri\", \"name\": \"View Logs\", \"targets\": [{ \"os\": \"default\", \"uri\": \"https://github.com/microsoft/TypeScript-Website/actions/runs/${{ github.run_id }}?check_suite_focus=true\" }] }]'\n"
+    },
+    {
+      "path": ".github/workflows/update_teams.yml",
+      "sha": null,
+      "content_sha256": "3d92b6ed73f2bf829fe370248b1b9355427037abf0695f9fdb6b0945cefd1856",
+      "score": 126,
+      "content": "name: Send comments from updates\non:\n  issue_comment: { types: created }\n\njobs:\n  apply-label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/github-script@0.3.0\n        env:\n          TEAMS_INCOMING_WEBHOOK_URL: ${{secrets.TEAMS_INCOMING_WEBHOOK_URL}}\n        with:\n          github-token: ${{github.token}}\n\n          script: |\n            const fetch = require(\"node-fetch\")\n\n            const teamsURL = process.env.TEAMS_INCOMING_WEBHOOK_URL\n            if (!teamsURL) return console.log(\"Skipping sending the message because it's not the update repo\")\n\n            // console.log(context.payload)\n\n            const issue = context.payload.issue\n            const issue_comment = context.payload.comment\n\n            if (issue_comment.user.login !== \"orta\") return console.log(`Skipping because not orta`)\n\n            if (issue.id !== 524510895) return console.log(`Skipping sending the message because ${issue.id} is not the update post`)\n\n            const message = {\n              \"@type\": \"MessageCard\",\n              \"@context\": \"https://schema.org/extensions\",\n              summary: \"Website update\",\n              themeColor: \"0078D7\",\n              title: 'Website update',\n              sections: [\n                {\n                  activityTitle: \"Comment\",\n                  activitySubtitle: issue_comment.created_at,\n                  activityImage: issue_comment.user.avatar_url,\n                  \"text\": issue_comment.body\n                }\n              ],\n              potentialAction: [\n                {\n                  \"@type\": \"OpenUri\",\n                  name: \"View in GitHub\",\n                  targets: [\n                    {\n                      os: \"default\",\n                      uri: issue_comment.html_url\n                    }\n                  ]\n                }\n              ]\n            };\n\n            fetch(teamsURL, {\n              method: \"post\",\n              body: JSON.stringify(message),\n              headers: { \"Content-Type\": \"application/json\" }\n            });\n"
+    },
+    {
+      "path": ".github/workflows/close-preview.yml",
+      "sha": null,
+      "content_sha256": "f22d0a013470793cd9f1874d3c63ba0e094fb7e5a0e9914d1ca29f3576715d29",
+      "score": 126,
+      "content": "name: Close preview environment\non:\n  pull_request_target:\n    types: [closed]\n\njobs:\n  close:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: Azure/static-web-apps-deploy@v1\n        with:\n          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_PROD }}\n          action: close\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "05d466f62a177278e30ead80e88c653301590d852a636ac8e8b4f44eb9210b69",
+      "score": 120,
+      "content": "{\n  \"private\": true,\n  \"name\": \"root\",\n  \"workspaces\": [\n    \"packages/*\"\n  ],\n  \"engines\": {\n    \"node\": \">=13, <= 16\"\n  },\n  \"devDependencies\": {\n    \"concurrently\": \"^5.1.0\",\n    \"cross-env\": \"^7.0.2\",\n    \"danger\": \"^9.2.10\",\n    \"danger-plugin-lighthouse\": \"^0.5.2\",\n    \"danger-plugin-spellcheck\": \"^1.5.0\",\n    \"fb-watchman\": \"^2.0.1\",\n    \"git-branch-is\": \"^3.1.0\",\n    \"husky\": \"^4.2.3\",\n    \"pleb\": \"^2.6.1\",\n    \"reflect-metadata\": \"^0.1.13\"\n  },\n  \"resolutions\": {\n    \"@types/react\": \"16.9.17\",\n    \"@types/estree\": \"0.0.46\",\n    \"node-gyp\": \"5.1.0\",\n    \"typescript\": \"5.0.2\",\n    \"tslib\": \"2.6.0\",\n    \"prettier\": \"^2.0.2\",\n    \"shelljs\": \"0.8.4\",\n    \"sharp\": \"0.28.1\"\n  },\n  \"jest\": {\n    \"transformIgnorePatterns\": [\n      \"/node_modules/(?!intl-messageformat|intl-messageformat-parser).+\\\\.js$\"\n    ]\n  },\n  \"scripts\": {\n    \"bootstrap\": \"yarn workspaces foreach -v -t --exclude root run bootstrap && BOOTSTRAPPING=true yarn workspaces foreach -v -t --exclude root run build\",\n    \"start\": \"concurrently -p \\\"[{name}]\\\" -n \\\"BUILD,SITE\\\" -c \\\"bgBlue.bold,bgMagenta.bold\\\" \\\"node watcher.js\\\" \\\"yarn workspace typescriptlang-org start\\\"\",\n    \"build\": \"yarn workspaces foreach -v -t --exclude root --exclude typescriptlang-org run build\",\n    \"build-site\": \"yarn workspace typescriptlang-org build\",\n    \"compile\": \"yarn workspace typescriptlang-org tsc\",\n    \"update-snapshots\": \"yarn workspace typescriptlang-org update-snapshots\",\n    \"clean\": \"yarn workspace typescriptlang-org gatsby clean\",\n    \"clean-twoslash\": \"rm -rf packages/.cache/twoslash\",\n    \"test\": \"CI=true yarn workspaces foreach -v -t --exclude root run test\",\n    \"update-test-snapshots\": \"CI=true yarn workspaces foreach --include gatsby-remark-shiki-twoslash  --include @typescript/twoslash --include shiki-twoslash --include @typescript/vfs run test -u\"\n  },\n  \"dependencies\": {\n    \"@oss-docs/sync\": \"^1.1.4\",\n    \"@types/express\": \"^4.17.6\",\n    \"gray-matter\": \"4.0.2\",\n    \"node-polyfill-webpack-plugin\": \"^1.1.0\",\n    \"serve-handler\": \"^6.1.2\",\n    \"xmldom\": \"^0.5.0\"\n  },\n  \"repository\": \"microsoft/TypeScript-Website\",\n  \"author\": \"Deploy Bot <ortam@microsoft.com>\",\n  \"auto\": {\n    \"plugins\": [\n      \"npm\"\n    ],\n    \"onlyPublishWithReleaseLabel\": true\n  },\n  \"packageManager\": \"yarn@3.2.3\",\n  \"volta\": {\n    \"node\": \"14.21.1\"\n  }\n}\n"
+    },
+    {
+      "path": "serve/package.json",
+      "sha": null,
+      "content_sha256": "1273e912976ae144f07a850a1d5079a80de5eaf7d7f4b793660f518ec9fb7a89",
+      "score": 118,
+      "content": "{\n  \"scripts\": {\n    \"start\": \"node index.js\"\n  },\n  \"dependencies\": {\n    \"serve-handler\": \"^6.1.2\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/glossary/package.json",
+      "sha": null,
+      "content_sha256": "294f004b973a5ff1158778c6643bfbd18dd49f68372499b49029782dc3107cf4",
+      "score": 116,
+      "content": "{\n  \"name\": \"glossary\",\n  \"version\": \"0.0.1\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"generate-markdown\": \"yarn ts-node --project tsconfig.json scripts/generateMarkdown.ts \",\n    \"build\": \"yarn generate-markdown\",\n    \"test\": \"yarn build && yarn lint\",\n    \"lint\": \"node scripts/lint.js\"\n  },\n  \"prettier\": {\n    \"printWidth\": 100,\n    \"semi\": true\n  },\n  \"devDependencies\": {\n    \"remark\": \"^11.0.2\",\n    \"remark-html\": \"^10.0.0\",\n    \"ts-node\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground-worker/package.json",
+      "sha": null,
+      "content_sha256": "9b8ff0f3a49330ee19693402b5cc5d37ab92e709424a9b2c61efd9e71868ebac",
+      "score": 116,
+      "content": "{\n  \"name\": \"@typescript/playground-worker\",\n  \"version\": \"0.1.0\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"bootstrap\": \"echo 'NOOP'\",\n    \"build\": \"esbuild index.ts --outdir=../typescriptlang-org/static/js/playground-worker  --format=esm --target=es2020 --bundle\"\n  },\n  \"dependencies\": {\n    \"esbuild\": \"^0.13.4\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/ata/package.json",
+      "sha": null,
+      "content_sha256": "c43eb5792def12aa42070653d048d3c3268683eab4a1fc9408e8b982bdf3eb91",
+      "score": 116,
+      "content": "{\n  \"name\": \"@typescript/ata\",\n  \"version\": \"0.9.4\",\n  \"license\": \"MIT\",\n  \"homepage\": \"https://github.com/microsoft/TypeScript-Website\",\n  \"repository\": {\n    \"url\": \"https://github.com/microsoft/TypeScript-Website.git\",\n    \"directory\": \"packages/ata\",\n    \"type\": \"git\"\n  },\n  \"main\": \"dist/index.js\",\n  \"type\": \"module\",\n  \"types\": \"src/userFacingTypes.d.ts\",\n  \"scripts\": {\n    \"build\": \"esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --platform=node && cpy src/userFacingTypes.d.ts dist/ --rename=index.d.ts && cpy src/ ../sandbox/src/vendor/ata\",\n    \"test\": \"jest\",\n    \"bootstrap\": \"yarn build\"\n  },\n  \"publishConfig\": {\n    \"access\": \"public\"\n  },\n  \"devDependencies\": {\n    \"cpy-cli\": \"^3.1.1\",\n    \"esbuild\": \"^0.12.9\",\n    \"esbuild-jest\": \"^0.5.0\",\n    \"jest\": \"^29.5.0\"\n  },\n  \"peerDependencies\": {\n    \"typescript\": \"^4.4.4\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground-handbook/package.json",
+      "sha": null,
+      "content_sha256": "db40cb38956e594d3b714e59e3a5f27caf209862e4e0970363227fbc3d0c3529",
+      "score": 116,
+      "content": "{\n  \"name\": \"@typescript/playground-handbook\",\n  \"version\": \"0.0.1\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"bootstrap\": \"echo 'NOOP'\",\n    \"build\": \"node scripts/generateJSON.mjs\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground-examples/package.json",
+      "sha": null,
+      "content_sha256": "3ec213767e4a5c86d46588c26dea66a1b945a96ec3d7c8c6969760f0763f20f4",
+      "score": 116,
+      "content": "{\n  \"name\": \"playground-examples\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"bootstrap\": \"yarn build\",\n    \"build\": \"node scripts/generateTOC.js && node scripts/copyFiles.js\",\n    \"test\": \"echo 'NOOP'\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/documentation/package.json",
+      "sha": null,
+      "content_sha256": "37485900af12cfe71be1e9bf11ccf2c41264bc175ff7079ef98b2740fdf57572",
+      "score": 116,
+      "content": "{\n  \"name\": \"documentation\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"build\": \"echo 'NOOP'\",\n    \"test\": \"echo 'NOOP'\",\n    \"lint\": \"node scripts/lintTwoslashErrors.js\",\n    \"create-handbook-nav\": \"node ./scripts/generateTypesForFilesInDocs && node ./scripts/generateDocsNavigationPerLanguage.js\",\n    \"bootstrap\": \"yarn create-handbook-nav && node ./scripts/generateAttribution.js\"\n  },\n  \"prettier\": {\n    \"semi\": true\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground/package.json",
+      "sha": null,
+      "content_sha256": "01089cb4c78aa055cfa07292001ca86d876a78ba1f2b6dbb4121cd856c3ad782",
+      "score": 116,
+      "content": "{\n  \"name\": \"@typescript/playground\",\n  \"version\": \"0.1.1\",\n  \"main\": \"dist/index.js\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"types\": \"../../typescriptlang-org/static/js/playground/index.d.ts\",\n  \"files\": [\n    \"dist\"\n  ],\n  \"scripts\": {\n    \"bootstrap\": \"node scripts/getListOfPluginsFromNPM.js\",\n    \"build-fast-test\": \"esbuild src/index.ts --outdir=../typescriptlang-org/static/js/playground/2  --format=esm --target=es2020 --bundle\",\n    \"build\": \"tsc\",\n    \"test\": \"jest\"\n  },\n  \"dependencies\": {\n    \"@typescript/playground-worker\": \"0.1.0\",\n    \"@typescript/sandbox\": \"0.1.1\",\n    \"esbuild\": \"^0.13.4\"\n  },\n  \"devDependencies\": {\n    \"@types/jest\": \"^25.1.3\",\n    \"jest\": \"^29.5.0\",\n    \"monaco-editor\": \"^0.32.1\",\n    \"monaco-typescript\": \"^3.7.0\",\n    \"typescript\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/create-typescript-playground-plugin/package.json",
+      "sha": null,
+      "content_sha256": "c7818eeb877f903e05ef47b3602b5c8da4445c344761189f934fc3e5f7f0cd52",
+      "score": 116,
+      "content": "{\n  \"name\": \"create-typescript-playground-plugin\",\n  \"version\": \"1.3.0\",\n  \"bin\": \"index.js\",\n  \"author\": \"TypeScript team\",\n  \"license\": \"MIT\",\n  \"homepage\": \"https://github.com/microsoft/TypeScript-Website\",\n  \"repository\": {\n    \"url\": \"https://github.com/microsoft/TypeScript-Website.git\",\n    \"directory\": \"packages/create-typescript-playground-plugin\",\n    \"type\": \"git\"\n  },\n  \"bugs\": {\n    \"url\": \"https://github.com/microsoft/TypeScript-Website/issues\"\n  },\n  \"scripts\": {\n    \"build\": \"echo NOOP\",\n    \"test\": \"echo NOOP\"\n  },\n  \"dependencies\": {\n    \"cross-spawn\": \"^7.0.1\",\n    \"gunzip-maybe\": \"^1.4.1\",\n    \"tar-fs\": \"^2.1.0\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/community-meta/package.json",
+      "sha": null,
+      "content_sha256": "ab40cfeb83995ee30711b30622f8be27b74fed27d002aee2c10b10bcbdff9660",
+      "score": 116,
+      "content": "{\n  \"name\": \"community-meta\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"moment\": \"2.24.0\",\n    \"moment-timezone\": \"0.5.28\"\n  },\n  \"scripts\": {\n    \"build\": \"node scripts/generateRichMeetupData.js\",\n    \"test\": \"echo 'NOOP'\"\n  }\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T15:25:29.522612+00:00"
+}

@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:mattpocock/offline-plugin",
+  "repo": "mattpocock/offline-plugin",
+  "revision_sha": "43959b5491249c48fa5c2dc4f762c6f80592b0cf",
+  "default_branch": "master",
+  "pushed_at": "2018-10-22T06:17:41Z",
+  "repo_updated_at": "2026-04-30T22:06:44Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "tests/browser/install-error-pass-none/test.js",
+      "sha": null,
+      "content_sha256": "1706d0f5cda5b9b3fddd25c628c0904dc8fad417b7bb5c00eedd049aa0c6bdf6",
+      "score": 246,
+      "content": "const puppeteer = require('puppeteer');\n\nconst server = require('./server');\nconst webpack = __buildWebpack('webpack.config.js');\n\n\n\nmodule.exports = new Promise((resolve) => {\n  after(async () => {\n    (await server).close();\n    resolve();\n  });\n});\n\ndescribe('testing failed assets on `install` event', async () => {\n  let browser;\n  let page;\n\n  before(async () => {\n    await server;\n    await webpack;\n\n    browser = await puppeteer.launch({\n      headless: true,\n      args: ['--no-sandbox', '--disable-setuid-sandbox']\n    });\n    page = await browser.newPage();\n  });\n\n  after(async () => {\n    // await browser.close();\n  });\n\n  it('should open page and fail to install service-worker', async () => {\n    await page.goto(`${__SERVER__}/`);\n    await page.evaluate(() => {\n      return navigator.serviceWorker.getRegistration().then(registration => {\n        // Failed to install\n        if (!registration) return true;\n\n        return registration.installing || registration.waiting || registration.active;\n      }).then(sw => {\n        // Failed to install\n        if (!sw) return true;\n\n        return new Promise((resolve, reject) => {\n          const check = () => {\n            if (sw.state === 'installed' || sw.state === 'activated') {\n              sw.onstatechange = null;\n              reject();\n              return;\n            }\n\n            if (sw.state === 'redundant') {\n              sw.onstatechange = null;\n              resolve();\n              return;\n            }\n          };\n\n          sw.onstatechange = check;\n          check();\n        });\n      });\n    });\n  });\n});\n"
+    },
+    {
+      "path": "tests/browser/install-error-pass-none/webpack.config.js",
+      "sha": null,
+      "content_sha256": "fbc41bd6ea1c9c0f4d1c5ce6076c1bbd870564fb267fbf7bc5dfe47cb2653bf4",
+      "score": 246,
+      "content": "const path = require('path');\nconst { resolve, join } = path;\n\nconst OfflinePlugin = require(process.env.OFFLINE_PLUGIN_ROOT);\nconst CopyWebpackPlugin = require('copy-webpack-plugin');\nconst DefinePlugin = require('webpack/lib/DefinePlugin');\n\nconst webpackMajorVersion = require('webpack/package.json').version.split('.')[0];\n\nconst config = {\n  entry: {\n    main: join(__dirname, 'src/main.js'),\n  },\n\n  output: {\n    path: join(__dirname, 'www'),\n    filename: '[name].js',\n    chunkFilename: '[name].js',\n    publicPath: '/'\n  },\n\n  plugins: [\n    new CopyWebpackPlugin([\n      { from: join(__dirname, 'src/index.html') },\n      { from: join(__dirname, 'src/app-shell.html') }\n    ]),\n    new DefinePlugin({\n      'process.env.OFFLINE_PLUGIN_ROOT': JSON.stringify(process.env.OFFLINE_PLUGIN_ROOT)\n    }),\n    new OfflinePlugin({\n      appShell: '/app-shell.html',\n      responseStrategy: 'network-first',\n\n      externals: ['/not-existent'],\n      caches: {\n        main: [':rest:', '/not-existent'],\n        additional: ['index.html'],\n      },\n      safeToUseOptionalCaches: true,\n\n      ServiceWorker: {\n        navigationPreload: true\n      },\n\n      AppCache: false,\n    })\n  ]\n};\n\nif (webpackMajorVersion === '4') {\n  config.mode = 'none';\n}\n\nmodule.exports = config;\n"
+    },
+    {
+      "path": "tests/browser/install-error-pass-none/server.js",
+      "sha": null,
+      "content_sha256": "6121be5b036745471502542f0e1f1282636123faa2bba1cca18a7b535a3c33b9",
+      "score": 246,
+      "content": "var path = require('path');\n\nvar express = require('express');\nvar app = express();\n\nvar WWW_FOLDER = path.join(__dirname, 'www');\n\napp.get('/', serveIndex);\n\napp.get('/sw.js', serveServiceWorker);\napp.use(express.static(WWW_FOLDER));\n\napp.get('/*', serveNotFound);\n\nlet indexPreload = 0;\nlet notFoundPreload = 0;\n\nfunction serveServiceWorker(req, res) {\n  res.sendFile(path.join(WWW_FOLDER, 'sw.js'), {\n    cacheControl: false,\n    acceptRanges: false,\n    headers: {\n      'Cache-Control': 'no-cache'\n    }\n  });\n}\n\nfunction serveIndex(req, res) {\n  if (req.headers['service-worker-navigation-preload']) {\n    res.send(`\n      <!doctype html>\n      <body>\n        <div id=\"page\">preload index</div>\n        <script src=\"/main.js\"></script>\n      </body>\n    `);\n\n    return;\n  }\n\n  res.sendFile(path.join(WWW_FOLDER, 'index.html'), {\n    cacheControl: false,\n    acceptRanges: false,\n    headers: {\n      'Cache-Control': 'no-cache'\n    }\n  });\n}\n\nfunction serveNotFound(req, res) {\n  res.sendStatus(404);\n}\n\n// Not used\n/*function serveAppShell(req, res) {\n  res.sendFile(path.join(WWW_FOLDER, 'app-shell.html'), {\n    cacheControl: false,\n    acceptRanges: false,\n    headers: {\n      'Cache-Control': 'no-cache'\n    }\n  });\n}\n*/\n\nmodule.exports = __createServer(app);"
+    },
+    {
+      "path": "tests/browser/install-error-pass-none/src/main.js",
+      "sha": null,
+      "content_sha256": "3525d057a86154009319f5054548aca1a0f051103a0de88bad483974cf07d2e1",
+      "score": 244,
+      "content": "const OfflinePlugin = require(process.env.OFFLINE_PLUGIN_ROOT + '/runtime');\n\nOfflinePlugin.install();"
+    },
+    {
+      "path": "tests/browser/cache-first/server.js",
+      "sha": null,
+      "content_sha256": "cd9cf70c45b1dd9c7c1b952a8ddd6c12efc060e8a4a67e42a75e1d6e2147394b",
+      "score": 222,
+      "content": "var path = require('path');\n\nvar express = require('express');\nvar app = express();\n\nvar WWW_FOLDER = path.join(__dirname, 'www');\n\napp.get('/', serveIndex);\n\napp.get('/sw.js', serveServiceWorker);\napp.use(express.static(WWW_FOLDER));\n\napp.get('/*', serveNotFound);\n\nlet indexPreload = 0;\nlet notFoundPreload = 0;\n\nfunction serveServiceWorker(req, res) {\n  res.sendFile(path.join(WWW_FOLDER, 'sw.js'), {\n    cacheControl: false,\n    acceptRanges: false,\n    headers: {\n      'Cache-Control': 'no-cache'\n    }\n  });\n}\n\nfunction serveIndex(req, res) {\n  if (req.headers['service-worker-navigation-preload']) {\n    res.send(JSON.stringify({\n      page: 'index',\n      load: 'preload' + (indexPreload++)\n    }));\n\n    return;\n  }\n\n  res.sendFile(path.join(WWW_FOLDER, 'index.html'), {\n    cacheControl: false,\n    acceptRanges: false,\n    headers: {\n      'Cache-Control': 'no-cache'\n    }\n  });\n}\n\nfunction serveNotFound(req, res) {\n  if (req.url === '/not-found' && req.headers['service-worker-navigation-preload']) {\n    res.send(JSON.stringify({\n      page: 'not-found',\n      load: 'preload' + (notFoundPreload++)\n    }));\n\n    return;\n  }\n\n  res.end();\n}\n\n// Not used\nfunction serveAppShell(req, res) {\n  res.sendFile(path.join(WWW_FOLDER, 'app-shell.html'), {\n    cacheControl: false,\n    acceptRanges: false,\n    headers: {\n      'Cache-Control': 'no-cache'\n    }\n  });\n}\n\n\nmodule.exports = __createServer(app);"
+    },
+    {
+      "path": "tests/browser/cache-first/webpack.config.js",
+      "sha": null,
+      "content_sha256": "463edcf8a5a8e28fa61745c876ab95de16637b5995bb991fe5e495d028df13dc",
+      "score": 222,
+      "content": "const path = require('path');\nconst { resolve, join } = path;\n\nconst OfflinePlugin = require(process.env.OFFLINE_PLUGIN_ROOT);\nconst CopyWebpackPlugin = require('copy-webpack-plugin');\nconst DefinePlugin = require('webpack/lib/DefinePlugin');\n\nconst webpackMajorVersion = require('webpack/package.json').version.split('.')[0];\n\nconst config = {\n  entry: {\n    main: join(__dirname, 'src/main.js'),\n  },\n\n  output: {\n    path: join(__dirname, 'www'),\n    filename: '[name].js',\n    chunkFilename: '[name].js',\n    publicPath: '/'\n  },\n\n  plugins: [\n    new CopyWebpackPlugin([\n      { from: join(__dirname, 'src/index.html') },\n      { from: join(__dirname, 'src/app-shell.html') }\n    ]),\n    new DefinePlugin({\n      'process.env.OFFLINE_PLUGIN_ROOT': JSON.stringify(process.env.OFFLINE_PLUGIN_ROOT)\n    }),\n    new OfflinePlugin({\n      appShell: '/app-shell.html',\n\n      ServiceWorker: {\n        navigationPreload: {\n          map: (url) => {\n            if (url.pathname === '/') {\n              return '/api/index.json';\n            }\n\n            if (url.pathname === '/not-found') {\n              return '/api/not-found.json';\n            }\n          },\n          test: (url) => {\n            if (url.pathname.indexOf('/api/') === 0) {\n              return true;\n            }\n          }\n        },\n      },\n\n      AppCache: false,\n    })\n  ]\n};\n\nif (webpackMajorVersion === '4') {\n  config.mode = 'none';\n}\n\nmodule.exports = config;\n"
+    },
+    {
+      "path": "tests/browser/cache-first/test.js",
+      "sha": null,
+      "content_sha256": "def86dbc1b5e006e062210b0d47377129d35a12f724127b1ebdef8a1392032fa",
+      "score": 222,
+      "content": "const puppeteer = require('puppeteer');\n\nconst server = require('./server');\nconst webpack = __buildWebpack('webpack.config.js');\n\nmodule.exports = new Promise((resolve) => {\n  after(async () => {\n    (await server).close();\n    resolve();\n  });\n});\n\ndescribe('testing basic `cache-first` sw install', async () => {\n  let browser;\n  let page;\n\n  before(async () => {\n    await server;\n    await webpack;\n\n    browser = await puppeteer.launch({\n      headless: true,\n      args: ['--no-sandbox', '--disable-setuid-sandbox']\n    });\n    page = await browser.newPage();\n  });\n\n  after(async () => {\n    // await browser.close();\n  });\n\n  it('should open page and install service-worker', async () => {\n    await page.goto(`${__SERVER__}/`);\n    await page.evaluate(function() {\n      return navigator.serviceWorker.ready;\n    });\n  });\n\n  it('should go to generated sw file location and get its contents', async () => {\n    const swScriptPage = await browser.newPage();\n\n    await swScriptPage.goto(`${__SERVER__}/sw.js`);\n\n    await swScriptPage.evaluate(function() {\n      const contents = document.body.textContent.trim();\n\n      if (contents.indexOf('var __wpo = {') !== 0) {\n        throw new Error('Incorrect page contents');\n      }\n    });\n  });\n\n  it('should perform 2 preloads concurrently', async () => {\n    const [ index, notFound ] = await Promise.all([\n      browser.newPage(), browser.newPage()\n    ]);\n\n    await Promise.all([\n      index.goto(`${__SERVER__}/`),\n      notFound.goto(`${__SERVER__}/not-found`)\n    ]);\n\n    // await new Promise(resolve => setTimeout(resolve, 5000));\n\n    await Promise.all([\n      index.evaluate(new Function(`\n        return fetch('${__SERVER__}/api/index.json')\n          .then(res => res.json()).then((data) => {\n            if (data && data.page === 'index' && data.load === 'preload0') {\n              return true;\n            }\n\n            throw new Error('Incorrect data: ' + JSON.stringify(data));\n          });\n      `)),\n\n      notFound.evaluate(new Function(`\n        return fetch('${__SERVER__}/api/not-found.json')\n          .then(res => res.json()).then((data) => {\n            if (data && data.page === 'not-found' && data.load === 'preload0') {\n              return true;\n            }\n\n            throw new Error('Incorrect data: ' + JSON.stringify(data));\n          });\n      `))\n    ]);\n\n    await Promise.all([\n      index.close(),\n      notFound.close()\n    ]);\n  });\n\n  it('should clean preload caches after its usage from memory', async () => {\n    await page.evaluate(function() {\n      return caches.open('webpack-offline$preload').then(cache => {\n        return cache.keys();\n      }).then(keys => {\n        if (keys.length > 1) {\n          throw new Error('Preload caches has not been cleaned');\n        }\n      });\n    });\n  });\n\n  it('should perform 2 preloads concurrently and retrieve from storage', async () => {\n    const [ index, notFound ] = await Promise.all([\n      browser.newPage(), browser.newPage()\n    ]);\n\n    await Promise.all([\n      index.goto(`${__SERVER__}/`),\n      notFound.goto(`${__SERVER__}/not-found`)\n    ]);\n\n    await new Promise(resolve => setTimeout(resolve, 500));\n\n    await Promise.all([\n      index.evaluate(new Function(`\n        return fetch('${__SERVER__}/api/index.json')\n          .then(res => res.json()).then((data) => {\n            if (data && data.page === 'index' && data.load === 'preload1') {\n              return true;\n            }\n\n            throw new Error('Incorrect data: ' + JSON.stringify(data));\n          });\n      `)),\n\n      notFound.evaluate(new Function(`\n        return fetch('${__SERVER__}/api/not-found.json')\n          .then(res => res.json()).then((data) => {\n            if (data && data.page === 'not-found' && data.load === 'preload1') {\n              return true;\n            }\n\n            throw new Error('Incorrect data: ' + JSON.stringify(data));\n          });\n      `))\n    ]);\n\n    await Promise.all([\n      index.close(),\n      notFound.close()\n    ]);\n  }).timeout(2500);\n\n  it('should clean preload caches after its usage from storage', async () => {\n    await page.evaluate(function() {\n      return caches.open('webpack-offline$preload').then(cache => {\n        return cache.keys();\n      }).then(keys => {\n        if (keys.length > 1) {\n          throw new Error('Preload caches has not been cleaned');\n        }\n      });\n    });\n  });\n\n  it('should reload page and perform navigation preload for it', function() {\n    // this.timeout(12000);\n\n    // page.close();\n\n    return (async () => {\n      // await new Promise(resolve => setTimeout(resolve, 10000));\n\n      // page = await browser.newPage();\n      // await page.goto(`${__SERVER__}/`);\n\n      await page.reload();\n      await page.evaluate(new Function(`\n        return fetch('${__SERVER__}/api/index.json')\n          .then(res => res.json()).then((data) => {\n            if (data && data.page === 'index' && data.load === 'preload2') {\n              return true;\n            }\n\n            throw new Error('Incorrect data: ' + JSON.stringify(data));\n          });\n      `));\n    })();\n  });\n\n  it('should reload page and perform navigation preload for it (again)', async () => {\n    await page.reload();\n    await page.evaluate(new Function(`\n      return fetch('${__SERVER__}/api/index.json')\n        .then(res => res.json()).then((data) => {\n          if (data && data.page === 'index' && data.load === 'preload3') {\n            return true;\n          }\n\n          throw new Error('Incorrect data: ' + JSON.stringify(data));\n        });\n    `));\n  });\n\n  it('should set offline mode and reload main page from the cache', async () => {\n    await page.setOfflineMode(true);\n    await page.reload();\n\n    await page.evaluate(function() {\n      const page = document.querySelector('#page').textContent.trim();\n\n      if (page !== 'index') {\n        throw new Error('Incorrect page:' + page);\n      }\n    });\n  });\n\n  it('should go to an unknown page and load from the app-shell cache', async () => {\n    await page.goto(`${__SERVER__}/not-found`);\n\n    await page.evaluate(function() {\n      const page = document.querySelector('#page').textContent.trim();\n\n      if (page !== 'app-shell') {\n        throw new Error('Incorrect page:' + page);\n      }\n    });\n  });\n});\n"
+    },
+    {
+      "path": "tests/browser/cache-first/src/main.js",
+      "sha": null,
+      "content_sha256": "3525d057a86154009319f5054548aca1a0f051103a0de88bad483974cf07d2e1",
+      "score": 220,
+      "content": "const OfflinePlugin = require(process.env.OFFLINE_PLUGIN_ROOT + '/runtime');\n\nOfflinePlugin.install();"
+    },
+    {
+      "path": "tests/browser/install-error-pass-none/src/app-shell.html",
+      "sha": null,
+      "content_sha256": "e2cb85daccea560273f735d7ab8b9b78646147616ad4f06e2fa5b5da13e5f635",
+      "score": 209,
+      "content": "<!doctype html>\n<body>\n  <div id=\"page\">app-shell</div>\n  <script src=\"/main.js\"></script>\n</body>"
+    },
+    {
+      "path": "tests/browser/install-error-pass-none/src/index.html",
+      "sha": null,
+      "content_sha256": "8002a0b8df6853f1d8d029d994f47b64aaec2b39ea776c157267d7fc1ee98ee0",
+      "score": 209,
+      "content": "<!doctype html>\n<body>\n  <div id=\"page\">index</div>\n  <script src=\"/main.js\"></script>\n</body>"
+    },
+    {
+      "path": "tests/browser/cache-first/src/index.html",
+      "sha": null,
+      "content_sha256": "8002a0b8df6853f1d8d029d994f47b64aaec2b39ea776c157267d7fc1ee98ee0",
+      "score": 185,
+      "content": "<!doctype html>\n<body>\n  <div id=\"page\">index</div>\n  <script src=\"/main.js\"></script>\n</body>"
+    },
+    {
+      "path": "tests/browser/cache-first/src/app-shell.html",
+      "sha": null,
+      "content_sha256": "e2cb85daccea560273f735d7ab8b9b78646147616ad4f06e2fa5b5da13e5f635",
+      "score": 185,
+      "content": "<!doctype html>\n<body>\n  <div id=\"page\">app-shell</div>\n  <script src=\"/main.js\"></script>\n</body>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-absolute-outside/__expected/webpack4/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-absolute-override-outside/__expected/webpack4/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-absolute-outside/__expected/webpack3/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-relative-override-outside/__expected/webpack2/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-relative-outside/__expected/webpack3/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-relative-override-outside/__expected/webpack3/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-absolute-outside/__expected/webpack2/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-relative-outside/__expected/webpack2/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-absolute-tools-override-outside/__expected/webpack4/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-absolute-override-outside/__expected/webpack2/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-relative-outside/__expected/webpack4/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    },
+    {
+      "path": "tests/legacy/fixtures/paths-explicit-absolute-override-outside/__expected/webpack3/appcache/manifest.html",
+      "sha": null,
+      "content_sha256": "9a4b63e147a43abb5adc77dc9d7103038cec8fcf57f3918e510b928e29ee7f8a",
+      "score": 176,
+      "content": "<!doctype html>\n<html manifest=\"manifest.appcache\"></html>"
+    }
+  ],
+  "generated_at": "2026-10-08T15:25:24.222082+00:00"
+}

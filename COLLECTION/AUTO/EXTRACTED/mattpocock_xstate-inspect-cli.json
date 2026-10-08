@@ -1,0 +1,50 @@
+{
+  "canonical_source": "github:mattpocock/xstate-inspect-cli",
+  "repo": "mattpocock/xstate-inspect-cli",
+  "revision_sha": "c3cb5604409cee33d64e2a541f6f160fafadc907",
+  "default_branch": "master",
+  "pushed_at": "2021-08-01T08:13:41Z",
+  "repo_updated_at": "2026-04-30T22:06:16Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "4bc6a8813d451801d0ad276620993b59977aff78f04956f87c6dc757ea639458",
+      "score": 120,
+      "content": "{\n  \"name\": \"xstate-inspect-cli\",\n  \"version\": \"0.0.4\",\n  \"author\": \"Matt Pocock\",\n  \"license\": \"MIT\",\n  \"bin\": \"src/index.js\",\n  \"dependencies\": {\n    \"xstate-inspect-no-fast-stringify\": \"0.0.1\",\n    \"vite\": \"^2.1.4\",\n    \"ws\": \"^7.4.4\",\n    \"xstate\": \"^4.17.1\"\n  },\n  \"scripts\": {\n    \"dev\": \"TS_NODE_COMPILER_OPTIONS='{\\\"module\\\":\\\"commonjs\\\"}' ts-node-dev --transpile-only --no-notify src/index.ts\",\n    \"local-link\": \"yarn unlink && npm run chmod:index && yarn link\",\n    \"chmod:index\": \"chmod +x src/index.js\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^14.14.37\",\n    \"ts-node-dev\": \"^1.1.6\",\n    \"typescript\": \"^4.2.3\"\n  }\n}\n"
+    },
+    {
+      "path": "readme.md",
+      "sha": null,
+      "content_sha256": "a57eeed335fffe9aabf691c37e96c4ce39f166eeb4384169c3d85d5831636802",
+      "score": 100,
+      "content": "> FYI! This lib has never worked! I have it public only to share for others to carry on this good fight. I may revisit this repo in the future.\n\n# What is the XState Inspector CLI?\n\nI wanted a quick way to open an `@xstate/inspect` panel targeting a local file. By running a quick CLI command, you can target a single file with `vite`, build it with `esbuild`, and open it in the browser.\n\nChanges to the machine will hot-reload into the browser, too.\n\n# Getting Started\n\n`yarn global add xstate-inspect-cli`\n\n# Running the CLI\n\n`xstate-inspect-cli ./desired-file.ts`\n\nThe inspector will open at `localhost:3001`. Check the console for any errors with your machine, for instance missing guards/services/actions etc.\n\n## Limitations\n\n1. Your machine must be exported from the module, i.e. `export const machine = createMachine();`, though you can export multiple machines.\n2. Works best in files where the machine is one of very few exports. Likely won't work if you are importing many modules or executing arbitrary code in your machine file.\n3. Modules which are not parse-able by `vite` may fail the build.\n4. Probably a bunch of others I haven't discovered yet.\n"
+    },
+    {
+      "path": "src/initInspector.ts",
+      "sha": null,
+      "content_sha256": "4e267e130256170f550e67bf8c040241ac20561a1b0ca315c159f663f00fabe8",
+      "score": 93,
+      "content": "import { inspect } from \"xstate-inspect-no-fast-stringify\";\nimport { interpret } from \"xstate\";\n\ninspect({\n  iframe: () => document.getElementById(\"xstate-iframe\") as any,\n});\n\n(async () => {\n  const exports = await import(\n    /* @vite-ignore */\n    // @ts-ignore\n    FILE_PATH\n  );\n\n  const machines = Object.values(exports);\n\n  let foundMachine = false;\n\n  machines.forEach((machine) => {\n    // @ts-ignore\n    if (machine && machine.__xstatenode) {\n      // @ts-ignore\n      interpret(machine, {\n        devTools: true,\n      }).start();\n\n      foundMachine = true;\n    }\n  });\n\n  if (!foundMachine) {\n    alert(\"No machines found exported from this file!\");\n  }\n})();\n"
+    },
+    {
+      "path": "src/index.js",
+      "sha": null,
+      "content_sha256": "406e0c82e425a1a5d1cd2e6a1f22a3c3a03df115422bf8f3958ac6252eef01b5",
+      "score": 33,
+      "content": "#!/usr/bin/env node\n\nconst { createServer } = require(\"vite\");\nconst path = require(\"path\");\n\nconst [, , filePath] = process.argv;\n\nif (!filePath) {\n  console.log(\"You must provide a file path\");\n  process.exit(1);\n}\n\nconst absoluteFilePath = path.resolve(process.cwd(), filePath);\n\n(async () => {\n  const server = await createServer({\n    configFile: false,\n    server: {\n      port: 3001,\n      open: true,\n    },\n    plugins: [\n      {\n        name: \"Index Html Creator\",\n        apply: \"serve\",\n        configureServer: (server) => {\n          server.app.use((req, res, next) => {\n            if (req.url === \"/\") {\n              res.write(`\n                <html>\n                  <head>\n                    <style>\n                      body {\n                        margin: 0px;\n                        height: 100vh;\n                        width: 100vw;\n                        display: flex;\n                        align-items: stretch;\n                      }\n\n                      body iframe {\n                        width: 100%;\n                        border: 0px solid;\n                      }\n                    </style>\n                    <title>XState Inspector</title>\n                  </head>\n                  <body>\n                  <iframe id=\"xstate-iframe\"></iframe>\n                  <script>\n                    const FILE_PATH = \"${absoluteFilePath}\";\n                  </script>\n                  <script type=\"module\" src=\"${path.resolve(\n                    __dirname,\n                    \"./initInspector.ts\",\n                  )}\"></script>\n                  \n                  </body>\n                </html>\n              `);\n              res.end();\n            } else {\n              next();\n            }\n          });\n        },\n      },\n    ],\n  });\n\n  await server.listen();\n})();\n"
+    }
+  ],
+  "generated_at": "2026-10-08T15:25:29.234141+00:00"
+}

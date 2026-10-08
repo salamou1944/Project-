@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:oneseanlee/design-alchemy",
+  "repo": "oneseanlee/design-alchemy",
+  "revision_sha": "e3b983b4a3d3df38e73d093c1a3a00a4294b9460",
+  "default_branch": "main",
+  "pushed_at": "2026-01-23T16:30:07Z",
+  "repo_updated_at": "2026-01-23T16:30:11Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "src/pages/ApiTest.tsx",
+      "sha": null,
+      "content_sha256": "7f7a8e43a7e52b49490b0bb0f9b765420739852d0d448177d55ed89604770606",
+      "score": 166,
+      "content": "import { useState, useRef } from \"react\";\nimport { Button } from \"@/components/ui/button\";\nimport { Card, CardContent, CardHeader, CardTitle } from \"@/components/ui/card\";\nimport { Input } from \"@/components/ui/input\";\nimport { Label } from \"@/components/ui/label\";\nimport { ScrollArea } from \"@/components/ui/scroll-area\";\nimport { Clock, Upload, Send, Loader2 } from \"lucide-react\";\nimport { supabase } from \"@/integrations/supabase/client\";\n\ninterface BureauFiles {\n  experian: File | null;\n  equifax: File | null;\n  transunion: File | null;\n}\n\ninterface ResponseLog {\n  timestamp: Date;\n  responseTime: number;\n  status: string;\n  rawResponse: string;\n  bureausSubmitted: string[];\n}\n\nconst ApiTest = () => {\n  const [files, setFiles] = useState<BureauFiles>({\n    experian: null,\n    equifax: null,\n    transunion: null,\n  });\n  const [isLoading, setIsLoading] = useState(false);\n  const [responseLogs, setResponseLogs] = useState<ResponseLog[]>([]);\n  const [currentResponse, setCurrentResponse] = useState<string>(\"\");\n  const startTimeRef = useRef<number>(0);\n\n  const handleFileChange = (bureau: keyof BureauFiles, file: File | null) => {\n    if (file && file.type !== \"application/pdf\") {\n      alert(\"Please upload a PDF file\");\n      return;\n    }\n    setFiles((prev) => ({ ...prev, [bureau]: file }));\n  };\n\n  const handleSubmit = async () => {\n    const formData = new FormData();\n    const bureausSubmitted: string[] = [];\n\n    if (files.experian) {\n      formData.append(\"experian\", files.experian);\n      bureausSubmitted.push(\"Experian\");\n    }\n    if (files.equifax) {\n      formData.append(\"equifax\", files.equifax);\n      bureausSubmitted.push(\"Equifax\");\n    }\n    if (files.transunion) {\n      formData.append(\"transunion\", files.transunion);\n      bureausSubmitted.push(\"TransUnion\");\n    }\n\n    if (bureausSubmitted.length === 0) {\n      alert(\"Please upload at least one PDF\");\n      return;\n    }\n\n    setIsLoading(true);\n    setCurrentResponse(\"\");\n    startTimeRef.current = Date.now();\n\n    try {\n      // Use fetch directly for streaming SSE response\n      const response = await fetch(\n        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-report`,\n        {\n          method: 'POST',\n          headers: {\n            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,\n            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,\n          },\n          body: formData,\n        }\n      );\n\n      if (!response.ok) {\n        const errorText = await response.text();\n        const responseTime = Date.now() - startTimeRef.current;\n        const log: ResponseLog = {\n          timestamp: new Date(),\n          responseTime,\n          status: `Error ${response.status}`,\n          rawResponse: errorText,\n          bureausSubmitted,\n        };\n        setResponseLogs((prev) => [log, ...prev]);\n        setCurrentResponse(errorText);\n        return;\n      }\n\n      // Read the streaming response\n      const reader = response.body?.getReader();\n      const decoder = new TextDecoder();\n      let fullResponse = \"\";\n      let buffer = \"\";\n\n      if (reader) {\n        while (true) {\n          const { done, value } = await reader.read();\n          if (done) break;\n          \n          const chunk = decoder.decode(value, { stream: true });\n          buffer += chunk;\n          \n          // Parse SSE events from buffer\n          const lines = buffer.split('\\n');\n          buffer = lines.pop() || ''; // Keep incomplete line in buffer\n          \n          for (const line of lines) {\n            if (line.startsWith('data: ')) {\n              const data = line.slice(6);\n              if (data === '[DONE]') {\n                fullResponse += '\\n--- STREAM COMPLETE ---\\n';\n              } else {\n                try {\n                  const parsed = JSON.parse(data);\n                  fullResponse += JSON.stringify(parsed, null, 2) + '\\n\\n';\n                } catch {\n                  fullResponse += data + '\\n';\n                }\n              }\n              setCurrentResponse(fullResponse);\n            }\n          }\n        }\n      }\n\n      const finalResponseTime = Date.now() - startTimeRef.current;\n      \n      const log: ResponseLog = {\n        timestamp: new Date(),\n        responseTime: finalResponseTime,\n        status: \"Success\",\n        rawResponse: fullResponse,\n        bureausSubmitted,\n      };\n      setResponseLogs((prev) => [log, ...prev]);\n\n    } catch (error) {\n      const responseTime = Date.now() - startTimeRef.current;\n      const errorMessage = error instanceof Error ? error.message : \"Unknown error\";\n      \n      const log: ResponseLog = {\n        timestamp: new Date(),\n        responseTime,\n        status: \"Error\",\n        rawResponse: errorMessage,\n        bureausSubmitted,\n      };\n      setResponseLogs((prev) => [log, ...prev]);\n      setCurrentResponse(errorMessage);\n    } finally {\n      setIsLoading(false);\n    }\n  };\n\n  const formatTime = (ms: number) => {\n    if (ms < 1000) return `${ms}ms`;\n    return `${(ms / 1000).toFixed(2)}s`;\n  };\n\n  return (\n    <div className=\"min-h-screen bg-background p-6\">\n      <div className=\"max-w-7xl mx-auto space-y-6\">\n        <div className=\"flex items-center justify-between\">\n          <h1 className=\"text-3xl font-bold text-foreground\">Gemini API Test Page</h1>\n          <a href=\"/\" className=\"text-primary hover:underline\">← Back to Home</a>\n        </div>\n\n        {/* File Upload Section */}\n        <Card>\n          <CardHeader>\n            <CardTitle className=\"flex items-center gap-2\">\n              <Upload className=\"w-5 h-5\" />\n              Upload Credit Reports\n            </CardTitle>\n          </CardHeader>\n          <CardContent>\n            <div className=\"grid grid-cols-1 md:grid-cols-3 gap-4\">\n              {([\"experian\", \"equifax\", \"transunion\"] as const).map((bureau) => (\n                <div key={bureau} className=\"space-y-2\">\n                  <Label htmlFor={bureau} className=\"capitalize text-foreground\">\n                    {bureau} PDF\n                  </Label>\n                  <Input\n                    id={bureau}\n                    type=\"file\"\n                    accept=\".pdf\"\n                    onChange={(e) => handleFileChange(bureau, e.target.files?.[0] || null)}\n                    className=\"cursor-pointer\"\n                  />\n                  {files[bureau] && (\n                    <p className=\"text-sm text-muted-foreground\">\n                      ✓ {files[bureau]?.name}\n                    </p>\n                  )}\n                </div>\n              ))}\n            </div>\n            <Button \n              onClick={handleSubmit} \n              disabled={isLoading}\n              className=\"mt-4\"\n            >\n              {isLoading ? (\n                <>\n                  <Loader2 className=\"w-4 h-4 mr-2 animate-spin\" />\n                  Analyzing...\n                </>\n              ) : (\n                <>\n                  <Send className=\"w-4 h-4 mr-2\" />\n                  Submit to Gemini API\n                </>\n              )}\n            </Button>\n          </CardContent>\n        </Card>\n\n        {/* Current Response */}\n        <Card>\n          <CardHeader>\n            <CardTitle className=\"flex items-center gap-2\">\n              <Clock className=\"w-5 h-5\" />\n              Current Response (Live)\n              {isLoading && (\n                <span className=\"text-sm font-normal text-muted-foreground ml-2\">\n                  Elapsed: {formatTime(Date.now() - startTimeRef.current)}\n                </span>\n              )}\n            </CardTitle>\n          </CardHeader>\n          <CardContent>\n            <ScrollArea className=\"h-[400px] w-full rounded-md border p-4\">\n              <pre className=\"text-sm text-foreground whitespace-pre-wrap font-mono\">\n                {currentResponse || \"No response yet. Submit a PDF to see the raw API response.\"}\n              </pre>\n            </ScrollArea>\n          </CardContent>\n        </Card>\n\n        {/* Response History */}\n        <Card>\n          <CardHeader>\n            <CardTitle>Response History ({responseLogs.length} submissions)</CardTitle>\n          </CardHeader>\n          <CardContent>\n            {responseLogs.length === 0 ? (\n              <p className=\"text-muted-foreground\">No submissions yet.</p>\n            ) : (\n              <div className=\"space-y-4\">\n                {responseLogs.map((log, index) => (\n                  <Card key={index} className=\"bg-muted/50\">\n                    <CardHeader className=\"py-3\">\n                      <div className=\"flex items-center justify-between\">\n                        <div className=\"flex items-center gap-4\">\n                          <span className={`px-2 py-1 rounded text-xs font-medium ${\n                            log.status === \"Success\" \n                              ? \"bg-green-100 text-green-800\" \n                              : \"bg-red-100 text-red-800\"\n                          }`}>\n                            {log.status}\n                          </span>\n                          <span className=\"text-sm text-muted-foreground\">\n                            {log.timestamp.toLocaleTimeString()}\n                          </span>\n                          <span className=\"text-sm font-medium text-foreground\">\n                            Response Time: {formatTime(log.responseTime)}\n                          </span>\n                        </div>\n                        <span className=\"text-sm text-muted-foreground\">\n                          Bureaus: {log.bureausSubmitted.join(\", \")}\n                        </span>\n                      </div>\n                    </CardHeader>\n                    <CardContent className=\"py-2\">\n                      <ScrollArea className=\"h-[200px] w-full rounded-md border p-2 bg-background\">\n                        <pre className=\"text-xs text-foreground whitespace-pre-wrap font-mono\">\n                          {log.rawResponse}\n                        </pre>\n                      </ScrollArea>\n                    </CardContent>\n                  </Card>\n                ))}\n              </div>\n            )}\n          </CardContent>\n        </Card>\n      </div>\n    </div>\n  );\n};\n\nexport default ApiTest;\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "67c430c683b2d2207ec1b7a5fa81fded3bc10f3ed016bee01320f44cc35de88b",
+      "score": 120,
+      "content": "{\n  \"name\": \"lovable-project\",\n  \"private\": true,\n  \"version\": \"0.0.0\",\n  \"type\": \"module\",\n  \"scripts\": {\n    \"dev\": \"vite\",\n    \"build\": \"vite build\",\n    \"build:dev\": \"vite build --mode development\",\n    \"lint\": \"eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0\",\n    \"preview\": \"vite preview\"\n  },\n  \"dependencies\": {\n    \"@hookform/resolvers\": \"^3.9.0\",\n    \"@radix-ui/react-accordion\": \"^1.2.0\",\n    \"@radix-ui/react-alert-dialog\": \"^1.1.1\",\n    \"@radix-ui/react-aspect-ratio\": \"^1.1.0\",\n    \"@radix-ui/react-avatar\": \"^1.1.0\",\n    \"@radix-ui/react-checkbox\": \"^1.1.1\",\n    \"@radix-ui/react-collapsible\": \"^1.1.0\",\n    \"@radix-ui/react-context-menu\": \"^2.2.1\",\n    \"@radix-ui/react-dialog\": \"^1.1.1\",\n    \"@radix-ui/react-dropdown-menu\": \"^2.1.1\",\n    \"@radix-ui/react-hover-card\": \"^1.1.1\",\n    \"@radix-ui/react-label\": \"^2.1.0\",\n    \"@radix-ui/react-menubar\": \"^1.1.1\",\n    \"@radix-ui/react-navigation-menu\": \"^1.2.0\",\n    \"@radix-ui/react-popover\": \"^1.1.1\",\n    \"@radix-ui/react-progress\": \"^1.1.0\",\n    \"@radix-ui/react-radio-group\": \"^1.2.0\",\n    \"@radix-ui/react-scroll-area\": \"^1.1.0\",\n    \"@radix-ui/react-select\": \"^2.1.1\",\n    \"@radix-ui/react-separator\": \"^1.1.0\",\n    \"@radix-ui/react-slider\": \"^1.2.0\",\n    \"@radix-ui/react-slot\": \"^1.1.0\",\n    \"@radix-ui/react-switch\": \"^1.1.0\",\n    \"@radix-ui/react-tabs\": \"^1.1.0\",\n    \"@radix-ui/react-toast\": \"^1.2.1\",\n    \"@radix-ui/react-toggle\": \"^1.1.0\",\n    \"@radix-ui/react-toggle-group\": \"^1.1.0\",\n    \"@radix-ui/react-tooltip\": \"^1.1.2\",\n    \"@supabase/supabase-js\": \"^2.89.0\",\n    \"@tanstack/react-query\": \"^5.0.0\",\n    \"@vitejs/plugin-react-swc\": \"^4.2.2\",\n    \"class-variance-authority\": \"^0.7.0\",\n    \"clsx\": \"^2.1.1\",\n    \"cmdk\": \"^1.0.0\",\n    \"date-fns\": \"^3.6.0\",\n    \"embla-carousel-react\": \"^8.3.0\",\n    \"hls.js\": \"^1.6.15\",\n    \"input-otp\": \"^1.2.4\",\n    \"lovable-tagger\": \"^1.1.13\",\n    \"lucide-react\": \"^0.446.0\",\n    \"next-themes\": \"^0.4.6\",\n    \"react\": \"^18.3.1\",\n    \"react-day-picker\": \"^9.13.0\",\n    \"react-dom\": \"^18.3.1\",\n    \"react-hook-form\": \"^7.53.0\",\n    \"react-resizable-panels\": \"^2.1.3\",\n    \"react-router-dom\": \"^6.26.2\",\n    \"recharts\": \"^2.12.7\",\n    \"sonner\": \"^1.5.0\",\n    \"tailwind-merge\": \"^2.5.2\",\n    \"tailwindcss-animate\": \"^1.0.7\",\n    \"vaul\": \"^0.9.9\",\n    \"zod\": \"^3.23.8\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20.16.5\",\n    \"@types/react\": \"^18.3.5\",\n    \"@types/react-dom\": \"^18.3.0\",\n    \"@vitejs/plugin-react\": \"^4.3.1\",\n    \"autoprefixer\": \"^10.4.20\",\n    \"eslint\": \"^9.9.1\",\n    \"eslint-plugin-react-hooks\": \"^5.1.0-rc.0\",\n    \"eslint-plugin-react-refresh\": \"^0.4.11\",\n    \"postcss\": \"^8.4.47\",\n    \"tailwindcss\": \"^3.4.11\",\n    \"typescript\": \"^5.5.3\",\n    \"vite\": \"^5.4.3\"\n  }\n}\n"
+    },
+    {
+      "path": "supabase/migrations/20251219191741_52f62489-6cdf-4f20-8966-1ad2ff9b9e8b.sql",
+      "sha": null,
+      "content_sha256": "ce74170da4c14e92f5431c2688317254d3623e12b6f7d7dfdfca21cf6bddc23a",
+      "score": 103,
+      "content": "-- Drop the existing restrictive policy\nDROP POLICY IF EXISTS \"Deny all public access\" ON public.leads;\n\n-- Create policy that explicitly grants full access to service_role\n-- This satisfies the scanner by having a \"usable\" policy\n-- while keeping the table inaccessible to anon/authenticated roles\nCREATE POLICY \"Enable Service Role Access\"\nON public.leads\nFOR ALL\nTO service_role\nUSING (true)\nWITH CHECK (true);"
+    },
+    {
+      "path": "src/components/ui/aspect-ratio.tsx",
+      "sha": null,
+      "content_sha256": "9c2338fa109b3fbdfc1767c0d1c0f4c396a39895c7f778343f4c4b897843ed66",
+      "score": 89,
+      "content": "'use client';\n\nimport * as AspectRatioPrimitive from '@radix-ui/react-aspect-ratio';\n\nconst AspectRatio = AspectRatioPrimitive.Root;\n\nexport { AspectRatio };\n"
+    },
+    {
+      "path": "tsconfig.node.json",
+      "sha": null,
+      "content_sha256": "8dc2fd2a2ff7497afa9e29037a36bcddbfa7c89ea8ff3b7c62b2814b55995449",
+      "score": 35,
+      "content": "{\r\n  \"compilerOptions\": {\r\n    \"target\": \"ES2022\",\r\n    \"lib\": [\"ES2023\"],\r\n    \"module\": \"ESNext\",\r\n    \"skipLibCheck\": true,\r\n\r\n    /* Bundler mode */\r\n    \"moduleResolution\": \"bundler\",\r\n    \"allowImportingTsExtensions\": true,\r\n    \"isolatedModules\": true,\r\n    \"moduleDetection\": \"force\",\r\n    \"noEmit\": true,\r\n\r\n    /* Linting */\r\n    \"strict\": true,\r\n    \"noUnusedLocals\": false,\r\n    \"noUnusedParameters\": false,\r\n    \"noFallthroughCasesInSwitch\": true\r\n  },\r\n  \"include\": [\"vite.config.ts\"]\r\n}\r\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "3d16a548525d077de2a2eaee10f98523fe07a343616693b47218cef1e16413f2",
+      "score": 35,
+      "content": "{\r\n  \"files\": [],\r\n  \"references\": [{ \"path\": \"./tsconfig.app.json\" }, { \"path\": \"./tsconfig.node.json\" }],\r\n  \"compilerOptions\": {\r\n    \"baseUrl\": \".\",\r\n    \"paths\": {\r\n      \"@/*\": [\"./src/*\"]\r\n    },\r\n    \"noImplicitAny\": false,\r\n    \"noUnusedParameters\": false,\r\n    \"skipLibCheck\": true,\r\n    \"allowJs\": true,\r\n    \"noUnusedLocals\": false,\r\n    \"strictNullChecks\": false\r\n  }\r\n}\r\n"
+    },
+    {
+      "path": "vite.config.ts",
+      "sha": null,
+      "content_sha256": "df2b5af44760d2c7c4f47d44e2e6ba390a49cbc2e9bf087d03d99fe61cf98eda",
+      "score": 35,
+      "content": "import { defineConfig } from \"vite\";\nimport react from \"@vitejs/plugin-react-swc\";\nimport path from \"path\";\nimport { componentTagger } from \"lovable-tagger\";\n\n// https://vitejs.dev/config/\nexport default defineConfig(({ mode }) => ({\n  server: {\n    host: \"::\",\n    port: 8080,\n  },\n  define: {\n    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || 'https://viotepfhdproajmntrfp.supabase.co'),\n    'import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY': JSON.stringify(process.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpb3RlcGZoZHByb2FqbW50cmZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYwODgyNDUsImV4cCI6MjA4MTY2NDI0NX0.7vdwcZxpSFn2BFl1_7R_Wqng0OpTrBmzjFlf2K_NWqs'),\n    'import.meta.env.VITE_SUPABASE_PROJECT_ID': JSON.stringify(process.env.VITE_SUPABASE_PROJECT_ID || 'viotepfhdproajmntrfp'),\n  },\n  plugins: [\n    react(),\n    mode === 'development' && componentTagger(),\n  ].filter(Boolean),\n  resolve: {\n    alias: {\n      \"@\": path.resolve(__dirname, \"./src\"),\n    },\n  },\n  build: {\n    outDir: \"dist\",\n    sourcemap: true,\n  },\n  esbuild: {\n    // Skip type checking - let the app run despite tsconfig issues\n    logOverride: { 'this-is-undefined-in-esm': 'silent' },\n  },\n  optimizeDeps: {\n    esbuildOptions: {\n      target: 'es2020',\n    },\n  },\n}));\n"
+    },
+    {
+      "path": "tailwind.config.js",
+      "sha": null,
+      "content_sha256": "8df92bc16013cd96910e9fc696debd6a42a3f8991856381493119d7873fcb875",
+      "score": 35,
+      "content": "/** @type {import('tailwindcss').Config} */\nexport default {\n    darkMode: [\"class\"],\n    content: [\n    \"./index.html\",\n    \"./src/**/*.{js,ts,jsx,tsx}\",\n  ],\n  theme: {\n  \textend: {\n  \t\tcolors: {\n  \t\t\tbackground: 'hsl(var(--background))',\n  \t\t\tforeground: 'hsl(var(--foreground))',\n  \t\t\tcard: {\n  \t\t\t\tDEFAULT: 'hsl(var(--card))',\n  \t\t\t\thover: 'hsl(var(--card-hover))',\n  \t\t\t\tforeground: 'hsl(var(--card-foreground))'\n  \t\t\t},\n  \t\t\tpopover: {\n  \t\t\t\tDEFAULT: 'hsl(var(--popover))',\n  \t\t\t\tforeground: 'hsl(var(--popover-foreground))'\n  \t\t\t},\n  \t\t\tprimary: {\n  \t\t\t\tDEFAULT: 'hsl(var(--primary))',\n  \t\t\t\tforeground: 'hsl(var(--primary-foreground))'\n  \t\t\t},\n  \t\t\tsecondary: {\n  \t\t\t\tDEFAULT: 'hsl(var(--secondary))',\n  \t\t\t\tforeground: 'hsl(var(--secondary-foreground))'\n  \t\t\t},\n  \t\t\tmuted: {\n  \t\t\t\tDEFAULT: 'hsl(var(--muted))',\n  \t\t\t\tforeground: 'hsl(var(--muted-foreground))'\n  \t\t\t},\n  \t\t\taccent: {\n  \t\t\t\tDEFAULT: 'hsl(var(--accent))',\n  \t\t\t\tcoral: 'hsl(var(--accent-coral))',\n  \t\t\t\tforeground: 'hsl(var(--accent-foreground))'\n  \t\t\t},\n  \t\t\tdestructive: {\n  \t\t\t\tDEFAULT: 'hsl(var(--destructive))',\n  \t\t\t\tforeground: 'hsl(var(--destructive-foreground))'\n  \t\t\t},\n  \t\t\tsuccess: {\n  \t\t\t\tDEFAULT: 'hsl(var(--success))',\n  \t\t\t\tforeground: 'hsl(var(--success-foreground))'\n  \t\t\t},\n  \t\t\twarning: {\n  \t\t\t\tDEFAULT: 'hsl(var(--warning))',\n  \t\t\t\tforeground: 'hsl(var(--warning-foreground))'\n  \t\t\t},\n  \t\t\tinfo: {\n  \t\t\t\tDEFAULT: 'hsl(var(--info))',\n  \t\t\t\tforeground: 'hsl(var(--info-foreground))'\n  \t\t\t},\n  \t\t\tborder: 'hsl(var(--border))',\n  \t\t\tinput: 'hsl(var(--input))',\n  \t\t\tring: 'hsl(var(--ring))',\n  \t\t\tchart: {\n  \t\t\t\t'1': 'hsl(var(--chart-1))',\n  \t\t\t\t'2': 'hsl(var(--chart-2))',\n  \t\t\t\t'3': 'hsl(var(--chart-3))',\n  \t\t\t\t'4': 'hsl(var(--chart-4))',\n  \t\t\t\t'5': 'hsl(var(--chart-5))'\n  \t\t\t}\n  \t\t},\n  \t\tborderRadius: {\n  \t\t\tlg: 'var(--radius)',\n  \t\t\tmd: 'calc(var(--radius) - 2px)',\n  \t\t\tsm: 'calc(var(--radius) - 4px)',\n  \t\t\t'2xl': '1rem',\n  \t\t\t'3xl': '1.5rem',\n  \t\t\t'4xl': '2rem'\n  \t\t},\n  \t\tanimation: {\n  \t\t\t'reveal': 'reveal 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards',\n  \t\t\t'reveal-delay': 'reveal 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s forwards',\n  \t\t\t'scale-in': 'scaleIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards',\n  \t\t\t'glow-pulse': 'glowPulse 2s ease-in-out infinite',\n  \t\t\t'float': 'float 3s ease-in-out infinite',\n  \t\t\t'ping': 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite',\n  \t\t\t'pulse-glow': 'pulse-glow 2s ease-in-out infinite'\n  \t\t},\n  \t\tkeyframes: {\n  \t\t\treveal: {\n  \t\t\t\tfrom: { opacity: '0', transform: 'translateY(24px)' },\n  \t\t\t\tto: { opacity: '1', transform: 'translateY(0)' }\n  \t\t\t},\n  \t\t\tscaleIn: {\n  \t\t\t\tfrom: { opacity: '0', transform: 'scale(0.95)' },\n  \t\t\t\tto: { opacity: '1', transform: 'scale(1)' }\n  \t\t\t},\n  \t\t\tglowPulse: {\n  \t\t\t\t'0%, 100%': { opacity: '0.3' },\n  \t\t\t\t'50%': { opacity: '0.8' }\n  \t\t\t},\n  \t\t\tfloat: {\n  \t\t\t\t'0%, 100%': { transform: 'translateY(0px)' },\n  \t\t\t\t'50%': { transform: 'translateY(-10px)' }\n  \t\t\t},\n  \t\t\tping: {\n  \t\t\t\t'75%, 100%': { transform: 'scale(2)', opacity: '0' }\n  \t\t\t},\n  \t\t\t'pulse-glow': {\n  \t\t\t\t'0%, 100%': { boxShadow: '0 0 20px hsl(var(--primary) / 0.3)' },\n  \t\t\t\t'50%': { boxShadow: '0 0 40px hsl(var(--primary) / 0.5)' }\n  \t\t\t}\n  \t\t},\n  \t\tboxShadow: {\n  \t\t\t'glow-sm': '0 0 16px hsl(var(--primary) / 0.3)',\n  \t\t\t'glow': '0 0 24px hsl(var(--primary) / 0.4)',\n  \t\t\t'glow-lg': '0 0 40px hsl(var(--primary) / 0.5)',\n  \t\t\t'ambient': '0 20px 40px hsl(0 0% 0% / 0.4)'\n  \t\t}\n  \t}\n  },\n  plugins: [require(\"tailwindcss-animate\")],\n}\n"
+    },
+    {
+      "path": "postcss.config.js",
+      "sha": null,
+      "content_sha256": "24ca546ca8918b28c796f2a06e417be70c0877e8de147ba87bc4e88f2ef71136",
+      "score": 35,
+      "content": "export default {\r\n    plugins: {\r\n        tailwindcss: {},\r\n        autoprefixer: {},\r\n    },\r\n}\r\n"
+    },
+    {
+      "path": "tsconfig.app.json",
+      "sha": null,
+      "content_sha256": "0ede23aab329cd8eac631b6aca906d37c60bbb15a90d6946b8e8dba59c9c804f",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"useDefineForClassFields\": true,\n    \"lib\": [\"ES2020\", \"DOM\", \"DOM.Iterable\"],\n    \"module\": \"ESNext\",\n    \"skipLibCheck\": true,\n    \"moduleResolution\": \"bundler\",\n    \"allowImportingTsExtensions\": true,\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"noEmit\": true,\n    \"jsx\": \"react-jsx\",\n    \"strict\": false,\n    \"noImplicitAny\": false,\n    \"noUnusedLocals\": false,\n    \"noUnusedParameters\": false,\n    \"strictNullChecks\": false,\n    \"allowJs\": true,\n    \"baseUrl\": \".\",\n    \"paths\": {\n      \"@/*\": [\"./src/*\"]\n    }\n  },\n  \"include\": [\"src\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
+    },
+    {
+      "path": "supabase/config.toml",
+      "sha": null,
+      "content_sha256": "045fa6b16ee12df74d651fd8c8a451d30b62c8cf442fc523c2b4025ca8d4c1af",
+      "score": 33,
+      "content": "project_id = \"viotepfhdproajmntrfp\"\n\n[functions.analyze-report]\nverify_jwt = false\n\n[functions.create-lead]\nverify_jwt = false\n\n[functions.generate-pdf]\nverify_jwt = false\n"
+    },
+    {
+      "path": "src/main.tsx",
+      "sha": null,
+      "content_sha256": "89aa0792b973c46edb940ba0b972609d8771b38caf7b51a863f6c9725b8972cb",
+      "score": 33,
+      "content": "import React from 'react'\nimport ReactDOM from 'react-dom/client'\nimport App from './App.tsx'\nimport './index.css'\n\nReactDOM.createRoot(document.getElementById('root')!).render(\n    <React.StrictMode>\n        <App />\n    </React.StrictMode>,\n)\n\n"
+    },
+    {
+      "path": "src/vite-env.d.ts",
+      "sha": null,
+      "content_sha256": "377cc0a59c66d168c659cfc9ebffc8409b385fa479738a9aefe8687b7107aaa1",
+      "score": 33,
+      "content": "/// <reference types=\"vite/client\" />\n\ninterface ImportMetaEnv {\n  readonly VITE_SUPABASE_URL: string\n  readonly VITE_SUPABASE_PUBLISHABLE_KEY: string\n  readonly VITE_SUPABASE_PROJECT_ID: string\n}\n\ninterface ImportMeta {\n  readonly env: ImportMetaEnv\n}\n"
+    },
+    {
+      "path": "src/App.tsx",
+      "sha": null,
+      "content_sha256": "eb9b4bdb2a150ee49f62132e349be869da1604bf4e15c1a77ed5ea8e2a0c6815",
+      "score": 33,
+      "content": "import { Toaster } from \"@/components/ui/toaster\";\nimport { Toaster as Sonner } from \"@/components/ui/sonner\";\nimport { TooltipProvider } from \"@/components/ui/tooltip\";\nimport { QueryClient, QueryClientProvider } from \"@tanstack/react-query\";\nimport { BrowserRouter, Routes, Route } from \"react-router-dom\";\nimport { LeadProvider } from \"@/lib/lead-context\";\nimport { ScrollToTop } from \"@/components/scroll-to-top\";\nimport Index from \"./pages/Index\";\nimport Analyze from \"./pages/Analyze\";\nimport ApiTest from \"./pages/ApiTest\";\nimport FreeEbook from \"./pages/FreeEbook\";\nimport Portal from \"./pages/Portal\";\nimport GetReports from \"./pages/GetReports\";\nimport PrivacyPolicy from \"./pages/PrivacyPolicy\";\nimport TermsOfService from \"./pages/TermsOfService\";\nimport Disclaimer from \"./pages/Disclaimer\";\nimport ValueLadder from \"./pages/ValueLadder\";\n\nconst queryClient = new QueryClient();\n\nconst App = () => (\n    <QueryClientProvider client={queryClient}>\n        <LeadProvider>\n            <TooltipProvider>\n                <Toaster />\n                <Sonner />\n                <BrowserRouter>\n                    <ScrollToTop />\n                    <Routes>\n                        <Route path=\"/\" element={<FreeEbook />} />\n                        <Route path=\"/home\" element={<Index />} />\n                        <Route path=\"/analyze\" element={<Analyze />} />\n                        <Route path=\"/api-test\" element={<ApiTest />} />\n                        <Route path=\"/portal\" element={<Portal />} />\n                        <Route path=\"/portal/get-reports\" element={<GetReports />} />\n                        <Route path=\"/privacy-policy\" element={<PrivacyPolicy />} />\n                        <Route path=\"/terms-of-service\" element={<TermsOfService />} />\n                        <Route path=\"/disclaimer\" element={<Disclaimer />} />\n                        <Route path=\"/value-ladder\" element={<ValueLadder />} />\n                    </Routes>\n                </BrowserRouter>\n            </TooltipProvider>\n        </LeadProvider>\n    </QueryClientProvider>\n);\n\nexport default App;\n"
+    },
+    {
+      "path": "src/components/theme-provider.tsx",
+      "sha": null,
+      "content_sha256": "b81e6a6a0fbec9de70485f5fbb3a3ec74340c22c2db4812d58be87d2e82d0caf",
+      "score": 31,
+      "content": "import * as React from \"react\"\n\ntype ThemeProviderProps = {\n  children: React.ReactNode\n  defaultTheme?: string\n  storageKey?: string\n}\n\nexport function ThemeProvider({ children }: ThemeProviderProps) {\n  return <>{children}</>\n}\n"
+    },
+    {
+      "path": "supabase/migrations/20251219194855_b79e78ad-b514-4a87-ba61-d17be95d1305.sql",
+      "sha": null,
+      "content_sha256": "c8c1cc755ed623626583bd44163e4aa843ac6cfa4dd37f262cca81d0e1715666",
+      "score": 31,
+      "content": "-- Add ip_address column to leads table for rate limiting\nALTER TABLE public.leads ADD COLUMN ip_address text;"
+    },
+    {
+      "path": "supabase/migrations/20251219190754_6536ba6d-b8e5-4aa2-9079-957803e69ff2.sql",
+      "sha": null,
+      "content_sha256": "2f0ac532ccf73d4735eb7c415c4f042343e5bec7e922e17cc0149b68bd3bc66b",
+      "score": 31,
+      "content": "-- Create restrictive policy that denies all access\n-- Service role bypasses RLS, so it will still have full access\nCREATE POLICY \"Deny all public access\"\nON public.leads\nFOR ALL\nTO anon, authenticated\nUSING (false)\nWITH CHECK (false);"
+    },
+    {
+      "path": "src/lib/db.ts",
+      "sha": null,
+      "content_sha256": "d761ffbd6a4d01ac8ff791bc6c3258a489d7233c52cee81454998803785dc8b2",
+      "score": 31,
+      "content": "// Database utilities placeholder\n// This file can be used for database-related helpers if needed\n\nexport const db = {\n  // Add database utilities here when backend is connected\n}\n"
+    },
+    {
+      "path": "src/components/scroll-to-top.tsx",
+      "sha": null,
+      "content_sha256": "b144b85199525fa95854c1ffc1015634485f3a25173f35d917319e5d927758c3",
+      "score": 31,
+      "content": "import { useEffect } from 'react';\nimport { useLocation } from 'react-router-dom';\n\nexport function ScrollToTop() {\n  const { pathname } = useLocation();\n\n  useEffect(() => {\n    window.scrollTo(0, 0);\n  }, [pathname]);\n\n  return null;\n}\n"
+    },
+    {
+      "path": "src/lib/types.ts",
+      "sha": null,
+      "content_sha256": "9c9992f2312146e50939e8d50f548ccd94c65d7961ada64870827be9c550520d",
+      "score": 31,
+      "content": "export type Expense = {\n  id: string\n  amount: number\n  category: string\n  description: string\n  date: Date\n}\n\nexport type ExpenseFormData = Omit<Expense, 'id' | 'date'> & {\n  date: string\n}\n\nexport const EXPENSE_CATEGORIES = [\n  'Food',\n  'Transportation',\n  'Housing',\n  'Utilities',\n  'Entertainment',\n  'Healthcare',\n  'Shopping',\n  'Education',\n  'Other'\n] as const\n\nexport type DateRange = {\n  from: Date | undefined\n  to: Date | undefined\n}"
+    },
+    {
+      "path": "supabase/migrations/20251219195629_30f50982-9ec1-4d98-bf4d-cc9857b30415.sql",
+      "sha": null,
+      "content_sha256": "73cc1f6e43464a047e8d6c8ab2dff4dbafe85a369dad7e5d6f6813359c0c130d",
+      "score": 31,
+      "content": "-- 1. Force Enable RLS (ensure it's active)\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\n\n-- 2. Force RLS for table owner as well\nALTER TABLE public.leads FORCE ROW LEVEL SECURITY;\n\n-- 3. Revoke all base permissions from public roles\nREVOKE ALL ON public.leads FROM anon;\nREVOKE ALL ON public.leads FROM authenticated;\nREVOKE ALL ON public.leads FROM public;\n\n-- 4. Drop ALL existing policies on leads table\nDROP POLICY IF EXISTS \"Allow Service Role Full Access\" ON public.leads;\nDROP POLICY IF EXISTS \"Explicitly Deny Authenticated Access\" ON public.leads;\nDROP POLICY IF EXISTS \"Explicitly Deny Public Access\" ON public.leads;\nDROP POLICY IF EXISTS \"Allow insert for service role\" ON public.leads;\nDROP POLICY IF EXISTS \"service_role_full_access\" ON public.leads;\nDROP POLICY IF EXISTS \"deny_anon_access\" ON public.leads;\nDROP POLICY IF EXISTS \"deny_authenticated_access\" ON public.leads;\n\n-- 5. Create Policy for service_role full access (service_role bypasses RLS by default, but explicit is safer)\nCREATE POLICY \"service_role_full_access\" \nON public.leads \nFOR ALL \nTO service_role\nUSING (true) \nWITH CHECK (true);\n\n-- 6. Create explicit DENY policy for anon role (restrictive)\nCREATE POLICY \"deny_anon_access\" \nON public.leads \nAS RESTRICTIVE\nFOR ALL \nTO anon\nUSING (false)\nWITH CHECK (false);\n\n-- 7. Create explicit DENY policy for authenticated role (restrictive)\nCREATE POLICY \"deny_authenticated_access\" \nON public.leads \nAS RESTRICTIVE\nFOR ALL \nTO authenticated\nUSING (false)\nWITH CHECK (false);"
+    },
+    {
+      "path": "src/lib/utils.ts",
+      "sha": null,
+      "content_sha256": "ab626dd364f4f112865d13348b9b6aa24979f069d14b7799cfc70c82340359d4",
+      "score": 31,
+      "content": "import { type ClassValue, clsx } from \"clsx\"\nimport { twMerge } from \"tailwind-merge\"\n \nexport function cn(...inputs: ClassValue[]) {\n  return twMerge(clsx(inputs))\n}\n\nexport function formatDuration(seconds: number): string {\n  const hours = Math.floor(seconds / 3600)\n  const minutes = Math.floor((seconds % 3600) / 60)\n  const remainingSeconds = seconds % 60\n\n  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`\n}"
+    },
+    {
+      "path": "supabase/migrations/20251219192113_cec4e633-7105-48f2-bba0-bc383efb6e53.sql",
+      "sha": null,
+      "content_sha256": "6499c616b4697693bef901d62bdf41049e0dd1f708addb51a4d78eb3d82b9ea9",
+      "score": 31,
+      "content": "-- Ensure RLS is enabled\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\n\n-- Force RLS for table owner as well (prevents bypassing RLS)\nALTER TABLE public.leads FORCE ROW LEVEL SECURITY;\n\n-- Drop ALL existing policies on leads table\nDROP POLICY IF EXISTS \"Enable Service Role Access\" ON public.leads;\nDROP POLICY IF EXISTS \"Deny all public access\" ON public.leads;\n\n-- Create single policy granting access ONLY to service_role\n-- anon and authenticated will have NO access (no policy = no access when RLS is enabled)\nCREATE POLICY \"Allow Service Role Full Access\"\nON public.leads\nFOR ALL\nTO service_role\nUSING (true)\nWITH CHECK (true);"
+    },
+    {
+      "path": "supabase/migrations/20251219190101_24e8d658-6e3b-4c3f-93e0-af6adb4e87b1.sql",
+      "sha": null,
+      "content_sha256": "5c1186b5929cd444aff0c8e9dbdfb1a194b3f964af3314d86f804755b1ac7f4b",
+      "score": 31,
+      "content": "-- Create the leads table\nCREATE TABLE public.leads (\n    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n    name TEXT NOT NULL,\n    email TEXT NOT NULL,\n    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()\n);\n\n-- Enable Row Level Security\nALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;\n\n-- No public policies - only service role can write/read\n-- Edge functions use service role key, so they can bypass RLS"
+    }
+  ],
+  "generated_at": "2026-10-08T15:25:17.956659+00:00"
+}

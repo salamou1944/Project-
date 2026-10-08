@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:mattpocock/svelte",
+  "repo": "mattpocock/svelte",
+  "revision_sha": "2133d7d67afc9908b9b7803bf76a0e2755ff913a",
+  "default_branch": "main",
+  "pushed_at": "2024-01-03T15:21:19Z",
+  "repo_updated_at": "2026-09-20T06:56:12Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "packages/svelte/tests/runtime-browser/custom-elements-samples/action/_config.js",
+      "sha": null,
+      "content_sha256": "87edbd5126157f7d1a3eacd524f21600fa1d94ef38f9e48d9622c2d5e2d44bf4",
+      "score": 240,
+      "content": "import { test } from '../../assert';\nconst tick = () => Promise.resolve();\n\nexport default test({\n\tasync test({ assert, target }) {\n\t\ttarget.innerHTML = '<custom-element name=\"foo\"></custom-element>';\n\t\tawait tick();\n\t\tawait tick();\n\t\t/** @type {any} */\n\t\tconst el = target.querySelector('custom-element');\n\t\tconst events = el.events; // need to get the array reference, else it's gone when destroyed\n\t\tassert.deepEqual(events, ['foo']);\n\n\t\tel.name = 'bar';\n\t\tawait tick();\n\t\tawait tick();\n\t\tassert.deepEqual(events, ['foo', 'bar']);\n\n\t\ttarget.innerHTML = '';\n\t\tawait tick();\n\t\tassert.deepEqual(events, ['foo', 'bar', 'destroy']);\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-browser/custom-elements-samples/action/main.svelte",
+      "sha": null,
+      "content_sha256": "97ec7abd95f67471a3da081e791f74e0728f78b9d7f091cc15250e2da4eac746",
+      "score": 205,
+      "content": "<svelte:options customElement=\"custom-element\" />\n\n<script>\n\texport let name;\n\texport let events = [];\n\n\tfunction action(_node, name) {\n\t\tevents.push(name);\n\t\treturn {\n\t\t\tupdate(name) {\n\t\t\t\tevents.push(name);\n\t\t\t},\n\t\t\tdestroy() {\n\t\t\t\tevents.push(\"destroy\");\n\t\t\t},\n\t\t};\n\t}\n</script>\n\n<div use:action={name}>action</div>\n"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "496a803730ba46dc6875fea4db9f25401ef1b5115ef2ecbe061b0441cb0a469c",
+      "score": 198,
+      "content": "name: CI\non:\n  push:\n    branches: [main]\n  pull_request:\npermissions:\n  contents: read # to fetch code (actions/checkout)\n\nenv:\n  # We only install Chromium manually\n  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'\n\njobs:\n  Tests:\n    runs-on: ${{ matrix.os }}\n    timeout-minutes: 15\n    strategy:\n      matrix:\n        include:\n          - node-version: 18\n            os: windows-latest\n          - node-version: 18\n            os: macOS-latest\n          - node-version: 18\n            os: ubuntu-latest\n          - node-version: 20\n            os: ubuntu-latest\n          - node-version: 21\n            os: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v3\n      - uses: pnpm/action-setup@v2.2.4\n      - uses: actions/setup-node@v3\n        with:\n          node-version: ${{ matrix.node-version }}\n          cache: pnpm\n      - run: pnpm install --frozen-lockfile\n      - run: pnpm playwright install chromium\n      - run: pnpm test\n        env:\n          CI: true\n  Lint:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - uses: actions/checkout@v3\n      - uses: pnpm/action-setup@v2.2.4\n      - uses: actions/setup-node@v3\n        with:\n          node-version: 18\n          cache: pnpm\n      - name: install\n        run: pnpm install --frozen-lockfile\n      - name: type check\n        run: pnpm check\n      - name: lint\n        run: pnpm lint\n      - name: build and check generated types\n        run: pnpm build && { [ \"`git status --porcelain=v1`\" == \"\" ] || (echo \"Generated types have changed — please regenerate types locally and commit the changes after you have reviewed them\"; git diff; exit 1); }\n"
+    },
+    {
+      "path": ".github/workflows/ecosystem-ci-trigger.yml",
+      "sha": null,
+      "content_sha256": "541b6fbc2913f9ed645fb7fd47a6b7d26596640e0a64224ce25f8eaf7fab65e8",
+      "score": 198,
+      "content": "name: ecosystem-ci trigger\n\non:\n  issue_comment:\n    types: [created]\n\njobs:\n  trigger:\n    runs-on: ubuntu-latest\n    if: github.repository == 'sveltejs/svelte' && github.event.issue.pull_request && startsWith(github.event.comment.body, '/ecosystem-ci run')\n    steps:\n      - uses: actions/github-script@v6\n        with:\n          script: |\n            const user = context.payload.sender.login\n            console.log(`Validate user: ${user}`)\n\n            let hasTriagePermission = false\n            try {\n              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({\n                owner: context.repo.owner,\n                repo: context.repo.repo,\n                username: user,\n              });\n              hasTriagePermission = data.user.permissions.triage\n            } catch (e) {\n              console.warn(e)\n            }\n\n            if (hasTriagePermission) {\n              console.log('Allowed')\n              await github.rest.reactions.createForIssueComment({\n                owner: context.repo.owner,\n                repo: context.repo.repo,\n                comment_id: context.payload.comment.id,\n                content: '+1',\n              })\n            } else {\n              console.log('Not allowed')\n              await github.rest.reactions.createForIssueComment({\n                owner: context.repo.owner,\n                repo: context.repo.repo,\n                comment_id: context.payload.comment.id,\n                content: '-1',\n              })\n              throw new Error('not allowed')\n            }\n      - uses: actions/github-script@v6\n        id: get-pr-data\n        with:\n          script: |\n            console.log(`Get PR info: ${context.repo.owner}/${context.repo.repo}#${context.issue.number}`)\n            const { data: pr } = await github.rest.pulls.get({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              pull_number: context.issue.number\n            })\n            return {\n              num: context.issue.number,\n              branchName: pr.head.ref,\n              repo: pr.head.repo.full_name\n            }\n      - id: generate-token\n        uses: tibdex/github-app-token@b62528385c34dbc9f38e5f4225ac829252d1ea92 #keep pinned for security reasons, currently 1.8.0\n        with:\n          app_id: ${{ secrets.ECOSYSTEM_CI_GITHUB_APP_ID }}\n          private_key: ${{ secrets.ECOSYSTEM_CI_GITHUB_APP_PRIVATE_KEY }}\n          repository: '${{ github.repository_owner }}/svelte-ecosystem-ci'\n      - uses: actions/github-script@v6\n        id: trigger\n        env:\n          COMMENT: ${{ github.event.comment.body }}\n        with:\n          github-token: ${{ steps.generate-token.outputs.token }}\n          result-encoding: string\n          script: |\n            const comment = process.env.COMMENT.trim()\n            const prData = ${{ steps.get-pr-data.outputs.result }}\n\n            const suite = comment.split('\\n')[0].replace(/^\\/ecosystem-ci run/, '').trim()\n\n            await github.rest.actions.createWorkflowDispatch({\n              owner: context.repo.owner,\n              repo: 'svelte-ecosystem-ci',\n              workflow_id: 'ecosystem-ci-from-pr.yml',\n              ref: 'main',\n              inputs: {\n                prNumber: '' + prData.num,\n                branchName: prData.branchName,\n                repo: prData.repo,\n                suite: suite === '' ? '-' : suite\n              }\n            })\n"
+    },
+    {
+      "path": "documentation/docs/02-template-syntax/07-special-elements.md",
+      "sha": null,
+      "content_sha256": "b3ceabb0ab2607cc87a781a90d0bf1226e7338a09d47e4a94f2ae73bed13fe0c",
+      "score": 196,
+      "content": "---\ntitle: Special elements\n---\n\n## `<slot>`\n\n```svelte\n<slot><!-- optional fallback --></slot>\n```\n\n```svelte\n<slot name=\"x\"><!-- optional fallback --></slot>\n```\n\n```svelte\n<slot prop={value} />\n```\n\nComponents can have child content, in the same way that elements can.\n\nThe content is exposed in the child component using the `<slot>` element, which can contain fallback content that is rendered if no children are provided.\n\n```svelte\n<!-- Widget.svelte -->\n<div>\n\t<slot>\n\t\tthis fallback content will be rendered when no content is provided, like in the first example\n\t</slot>\n</div>\n\n<!-- App.svelte -->\n<Widget />\n<!-- this component will render the default content -->\n\n<Widget>\n\t<p>this is some child content that will overwrite the default slot content</p>\n</Widget>\n```\n\nNote: If you want to render regular `<slot>` element, You can use `<svelte:element this=\"slot\" />`.\n\n### `<slot name=\"`_name_`\">`\n\nNamed slots allow consumers to target specific areas. They can also have fallback content.\n\n```svelte\n<!-- Widget.svelte -->\n<div>\n\t<slot name=\"header\">No header was provided</slot>\n\t<p>Some content between header and footer</p>\n\t<slot name=\"footer\" />\n</div>\n\n<!-- App.svelte -->\n<Widget>\n\t<h1 slot=\"header\">Hello</h1>\n\t<p slot=\"footer\">Copyright (c) 2019 Svelte Industries</p>\n</Widget>\n```\n\nComponents can be placed in a named slot using the syntax `<Component slot=\"name\" />`.\nIn order to place content in a slot without using a wrapper element, you can use the special element `<svelte:fragment>`.\n\n```svelte\n<!-- Widget.svelte -->\n<div>\n\t<slot name=\"header\">No header was provided</slot>\n\t<p>Some content between header and footer</p>\n\t<slot name=\"footer\" />\n</div>\n\n<!-- App.svelte -->\n<Widget>\n\t<HeaderComponent slot=\"header\" />\n\t<svelte:fragment slot=\"footer\">\n\t\t<p>All rights reserved.</p>\n\t\t<p>Copyright (c) 2019 Svelte Industries</p>\n\t</svelte:fragment>\n</Widget>\n```\n\n### $$slots\n\n`$$slots` is an object whose keys are the names of the slots passed into the component by the parent. If the parent does not pass in a slot with a particular name, that name will not be present in `$$slots`. This allows components to render a slot (and other elements, like wrappers for styling) only if the parent provides it.\n\nNote that explicitly passing in an empty named slot will add that slot's name to `$$slots`. For example, if a parent passes `<div slot=\"title\" />` to a child component, `$$slots.title` will be truthy within the child.\n\n```svelte\n<!-- Card.svelte -->\n<div>\n\t<slot name=\"title\" />\n\t{#if $$slots.description}\n\t\t<!-- This <hr> and slot will render only if a slot named \"description\" is provided. -->\n\t\t<hr />\n\t\t<slot name=\"description\" />\n\t{/if}\n</div>\n\n<!-- App.svelte -->\n<Card>\n\t<h1 slot=\"title\">Blog Post Title</h1>\n\t<!-- No slot named \"description\" was provided so the optional slot will not be rendered. -->\n</Card>\n```\n\n### `<slot key={`_value_`}>`\n\nSlots can be rendered zero or more times and can pass values _back_ to the parent using props. The parent exposes the values to the slot template using the `let:` directive.\n\nThe usual shorthand rules apply — `let:item` is equivalent to `let:item={item}`, and `<slot {item}>` is equivalent to `<slot item={item}>`.\n\n```svelte\n<!-- FancyList.svelte -->\n<ul>\n\t{#each items as item}\n\t\t<li class=\"fancy\">\n\t\t\t<slot prop={item} />\n\t\t</li>\n\t{/each}\n</ul>\n\n<!-- App.svelte -->\n<FancyList {items} let:prop={thing}>\n\t<div>{thing.text}</div>\n</FancyList>\n```\n\nNamed slots can also expose values. The `let:` directive goes on the element with the `slot` attribute.\n\n```svelte\n<!-- FancyList.svelte -->\n<ul>\n\t{#each items as item}\n\t\t<li class=\"fancy\">\n\t\t\t<slot name=\"item\" {item} />\n\t\t</li>\n\t{/each}\n</ul>\n\n<slot name=\"footer\" />\n\n<!-- App.svelte -->\n<FancyList {items}>\n\t<div slot=\"item\" let:item>{item.text}</div>\n\t<p slot=\"footer\">Copyright (c) 2019 Svelte Industries</p>\n</FancyList>\n```\n\n## `<svelte:self>`\n\nThe `<svelte:self>` element allows a component to include itself, recursively.\n\nIt cannot appear at the top level of your markup; it must be inside an if or each block or passed to a component's slot to prevent an infinite loop.\n\n```svelte\n<script>\n\t/** @type {number} */\n\texport let count;\n</script>\n\n{#if count > 0}\n\t<p>counting down... {count}</p>\n\t<svelte:self count={count - 1} />\n{:else}\n\t<p>lift-off!</p>\n{/if}\n```\n\n## `<svelte:component>`\n\n```svelte\n<svelte:component this={expression} />\n```\n\nThe `<svelte:component>` element renders a component dynamically, using the component constructor specified as the `this` property. When the property changes, the component is destroyed and recreated.\n\nIf `this` is falsy, no component is rendered.\n\n```svelte\n<svelte:component this={currentSelection.component} foo={bar} />\n```\n\n## `<svelte:element>`\n\n```svelte\n<svelte:element this={expression} />\n```\n\nThe `<svelte:element>` element lets you render an element of a dynamically specified type. This is useful for example when displaying rich text content from a CMS. Any properties and event listeners present will be applied to the element.\n\nThe only supported binding is `bind:this`, since the element type-specific bindings that Svelte does at build time (e.g. `bind:value` for input elements) do not work with a dynamic tag type.\n\nIf `this` has a nullish value, the element and its children will not be rendered.\n\nIf `this` is the name of a [void element](https://developer.mozilla.org/en-US/docs/Glossary/Void_element) (e.g., `br`) and `<svelte:element>` has child elements, a runtime error will be thrown in development mode.\n\n```svelte\n<script>\n\tlet tag = 'div';\n\n\texport let handler;\n</script>\n\n<svelte:element this={tag} on:click={handler}>Foo</svelte:element>\n```\n\n## `<svelte:window>`\n\n```svelte\n<svelte:window on:event={handler} />\n```\n\n```svelte\n<svelte:window bind:prop={value} />\n```\n\nThe `<svelte:window>` element allows you to add event listeners to the `window` object without worrying about removing them when the component is destroyed, or checking for the existence of `window` when server-side rendering.\n\nUnlike `<svelte:self>`, this element may only appear at the top level of your component and must never be inside a block or element.\n\n```svelte\n<script>\n\t/** @param {KeyboardEvent} event */\n\tfunction handleKeydown(event) {\n\t\talert(`pressed the ${event.key} key`);\n\t}\n</script>\n\n<svelte:window on:keydown={handleKeydown} />\n```\n\nYou can also bind to the following properties:\n\n- `innerWidth`\n- `innerHeight`\n- `outerWidth`\n- `outerHeight`\n- `scrollX`\n- `scrollY`\n- `online` — an alias for `window.navigator.onLine`\n- `devicePixelRatio`\n\nAll except `scrollX` and `scrollY` are readonly.\n\n```svelte\n<svelte:window bind:scrollY={y} />\n```\n\n> Note that the page will not be scrolled to the initial value to avoid accessibility issues. Only subsequent changes to the bound variable of `scrollX` and `scrollY` will cause scrolling. However, if the scrolling behaviour is desired, call `scrollTo()` in `onMount()`.\n\n## `<svelte:document>`\n\n```svelte\n<svelte:document on:event={handler} />\n```\n\n```svelte\n<svelte:document bind:prop={value} />\n```\n\nSimilarly to `<svelte:window>`, this element allows you to add listeners to events on `document`, such as `visibilitychange`, which don't fire on `window`. It also lets you use [actions](/docs/element-directives#use-action) on `document`.\n\nAs with `<svelte:window>`, this element may only appear the top level of your component and must never be inside a block or element.\n\n```svelte\n<svelte:document on:visibilitychange={handleVisibilityChange} use:someAction />\n```\n\nYou can also bind to the following properties:\n\n- `fullscreenElement`\n- `visibilityState`\n\nAll are readonly.\n\n## `<svelte:body>`\n\n```svelte\n<svelte:body on:event={handler} />\n```\n\nSimilarly to `<svelte:window>`, this element allows you to add listeners to events on `document.body`, such as `mouseenter` and `mouseleave`, which don't fire on `window`. It also lets you use [actions](/docs/element-directives#use-action) on the `<body>` element.\n\nAs with `<svelte:window>` and `<svelte:document>`, this element may only appear the top level of your component and must never be inside a block or element.\n\n```svelte\n<svelte:body on:mouseenter={handleMouseenter} on:mouseleave={handleMouseleave} use:someAction />\n```\n\n## `<svelte:head>`\n\n```svelte\n<svelte:head>...</svelte:head>\n```\n\nThis element makes it possible to insert elements into `document.head`. During server-side rendering, `head` content is exposed separately to the main `html` content.\n\nAs with `<svelte:window>`, `<svelte:document>` and `<svelte:body>`, this element may only appear at the top level of your component and must never be inside a block or element.\n\n```svelte\n<svelte:head>\n\t<title>Hello world!</title>\n\t<meta name=\"description\" content=\"This is where the description goes for SEO\" />\n</svelte:head>\n```\n\n## `<svelte:options>`\n\n```svelte\n<svelte:options option={value} />\n```\n\nThe `<svelte:options>` element provides a place to specify per-component compiler options, which are detailed in the [compiler section](/docs/svelte-compiler#compile). The possible options are:\n\n- `immutable={true}` — you never use mutable data, so the compiler can do simple referential equality checks to determine if values have changed\n- `immutable={false}` — the default. Svelte will be more conservative about whether or not mutable objects have changed\n- `accessors={true}` — adds getters and setters for the component's props\n- `accessors={false}` — the default\n- `namespace=\"...\"` — the namespace where this component will be used, most commonly \"svg\"; use the \"foreign\" namespace to opt out of case-insensitive attribute names and HTML-specific warnings\n- `customElement=\"...\"` — the name to use when compiling this component as a custom element\n\n```svelte\n<svelte:options customElement=\"my-custom-element\" />\n```\n\n## `<svelte:fragment>`\n\nThe `<svelte:fragment>` element allows you to place content in a [named slot](/docs/special-elements#slot-slot-name-name) without wrapping it in a container DOM element. This keeps the flow layout of your document intact.\n\n```svelte\n<!-- Widget.svelte -->\n<div>\n\t<slot name=\"header\">No header was provided</slot>\n\t<p>Some content between header and footer</p>\n\t<slot name=\"footer\" />\n</div>\n\n<!-- App.svelte -->\n<Widget>\n\t<h1 slot=\"header\">Hello</h1>\n\t<svelte:fragment slot=\"footer\">\n\t\t<p>All rights reserved.</p>\n\t\t<p>Copyright (c) 2019 Svelte Industries</p>\n\t</svelte:fragment>\n</Widget>\n```\n"
+    },
+    {
+      "path": "documentation/docs/02-template-syntax/04-special-tags.md",
+      "sha": null,
+      "content_sha256": "26da8ce355070b1dc0074d5cabc19d0d42427541689efa5ed17ecb8d9af552a1",
+      "score": 196,
+      "content": "---\ntitle: Special tags\n---\n\n## {@html ...}\n\n```svelte\n<!--- copy: false --->\n{@html expression}\n```\n\nIn a text expression, characters like `<` and `>` are escaped; however, with HTML expressions, they're not.\n\nThe expression should be valid standalone HTML — `{@html \"<div>\"}content{@html \"</div>\"}` will _not_ work, because `</div>` is not valid HTML. It also will _not_ compile Svelte code.\n\n> Svelte does not sanitize expressions before injecting HTML. If the data comes from an untrusted source, you must sanitize it, or you are exposing your users to an XSS vulnerability.\n\n```svelte\n<div class=\"blog-post\">\n\t<h1>{post.title}</h1>\n\t{@html post.content}\n</div>\n```\n\n## {@debug ...}\n\n```svelte\n<!--- copy: false --->\n{@debug}\n```\n\n```svelte\n<!--- copy: false --->\n{@debug var1, var2, ..., varN}\n```\n\nThe `{@debug ...}` tag offers an alternative to `console.log(...)`. It logs the values of specific variables whenever they change, and pauses code execution if you have devtools open.\n\n```svelte\n<script>\n\tlet user = {\n\t\tfirstname: 'Ada',\n\t\tlastname: 'Lovelace'\n\t};\n</script>\n\n{@debug user}\n\n<h1>Hello {user.firstname}!</h1>\n```\n\n`{@debug ...}` accepts a comma-separated list of variable names (not arbitrary expressions).\n\n```svelte\n<!-- Compiles -->\n{@debug user}\n{@debug user1, user2, user3}\n\n<!-- WON'T compile -->\n{@debug user.firstname}\n{@debug myArray[0]}\n{@debug !isReady}\n{@debug typeof user === 'object'}\n```\n\nThe `{@debug}` tag without any arguments will insert a `debugger` statement that gets triggered when _any_ state changes, as opposed to the specified variables.\n\n## {@const ...}\n\n```svelte\n<!--- copy: false --->\n{@const assignment}\n```\n\nThe `{@const ...}` tag defines a local constant.\n\n```svelte\n<script>\n\texport let boxes;\n</script>\n\n{#each boxes as box}\n\t{@const area = box.width * box.height}\n\t{box.width} * {box.height} = {area}\n{/each}\n```\n\n`{@const}` is only allowed as direct child of `{#if}`, `{:else if}`, `{:else}`, `{#each}`, `{:then}`, `{:catch}`, `<Component />` or `<svelte:fragment />`.\n"
+    },
+    {
+      "path": "documentation/docs/04-compiler-and-api/meta.json",
+      "sha": null,
+      "content_sha256": "6d6641eaaa36f35df0d3977850ebb3dc267ac8fb7b9ba000246f054a4595de86",
+      "score": 174,
+      "content": "{\n\t\"title\": \"Compiler and API\"\n}\n"
+    },
+    {
+      "path": "sites/svelte.dev/src/routes/(authed)/repl/api/[id].json/+server.js",
+      "sha": null,
+      "content_sha256": "c2038386e64684f3398e9a9a09cf0d596cd0c235396d621907316973ce172f88",
+      "score": 174,
+      "content": "import { dev } from '$app/environment';\nimport { client } from '$lib/db/client.js';\nimport * as gist from '$lib/db/gist.js';\nimport examples_data from '$lib/generated/examples-data.js';\nimport { get_example, get_examples_list } from '$lib/server/examples/index.js';\nimport { error, json } from '@sveltejs/kit';\n\nexport const prerender = 'auto';\n\nconst UUID_REGEX = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/;\n\n/** @type {Set<string>} */\nlet examples;\n\n/** @param {import('$lib/server/examples/types').ExamplesData[number]['examples'][number]['files'][number][]} files  */\nfunction munge(files) {\n\treturn files\n\t\t.map((file) => {\n\t\t\tconst dot = file.name.lastIndexOf('.');\n\t\t\tlet name = file.name.slice(0, dot);\n\t\t\tlet type = file.name.slice(dot + 1);\n\n\t\t\tif (type === 'html') type = 'svelte';\n\t\t\t// @ts-expect-error what is file.source? by @PuruVJ\n\t\t\treturn { name, type, source: file.source ?? file.content ?? '' };\n\t\t})\n\t\t.sort((a, b) => {\n\t\t\tif (a.name === 'App' && a.type === 'svelte') return -1;\n\t\t\tif (b.name === 'App' && b.type === 'svelte') return 1;\n\n\t\t\tif (a.type !== b.type) return a.type === 'svelte' ? -1 : 1;\n\n\t\t\treturn a.name < b.name ? -1 : 1;\n\t\t});\n}\n\nexport async function GET({ params }) {\n\t// Currently, these pages(that are in examples/) are prerendered. To avoid making any FS requests,\n\t// We prerender examples pages during build time. That means, when something like `/repl/hello-world.json`\n\t// is accessed, this function won't be run at all, as it will be served from the filesystem\n\n\texamples = new Set(\n\t\tget_examples_list(examples_data)\n\t\t\t.map((category) => category.examples)\n\t\t\t.flat()\n\t\t\t.map((example) => example.slug)\n\t);\n\n\tconst example = get_example(examples_data, params.id);\n\tif (example) {\n\t\treturn json({\n\t\t\tid: params.id,\n\t\t\tname: example.title,\n\t\t\towner: null,\n\t\t\trelaxed: false, // TODO is this right? EDIT: It was example.relaxed before, which no example return to my knowledge. By @PuruVJ\n\t\t\tcomponents: munge(example.files)\n\t\t});\n\t}\n\n\tif (dev && !client) {\n\t\t// in dev with no local Supabase configured, proxy to production\n\t\t// this lets us at least load saved REPLs\n\t\tconst res = await fetch(`https://svelte.dev/repl/api/${params.id}.json`);\n\n\t\t// returning the response directly results in a bizarre\n\t\t// content encoding error, so we create a new one\n\t\treturn new Response(await res.text(), {\n\t\t\tstatus: res.status,\n\t\t\theaders: {\n\t\t\t\t'content-type': 'application/json'\n\t\t\t}\n\t\t});\n\t}\n\n\tif (!UUID_REGEX.test(params.id)) {\n\t\tthrow error(404);\n\t}\n\n\tconst app = await gist.read(params.id);\n\n\tif (!app) {\n\t\tthrow error(404, 'not found');\n\t}\n\n\treturn json({\n\t\tid: params.id,\n\t\tname: app.name,\n\t\t// @ts-ignore\n\t\towner: app.userid,\n\t\trelaxed: false,\n\t\t// @ts-expect-error app.files has a `source` property\n\t\tcomponents: munge(app.files)\n\t});\n}\n\nexport async function entries() {\n\tconst { get_examples_list } = await import('$lib/server/examples/index.js');\n\n\treturn get_examples_list(examples_data)\n\t\t.map(({ examples }) => examples)\n\t\t.flatMap((val) => val.map(({ slug }) => ({ id: slug })));\n}\n"
+    },
+    {
+      "path": "packages/svelte/tests/types/actions.ts",
+      "sha": null,
+      "content_sha256": "0b6c4c277426380c3e6f20edf099e677945d4bccc3661247ce16cd753cf1a4cc",
+      "score": 169,
+      "content": "import type { Action, ActionReturn } from 'svelte/action';\n\n// ---------------- Action\n\nconst href: Action<HTMLAnchorElement> = (node) => {\n\tnode.href = '';\n\t// @ts-expect-error\n\tnode.href = 1;\n};\nhref;\n\nconst required: Action<HTMLElement, boolean> = (_node, _param) => {};\nrequired(null as any, true);\n// @ts-expect-error (only in strict mode) boolean missing\nrequired(null as any);\n// @ts-expect-error no boolean\nrequired(null as any, 'string');\n\nconst required1: Action<HTMLElement, boolean> = (_node, _param) => {\n\treturn {\n\t\tupdate: (p) => p === true,\n\t\tdestroy: () => {}\n\t};\n};\nrequired1;\n\nconst required2: Action<HTMLElement, boolean> = (_node) => {};\nrequired2;\n\nconst required3: Action<HTMLElement, boolean> = (_node, _param) => {\n\treturn {\n\t\t// @ts-expect-error comparison always resolves to false\n\t\tupdate: (p) => p === 'd',\n\t\tdestroy: () => {}\n\t};\n};\nrequired3;\n\nconst optional: Action<HTMLElement, boolean | undefined> = (_node, _param?) => {};\noptional(null as any, true);\noptional(null as any);\n// @ts-expect-error no boolean\noptional(null as any, 'string');\n\nconst optional1: Action<HTMLElement, boolean | undefined> = (_node, _param?) => {\n\treturn {\n\t\tupdate: (p) => p === true,\n\t\tdestroy: () => {}\n\t};\n};\noptional1;\n\nconst optional2: Action<HTMLElement, boolean | undefined> = (_node) => {};\noptional2;\n\nconst optional3: Action<HTMLElement, boolean | undefined> = (_node, _param) => {};\noptional3;\n\nconst optional4: Action<HTMLElement, boolean | undefined> = (_node, _param?) => {\n\treturn {\n\t\t// @ts-expect-error comparison always resolves to false\n\t\tupdate: (p) => p === 'd',\n\t\tdestroy: () => {}\n\t};\n};\noptional4;\n\nconst no: Action<HTMLElement, undefined> = (_node) => {};\n// @ts-expect-error second param\nno(null as any, true);\nno(null as any);\n// @ts-expect-error second param\nno(null as any, 'string');\n\nconst no1: Action<HTMLElement, undefined> = (_node) => {\n\treturn {\n\t\tdestroy: () => {}\n\t};\n};\nno1;\n\nconst no2: Action<HTMLElement, undefined> = (_node, _param?) => {};\nno2(null as any);\n\nconst no3: Action<HTMLElement, undefined> = (_node, _param) => {};\nno3;\n\nconst no4: Action<HTMLElement, undefined> = (_node) => {\n\treturn {\n\t\tupdate: () => {},\n\t\tdestroy: () => {}\n\t};\n};\nno4;\n\n// ---------------- ActionReturn\n\nconst requiredReturn: ActionReturn<string> = {\n\tupdate: (p) => p.toString()\n};\nrequiredReturn;\n\nconst optionalReturn: ActionReturn<boolean | undefined> = {\n\tupdate: (p) => {\n\t\tp === true;\n\t\t// @ts-expect-error (only in strict mode) could be undefined\n\t\tp.toString();\n\t}\n};\noptionalReturn;\n\nconst invalidProperty: ActionReturn = {\n\t// @ts-expect-error invalid property\n\tinvalid: () => {}\n};\ninvalidProperty;\n\ntype Attributes = ActionReturn<undefined, { a: string }>['$$_attributes'];\nconst attributes: Attributes = { a: 'a' };\nattributes;\n// @ts-expect-error wrong type\nconst invalidAttributes1: Attributes = { a: 1 };\ninvalidAttributes1;\n// @ts-expect-error missing prop\nconst invalidAttributes2: Attributes = {};\ninvalidAttributes2;\n\nfunction generic_action<T extends boolean>(_node: HTMLElement, param: T): ActionReturn<T> {\n\treturn {\n\t\tupdate: (p) => p === param,\n\t\tdestroy: () => {}\n\t};\n}\ngeneric_action;\n"
+    },
+    {
+      "path": "sites/svelte-5-preview/src/routes/docs/content/01-api/meta.json",
+      "sha": null,
+      "content_sha256": "b719cb5ac469a9a4aa96d2c2e2f7aa316a9cf8ec3036539d73a47e458d61b056",
+      "score": 166,
+      "content": "{\n\t\"title\": \"API\"\n}\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/prop-not-action/_config.js",
+      "sha": null,
+      "content_sha256": "25ae5eb65e08f9e6876d5193b502d9d13f5f218ca0acdaaa5417faef2a749e45",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\nexport default test({\n\tget props() {\n\t\treturn { currentUser: { name: 'world' } };\n\t},\n\n\thtml: `\n\t\t<h1>Hello world!</h1>\n\t`\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/deconflict-contextual-action/util.js",
+      "sha": null,
+      "content_sha256": "c6fd46bccf78fbe04403b985b92a3fe827393ea25c364223511414a77ff18724",
+      "score": 165,
+      "content": "export default function (_, fn) {\n\tfn('import_action');\n}\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-object-deep/_config.js",
+      "sha": null,
+      "content_sha256": "aa5a4e3a7645c6dbf1459ee927f413e9e7135cb98f2f7e883983625c484677ca",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\nexport default test({\n\thtml: `\n\t\t<button>action</button>\n\t`,\n\tasync test({ assert, target }) {\n\t\tconst button = /** @type {HTMLButtonElement & { foo: string }} */ (\n\t\t\ttarget.querySelector('button')\n\t\t);\n\t\tassert.equal(button.foo, 'bar1337');\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-custom-event-handler/_config.js",
+      "sha": null,
+      "content_sha256": "5075a9c4acdeff53c4b2f7704d571b2b5ee8fed1dbf45a89b8392ae6a851910c",
+      "score": 165,
+      "content": "import { ok, test } from '../../test';\n\nexport default test({\n\thtml: '<button>0, 0</button>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst event = new window.MouseEvent('click', {\n\t\t\tclientX: 42,\n\t\t\tclientY: 42\n\t\t});\n\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tawait button.dispatchEvent(event);\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>42, 42</button>');\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-document/_config.js",
+      "sha": null,
+      "content_sha256": "0ae51c912efd0c570c3420afb869b3fcaffb92f801b74959352354853f40c030",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\nexport default test({\n\thtml: '<div></div>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst visibility = new window.Event('visibilitychange');\n\n\t\tawait window.document.dispatchEvent(visibility);\n\t\tassert.htmlEqual(\n\t\t\ttarget.innerHTML,\n\t\t\t`\n\t\t\t<div>\n\t\t\t\t<div class=\"tooltip\">Perform an Action</div>\n\t\t\t</div>\n\t\t`\n\t\t);\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-object/_config.js",
+      "sha": null,
+      "content_sha256": "aa5a4e3a7645c6dbf1459ee927f413e9e7135cb98f2f7e883983625c484677ca",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\nexport default test({\n\thtml: `\n\t\t<button>action</button>\n\t`,\n\tasync test({ assert, target }) {\n\t\tconst button = /** @type {HTMLButtonElement & { foo: string }} */ (\n\t\t\ttarget.querySelector('button')\n\t\t);\n\t\tassert.equal(button.foo, 'bar1337');\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-custom-event-handler-node-context/_config.js",
+      "sha": null,
+      "content_sha256": "05751f6e26288b78ed60a1e4edb896dbfd6aec98bec823af8e71f205ed8b3eee",
+      "score": 165,
+      "content": "import { ok, test } from '../../test';\n\nexport default test({\n\tskip_if_ssr: 'permanent', // unnecessary to test this in ssr mode\n\n\thtml: '<button>10</button>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst event = new window.MouseEvent('click');\n\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tawait button.dispatchEvent(event);\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>11</button>');\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/deconflict-contextual-action/_config.js",
+      "sha": null,
+      "content_sha256": "a8cf1a4505b83d67319ca5fbcf5471be14220f105af25c4ab046f7721c422754",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\n/** @type {string[]} */\nlet result;\n\nexport default test({\n\tbefore_test() {\n\t\tresult = [];\n\t},\n\tget props() {\n\t\treturn {\n\t\t\t/** @param {string} str */\n\t\t\tcollect: (str) => result.push(str)\n\t\t};\n\t},\n\ttest({ assert }) {\n\t\tassert.deepEqual(result, ['import_action', 'each_action']);\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/each-block-keyed-component-action/_config.js",
+      "sha": null,
+      "content_sha256": "576f2fc2ba09d35162c82de9a8b3998cc9ffcb327da534aea3cb579b4f228e19",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\nexport default test({\n\ttest({ assert, component }) {\n\t\tassert.equal(component.count, 0);\n\n\t\tcomponent.arr = ['2'];\n\n\t\tassert.equal(component.count, 1);\n\n\t\tcomponent.arr = ['1', '2'];\n\n\t\tassert.equal(component.count, 2);\n\n\t\tcomponent.arr = ['2', '1'];\n\n\t\tassert.equal(component.count, 2);\n\n\t\tcomponent.arr = [];\n\n\t\tassert.equal(component.count, 0);\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-this/_config.js",
+      "sha": null,
+      "content_sha256": "990f6600b3fa1ac7a5a29dbb84685724a2bf0f6dfab302cc61bfebd9ac7b370d",
+      "score": 165,
+      "content": "import { ok, test } from '../../test';\n\nexport default test({\n\tasync test({ assert, target, window }) {\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tconst click = new window.MouseEvent('click');\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>1</button>');\n\t\tawait button.dispatchEvent(click);\n\t\tassert.htmlEqual(target.innerHTML, '<button>2</button>');\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-custom-event-handler-with-context/_config.js",
+      "sha": null,
+      "content_sha256": "75bcef5ce2940db0b2fa9a30a25db45b76e6c7b4215e896542cfafe705539e29",
+      "score": 165,
+      "content": "import { ok, test } from '../../test';\n\nexport default test({\n\thtml: '<button>???</button>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst event = new window.MouseEvent('click', {\n\t\t\tclientX: 42,\n\t\t\tclientY: 42\n\t\t});\n\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tawait button.dispatchEvent(event);\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>42</button>');\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-receives-element-mounted/_config.js",
+      "sha": null,
+      "content_sha256": "b4d602709205752493cbb829d952762e7cf959518c897dcecba9fa66fbfd3a7c",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\n/** @type {Record<string, any>} */\nconst result = {};\n\nexport default test({\n\tget props() {\n\t\treturn { result };\n\t},\n\tasync test({ assert }) {\n\t\tassert.notEqual(result.parentElement, null);\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/validator/samples/action-on-component/errors.json",
+      "sha": null,
+      "content_sha256": "5912f3a650ad5a73acd3cc30fadb4b4115201b9d95838d05df758fa33bdd22c5",
+      "score": 165,
+      "content": "[\n\t{\n\t\t\"code\": \"invalid-component-directive\",\n\t\t\"message\": \"This type of directive is not valid on components\",\n\t\t\"start\": {\n\t\t\t\"line\": 7,\n\t\t\t\"column\": 8\n\t\t},\n\t\t\"end\": {\n\t\t\t\"line\": 7,\n\t\t\t\"column\": 15\n\t\t}\n\t}\n]\n"
+    },
+    {
+      "path": "packages/svelte/tests/parser-legacy/samples/action/output.json",
+      "sha": null,
+      "content_sha256": "d3b782eebf866b4d5b73a239afef428315bad945a5bcc5242063ca9be2733738",
+      "score": 165,
+      "content": "{\n\t\"html\": {\n\t\t\"type\": \"Fragment\",\n\t\t\"start\": 0,\n\t\t\"end\": 21,\n\t\t\"children\": [\n\t\t\t{\n\t\t\t\t\"type\": \"Element\",\n\t\t\t\t\"start\": 0,\n\t\t\t\t\"end\": 21,\n\t\t\t\t\"name\": \"input\",\n\t\t\t\t\"attributes\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"start\": 7,\n\t\t\t\t\t\t\"end\": 20,\n\t\t\t\t\t\t\"type\": \"Action\",\n\t\t\t\t\t\t\"name\": \"autofocus\",\n\t\t\t\t\t\t\"modifiers\": [],\n\t\t\t\t\t\t\"expression\": null\n\t\t\t\t\t}\n\t\t\t\t],\n\t\t\t\t\"children\": []\n\t\t\t}\n\t\t]\n\t}\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T15:25:27.651864+00:00"
+}
