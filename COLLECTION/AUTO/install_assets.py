@@ -47,7 +47,7 @@ def source_records():
         m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
         r = re.search(r"^- Repository:\s*([^\s]+)", text, re.M)
         owner = re.search(r"^- Owner:\s*([^\s]+)", text, re.M)
-        rev = re.search(r"^- Main revision inspected:\s*([0-9a-f]{7,40})", text, re.M)
+        rev = re.search(r"^- Main revision inspected:\s*`?([0-9a-f]{7,40})`?", text, re.M)
         lic = re.search(r"^- License:\s*([^\n]+)", text, re.M)
         if not (m and rev and lic):
             continue
