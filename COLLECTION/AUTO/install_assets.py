@@ -24,6 +24,24 @@ MAX_MB = int(os.getenv("COLLECTION_INSTALL_MAX_MB", "250"))
 
 def source_records():
     out = []
+    manifest = ROOT / "COLLECTION" / "AUTO" / "DEEP-EXTRACTED" / "MANIFEST.json"
+    if manifest.exists():
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            for x in data.get("repos", []):
+                repo = x.get("repo")
+                rev = x.get("revision_sha")
+                lic = x.get("license")
+                if repo and rev and lic in ALLOWED:
+                    out.append({
+                        "source_record": "DEEP-EXTRACTED/MANIFEST.json",
+                        "repo": repo,
+                        "url": "https://github.com/" + repo,
+                        "revision": rev,
+                        "license": lic,
+                    })
+        except Exception:
+            pass
     for p in sorted(SOURCES.glob("*.md")):
         text = p.read_text(encoding="utf-8", errors="ignore")
         m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
@@ -94,8 +112,7 @@ def main():
     ap.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     ap.add_argument("--max-mb", type=int, default=MAX_MB)
     ns = ap.parse_args()
-    global MAX_MB
-    MAX_MB = ns.max_mb
+    globals()["MAX_MB"] = ns.max_mb
     items = source_records()
     # Source+revision is the installation identity; preserve distinct records but install once.
     unique = {}
