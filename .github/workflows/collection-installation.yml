@@ -5,6 +5,7 @@ on:
   push:
     paths:
       - "COLLECTION/AUTO/install_assets.py"
+      - "COLLECTION/AUTO/verify_installed_assets.py"
       - "COLLECTION/AUTO/DEEP-EXTRACTED/MANIFEST.json"
       - "COLLECTION/SOURCES/**"
   schedule:
@@ -21,16 +22,27 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
       - name: Install collected OSS sources at high throughput
         run: |
           set -euo pipefail
-          python3 -m py_compile COLLECTION/AUTO/install_assets.py
+          python3 -m py_compile COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py
           python3 COLLECTION/AUTO/install_assets.py --workers 16 --max-mb 500
-      - name: Commit installed assets and report
+
+      - name: Push installed candidates into verification gate
+        run: |
+          set -euo pipefail
+          python3 COLLECTION/AUTO/verify_installed_assets.py
+          python3 COLLECTION/AUTO/test_collection_policy.py
+          python3 COLLECTION/AUTO/validate_readiness.py
+          python3 COLLECTION/AUTO/validate_callable_registry.py
+          python3 COLLECTION/AUTO/invoke_capability.py --list
+
+      - name: Commit installed assets, verification queue, and report
         run: |
           set -euo pipefail
           git config user.name "collection-bot"
           git config user.email "collection-bot@users.noreply.github.com"
-          git add COLLECTION/INSTALLED COLLECTION/MASTER/INSTALLATION-REPORT.json
-          git diff --cached --quiet || git commit -m "chore(collection): install verified OSS sources"
+          git add COLLECTION/INSTALLED COLLECTION/MASTER/INSTALLATION-REPORT.json COLLECTION/VERIFICATION/INSTALLED-QUEUE.json
+          git diff --cached --quiet || git commit -m "chore(collection): verify installed assets and queue callable review"
           git push
