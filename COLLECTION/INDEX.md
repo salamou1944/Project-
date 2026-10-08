@@ -25,7 +25,12 @@ Central collection of repositories, documentation, tools, and reusable implement
   - Strategic relevance: agent orchestration, durable execution/state, memory/provenance, provider routing, search/evidence, parallel agent operations and one-person-company automation.
   - Inventory discrepancy is recorded: profile view showed 71 repositories while connected GitHub search returned 89 accessible public records; full enumeration must reconcile this before exhaustion.
 
-- miqdadbadjuber — https://github.com/miqdadbadjuber
+- Mattpocock — https://github.com/mattpocock
+  - Account-wide capture: COLLECTION/ACCOUNTS/MATTPOCOCK_2026-10-08.md
+  - Enumerated: 223 public repositories on 2026-10-08.
+  - Primary high-value source: mattpocock/skills — MIT, verified package version 1.3.1.
+  - Priority leverage: composable engineering Agent Skills, research/evidence, TDD, code review, diagnosis, domain modeling, architecture, triage, ticket/spec generation, handoff and human-only setup boundaries.
+  - Reuse rule: semantic dedupe against existing agent-skills/SOAT/ASTRA capabilities; extract only materially stronger or missing contracts; preserve MIT provenance.\n- miqdadbadjuber — https://github.com/miqdadbadjuber
   - Account-wide source added: COLLECTION/ACCOUNTS/MIQDADBADJUBER_2026-10-04.md
   - GitHub profile currently reports 11 public repositories.
   - Primary verified source: anti-slop — https://github.com/miqdadbadjuber/anti-slop — MIT, latest inspected release v3.2.20.
