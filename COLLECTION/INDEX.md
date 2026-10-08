@@ -263,3 +263,12 @@ No completion claim is made. Collection remains active.
 - 5 public repositories captured in the current owner-scoped pass.
 - Priority: AgentScope Java event/permission/middleware/distributed-agent patterns; DeerFlow super-agent harness, skills, memory, scheduling and sandbox patterns.
 - Account record: COLLECTION/ACCOUNTS/XIHONGSHICHAOJIDAN8_2026-10-04.md
+
+
+## Dark Web OSINT / Threat Intelligence — 2026-10-08
+- Source capture: COLLECTION/SOURCES/DARKWEB_OSINT_TOOLS_2026-10-08.md
+- Candidate Skill: COLLECTION/SKILLS/DARKWEB_OSINT_DEFENSIVE_COLLECTION_2026-10-08.md
+- Primary sources captured: osintph/darkweb-observatory, osintph/threatintel-platform, Kirov-Dynamics-Technology/kirov-osint-intelligence, spideydotjs/gengar.
+- Discovery indexes retained as leads: osintshifu/awesome-osint-repos and djbpm/osint-toolkit.
+- Priority leverage: bounded Tor/onion collection, IOC extraction/normalization, entity/relationship correlation, evidence hashing/provenance, STIX/MISP/TAXII interoperability, monitoring/alerts/digests.
+- Promotion status: candidate only; semantic dedupe and isolated runtime verification required before canonical Skill promotion.
