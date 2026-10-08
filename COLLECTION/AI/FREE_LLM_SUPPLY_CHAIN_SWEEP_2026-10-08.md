@@ -119,3 +119,33 @@ Assessment: MEDIUM/HIGH VALUE regional adapter; inspect license, maintenance and
 
 ## Evidence status
 Verified against current web/GitHub search on 2026-10-08. Free-tier availability is dynamic and must be revalidated before operational use.
+
+
+## Second-region sweep — 2026-10-08
+
+Additional current candidates found during regional sweep:
+
+- **Nous Research / Nous Portal** — OpenAI-compatible inference endpoint with a $0 portal tier and free models. Treat as a provider candidate; verify current model/quota and commercial terms before routing production traffic.
+- **UnoRouter** — OpenAI-compatible multi-model gateway advertising a large catalog of free routes. Treat as a discovery/fallback gateway, not as guaranteed production capacity.
+- **ModelScope** — important China model/inference ecosystem. Preserve as a source for open-weight Chinese models and possible hosted inference; verify each model endpoint and license rather than treating the platform as universally free.
+- **Z.ai / GLM** — Chinese provider with free Flash/Air options in current provider inventories; KYC/account eligibility must be tracked.
+- **SambaNova** — US inference provider worth keeping as a performance/provider-diversity candidate; free/promotional terms are dynamic and must be verified before classifying as free.
+- **TokenRouter** — emerging multi-provider/model gateway with promotional/free model routes; track as experimental.
+- **Mistral** — European provider with a current free API tier in provider inventories; monthly credits and rate limits make it a useful secondary provider rather than a guaranteed unlimited source.
+- **Cohere** — trial/evaluation API access; useful for multilingual/embedding-oriented workloads but not a permanent production-free tier.
+- **Together AI** — selected $0 models/promotional access can be useful, but do not classify the entire platform as free.
+
+### Regional conclusion
+
+No strong evidence was found that a newly discovered India/Japan/Korea/Middle-East provider materially beats the existing core stack on **free + OpenAI-compatible + no-card + reusable infrastructure**. The strongest additions are therefore cross-regional gateways (Nous Portal, UnoRouter), Chinese model infrastructure (ModelScope), and provider-diversity candidates (Mistral, Cohere, SambaNova, TokenRouter).
+
+### Selection rule
+
+Do not add providers merely because a directory lists them. Promote a provider into the operational tier only after current verification of:
+1. free quota,
+2. card/KYC requirements,
+3. OpenAI compatibility,
+4. tool/vision/coding capability where needed,
+5. commercial-use terms,
+6. geographic eligibility,
+7. rate limits and reset behavior.
