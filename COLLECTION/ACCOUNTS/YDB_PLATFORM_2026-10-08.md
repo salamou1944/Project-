@@ -1,0 +1,173 @@
+# ydb-platform — Russian Technical Frontier Account Capture — 2026-10-08
+
+## Classification
+Russian-origin database frontier associated with Yandex/YDB; YDB is an open-source distributed SQL database with strong consistency and ACID transactions.
+
+Evidence anchor: https://ydb.tech/docs/en/downloads/ydb-open-source-database
+
+## Account-wide enumeration
+Public repositories observed through GitHub repository search: **142**.
+This capture preserves the owner-level frontier; it is not a claim that every repository is valuable or Russian-specific.
+
+## High-value triage candidates
+- ydb-platform/ydb-kubernetes-operator
+- ydb-platform/ydb-mcp
+- ydb-platform/terraform-provider-ydb
+- ydb-platform/ydb-ai-skills
+- ydb-platform/ydb-terraform
+- ydb-platform/mcp-memory-ydb
+- ydb-platform/ydb-agent-memory
+- ydb-platform/terraform-provider-ydbcp
+- ydb-platform/ydb-mcp-demo-notes
+
+## Full public repository inventory observed
+- ydb-platform/ydb
+- ydb-platform/ydb-go-sdk
+- ydb-platform/ydb-dotnet-sdk
+- ydb-platform/nbs
+- ydb-platform/ydb-python-sdk
+- ydb-platform/ydb-js-sdk
+- ydb-platform/ydb-java-dialects
+- ydb-platform/ydb-rs-sdk
+- ydb-platform/ydb-kubernetes-operator
+- ydb-platform/ydb-java-sdk
+- ydb-platform/ydb-sqlalchemy
+- ydb-platform/ydb-php-sdk
+- ydb-platform/jaeger-ydb-store
+- ydb-platform/ydb-embedded-ui
+- ydb-platform/langchain-ydb
+- ydb-platform/ydb-mcp
+- ydb-platform/ydb-jdbc-driver
+- ydb-platform/dbt-ydb
+- ydb-platform/ydb-cpp-sdk
+- ydb-platform/yoj-project
+- ydb-platform/tpcc-postgres-cpp
+- ydb-platform/ydb-api-protos
+- ydb-platform/django-ydb-backend
+- ydb-platform/ydb-presentations
+- ydb-platform/gorm-driver
+- ydb-platform/ydb-go-examples
+- ydb-platform/tpcc
+- ydb-platform/fq-connector-go
+- ydb-platform/ydb-importer
+- ydb-platform/tpcc-postgres
+- ydb-platform/ydb-java-examples
+- ydb-platform/ydb-ui-components
+- ydb-platform/ydbops
+- ydb-platform/ydb-go-genproto
+- ydb-platform/benchhelpers
+- ydb-platform/terraform-provider-ydb
+- ydb-platform/ydb-dotnet-examples
+- ydb-platform/ydb-go-yc
+- ydb-platform/ydb-dotnet-yc
+- ydb-platform/ydb-sqlglot-plugin
+- ydb-platform/sqlc-ydb
+- ydb-platform/ydb-go-sdk-zap
+- ydb-platform/ydb-ansible
+- ydb-platform/ydb-php-examples
+- ydb-platform/ydb-go-sdk-opentracing
+- ydb-platform/postgres-compatibility-tests
+- ydb-platform/ydb-python-dbapi
+- ydb-platform/ydb-serverless-webinar-ai
+- ydb-platform/ydb-go-sdk-zerolog
+- ydb-platform/ydb-dbeaver-plugin
+- ydb-platform/ydb-slo-action
+- ydb-platform/ydb-ansible-examples
+- ydb-platform/ydb-spark-connector
+- ydb-platform/ydb-ai-skills
+- ydb-platform/ydb-go-yc-metadata
+- ydb-platform/ydb-grafana-datasource-plugin
+- ydb-platform/ydb-go-sdk-otel
+- ydb-platform/ydb-r2dbc-driver
+- ydb-platform/postgres_vs_distributed
+- ydb-platform/ydb-go-sdk-prometheus
+- ydb-platform/chaos-md
+- ydb-platform/ydb-go-sdk-metrics
+- ydb-platform/sqlancer
+- ydb-platform/ydb-terraform
+- ydb-platform/ydb-dotnet-genproto
+- ydb-platform/ydb-nodejs-genproto
+- ydb-platform/goose
+- ydb-platform/mcp-memory-ydb
+- ydb-platform/aardappel
+- ydb-platform/fluent-bit-ydb
+- ydb-platform/ydb-go-sdk-auth-environ
+- ydb-platform/ydb-go-sql
+- ydb-platform/ydbcp
+- ydb-platform/ydb-go-persqueue-sdk
+- ydb-platform/ydb-frameworks
+- ydb-platform/monaco-yql-languages
+- ydb-platform/cube-js
+- ydb-platform/ydb-kafka-sink-connector
+- ydb-platform/ydb-website-worker
+- ydb-platform/ydb-janusgraph-storage-backend
+- ydb-platform/jepsen.ydb
+- ydb-platform/udev-manager
+- ydb-platform/slo-tests
+- ydb-platform/ydb-js-examples
+- ydb-platform/ydb-rolling-restart
+- ydb-platform/beego
+- ydb-platform/ory-kratos
+- ydb-platform/appteam-projects
+- ydb-platform/monaco-ghost
+- ydb-platform/opentelemetry-collector-contrib
+- ydb-platform/json2parquet
+- ydb-platform/ariga-atlas
+- ydb-platform/ydb-vscode-plugin
+- ydb-platform/ydb-logstash-plugins
+- ydb-platform/ydb-jmeter
+- ydb-platform/ydbdoc-review-ng
+- ydb-platform/go-ycsb
+- ydb-platform/squirrel
+- ydb-platform/jmoiron-sqlx
+- ydb-platform/ydb-go-sdk-logrus
+- ydb-platform/FerretDB
+- ydb-platform/xorm
+- ydb-platform/ydb-disk-manager
+- ydb-platform/ydb-sdk-benchmarks
+- ydb-platform/uptrace
+- ydb-platform/runner
+- ydb-platform/vector
+- ydb-platform/github_action_executor
+- ydb-platform/ory-x
+- ydb-platform/dev-courses
+- ydb-platform/grafana
+- ydb-platform/ydb-agent-memory
+- ydb-platform/gorm
+- ydb-platform/ent
+- ydb-platform/ydb-reels
+- ydb-platform/db-scheduler-ydb
+- ydb-platform/hashicorp-web-unified-docs
+- ydb-platform/hashicorp-vault
+- ydb-platform/yql-parsers
+- ydb-platform/ydb-go-sdk-slog
+- ydb-platform/terraform-provider-ydbcp
+- ydb-platform/ydb-pg-shortener
+- ydb-platform/GoFrame
+- ydb-platform/gobuffalo-nulls
+- ydb-platform/golang-migrate
+- ydb-platform/ydbdoc-review
+- ydb-platform/fizz
+- ydb-platform/queue_simulations
+- ydb-platform/ydb-mcp-demo-notes
+- ydb-platform/ydb-cdc-processor
+- ydb-platform/grpc-node
+- ydb-platform/mysql-ydb-importer
+- ydb-platform/ann-benchmarks
+- ydb-platform/ydb-platform.github.io
+- ydb-platform/ydb-java-yc
+- ydb-platform/pop
+- ydb-platform/drizzle-orm
+- ydb-platform/ydb-parallel-processor
+- ydb-platform/migrate
+- ydb-platform/ydb-docs-status
+- ydb-platform/ycsb-ydb
+- ydb-platform/ydb-java-genproto
+
+## Collection rules
+- Discovery is not readiness.
+- Preserve provenance and source revision before extraction.
+- No wholesale copying.
+- Semantic duplicate = upgrade existing capability/Skill, not reimplementation.
+- Historical source evidence remains preserved even when functionality overlaps.
+- Runtime/production readiness requires our own evidence.
