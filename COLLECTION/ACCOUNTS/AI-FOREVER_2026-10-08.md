@@ -1,0 +1,121 @@
+# Russian GitHub Frontier — Account Capture
+
+- Owner: `ai-forever`
+- Captured: 2026-10-08
+- Scope: current public repositories returned by owner-scoped GitHub search; this is not an exhaustion claim.
+- Public repositories returned now: 100
+
+## Why this account is in the frontier
+
+Russian-origin AI organization surfaced by the curated Russian frontier. Priority families include Kandinsky-2, Kandinsky-3, ru-gpts and ru-clip. Full account sweep required; preserve model/source/licensing evidence before any reuse.
+
+## Current public repository frontier
+
+- ai-forever/Kandinsky-2
+- ai-forever/ru-gpts
+- ai-forever/ru-dalle
+- ai-forever/ghost
+- ai-forever/Real-ESRGAN
+- ai-forever/gigachain
+- ai-forever/ner-bert
+- ai-forever/Kandinsky-3
+- ai-forever/MoVQGAN
+- ai-forever/ru-dolph
+- ai-forever/giga_agent
+- ai-forever/mgpt
+- ai-forever/KandinskyVideo
+- ai-forever/gigachat
+- ai-forever/sage
+- ai-forever/ghost-2.0
+- ai-forever/ru-clip
+- ai-forever/Kandinsky-4
+- ai-forever/gpt2giga
+- ai-forever/STARM
+- ai-forever/dynamic_gestures
+- ai-forever/ruGPT3_demos
+- ai-forever/deforum-kandinsky
+- ai-forever/music-composer
+- ai-forever/augmentex
+- ai-forever/digital_peter_aij2020
+- ai-forever/MERA
+- ai-forever/ru-prompts
+- ai-forever/VIBE
+- ai-forever/harness-bench-fast
+- ai-forever/langchain-gigachat
+- ai-forever/model-zoo
+- ai-forever/OCR-model
+- ai-forever/spring-ai-gigachat
+- ai-forever/fusion_brain_aij2021
+- ai-forever/StackMix-OCR
+- ai-forever/CerberusDet
+- ai-forever/slides_generator
+- ai-forever/easy_sign
+- ai-forever/KandiSuperRes
+- ai-forever/DataProcessingFramework
+- ai-forever/tuned-vq-gan
+- ai-forever/easyportrait
+- ai-forever/gigachat-java
+- ai-forever/htr_datasets
+- ai-forever/ReadingPipeline
+- ai-forever/mineral-recognition
+- ai-forever/gigachat-js
+- ai-forever/POLLUX
+- ai-forever/LIBRA
+- ai-forever/FRIDA-Decisions
+- ai-forever/fbc3_aij2023
+- ai-forever/sg-detr
+- ai-forever/DigiTeller
+- ai-forever/gigagraph
+- ai-forever/ScrabbleGAN
+- ai-forever/langchain4j-gigachat
+- ai-forever/deepagents-gigachat
+- ai-forever/think-mcp
+- ai-forever/gigacheck
+- ai-forever/fbc2_aij2022
+- ai-forever/combined_solution_aij2019
+- ai-forever/railway_infrastructure_detection_aij2021
+- ai-forever/diffusers_kandinsky3
+- ai-forever/no_fire_with_ai_aij2021
+- ai-forever/SEGM-model
+- ai-forever/kandinsky3-diffusers
+- ai-forever/aggme
+- ai-forever/diffusers
+- ai-forever/gigaserve
+- ai-forever/langchainjs
+- ai-forever/NoHumansRequired
+- ai-forever/mcp_voice_salute
+- ai-forever/ControlledNST
+- ai-forever/Logos
+- ai-forever/langflow-gigachat
+- ai-forever/bukva
+- ai-forever/mcp_kandinsky
+- ai-forever/gigaragas
+- ai-forever/fsconnectors
+- ai-forever/emotional-fbc4.0-aij24
+- ai-forever/no_flood_with_ai_aij2020
+- ai-forever/TrainingStrategiesISLR
+- ai-forever/RusCode
+- ai-forever/mchs-wildfire
+- ai-forever/pi-gigachat
+- ai-forever/gigachat-ai-sdk-provider
+- ai-forever/mcp_giga_checker
+- ai-forever/rsl_aij2023
+- ai-forever/SMITH
+- ai-forever/hagrid
+- ai-forever/data_leakage_detect
+- ai-forever/Automated-Sign-Language-Tutor
+- ai-forever/slovo
+- ai-forever/gigalogger
+- ai-forever/podcast_generating
+- ai-forever/russian-lm-evaluation
+- ai-forever/moe-lora-tuning
+- ai-forever/zarya
+- ai-forever/paper_persi_chat
+
+## Collection boundary
+
+- Account target -> all public repositories -> relevant files/components -> newly discovered accounts -> repeat.
+- No wholesale import.
+- Preserve source, revision, license, dependencies and evidence.
+- Discovery is not readiness; no runtime/prod claim is made by this capture.
+- Before creating a Skill or implementation, perform semantic dedupe against existing Collection and canonical agent-skills/API Factory/SOAT contracts.
