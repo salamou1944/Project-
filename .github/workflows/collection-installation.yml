@@ -27,7 +27,7 @@ jobs:
       - name: Install collected OSS sources at high throughput
         run: |
           set -euo pipefail
-          python3 -m py_compile COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py
+          python3 -m py_compile COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/promote_router_if_proven.py
           python3 COLLECTION/AUTO/install_assets.py --workers 16 --max-mb 500
 
       - name: Push installed candidates into verification gate
@@ -77,12 +77,19 @@ jobs:
           }
           EOF
 
-      - name: Commit installed assets, verification queue, router evidence, and report
+      - name: Promote Router only from verified evidence
+        if: ${{ hashFiles('COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json') != '' }}
+        run: python3 COLLECTION/AUTO/promote_router_if_proven.py
+
+      - name: Revalidate callable registry after promotion
+        run: python3 COLLECTION/AUTO/validate_callable_registry.py
+
+      - name: Commit installed assets, verification queue, router evidence, registry, and report
         run: |
           set -euo pipefail
           git config user.name "collection-bot"
           git config user.email "collection-bot@users.noreply.github.com"
-          git add COLLECTION/MASTER/INSTALLATION-REPORT.json COLLECTION/VERIFICATION/INSTALLED-QUEUE.json
+          git add COLLECTION/MASTER/INSTALLATION-REPORT.json COLLECTION/VERIFICATION/INSTALLED-QUEUE.json COLLECTION/MASTER/CALLABLE-REGISTRY.json
           if [ -f COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json ]; then
             git add COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json
           fi
