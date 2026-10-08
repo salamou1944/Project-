@@ -226,6 +226,15 @@ Central collection of repositories, documentation, tools, and reusable implement
 - `COLLECTION/VERIFIED_EXTERNAL/REUSE_GAP_MATRIX_2026-10-05.md`
   - Live comparison of OpenHands/LiteLLM/Ollama/canonical OmniRoute against Salamou-31/API Factory, agent-skills/Elite, and ASTRA; rejects wholesale duplication and identifies OmniRoute provider-intelligence extraction as the only immediate gap.
 
+
+- Juspay — https://github.com/juspay
+  - Account capture: COLLECTION/ACCOUNTS/JUSPAY_2026-10-08.md
+  - Payment infrastructure family captured from the current owner-scoped inventory: hyperswitch, hyperswitch-suite, hyperswitch-control-center, card-vault, encryption-service, prism, decision-engine, checkout SDKs, Helm/deployment tooling, WooCommerce/Saleor/Kill Bill integrations and client libraries.
+  - Primary source: COLLECTION/SOURCES/JUSPAY_HYPERSWITCH_2026-10-08.md
+  - Exact main revision inspected: 1d71d94d2e2e1c72f3ede13abebc24132997685f.
+  - Priority leverage: payment routing/orchestration, connector abstraction, retries/revenue recovery, reconciliation, vault/encryption boundaries, cost observability and self-hosted payment infrastructure.
+  - Reuse rule: Hyperswitch is distinct from existing Lago/Kill Bill billing candidates. Do not wholesale import or create duplicate Skills; extract only missing contracts after semantic dedupe.
+
 ## Collection rules
 1. Discovery != production-ready without verification.
 2. Preserve source URL, revision/version, license, setup method, dependencies and limitations.
