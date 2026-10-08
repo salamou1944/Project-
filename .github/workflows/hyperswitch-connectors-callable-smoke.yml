@@ -1,0 +1,62 @@
+name: Hyperswitch Connectors Callable Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "COLLECTION/INSTALLED/juspay__hyperswitch/**"
+      - ".github/workflows/hyperswitch-connectors-callable-smoke.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hyperswitch-connectors-callable-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout collection
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+
+      - name: Cargo metadata
+        working-directory: COLLECTION/INSTALLED/juspay__hyperswitch
+        run: cargo metadata --no-deps --format-version 1 > /tmp/hyperswitch-connectors-metadata.json
+
+      - name: Connectors deterministic smoke
+        working-directory: COLLECTION/INSTALLED/juspay__hyperswitch
+        run: cargo test -p hyperswitch_connectors --lib
+
+      - name: Record callable evidence
+        shell: bash
+        run: |
+          mkdir -p COLLECTION/VERIFICATION
+          cat > COLLECTION/VERIFICATION/HYPERSWITCH-CONNECTORS-CALLABLE-EVIDENCE.json <<'EOF'
+          {
+            "schema_version": "collection-hyperswitch-connectors-callable-evidence/v1",
+            "repo": "juspay/hyperswitch",
+            "revision": "1d71d94d2e2e1c72f3ede13abebc24132997685f",
+            "installed_path": "COLLECTION/INSTALLED/juspay__hyperswitch",
+            "capability": "hyperswitch_connectors_deterministic_library_execution",
+            "entrypoint": "cargo test -p hyperswitch_connectors --lib",
+            "external_payment_network": false,
+            "secrets_required": false,
+            "execution_status": "PROVEN_CALLABLE_IF_JOB_SUCCEEDS"
+          }
+          EOF
+
+      - name: Commit evidence
+        run: |
+          git config user.name "collection-bot"
+          git config user.email "collection-bot@users.noreply.github.com"
+          git add COLLECTION/VERIFICATION/HYPERSWITCH-CONNECTORS-CALLABLE-EVIDENCE.json
+          git diff --cached --quiet || git commit -m "chore(collection): record hyperswitch connectors callable smoke evidence"
+          git push
