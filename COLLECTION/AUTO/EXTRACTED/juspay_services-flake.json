@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:juspay/services-flake",
+  "repo": "juspay/services-flake",
+  "revision_sha": "03189b6f0ef5083ffce220e912e13e8cd4907108",
+  "default_branch": "main",
+  "pushed_at": "2026-10-07T10:36:01Z",
+  "repo_updated_at": "2026-10-07T10:10:06Z",
+  "license": "MIT",
+  "topics": [
+    "flake-parts",
+    "flakes",
+    "nix",
+    "services"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yaml",
+      "sha": null,
+      "content_sha256": "f73248cba6b3165fff12738ca91bde2ba21c2c6537ba55eb48553d6664185cfd",
+      "score": 198,
+      "content": "# CI, ported from omnix (`nix/omnix.nix`).\n#\n# Same coverage as before: the seven flakes from `ci.default` are devoured\n# (srid/devour-flake — the same builder omnix uses), with the same input\n# overrides, built for x86_64-linux and aarch64-darwin (via the matrix). The\n# omnix `om ci run` check is replaced by this workflow's own check runs\n# across the matrix (one `devour-flake (os, subflake)` per combination), and\n# the build cache by `cache-nix-action` (store cache persisted across runs).\nname: ci\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\njobs:\n  devour-flake:\n    name: \"devour-flake (${{ matrix.os }}, ${{ matrix.flake.name }})\"\n    strategy:\n      fail-fast: false\n      matrix:\n        os:\n          # matrix.system in the old omnix GitHub workflow\n          - ubuntu-latest # x86_64-linux\n          - macos-latest # aarch64-darwin (Intel mac excluded; see #231)\n        flake:\n          # ci.default in nix/omnix.nix (with overrideInputs). nix input path\n          # suffix is relative to the repo root ($PWD); the subflake path is\n          # relative to the root too.\n          - name: simple\n            path: example/simple\n          - name: llm\n            path: example/llm\n          - name: share-services\n            path: example/share-services/pgweb\n            extraOverride: --override-input flake/northwind \"path:$PWD/example/share-services/northwind\"\n          - name: without-flake-parts\n            path: example/without-flake-parts\n          - name: test\n            path: test\n          - name: dev\n            path: dev\n          - name: doc\n            path: doc\n    runs-on: ${{ matrix.os }}\n    permissions:\n      contents: read\n      actions: write # cache-nix-action's purge: true requires it\n    steps:\n      - uses: actions/checkout@v4\n      - uses: nixbuild/nix-quick-install-action@v34\n        with:\n          # Same as `om ci run --extra-access-tokens` in the old workflow.\n          nix_conf: extra-access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}\n      - uses: nix-community/cache-nix-action@v6\n        with:\n          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/flake.lock') }}\n          restore-prefixes-first-match: nix-${{ runner.os }}-\n          gc-max-store-size-linux: 5G\n          gc-max-store-size-macos: 5G\n          purge: true\n          purge-prefixes: nix-${{ runner.os }}-\n          purge-last-accessed: 604800\n          purge-primary-key: never\n\n      # Devour the subflake the same way omnix/Vira builds it: every package,\n      # check, devShell, app, ... of the flake for the current system.\n      # overrideInputs services-flake=. from omnix.nix (a no-op warning on\n      # ./doc, which has no such input).\n      - name: \"devour ${{ matrix.flake.name }}\"\n        run: >\n          nix build github:srid/devour-flake#default -L --print-out-paths\n          --no-write-lock-file --no-link\n          --override-input flake \"path:$PWD/${{ matrix.flake.path }}\"\n          --override-input flake/services-flake \"path:$PWD\"\n          ${{ matrix.flake.extraOverride }}\n"
+    },
+    {
+      "path": "example/llm/README.md",
+      "sha": null,
+      "content_sha256": "81e3d62271cabb4b452faae4fd01ddc0b9f4b6b7af7616abdcc3a06fbe0999f4",
+      "score": 171,
+      "content": "See https://services.nixos.asia/llm\n"
+    },
+    {
+      "path": "nix/services/postgres/test.sql",
+      "sha": null,
+      "content_sha256": "208053a86448f692f4013a0b9e0f331427325f98bb8944c3d60cabc2a860671b",
+      "score": 149,
+      "content": "CREATE TABLE users (id INT PRIMARY KEY, user_name VARCHAR(25));\n\nINSERT INTO users values (1, 'test_user');\n\n"
+    },
+    {
+      "path": "nix/services/postgres/bad_test.sql",
+      "sha": null,
+      "content_sha256": "3d7d6cd3ef62866ae01a55d716ccdfe092ec722e4830459d92e84400268914fa",
+      "score": 149,
+      "content": "-- Tests if the postgres process gets skipped when there is an error while setting up inital databases\nCREATE STABLE users (id INT PRIMARY KEY, user_name VARCHAR(25));\n\n"
+    },
+    {
+      "path": "nix/services/postgres/setup-script.nix",
+      "sha": null,
+      "content_sha256": "e6e2893e4efc10a2ea90e93b6b8eba2d749828ea304cba1b29b48b081135f9b3",
+      "score": 136,
+      "content": "{\n  config,\n  pkgs,\n  lib,\n}:\nlet\n  setupInitialSchema = dbName: schema: ''\n    echo \"Applying database schema on ${dbName}\"\n    if [ -f \"${schema}\" ]\n    then\n      echo \"Running file ${schema}\"\n      awk 'NF' \"${schema}\" | psql_with_args -d ${dbName}\n    elif [ -d \"${schema}\" ]\n    then\n      # Read sql files in version order. Apply one file\n      # at a time to handle files where the last statement\n      # doesn't end in a ;.\n      find \"${schema}\"/*.sql | while read -r f ; do\n        echo \"Applying sql file: $f\"\n        awk 'NF' \"$f\" | psql_with_args -d ${dbName}\n      done\n    else\n      echo \"ERROR: Could not determine how to apply schema with ${schema}\"\n      exit 1\n    fi\n  '';\n  setupInitialDatabases =\n    if config.initialDatabases != [ ] then\n      (lib.concatMapStrings (database: ''\n        echo \"Checking presence of database: ${database.name}\"\n        # Create initial databases\n        dbAlreadyExists=$(\n          echo \"SELECT 1 as exists FROM pg_database WHERE datname = '${database.name}';\" | \\\n          psql_with_args -d postgres | \\\n          grep -c 'exists = \"1\"' || true\n        )\n        echo \"$dbAlreadyExists\"\n        if [ 1 -ne \"$dbAlreadyExists\" ]; then\n          echo \"Creating database: ${database.name}\"\n          echo 'create database \"${database.name}\";' | psql_with_args -d postgres\n          ${lib.optionalString (database.schemas != null) (\n            lib.concatMapStrings (schema: setupInitialSchema (database.name) schema) database.schemas\n          )}\n        fi\n      '') config.initialDatabases)\n    else\n      lib.optionalString config.createDatabase ''echo \"CREATE DATABASE ''${USER:-$(id -nu)};\" | psql_with_args -d postgres '';\n\n  runInitialScript =\n    let\n      scriptCmd = sqlScript: ''\n        psql_with_args -d postgres -f ${sqlScript}\n      '';\n    in\n    {\n      before = with config.initialScript; lib.optionalString (before != null) (scriptCmd before);\n      after = with config.initialScript; lib.optionalString (after != null) (scriptCmd after);\n    };\n  toStr =\n    value:\n    if true == value then\n      \"yes\"\n    else if false == value then\n      \"no\"\n    else if lib.isString value then\n      \"'${lib.replaceStrings [ \"'\" ] [ \"''\" ] value}'\"\n    else\n      toString value;\n  configFile = pkgs.writeText \"postgresql.conf\" (\n    lib.concatStringsSep \"\\n\" (\n      lib.mapAttrsToList (n: v: \"${n} = ${toStr v}\") (config.defaultSettings // config.settings)\n    )\n  );\n\n  initdbArgs =\n    config.initdbArgs\n    ++ (lib.optionals (config.superuser != null) [\n      \"-U\"\n      config.superuser\n    ])\n    ++ [\n      \"-D\"\n      \"\\\"${config.dataDir}\\\"\"\n    ];\nin\n(pkgs.writeShellApplication {\n  name = \"setup-postgres\";\n  runtimeInputs = with pkgs; [\n    config.package\n    coreutils\n    gnugrep\n    gawk\n    findutils\n  ];\n  text = ''\n    set -x\n    # Execute the `psql` command with default arguments\n    function psql_with_args() {\n      psql ${\n        lib.optionalString (config.superuser != null) \"-U ${config.superuser}\"\n      } -v \"ON_ERROR_STOP=1\" --no-psqlrc \"$@\"\n    }\n    # Setup postgres ENVs\n    export PGDATA=\"${config.dataDir}\"\n    export PGPORT=\"${toString config.port}\"\n    POSTGRES_RUN_INITIAL_SCRIPT=\"false\"\n\n\n    if [[ ! -d \"$PGDATA\" ]]; then\n      initdb ${lib.concatStringsSep \" \" initdbArgs}\n      POSTGRES_RUN_INITIAL_SCRIPT=\"true\"\n      echo\n      echo \"PostgreSQL initdb process complete.\"\n      echo\n    fi\n\n    # Setup config\n    echo \"Setting up postgresql.conf\"\n    cp ${configFile} \"$PGDATA/postgresql.conf\"\n    # Create socketDir if it doesn't exist and it is not empty\n    ${lib.optionalString (config.socketDir != \"\") ''\n      if [ ! -d \"${config.socketDir}\" ]; then\n        echo \"Creating socket directory\"\n        mkdir -p \"${config.socketDir}\"\n      fi\n    ''}\n\n    if [[ \"$POSTGRES_RUN_INITIAL_SCRIPT\" = \"true\" ]]; then\n      echo\n      echo \"PostgreSQL is setting up the initial database.\"\n      echo\n      ${\n        if config.socketDir != \"\" then\n          ''\n            PGHOST=$(mktemp -d \"$(readlink -f \"${config.socketDir}\")/pg-init-XXXXXX\")\n          ''\n        else\n          ''\n            PGHOST=$(mktemp -d /tmp/pg-init-XXXXXX)\n          ''\n      }\n      export PGHOST\n\n      function remove_tmp_pg_init_sock_dir() {\n        if [[ -d \"$1\" ]]; then\n          rm -rf \"$1\"\n        fi\n      }\n      trap 'remove_tmp_pg_init_sock_dir \"$PGHOST\"' EXIT\n\n      trap 'pg_ctl -D \"$PGDATA\" -m fast -w stop' EXIT\n\n      pg_ctl -D \"$PGDATA\" -w start -o \"-c unix_socket_directories=\\\"$PGHOST\\\" -c listen_addresses= -p ${toString config.port}\"\n\n      ${runInitialScript.before}\n      ${setupInitialDatabases}\n      ${runInitialScript.after}\n    else\n      echo\n      echo \"PostgreSQL database directory appears to contain a database; Skipping initialization\"\n      echo\n    fi\n    unset POSTGRES_RUN_INITIAL_SCRIPT\n  '';\n})\n"
+    },
+    {
+      "path": "nix/services/elasticsearch_test.nix",
+      "sha": null,
+      "content_sha256": "d4744a21180b62f5139d18030e3b58b0d2775eccf6416bd051afbbd1b5f33a1e",
+      "score": 131,
+      "content": "{ pkgs, config, ... }: {\n  services.elasticsearch.\"es1\" = {\n    enable = true;\n    plugins = [\n      pkgs.elasticsearchPlugins.analysis-icu\n    ];\n  };\n  settings.processes.test = {\n    command = pkgs.writeShellApplication {\n      runtimeInputs = [ pkgs.curl ];\n      text = ''\n        curl 127.0.0.1:9200/_cat/health \n\n        echo \"Verify plugin installation\"\n        curl 127.0.0.1:9200/_cat/plugins | grep 'analysis-icu'\n      '';\n      name = \"elasticsearch-test\";\n    };\n    depends_on.\"es1\".condition = \"process_healthy\";\n  };\n}\n"
+    },
+    {
+      "path": ".github/workflows/update-flake-lock.yaml",
+      "sha": null,
+      "content_sha256": "83a535c453097e3aca85bd98c7f16e625cbb10dd83b3cb89c180e0b2f869a1a6",
+      "score": 126,
+      "content": "name: update-flake-lock\non:\n  workflow_dispatch: # allows manual triggering\n  schedule:\n    - cron: \"0 0 * * 0\" # runs weekly on Sunday at 00:00\n\njobs:\n  update-flake-lock:\n    strategy:\n      matrix:\n        lock-file-dir:\n          [\n            \"test\",\n            \"example/simple\",\n            \"example/share-services/pgweb\",\n            \"example/share-services/northwind\",\n            \"example/llm\",\n          ]\n    runs-on: ubuntu-latest\n    steps:\n      - name: Generate Github App Token\n        uses: navikt/github-app-token-generator@v1\n        id: github-app-token\n        with:\n          app-id: ${{ vars.NIXOS_ASIA_APP_ID }}\n          private-key: ${{ secrets.NIXOS_ASIA_PRIVATE_KEY }}\n      - name: Checkout repository\n        uses: actions/checkout@v4\n      - name: Install Nix\n        uses: DeterminateSystems/nix-installer-action@main\n      - name: Update flake.lock\n        uses: DeterminateSystems/update-flake-lock@main\n        id: update-flake-lock\n        with:\n          commit-msg: \"chore(${{ matrix.lock-file-dir }}): Update flake.lock\"\n          pr-title: \"Update ${{ matrix.lock-file-dir }}/flake.lock\"\n          pr-body: |\n            Automated changes by the [update-flake-lock](https://github.com/DeterminateSystems/update-flake-lock) GitHub Action.\n\n            ```\n            {{ env.GIT_COMMIT_MESSAGE }}\n            ```\n          pr-labels: |\n            automated\n          path-to-flake-dir: \"${{ matrix.lock-file-dir }}\"\n          branch: \"update_flake_lock_${{ matrix.lock-file-dir }}\"\n          token: ${{ steps.github-app-token.outputs.token }}\n      - run: \"gh pr merge --auto --rebase --delete-branch ${{ steps.update-flake-lock.outputs.pull-request-number }}\"\n        env:\n          GH_TOKEN: ${{ github.token }}\n"
+    },
+    {
+      "path": ".github/workflows/pages.yaml",
+      "sha": null,
+      "content_sha256": "1f6a87456c721aa1849dce7cef5e3a5b64c6628d5a3566080a0a1b4a4083ebfd",
+      "score": 126,
+      "content": "# Publish the docs site (./doc) to GitHub Pages, which serves it at the\n# https://services.nixos.asia custom domain (set in the repo's Pages settings).\n#\n# Same shape as https://github.com/srid/emanote-template's publish workflow.\nname: pages\n\non:\n  push:\n    # Any branch, so that docs changes on a PR branch are published for review\n    # (Pages serves a single site, so the latest push wins). The `github-pages`\n    # environment's deployment branch policies gate who can deploy.\n    paths:\n      - \"doc/**\"\n      - \".github/workflows/pages.yaml\"\n  workflow_dispatch:\n\n# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages\npermissions:\n  contents: read\n  pages: write\n  id-token: write\n\n# Allow only one concurrent deployment, skipping runs queued between the run\n# in-progress and latest queued. However, do NOT cancel in-progress runs as we\n# want to allow these production deployments to complete.\nconcurrency:\n  group: pages\n  cancel-in-progress: false\n\njobs:\n  build:\n    name: build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: nixbuild/nix-quick-install-action@v34\n      - name: Build the static site\n        # --accept-flake-config picks up the `cache.nixos.asia` substituter\n        # declared in ./doc/flake.nix, which caches Emanote builds.\n        run: nix --accept-flake-config build ./doc -o ./_site\n      - name: Upload artifact\n        uses: actions/upload-pages-artifact@v3\n\n  deploy:\n    environment:\n      name: github-pages\n      url: ${{ steps.deployment.outputs.page_url }}\n    runs-on: ubuntu-latest\n    needs: build\n    steps:\n      - name: Deploy to GitHub Pages\n        id: deployment\n        uses: actions/deploy-pages@v4\n"
+    },
+    {
+      "path": ".github/workflows/update-changelog.yaml",
+      "sha": null,
+      "content_sha256": "b90af218a5986c7a7586f6ae7a1f4716f88e07481ec727a02fcf8937d8a04b03",
+      "score": 126,
+      "content": "name: update-changelog\non:\n  workflow_dispatch: # allows manual triggering\n  schedule:\n    - cron: \"0 0 * * 0\" # runs weekly on Sunday at 00:00\n\njobs:\n  update-changelog:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Generate Github App Token\n        uses: navikt/github-app-token-generator@v1\n        id: github-app-token\n        with:\n          app-id: ${{ vars.NIXOS_ASIA_APP_ID }}\n          private-key: ${{ secrets.NIXOS_ASIA_PRIVATE_KEY }}\n      - name: Checkout repository\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0 # this fetches all history so `git describe` can see tags\n      - name: Install Nix\n        uses: DeterminateSystems/nix-installer-action@main\n      - uses: cachix/cachix-action@v14\n        with:\n          name: services-flake\n          authToken: \"${{ secrets.CACHIX_AUTH_TOKEN }}\"\n      - run: \"nix develop ./dev -c just changelog\"\n      - name: Create PR\n        id: create-pr\n        uses: peter-evans/create-pull-request@v6\n        with:\n          branch: update_changelog\n          commit-message: |\n            chore: update changelog\n          delete-branch: true\n          title: \"chore: update changelog\"\n          token: ${{ steps.github-app-token.outputs.token }}\n          labels: |\n            automated\n          body: \"\"\n\n      - name: Check if PR is available\n        id: check-pr\n        run: echo \"pr-available=${{ steps.create-pr.outputs.pull-request-number != '' }}\" >> $GITHUB_OUTPUT\n\n      - name: Merge PR\n        if: steps.check-pr.outputs.pr-available == 'true'\n        run: \"gh pr merge --auto --rebase --delete-branch ${{ steps.create-pr.outputs.pull-request-number }}\"\n        env:\n          GH_TOKEN: ${{ github.token }}\n"
+    },
+    {
+      "path": "nix/services/prometheus_test.nix",
+      "sha": null,
+      "content_sha256": "1ee498cf54d71509afacbcb75215ed19e9bcf61db3dff295860fb2bd104992fd",
+      "score": 116,
+      "content": "{ pkgs, config, ... }: {\n  services.prometheus.\"pro1\" = {\n    enable = true;\n    # scrape prometheus\n    extraConfig = {\n      scrape_configs = [\n        {\n          job_name = \"prometheus\";\n          static_configs = [\n            {\n              targets = [ \"localhost:9090\" ];\n            }\n          ];\n        }\n      ];\n    };\n  };\n\n  settings.processes.test =\n    let\n      cfg = config.services.prometheus.\"pro1\";\n    in\n    {\n      command = pkgs.writeShellApplication {\n        runtimeInputs = [\n          cfg.package\n          pkgs.curl\n          pkgs.gnugrep\n        ];\n        text = ''\n          curl -sS ${cfg.listenAddress}:${builtins.toString cfg.port}/-/healthy\n          curl -s -o /dev/null -w \"%{http_code}\" ${cfg.listenAddress}:${builtins.toString cfg.port}/metrics\n        '';\n        name = \"prometheus-test\";\n      };\n      depends_on.\"pro1\".condition = \"process_healthy\";\n    };\n}\n"
+    },
+    {
+      "path": "nix/services/redis-cluster_test.nix",
+      "sha": null,
+      "content_sha256": "bcc168466dbb4ba0248bb17af733ee8874985aa9328bfd7c8661f082a2d144f6",
+      "score": 116,
+      "content": "{ pkgs, config, ... }: {\n  services.redis-cluster.\"c1\".enable = true;\n\n  settings.processes.test =\n    let\n      cfg = config.services.redis-cluster.\"c1\";\n    in\n    {\n      command = pkgs.writeShellApplication {\n        runtimeInputs = [\n          cfg.package\n          pkgs.gnugrep\n        ];\n        text = ''\n          redis-cli -p 30001 ping | grep -q \"PONG\"\n          redis-cli -p 30002 ping | grep -q \"PONG\"\n          redis-cli -p 30003 ping | grep -q \"PONG\"\n          redis-cli -p 30004 ping | grep -q \"PONG\"\n          redis-cli -p 30005 ping | grep -q \"PONG\"\n          redis-cli -p 30006 ping | grep -q \"PONG\"\n        '';\n        name = \"redis-cluster-test\";\n      };\n      depends_on.\"c1-cluster-create\".condition = \"process_completed\";\n    };\n\n}\n"
+    },
+    {
+      "path": "nix/services/redis_test.nix",
+      "sha": null,
+      "content_sha256": "1f5f8ced5825122b7107553a5be9ca4cdf76998855edb696ecb7c9f943ee232c",
+      "score": 116,
+      "content": "{ pkgs, config, ... }: {\n  services.redis.\"redis1\".enable = true;\n\n  services.redis.\"redis2\" = { config, ... }: {\n    enable = true;\n    port = 0;\n    unixSocket = \"./redis.sock\";\n  };\n\n  settings.processes.test =\n    let\n      cfg = config.services.redis.\"redis1\";\n    in\n    {\n      command = pkgs.writeShellApplication {\n        runtimeInputs = [\n          cfg.package\n          pkgs.gnugrep\n        ];\n        text = ''\n          echo  \"Ping from redis1\"\n          redis-cli ping | grep \"PONG\"\n\n          echo \"Test connection to redis2 listening on Unix socket\"\n          echo \"Ping from redis2\"\n\n          redis-cli -s ./data/redis2/redis.sock ping | grep \"PONG\"\n        '';\n        name = \"redis-test\";\n      };\n      depends_on.\"redis1\".condition = \"process_healthy\";\n      depends_on.\"redis2\".condition = \"process_healthy\";\n    };\n}\n"
+    },
+    {
+      "path": "nix/services/grafana_test.nix",
+      "sha": null,
+      "content_sha256": "3b70759901553cfd4e22a4d6a9b273e48a06f825a6a64eb29d09e900563a29b5",
+      "score": 116,
+      "content": "{ pkgs, config, ... }:\nlet\n  dashboardUid = \"adnyzrfa5cqv4c\";\n  dashboardTitle = \"Test dashboard\";\n  dashboards = pkgs.writeTextDir \"dashboards/test_dashboard.json\" ''\n    {\n      \"annotations\": {\n        \"list\": [\n          {\n            \"builtIn\": 1,\n            \"datasource\": {\n              \"type\": \"grafana\",\n              \"uid\": \"-- Grafana --\"\n            },\n            \"enable\": true,\n            \"hide\": true,\n            \"iconColor\": \"rgba(0, 211, 255, 1)\",\n            \"name\": \"Annotations & Alerts\",\n            \"type\": \"dashboard\"\n          }\n        ]\n      },\n      \"editable\": true,\n      \"fiscalYearStartMonth\": 0,\n      \"graphTooltip\": 0,\n      \"id\": 3,\n      \"links\": [],\n      \"panels\": [],\n      \"schemaVersion\": 39,\n      \"tags\": [],\n      \"templating\": {\n        \"list\": []\n      },\n      \"time\": {\n        \"from\": \"now-6h\",\n        \"to\": \"now\"\n      },\n      \"timepicker\": {},\n      \"timezone\": \"browser\",\n      \"title\": \"${dashboardTitle}\",\n      \"uid\": \"${dashboardUid}\",\n      \"version\": 1,\n      \"weekStart\": \"\"\n    }\n  '';\nin\n{\n  services.grafana.\"gf1\" = {\n    enable = true;\n    http_port = 3000;\n    extraConf = {\n      security.admin_user = \"patato\";\n      security.admin_password = \"potato\";\n    };\n    providers = [\n      {\n        name = \"Test dashboard provider\";\n        type = \"file\";\n        options = {\n          path = \"${dashboards}/dashboards\";\n        };\n      }\n    ];\n    declarativePlugins = with pkgs.grafanaPlugins; [ grafana-clickhouse-datasource ];\n  };\n\n  settings.processes.test =\n    let\n      cfg = config.services.grafana.\"gf1\";\n    in\n    {\n      # Tests based on: https://github.com/NixOS/nixpkgs/blob/master/nixos/tests/grafana/basic.nix\n      command = pkgs.writeShellApplication {\n        runtimeInputs = [\n          cfg.package\n          pkgs.gnugrep\n          pkgs.curl\n          pkgs.uutils-coreutils-noprefix\n          pkgs.jq\n        ];\n        text = ''\n          ADMIN=${cfg.extraConf.security.admin_user}\n          PASSWORD=${cfg.extraConf.security.admin_password}\n          ROOT_URL=\"${cfg.protocol}://${cfg.domain}:${builtins.toString cfg.http_port}\";\n          # The admin user can authenticate against the running service.\n          curl -sSfN -u $ADMIN:$PASSWORD $ROOT_URL/api/org/users -i\n          curl -sSfN -u $ADMIN:$PASSWORD $ROOT_URL/api/org/users | grep admin\\@localhost\n          # The dashboard provisioner was used to create a dashboard.\n          curl -sSfN -u $ADMIN:$PASSWORD $ROOT_URL/api/dashboards/uid/${dashboardUid} -i\n          curl -sSfN -u $ADMIN:$PASSWORD $ROOT_URL/api/dashboards/uid/${dashboardUid} | grep '\"title\":\"${dashboardTitle}\"'\n          # Test for extra plugins added to grafana.\n          curl -sSfN -u $ADMIN:$PASSWORD $ROOT_URL/api/plugins | jq '.[] | select(.id == \"grafana-clickhouse-datasource\") | .enabled' | grep \"true\"\n        '';\n        name = \"grafana-test\";\n      };\n      depends_on.\"gf1\".condition = \"process_healthy\";\n    };\n}\n"
+    },
+    {
+      "path": "nix/services/memcached_test.nix",
+      "sha": null,
+      "content_sha256": "12821696ba198efe046ec8f36b58d7c1a6765db47f68ec75849a064303d2fa3f",
+      "score": 114,
+      "content": "{ pkgs, config, ... }:\n{\n  services.memcached.\"memcached1\".enable = true;\n\n  settings.processes.test =\n    let\n      cfg = config.services.memcached.\"memcached1\";\n    in\n    {\n      command = pkgs.writeShellApplication {\n        runtimeInputs = [\n          cfg.package\n          pkgs.gnugrep\n          pkgs.netcat\n        ];\n        text = ''\n          echo -e \"stats\\nquit\" | nc 127.0.0.1 11211 | grep \"STAT version\"\n        '';\n        name = \"memcached-test\";\n      };\n      depends_on.\"memcached1\".condition = \"process_healthy\";\n    };\n}\n"
+    },
+    {
+      "path": "nix/services/postgres/postgres_test.nix",
+      "sha": null,
+      "content_sha256": "e436f3806dc6285f59e5c34d3cfd5010645b32a91256dbaccfcb13a3f0eacac2",
+      "score": 114,
+      "content": "{\n  pkgs,\n  config,\n  name,\n  ...\n}:\n{\n  services.postgres.\"pg1\" = {\n    enable = true;\n    initialScript.before = pkgs.writeText \"init_before.sql\" \"CREATE USER bar;\";\n    initialScript.after = pkgs.writeText \"init_after.sql\" \"CREATE DATABASE foo OWNER bar;\";\n  };\n  services.postgres.\"pg2\" = {\n    enable = true;\n    socketDir = \"./test/new/socket/path\";\n    port = 5433;\n    # INFO: pg1 creates $USER database while pg2 doesn't because `initialDatabases` is present\n    initialDatabases = [\n      {\n        name = \"sample-db\";\n        schemas = [ ./test.sql ];\n      }\n    ];\n  };\n  services.postgres.\"pg3\" = {\n    enable = true;\n    socketDir = \"./test/new/socket/path2\";\n    listen_addresses = \"\";\n    initialDatabases = [\n      {\n        name = \"test-db\";\n      }\n    ];\n  };\n\n  # Tests if `pg4-init` fails due to `./bad_test.sql`\n  services.postgres.\"pg4\" = {\n    enable = true;\n    socketDir = \"./test/new/socket/path3\";\n    listen_addresses = \"\";\n    initialDatabases = [\n      {\n        name = \"test-db\";\n        schemas = [ ./bad_test.sql ];\n      }\n    ];\n  };\n  # avoid both the processes trying to create `data` directory at the same time\n  settings.processes.\"pg2-init\".depends_on.\"pg1-init\".condition = \"process_completed_successfully\";\n  settings.processes.\"pg3-init\".depends_on.\"pg2-init\".condition = \"process_completed_successfully\";\n  settings.processes.\"pg4-init\".depends_on.\"pg3-init\".condition = \"process_completed_successfully\";\n\n  settings.processes.test =\n    let\n      cfg = config.services.postgres.\"pg1\";\n    in\n    {\n      command = pkgs.writeShellApplication {\n        runtimeInputs = [\n          cfg.package\n          pkgs.gnugrep\n          pkgs.curl\n          pkgs.jq\n        ];\n        text = ''\n          echo 'SELECT version();' | psql -h 127.0.0.1\n          echo 'SHOW hba_file;' | psql -h 127.0.0.1 | ${pkgs.gawk}/bin/awk 'NR==3' | grep '^ /nix/store'\n\n          # initialScript.before test\n          echo \"SELECT 1 FROM pg_roles WHERE rolname = 'bar';\" | psql -h 127.0.0.1 | grep -q 1\n\n          # initialScript.after test\n          echo \"SELECT 1 FROM pg_database WHERE datname = 'foo';\" | psql -h 127.0.0.1 | grep -q 1\n\n          # schemas test\n          echo \"SELECT * from users where user_name = 'test_user';\" | psql -h 127.0.0.1 -p 5433 -d sample-db | grep -q test_user\n\n          # listen_addresses test\n          echo \"SELECT 1 FROM pg_database where datname = 'test-db';\" | psql -h \"$(readlink -f ${config.services.postgres.pg3.socketDir})\" -d postgres | grep -q 1\n\n          # Test if `pg4-init` fails due to `bad_test.sql`\n          #\n          # The curl to process-compose server is documented in the swagger URL, http://localhost:8080, but since we are listening on unix socket here, you can use `socat` to temporarily pipe the port `8080` to the `pc-${name}.sock` (`socat TCP-LISTEN:8080,fork UNIX-CONNECT:/path/to/your/socket.sock\n\n          # OpenAPI documentation from the swagger URL:\n          # /process/logs/{name}/{endOffset}/{limit}\n          curl --unix-socket pc-${name}.sock http://localhost/process/logs/pg4-init/0/30 | jq '.logs | contains([\"ERROR:  syntax error at or near \\\"STABLE\\\"\"])' | grep \"true\"\n        '';\n        name = \"postgres-test\";\n      };\n      depends_on = {\n        \"pg1\".condition = \"process_healthy\";\n        \"pg2\".condition = \"process_healthy\";\n        \"pg3\".condition = \"process_healthy\";\n        \"pg4-init\".condition = \"process_completed\";\n      };\n    };\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "7e73c754000201cd20af07d5396896060aac107057aa2bb4afd2e4e6aecaf996",
+      "score": 100,
+      "content": "# services-flake\n\n`services-flake` provides declarative, composable and reproducible services for Nix development\nenvironment, as a [process-compose-flake](https://github.com/Platonic-Systems/process-compose-flake)\nmodule (based on [flake-parts](https://flake.parts)). It enables users to have NixOS-like services\non macOS and Linux.\n\n![Demo](./doc/demo.gif)\n\n## Motivation\n\n`services-flake` is designed to solve the following problems:\n\n- Run external services like databases, Redis, etc. natively across platforms.\n- Enable users to configure multiple instances of these external services.\n- Provide project-specific service configuration and data isolation.\n\nConsider a scenario where we are juggling two projects, located at `~/code/foo` and `~/code/bar`.\nThe `foo` project integrates postgres and nginx, while `bar` encompasses postgres, pgAdmin, and\nkafka. It's crucial that the postgres data remains segregated across these projects. Additionally,\nthe `bar` project is designed to facilitate multiple instances of postgres. Both projects are\nequipped with a flake app, streamlining the launch of their respective service stacks. Consequently,\nanyone using a Linux or macOS system can effortlessly clone either project and execute\n`nix run .#services` to activate the full suite of services without the need for manual\nconfiguration.\n\n## Getting Started\n\nSee <https://services.nixos.asia/start>\n\n## Services available\n\nList of supported services is available at https://services.nixos.asia/services\n\n## Comparison with other tools\n\n|                                 | services-flake | [devenv services](https://devenv.sh/services/) |\n| ------------------------------- | -------------- | ---------------------------------------------- |\n| macOS support                   | ✔️             | ✔️                                             |\n| Pure Flakes                     | ✔️             | ✖️[^1]                                         |\n| Services as flake apps          | ✔️             | ✖️[^3]                                         |\n| Multiple instances of a service | ✔️             | ✖️[^4]                                         |\n| Share services                  | ✔️             | ✖️[^2]                                         |\n| No coupling                     | ✔️             | ✖️[^5]                                         |\n\nWant to compare with other tools? [Let us know](https://github.com/juspay/services-flake/issues).\n\n[^1]:\n    Devenv's flakes integration [requires](https://devenv.sh/guides/using-with-flakes/) you use run\n    the nix shell in impure mode by passing `--impure`.\n\n[^2]:\n    `services-flake` is built on top of [flake-parts](https://flake.parts/), thus you may share your\n    service and process modules for re-use across flakes (see [example](./example/share-services)),\n    whilst making them general enough for customization based on the module system. With devenv, as\n    far as we can ascertain, you can only share whole devenv configuration as modules. See\n    [here](https://github.com/juspay/services-flake/pull/135#discussion_r1517425295).\n\n[^3]:\n    `services-flake` produces a flake app that you can run using the Nix command (`nix run`) outside\n    of the devShell, whereas with devenv you must use devenv's CLI, `devenv up`, inside of devShell.\n    See [here](https://github.com/juspay/services-flake/pull/135#discussion_r1517213858).\n\n[^4]:\n    `services-flake` allows you to configure multiple instances of the same service, whereas\n    [devenv does not](https://github.com/cachix/devenv/issues/75#issuecomment-1638859874).\n\n[^5]:\n    `service-flake` exposes\n    [`process-compose-flake`](https://github.com/Platonic-Systems/process-compose-flake) modules for\n    each service, which can be reused as long as your project is using `flake-parts`. With devenv,\n    decoupling is not possible (nor\n    [prioritized](https://github.com/cachix/devenv/issues/75#issuecomment-1324914551) in future)\n    unless you buy into the whole devenv ecosystem.\n\n## Service data directory\n\nSee <https://services.nixos.asia/datadir>\n\n## Discussions\n\nTo discuss the project, post in\n[Github Discussions](https://github.com/juspay/services-flake/discussions).\n\n## Contributing & Development\n\nSee <https://services.nixos.asia/contributing>\n\n## Credits\n\nThanks to [the devenv project](https://github.com/cachix/devenv/tree/main/src/modules/services),\nwhich originally inspired this project to provide the same for Nix flake users.\n\n### Thanks to all the contributors!\n\n<a href=\"https://github.com/juspay/services-flake/graphs/contributors\">\n  <img src=\"https://contributors-img.web.app/image?repo=juspay/services-flake\" alt=\"Contributors\"/>\n</a>\n"
+    },
+    {
+      "path": "example/share-services/README.md",
+      "sha": null,
+      "content_sha256": "802c023de4937ed67076300fcc44baefca037547a87171507120b4b4db9609ba",
+      "score": 96,
+      "content": "A demonstration of sharing services across flakes.\n\nTo run,\n\n```\ncd ./example/share-services\nnix run\n```\n\nTo run using latest code, go to the repository root and run the following in a Nix shell:\n\n```sh\njust ex-share-services\n```\n"
+    },
+    {
+      "path": "nix/services/clickhouse/bad_test.sql",
+      "sha": null,
+      "content_sha256": "e020a4f73b1003451e687b9950b3d64e98e908d18b3b4eb0ff28d57c1b736266",
+      "score": 89,
+      "content": "CREATE STABLE sample_db.ride (`id` Int64, `short_id` String) ENGINE = MergeTree() PRIMARY KEY (id);\n\n"
+    },
+    {
+      "path": "nix/services/clickhouse/test.sql",
+      "sha": null,
+      "content_sha256": "4290ce76b21b8f06f3b6a64e0b0ca5e159315f1f8d9a693e7a0448da532b9043",
+      "score": 89,
+      "content": "CREATE TABLE sample_db.ride (`id` Int64, `short_id` String) ENGINE = MergeTree() PRIMARY KEY (id);\n\nINSERT INTO sample_db.ride values (1, 'test_ride');\n"
+    },
+    {
+      "path": "nix/services/mysql/test_schemas/bar.sql",
+      "sha": null,
+      "content_sha256": "078afeff35ae6c85089b2789dd30f1e644a429d4f4a1b274a52e3e25e855642b",
+      "score": 87,
+      "content": "CREATE TABLE bar (id INT PRIMARY KEY);\n"
+    },
+    {
+      "path": "nix/services/mysql/test_schemas/foo.sql",
+      "sha": null,
+      "content_sha256": "faf42bc8bb1c52f5dc6d0822c3805f55ebf71177ff81d1c7a31a15f2eaf9508c",
+      "score": 87,
+      "content": "CREATE TABLE foo (id INT PRIMARY KEY);\n"
+    },
+    {
+      "path": "nix/process-compose/default.nix",
+      "sha": null,
+      "content_sha256": "b331f54e201181fe73d35f24818db70db7b5676cbc58512a028cb4d70dacaa7c",
+      "score": 81,
+      "content": "{\n  imports = [\n    ../services\n    ./defaults.nix\n  ];\n}\n"
+    },
+    {
+      "path": "nix/process-compose/defaults.nix",
+      "sha": null,
+      "content_sha256": "0a736bd5940fc08efe4874bbefeeb63b25610dac85f7927fe7f21869f45a815f",
+      "score": 81,
+      "content": "# Default process-compose cli settings\n{ pkgs, lib, ... }:\n{\n  cli = {\n    # Disable the process-compose HTTP server\n    options.no-server = lib.mkDefault true;\n  };\n}\n"
+    },
+    {
+      "path": "doc/elasticsearch.md",
+      "sha": null,
+      "content_sha256": "1624709ba58656cff106012063e0ca61a46639ca462caaaf790279a7a73630e2",
+      "score": 73,
+      "content": "# Elasticsearch\n\n[Elasticsearch](https://www.elastic.co/elasticsearch/) is a distributed, RESTful search and\nanalytics engine capable of performing real-time search and analytics.\n\n## Usage example\n\n<https://github.com/juspay/services-flake/blob/main/nix/services/elasticsearch_test.nix>\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:13.567752+00:00"
+}

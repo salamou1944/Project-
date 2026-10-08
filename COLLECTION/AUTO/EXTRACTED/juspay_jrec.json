@@ -1,0 +1,88 @@
+{
+  "canonical_source": "github:juspay/jrec",
+  "repo": "juspay/jrec",
+  "revision_sha": "3be4f9c86a59c40e5c83a7d4497f7b15cecafc94",
+  "default_branch": "master",
+  "pushed_at": "2023-03-13T00:52:55Z",
+  "repo_updated_at": "2025-05-17T10:31:41Z",
+  "license": "BSD-3-Clause",
+  "topics": [
+    "haskell",
+    "records"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yaml",
+      "sha": null,
+      "content_sha256": "8e5f07e82f0710ba3adb8e3618f8a641aaf7b1beb838b4ade0fca3e00aa66e30",
+      "score": 198,
+      "content": "name: \"CI\"\non:\n  pull_request:\n  push:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v2\n    - uses: nixbuild/nix-quick-install-action@v21\n      with:\n        nix_conf: |\n          experimental-features = nix-command flakes\n    - name: Build and test 🔧\n      run: nix build -j 4 -L\n    - name: Build and test (GHC 8.8) 🔧\n      run: nix build -j 4 -L .#jrec-ghc88\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "f82745e130af159e7c18199e60a3cded61dfbbe0fe932d56bebbeccb95222e42",
+      "score": 100,
+      "content": "# jrec — anonymous records for busy people\n\nBased on [superrecord](https://hackage.haskell.org/package/superrecord), but simplified. No automatic field reordering. No GHCJS bits inside. Easier to hack on.\n\n## Benefits\n\n* Nice construction syntax:\n\n  ```haskell\n  Rec (#id := 18853, #orderId := \"MG13-233\")\n  ```\n\n* Provides `Generic` instances out of the box. Aeson, etc can't believe these aren't normal records! Anything `Generic`-derived just works.\n\n* Provides `generic-lens` and `generic-optics` instances out of the box. Due to those custom instances, we support polymorphic updates.\n\n* O(1) field access, O(n) construction.\n\n* PureScript-style partial records — if you have a `Rec (\"foo\" := Int ': rest)`, `HasField \"foo\"` will work just fine.\n\n## Developing\n\nIDE support is available inside `nix-shell`. For example, if you use VS Code, you may launch it as:\n\n```bash\nnix-shell --run \"code .\"\n```\n\n### Tests\n\nRun `bin/test` for fast-reloading tests. When library sources change, the test script will reload instantly and re-run the tests.\n\n## TODOs\n\n* Documentation.\n* Expose all internals.\n* `-- NOTE: doesn't use 'KeyDoesNotExist'` — fix this.\n* `RemoveAccessTo` — can we get rid of it?\n\n## Acknowledgement\n\n* The `JRec.Internal` module is entirely based on the code from [superrecord](https://hackage.haskell.org/package/superrecord).\n"
+    },
+    {
+      "path": "test/JRecShouldNotTypecheckSpec.hs",
+      "sha": null,
+      "content_sha256": "8c12f7b00b632d838d5dc6435888ebe930d617dbd9225f336d3eb2774acae18e",
+      "score": 58,
+      "content": "{-# OPTIONS_GHC -fdefer-type-errors #-}\n\nmodule JRecShouldNotTypecheckSpec (spec) where\n\nimport Control.Lens ((&), (.~), (^.))\nimport JRec\nimport Test.Hspec\nimport Test.ShouldNotTypecheck\nimport GHC.Stack\n\nspec :: Spec\nspec = do\n  describe \"insert\" $ do\n    it \"type-check fails if field already exists\" $ do\n      shouldNotTypecheck ((#a := '1') `insert` Rec (#b := '2', #a := '0'))\n"
+    },
+    {
+      "path": "test/JRecSpec.hs",
+      "sha": null,
+      "content_sha256": "d3ea08faca157ca7d40019382bce036417e444215b34f519c2ed326685484773",
+      "score": 58,
+      "content": "module JRecSpec (spec) where\n\nimport Control.Lens ((&), (.~), (^.))\nimport Data.Aeson\nimport GHC.Stack\nimport JRec\nimport Test.Hspec\n\ndata Pair a = Pair !a !a\n  deriving (Eq, Show)\n\nspec :: HasCallStack => Spec\nspec = do\n  it \"is not crazy\" $ do\n    Pair (Rec (#a := 1)) (Rec (#a := 2))\n      `shouldNotBe` Pair (Rec (#a := 1)) (Rec (#a := 1))\n    Pair (Rec (#a := 1)) (Rec (#a := 2))\n      `shouldNotBe` Pair (Rec (#a := 2)) (Rec (#a := 2))\n  it \"polymorphic\" $ do\n    (Rec (#u := True, #a := 5, #b := 6, #a := 2) & #u .~ 5)\n      `shouldBe` Rec (#u := 5, #a := 5, #b := 6, #a := 2)\n  describe \"eq\" $ do\n    -- eq can compare only the first matching field, discarding the rest.\n    it \"fails if first matching field doesn't compare\" $ do\n      Rec (#a := 1, #a := 2) `shouldNotBe` Rec (#a := 0, #a := 2)\n    it \"succeeds if first matching field compares\" $ do\n      Rec (#a := 1, #a := 2) `shouldBe` Rec (#a := 1, #a := 0)\n  it \"ord\" $ do\n    -- Same as eq when there is duplicated keys.\n    -- Only the first occurence of that key is considered.\n    compare (Rec (#a := 1, #a := 2)) (Rec (#a := 1, #a := 2)) `shouldBe` EQ\n    compare (Rec (#a := 1, #a := 2)) (Rec (#a := 1, #a := 3)) `shouldBe` EQ\n    compare (Rec (#a := 1, #a := 2)) (Rec (#a := 2, #a := 1)) `shouldBe` LT\n    compare (Rec (#a := 1, #a := 2)) (Rec (#a := 0, #a := 3)) `shouldBe` GT\n    compare (Rec (#a := 1, #b := 2)) (Rec (#a := 1, #b := 2)) `shouldBe` EQ\n    compare (Rec (#a := 1, #b := 2)) (Rec (#a := 1, #b := 3)) `shouldBe` LT\n    compare (Rec (#a := 1, #b := 2)) (Rec (#a := 2, #b := 1)) `shouldBe` LT\n    compare (Rec (#a := 1, #b := 2)) (Rec (#a := 0, #b := 3)) `shouldBe` GT\n    compare (Rec (#a := 1, #a := 2, #b := 3)) (Rec (#a := 1, #a := 3, #b := 2)) `shouldBe` GT\n  it \"show\" $ do\n    show (Rec ()) `shouldBe` \"{}\"\n    show (Rec (#foo := True)) `shouldBe` \"{foo = True}\"\n    show (Rec (#foo := True, #bar := 0)) `shouldBe` \"{foo = True, bar = 0}\"\n  it \"get\" $ do\n    let getA1 :: Rec (\"a\" := Int ': rest) -> Int\n        getA1 = (^. #a)\n    let getA2 :: Rec (\"u\" := Bool ': \"a\" := Int ': rest) -> Int\n        getA2 = (^. #a)\n    getA1 (Rec (#a := 5)) `shouldBe` 5\n    getA1 (Rec (#a := 5, #b := 6)) `shouldBe` 5\n    getA2 (Rec (#u := True, #a := 5)) `shouldBe` 5\n    getA2 (Rec (#u := True, #a := 5, #b := 6)) `shouldBe` 5\n  it \"set\" $ do\n    let setA1 ::\n          Rec (\"a\" := Int ': rest) ->\n          Rec (\"a\" := Int ': rest)\n        setA1 = (#a .~ 8)\n    let setA2 ::\n          Rec (\"u\" := Bool ': \"a\" := Int ': rest) ->\n          Rec (\"u\" := Bool ': \"a\" := Int ': rest)\n        setA2 = (#a .~ 8)\n    setA1 (Rec (#a := 5))\n      `shouldBe` (Rec (#a := 8))\n    setA1 (Rec (#a := 5, #b := 6))\n      `shouldBe` (Rec (#a := 8, #b := 6))\n    setA2 (Rec (#u := True, #a := 5))\n      `shouldBe` (Rec (#u := True, #a := 8))\n    setA2 (Rec (#u := True, #a := 5, #b := 6))\n      `shouldBe` (Rec (#u := True, #a := 8, #b := 6))\n  describe \"append\" $ do\n    it \"simple append\" $ do\n      Rec (#a := 1) `append` Rec (#b := 2)\n        `shouldBe` Rec (#a := 1, #b := 2)\n      Rec () `append` Rec (#b := 2)\n        `shouldBe` Rec (#b := 2)\n      Rec (#a := 1) `append` Rec ()\n        `shouldBe` Rec (#a := 1)\n      Rec (#a := 1, #b := 2) `append` Rec (#c := 3)\n        `shouldBe` Rec (#a := 1, #b := 2, #c := 3)\n      Rec (#a := 1) `append` Rec (#b := 2, #c := 3)\n        `shouldBe` Rec (#a := 1, #b := 2, #c := 3)\n      Rec (#a := 1, #b := 2) `append` Rec (#c := 3, #d := 4)\n        `shouldBe` Rec (#a := 1, #b := 2, #c := 3, #d := 4)\n    it \"append with duplicates\" $ do\n      let r1 = Rec (#b := 5, #a := 6)\n          r2 = Rec (#c := 7, #a := 8)\n      r1 `append` r2\n        `shouldBe` Rec (#b := 5, #a := 6, #c := 7, #a := 8)\n  describe \"union\" $ do\n    it \"simple union\" $ do\n      Rec (#a := 1) `union` Rec (#b := 2)\n        `shouldBe` Rec (#a := 1, #b := 2)\n    it \"union with duplicates (left-biased)\" $ do\n      let r1 = Rec (#b := 5, #a := 6)\n          r2 = Rec (#c := 7, #a := 8)\n      r1 `union` r2\n        `shouldBe` Rec (#b := 5, #a := 6, #c := 7)\n  describe \"insert\" $ do\n    it \"simple insert\" $ do\n      (#a := 1) `insert` Rec (#b := 2, #c := 3)\n        `shouldBe` Rec (#a := 1, #b := 2, #c := 3)\n  describe \"insertOrSet\" $ do\n    it \"distinct\" $ do\n      insertOrSet (#a := 1) (Rec (#b := 2, #c := 3))\n        `shouldBe` Rec (#a := 1, #b := 2, #c := 3)\n    it \"overwrite\" $ do\n      insertOrSet (#c := 1) (Rec (#b := 2, #c := 3))\n        `shouldBe` Rec (#b := 2, #c := 1)\n  describe \"optional fields\" $ do\n    it \"encode\" $ do\n      encode (Rec (#a := (1 :: Int), #b := (Nothing :: Maybe Int)))\n        `shouldBe` \"{\\\"a\\\":1}\"\n    it \"encode\" $ do\n      encode (Rec (#a := (1 :: Int), #b := (Just 2 :: Maybe Int)))\n        `shouldBe` \"{\\\"a\\\":1,\\\"b\\\":2}\"\n    it \"decode\" $ do\n      decode \"{\\\"a\\\": 1}\"\n        `shouldBe` Just (Rec (#a := (1 :: Int), #b := (Nothing :: Maybe Int)))\n      decode \"{\\\"a\\\": 1, \\\"b\\\": null}\"\n        `shouldBe` Just (Rec (#a := (1 :: Int), #b := (Nothing :: Maybe Int)))\n      decode \"{\\\"a\\\": 1, \\\"b\\\": 2}\"\n        `shouldBe` Just (Rec (#a := (1 :: Int), #b := (Just 2 :: Maybe Int)))\n"
+    },
+    {
+      "path": "bin/test",
+      "sha": null,
+      "content_sha256": "3b8b40d5fb5723e0b446885cf6d98a69aaa8c782d94903af3fa96495f5fda385",
+      "score": 58,
+      "content": "#!/usr/bin/env bash\nset -xe\n\n# NOTE: ghcid should be run with -W to allow warnings from should-not-typecheck\nnix develop -c sh -c \"ghcid $* -W -c 'cabal new-repl test:jrec-test' -T \\\":main $*\\\"\"\n"
+    },
+    {
+      "path": "test/Spec.hs",
+      "sha": null,
+      "content_sha256": "2fbd14b119a40eaca54f6255686c7cfbe8ff26a9c18d79ec474a61225232d324",
+      "score": 58,
+      "content": "{-# OPTIONS_GHC -F -pgmF hspec-discover #-}\n"
+    },
+    {
+      "path": "hie.yaml",
+      "sha": null,
+      "content_sha256": "60376f5b535166e49cdc102eb4c5a274629df3e57434215a5fa0768adcdc51c2",
+      "score": 35,
+      "content": "cradle:\n  cabal:\n    - path: \"./src\"\n      component: \"lib:jrec\"\n    - path: \"./test\"\n      component: \"test:jrec-test\"\n"
+    },
+    {
+      "path": ".vscode/settings.json",
+      "sha": null,
+      "content_sha256": "3c5999bc2db0a47b054954389a98c33d31db9c88ec97767eb845df1c2aea5e0c",
+      "score": 33,
+      "content": "{\n  \"editor.formatOnType\": true,\n  \"editor.formatOnSave\": true,\n  \"nixEnvSelector.nixFile\": \"${workspaceRoot}/shell.nix\",\n  \"haskell.manageHLS\": \"PATH\"\n}"
+    },
+    {
+      "path": ".vscode/extensions.json",
+      "sha": null,
+      "content_sha256": "94261c909b8b5b466e03407ff98742dc6e17e3cb8020d38458fc4243c7893979",
+      "score": 33,
+      "content": "{\n  // See https://go.microsoft.com/fwlink/?LinkId=827846\n  // for the documentation about the extensions.json format\n  \"recommendations\": [\n    \"haskell.haskell\",\n    \"arrterian.nix-env-selector\",\n    \"bbenoist.nix\",\n    \"jnoortheen.nix-ide\",\n    \"tamasfe.even-better-toml\"\n  ]\n}"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:10.213891+00:00"
+}

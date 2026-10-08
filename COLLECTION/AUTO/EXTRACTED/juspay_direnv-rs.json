@@ -1,0 +1,50 @@
+{
+  "canonical_source": "github:juspay/direnv-rs",
+  "repo": "juspay/direnv-rs",
+  "revision_sha": "d323dd1a400e5964d6931ba3c140f39a9b704247",
+  "default_branch": "main",
+  "pushed_at": "2024-04-04T07:32:20Z",
+  "repo_updated_at": "2024-09-10T17:38:42Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yaml",
+      "sha": null,
+      "content_sha256": "03dc6b86b87594511ee77fa850513ce8571fd0b0bd89e2fe0e8c54cab322d55d",
+      "score": 198,
+      "content": "name: \"CI\"\non:\n  # Run only when pushing to master branch, and making PRs\n  push:\n    branches:\n      - main\n  pull_request:\njobs:\n  build:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-14]\n    steps:\n      - uses: actions/checkout@v3\n      - uses: DeterminateSystems/nix-installer-action@main\n        with:\n          extra-conf: |\n            trusted-public-keys = cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=\n            substituters = https://cache.garnix.io?priority=41 https://cache.nixos.org/\n      - uses: yaxitech/nix-install-pkgs-action@v3\n        with:\n          packages: \"github:srid/nixci\"\n      - run: nixci build\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "2c11feb36f17328605a7184973c6cba29443d30835d6674d55d94633328c7fda",
+      "score": 120,
+      "content": "[package]\nedition = \"2021\"\nname = \"direnv\"\nversion = \"0.1.1\"\nlicense = \"Apache-2.0\"\nrepository = \"https://github.com/juspay/direnv-rs\"\ndescription = \"Rust bindings for direnv\"\n\n[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n\n# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html\n\n[dependencies]\ncfg-if = \"1\"\nthiserror = \"1.0\"\nserde = { version = \"1.0.197\", features = [\"derive\"] }\nserde_json = \"1.0\"\nwhich = { version = \"4.4.2\" }\nsemver = { version = \"1.0.22\", features = [\"serde\"] }\nserde_repr = \"0.1.18\"\n"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha": null,
+      "content_sha256": "2ce1c1fe5e79a52424c9d88d99f5a2c95dcf5b4f4a82431bb9e5710cfb39e184",
+      "score": 35,
+      "content": "[toolchain]\nchannel = \"nightly\"\n"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha": null,
+      "content_sha256": "0489d5df3bd07620ea34aa7839381c97f1e675e07685b13357bb903b26f5e9e0",
+      "score": 33,
+      "content": "use semver::{Version, VersionReq};\nuse serde::{Deserialize, Serialize};\nuse serde_repr::{Deserialize_repr, Serialize_repr};\nuse std::path::PathBuf;\n\n/// Information about a local direnv installation\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub struct DirenvInstall {\n    /// Path to the direnv binary\n    pub bin_path: PathBuf,\n    /// Path to the direnv binary without any symbolic links\n    pub canonical_path: PathBuf,\n    /// Version of the installed direnv\n    pub version: Version,\n}\n\n#[derive(thiserror::Error, Debug)]\npub struct CanonicalizeError(#[from] std::io::Error);\n\nimpl std::fmt::Display for CanonicalizeError {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        write!(f, \"{:?}\", self.0)\n    }\n}\n\n#[derive(thiserror::Error, Debug)]\npub enum DirenvInstallError {\n    #[error(\"Cannot find direnv binary\")]\n    DirenvWhichError(#[from] which::Error),\n\n    #[error(\"Cannot canonicalize direnv path: {0}\")]\n    DirenvCanonicalizeError(#[from] CanonicalizeError),\n\n    #[error(\"Direnv command error: {0}\")]\n    DirenvCmdError(#[from] std::io::Error),\n\n    #[error(\"Cannot parse direnv version: {0}\")]\n    DirenvVersionError(#[from] semver::Error),\n}\n\nimpl DirenvInstall {\n    /// Detect user's direnv installation\n    pub fn detect() -> Result<Self, DirenvInstallError> {\n        let bin_path = which::which(\"direnv\")?;\n        let canonical_path = bin_path.canonicalize().map_err(CanonicalizeError)?;\n        let output = std::process::Command::new(&bin_path)\n            .args([\"--version\"])\n            .output()?;\n        let out = String::from_utf8_lossy(&output.stdout);\n        let version = Version::parse(out.trim())?;\n        Ok(DirenvInstall {\n            bin_path,\n            canonical_path,\n            version,\n        })\n    }\n\n    /// Return the `direnv status` on the given project directory\n    pub fn status(&self, project_dir: &std::path::Path) -> Result<DirenvStatus, DirenvStatusError> {\n        let min_version = VersionReq::parse(\">=2.33.0\").unwrap(); // --json was added in latter versions\n        if min_version.matches(&self.version) {\n            DirenvStatus::new(&self.bin_path, project_dir)\n        } else {\n            Err(DirenvStatusError::DirenvVersionError(min_version))\n        }\n    }\n}\n\n/// Information about the direnv status\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub struct DirenvStatus {\n    pub config: DirenvConfig,\n    pub state: DirenvState,\n}\n\nimpl DirenvStatus {\n    /// Run `direnv status` and parse the output, for the given project directory.\n    fn new(direnv_bin: &PathBuf, dir: &std::path::Path) -> Result<Self, DirenvStatusError> {\n        let output = std::process::Command::new(direnv_bin)\n            .args([\"status\", \"--json\"])\n            .current_dir(dir)\n            .output()?;\n        let out = String::from_utf8_lossy(&output.stdout);\n        let status: DirenvStatus = serde_json::from_str(&out)?;\n        Ok(status)\n    }\n}\n\n#[derive(thiserror::Error, Debug)]\npub enum DirenvStatusError {\n    #[error(\"Direnv command error: {0}\")]\n    DirenvCmdError(#[from] std::io::Error),\n\n    #[error(\"Cannot parse direnv status JSON: {0}\")]\n    DirenvStatusError(#[from] serde_json::Error),\n\n    #[error(\"Direnv version is too old; you need direnv {0}\")]\n    DirenvVersionError(semver::VersionReq),\n}\n\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub struct DirenvConfig {\n    /// Path to the config folder of direnv\n    #[serde(rename = \"ConfigDir\")]\n    pub config_dir: PathBuf,\n    /// Path to the direnv binary\n    #[serde(rename = \"SelfPath\")]\n    pub self_path: PathBuf,\n}\n\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub struct DirenvState {\n    /// Information about the .envrc found in the current directory\n    #[serde(rename = \"foundRC\")]\n    pub found_rc: Option<DirenvRC>,\n    /// Information about the .envrc that is currently allowed using `direnv allow`\n    #[serde(rename = \"loadedRC\")]\n    pub loaded_rc: Option<DirenvRC>,\n}\n\nimpl DirenvState {\n    /// Check if the .envrc file is allowed\n    pub fn is_allowed(&self) -> bool {\n        self.found_rc\n            .as_ref()\n            .map_or(false, |rc| rc.allowed == AllowedStatus::Allowed)\n    }\n}\n\n/// Information about the .envrc file\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub struct DirenvRC {\n    pub allowed: AllowedStatus,\n    /// Path to the .envrc file\n    pub path: PathBuf,\n}\n\n#[derive(Serialize_repr, Deserialize_repr, PartialEq, Debug, Clone)]\n#[repr(u8)]\n/// Can be 0, 1 or 2\n/// 0: Allowed\n/// 1: NotAllowed\n/// 2: Denied\npub enum AllowedStatus {\n    Allowed = 0,\n    NotAllowed = 1,\n    Denied = 2,\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:16.145033+00:00"
+}

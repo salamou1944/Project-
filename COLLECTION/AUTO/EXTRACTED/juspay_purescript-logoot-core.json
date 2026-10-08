@@ -1,0 +1,55 @@
+{
+  "canonical_source": "github:juspay/purescript-logoot-core",
+  "repo": "juspay/purescript-logoot-core",
+  "revision_sha": "2a5f530ea0918f01e73a37867a8e7e63c222fcc7",
+  "default_branch": "master",
+  "pushed_at": "2018-03-21T01:44:50Z",
+  "repo_updated_at": "2024-07-24T15:14:38Z",
+  "license": "NOASSERTION",
+  "topics": [
+    "ces",
+    "crdt",
+    "logoot",
+    "purescript"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "442e1b183ae0c503a3c4833c0f17ef0377671f4ee546eaa2b1676caa496e9dbe",
+      "score": 100,
+      "content": "# purescript-logoot-core\n\nThis package defines the core Logoot algorithm as described in \"Logoot: A\nScalable Optimistic Replication Algorithm for Collaborative Editing on P2P\nNetworks\" by Stéphane Weiss, Pascal Urso and Pascal Molli.\n\nWherever possible, it tries to be polymorphic in its types.\n\nThe core identifier generation algorithm is not a direct port of the imperative\npseudocode found in the paper; it has been modified to fit a more functional\nstyle of programming.\n\n# Usage\n\nThis package is only useful for identifier generation. In an actual collaborative\neditor, the following will need to be implemented:\n\n1. Sending messages to other peers (you can use `encodeJSON` on identifiers for this)\n2. Receiving messages from other peers (similarly for `decodeJSON`)\n3. Assigning identifiers to atomic elements in the document.\n4. Retrieving elements based on identifiers.\n5. Retrieving document history for newcomers.\n\nNote that since identifiers generated are unique and totally ordered,\nit makes sense to use a fast (i.e. O(log n)) search algorithm, like\na simple binary search, to retrieve identifiers.\n\nAlso, if server CPU cyles are not an issue, it may be worthwhile to keep a \"current document state\" that holds a list of active identifiers and document elements, then broadcast that to a new user upon connecting. The alternative is to transmit the whole document history and let the user recompute the latest document state.\n\nFor convenience you can use the `Logoot.Types.History` module for encoding and decoding history."
+    },
+    {
+      "path": "test/Testlude.purs",
+      "sha": null,
+      "content_sha256": "7bbaa22f76e1b5c9d5f700b24c33f7ae59fadb729189ef0ce625d7578ff0e4be",
+      "score": 58,
+      "content": "module Testlude\n  ( module Exports\n  -- constants\n  , p, q, b\n  -- utilities\n  , pref, len\n  , shouldEq, (==?)\n  , print, printStr\n  , shouldEqTest, (?==)\n  , rand\n  -- data types\n  , S(..)\n  , Test(..)\n  -- aliases\n  , TestId\n  , TestEff\n  ) where\n\nimport Prelude\n\nimport Control.Monad.Eff (Eff)\nimport Control.Monad.Eff.Console (CONSOLE, error, log)\nimport Control.Monad.Eff.Console (error, log) as Exports\nimport Control.Monad.Eff.Random (RANDOM, randomInt)\nimport Control.Monad.Eff.Ref (REF, Ref, modifyRef')\nimport Data.Container (class Container)\nimport Data.Container (class Container, take, drop, cons, index) as Exports\nimport Data.Maybe (Maybe(..))\nimport Data.Newtype (class Newtype)\nimport Data.Newtype (un) as Exports\nimport Logoot.Id (intervalLength, logootRand, prefix) as Exports\nimport Logoot.Id (intervalLength, prefix)\nimport Logoot.Types.Util (Base(..))\nimport Logoot.Types.Util (Base(..), Boundary(..)) as Exports\nimport Logoot.Types (IdentifierF(..), Position(..))\nimport Logoot.Types (IdentifierF(..), Position(..)) as Exports\nimport Logoot.Types.Class.Site (class Site)\nimport Logoot.Types.Class.Site (class Site) as Exports\nimport Prelude (class Applicative, class Apply, class Bind, class BooleanAlgebra, class Bounded, class Category, class CommutativeRing, class Discard, class DivisionRing, class Eq, class EuclideanRing, class Field, class Functor, class HeytingAlgebra, class Monad, class Ord, class Ring, class Semigroup, class Semigroupoid, class Semiring, class Show, type (~>), Ordering(EQ, GT, LT), Unit, Void, absurd, add, ap, append, apply, between, bind, bottom, clamp, compare, comparing, compose, conj, const, degree, discard, disj, div, eq, flap, flip, gcd, id, ifM, join, lcm, liftA1, liftM1, map, max, min, mod, mul, negate, not, notEq, one, otherwise, pure, recip, show, sub, top, unit, unless, unlessM, void, when, whenM, zero, (#), ($), ($>), (&&), (*), (*>), (+), (-), (/), (/=), (<), (<#>), (<$), (<$>), (<*), (<*>), (<<<), (<=), (<=<), (<>), (<@>), (=<<), (==), (>), (>=), (>=>), (>>=), (>>>), (||)) as Exports\n\nshouldEq :: forall a e. Show a => Eq a => a -> a -> Eff (console :: CONSOLE | e) Unit\nshouldEq x y\n  | x == y = log \"Test passed\"\n  | otherwise = error $ \"Failed on \" <> show x <> \" /= \" <> show y\n\ninfix 4 shouldEq as ==?\n\np :: IdentifierF Array Int Int\np = IdentifierF [Position 2 (Just 4) (Just 7), Position 59 (Just 9) (Just 5)]\n\nq :: IdentifierF Array Int Int\nq = IdentifierF [Position 10 (Just 5) (Just 3), Position 20 (Just 3) (Just 6), Position 3 (Just 3) (Just 9)]\n\nb :: Base\nb = Base 100\n\npref :: forall f s c. Container f => Int -> IdentifierF f s c -> Number\npref = prefix b\n\nlen :: forall f s c. Container f => Int -> IdentifierF f s c -> IdentifierF f s c -> Int\nlen = intervalLength b\n\nnewtype S = S {id :: Int, clock :: Ref Int}\n\ninstance siteS :: Site S (Test e) Int Int where\n  siteId (S {id}) = pure id\n  siteClock (S {clock}) =\n    Test $ modifyRef' clock \\ s -> {state: s+1, value: s+1}\n\ntype TestId = IdentifierF Array Int Int\n\ntype TestEff e a = Eff (ref :: REF, console :: CONSOLE, random :: RANDOM | e) a\n\nnewtype Test e a = Test (Eff (ref :: REF, console :: CONSOLE, random :: RANDOM | e) a)\n\nderive instance newtypeTest :: Newtype (Test e a) _\nderive newtype instance functorTest :: Functor (Test e)\nderive newtype instance applyTest :: Apply (Test e)\nderive newtype instance applicativeTest :: Applicative (Test e)\nderive newtype instance bindTest :: Bind (Test e)\nderive newtype instance monadTest :: Monad (Test e)\n\nrand :: forall e. Int -> Int -> Test e Int\nrand beg end = Test (randomInt beg end)\n\nprint :: forall a e. Show a => a -> Test e Unit\nprint = printStr <<< show\n\nprintStr :: forall e. String -> Test e Unit\nprintStr = Test <<< log\n\nshouldEqTest :: forall a e. Show a => Eq a => a -> a -> Test e Unit\nshouldEqTest x y = Test (shouldEq x y)\n\ninfix 4 shouldEqTest as ?=="
+    },
+    {
+      "path": "test/Main.purs",
+      "sha": null,
+      "content_sha256": "87ec54f50e1380ff56554cba2eb9d82e6881b253bba0d7d84aff680ee960a74e",
+      "score": 58,
+      "content": "module Test.Main where\n\nimport Testlude\n\nimport Control.Monad.Eff.Ref (Ref, newRef)\nimport Control.Monad.Except (runExcept)\nimport Data.Array as A\nimport Data.Either (Either(..))\nimport Data.Foreign.Generic (decodeJSON, encodeJSON)\nimport Data.Maybe (Maybe(..))\n\nmain :: forall e. TestEff e Unit\nmain = do\n  log \"\\nTesting prefixes\\n\"\n  testPrefixes\n  log \"\\nTesting interval lengths\\n\"\n  testIntervalLengths\n  log \"\\nTesting id creation\\n\"\n  testIdCreation\n  log \"\\nTesting json\"\n  testJson\n\ntestPrefixes :: forall e. TestEff e Unit\ntestPrefixes = do\n  log \"Base: 100\"\n  log \"prefix(p, 1) == 2\"\n  pref 1 p ==? 2.0\n  log \"prefix(q, 1) == 10\"\n  pref 1 q ==? 10.0\n  log \"prefix(p, 2) == 2.59\"\n  pref 2 p ==? 2.59\n  log \"prefix(q, 2) == 10.20\"\n  pref 2 q ==? 10.20\n  log \"prefix(p, 3) == 2.59.00\"\n  pref 3 p ==? 2.5900\n  log \"prefix(q, 3) == 10.20.03\"\n  pref 3 q ==? 10.2003\n\ntestIntervalLengths :: forall e. TestEff e Unit\ntestIntervalLengths = do\n  log \"intervalLength(p,q,1) == 7\"\n  len 1 p q ==? 7\n  log \"intervalLength(p,q,2) == 760\"\n  len 2 p q ==? 760\n  log \"intervalLength(p,q,3) == 76102\"\n  len 3 p q ==? 76102\n\ntestIdCreation :: forall e. TestEff e Unit\ntestIdCreation = un Test do\n  clock <- Test (newRef 0)\n  computedArrayOfLength7 <- getArray 7 clock\n  computedArrayOfLength70 <- getArray 70 clock\n\n  printStr \"Computed identifier is what we expect:\"\n  computedArrayOfLength7 ?== artisanallyHandcraftedArrayOfLength7\n\n  printStr \"Identifier with 70 elements has expected properties:\"\n  A.length computedArrayOfLength70 ?== 70\n  A.sort computedArrayOfLength70 ?== computedArrayOfLength70\n  compare (Just p) (A.head computedArrayOfLength70) ?== LT\n  compare (Just q) (A.last computedArrayOfLength70) ?== GT\n  where\n    getArray :: Int -> Ref Int -> Test e (Array TestId)\n    getArray i clock = logootRand {rand} b p q i (Boundary 10) (S {id: 0, clock})\n    artisanallyHandcraftedArrayOfLength7 :: Array (IdentifierF Array Int Int)\n    artisanallyHandcraftedArrayOfLength7 = createIdentifier <$> A.range 1 7\n    createIdentifier :: Int -> IdentifierF Array Int Int\n    createIdentifier n = IdentifierF [Position (n + 2) (Just 0) (Just n)]\n\ntestJson :: forall e. TestEff e Unit\ntestJson = un Test do\n  runExcept (decodeJSON (encodeJSON p)) ?== Right p\n  runExcept (decodeJSON (encodeJSON q)) ?== Right q\n  runExcept (decodeJSON (encodeJSON p0)) ?== Right p0\n  runExcept (decodeJSON (encodeJSON q0)) ?== Right q0\n  where\n    p0 :: Position Int Int\n    p0 = Position 0 Nothing Nothing\n    q0 :: Position Int Int\n    q0 = Position 100 Nothing Nothing"
+    },
+    {
+      "path": "bower.json",
+      "sha": null,
+      "content_sha256": "4a578b2defad06495c5422d3ce28459913df4cf7e11704edf19bf6515619edc8",
+      "score": 35,
+      "content": "{\n  \"name\": \"purescript-logoot-core\",\n  \"ignore\": [\n    \"**/.*\",\n    \"node_modules\",\n    \"bower_components\",\n    \"output\"\n  ],\n  \"dependencies\": {\n    \"purescript-prelude\": \"^3.1.1\",\n    \"purescript-console\": \"^3.0.0\",\n    \"purescript-lists\": \"^4.12.0\",\n    \"purescript-random\": \"^3.0.0\",\n    \"purescript-free\": \"^4.2.0\",\n    \"purescript-strings\": \"^3.4.0\",\n    \"purescript-foreign-generic\": \"^5.0.1\"\n  },\n  \"devDependencies\": {\n    \"purescript-psci-support\": \"^3.0.0\",\n    \"purescript-refs\": \"^3.0.0\",\n    \"purescript-debug\": \"^3.0.0\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/juspay/purescript-logoot-core.git\"\n  },\n  \"license\": \"AGPL-1.0\"\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:07.724021+00:00"
+}

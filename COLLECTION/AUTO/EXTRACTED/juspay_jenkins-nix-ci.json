@@ -1,0 +1,47 @@
+{
+  "canonical_source": "github:juspay/jenkins-nix-ci",
+  "repo": "juspay/jenkins-nix-ci",
+  "revision_sha": "4352b7f227a8fa15cb3f4fb08471a5c50a7035b8",
+  "default_branch": "main",
+  "pushed_at": "2024-05-22T23:44:30Z",
+  "repo_updated_at": "2026-05-05T21:51:13Z",
+  "license": "AGPL-3.0",
+  "topics": [
+    "ci",
+    "jenkins",
+    "nixos"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/flakehub-publish-rolling.yml",
+      "sha": null,
+      "content_sha256": "90abc91f4c7557aee4469f7e971174ec813654725b87d5205a3250e7c5a37065",
+      "score": 126,
+      "content": "name: \"Publish every Git push to main to FlakeHub\"\non:\n  push:\n    branches:\n      - \"main\"\njobs:\n  flakehub-publish:\n    runs-on: \"ubuntu-latest\"\n    permissions:\n      id-token: \"write\"\n      contents: \"read\"\n    steps:\n      - uses: \"actions/checkout@v3\"\n      - uses: \"DeterminateSystems/nix-installer-action@main\"\n      - uses: \"DeterminateSystems/flakehub-push@main\"\n        with:\n          name: \"juspay/jenkins-nix-ci\"\n          rolling: true\n          visibility: \"public\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "346d1303298d5810dd4954d084ff72cc72b05b0e79e8fc9698967bad499145fc",
+      "score": 100,
+      "content": "[![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)][zulip]\n\n# jenkins-nix-ci\n\nA [NixOS module][nixos-mod] to run [Jenkins][jenkins], optimized specifically for running projects using [Nix].\n\n## Features\n\n- Fully nixified\n    - [x] Jenkins configuration declared in Nix (via [configuration-as-code](https://github.com/jenkinsci/configuration-as-code-plugin) plugin)\n    - [x] [sops-nix] for secrets management, for use in Jenkins credentials. Known limitation: only JSON format is supported.\n    - [x] Jenkins plugins are managed by [jenkinsPlugins2nix](https://github.com/Fuuzetsu/jenkinsPlugins2nix)\n- Isolated build agents\n    - [x] [NixOS containers](https://nixos.wiki/wiki/NixOS_Containers) as build agents (runs in local node)\n    - [x] External SSH slaves (useful to run macOS build nodes)\n- CI features as NixOS modules, encapsulated along with their associated groovy library for referencing in `Jenkinsfile`\n    - [x] `nix`: provides `nixCI` (using [nixci](https://github.com/srid/nixci)) to build all flake outputs, and sets `env.FLAKE_OUTPUTS` to the list of outputs built.\n        - Uses `--no-update-lock-file` (thus fails on out of sync `flake.lock` files)\n        - Supports sub flakes ([example](https://github.com/srid/haskell-flake/pull/179)) via `nixci`\n    - [x] [cachix](https://www.cachix.org/): provides `cachixPush` and `cachixUse` pipeline steps\n        - `cachixPush` will push the `env.FLAKE_OUTPUTS` built by the `nix` feature\n    - [x] [docker](https://www.docker.com/): provides `dockerPush` pipeline step\n    - [x] `githubApp`: provides Github integration for CI status reporting\n\n## Examples\n\n- https://github.com/nammayatri/jenkins-config (used by [Nammayatri](https://www.nammayatri.in/))\n- [srid/nixos-config](https://github.com/srid/nixos-config/blob/aeb13a8b06692144910526be0c342fed017015b4/nixos/jenkins.nix)\n\n## Plugins\n\nTo update the plugins, run `nix-prefetch-jenkins-plugins > nix/jenkins/plugins.nix`. `nix-prefetch-jenkins-plugins` must have been added to the devShell. See the aforementioned example.\n\n## Secrets\n\nWe use [sops-nix] to manage secrets used by the individual CI features. Convert your SSH key (ed25519) to age, which sops uses. With macOS & 1Password, it would look like:\n\n```sh\nnix run nixpkgs#ssh-to-age  <<< \"$(op read 'op://Personal/id_ed25519/public key')\"\nnix run nixpkgs#ssh-to-age -- --private-key -i <(op read 'op://Personal/id_ed25519/actual private') > ~/.config/sops/age/keys.txt\n# ^ $HOME/Library/Application\\ Support/sops/age/keys.txt actually\n```\n\nYou also want to get the host key (`ssh-keyscan localhost | ssh-to-age`) of the machine being deployed.\n\nPut both these public age keys in `.sops.yaml` of the repository.\n\n## Discussion\n\n- [Zulip][zulip]\n\n[sops-nix]: https://github.com/Mic92/sops-nix\n[nixos-mod]: https://nixos.wiki/wiki/NixOS_modules\n[jenkins]: https://www.jenkins.io/\n[Nix]: https://zero-to-nix.com/\n[zulip]: https://nixos.zulipchat.com/#narrow/stream/416818-jenkins-nix-ci\n"
+    },
+    {
+      "path": "nix/jenkins/features/nix/nixCI.groovy",
+      "sha": null,
+      "content_sha256": "bc928d7fc05d89ebaec2e0f68682f87f2ebd92819051aa68e81bbcc9a76799ba",
+      "score": 64,
+      "content": "#!/usr/bin/env groovy\n\ndef call(Map args = [:]) {\n    // Function args are deprecated\n    system = args[\"system\"] ?: env.NIX_SYSTEM\n    stage (\"\"\"NixCI (${system ?: \"default\"})\"\"\") {\n      nixArgs = [\n        system ? \"--system ${system}\" : \"\",\n      ]\n      flakeOutputs = sh script: \"\"\"nixci ${nixArgs.join(\" \")}\"\"\",\n         returnStdout: true\n      echo flakeOutputs\n      env.FLAKE_OUTPUTS = flakeOutputs.trim().replaceAll(\"\\n\", \" \")\n    }\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:12.358510+00:00"
+}

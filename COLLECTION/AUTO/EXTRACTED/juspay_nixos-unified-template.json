@@ -1,0 +1,68 @@
+{
+  "canonical_source": "github:juspay/nixos-unified-template",
+  "repo": "juspay/nixos-unified-template",
+  "revision_sha": "5b3be42b4baeb50a876affb81dabe73ba7f1a7ca",
+  "default_branch": "main",
+  "pushed_at": "2026-10-04T00:59:40Z",
+  "repo_updated_at": "2026-09-28T21:41:51Z",
+  "license": "AGPL-3.0",
+  "topics": [
+    "home-manager",
+    "home-manager-config",
+    "nix"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yaml",
+      "sha": null,
+      "content_sha256": "5c827f949946844b4e6d6a9be63739cfa2a0d33489fb6eefbc2f9b6f6b5180e0",
+      "score": 198,
+      "content": "name: \"CI\"\non:\n  push:\n    branches:\n      - main\n      - ci/**\n  pull_request:\njobs:\n  nix:\n    runs-on: ${{ matrix.runner }}\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - system: x86_64-linux\n            runner: ubuntu-latest\n          - system: aarch64-darwin\n            runner: macos-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: DeterminateSystems/nix-installer-action@main\n      - name: Install omnix\n        run: nix profile install nixpkgs#omnix\n      - name: om show\n        run: om show .\n      - name: om ci\n        run: om ci run --extra-access-tokens \"github.com=${{ secrets.GITHUB_TOKEN }}\" --systems \"${{ matrix.system }}\"\n      - name: om init tests\n        run: |\n          om init --test .\n\n"
+    },
+    {
+      "path": ".github/workflows/update-flake-lock.yaml",
+      "sha": null,
+      "content_sha256": "fe5865c13b49e80b03832b94bacc4e7c564a56750ddd3120bbe3dedd819b30df",
+      "score": 126,
+      "content": "name: update-flake-lock\non:\n  workflow_dispatch: # allows manual triggering\n  schedule:\n    - cron: '0 0 * * 0' # runs weekly on Sunday at 00:00\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  example-lock:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n      - name: Install Nix\n        uses: DeterminateSystems/nix-installer-action@main\n      - name: Update flake.lock\n        id: update\n        uses: DeterminateSystems/update-flake-lock@main\n        with:\n          pr-title: \"Update flake.lock\"\n          pr-labels: |\n            automated\n      - name: Enable auto-merge\n        if: steps.update.outputs.pull-request-number != ''\n        env:\n          GH_TOKEN: ${{ github.token }}\n          PR_NUMBER: ${{ steps.update.outputs.pull-request-number }}\n        run: gh pr merge --auto --squash \"$PR_NUMBER\"\n"
+    },
+    {
+      "path": ".mcp.json",
+      "sha": null,
+      "content_sha256": "73de7d37e8b4d2b82ffccdea538f37a1e08e48da2be35d7dbe3a88d8f23f3a00",
+      "score": 110,
+      "content": "{\n  \"mcpServers\": {\n    \"nixos\": {\n      \"command\": \"nix\",\n      \"args\": [\"run\", \"github:utensils/mcp-nixos\"]\n    }\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "33beb1d0ae4ea7ead04ff0a5351614e65d73a1b57a2b06e2a2f39e90e25b8db0",
+      "score": 100,
+      "content": "[![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://nixos.zulipchat.com/#narrow/stream/413950-nix)\n\n# nixos-unified-template\n\nThis repository provides a ready-made Nix configuration to manage either your Home environment or whole NixOS systems. It is optimized specifically for development environment (with direnv, neovim with LSP[^neovim], etc.).\n\nUnder the hood, it uses [nixos-unified]. See [`./modules`](modules/) to see what's available. We support [home-manager] (see `./modules/home`), [nix-darwin] (see `./modules/darwin`) and [NixOS] (see `./modules/nixos`).\n\n| Platform    | Supported By                              |\n|-------------|-------------------------------------------|\n| macOS only       | ✅ [home-manager] and/or ✅ [nix-darwin]   |\n| NixOS only       | ✅ [home-manager] and ✅ [NixOS]  |\n| All platforms    | ✅ [home-manager] only                       |\n\n[^neovim]: Wanna try before you buy?\n    ```\n    git clone https://github.com/srid/rust-nix-template\n    cd rust-nix-template\n    nix develop\n    nix run github:juspay/nixos-unified-template#neovim\n    # Type `SPC f f` to open a .rs file\n    # Wait for rust-analyzer to finish; go to a symbol and type K\n    ```\n\n    Expect to see:\n\n    <img width=\"534\" alt=\"image\" src=\"https://github.com/user-attachments/assets/204e6ad7-c233-4503-9924-73fbce2772d6\">\n\n\n[nix-darwin]: https://github.com/LnL7/nix-darwin\n[home-manager]: https://github.com/nix-community/home-manager\n[NixOS]: https://nixos.asia/en/nixos-tutorial\n[nixos-unified]: https://nixos-unified.org\n\n## Getting Started\n\n![Demo](./assets/out.gif)\n\n### On NixOS\n\nIf you use, or intend to use, [NixOS]:\n\n1. Install NixOS from [Graphical ISO image](https://nixos.org/download/#download-nixos) and reboot.\n1. Ensure that `/etc/nixos/{configuration.nix, hardware-configuration.nix}` are in place.\n1. In a terminal, become `root` and initialize our template under `/etc/nixos`:\n    ```sh-session\n    sudo su -\n    cd /etc/nixos\n    nix --extra-experimental-features \"nix-command flakes\" \\\n      run nixpkgs#omnix -- \\\n      init github:juspay/nixos-unified-template#nixos -o .\n    # Replace HOSTNAME with the hostname you entered above.\n    mv configuration.nix hardware-configuration.nix ./configurations/nixos/HOSTNAME/\n    nix --extra-experimental-features \"nix-command flakes\" run\n    ```\n1. At this point, you can move `/etc/nixos` to anywhere, and initialize a Git repository to track future changes.\n\n### On non-NixOS\n\nIf you are on macOS or running other Linux distros:\n\n1. [Install Nix](https://nixos.asia/en/install):\n    ```sh-session\n    curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | \\\n      sh -s -- install --no-confirm --extra-conf \"trusted-users = $(id -un)\"\n    ```\n1. Open a new terminal; Initialize[^omnix] your Nix configuration using this repo as template:\n    ```sh-session\n    nix run nixpkgs#omnix -- init github:juspay/nixos-unified-template -o ~/nixconfig\n    cd ~/nixconfig\n    ```\n    <img width=\"1092\" alt=\"image\" src=\"https://github.com/user-attachments/assets/1341d200-d894-488c-ba74-42d8830cc6f7\">\n\n    - It will prompt to you choose between [home-manager] only configuration and [nix-darwin] configuration (ignore the [NixOS] template). The latter includes [home-manager] as well.\n    - Optionally, you may edit `./modules/{home,darwin}/*.nix` to your liking.\n1. Run `nix run` (or the appropriate command printed by the above command) to activate your configuration.\n    - Does this fail to run? See the [Troubleshooting](#troubleshooting) section below.\n1. Restart your terminal.\n\nAfter steps 1-4, you should expect to see the [starship](https://starship.rs/) prompt:\n\n<img width=\"236\" alt=\"image\" src=\"https://github.com/user-attachments/assets/bea3a7e5-b06a-483f-b76b-5c3865ce5e55\">\n\nWhenever you modify your configuration in `./modules/*/*.nix`, you should re-run `nix run` to activate the new configuration.\n\n[^omnix]: We use [omnix](https://omnix.page/om/init.html) to initialize this repository template.\n\n## Details\n\nThe configuration repo has `flake.nix` file in the current directory and some `./modules/{home,darwin,nixos}/*.nix` files containing the [home-manager], [nix-darwin] and [NixOS] configurations respectively that you can review. It also has a [justfile](https://github.com/casey/just), which provides a set of recipes analogous to Make targets to interact with the nix flake.\n\nRun `nix run` to activate this configuration in your system.\n\nTo browse the capabilities of [home-manager] (and to see what else can go in your `./modules/home/*.nix` -- such as shell aliases), consult [home-manager options reference](https://nix-community.github.io/home-manager/options.xhtml). You can also run `man home-configuration.nix` in the terminal.\n\n## What's included\n\nHere we describe just a handful of tools included in this template. See the [./modules](./modules) directory for more. All of `./modules` and `./configurations` directories are organized by [nixos-unified's autowiring structure](https://nixos-unified.org/autowiring.html).\n\n### neovim\n\nNeovim configured using [nixvim](https://github.com/nix-community/nixvim) is included across all configurations. It is also exposed as a flake app, so you can launch it directly using `nix run github:juspay/nixos-unified-template#neovim`. See `neovim/nixvim.nix`.\n\n### starship\n\nPrettify your shell prompt with [starship](https://starship.rs/). It is configured to show the current git branch, the current directory, Nix devshell status and the exit code of the last command.\n\n### direnv\n\n[direnv](https://nixos.asia/en/direnv) as well as `nix-direnv` is fully configured and available to use in your shell, with tight starship (see above) prompt integration. See `direnv.nix`\n\n### git configuration\n\nYour `~/.config/git/config` is managed entirely in Nix. See `git.nix`.\n\n### comma\n\nType `, ` followed by the any binary name to run it directly from nixpkgs, using [comma](https://github.com/nix-community/comma).\n\n[![asciicast](https://asciinema.org/a/i3zAyXH7zYlBJU8shQK5nhke7.svg)](https://asciinema.org/a/i3zAyXH7zYlBJU8shQK5nhke7)\n\n### Garbage collection\n\nNix garbage collection runs periodically to keep disk space manageable. See `gc.nix`\n\nBy default, [home-manager] is configured to run garbage collection automatically every week. If your projects use nix-direnv, you don't have to worry about having to download the dependencies again while in a remote area with limited internet access ([see prominent features of nix-direnv](https://github.com/nix-community/nix-direnv#nix-direnv)).\n\n## Troubleshooting\n\n### `error: opening lock file ...`\n\n**Problem**: When using home-manager, `nix run` shows an error like: `error: opening lock file '/nix/var/nix/profiles/per-user/utkarsh.pandey1/profile.lock': No such file or directory`\n\n**Solution**: This is an instance of https://github.com/nix-community/home-manager/issues/4611. Run `sudo mkdir /nix/var/nix/profiles/per-user/$(id -un)/ && sudo chown $(id -un) /nix/var/nix/profiles/per-user/$(id -un)` and try again.\n\n### `error: unable to download ... Problem with the SSL CA cert (path? access rights?)`\n\n**Problem**: On macOS, you may see this error: `error: unable to download ... Problem with the SSL CA cert (path? access rights?)`\n\n**Solution**: You may be able to resolve this by running:\n\n```sh\nsudo rm /etc/ssl/certs/ca-certificates.crt\nsudo ln -s /nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt /etc/ssl/certs/ca-certificates.crt\n```\n\nSee https://github.com/NixOS/nix/issues/2899#issuecomment-1669501326\n"
+    },
+    {
+      "path": "assets/README.md",
+      "sha": null,
+      "content_sha256": "0c8fc61865a2a26fa9c96ba4c57665fda39ba3e64267e83e5e5f3f4b04ac803c",
+      "score": 98,
+      "content": "# Demo\n\n## Create the demo\n\n```\nnix run\n```\n\n[VHS](https://github.com/charmbracelet/vhs) will automatically:\n- Execute all commands in the tape file\n- Capture the terminal output\n- Generate `out.gif` and `out.mp4`\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha": null,
+      "content_sha256": "d3298e1119dfe0477ffd2d4f9f06af4ae6decf26fb5178ae754e04e3b8109c64",
+      "score": 75,
+      "content": "# AGENTS\n\nAfter making configuration changes, run `nix run` to activate them.\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:12.677950+00:00"
+}

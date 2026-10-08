@@ -1,0 +1,95 @@
+{
+  "canonical_source": "github:juspay/purescript-node-websocket",
+  "repo": "juspay/purescript-node-websocket",
+  "revision_sha": "48f42466491e12ce50b9558c43595ec5c7501920",
+  "default_branch": "master",
+  "pushed_at": "2019-02-01T00:42:21Z",
+  "repo_updated_at": "2018-04-06T18:39:07Z",
+  "license": "NOASSERTION",
+  "topics": [
+    "purescript",
+    "websocket"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "679f24556dfbf2d45b726ece1b987af34c60baab1e1d46ce411aa0c634376f7b",
+      "score": 120,
+      "content": "{\n  \"dependencies\": {\n    \"websocket\": \"^1.0.25\"\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "ef899523149abcd98be26c93c958d10ed65dc012575baf27815f05e8f202b5bd",
+      "score": 100,
+      "content": "# purescript-node-websocket\n\nBindings to node's [`websocket`](https://github.com/theturtle32/WebSocket-Node) library.\n\n# Installation\n\n`bower i purescript-node-websocket`\n"
+    },
+    {
+      "path": "test/Main.purs",
+      "sha": null,
+      "content_sha256": "c7d02ee3d4d59a29496c7306956416ddac87a1f8cfccb9d82d02653b4e34078b",
+      "score": 58,
+      "content": "module Test.Main where\n\nimport Prelude\n\nimport Control.Monad.Eff (Eff)\nimport Control.Monad.Eff.Console (CONSOLE, log)\nimport Control.Monad.ST (ST)\nimport Data.Array.ST as Array\nimport Data.Either (Either(..))\nimport Data.Foldable (traverse_)\nimport Data.FoldableWithIndex (forWithIndex_)\nimport Data.Maybe (Maybe(..))\nimport Data.Nullable (toNullable)\nimport Node.HTTP (HTTP, listen)\nimport Node.HTTP as HTTP\nimport Node.Websocket (ConnectionClose, ConnectionMessage, EventProxy(EventProxy), Request, on)\nimport Node.Websocket.Connection (remoteAddress, sendMessage, sendUTF)\nimport Node.Websocket.Request (accept, origin)\nimport Node.Websocket.Server (newWebsocketServer)\nimport Node.Websocket.Types (TextFrame(..), WSSERVER, defaultServerConfig)\n\ndata AppState\n\n-- | Routes incoming messages to all clients except the one that sent it, and sends\n-- | message history to new connections.\nmain :: forall e. Eff (st :: ST AppState, wss :: WSSERVER, console :: CONSOLE, http :: HTTP | e) Unit\nmain = do\n\n  httpServer <- HTTP.createServer \\ _ _ -> log \"Server created\"\n  listen\n    httpServer\n    {hostname: \"localhost\", port: 2718, backlog: Nothing} do\n      log \"Server now listening\"\n\n  wsServer <- newWebsocketServer (defaultServerConfig httpServer)\n\n  clientsRef <- Array.emptySTArray\n  historyRef <- Array.emptySTArray\n\n  on request wsServer \\ req -> do\n    log do\n      \"New connection from: \" <> show (origin req)\n    conn <- accept req (toNullable Nothing) (origin req)\n    idx <- (_ - 1) <$> Array.pushSTArray clientsRef conn\n\n    log \"New connection accepted\"\n\n    history <- Array.freeze historyRef\n    -- sending a batched history requires client-side decoding support\n    traverse_ (sendUTF conn) history\n\n    on message conn \\ msg -> do\n\n      case msg of\n        Left (TextFrame {utf8Data}) -> do\n          _ <- Array.pushSTArray historyRef utf8Data\n          log (\"Received message: \" <> utf8Data)\n          pure unit\n        Right _ -> pure unit\n\n      clients <- Array.freeze clientsRef\n      forWithIndex_ clients \\ i client -> do\n\n        when (i /= idx) do\n          sendMessage client msg\n\n    on close conn \\ _ _ -> do\n      _ <- Array.spliceSTArray clientsRef idx 1 []\n      log (\"Peer disconnected \" <> remoteAddress conn)\n  where\n    close = EventProxy :: EventProxy ConnectionClose\n    message = EventProxy :: EventProxy ConnectionMessage\n    request = EventProxy :: EventProxy Request"
+    },
+    {
+      "path": "package-lock.json",
+      "sha": null,
+      "content_sha256": "ed83c26c90c2435d01519f3705dfa7c4024b7c1eb462e1505bfa1d3b6c6b4def",
+      "score": 35,
+      "content": "{\n  \"requires\": true,\n  \"lockfileVersion\": 1,\n  \"dependencies\": {\n    \"debug\": {\n      \"version\": \"2.6.9\",\n      \"resolved\": \"https://registry.npmjs.org/debug/-/debug-2.6.9.tgz\",\n      \"integrity\": \"sha512-bC7ElrdJaJnPbAP+1EotYvqZsb3ecl5wi6Bfi6BJTUcNowp6cvspg0jXznRTKDjm/E7AdgFBVeAPVMNcKGsHMA==\",\n      \"requires\": {\n        \"ms\": \"2.0.0\"\n      }\n    },\n    \"is-typedarray\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/is-typedarray/-/is-typedarray-1.0.0.tgz\",\n      \"integrity\": \"sha1-5HnICFjfDBsR3dppQPlgEfzaSpo=\"\n    },\n    \"ms\": {\n      \"version\": \"2.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/ms/-/ms-2.0.0.tgz\",\n      \"integrity\": \"sha1-VgiurfwAvmwpAd9fmGF4jeDVl8g=\"\n    },\n    \"nan\": {\n      \"version\": \"2.10.0\",\n      \"resolved\": \"https://registry.npmjs.org/nan/-/nan-2.10.0.tgz\",\n      \"integrity\": \"sha512-bAdJv7fBLhWC+/Bls0Oza+mvTaNQtP+1RyhhhvD95pgUJz6XM5IzgmxOkItJ9tkoCiplvAnXI1tNmmUD/eScyA==\"\n    },\n    \"typedarray-to-buffer\": {\n      \"version\": \"3.1.5\",\n      \"resolved\": \"https://registry.npmjs.org/typedarray-to-buffer/-/typedarray-to-buffer-3.1.5.tgz\",\n      \"integrity\": \"sha512-zdu8XMNEDepKKR+XYOXAVPtWui0ly0NtohUscw+UmaHiAWT8hrV1rr//H6V+0DvJ3OQ19S979M0laLfX8rm82Q==\",\n      \"requires\": {\n        \"is-typedarray\": \"1.0.0\"\n      }\n    },\n    \"websocket\": {\n      \"version\": \"1.0.25\",\n      \"resolved\": \"https://registry.npmjs.org/websocket/-/websocket-1.0.25.tgz\",\n      \"integrity\": \"sha512-M58njvi6ZxVb5k7kpnHh2BvNKuBWiwIYvsToErBzWhvBZYwlEiLcyLrG41T1jRcrY9ettqPYEqduLI7ul54CVQ==\",\n      \"requires\": {\n        \"debug\": \"2.6.9\",\n        \"nan\": \"2.10.0\",\n        \"typedarray-to-buffer\": \"3.1.5\",\n        \"yaeti\": \"0.0.6\"\n      }\n    },\n    \"yaeti\": {\n      \"version\": \"0.0.6\",\n      \"resolved\": \"https://registry.npmjs.org/yaeti/-/yaeti-0.0.6.tgz\",\n      \"integrity\": \"sha1-8m9ITXJoTPQr7ft2lwqhYI+/lXc=\"\n    }\n  }\n}\n"
+    },
+    {
+      "path": "bower.json",
+      "sha": null,
+      "content_sha256": "fc5fea82e333039da490b2337d59ef212fc1411c47bcf9127df8af47ff0ed97f",
+      "score": 35,
+      "content": "{\n  \"name\": \"purescript-node-websocket\",\n  \"ignore\": [\n    \"**/.*\",\n    \"node_modules\",\n    \"bower_components\",\n    \"output\"\n  ],\n  \"dependencies\": {\n    \"purescript-prelude\": \"^3.1.1\",\n    \"purescript-console\": \"^3.0.0\",\n    \"purescript-node-http\": \"^4.2.0\"\n  },\n  \"devDependencies\": {\n    \"purescript-psci-support\": \"^3.0.0\",\n    \"purescript-refs\": \"^3.0.0\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/juspay/purescript-node-websocket.git\"\n  },\n  \"license\": \"AGPL-1.0\"\n}\n"
+    },
+    {
+      "path": "src/Node/Websocket/Request.js",
+      "sha": null,
+      "content_sha256": "7f60f6c2ab435b142ebf6875e4936cdffb8a893f61dbae8f71bf3bdf9bc78df1",
+      "score": 29,
+      "content": "\"use strict\";\n\nexports.httpRequest = function (req) {\n  return req.httpRequest;\n}\n\nexports.host = function (req) {\n  return req.host;\n}\n\nexports.resource = function (req) {\n  return req.resource;\n}\n\nexports.resourceURL = function (req) {\n  return req.resourceURL;\n}\n\nexports.remoteAddress = function (req) {\n  return req.remoteAddress;\n}\n\nexports.webSocketVersion = function (req) {\n  return req.webSocketVersion;\n}\n\nexports.origin = function (req) {\n  return req.origin;\n}\n\nexports.requestedProtocols = function (req) {\n  return req.requestedProtocols;\n}\n\nexports.accept = function (req) {\n  return function (acceptedProtocol) {\n    return function (allowedOrigin) {\n      return function () {\n        return req.accept(acceptedProtocol, allowedOrigin);\n      }\n    }\n  }\n}\n\nexports.reject = function (req) {\n  return function (httpStatus) {\n    return function (reason) {\n      return function () {\n        req.reject(httpStatus, reason);\n      }\n    }\n  }\n}\n\nexports.onRequestAccepted = function (req) {\n  return function (callback) {\n    return function () {\n      req.on(\"requestAccepted\", function(conn) {\n        callback(conn)();\n      });\n    }\n  }\n}\n\nexports.onRequestRejected = function (req) {\n  return function (callback) {\n    return function () {\n      req.on(\"requestRejected\", function() {\n        callback();\n      });\n    }\n  }\n}"
+    },
+    {
+      "path": "src/Node/Websocket/Connection.js",
+      "sha": null,
+      "content_sha256": "74485f694efad230944112151a7072c095f65d8494853d41b0aebc0539f0c533",
+      "score": 29,
+      "content": "\"use strict\";\n\nexports.closeDescription = function (conn) {\n  return conn.closeDescription;\n}\n\nexports.closeReasonCode = function (conn) {\n  return conn.closeReasonCode;\n}\n\nexports.protocol = function (conn) {\n  return conn.protocol;\n}\n\nexports.remoteAddress = function (conn) {\n  return conn.remoteAddress;\n}\n\nexports.webSocketVersion = function (conn) {\n  return conn.webSocketVersion;\n}\n\nexports.connected = function (conn) {\n  return conn.connected;\n}\n\nexports.closeWithReason = function (conn) {\n  return function (reasonCode) {\n    return function (description) {\n      return function () {\n        conn.close(reasonCode, description);\n      }\n    }\n  }\n}\n\nexports.close = function (conn) {\n  return function () {\n    conn.close();\n  }\n}\n\nexports.drop = function (conn) {\n  return function (reasonCode) {\n    return function (description) {\n      return function () {\n        conn.drop(reasonCode, description);\n      }\n    }\n  }\n}\n\nexports.sendUTF = function (conn) {\n  return function (msg) {\n    return function () {\n      conn.sendUTF(msg);\n    }\n  }\n}\n\nexports.sendBytes = function (conn) {\n  return function (buffer) {\n    return function () {\n      conn.sendBytes(buffer);\n    }\n  }\n}\n\nexports.ping = function (conn) {\n  return function (buffer) {\n    return function () {\n      conn.ping(buffer);\n    }\n  }\n}\n\nexports.pong = function (conn) {\n  return function (buffer) {\n    return function () {\n      conn.pong(buffer);\n    }\n  }\n}\n\nexports.sendFrame = function (conn) {\n  return function (frame) {\n    return function () {\n      conn.sendFrame(frame);\n    }\n  }\n}\n\nexports.onMessageImpl = function (Left) {\n  return function (Right) {\n    return function (conn) {\n      return function (callback) {\n        return function () {\n          conn.on(\"message\", function (msg) {\n            if (msg.type == \"utf8\") {\n              callback(Left(msg))();\n              return;\n            }\n            callback(Right(msg))();\n          })\n        }\n      }\n    }\n  }\n}\n\nexports.onFrame = function (conn) {\n  return function (callback) {\n    return function () {\n      conn.on(\"frame\", function (frame) {\n        callback(frame)();\n      })\n    }\n  }\n}\n\nexports.onClose = function (conn) {\n  return function (callback) {\n    return function () {\n      conn.on(\"close\", function(reasonCode, description) {\n        callback(reasonCode)(description)();\n      })\n    }\n  }\n}\n\nexports.onError = function (conn) {\n  return function (callback) {\n    return function () {\n      conn.on(\"error\", function (err) {\n        callback(err)();\n      })\n    }\n  }\n}\n\nexports.onPing = function (conn) {\n  return function (callback) {\n    return function () {\n      conn.on(\"ping\", function(cancel, data) {\n        callback(data)(cancel)();\n      })\n    }\n  }\n}\n\nexports.onPong = function (conn) {\n  return function (callback) {\n    return function () {\n      conn.on(\"pong\", function (data) {\n        callback(data)();\n      })\n    }\n  }\n}"
+    },
+    {
+      "path": "src/Node/Websocket/Server.js",
+      "sha": null,
+      "content_sha256": "5ecd7a5e309e23b0edeacdc5993b1f0a457eb5415819d3b9b8df1c2c7c0a11ff",
+      "score": 29,
+      "content": "\"use strict\";\n\nvar WSServer = require(\"websocket\").server;\n\nexports.newWebsocketServer = function (config) {\n  return function () {\n    return new WSServer(config);\n  }\n}\n\nexports.onRequest = function (server) {\n  return function (callback) {\n    return function () {\n      server.on(\"request\", function (req) {\n        callback(req)();\n      })\n    }\n  }\n}\n\nexports.onConnect = function (server) {\n  return function (callback) {\n    return function () {\n      server.on(\"connect\", function (conn) {\n        callback(conn)();\n      })\n    }\n  }\n}\n\nexports.onClose = function (server) {\n  return function (callback) {\n    return function () {\n      server.on(\"close\", function (conn, reason, description) {\n        callback(conn)(reason)(description)();\n      })\n    }\n  }\n}"
+    },
+    {
+      "path": "src/Node/Websocket/Frame.js",
+      "sha": null,
+      "content_sha256": "323a928dfc754668b3e8f4da8fab956fd59096c44301e312c9e6f5259675830e",
+      "score": 29,
+      "content": "\"use strict\";\n\nvar WSFrame = require(\"websocket\").frame;\n\nexports.newWebsocketFrame = function () {\n  return new WSFrame();\n}\n\nexports.unsafeGet = function (frame) {\n  return function (prop) {\n    return frame[prop];\n  }\n}\n\nexports.unsafeSet = function (frame) {\n  return function (prop) {\n    return function (val) {\n      return function () {\n        frame[prop] = val;\n      }\n    }\n  }\n}"
+    },
+    {
+      "path": "src/Node/Websocket/Client.js",
+      "sha": null,
+      "content_sha256": "45e6fb5d6975b1eee6f1d721c997c08a2b69f1d0b87c25f4193d0d7957609b71",
+      "score": 29,
+      "content": "\"use strict\";\n\nvar WSClient = require(\"websocket\").client;\n\nexports.newWebsocketClient = function (config) {\n  return function () {\n    return new WSClient(config);\n  }\n}\n\nexports.connect = function (client) {\n  return function (requestUrl) {\n    return function (requestProtocols) {\n      return function (origin) {\n        return function (headers) {\n          return function (requestOptions) {\n            return function () {\n              client.connect(requestUrl, requestProtocols, origin, headers, requestOptions);\n            }\n          }\n        }\n      }\n    }\n  }\n}\n\nexports.abort = function (client) {\n  return function () {\n    client.abort();\n  }\n}\n\nexports.onConnect = function (client) {\n  return function (callback) {\n    return function () {\n      client.on(\"connect\", function (conn) {\n        callback(conn)();\n      })\n    }\n  }\n}\n\nexports.onConnectFailed = function (client) {\n  return function (callback) {\n    return function () {\n      client.on(\"connectFailed\", function (errorDescription) {\n        callback(errorDescription)();\n      })\n    }\n  }\n}\n\nexports.onHttpResponse = function (client) {\n  return function (callback) {\n    return function () {\n      client.on(\"httpResponse\", function (response, webSocketClient) {\n        callback(response)(webSocketClient)();\n      })\n    }\n  }\n}"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:07.990490+00:00"
+}

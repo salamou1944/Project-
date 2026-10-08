@@ -1,0 +1,99 @@
+{
+  "canonical_source": "github:juspay/flakreate",
+  "repo": "juspay/flakreate",
+  "revision_sha": "48825a800dc017f340e6f0f651604534640b3cce",
+  "default_branch": "master",
+  "pushed_at": "2024-07-22T19:43:43Z",
+  "repo_updated_at": "2024-07-22T19:44:32Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci-nix.yml",
+      "sha": null,
+      "content_sha256": "fe9d916beb8fbd53dde9481ee2e79871a23d6fda509a5f8e5a6353f8353331ea",
+      "score": 198,
+      "content": "name: \"CI Nix\"\non:\n  # Run only when pushing to master branch, and making PRs\n  push:\n    branches:\n      - master\n  pull_request:\njobs:\n  build:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-14]\n    steps:\n      - uses: actions/checkout@v4\n      - uses: DeterminateSystems/nix-installer-action@main\n        with:\n          extra-conf: |\n            trusted-public-keys = cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g= cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=\n            substituters = https://cache.garnix.io?priority=41 https://cache.nixos.org/\n      - uses: yaxitech/nix-install-pkgs-action@v3\n        with:\n          packages: \"github:srid/nixci\"\n      - run: nixci build\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "3302834547d980f526d29e43f8f46d0fe9ebc3c450bc15c82cb8afb45c4e915b",
+      "score": 120,
+      "content": "[package]\nauthors = [\"Sridhar Ratnakumar <srid@srid.ca>\"]\nedition = \"2021\"\n# If you change the name here, you must also do it in flake.nix (and run `cargo generate-lockfile` afterwards)\nname = \"flakreate\"\nversion = \"0.1.0\"\n\n# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html\n\n[dependencies]\nanyhow = \"1.0.86\"\nclap = { version = \"4.3.14\", features = [\"derive\"] }\ncolored = \"2.1.0\"\nconsole = \"0.15.8\"\nglob = \"0.3.1\"\ninquire = \"0.7.5\"\nnix_rs = \"0.4.0\"\nserde = { version = \"1.0.203\", features = [\"serde_derive\"] }\nserde_json = \"1.0.117\"\ntokio = \"1.37.0\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "8a40c6bd1cf49162fdfe312937dc001ad8b1a00aa028f38854c9fc0993f3b69f",
+      "score": 100,
+      "content": "# flakreate\n\nMOVED to https://github.com/juspay/omnix/tree/main/crates/flakreate\n"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha": null,
+      "content_sha256": "e5cc0545f232bde807bd9394c2433322d1cd2cf42b060ceab2ac7329bc9cdaa2",
+      "score": 35,
+      "content": "[toolchain]\nchannel = \"stable\"\n"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha": null,
+      "content_sha256": "651db887ab3f303cc06478b1412ca68a79d2ec53fe27214b200b8e893c94dcec",
+      "score": 33,
+      "content": "use nix_rs::command::NixCmd;\nuse tokio::sync::OnceCell;\n\npub mod flake_template;\n\nstatic NIXCMD: OnceCell<NixCmd> = OnceCell::const_new();\n\npub async fn nixcmd() -> &'static NixCmd {\n    NIXCMD\n        .get_or_init(|| async {\n            NixCmd {\n                refresh: true.into(),\n                ..NixCmd::with_flakes().await.unwrap()\n            }\n        })\n        .await\n}\n"
+    },
+    {
+      "path": ".vscode/extensions.json",
+      "sha": null,
+      "content_sha256": "4c1a4803cc826b2786ed45d911be70a8c435024a63591764276d7959005b6ceb",
+      "score": 33,
+      "content": "{\n    \"recommendations\": [\n        \"rust-lang.rust-analyzer\",\n        \"jnoortheen.nix-ide\",\n        \"mkhl.direnv\",\n        \"github.vscode-github-actions\"\n    ]\n}"
+    },
+    {
+      "path": "src/main.rs",
+      "sha": null,
+      "content_sha256": "d320504ada1b56953be9f964ca51998580b8bbc4c706c904c2d9bb78a2fae3aa",
+      "score": 33,
+      "content": "use std::path::PathBuf;\n\nuse clap::Parser;\nuse flakreate::{\n    flake_template::{self, fileop::FileOp, FlakeTemplate},\n    nixcmd,\n};\nuse glob::{Pattern, PatternError};\nuse inquire::Select;\nuse nix_rs::flake::url::FlakeUrl;\n\n#[derive(Parser, Debug)]\n#[clap(author = \"Sridhar Ratnakumar\", version, about)]\n/// Application configuration\nstruct Args {\n    /// whether to be verbose\n    #[arg(short = 'v')]\n    verbose: bool,\n\n    /// Flake template registry to use\n    ///\n    /// The flake attribute is treated as a glob pattern to select the\n    /// particular template (or subset of templates) to use.\n    #[arg(short = 't', default_value = \"github:flake-parts/templates\")]\n    registry: FlakeUrl,\n\n    /// Where to create the template\n    #[arg()]\n    path: PathBuf,\n}\n\nstruct FlakeTemplateRegistry {\n    pub flake_url: FlakeUrl,\n    pub filter: Option<Pattern>,\n}\n\nimpl FlakeTemplateRegistry {\n    pub fn from_url(url: FlakeUrl) -> Result<Self, PatternError> {\n        let (base, attr) = url.split_attr();\n        Ok(FlakeTemplateRegistry {\n            flake_url: base,\n            filter: if attr.is_none() {\n                None\n            } else {\n                Some(Pattern::new(&attr.get_name())?)\n            },\n        })\n    }\n\n    pub async fn load_and_select_template(&self) -> anyhow::Result<FlakeTemplate> {\n        let term = console::Term::stdout();\n        term.write_line(format!(\"Loading registry {}...\", self.flake_url).as_str())?;\n        let templates = flake_template::fetch(&self.flake_url).await?;\n        term.clear_last_lines(1)?;\n        println!(\"Loaded registry: {}\", self.flake_url);\n        // TODO: avoid duplicates (aliases)\n        let filtered_templates = templates\n            .iter()\n            .filter(|template| {\n                self.filter\n                    .as_ref()\n                    .map_or(true, |filter| filter.matches(&template.name))\n            })\n            .collect::<Vec<_>>();\n        let template = if filtered_templates.len() == 1 {\n            filtered_templates[0]\n        } else {\n            Select::new(\"Select a template\", filtered_templates)\n                .with_help_message(\"Choose a flake template to use\")\n                .prompt()?\n        };\n        println!(\"Selected template: {}\", template);\n        Ok(template.clone())\n    }\n}\n\n#[tokio::main]\nasync fn main() -> anyhow::Result<()> {\n    let args = Args::parse();\n    if args.verbose {\n        println!(\"DEBUG {args:?}\");\n    }\n    println!(\n        \"Welcome to flakreate! Let's create your flake template at {:?}:\",\n        args.path\n    );\n    let template = FlakeTemplateRegistry::from_url(args.registry.clone())?\n        .load_and_select_template()\n        .await?;\n\n    // Prompt for template parameters\n    let param_values = template.prompt_replacements()?;\n\n    let path = args.path.to_string_lossy();\n\n    // Create the flake templatge\n    let template_url = args.registry.with_attr(&template.name);\n    println!(\"$ nix flake new {} -t {}\", path, template_url);\n    nixcmd()\n        .await\n        .run_with_args(&[\"flake\", \"new\", &path, \"-t\", &template_url.0])\n        .await?;\n\n    // Do the actual replacement\n    std::env::set_current_dir(args.path)?;\n    for replace in param_values {\n        FileOp::apply(&replace).await?;\n    }\n    Ok(())\n}\n"
+    },
+    {
+      "path": ".vscode/settings.json",
+      "sha": null,
+      "content_sha256": "c4fcdabbd1ea9d8df2c9a3bc001fd769d26f1445c631c2ec8a54f17055a96a60",
+      "score": 33,
+      "content": "{\n    \"editor.formatOnSave\": true,\n    \"rust-analyzer.files.excludeDirs\": [\n        \".direnv\"\n    ],\n    \"nix.enableLanguageServer\": true,\n    \"nix.serverPath\": \"nixd\"\n    // https://twitter.com/sridca/status/1674947342607216641\n    // \"editor.inlayHints.enabled\": \"offUnlessPressed\",\n}"
+    },
+    {
+      "path": "src/flake_template/mod.rs",
+      "sha": null,
+      "content_sha256": "255b0e13ea7aa8d51b3b1194b8583c04ea9cc3c4a067dcf1cb4d284dc8c19cad",
+      "score": 31,
+      "content": "use colored::Colorize;\nuse core::fmt;\nuse std::{\n    collections::BTreeMap,\n    fmt::{Display, Formatter},\n};\n\nuse fileop::FileOp;\nuse nix_rs::{command::NixCmdError, flake::url::FlakeUrl};\nuse param::Param;\nuse serde::{Deserialize, Serialize};\n\nuse crate::nixcmd;\n\npub mod fileop;\npub mod param;\n\n/// A Nix flake template\n///\n/// Defined per [this definition](https://nix.dev/manual/nix/2.22/command-ref/new-cli/nix3-flake-init#template-definitions) in the flake.\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub struct FlakeTemplate {\n    #[serde(skip_deserializing)]\n    pub name: String,\n\n    #[serde(default)]\n    pub tags: Vec<String>,\n\n    pub description: String,\n\n    pub path: String,\n\n    #[serde(rename = \"welcomeText\")]\n    pub welcome_text: Option<String>,\n\n    pub params: Vec<Param>,\n}\n\nimpl Display for FlakeTemplate {\n    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {\n        if self.tags.is_empty() {\n            write!(f, \"{}\", self.name)\n        } else {\n            write!(f, \"{:<20} {}\", self.name, self.tags.join(\", \").dimmed())\n        }\n    }\n}\n\nimpl FlakeTemplate {\n    pub fn prompt_replacements(&self) -> anyhow::Result<Vec<Vec<FileOp>>> {\n        self.params\n            .iter()\n            .map(|param| param.prompt_value())\n            .collect()\n    }\n}\n\n/// Fetch the templates defined in a flake\npub async fn fetch(url: &FlakeUrl) -> Result<Vec<FlakeTemplate>, NixCmdError> {\n    let mut templates = nix_rs::flake::eval::nix_eval_attr_json::<BTreeMap<String, FlakeTemplate>>(\n        nixcmd().await,\n        &url.with_attr(\"templates\"),\n        false,\n    )\n    .await?;\n    // Set 'name' field in each template\n    for (name, template) in templates.iter_mut() {\n        template.name.clone_from(name);\n    }\n    Ok(templates.values().cloned().collect())\n}\n"
+    },
+    {
+      "path": "src/flake_template/param.rs",
+      "sha": null,
+      "content_sha256": "5a5b08c0ace3e07005df87bdf7c2f3418390a7014950178f0a36ceab628b9889",
+      "score": 31,
+      "content": "use std::path::PathBuf;\n\nuse inquire::{Confirm, Text};\nuse serde::{Deserialize, Serialize};\n\nuse super::fileop::FileOp;\n\n/// A parameter to be filled in by the user in a nix flake template path.\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub struct Param {\n    /// Main message when prompting the user for input\n    name: String,\n    /// Message displayed at the line below the prompt.\n    help: String,\n    /// The default value used in the template files, that must be replaced by\n    /// the user provided value (if it is different)\n    default: Val,\n    /// Short hint that describes the expected value of the input.\n    placeholder: Option<String>,\n    /// Files to do replacement on.\n    files: Vec<PathBuf>,\n    /// Whether the user must provide a value\n    #[serde(default)]\n    required: bool,\n}\n\n/// The `Param` type.\n#[derive(Debug, Serialize, Deserialize, Clone)]\n#[serde(untagged)]\nenum Val {\n    Str(String),\n    Bool(bool),\n}\n\nimpl Param {\n    /// Prompt the user for a value for this parameter.\n    ///\n    /// Return a [`FileOp`] that knows how to apply the replacement.\n    pub fn prompt_value(&self) -> anyhow::Result<Vec<FileOp>> {\n        match self.default.clone() {\n            Val::Str(v) => self.prompt_str(v),\n            Val::Bool(v) => self.prompt_bool(v),\n        }\n    }\n    pub fn prompt_bool(&self, default: bool) -> anyhow::Result<Vec<FileOp>> {\n        let v = Confirm::new(&self.name)\n            .with_help_message(&self.help)\n            .with_default(default)\n            .prompt()?;\n        if v {\n            // We expect the template to include all these conditional files by\n            // default, so there's nothing to do.\n            Ok(vec![])\n        } else {\n            let ops = self\n                .files\n                .iter()\n                .map(|file| FileOp::PathDelete(file.clone()))\n                .collect();\n            Ok(ops)\n        }\n    }\n    pub fn prompt_str(&self, default: String) -> anyhow::Result<Vec<FileOp>> {\n        let to = Text::new(&self.name)\n            .with_help_message(&self.help)\n            .with_placeholder(self.placeholder.as_deref().unwrap_or(\"\"))\n            .with_default(&default)\n            .prompt()?;\n        let from = default.clone();\n        let ops = FileOp::ops_for_replacing(&from, &to, &self.files);\n        // TODO: return nothing if from == to\n        Ok(ops)\n    }\n}\n"
+    },
+    {
+      "path": "src/flake_template/fileop.rs",
+      "sha": null,
+      "content_sha256": "5162d3c96c93fe6c3acf030cce4bb79b2859428c8e8af53f17eaad276a7a8f85",
+      "score": 31,
+      "content": "use std::path::PathBuf;\n\nuse serde::{Deserialize, Serialize};\n\n/// An operation on a file part of the flake template\n#[derive(Debug, Serialize, Deserialize, Clone)]\npub enum FileOp {\n    /// Replace all occurrences of `from` with `to` in the file content\n    ContentReplace(PathBuf, String, String),\n    /// Rename the file to the given name\n    FileRename(PathBuf, String),\n    /// Delete the file or directory\n    PathDelete(PathBuf),\n}\n\nimpl FileOp {\n    /// Return the list of [`FileOp`]s required to replace the placeholder\n    /// `from` to an user-provided `to` across the given set of files.\n    ///\n    /// The placeholder is expected to be in both the file content and the file\n    /// name.\n    pub fn ops_for_replacing(from: &str, to: &str, files: &[PathBuf]) -> Vec<FileOp> {\n        files\n            .iter()\n            .flat_map(|file| {\n                let mut items: Vec<FileOp> = vec![];\n                if to != from {\n                    items.push(FileOp::ContentReplace(\n                        file.clone(),\n                        from.to_string(),\n                        to.to_string(),\n                    ));\n                    if file.to_string_lossy().contains(from) {\n                        items.push(FileOp::FileRename(\n                            file.clone(),\n                            file.to_string_lossy().replace(from, to),\n                        ))\n                    }\n                }\n                items\n            })\n            .collect()\n    }\n\n    pub async fn apply(ops: &[Self]) -> anyhow::Result<()> {\n        // TODO: Refactor the LLM generated code below\n        // TODO: Append thesae paths to base dir\n        for op in ops {\n            match op {\n                FileOp::ContentReplace(file, from, to) => {\n                    let content = tokio::fs::read_to_string(file).await?;\n                    let content = content.replace(from, to);\n                    println!(\"replace: {} : {} -> {}\", file.display(), from, to);\n                    tokio::fs::write(file, content).await?;\n                }\n                FileOp::FileRename(file, new_name) => {\n                    println!(\"rename: {} -> {}\", file.display(), new_name);\n                    tokio::fs::rename(file, new_name).await?;\n                }\n                FileOp::PathDelete(path) => {\n                    println!(\"delete: {}\", path.display());\n                    // FIXME: Careful not to delete anything outside of base dir!\n                    tokio::fs::remove_dir_all(path).await?;\n                }\n            }\n        }\n        Ok(())\n    }\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:17.581362+00:00"
+}

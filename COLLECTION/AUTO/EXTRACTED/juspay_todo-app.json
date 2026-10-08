@@ -1,0 +1,57 @@
+{
+  "canonical_source": "github:juspay/todo-app",
+  "repo": "juspay/todo-app",
+  "revision_sha": "8d155465bfa54c979b948665fcd9ccaed0644e92",
+  "default_branch": "master",
+  "pushed_at": "2024-10-25T08:56:22Z",
+  "repo_updated_at": "2026-03-12T21:07:07Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yaml",
+      "sha": null,
+      "content_sha256": "d7c220c654c21144753ac7f5fa4441277e16f0e00875dfbb7ebf61989bf5d2c6",
+      "score": 198,
+      "content": "name: \"CI\"\non:\n  # Run only when pushing to master branch, and making PRs\n  push:\n    branches:\n      - master\n  pull_request:\njobs:\n  build:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    steps:\n      - uses: actions/checkout@v2\n      # https://omnix.page/om/ci.html#gh-simple\n      - uses: actions/checkout@v4\n      - uses: DeterminateSystems/nix-installer-action@main\n      - uses: DeterminateSystems/magic-nix-cache-action@main\n      - name: Install omnix\n        run: nix --accept-flake-config profile install \"github:juspay/omnix\"\n      - run: om ci\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3203cc5d5f1fcaa0c8b0cdc8a83cc8ab7b40f6206cd66d148902308d96cac08b",
+      "score": 100,
+      "content": "# todo-app\n\nA simple TODO app in Haskell using [PostgREST](https://postgrest.org/) as a RESTful API for [PostgreSQL](https://www.postgresql.org/).\n\n> [!NOTE]\n> This app is a demo to showcase how developer experience in a Haskell project can be improved using Nix. We primarily use [haskell-flake], [services-flake] and [flake-parts] to achieve this.\n\n[haskell-flake]: https://community.flake.parts/haskell-flake\n[services-flake]: https://community.flake.parts/services-flake\n[flake-parts]: https://flake.parts\n\n## Tutorial\n\nLearn with [our blog post series](https://nixos.asia/en/nixify-haskell):\n\n- [Introduction](https://nixos.asia/en/nixify-haskell-nixpkgs)\n- [Switch to flake-parts](https://nixos.asia/en/nixify-haskell-parts)\n- [Simplify Nix using haskell-flake](https://nixos.asia/en/nixify-haskell-flake)\n- [Integrate external services using services-flake](https://nixos.asia/en/nixify-services-flake)\n- ...\n\n## Getting Started\n\n[Install Nix](https://nixos.asia/en/install)\n\n## Development\n\n```sh\nnix develop\n```\nTo enter development shell on `cd`, use [direnv](https://nixos.asia/en/direnv)\n\n> [!NOTE]\n> `just services` starts postgres and postgrest, both of which bind to Unix socket.\n\n```sh\njust services\n# Watch for changes in the Haskell code\njust watch\n```\n\n## Run through Nix\n\n> [!NOTE]\n> `todo-app-services-tcp` starts postgres, which listens on Unix socket, while postgrest listens on TCP port 3000.\n\n```sh\nnix run github:juspay/todo-app#todo-app-services-tcp\nnix run github:juspay/todo-app -- view\n```\n"
+    },
+    {
+      "path": "nix/integration-test.nix",
+      "sha": null,
+      "content_sha256": "adc07692a408395347db48af7e6764ff9cacbd93571ded57e2afcf628ac08fcc",
+      "score": 58,
+      "content": "# Check `todo-app` integration with external services.\n{ inputs, ... }:\n{\n  perSystem = { self', pkgs, ... }: {\n    process-compose.todo-app-integ-test = { config, ... }: {\n      imports = [\n        inputs.services-flake.processComposeModules.default\n        ./services\n      ];\n      services.postgrest.unixSocket = \"./data/pgrst.sock\";\n      # `test` is a reserved name in `process-compose-flake`.\n      # This process is disabled by default and is only enabled when `nix flake check` is run,\n      # which is only done in CI.\n      settings.processes.test = {\n        environment = {\n          # If not set, `todo-app` will try to connect to `postgrest` using TCP.\n          PGRST_SERVER_UNIX_SOCKET = config.services.postgrest.unixSocket;\n        };\n        command = pkgs.writeShellApplication {\n          name = \"todo-app-integration-test\";\n          runtimeInputs = [ self'.packages.default ];\n          # TODO: Capture output and check for expected strings.\n          text = ''\n            # Function to print a separator\n            print_separator() {\n              echo \"----------------------------------------\"\n              echo \"  $1\"\n              echo \"----------------------------------------\"\n            }\n            print_separator \"Test viewing all todos\"\n            todo-app viewAll\n\n            print_separator \"Test viewing pending todos\"\n            todo-app view\n\n            print_separator \"Test adding a todo\"\n            todo-app add \"Buy milk\"\n\n            print_separator \"Test completing a todo\"\n            # Workaround for https://www.shellcheck.net/wiki/SC1010\n            todo-app \"done\" 1\n\n            print_separator \"Test deleting a todo\"\n            todo-app delete 1\n\n            print_separator \"Test resetting the todo list\"\n            todo-app reset\n          '';\n        };\n        depends_on.\"postgrest\".condition = \"process_healthy\";\n      };\n    };\n  };\n}"
+    },
+    {
+      "path": "nix/services/postgrest.nix",
+      "sha": null,
+      "content_sha256": "36c71865314de812f598335a778da62b6c5e7bb304981b91d645e65e3890db6a",
+      "score": 56,
+      "content": "# Custom service (not provided by `services-flake`) configuration for `postgrest`.\n# See https://community.flake.parts/services-flake/custom-service\n{ pkgs, lib, config, ... }:\nlet\n  inherit (lib) types;\nin\n{\n  options = {\n    services.postgrest = {\n      enable = lib.mkEnableOption \"postgrest\";\n      unixSocket = lib.mkOption {\n        type = types.nullOr types.str;\n        default = null;\n        description = \"The path to the socket to bind to\";\n        example = \"/tmp/pgrst.sock\";\n      };\n      config = lib.mkOption {\n        type = types.attrsOf types.str;\n        # TODO: use https://github.com/srid/flake-root for `db-uri` and `server-unix-socket`\n        default = {\n          # Note: socket path in connection uri cannot contain `/`, so we need to URL-encode it.\n          # see https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING-KEYWORD-VALUE\n          # TODO: re-use `config.services.postgres.\"pg\".dataDir`\n          db-uri = \"postgres://\\${PWD//\\//%2F}%2Fdata%2Fpg/todo\";\n          db-schemas = \"api\";\n          db-anon-role = \"todo_user\";\n        };\n      };\n    };\n  };\n  config = lib.mkIf config.services.postgrest.enable {\n    settings.processes.postgrest = {\n      environment = {\n        PGRST_DB_SCHEMAS = config.services.postgrest.config.db-schemas;\n        PGRST_DB_ANON_ROLE = config.services.postgrest.config.db-anon-role;\n      } // lib.optionalAttrs (config.services.postgrest.unixSocket != null) {\n        PGRST_SERVER_UNIX_SOCKET = config.services.postgrest.unixSocket;\n      };\n      command = pkgs.writeShellApplication {\n        name = \"pg_rest\";\n        runtimeInputs = [ pkgs.haskellPackages.postgrest ];\n        text =\n          ''\n            # Can't be set in `settings.processes.postgrest.environment` because the value has to be evaluated in the shell\n            PGRST_DB_URI=\"${config.services.postgrest.config.db-uri}\";\n            # Have to export explicitly: https://www.shellcheck.net/wiki/SC2155\n            export PGRST_DB_URI;\n            exec postgrest\n          '';\n      };\n      readiness_probe = {\n        # `http://localhost` is to tell curl to use the HTTP protocol and `localhost` is just a dummy hostname\n        exec.command = if config.services.postgrest.unixSocket != null then\n          \"${lib.getExe' pkgs.curl \"curl\"} --unix-socket ${config.services.postgrest.unixSocket} http://localhost\"\n        else\n          # TODO: configurable hostname and port\n          \"${lib.getExe pkgs.curl} http://localhost:3000\";\n      };\n    };\n  };\n}\n"
+    },
+    {
+      "path": "db.sql",
+      "sha": null,
+      "content_sha256": "8ae5e70d45898c20812c424243ce2d5be227c1e4d0ba37ce4737b9583ede8a07",
+      "score": 35,
+      "content": "-- This schema has been taken from https://postgrest.org/en/stable/tutorials/tut0.html\ncreate schema api;\ncreate table if not exists api.todos (\n  id serial primary key, done boolean not null default false, \n  task text not null\n);\ninsert into api.todos (task) \nvalues \n  ('finish tutorial 0'), \n  ('pat self on back');\ncreate role authenticator noinherit login password 'mysecretpassword';\ncreate role todo_user nologin;\ngrant todo_user to authenticator;\n-- Granting all permissions for tutorial purposes only\n-- Follow this to use JWT and secure your api calls: https://postgrest.org/en/stable/tutorials/tut1.html\ngrant all on schema api to todo_user;\ngrant all on api.todos to todo_user;\ngrant all on sequence api.todos_id_seq to todo_user;\n-- To reset the sequence\ncreate function api.reset_id() returns void language plpgsql as $$ begin alter sequence api.todos_id_seq restart with 1;\nend;\n$$;\n-- This is needed because to change ownership of sequence, the same owner has to own the table\n-- TODO: Find a better way to do this \nalter table \n  api.todos owner to todo_user;\nalter sequence api.todos_id_seq owner to todo_user;\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:11.605172+00:00"
+}

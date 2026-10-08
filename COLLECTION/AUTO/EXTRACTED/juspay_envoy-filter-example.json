@@ -1,0 +1,85 @@
+{
+  "canonical_source": "github:juspay/envoy-filter-example",
+  "repo": "juspay/envoy-filter-example",
+  "revision_sha": "6e57c97574986bddb827c7d9ebb4dca1dd5dcf08",
+  "default_branch": "master",
+  "pushed_at": "2019-05-01T23:52:17Z",
+  "repo_updated_at": "2019-05-02T11:07:33Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".circleci/config.yml",
+      "sha": null,
+      "content_sha256": "6e4d65e28f008097b0c69aad4403fd695f81894221a03cebefe4c36318fbf689",
+      "score": 105,
+      "content": "references:\n  envoy-build-image: &envoy-build-image\n    envoyproxy/envoy-build:latest\n\nversion: 2\njobs:\n  build:\n    docker:\n      - image: *envoy-build-image\n    resource_class: xlarge\n    steps:\n      - checkout\n      - run: git submodule update --init\n      - run: ./ci/do_ci.sh build\n  test:\n    docker:\n      - image: *envoy-build-image\n    resource_class: xlarge\n    steps:\n      - checkout\n      - run: git submodule update --init\n      - run: ./ci/do_ci.sh test\n\nworkflows:\n  version: 2\n  all:\n    jobs:\n      - build\n      - test\n\n"
+    },
+    {
+      "path": "ci/do_ci.sh",
+      "sha": null,
+      "content_sha256": "16e47b1b5f9331426e5dd82106bbae57ce35e65ee85b67ec24f0c117d748641a",
+      "score": 105,
+      "content": "#!/bin/bash -e\n\nexport PATH=/usr/lib/llvm-7/bin:$PATH\nexport CC=clang\nexport CXX=clang++\nexport ASAN_SYMBOLIZER_PATH=/usr/lib/llvm-7/bin/llvm-symbolizer\necho \"$CC/$CXX toolchain configured\"\n\nif [[ -f \"${HOME:-/root}/.gitconfig\" ]]; then\n    mv \"${HOME:-/root}/.gitconfig\" \"${HOME:-/root}/.gitconfig_save\"\nfi\n\nfunction do_build () {\n    bazel build --verbose_failures=true //:envoy\n}\n\nfunction do_test() {\n    bazel test --test_output=all --test_env=ENVOY_IP_TEST_VERSIONS=v4only \\\n      //:echo2_integration_test\n}\n\ncase \"$1\" in\n  build)\n    do_build\n  ;;\n  test)\n    do_test\n  ;;\n  *)\n    echo \"must be one of [build,test]\"\n    exit 1\n  ;;\nesac\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "561d3e3f62d11fc712c42253a765724ca719e0555ea72070ae879f9a2d0f2671",
+      "score": 100,
+      "content": "# Envoy filter example\n\nThis project demonstrates the linking of additional filters with the Envoy binary.\nA new filter `echo2` is introduced, identical modulo renaming to the existing\n[`echo`](https://github.com/envoyproxy/envoy/blob/master/source/extensions/filters/network/echo/echo.h)\nfilter. Integration tests demonstrating the filter's end-to-end behavior are\nalso provided.\n\nFor an example of additional HTTP filters, see [here](http-filter-example).\n\n## Building\n\nTo build the Envoy static binary:\n\n1. `git submodule update --init`\n2. `bazel build //:envoy`\n\n## Testing\n\nTo run the `echo2` integration test:\n\n`bazel test //:echo2_integration_test`\n\nTo run the regular Envoy tests from this project:\n\n`bazel test @envoy//test/...`\n\n## How it works\n\nThe [Envoy repository](https://github.com/envoyproxy/envoy/) is provided as a submodule.\nThe [`WORKSPACE`](WORKSPACE) file maps the `@envoy` repository to this local path.\n\nThe [`BUILD`](BUILD) file introduces a new Envoy static binary target, `envoy`,\nthat links together the new filter and `@envoy//source/exe:envoy_main_lib`. The\n`echo2` filter registers itself during the static initialization phase of the\nEnvoy binary as a new filter.\n"
+    },
+    {
+      "path": "http-filter-example/README.md",
+      "sha": null,
+      "content_sha256": "a699f580d51d0dbcf7c731928b7b7b1a85db380cc8f1dcc9f8ba4e9c623734f3",
+      "score": 98,
+      "content": "# Envoy filter example\n\nThis project demonstrates the linking of additional HTTP filters with the Envoy binary.\nA new filter `sample` which adds a HTTP header is introduced.\nIntegration tests demonstrating the filter's end-to-end behavior are\nalso provided.\n\n## Building\n\nTo build the Envoy static binary:\n\n1. `git submodule update --init`\n2. `bazel build //http-filter-example:envoy`\n\n## Testing\n\nTo run the `sample` integration test:\n\n`bazel test //http-filter-example:http_filter_integration_test`\n\n## How it works\n\nSee the [network filter example](../README.md#how-it-works).\n\n## How to write and use an HTTP filter\n\n- The main task is to write a class that implements the interface\n [`Envoy::Http::StreamDecoderFilter`][StreamDecoderFilter] as in\n [`http_filter.h`](http_filter.h) and [`http_filter.cc`](http_filter.cc),\n which contains functions that handle http headers, data, and trailers.\n Note that this is an example of decoder filters, \n and to write encoder filters or decoder/encoder filters\n you need to implement \n [`Envoy::Http::StreamEncoderFilter`][StreamEncoderFilter] or\n [`Envoy::Http::StreamFilter`][StreamFilter] instead.\n- You also need a class that implements \n `Envoy::Server::Configuration::NamedHttpFilterConfigFactory`\n to enable the Envoy binary to find your filter,\n as in [`http_filter_config.cc`](http_filter_config.cc).\n It should be linked to the Envoy binary by modifying [`BUILD`][BUILD] file.\n- Finally, you need to modify the Envoy config file to add your filter to the\n filter chain for a particular HTTP route configuration. For instance, if you\n wanted to change [the front-proxy example][front-envoy.yaml] to chain our\n `sample` filter, you'd need to modify its config to look like\n\n```yaml\nhttp_filters:\n- name: sample          # before envoy.router because order matters!\n  config:\n    key: via\n    val: sample-filter\n- name: envoy.router\n  config: {}\n```\n \n\n[StreamDecoderFilter]: https://github.com/envoyproxy/envoy/blob/b2610c84aeb1f75c804d67effcb40592d790e0f1/include/envoy/http/filter.h#L300\n[StreamEncoderFilter]: https://github.com/envoyproxy/envoy/blob/b2610c84aeb1f75c804d67effcb40592d790e0f1/include/envoy/http/filter.h#L413\n[StreamFilter]: https://github.com/envoyproxy/envoy/blob/b2610c84aeb1f75c804d67effcb40592d790e0f1/include/envoy/http/filter.h#L462\n[BUILD]: https://github.com/envoyproxy/envoy-filter-example/blob/d76d3096c4cbd647d26b44b3f801c3afbc81d3e2/http-filter-example/BUILD#L15-L18\n[front-envoy.yaml]: https://github.com/envoyproxy/envoy/blob/b2610c84aeb1f75c804d67effcb40592d790e0f1/examples/front-proxy/front-envoy.yaml#L28\n"
+    },
+    {
+      "path": "envoy_binary_test.sh",
+      "sha": null,
+      "content_sha256": "b8f41ce9893309ac5eeacfff5a6a234d47f69bf76d8cb0326e0b4e8f3779f9f0",
+      "score": 95,
+      "content": "#!/bin/bash\n#\n\nset -e\n\n# Just test that the binary was produced and can be executed.\n# envoy --help will give a success return code if working.\nenvoy --help\n\necho \"PASS\"\n"
+    },
+    {
+      "path": "echo2_integration_test.cc",
+      "sha": null,
+      "content_sha256": "fbcb20502edcf865bcb29a9ca2adea5e46d8c3405d5549663985eed60a8f77f0",
+      "score": 60,
+      "content": "#include \"test/integration/integration.h\"\n#include \"test/integration/utility.h\"\n\nnamespace Envoy {\nclass Echo2IntegrationTest : public BaseIntegrationTest,\n                             public testing::TestWithParam<Network::Address::IpVersion> {\n\n  std::string echoConfig() {\n    return TestEnvironment::readFileToStringForTest(\n        TestEnvironment::runfilesPath(\"echo2_server.yaml\"));\n  }\n\npublic:\n  Echo2IntegrationTest() : BaseIntegrationTest(GetParam(), echoConfig()) {}\n  /**\n   * Initializer for an individual integration test.\n   */\n  void SetUp() override { BaseIntegrationTest::initialize(); }\n\n  /**\n   * Destructor for an individual integration test.\n   */\n  void TearDown() override {\n    test_server_.reset();\n    fake_upstreams_.clear();\n  }\n};\n\nINSTANTIATE_TEST_CASE_P(IpVersions, Echo2IntegrationTest,\n                        testing::ValuesIn(TestEnvironment::getIpVersionsForTest()));\n\nTEST_P(Echo2IntegrationTest, Echo) {\n  Buffer::OwnedImpl buffer(\"hello\");\n  std::string response;\n  RawConnectionDriver connection(\n      lookupPort(\"listener_0\"), buffer,\n      [&](Network::ClientConnection&, const Buffer::Instance& data) -> void {\n        response.append(data.toString());\n        connection.close();\n      },\n      GetParam());\n\n  connection.run();\n  EXPECT_EQ(\"hello\", response);\n}\n} // namespace Envoy\n"
+    },
+    {
+      "path": "http-filter-example/http_filter_integration_test.cc",
+      "sha": null,
+      "content_sha256": "6cd3a2d357e86952ad886fc34abb392d88d70479abe83f570799b7170f078ddc",
+      "score": 58,
+      "content": "#include \"test/integration/http_integration.h\"\n\nnamespace Envoy {\nclass HttpFilterSampleIntegrationTest : public HttpIntegrationTest,\n                                        public testing::TestWithParam<Network::Address::IpVersion> {\npublic:\n  HttpFilterSampleIntegrationTest()\n      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()) {}\n  /**\n   * Initializer for an individual integration test.\n   */\n  void SetUp() override { initialize(); }\n\n  void initialize() override {\n    config_helper_.addFilter(\"{ name: sample, config: { key: via, val: sample-filter } }\");\n    HttpIntegrationTest::initialize();\n  }\n};\n\nINSTANTIATE_TEST_CASE_P(IpVersions, HttpFilterSampleIntegrationTest,\n                        testing::ValuesIn(TestEnvironment::getIpVersionsForTest()));\n\nTEST_P(HttpFilterSampleIntegrationTest, Test1) {\n  Http::TestHeaderMapImpl headers{{\":method\", \"GET\"}, {\":path\", \"/\"}, {\":authority\", \"host\"}};\n\n  IntegrationCodecClientPtr codec_client;\n  FakeHttpConnectionPtr fake_upstream_connection;\n  FakeStreamPtr request_stream;\n\n  codec_client = makeHttpConnection(lookupPort(\"http\"));\n  auto response = codec_client->makeHeaderOnlyRequest(headers);\n  ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection,\n                                                        std::chrono::milliseconds(5)));\n  ASSERT_TRUE(fake_upstream_connection->waitForNewStream(*dispatcher_, request_stream));\n  ASSERT_TRUE(request_stream->waitForEndStream(*dispatcher_));\n  response->waitForEndStream();\n\n  EXPECT_STREQ(\"sample-filter\",\n               request_stream->headers().get(Http::LowerCaseString(\"via\"))->value().c_str());\n\n  codec_client->close();\n}\n} // namespace Envoy\n"
+    },
+    {
+      "path": "echo2_server.json",
+      "sha": null,
+      "content_sha256": "ebea02ab876b5950bf4958d7255d6e001d0ceaa266e78cf3dbb1a9224c62ffaa",
+      "score": 35,
+      "content": "{\n  \"listeners\": [\n  {\n    \"address\": \"tcp://{{ ip_loopback_address }}:0\",\n    \"use_original_dst\": true,\n    \"filters\": [\n      { \"name\": \"ratelimit\",\n        \"config\": {\n          \"domain\": \"foo\",\n          \"descriptors\": [[{\"key\": \"foo\", \"value\": \"bar\"}]],\n          \"stat_prefix\": \"name\"\n        }\n      },\n      { \"name\": \"echo2\", \"config\": {} }\n    ]\n  }],\n\n  \"admin\": { \"access_log_path\": \"/dev/null\",\n\t     \"profile_path\": \"{{ test_tmpdir }}/envoy.prof\",\n\t     \"address\": \"tcp://{{ ip_loopback_address }}:0\" },\n\n  \"cluster_manager\": {\n      \"clusters\": []\n  }\n}\n"
+    },
+    {
+      "path": "echo2_server.yaml",
+      "sha": null,
+      "content_sha256": "4f7145a06eb3dadb93a2d99c266c05552eb6601ae507851c36a7e954267f4afc",
+      "score": 35,
+      "content": "admin:\n  access_log_path: /dev/null\n  address:\n    socket_address:\n      address: 127.0.0.1\n      port_value: 0\nstatic_resources:\n  clusters:\n    name: cluster_0\n    load_assignment:\n      cluster_name: cluster_0\n      endpoints:\n        - lb_endpoints:\n            - endpoint:\n                address:\n                  socket_address:\n                    address: 127.0.0.1\n                    port_value: 0\n  listeners:\n    name: listener_0\n    address:\n      socket_address:\n        address: 127.0.0.1\n        port_value: 0\n    filter_chains:\n    - filters:\n      - name: echo2\n        config:\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:09.245240+00:00"
+}

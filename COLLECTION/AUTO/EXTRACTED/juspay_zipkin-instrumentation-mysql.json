@@ -1,0 +1,71 @@
+{
+  "canonical_source": "github:juspay/zipkin-instrumentation-mysql",
+  "repo": "juspay/zipkin-instrumentation-mysql",
+  "revision_sha": "106b163d5eb989642adb7bf4730e985023810d48",
+  "default_branch": "master",
+  "pushed_at": "2023-04-26T12:33:30Z",
+  "repo_updated_at": "2023-02-16T19:28:54Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "40ab1b2ed904b52c7b73323d4c5e7c2e1aeac7c6b97061fe7ab381a3ba3da139",
+      "score": 120,
+      "content": "{\n  \"name\": \"zipkin-instrumentation-mysql\",\n  \"version\": \"0.0.1\",\n  \"description\": \"Interceptor for mysql clients\",\n  \"main\": \"lib/zipkinClient.js\",\n  \"scripts\": {\n    \"build\": \"babel src -d lib\",\n    \"test\": \"mocha --require test/helper.js\",\n    \"prepublish\": \"npm run build\",\n    \"prepare\": \"npm run build\"\n  },\n  \"author\": \"Mrinal Purohit <github@mrinalpurohit.in>\",\n  \"license\": \"Apache-2.0\",\n  \"repository\": \"https://github.com/iammrinal0/zipkin-instrumentation-mysql\",\n  \"devDependencies\": {\n    \"babel-cli\": \"^6.23.0\",\n    \"babel-preset-es2015\": \"^6.18.0\",\n    \"chai\": \"^3.5.0\",\n    \"mocha\": \"^5.2.0\",\n    \"mysql\": \"^2.15.0\",\n    \"sinon\": \"^1.17.6\",\n    \"zipkin\": \"^0.13.0\"\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "f3c37fb43508dbd42674fade6023a84a6ec97d9cf0670e8bdf1ccd7e01f304c5",
+      "score": 100,
+      "content": "# zipkin-instrumentation-mysql\n\nThis library will wrap [mysql](https://www.npmjs.com/package/mysql).\n\n## Usage\n\n```javascript\nconst {Tracer} = require('zipkin');\nconst Mysql = require('mysql');\nconst zipkinClient = require('zipkin-instrumentation-mysql');\n\nconst tracer = new Tracer({ctxImpl, recorder}); // configure your tracer properly here\n\nconst ZipkinMysql = zipkinClient(tracer, Mysql);\n\nconst connectionOptions = {\n  user: 'mysql',\n  password: 'secret',\n  host: 'localhost',\n  database: 'mydb'\n};\n\nconst client = ZipkinMysql.createConnection(connectionOptions);\n\n// Your application code here\nclient.query('SELECT NOW()', (err, result, fields) => {\n  console.log(err, result, fields);\n});\n```\n"
+    },
+    {
+      "path": "test/helper.js",
+      "sha": null,
+      "content_sha256": "73dea2955080cad3ce9935d04d7afa1779f72496a59c0c20536091e457072cb2",
+      "score": 93,
+      "content": "const chai = require('chai');\nchai.config.includeStack = true;\nglobal.expect = chai.expect;\n"
+    },
+    {
+      "path": "test/integrationTest.js",
+      "sha": null,
+      "content_sha256": "a56e06f1dd4a3a34456bd0fa6ae39ac16334373b625386eae71ec26a96d3fd99",
+      "score": 93,
+      "content": "const sinon = require('sinon');\nconst {Tracer, ExplicitContext, BatchRecorder} = require('zipkin');\nconst zipkinClient = require('../src/zipkinClient');\n\nconst mysqlConnectionOptions = {\n  host: '127.0.0.1',\n  database: 'mysql',\n  user: 'mysql',\n  password: process.env.MYSQL_PWD\n};\n\nconst Mysql = require('mysql');\n\nfunction getMysql(tracer) {\n  return zipkinClient(tracer, Mysql);\n}\n\nfunction expectCorrectSpanData(span) {\n  expect(span.name).to.equal(`query ${mysqlConnectionOptions.database}`);\n  expect(span.localEndpoint.serviceName).to.equal('unknown');\n  expect(span.remoteEndpoint.serviceName).to.equal('mysql');\n  expect(span.remoteEndpoint.ipv4).to.equal(mysqlConnectionOptions.host);\n}\n\ndescribe('mysql interceptor', () => {\n  it('should add zipkin annotations', (done) => {\n    const logSpan = sinon.spy();\n\n    const ctxImpl = new ExplicitContext();\n    const recorder = new BatchRecorder({logger: {logSpan}});\n    const tracer = new Tracer({ctxImpl, recorder});\n    tracer.setId(tracer.createRootId());\n\n    const mysql = (getMysql(tracer).createConnection)(mysqlConnectionOptions);\n    mysql.connect();\n\n    mysql.query('SELECT NOW()', () => {\n      mysql.query('SELECT NOW()').on('end', () => {\n        const query = Mysql.createQuery('SELECT NOW()');\n        const result = mysql.query(query);\n        result.on('end', () => {\n          const spans = logSpan.args.map(arg => arg[0]);\n          expect(spans).to.have.length(3);\n          spans.forEach(expectCorrectSpanData);\n\n          done();\n        });\n      });\n    });\n  });\n\n\n  it('should annotate mysql errors', (done) => {\n    const logSpan = sinon.spy();\n\n    const ctxImpl = new ExplicitContext();\n    const recorder = new BatchRecorder({logger: {logSpan}});\n    const tracer = new Tracer({ctxImpl, recorder});\n    tracer.setId(tracer.createRootId());\n\n    const mysql = new (getMysql(tracer).createConnection)(mysqlConnectionOptions);\n    mysql.connect();\n\n    mysql.query('INVALID QUERY', (firstError) => {\n      mysql.query('ERROR QUERY').on('error', (secondError) => {\n        const query = Mysql.createQuery('FAILED QUERY()');\n        const result = mysql.query(query);\n        result.on('error', (thirdError) => {\n          const errorTags = logSpan.args.map(arg => arg[0].tags.error);\n          expect(errorTags[0]).to.equal(firstError.toString());\n          expect(errorTags[1]).to.equal(secondError.toString());\n          expect(errorTags[2]).to.equal(thirdError.toString());\n        });\n\n        done();\n      });\n    });\n  });\n\n  it('should run mysql calls', (done) => {\n    const ctxImpl = new ExplicitContext();\n    const recorder = {record: sinon.spy()};\n    const tracer = new Tracer({ctxImpl, recorder});\n    tracer.setId(tracer.createRootId());\n\n    const mysql = new (getMysql(tracer).createConnection)(mysqlConnectionOptions);\n    mysql.connect();\n\n    const queryText = 'SELECT ?';\n    const queryValues = ['test'];\n    mysql.query(queryText, queryValues, (error, firstResult) => {\n      mysql.query({sql: queryText, values: queryValues},).on('result', (secondResult) => {\n        const query = Mysql.createQuery(queryText, queryValues);\n        const result = mysql.query(query);\n\n        expect(query).to.equal(result);\n\n        const submittableRows = [];\n        query.on('result', (row) => submittableRows.push(row));\n        query.on('end', () => {\n          expect(firstResult[0].test).to.equal('test');\n          expect(secondResult.test).to.equal('test');\n          expect(submittableRows[0].test).to.equal('test');\n\n          done();\n        });\n      });\n    });\n  });\n});\n"
+    },
+    {
+      "path": "test/mocha.opts",
+      "sha": null,
+      "content_sha256": "7b92914014ce28745afc2ea34548ff0b6aa6a394c493289ba15754d94e62f6b4",
+      "score": 58,
+      "content": "--reporter spec\n--recursive\n--require test/helper.js\ntest/*.js\n"
+    },
+    {
+      "path": "test/.eslintrc",
+      "sha": null,
+      "content_sha256": "0753a6fdb99b499c30fc61d93d859f56e23cee44773b683a93a78f152801bd28",
+      "score": 58,
+      "content": "{\n  \"env\": {\n    \"mocha\": true\n  },\n  \"globals\": {\n    \"expect\": true\n  },\n  \"rules\": {\n    \"no-console\": \"off\"\n  }\n}\n"
+    },
+    {
+      "path": "src/zipkinClient.js",
+      "sha": null,
+      "content_sha256": "6ff6bf1829ab568c5ee189cc53bbc294274233e5a79e0513d97f2fb835304149",
+      "score": 33,
+      "content": "const {Annotation, InetAddress} = require('zipkin');\n\nfunction zipkinClient(tracer, Mysql, serviceName = tracer.localEndpoint.serviceName, remoteServiceName = 'mysql') {\n  const ZipkinMysql = Object.assign({}, Mysql , {\n    createConnection: function (config) {\n      const Connection = Mysql.createConnection(config)\n      const actualFn = Connection.query;\n\n      Connection.query = function (sql, values, callback) {\n        const id = tracer.createChildId();\n        tracer.letId(id, () => {\n          tracer.recordAnnotation(new Annotation.ClientSend());\n          tracer.recordServiceName(serviceName);\n          tracer.recordAnnotation(new Annotation.ServerAddr({\n            serviceName: remoteServiceName,\n            host: new InetAddress(this.config.host),\n            port: this.config.port\n          }));\n          tracer.recordRpc(`query ${this.config.database}`);\n        });\n\n        const promise = actualFn.call(this, sql, values, callback);\n\n        promise.on('end', function () {\n          tracer.letId(id, () => {\n            tracer.recordAnnotation(new Annotation.ClientRecv());\n          });\n        });\n\n        promise.on('error', function (error) {\n          tracer.letId(id, () => {\n            tracer.recordBinary('error', error.toString());\n            tracer.recordAnnotation(new Annotation.ClientRecv());\n          });\n        });\n        return promise;\n      };\n      return Connection;\n    }\n  });\n  return ZipkinMysql;\n};\n\nmodule.exports = zipkinClient\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:08.293956+00:00"
+}

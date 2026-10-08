@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:juspay/y-sweet",
+  "repo": "juspay/y-sweet",
+  "revision_sha": "8b24324e9eea146d747d0e3de4b86723500aae30",
+  "default_branch": "main",
+  "pushed_at": "2026-09-02T09:51:31Z",
+  "repo_updated_at": "2026-09-02T09:52:07Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/staging-deploy.yml",
+      "sha": null,
+      "content_sha256": "aaa65601d49aba93388ecbdbd7c04058af6ef09982d872f1bde629833f08e521",
+      "score": 198,
+      "content": "name: Staging Deploy\n\n# on:\n#   push:\n#     branches: [ \"main\" ]\n#     paths:\n#       - \"crates/**\"\non: workflow_dispatch\n\nenv:\n  CARGO_TERM_COLOR: always\n\njobs:\n  staging-deploy:\n    runs-on: ubuntu-latest-16-cores\n    defaults:\n      run:\n        working-directory: ./crates/y-sweet-worker\n\n    steps:\n    - uses: actions/checkout@v3\n    - uses: Swatinem/rust-cache@v2\n      with:\n        cache-on-failure: \"true\"\n        # y-sweet-worker is excluded from the outer Cargo \"workspace\"\n        # because it has a different target (wasm rather than system arch). We\n        # still want to cache its output, so we do that here.\n        # See: https://github.com/Swatinem/rust-cache\n        workspaces: \"crates -> target\\ncrates/y-sweet-worker -> target\"\n\n    - name: Use Node.js\n      uses: actions/setup-node@v3\n      with:\n        node-version: 19\n    - run: npm ci\n    - run: npm run deploy\n      env:\n        CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n"
+    },
+    {
+      "path": "openapi/package.json",
+      "sha": null,
+      "content_sha256": "94ff51fe40431bedb2e3936457b25eb4e2d2bb922e6d95a55a7dcb9dfe0af554",
+      "score": 193,
+      "content": "{\n  \"name\": \"y-sweet-openapi-doc\",\n  \"version\": \"1.0.0\",\n  \"description\": \"\",\n  \"scripts\": {\n    \"lint\": \"redocly lint server.yml document.yml\",\n    \"build\": \"rm -rf build && mkdir build && mkdir -p build && redocly build-docs server.yml --output build/index.html && redocly build-docs document.yml --output build/document.html\"\n  },\n  \"dependencies\": {\n    \"@redocly/cli\": \"1.25.5\"\n  }\n}\n"
+    },
+    {
+      "path": "js-pkg/sdk/package.json",
+      "sha": null,
+      "content_sha256": "6d529f706275001b1eabcdfe2568772a9b906d885d1d101974f4028c59b2fc3b",
+      "score": 191,
+      "content": "{\n  \"name\": \"@y-sweet/sdk\",\n  \"scripts\": {\n    \"build\": \"tsup\",\n    \"clean\": \"rm -rf dist\",\n    \"dev\": \"tsup --watch\",\n    \"format\": \"prettier --write \\\"**/*.{ts,tsx,js,jsx}\\\"\",\n    \"prepublishOnly\": \"npm run build\"\n  },\n  \"version\": \"0.9.1\",\n  \"description\": \"Javascript/Typescript backend SDK for building collaboration features with y-sweet.\",\n  \"main\": \"./dist/main.js\",\n  \"types\": \"./dist/main.d.ts\",\n  \"exports\": {\n    \".\": {\n      \"import\": {\n        \"types\": \"./dist/main.d.mts\",\n        \"default\": \"./dist/main.mjs\"\n      },\n      \"require\": {\n        \"types\": \"./dist/main.d.ts\",\n        \"module\": \"./dist/main.mjs\",\n        \"default\": \"./dist/main.js\"\n      }\n    }\n  },\n  \"files\": [\n    \"dist/**/*\"\n  ],\n  \"homepage\": \"https://github.com/drifting-in-space/y-sweet\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/drifting-in-space/y-sweet.git\"\n  },\n  \"license\": \"MIT\",\n  \"devDependencies\": {\n    \"prettier\": \"^3.0.0\",\n    \"tsup\": \"^7.2.0\",\n    \"typescript\": \"^5.1.6\"\n  },\n  \"bugs\": {\n    \"url\": \"https://github.com/drifting-in-space/y-sweet/issues\"\n  },\n  \"dependencies\": {\n    \"@types/node\": \"^20.5.9\"\n  }\n}\n"
+    },
+    {
+      "path": "deploy/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "52e8fb7e69e8c9e081bf5e727085b71ad97675aa8b30947ddefd72c2a19ea5b5",
+      "score": 190,
+      "content": "services:\n  y-sweet:\n    restart: unless-stopped\n    image: ghcr.io/jamsocket/y-sweet:latest\n    build:\n      dockerfile: Dockerfile\n      context: ../crates\n    command:\n      \"y-sweet serve ./data --host 0.0.0.0 --auth AXO33rILFt0ZOP7v9NM8e2u6m1pVWvCS5HI9mYMK --url-prefix=http://localhost/\"\n    volumes:\n      - ./data:/data\n    ports:\n      - \"8080:8080\"\n\n  demos:\n    restart: unless-stopped\n    build:\n      context: ../examples/nextjs\n    environment:\n      - CONNECTION_STRING=ys://AAAg1s4QOZVQsRWT4p-CUrk3ory1a21SksuWR6hzqy-vFJM@y-sweet:8080\n    ports:\n      - \"3000:3000\"\n\n  caddy:\n    image: caddy:2.8.4\n    restart: unless-stopped\n    cap_add:\n      - NET_ADMIN\n    ports:\n      - \"80:80\"\n      - \"443:443\"\n    volumes:\n      - ./Caddyfile:/etc/caddy/Caddyfile\n"
+    },
+    {
+      "path": ".github/workflows/unit-tests.yml",
+      "sha": null,
+      "content_sha256": "7f70fb4c4385f7f9706b415e4fe6333a08f4d069ebb2233416da4a129dd4847f",
+      "score": 186,
+      "content": "name: Unit Tests\n\n# on:\n#   pull_request:\n#     branches: [\"main\"]\n#     paths:\n#       - \"crates/**\"\n#       - \".github/workflows/unit-tests.yml\"\non: workflow_dispatch\n\nenv:\n  CARGO_TERM_COLOR: always\n\njobs:\n  unit-test:\n    runs-on: ubuntu-latest-16-cores\n    defaults:\n      run:\n        working-directory: ./crates\n\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 18\n      - uses: Swatinem/rust-cache@v2\n        with:\n          cache-on-failure: \"true\"\n          workspaces: |\n            crates\n      - name: Run unit tests\n        run: cargo test --verbose\n"
+    },
+    {
+      "path": ".github/workflows/python-tests.yml",
+      "sha": null,
+      "content_sha256": "fcdf1ca2e528dc16538e4b94be8a32cf3c103e8288e629feacc51e3fc7ca0aac",
+      "score": 186,
+      "content": "name: Run Python tests\n\n# on:\n#   pull_request:\n#     branches: [ \"main\" ]\n#     paths:\n#       - \"python/**\"\n#       - \".github/workflows/python-tests.yml\"\non: workflow_dispatch\n\njobs:\n  uv-example:\n    name: python\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./python\n\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Install uv\n        uses: astral-sh/setup-uv@v4\n\n      - name: Set up Python\n        run: uv python install\n\n      - name: Install the project\n        run: uv sync --all-extras --dev\n\n      - name: Run tests\n        run: uv run pytest tests\n\n      - name: Check formatting\n        run: uv run ruff format --check\n"
+    },
+    {
+      "path": ".github/workflows/integration-tests.yml",
+      "sha": null,
+      "content_sha256": "cb2b09d683d3ce1132fc35de37e3cd2dc0b1e091c9a93941c2dedba62d575a68",
+      "score": 186,
+      "content": "name: Integration Tests\n\n# on:\n#   pull_request:\n#     branches: [ \"main\" ]\n#     paths:\n#       - \".github/workflows/integration-tests.yml\"\n#       - \"tests/**\"\n#       - \"crates/**\"\n#       - \"js-pkg/**\"\non: workflow_dispatch\n\nenv:\n  CARGO_TERM_COLOR: always\n\njobs:\n  integration-test:\n    runs-on: ubuntu-latest-16-cores\n    container: ghcr.io/jamsocket/cicd-runner-base:main\n\n    steps:\n    - uses: actions/checkout@v4\n    - name: Install latest rust toolchain\n      run: rustup update && rustup default stable\n    - name: Install client\n      run: npm ci\n      working-directory: js-pkg/client\n    - name: Test deps\n      run: npm ci\n      working-directory: tests\n    - name: Run integration tests\n      run: npm test\n      working-directory: tests\n      timeout-minutes: 4\n\n    - uses: actions/upload-artifact@v4\n      if: always()\n      with:\n        name: test-data\n        path: tests/out\n"
+    },
+    {
+      "path": "js-pkg/gen-docs/package.json",
+      "sha": null,
+      "content_sha256": "c0200987f4897d58b9aecd206336f6a83919864487809211d82c7b1733265d37",
+      "score": 186,
+      "content": "{\n  \"name\": \"gen-docs\",\n  \"version\": \"0.2.2\",\n  \"description\": \"\",\n  \"scripts\": {\n    \"build\": \"ts-node src/main.ts\",\n    \"format\": \"prettier --write \\\"**/*.{ts,tsx,js,jsx}\\\"\"\n  },\n  \"author\": \"\",\n  \"license\": \"ISC\",\n  \"dependencies\": {\n    \"ts-node\": \"^10.9.1\",\n    \"typedoc\": \"^0.25.1\"\n  },\n  \"devDependencies\": {\n    \"prettier\": \"^3.0.3\"\n  }\n}\n"
+    },
+    {
+      "path": "tests/package.json",
+      "sha": null,
+      "content_sha256": "d747fd15e0361af8670d8aeafc2a1ed6ed7c39b8e7e25473eee94b56f0408097",
+      "score": 178,
+      "content": "{\n  \"name\": \"y-sweet-integration-tests\",\n  \"version\": \"0.9.1\",\n  \"private\": true,\n  \"description\": \"Integration tests for Y-sweet.\",\n  \"scripts\": {\n    \"test\": \"rm -rf ./out && vitest run\",\n    \"format\": \"prettier --write \\\"**/*.{ts,tsx,js,jsx,md}\\\"\"\n  },\n  \"license\": \"MIT\",\n  \"devDependencies\": {\n    \"@types/ws\": \"^8.5.5\",\n    \"prettier\": \"^3.0.0\",\n    \"tsup\": \"^7.2.0\",\n    \"typescript\": \"^5.1.6\",\n    \"vitest\": \"^0.34.4\",\n    \"ws\": \"^8.13.0\",\n    \"yjs\": \"^13.6.7\"\n  },\n  \"dependencies\": {\n    \"@y-sweet/react\": \"0.9.1\",\n    \"@y-sweet/sdk\": \"0.9.1\"\n  }\n}\n"
+    },
+    {
+      "path": "examples/nextjs/src/app/api/auth/route.ts",
+      "sha": null,
+      "content_sha256": "41c6294e4cc7b0651e0dc720876c0df04baebc0320aff20dc743899180e0d6c6",
+      "score": 178,
+      "content": "import { CONNECTION_STRING } from '@/lib/config'\nimport { getOrCreateDocAndToken } from '@y-sweet/sdk'\nimport { NextResponse } from 'next/server'\n\nconst CORS_HEADERS = {\n  'access-control-allow-origin': '*',\n  'access-control-allow-methods': 'POST',\n  'access-control-allow-headers': 'content-type',\n}\n\nexport async function OPTIONS(request: Request) {\n  return new Response(null, { status: 204, headers: CORS_HEADERS })\n}\n\nexport async function POST(request: Request) {\n  // In a production app, you'd want to validate that the user is authenticated\n  // and has access to the given doc.\n\n  const { docId } = await request.json()\n  const clientToken = await getOrCreateDocAndToken(CONNECTION_STRING, docId)\n  return NextResponse.json(clientToken, { headers: CORS_HEADERS })\n}\n"
+    },
+    {
+      "path": ".github/workflows/runner.Dockerfile",
+      "sha": null,
+      "content_sha256": "a6b5cb961c2270c9b757d1a3e96707811c3be1e05fe2477523c853b64f84e3b3",
+      "score": 176,
+      "content": "FROM rust:1.73-slim\n\nRUN cargo install wasm-pack\n\nRUN cargo install worker-build --version 0.0.10 --force\n\nRUN rustup target add wasm32-unknown-unknown\n\nRUN apt-get update && \\\n    apt-get install -y curl software-properties-common\n\nRUN curl -sL https://deb.nodesource.com/setup_18.x | bash -\n\nRUN apt-get install -y nodejs\n\nRUN apt-get install -y llvm\n\nENV LLVM_SYMBOLIZER=/usr/bin/llvm-symbolizer\n"
+    },
+    {
+      "path": "js-pkg/sdk/README.md",
+      "sha": null,
+      "content_sha256": "e90718b47c720cbb756af13f3592d0eb6f24b736e14ee92e8db3ab477d55c33f",
+      "score": 171,
+      "content": "<img src=\"https://raw.githubusercontent.com/drifting-in-space/y-sweet/main/logo.svg\" />\n\n# @y-sweet/sdk\n\n[![GitHub Repo stars](https://img.shields.io/github/stars/drifting-in-space/y-sweet?style=social)](https://github.com/drifting-in-space/y-sweet)\n[![Chat on Discord](https://img.shields.io/static/v1?label=chat&message=discord&color=404eed)](https://discord.gg/N5sEpsuhh9)\n[![npm](https://img.shields.io/npm/v/@y-sweet/sdk)](https://www.npmjs.com/package/@y-sweet/sdk)\n\nJavaScript/TypeScript backend SDK for building collaboration features with y-sweet.\n\n## Installation\n```\nnpm install @y-sweet/sdk\n```\n\n## Documentation\nRead the [documentation](https://www.y-sweet.dev/) for guides and API references.\n\n## Examples\nExplore our [collaborative examples](https://github.com/drifting-in-space/y-sweet) to help you get started.\n\nAll examples are open source and live in this repository, within [/examples](https://github.com/drifting-in-space/y-sweet/tree/main/examples).\n\n# Using @y-sweet/sdk\n\nHere’s how access control works in y-sweet:\n\n- Your server (i.e. your Next.js server component) connects to y-sweet using an API key and asks for a client token for a specific document.\n- Your server then passes that client token to the client, often as props to a client-side React component.\n- Your client then connects to y-sweet using the client token.\n\nThe client token contains all the information needed for the client to connect to a y-sweet document, so the client doesn’t need any configuration.\nBut you _do_ need to tell your server how to talk to y-sweet, by passing a **server token**.\n\nA server token combines a URL and a secret key. It can be represented either as a JSON object with `url` and `token` as keys, or as a JSONified string\nof the same. This makes it easy to store the server token in a secret store, and pass it to your server code as an environment variable.\n\n\n``` tsx filename=\"Home.tsx\"\nimport { YDocProvider } from '@y-sweet/react'\nimport { getOrCreateDocAndToken } from '@y-sweet/sdk'\n\ntype HomeProps = {\n  searchParams: Record<string, string>\n}\n\nexport default async function Home({ searchParams }: HomeProps) {\n    // Point to a local or production y-sweet server.\n    const connectionString = \"ys://localhost:8080\"\n\n    const clientToken = await getOrCreateDocAndToken(connectionString, searchParams.doc)\n\n    return (\n        <YDocProvider clientToken={clientToken} setQueryParam=\"doc\">\n            // Call your collaborative interface here\n        </YDocProvider>\n    )\n}\n```\n"
+    },
+    {
+      "path": "deploy/README.md",
+      "sha": null,
+      "content_sha256": "e77cd2ec69fa01fbbcc106227c93c93707faa276618e7933b81da987e0a02e9a",
+      "score": 170,
+      "content": "This shows an example deployment using Docker Compose. This is suitable for setups where one y-sweet server is\nsufficient to handle the scale of requests.\n\nTo run locally, run `docker compose up`, and open http://localhost in your browser.\n\nTo use a custom domain with HTTPS, follow the commented instructions in `Caddyfile`.\n"
+    },
+    {
+      "path": "tests/src/sdk-error.test.ts",
+      "sha": null,
+      "content_sha256": "33444ba9ed9a87d3e27a6ccdf8ed8998cfa1ab23ea6527d7934359c45a2d5a09",
+      "score": 166,
+      "content": "import { expect, test } from 'vitest'\nimport { YSweetError, YSweetErrorPayload } from '@y-sweet/sdk'\n\nfunction expectRoundTrip(payload: YSweetErrorPayload) {\n  const message = YSweetError.getMessage(payload)\n  const error = YSweetError.fromMessage(message)\n  expect(error.cause).toEqual(payload)\n}\n\ntest('server refused', () => {\n  const payload: YSweetErrorPayload = {\n    code: 'ServerRefused',\n    address: '127.0.0.1',\n    port: 1234,\n    url: 'https://foo.bar/baz',\n  }\n\n  expectRoundTrip(payload)\n})\n\ntest('server error', () => {\n  const payload: YSweetErrorPayload = {\n    code: 'ServerError',\n    status: 404,\n    message: 'Not found',\n    url: 'https://foo.bar/baz',\n  }\n\n  expectRoundTrip(payload)\n})\n\ntest('no auth provided', () => {\n  const payload: YSweetErrorPayload = {\n    code: 'NoAuthProvided',\n  }\n\n  expectRoundTrip(payload)\n})\n\ntest('invalid auth provided', () => {\n  const payload: YSweetErrorPayload = {\n    code: 'InvalidAuthProvided',\n  }\n\n  expectRoundTrip(payload)\n})\n\ntest('unknown', () => {\n  const payload: YSweetErrorPayload = {\n    code: 'Unknown',\n    message: 'Something went wrong',\n  }\n\n  expectRoundTrip(payload)\n})\n"
+    },
+    {
+      "path": "tests/README.md",
+      "sha": null,
+      "content_sha256": "475532613156517c4f40db7711fe80df38403805ba0456c90cf5c278a952e452",
+      "score": 158,
+      "content": "# Tests\n\nThe test suite is primarily for testing the servers for API conformity, and only secondarily for\ntesting the JavaScript library.\n\nThe test currently builds and tests three versions of the server:\n\n- Native server without authentication\n- Native server with authentication\n- Cloudflare worker without authentication\n\n(TODO: Cloudflare worker with authentication)\n\n# S3 Config\n\nIf _ALL FIVE_ of the following env vars are set, tests\nwith S3 as the storage backend will also be run.\n\n- Y_SWEET_S3_ACCESS_KEY_ID\n- Y_SWEET_S3_SECRET_KEY\n- Y_SWEET_S3_REGION\n- Y_SWEET_S3_BUCKET_PREFIX\n- Y_SWEET_S3_BUCKET_NAME\n"
+    },
+    {
+      "path": ".github/workflows/rustfmt.yml",
+      "sha": null,
+      "content_sha256": "61cdbcb64a08ec74c6d901c40b7cae9d500f5814a52e4b188374914225a52f6a",
+      "score": 126,
+      "content": "name: Rustfmt\n\n# on:\n#   pull_request:\n#     branches: [ \"*\" ]\n#     paths:\n#       - \"crates/**\"\non: workflow_dispatch\n\njobs:\n  check-rust-format:\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./crates\n    steps:\n      - uses: actions/checkout@v4\n      - name: Install clippy\n        run: rustup update && rustup component add clippy\n      - name: Check format\n        run: cargo fmt -- --check\n      - name: Check format\n        run: cargo fmt -- --check\n        working-directory: ./crates/y-sweet-worker\n"
+    },
+    {
+      "path": ".github/workflows/clippy.yml",
+      "sha": null,
+      "content_sha256": "591305b2eba182a6fa9b8094ccdecc824966ce2042627a29e9cbd4848346045e",
+      "score": 126,
+      "content": "# on:\n#   pull_request:\n#     branches: [ \"*\" ]\n#     paths:\n#       - \"crates/**\"\non: workflow_dispatch\n\nname: Clippy check\njobs:\n  check-rust-clippy:\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./crates\n\n    steps:\n      - uses: actions/checkout@v4\n      - name: Install latest rust toolchain\n        run: rustup update && rustup component add clippy && rustup target add wasm32-unknown-unknown\n      - uses: actions-rs/clippy-check@v1\n        with:\n          token: ${{ secrets.GITHUB_TOKEN }}\n          args: --all-features --manifest-path=crates/Cargo.toml\n"
+    },
+    {
+      "path": ".github/workflows/docker-publish.yml",
+      "sha": null,
+      "content_sha256": "b2655445cb17bd46c377d928dd5c1c399ebd2f59cf0aa17d37a47d3504c3bf60",
+      "score": 126,
+      "content": "name: Docker\n\non:\n  push:\n    branches: [\"main\"]\n    tags: [\"v*.*.*\"]\n  pull_request:\n    branches: [\"main\"]\n\nenv:\n  REGISTRY: ghcr.io\n  IMAGE_NAME: ${{ github.repository }}\n\njobs:\n  build:\n    runs-on: ${{ matrix.runner }}\n    permissions:\n      contents: read\n      packages: write\n    strategy:\n      matrix:\n        include:\n          - platform: linux/amd64\n            runner: ubuntu-latest\n          - platform: linux/arm64\n            runner: ubuntu-24.04-arm\n\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v3\n\n      - name: Log into registry ${{ env.REGISTRY }}\n        if: github.event_name != 'pull_request'\n        uses: docker/login-action@v3\n        with:\n          registry: ${{ env.REGISTRY }}\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Extract Docker metadata\n        id: meta\n        uses: docker/metadata-action@v5\n        with:\n          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\n\n      - name: Build and push by digest\n        id: build\n        uses: docker/build-push-action@v6\n        with:\n          context: \"crates\"\n          file: \"crates/Dockerfile\"\n          platforms: ${{ matrix.platform }}\n          labels: ${{ steps.meta.outputs.labels }}\n          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}\n          cache-from: type=gha,scope=${{ matrix.platform }}\n          cache-to: type=gha,scope=${{ matrix.platform }},mode=max\n\n      - name: Export digest\n        if: github.event_name != 'pull_request'\n        run: |\n          mkdir -p /tmp/digests\n          digest=\"${{ steps.build.outputs.digest }}\"\n          touch \"/tmp/digests/${digest#sha256:}\"\n\n      - name: Upload digest\n        if: github.event_name != 'pull_request'\n        uses: actions/upload-artifact@v4\n        with:\n          name: digests-${{ matrix.runner }}\n          path: /tmp/digests/*\n          if-no-files-found: error\n          retention-days: 1\n\n  merge:\n    runs-on: ubuntu-latest\n    if: github.event_name != 'pull_request'\n    needs: build\n    permissions:\n      contents: read\n      packages: write\n\n    steps:\n      - name: Download digests\n        uses: actions/download-artifact@v4\n        with:\n          path: /tmp/digests\n          pattern: digests-*\n          merge-multiple: true\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v3\n\n      - name: Log into registry ${{ env.REGISTRY }}\n        uses: docker/login-action@v3\n        with:\n          registry: ${{ env.REGISTRY }}\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Extract Docker metadata\n        id: meta\n        uses: docker/metadata-action@v5\n        with:\n          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\n          tags: |\n            type=sha,enable=true,priority=100,prefix=sha-,suffix=,format=short\n            type=raw,value=latest,enable={{is_default_branch}}\n            type=semver,pattern={{version}}\n            type=semver,pattern={{major}}.{{minor}}\n\n      - name: Create manifest list and push\n        working-directory: /tmp/digests\n        run: |\n          docker buildx imagetools create $(jq -cr '.tags | map(\"-t \" + .) | join(\" \")' <<< \"$DOCKER_METADATA_OUTPUT_JSON\") \\\n            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)\n"
+    },
+    {
+      "path": ".github/workflows/check-ts.yml",
+      "sha": null,
+      "content_sha256": "379bd12935dbce0d894eed0ce9de423f0e460c48435648a5d26470d45e25b042",
+      "score": 126,
+      "content": "name: Check TypeScript code\n\n# on:\n#   pull_request:\n#     branches: [ \"main\" ]\n#     paths:\n#       - \".github/workflows/check-ts.yml\"\n#       - \"examples/**\"\n#       - \"debugger/**\"\n#       - \"tests/**\"\n#       - \"js-pkg/**\"\non: workflow_dispatch\n\njobs:\n  check-ts-format:\n    runs-on: ubuntu-latest\n    steps:\n    - name: Check out code\n      uses: actions/checkout@v4\n\n    - name: Setup Node.js\n      uses: actions/setup-node@v4\n      with:\n        node-version: '16'\n\n    - name: Check Formatting of Examples\n      run: npx prettier --check \"**/src/**/*.{js,ts,tsx}\"\n      working-directory: examples/\n\n    - name: Check Formatting of Debugger\n      run: npx prettier --check \"src/**/*.{ts,tsx}\"\n      working-directory: debugger/\n\n    - name: Check Formatting of Tests\n      run: npx prettier --check \"src/**/*.ts\"\n      working-directory: tests/\n\n    - name: Check Formatting of React lib\n      run: npx prettier --check \"src/**/*.{ts,tsx}\"\n      working-directory: js-pkg/react/\n\n    - name: Check Formatting of SDK\n      run: npx prettier --check \"src/**/*.{ts,tsx}\"\n      working-directory: js-pkg/sdk/\n\n    - name: Check Formatting of client\n      run: npx prettier --check \"src/**/*.{ts,tsx}\"\n      working-directory: js-pkg/client/\n\n    - name: Check Formatting of doc generator\n      run: npx prettier --check \"**/*.{ts,tsx}\"\n      working-directory: js-pkg/gen-docs/\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "32b4f35c2182a49a9a629ceb4b14ba77b27c790514b4d1ddbb7755e92d3cb538",
+      "score": 126,
+      "content": "name: Build Rust binary and create release\n\n# Note: If you add or remove binaries, you should also update the list in releaser/src/check_binaries.rs\n\n# on:\n#   workflow_dispatch:\n#     inputs:\n#       version:\n#         description: 'Release Version'\n#         required: true\n#   pull_request:\n#     branches: [ \"main\" ]\n#     paths:\n#       - \".github/workflows/release.yml\"\non: workflow_dispatch\n\njobs:\n  build-macos-arm64:\n    runs-on: macos-latest\n    steps:\n    - name: Checkout\n      uses: actions/checkout@v4\n\n    - name: Install latest rust toolchain\n      uses: actions-rs/toolchain@v1\n      with:\n        toolchain: beta\n        target: aarch64-apple-darwin\n        default: true\n        override: true\n\n    - name: Build for MacOS\n      uses: actions-rs/cargo@v1\n      with:\n        command: build\n        args: --manifest-path=crates/Cargo.toml --target aarch64-apple-darwin --release\n\n    - name: strip binary\n      run: strip ./crates/target/aarch64-apple-darwin/release/y-sweet\n\n    - name: Upload artifact\n      uses: actions/upload-artifact@v4\n      with:\n        name: macos-binary-arm64\n        path: ./crates/target/aarch64-apple-darwin/release/y-sweet\n\n  build-macos-x64:\n    runs-on: macos-latest\n    steps:\n    - name: Checkout\n      uses: actions/checkout@v4\n\n    - name: Install latest rust toolchain\n      uses: actions-rs/toolchain@v1\n      with:\n        toolchain: beta\n        target: x86_64-apple-darwin\n        default: true\n        override: true\n\n    - name: Build for MacOS\n      uses: actions-rs/cargo@v1\n      with:\n        command: build\n        args: --release --manifest-path=crates/Cargo.toml --target x86_64-apple-darwin\n\n    - name: Upload artifact\n      uses: actions/upload-artifact@v4\n      with:\n        name: macos-binary-x64\n        path: ./crates/target/x86_64-apple-darwin/release/y-sweet \n\n  build-linux:\n    runs-on: ubuntu-latest\n    steps:\n    - name: Checkout code\n      uses: actions/checkout@v2\n      \n    - name: Setup Rust\n      uses: actions-rs/toolchain@v1\n      with:\n        toolchain: stable\n        target: x86_64-unknown-linux-musl\n        override: true\n        \n    - name: Install musl-tools \n      run: sudo apt-get install -y musl-tools\n\n    - name: Build for Linux\n      uses: actions-rs/cargo@v1\n      with:\n        command: build\n        args: --release --target x86_64-unknown-linux-musl --manifest-path=crates/Cargo.toml\n        \n    - name: Upload artifact\n      uses: actions/upload-artifact@v4\n      with:\n        name: linux-binary\n        path: ./crates/target/x86_64-unknown-linux-musl/release/y-sweet \n\n  build-linux-arm64:\n    runs-on: ubuntu-latest\n    steps:\n    - name: Checkout code\n      uses: actions/checkout@v2\n      \n    - name: Setup Rust\n      uses: actions-rs/toolchain@v1\n      with:\n        toolchain: stable\n        target: aarch64-unknown-linux-musl\n        override: true\n        \n    - name: Install musl-tools \n      run: sudo apt-get install -y musl-tools\n\n    - run: sudo apt-get install gcc-aarch64-linux-gnu\n\n    - name: Build for Linux\n      uses: actions-rs/cargo@v1\n      env:\n        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: aarch64-linux-gnu-gcc\n        CC: aarch64-linux-gnu-gcc\n      with:\n        command: build\n        args: --release --target aarch64-unknown-linux-musl --manifest-path=crates/Cargo.toml\n        \n    - name: Upload artifact\n      uses: actions/upload-artifact@v4\n      with:\n        name: linux-binary-arm64\n        path: ./crates/target/aarch64-unknown-linux-musl/release/y-sweet \n\n  build-windows:\n    runs-on: ubuntu-latest\n    steps:\n    - name: Checkout code\n      uses: actions/checkout@v2 \n\n    - name: Setup Rust\n      uses: actions-rs/toolchain@v1\n      with:\n        toolchain: stable\n        target: x86_64-pc-windows-gnu\n        override: true\n        \n    - name: Install mingw\n      run: sudo apt-get install -y gcc-mingw-w64\n\n    - name: Build for Windows\n      uses: actions-rs/cargo@v1\n      with:\n        command: build\n        args: --release --target x86_64-pc-windows-gnu --manifest-path=crates/Cargo.toml\n\n    - name: ls\n      run: ls ./crates/target/x86_64-pc-windows-gnu/release\n      \n    - name: Upload artifact\n      uses: actions/upload-artifact@v4\n      with:\n        name: windows-binary\n        path: ./crates/target/x86_64-pc-windows-gnu/release/y-sweet.exe\n\n  release:\n    needs: [build-linux, build-macos-arm64, build-macos-x64, build-windows, build-linux-arm64]\n    runs-on: ubuntu-latest\n    if: github.event_name != 'pull_request'\n    steps:\n    - name: Download artifacts\n      uses: actions/download-artifact@v4\n    - name: Compress binary\n      run: >\n        gzip -9 --keep --force \n        windows-binary/y-sweet.exe\n        linux-binary/y-sweet\n        macos-binary-x64/y-sweet\n        macos-binary-arm64/y-sweet\n        linux-binary-arm64/y-sweet\n    - name: ls\n      run: ls -la\n    - name: rename and move\n      run: >\n        mv windows-binary/y-sweet.exe.gz y-sweet-win-x64.exe.gz &&\n        mv linux-binary/y-sweet.gz y-sweet-linux-x64.gz &&\n        mv macos-binary-x64/y-sweet.gz y-sweet-macos-x64.gz &&\n        mv macos-binary-arm64/y-sweet.gz y-sweet-macos-arm64.gz &&\n        mv linux-binary-arm64/y-sweet.gz y-sweet-linux-arm64.gz\n    - name: Release\n      uses: softprops/action-gh-release@v1\n      with:\n        name: ${{ github.event.inputs.version }}\n        draft: true\n        files: |\n            y-sweet-win-x64.exe.gz\n            y-sweet-linux-x64.gz\n            y-sweet-macos-x64.gz\n            y-sweet-macos-arm64.gz\n            y-sweet-linux-arm64.gz\n"
+    },
+    {
+      "path": ".github/workflows/build-runner.yml",
+      "sha": null,
+      "content_sha256": "0d24cc141928c99e0ff9d3cc88bc532920f79a9b56a599dc0775d180ae99239e",
+      "score": 126,
+      "content": "name: Build CI/CD base image\n\n# on:\n#   # schedule:\n#   #   - cron: '15 11 * * *'\n#   push:\n#     branches: [ \"main\" ]\n#     paths:\n#       - \".github/workflows/build-runner.yml\"\n#       - \".github/workflows/runner.Dockerfile\"\n#   pull_request:\n#     branches: [ \"main\" ]\n#     paths:\n#       - \".github/workflows/build-runner.yml\"\n#       - \".github/workflows/runner.Dockerfile\"\non: workflow_dispatch\n\nenv:\n  REGISTRY: ghcr.io\n  IMAGE_NAME: drifting-in-space/cicd-runner-base\n\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      packages: write\n\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v3\n\n      - name: Log into registry ${{ env.REGISTRY }}\n        if: github.event_name != 'pull_request'\n        uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d # v3.0.0\n        with:\n          registry: ${{ env.REGISTRY }}\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Extract Docker metadata\n        id: meta\n        uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0\n        with:\n          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\n\n      - name: Build and push Docker image\n        id: build-and-push\n        uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0\n        with:\n          file: .github/workflows/runner.Dockerfile\n          push: ${{ github.event_name != 'pull_request' }}\n          tags: ${{ steps.meta.outputs.tags }}\n          labels: ${{ steps.meta.outputs.labels }}\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "588812af491c641f6f77c8ae7e7ceaa353e09a87d369b12ee6dcd95d504f8aa6",
+      "score": 120,
+      "content": "{\n  \"name\": \"@y-sweet/monorepo\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"description\": \"The monorepo for Y-sweet\",\n  \"workspaces\": [\n    \"js-pkg/client\",\n    \"js-pkg/react\",\n    \"js-pkg/sdk\",\n    \"js-pkg/gen-docs\",\n    \"examples/nextjs\",\n    \"examples/vanilla\",\n    \"debugger\",\n    \"tests\"\n  ],\n  \"scripts\": {\n    \"clean\": \"npm run clean -w js-pkg/sdk -w js-pkg/client -w js-pkg/react\",\n    \"postinstall\": \"npm run build\",\n    \"build\": \"npm run build -w js-pkg/sdk -w js-pkg/client -w js-pkg/react\",\n    \"format\": \"npm run format -w js-pkg/sdk -w js-pkg/client -w js-pkg/react\"\n  },\n  \"license\": \"MIT\",\n  \"dependencies\": {\n    \"typescript\": \"^5.1.6\"\n  },\n  \"engines\": {\n    \"node\": \">=16.8.0\"\n  }\n}\n"
+    },
+    {
+      "path": "crates/Cargo.toml",
+      "sha": null,
+      "content_sha256": "a10d090c57d35380ea9c39b9355c8dccd50886329e4f13a2d82f6b6254058ba3",
+      "score": 118,
+      "content": "[workspace]\nresolver = \"2\"\n\nmembers = [\n    \"y-sweet\",\n    \"y-sweet-core\",\n]\n\nexclude = [\n    \"y-sweet-worker\",\n]\n"
+    },
+    {
+      "path": "local-first-landscape/package.json",
+      "sha": null,
+      "content_sha256": "e3c085c9a67e45f3c6377394218764024fffd36558d968f0ce81e36b6d882dd9",
+      "score": 118,
+      "content": "{\n    \"name\": \"y-sweet-local-first-landscape\",\n    \"private\": true,\n    \"devDependencies\": {\n        \"@biomejs/biome\": \"1.9.4\",\n        \"typescript\": \"^5.7.2\"\n    },\n    \"dependencies\": {\n        \"@localfirstfm/landscape-schema\": \"^0.0.2\"\n    }\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:22.940478+00:00"
+}

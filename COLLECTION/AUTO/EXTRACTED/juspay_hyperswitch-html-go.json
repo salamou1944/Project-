@@ -1,0 +1,48 @@
+{
+  "canonical_source": "github:juspay/hyperswitch-html-go",
+  "repo": "juspay/hyperswitch-html-go",
+  "revision_sha": "5c2c52add6ec9a7ac5de3be5d02d5f999dbef611",
+  "default_branch": "main",
+  "pushed_at": "2023-08-25T07:44:08Z",
+  "repo_updated_at": "2026-09-11T10:46:48Z",
+  "license": null,
+  "topics": [
+    "css",
+    "go",
+    "html",
+    "javascript"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "4466588d4e56426599c7cd72ed3b797b33d484577dd610931d465b98b705fddb",
+      "score": 100,
+      "content": "# Hyperswitch HTML + Go Integration\n\nBuild a simple checkout web-app to collect payment details and make a test payment. Included are some basic build and run scripts you can use to run the demo application.\n\n## Introduction\n\nThis demo application uses the following tech-stack :\n\n**Frontend :** `HTML + CSS` with `JavaScript`\n\n**Backend :** `Go`  \n\n## Prerequisites\n\nBefore running the demo app, please make sure to activate your Hyperswitch secret keys (API Key and Publishable Key) in your [Hyperswitch Dashboard](https://app.hyperswitch.io/developers). \n\nDon't have a Hyperswitch account? [Sign up here!](https://app.hyperswitch.io/register) \n\n## Running the sample\n\n1. Add your keys :\n    - Navigate to `public/script.js` and replace the placeholder `HYPERSWITCH_PUBLISHABLE_KEY` with your publishable key.\n    - Navigate to `server.go` and replace the placeholder `HYPERSWITCH_API_KEY` with your API key.\n\n2. Run the server :\n~~~\ngo run server.go\n~~~\n\n3. The sample app will now be accessible here : [http://localhost:4242/index.html](http://localhost:4242/index.html).\n"
+    },
+    {
+      "path": "server.go",
+      "sha": null,
+      "content_sha256": "1ba07d1028d0a81f08a7df5baa89a7bbc3b5d0e95edae4ebade81b0391d596af",
+      "score": 35,
+      "content": "package main\n\nimport (\n\t\"encoding/json\"\n  \t\"log\"\n\t\"fmt\"\n\t\"net/http\"\n  \t\"bytes\"\n)\n\nconst HYPER_SWITCH_API_KEY = \"HYPERSWITCH_API_KEY\"\nconst HYPER_SWITCH_API_BASE_URL = \"https://sandbox.hyperswitch.io\"\n\nfunc createPaymentHandler(w http.ResponseWriter, r *http.Request) {\n\t\n\t/*\n\t\tIf you have two or more “business_country” + “business_label” pairs configured in your Hyperswitch dashboard,\n\t\tplease pass the fields business_country and business_label in this request body.\n\t\tFor accessing more features, you can check out the request body schema for payments-create API here :\n\t\thttps://api-reference.hyperswitch.io/docs/hyperswitch-api-reference/60bae82472db8-payments-create\n\t*/\n\t\n\tpayload := []byte(`{\"amount\": 100, \"currency\": \"USD\", \"customer_id\": \"hyperswitch_customer\"}`)\n\tclient := &http.Client{}\n\treq, err := http.NewRequest(\"POST\", HYPER_SWITCH_API_BASE_URL+\"/payments\", bytes.NewBuffer(payload))\n\tif err != nil {\n\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n\t\treturn\n\t}\n\n\treq.Header.Set(\"Content-Type\", \"application/json\")\n\treq.Header.Set(\"Accept\", \"application/json\")\n\treq.Header.Set(\"api-key\", HYPER_SWITCH_API_KEY)\n\n\tresp, err := client.Do(req)\n\tif err != nil {\n\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n\t\treturn\n\t}\n\tdefer resp.Body.Close()\n\n\tif resp.StatusCode != http.StatusOK {\n\t\thttp.Error(w, fmt.Sprintf(\"API request failed with status code: %d\", resp.StatusCode), http.StatusInternalServerError)\n\t\treturn\n\t}\n\n\tvar data map[string]interface{}\n\terr = json.NewDecoder(resp.Body).Decode(&data)\n\tif err != nil {\n\t\thttp.Error(w, err.Error(), http.StatusInternalServerError)\n\t\treturn\n\t}\n\n\tjson.NewEncoder(w).Encode(map[string]interface{}{\"client_secret\": data[\"client_secret\"]})\n}\n\nfunc main() {\n\tfs := http.FileServer(http.Dir(\"public\"))\n  http.Handle(\"/\", fs)\n  http.HandleFunc(\"/create-payment\", createPaymentHandler)\n\n  addr := \"localhost:4242\"\n  log.Printf(\"Listening on %s ...\", addr)\n  log.Fatal(http.ListenAndServe(addr, nil))\n}\n"
+    },
+    {
+      "path": "public/script.js",
+      "sha": null,
+      "content_sha256": "421b35fc2349d5744288debebc8bcfda4ba5f8534f2e53d61ca6fbf327492873",
+      "score": 33,
+      "content": "//Follow this doc for HTML and REST API integration: https://hyperswitch.io/docs/sdkIntegrations/unifiedCheckoutWeb/restAPIBackendAndHTMLFrontend\n// Update your publishable key here\n\nconst hyper = Hyper(\"HYPERSWITCH_PUBLISHABLE_KEY\");\n\nconst items = [{ id: \"xl-tshirt\" }];\n\nasync function initialize() {\n  // For demo purpose we are calling the hyperswitch API directly here, but in actual setup this should be backend call to your server and call the hyperswitch API internally with your API key\n  const response = await fetch(\"/create-payment\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ items }),\n  });\n  \n  const {\n    client_secret\n  } = await response.json();\n\n  // You can change the apperance of the SDK by adding field here\n  const appearance = {\n    // theme: \"midnight\",\n  };\n\n  widgets = hyper.widgets({\n    appearance,\n    clientSecret: client_secret\n  });\n\n  const unifiedCheckoutOptions = {\n    layout: \"tabs\",\n    wallets: {\n      walletReturnUrl: \"https://example.com/complete\",\n      //Mandatory parameter for Wallet Flows such as Googlepay, Paypal and Applepay\n    },\n  };\n\n  const unifiedCheckout = widgets.create(\"payment\", unifiedCheckoutOptions);\n  unifiedCheckout.mount(\"#unified-checkout\");\n}\ninitialize();\n\nasync function handleSubmit(e) {\n  setLoading(true);\n  const { error, data, status } = await hyper.confirmPayment({\n    widgets,\n    confirmParams: {\n      // Make sure to change this to your payment completion page\n      return_url: \"https://example.com/complete\",\n    },\n  });\n\n  // This point will only be reached if there is an immediate error occurring while confirming the payment. Otherwise, your customer will be redirected to your `return_url`.\n\n  // For some payment flows such as Sofort, iDEAL, your customer will be redirected to an intermediate page to complete authorization of the payment, and then redirected to the `return_url`.\n\n  if (error && error.type === \"validation_error\") {\n    showMessage(error.message);\n  }\n  else if (status === \"succeeded\") {\n    addClass(\"#hypers-sdk\", \"hidden\")\n    removeClass(\"#orderSuccess\", \"hidden\")\n  }\n  else {\n    showMessage(\"An unexpected error occurred.\");\n  }\n\n  setLoading(false);\n}\n\n// Fetches the payment status after payment submission\nasync function checkStatus() {\n  const clientSecret = new URLSearchParams(window.location.search).get(\n    \"payment_intent_client_secret\"\n  );\n\n  if (!clientSecret) {\n    return;\n  }\n\n  const { payment } = await hyper.retrievePayment(clientSecret);\n\n  switch (payment.status) {\n    case \"succeeded\":\n      showMessage(\"Payment succeeded!\");\n      break;\n    case \"processing\":\n      showMessage(\"Your payment is processing.\");\n      break;\n    case \"requires_payment_method\":\n      showMessage(\"Your payment was not successful, please try again.\");\n      break;\n    default:\n      showMessage(\"Something went wrong.\");\n      break;\n  }\n}\n\nfunction setLoading(showLoader) {\n  if (showLoader) {\n    show('.spinner');\n    hide('#button-text');\n  }\n  else {\n    hide('.spinner');\n    show('#button-text');\n  }\n}\n\nfunction show(id) {\n  removeClass(id, 'hidden');\n}\nfunction hide(id) {\n  addClass(id, 'hidden');\n}\n\nfunction showMessage(msg) {\n  show('#payment-message');\n  addText('#payment-message', msg);\n}\n\nfunction addText(id, msg) {\n  var element = document.querySelector(id);\n  element.innerText = msg;\n}\n\nfunction addClass(id, className) {\n  var element = document.querySelector(id);\n  element.classList.add(className);\n}\n\nfunction removeClass(id, className) {\n  var element = document.querySelector(id);\n  element.classList.remove(className);\n}\n\nfunction retryPayment() {\n  hide('#orderSuccess');\n  show('.Container');\n  initialize();\n}\n\nfunction showSDK(e) {\n  hide('.Container');\n  show('#hypers-sdk');\n};\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:13.384978+00:00"
+}

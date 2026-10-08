@@ -1,0 +1,57 @@
+{
+  "canonical_source": "github:juspay/haskell-incremental-build-template",
+  "repo": "juspay/haskell-incremental-build-template",
+  "revision_sha": "d406e4ac400691827875fd1f05898bdc7296048e",
+  "default_branch": "main",
+  "pushed_at": "2025-05-13T08:34:02Z",
+  "repo_updated_at": "2026-01-18T16:40:09Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/actions/find-latest-cached-commit/README.md",
+      "sha": null,
+      "content_sha256": "9e3578f76ca68348db6a89de41139979c5d08091e52ef5f5fed0b2af5fb0dff1",
+      "score": 294,
+      "content": "# Find Latest Cached Commit Action\n\nThis GitHub Action finds the most recent commit (from the last 5) with cached build artifacts for a specified Nix flake `packages` output.\n\n## Dependencies\n\n- **Nix**: Required for checking if the binary cache has intermediates cached.\n- **Git**: Required for `git log` to retrieve commit history.\n- **Bash**: The Action uses Bash scripting, so a Unix-like environment is required.\n\n\n### Example Workflow\n\nThis example github action workflow configuration does the following:\n- Install Nix\n- Setup cachix (Nix store object cache)\n- Find the previously cached build artifacts\n- Uses the cache to incrementally build the latest version of the package\n\n```yaml\nname: CI with Cached Intermediates\non:\n  pull_request:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Install Nix\n        uses: DeterminateSystems/nix-installer-action@v1.0.0\n      - uses: cachix/cachix-action@v14\n        with:\n          name: mycompany\n          authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'\n      - name: Find Latest Cached Commit\n        if: github.event_name == 'pull_request'\n        id: latest_cached\n        uses: ./.github/actions/find-latest-cached-commit\n        with:\n          # Nix store object cache used to query the cached build artifacts\n          cache_url: \"https://mycompany.cachix.org\"\n          # The package whose build artifacts are fetched and incremented on in the latest revision of the project\n          package_name: \"default\"\n      - name: Build Incrementally\n        run: |\n          if [ -n \"${{ steps.latest_cached.outputs.commit_hash }}\" ]; then\n            echo \"Building incrementally from commit ${{ steps.latest_cached.outputs.commit_hash }}\"\n            nix build .#default --override-input prev ${{ steps.latest_cached.outputs.flake_ref }}\n          else\n            echo \"No cached intermediates found; performing full build\"\n            nix build .#default\n          fi\n\n"
+    },
+    {
+      "path": ".github/actions/find-latest-cached-commit/action.yml",
+      "sha": null,
+      "content_sha256": "27e9178ab2d9d90ae6d6eca44a3469c63c5f6d7cea92c83a264214a4831c1a52",
+      "score": 229,
+      "content": "name: Find Latest Cached Commit\ndescription: Finds the most recent commit (from the last 5) with cached build artifacts for a specified Nix flake `packages` output. Requires Nix installed on the runner\ninputs:\n  cache_url:\n    description: The URL of the Nix binary cache to check for previous build artifacts.\n    required: true\n  package_name:\n    description: The `packages.<name>` flake output to incrementally build. Defaults to `default`.\n    required: true\noutputs:\n  commit_hash:\n    description: The commit hash of the most recent commit (from the last 5) with cached artifacts for the specified package. Empty if none found.\n    value: ${{ steps.find_intermediates.outputs.commit_hash }}\n  flake_ref:\n    description: This output can be used directly while overriding a flake input instead of having to construct it as is the case while using `outputs.commit_hash`\n    value: \"github:${{ github.repository }}/${{ steps.find_intermediates.outputs.commit_hash }}\"\nruns:\n  using: \"composite\"\n  steps:\n    - name: Find Base Commit for Incremental Build\n      id: find_intermediates\n      shell: bash\n      run: |\n        echo \"::group::Checking for cached intermediates\"\n        for commit in $(git log -n 5 --pretty=%H); do\n          echo \"::debug::Finding intermediates in $commit\"\n\n          FLAKE_URL=\"github:${{ github.repository }}/$commit#packages.$(nix eval --impure --expr 'builtins.currentSystem').${{ inputs.package_name }}.outPath\"\n          # Evaluate the `/nix/store` output path of `inputs.package_name` and trim the quotes enclosing the path\n          OUT_PATH=$(nix eval $FLAKE_URL | tr -d '\"')\n\n          # Check if the output path exists in the cache without downloading it\n          if nix path-info $OUT_PATH --store ${{ inputs.cache_url }}; then\n            echo \"::notice::Found cached intermediates for commit $commit\"\n            # Output only the commit hash to original stdout (fd 3)\n            echo \"commit_hash=$commit\" >> $GITHUB_OUTPUT\n            echo \"::endgroup::\"\n            exit 0\n          else\n            echo \"::debug::No cached intermediates for commit $commit\"\n          fi\n        done\n        echo \"::notice::No cached intermediates found in the last 5 commits\"\n        echo \"commit_hash=\" >> $GITHUB_OUTPUT\n        echo \"::endgroup::\"\n\n"
+    },
+    {
+      "path": ".github/workflows/ci.yaml",
+      "sha": null,
+      "content_sha256": "d4aaa5b91e2527b75235e13d8c336e3733aaed54ac2a3b081ca64547dab46650",
+      "score": 198,
+      "content": "name: \"CI\"\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\njobs:\n  build:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 5\n      - uses: DeterminateSystems/nix-installer-action@main\n\n      - name: Install omnix and attic-client\n        run: |\n          nix profile install nixpkgs#omnix nixpkgs#attic-client\n          nix --version\n\n      - name: Setup Attic cache\n        run: |\n          attic login chutney https://cache.nixos.asia ${{ secrets.ATTIC_LOGIN_TOKEN }}\n          attic use chutney:oss\n\n      - name: Find Latest Cached Commit\n        uses: ./.github/actions/find-latest-cached-commit\n        if: github.event_name == 'pull_request'\n        id: latest_cached\n        with:\n          cache_url: \"https://cache.nixos.asia/oss\"\n          package_name: \"default\"\n\n      - name: Om CI\n        id: om_ci\n        shell: bash\n        run: |\n          if [ -n \"${{ steps.latest_cached.outputs.commit_hash }}\" ]; then\n            # The `flake/` prefix is necessary for https://github.com/juspay/omnix/issues/452\n            om ci run -- --override-input \"flake/prev\" \"${{ steps.latest_cached.outputs.flake_ref }}\"\n          else\n            om ci run\n          fi\n          echo \"result=$(readlink result)\" >> \"$GITHUB_OUTPUT\"\n\n      - name: Push to Attic cache\n        run: attic push chutney:oss ${{ steps.om_ci.outputs.result }}\n"
+    },
+    {
+      "path": ".github/workflows/update-flake-lock.yaml",
+      "sha": null,
+      "content_sha256": "297e9e704852150bd5ae894a481ed6352637af8ddb9fd489667a20ce9cad1d56",
+      "score": 126,
+      "content": "name: update-flake-lock\non:\n  workflow_dispatch: # allows manual triggering\n  # schedule:\n  #   - cron: '0 0 * * 0' # runs weekly on Sunday at 00:00\n\njobs:\n  lockfile:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v3\n      - name: Install Nix\n        uses: DeterminateSystems/nix-installer-action@main\n      - name: Update flake.lock\n        uses: DeterminateSystems/update-flake-lock@main\n        with:\n          token: ${{ secrets.GH_TOKEN_FOR_UPDATES }}\n          pr-title: \"Update flake.lock\" # Title of PR to be created\n          pr-labels: |                  # Labels to be set on the PR\n            automated\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "6c7b7f55abeadca6d625d1d6a15c67e6a652e74e28ac16913f3e98d872da1189",
+      "score": 100,
+      "content": "# haskell-incremental-build-template\n\n> [!IMPORTANT]\n> This minimal template focuses solely on incremental Haskell build configuration with Nix.\n> For a more batteries-included Haskell Nix template, combine it with <https://github.com/srid/haskell-template>\n\n> [!IMPORTANT]\n> Requires GHC >= 9.4\n\nA template for incremental Haskell builds using Nix, leveraging [nixpkgs’s Haskell incremental build system](https://github.com/NixOS/nixpkgs/blob/30a7bc1176cd9cd066cd75b9339872fa985a6379/doc/languages-frameworks/haskell.section.md?plain=1#L469-L515) and [haskell-flake]\n\n## Getting Started\n\nFor an existing Haskell project already using [haskell-flake], integrate this template by:\n- Add the `prev` flake input (see [flake.nix](./flake.nix)).\n\nhttps://github.com/juspay/haskell-incremental-build-template/blob/7432331400f27924d827fbf81de5140c1fa0052c/flake.nix#L10-L14\n\n- Include settings from [haskell.nix](./nix/modules/flake/haskell.nix):\n\nhttps://github.com/juspay/haskell-incremental-build-template/blob/7432331400f27924d827fbf81de5140c1fa0052c/nix/modules/flake/haskell.nix#L20-L32\n\n- Use [Find Latest Cached Commit](./.github/actions/find-latest-cached-commit) action to find the commit hash with cached build artifacts.\n\nhttps://github.com/juspay/haskell-incremental-build-template/blob/efd179a97b078634db3f124e862260d3acc35499/.github/workflows/ci.yaml#L30-L48\n\n[haskell-flake]: https://github.com/srid/haskell-flake\n\n## Quick Trial\n\n- Clone the repository: `git clone https://github.com/juspay/haskell-incremental-build-template && cd haskell-incremental-build-template`\n- Perform a full build: `nix build .#default -L`\n  - This builds both `Example.hs` and `Main.hs` modules.\n- Add a newline to `Main.hs` to simulate a change: `echo >> src/Main.hs`\n- Perform an incremental build: `nix build .#default --override-input prev github:juspay/haskell-incremental-build-template -L`\n  - Only `Main.hs` is rebuilt.\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:19.242284+00:00"
+}

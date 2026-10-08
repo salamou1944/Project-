@@ -1,0 +1,50 @@
+{
+  "canonical_source": "github:juspay/hs-unix-memory",
+  "repo": "juspay/hs-unix-memory",
+  "revision_sha": "0e3ebf48bf0208a5b8179014aa456555ad8f5cba",
+  "default_branch": "master",
+  "pushed_at": "2026-08-03T12:47:37Z",
+  "repo_updated_at": "2026-08-03T12:48:39Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "e11440f9fdcf78eacf0222b3ac57fb968509b00cd74e2c2e33b2022b70949340",
+      "score": 100,
+      "content": "unix-memory\n===========\n\n[![Build Status](https://travis-ci.org/vincenthz/hs-unix-memory.png?branch=master)](https://travis-ci.org/vincenthz/hs-unix-memory)\n[![BSD](http://b.repl.ca/v1/license-BSD-blue.png)](http://en.wikipedia.org/wiki/BSD_licenses)\n[![Haskell](http://b.repl.ca/v1/language-haskell-lightgrey.png)](http://haskell.org)\n\nProvide access to lowlevel syscalls for memory mapping. typically mmap, munmap, msync, mlock, mprotect, ..\n\nDocumentation: [unix-memory on hackage](http://hackage.haskell.org/package/unix-memory)\n\nThe goal is to fold the System.Posix.Memory module in the unix package. As the unix package\nis tied to ghc, it's not convenient to upgrade the package, so this package can act as a\ntest ground, and a compatility module for older unix version.\n\nPortability is inherently difficult, but the goal is to support every unixoid (Linux, BSD, MacOSX)\nthat have mmap style functions. Bug reports and pull requests to improve portability more than welcome.\n"
+    },
+    {
+      "path": "Setup.hs",
+      "sha": null,
+      "content_sha256": "5066653559d4d6134b022d66a634a17fdcf8db35d28b447e581fec284afa4689",
+      "score": 82,
+      "content": "import Distribution.Simple\nmain = defaultMain\n"
+    },
+    {
+      "path": "tests/Tests.hs",
+      "sha": null,
+      "content_sha256": "f1b1f14691aa11d18cd66604cd8be9e7363af5ed34c1331089ede7c5e80ebf52",
+      "score": 58,
+      "content": "{-# LANGUAGE CPP #-}\nmodule Main where\n\nimport Test.Tasty (defaultMain, testGroup)\nimport Test.Tasty.QuickCheck\n\nimport Test.QuickCheck.Monadic (monadicIO, run)\n\nimport System.Posix.IO\nimport System.Posix.Memory\n\nimport Control.Monad\nimport Control.Exception (bracket)\n\nimport Foreign.C.Types\nimport Foreign.Storable\n\nimport Data.Word\n\npsz :: CSize\npsz = fromIntegral sysconfPageSize\n\n-- create an anonymous private mapping of page-size size.\nwithDummyMapping f = do\n    bracket (memoryMap Nothing psz [MemoryProtectionRead,MemoryProtectionWrite] MemoryMapPrivate Nothing 0)\n            (\\mem -> memoryUnmap mem psz)\n            f\n\nwithDevZeroMapping f = withOpenFd \"/dev/zero\" $ \\fd ->\n    bracket (memoryMap Nothing psz [MemoryProtectionRead,MemoryProtectionWrite] MemoryMapPrivate (Just fd) 0)\n            (\\mem -> memoryUnmap mem psz)\n            f\n  where withOpenFd filename g = do \n            bracket (openFd filename ReadWrite defaultFileFlags)\n                    closeFd\n                    g\n\ntests = testGroup \"unix-memory\"\n    [ testProperty \"page-size\" $ sysconfPageSize > 0 && sysconfPageSize < (2^(20::Int))\n    , testGroup \"anonymous\" $ runTestWithMapping withDummyMapping\n#ifdef __APPLE__\n    , testGroup \"fd\"        $ runTestWithMapping withDevZeroMapping\n#endif\n    ]\n  where runTestWithMapping mapF =\n                [ testProperty \"mmap-munmap\" $ monadicIO $ run $ mapF $ \\_ -> return True\n                , testProperty \"madvise\" $ monadicIO $ run $ mapF $ \\ptr ->\n                    memoryAdvise ptr psz MemoryAdviceRandom >> return True\n                , testProperty \"msync\" $ monadicIO $ run $ mapF $ \\ptr ->\n                    memorySync ptr psz [MemorySyncAsync] >> return True\n                , testProperty \"mlock-munlock\" $ monadicIO $ run $ mapF $ \\ptr -> do\n                    memoryLock ptr psz\n                    memoryUnlock ptr psz\n                    return True\n                , testProperty \"read\" $ monadicIO $ run $ mapF $ \\ptr -> do\n                    res <- forM [0..(sysconfPageSize-1)] $ \\off -> do\n                        b <- peekElemOff ptr off :: IO Word8\n                        return (b == 0)\n                    return $ and res\n                ]\n\nmain :: IO ()\nmain = defaultMain tests\n"
+    },
+    {
+      "path": ".travis.yml",
+      "sha": null,
+      "content_sha256": "ee5453a019ce37dbc13b59565ce7f2156ecc9f6c3938f3ef12b891c91de5c522",
+      "score": 35,
+      "content": "env:\n - GHCVER=7.4.2\n - GHCVER=7.6.3\n - GHCVER=7.8.2\n - GHCVER=head\n\nmatrix:\n  allow_failures:\n   - env: GHCVER=head\n\nbefore_install:\n - sudo add-apt-repository -y ppa:hvr/ghc\n - sudo apt-get update\n - sudo apt-get install cabal-install-1.18 ghc-$GHCVER\n - export PATH=/opt/ghc/$GHCVER/bin:$PATH\n\ninstall:\n - cabal-1.18 update\n - cabal-1.18 install --only-dependencies --enable-tests;\n\nscript:\n - cabal-1.18 configure --enable-tests -v2\n - cabal-1.18 build\n - cabal-1.18 test\n - cabal-1.18 check\n - cabal-1.18 sdist\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:25.315064+00:00"
+}

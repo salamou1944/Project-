@@ -1,0 +1,85 @@
+{
+  "canonical_source": "github:juspay/purescript-foreign-generic",
+  "repo": "juspay/purescript-foreign-generic",
+  "revision_sha": "8a405382c9f0b18e2d73a2e55111b6fb2349876e",
+  "default_branch": "main",
+  "pushed_at": "2023-03-15T13:52:31Z",
+  "repo_updated_at": "2023-04-17T17:44:47Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "874442b79adfa1efc5157c82f016a32166551bc9fbdec20e83314f24e31f9be8",
+      "score": 120,
+      "content": "{\n  \"private\": true,\n  \"scripts\": {\n    \"clean\": \"rimraf output\",\n    \"pulp:build\": \"pulp build -- --censor-lib --strict\",\n    \"build\": \"spago build --purs-args '--censor-lib --strict'\",\n    \"pulp:test\": \"pulp test\",\n    \"test\": \"spago test\"\n  },\n  \"devDependencies\": {\n    \"purescript\": \"^0.15.6\",\n    \"purescript-psa\": \"^0.8.2\",\n    \"rimraf\": \"^2.5.0\",\n    \"spago\": \"^0.20.9\"\n  },\n  \"dependencies\": {\n    \"pulp\": \"^16.0.2\"\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "143dfe5ba3fc1f8c5f519543860b47d997067cbc6f5926e7e27ebe3a4c729e4a",
+      "score": 100,
+      "content": "# purescript-foreign-generic\n\n[![Build Status](https://travis-ci.org/paf31/purescript-foreign-generic.svg?branch=master)](https://travis-ci.org/paf31/purescript-foreign-generic)\n\nGeneric deriving for `purescript-foreign`.\n\n- [Module Documentation](generated-docs/Foreign/Generic.md)\n- [Example](test/Main.purs)\n- [Further examples in this repo](https://github.com/justinwoo/purescript-howto-foreign-generic)\n\n## Example Usage\n\nFirst, define some data type and derive `Generic`:\n\n```purescript\n> import Prelude\n> import Data.Generic.Rep (class Generic)\n> import Data.Show.Generic (genericShow)\n\n> newtype MyRecord = MyRecord { a :: Int }\n> derive instance genericMyRecord :: Generic MyRecord _\n> instance showMyRecord :: Show MyRecord where show = genericShow\n```\n\nTo encode JSON, use `genericEncodeJSON`:\n\n```purescript\n> import Foreign.Generic (defaultOptions, genericEncodeJSON)\n\n> opts = defaultOptions { unwrapSingleConstructors = true }\n\n> genericEncodeJSON opts (MyRecord { a: 1 })\n\"{\\\"a\\\":1}\"\n```\n\nAnd to decode JSON, use `genericDecodeJSON`:\n\n```purescript\n> import Control.Monad.Except (runExcept)\n> import Foreign.Generic (genericDecodeJSON)\n\n> runExcept (genericDecodeJSON opts \"{\\\"a\\\":1}\" :: _ MyRecord)\n(Right (MyRecord { a: 1 }))\n```\n\nBadly formed JSON will result in a useful error, which can be inspected or pretty-printed:\n\n```purescript\n> import Data.Bifunctor (lmap)\n> import Foreign (renderForeignError)\n\n> lmap (map renderForeignError) $ runExcept (genericDecodeJSON opts \"{\\\"a\\\":\\\"abc\\\"}\" :: _ MyRecord)\n(Left\n  (NonEmptyList\n    (NonEmpty\n      \"Error at array index 0: (ErrorAtProperty \\\"a\\\" (TypeMismatch \\\"Int\\\" \\\"String\\\"))\"\n      Nil)))\n```\n"
+    },
+    {
+      "path": "test/Types.purs",
+      "sha": null,
+      "content_sha256": "9b0312e84c62e67ee45aef43e941d62b5cfbdab106f775d83a4e3566940e077a",
+      "score": 58,
+      "content": "module Test.Types where\n\nimport Prelude\n\nimport Data.Bifunctor (class Bifunctor)\nimport Foreign (ForeignError(..), fail, readArray, unsafeToForeign)\nimport Foreign.Generic (class Encode, class Decode, Options, SumEncoding(..), encode, decode, defaultOptions, genericDecode, genericEncode)\nimport Foreign.Generic.EnumEncoding (defaultGenericEnumOptions, genericDecodeEnum, genericEncodeEnum)\nimport Foreign.Generic.Class (class DecodeWithOptions, class EncodeWithOptions)\nimport Data.Generic.Rep (class Generic)\nimport Data.Eq.Generic (genericEq)\nimport Data.Show.Generic (genericShow)\nimport Data.Maybe (Maybe)\nimport Data.Tuple (Tuple(..))\n\nnewtype TupleArray a b = TupleArray (Tuple a b)\n\nderive newtype instance bifunctorTupleArray :: Bifunctor TupleArray\n\nderive instance genericTupleArray :: Generic (TupleArray a b) _\n\ninstance showTupleArray :: (Show a, Show b) => Show (TupleArray a b) where\n  show x = genericShow x\n\ninstance eqTupleArray :: (Eq a, Eq b) => Eq (TupleArray a b) where\n  eq x y = genericEq x y\n\ninstance decodeTupleArray :: (Decode a, Decode b) => Decode (TupleArray a b) where\n  decode x = do\n    arr <- readArray x\n    case arr of\n      [y, z] -> TupleArray <$> (Tuple <$> decode y <*> decode z)\n      _ -> fail (ForeignError \"Expected two array elements\")\n\ninstance encodeTupleArray :: (Encode a, Encode b) => Encode (TupleArray a b) where\n  encode (TupleArray (Tuple a b)) = unsafeToForeign [encode a, encode b]\n\n-- | An example record\nnewtype RecordTest = RecordTest\n  { foo :: Int\n  , bar :: String\n  , baz :: Char\n  }\n\nderive instance genericRecordTest :: Generic RecordTest _\n\ninstance showRecordTest :: Show RecordTest where\n  show x = genericShow x\n\ninstance eqRecordTest :: Eq RecordTest where\n  eq x y = genericEq x y\n\ninstance decodeRecordTest :: Decode RecordTest where\n  decode x = genericDecode (defaultOptions { unwrapSingleConstructors = true }) x\n\ninstance encodeRecordTest :: Encode RecordTest where\n  encode x = genericEncode (defaultOptions { unwrapSingleConstructors = true }) x\n\n-- | An example of an ADT with nullary constructors\ndata IntList = Nil | Cons Int IntList\n\nderive instance genericIntList :: Generic IntList _\n\ninstance showIntList :: Show IntList where\n  show x = genericShow x\n\ninstance eqIntList :: Eq IntList where\n  eq x y = genericEq x y\n\nintListOptions :: Options\nintListOptions =\n  defaultOptions { unwrapSingleConstructors = true\n                 , sumEncoding = TaggedObject { tagFieldName: \"tag\"\n                                               , contentsFieldName: \"contents\"\n                                               , constructorTagTransform: \\tag -> case tag of\n                                                                                    \"Cons\" -> \"cOnS\"\n                                                                                    _ -> \"\"\n                                               }\n                 }\n\ninstance decodeIntList :: Decode IntList where\n  decode x = genericDecode intListOptions x\n\ninstance encodeIntList :: Encode IntList where\n  encode x = genericEncode intListOptions x\n\n-- | Balanced binary leaf trees\ndata Tree a = Leaf a | Branch (Tree (TupleArray a a))\n\nderive instance genericTree :: Generic (Tree a) _\n\ninstance showTree :: Show a => Show (Tree a) where\n  show x = genericShow x\n\ninstance eqTree :: Eq a => Eq (Tree a) where\n  eq x y = genericEq x y\n\ninstance decodeTree :: (Decode a, DecodeWithOptions a) => Decode (Tree a) where\n  decode x = genericDecode defaultOptions x\n\ninstance encodeTree :: (Encode a, EncodeWithOptions a) => Encode (Tree a) where\n  encode x = genericEncode defaultOptions x\n\nnewtype UndefinedTest = UndefinedTest\n  { a :: Maybe String\n  }\n\nderive instance eqUT :: Eq UndefinedTest\nderive instance geUT :: Generic UndefinedTest _\n\ninstance dUT :: Decode UndefinedTest where\n  decode = genericDecode $ defaultOptions\ninstance eUT :: Encode UndefinedTest where\n  encode = genericEncode $ defaultOptions\n\ndata Fruit\n  = Apple\n  | Banana\n  | Frikandel\n\nderive instance eqFruit :: Eq Fruit\nderive instance geFruit :: Generic Fruit _\n\ninstance dFruit :: Decode Fruit where\n  decode = genericDecodeEnum defaultGenericEnumOptions\ninstance eFruit :: Encode Fruit where\n  encode = genericEncodeEnum defaultGenericEnumOptions\n"
+    },
+    {
+      "path": "test/Main.purs",
+      "sha": null,
+      "content_sha256": "6dfe992f15b9f657f6a3ea3188c95f2f6ad2c80e4176327a9e6d9dc8019633fc",
+      "score": 58,
+      "content": "module Test.Main where\n\nimport Prelude\n\nimport Control.Monad.Except (runExcept)\nimport Data.Bifunctor (bimap)\nimport Data.Either (Either(..))\nimport Data.Generic.Rep (class Generic)\nimport Data.Maybe (Maybe(..), isNothing)\nimport Data.String (toLower, toUpper)\nimport Data.Tuple (Tuple(..))\nimport Effect (Effect)\nimport Effect.Console (log)\nimport Foreign (isNull, unsafeToForeign)\nimport Foreign.Generic (class Decode, class Encode, class GenericDecode, class GenericEncode, Options, decode, encode, defaultOptions, decodeJSON, encodeJSON, genericDecodeJSON, genericEncodeJSON)\nimport Foreign.Generic.EnumEncoding (class GenericDecodeEnum, class GenericEncodeEnum, GenericEnumOptions, genericDecodeEnum, genericEncodeEnum)\nimport Foreign.Index (readProp)\nimport Foreign.Internal.Stringify (unsafeStringify)\nimport Foreign.JSON (parseJSON)\nimport Foreign.Object as Object\nimport Test.Assert (assert, assert')\nimport Test.Types (Fruit(..), IntList(..), RecordTest(..), Tree(..), TupleArray(..), UndefinedTest(..))\n\nbuildTree :: forall a. (a -> TupleArray a a) -> Int -> a -> Tree a\nbuildTree _ 0 a = Leaf a\nbuildTree f n a = Branch $ buildTree (bimap f f) (n - 1) (f a)\n\n-- A balanced binary tree of depth N\nmakeTree :: Int -> Tree Int\nmakeTree n = buildTree (\\i -> TupleArray (Tuple (2 * i) (2 * i + 1))) n 0\n\nthrow :: String -> Effect Unit\nthrow = flip assert' false\n\ntestRoundTrip\n  :: ∀ a\n   . Eq a\n  => Decode a\n  => Encode a\n  => a\n  -> Effect Unit\ntestRoundTrip x = do\n  let json = encodeJSON x\n  log json\n  case runExcept (decodeJSON json) of\n    Right y -> assert (x == y)\n    Left err -> throw (show err)\n\ntestGenericRoundTrip\n  :: ∀ a r\n   . Eq a\n  => Generic a r\n  => GenericDecode r\n  => GenericEncode r\n  => Options\n  -> a\n  -> Effect Unit\ntestGenericRoundTrip opts x = do\n  let json = genericEncodeJSON opts x\n  log json\n  case runExcept (genericDecodeJSON opts json) of\n    Right y -> assert (x == y)\n    Left err -> throw (show err)\n\ntestOption\n  :: ∀ a rep\n   . Eq a\n  => Generic a rep\n  => GenericEncodeEnum rep\n  => GenericDecodeEnum rep\n  => GenericEnumOptions\n  -> String\n  -> a\n  -> Effect Unit\ntestOption options string value = do\n  let json = unsafeStringify $ genericEncodeEnum options value\n  log json\n  case runExcept $ Tuple <$> decode' json <*> decode' string of\n    Right (Tuple x y) -> assert (value == y && value == x)\n    Left err -> throw (show err)\n  where\n    decode' = genericDecodeEnum options <=< parseJSON\n\ntestUnaryConstructorLiteral :: Effect Unit\ntestUnaryConstructorLiteral = do\n    testOption (makeCasingOptions toUpper) \"\\\"FRIKANDEL\\\"\" Frikandel\n    testOption (makeCasingOptions toLower) \"\\\"frikandel\\\"\" Frikandel\n  where\n    makeCasingOptions f =\n      { constructorTagTransform: f\n      }\n\n-- Test that `Nothing` record fields, when encoded to JSON, are present and\n-- encoded as `null`\ntestNothingToNull :: Effect Unit\ntestNothingToNull =\n  let\n    json = encode (UndefinedTest {a: Nothing})\n  in do\n    log (encodeJSON json)\n    case runExcept (pure json >>= readProp \"contents\" >>= readProp \"a\") of\n      Right val ->\n        when (not (isNull val))\n          (throw (\"property 'a' was not null; got: \" <> encodeJSON val))\n      Left err ->\n        throw (show err)\n\n-- Test that `Maybe` fields which are not present in the JSON are decoded to\n-- `Nothing`\ntestNothingFromMissing :: Effect Unit\ntestNothingFromMissing =\n  let\n    json = unsafeToForeign\n            { tag: \"UndefinedTest\"\n            , contents: 0\n            }\n  in\n    case runExcept (decode json) of\n      Right (UndefinedTest x) ->\n        when (not (isNothing x.a))\n          (throw (\"Expected Nothing, got: \" <> show x.a))\n      Left err ->\n        throw (show err)\n\nmain :: Effect Unit\nmain = do\n  testRoundTrip (RecordTest { foo: 1, bar: \"test\", baz: 'a' })\n  testRoundTrip (Cons 1 (Cons 2 (Cons 3 Nil)))\n  testRoundTrip (UndefinedTest {a: Just \"test\"})\n  testRoundTrip (UndefinedTest {a: Nothing})\n  testRoundTrip [Just \"test\"]\n  testRoundTrip [Nothing :: Maybe String]\n  testRoundTrip (Apple)\n  testRoundTrip (makeTree 0)\n  testRoundTrip (makeTree 5)\n  testRoundTrip (Object.fromFoldable [Tuple \"one\" 1, Tuple \"two\" 2])\n  testUnaryConstructorLiteral\n  let opts = defaultOptions { fieldTransform = toUpper }\n  testGenericRoundTrip opts (RecordTest { foo: 1, bar: \"test\", baz: 'a' })\n  testNothingToNull\n  testNothingFromMissing\n"
+    },
+    {
+      "path": "bower.json",
+      "sha": null,
+      "content_sha256": "eba04f69519464a87897325b4ba581b7c1aeda277b277fa25e6949e1956926e6",
+      "score": 35,
+      "content": "{\n  \"name\": \"purescript-foreign-generic\",\n  \"moduleType\": [\n    \"node\"\n  ],\n  \"ignore\": [\n    \"**/.*\",\n    \"node_modules\",\n    \"bower_components\",\n    \".spago\",\n    \"output\"\n  ],\n  \"license\": \"MIT\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git://github.com/paf31/purescript-foreign-generic.git\"\n  },\n  \"dependencies\": {\n    \"purescript-effect\": \"^4.0.0\",\n    \"purescript-foreign\": \"^7.0.0\",\n    \"purescript-foreign-object\": \"v4.1.0\",\n    \"purescript-exceptions\": \"^6.0.0\",\n    \"purescript-record\": \"^4.0.0\",\n    \"purescript-identity\": \"^6.0.0\"\n  },\n  \"devDependencies\": {\n    \"purescript-assert\": \"^6.0.0\",\n    \"purescript-psci-support\": \"^6.0.0\"\n  }\n}\n"
+    },
+    {
+      "path": ".travis.yml",
+      "sha": null,
+      "content_sha256": "db7ad45afaa29326a3e5e123da04db37a4d2f5763640c76267f5d31bc3acfcb8",
+      "score": 35,
+      "content": "language: node_js\ndist: trusty\nsudo: required\nnode_js: stable\ninstall:\n  - npm install -g bower\n  - npm install\nscript:\n  - bower install --production\n  - npm run -s build\n  - bower install\n  - npm run -s test\n"
+    },
+    {
+      "path": "src/Foreign/NullOrUndefined.js",
+      "sha": null,
+      "content_sha256": "b09777903e4103877eb9741b6b9cb21ab6ef5ac972e857c1170a09293803183c",
+      "score": 31,
+      "content": "export const nullImpl = null;\n\nexport const undefinedImpl = undefined;\n"
+    },
+    {
+      "path": "src/Foreign/JSON.js",
+      "sha": null,
+      "content_sha256": "524033e2d6385a69e2f78b5a8130bc8190ff62d8228f4694a103ae2f626974c2",
+      "score": 31,
+      "content": "\"use strict\";\n\nexport const parseJSONImpl = function (str) {\n  return JSON.parse(str);\n};\n"
+    },
+    {
+      "path": "src/Foreign/Internal/Stringify.js",
+      "sha": null,
+      "content_sha256": "1deb66be7f7db57dc219bec35b51b5218469bc4eaccc2c8edf4935490145f258",
+      "score": 29,
+      "content": "export const unsafeStringify = function (x) {\n  return JSON.stringify(x);\n};\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:11.827811+00:00"
+}

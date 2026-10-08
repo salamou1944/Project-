@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:juspay/vira",
+  "repo": "juspay/vira",
+  "revision_sha": "2dc5c1572f34af61b49aa99e6638a457c7d6079c",
+  "default_branch": "main",
+  "pushed_at": "2026-05-14T17:46:30Z",
+  "repo_updated_at": "2026-09-17T06:10:47Z",
+  "license": "AGPL-3.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "packages/vira-ci-types/README.md",
+      "sha": null,
+      "content_sha256": "e1be441a0598f43753b8805c3b66e13535da0fa71b1a5dc53203152db5dd16ba",
+      "score": 168,
+      "content": "# vira-ci-types\n\nThis package contains CI-specific types and data structures for vira. It is separated into its own package to allow importing in hint configuration files without bringing in the entire vira dependency tree.\n\nThe package includes:\n\n- `Vira.CI.Context` - CI context types\n- `Vira.CI.Pipeline.Type` - Pipeline type definitions\n\nThis lightweight package enables hint-based configuration while maintaining clean dependency boundaries.\n"
+    },
+    {
+      "path": "packages/htmx-lucid-contrib/README.md",
+      "sha": null,
+      "content_sha256": "0540b767679b873850eb3e1c45d4e35270cbc8e4b07a962262c6ee707985baeb",
+      "score": 168,
+      "content": "# htmx-lucid-contrib\n\nAdditional utilities for HTMX with Lucid2 HTML generation (candidates for upstreaming to htmx-lucid).\n"
+    },
+    {
+      "path": "packages/nix-cache-server/README.md",
+      "sha": null,
+      "content_sha256": "a65bf42526dfaebb87f1cac0540f0c49048e41ad47724e94f14282da231fd114",
+      "score": 154,
+      "content": "# nix-cache-server\n\nMinimal WAI application wrapper around [nix-serve-ng](https://github.com/aristanetworks/nix-serve-ng) for serving Nix binary caches.\n\n## What it provides\n\n- `makeCacheServer`: Creates a WAI application that serves Nix binary cache protocol\n- `cacheMiddleware`: Mounts the cache at a path prefix (e.g., `/cache/*`)\n\n## How it uses nix-serve-ng\n\nThis package is a thin wrapper that:\n\n1. Initializes the Nix store using the `nix` Haskell library\n2. Configures `nix-serve-ng` with store path and signing keys\n3. Returns a WAI `Application` that handles standard Nix cache endpoints:\n   - `/nix-cache-info` - Cache metadata\n   - `/*.narinfo` - NAR info files\n   - `/nar/*.nar` - NAR archives\n\nAll Nix protocol handling and NAR signing is delegated to `nix-serve-ng`.\n\n## Usage\n\n```haskell\nimport System.Nix.Cache.Server\nimport System.Nix.Cache.Keys\n\n-- Load or generate cache signing keys\nkeys <- ensureCacheKeys \"/path/to/keys\"\n\n-- Create cache application\ncacheApp <- makeCacheServer keys.secretKey\n\n-- Mount at /cache/* in your WAI server\nlet app = cacheMiddleware \"cache\" cacheApp mainApp\n```\n"
+    },
+    {
+      "path": ".github/workflows/website.yaml",
+      "sha": null,
+      "content_sha256": "e0e791999e8f663f75e2fd69a4d79824e5ea7a95f897592fae92c42c9bc8aa47",
+      "score": 126,
+      "content": "name: \"Website\"\non:\n  push:\n    branches:\n      - main\n\n# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages\npermissions:\n  contents: read\n  pages: write\n  id-token: write\n# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.\n# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.\nconcurrency:\n  group: \"pages\"\n  cancel-in-progress: false\n\njobs:\n  build-website:\n    runs-on: x86_64-linux\n    steps:\n      - uses: actions/checkout@v4\n      - name: Build the website (Nix) 🔧\n        run: |\n          cd ./doc && nix build -o ../_site\n      - name: Upload artifact\n        uses: actions/upload-pages-artifact@v3\n  deploy-website:\n    environment:\n      name: github-pages\n      url: ${{ steps.deployment.outputs.page_url }}\n    runs-on: ubuntu-latest\n    needs: build-website\n    steps:\n      - name: Deploy to GitHub Pages\n        id: deployment\n        uses: actions/deploy-pages@v4\n"
+    },
+    {
+      "path": "packages/stm-circular-buffer/test/Spec.hs",
+      "sha": null,
+      "content_sha256": "2fbd14b119a40eaca54f6255686c7cfbe8ff26a9c18d79ec474a61225232d324",
+      "score": 126,
+      "content": "{-# OPTIONS_GHC -F -pgmF hspec-discover #-}\n"
+    },
+    {
+      "path": "packages/vira/test/Vira/CI/WorkerSpec.hs",
+      "sha": null,
+      "content_sha256": "6353953394797f5092ed69c1d7469480127f3ee34687a01d437e57a755ed1247",
+      "score": 122,
+      "content": "{-# LANGUAGE OverloadedRecordDot #-}\n\nmodule Vira.CI.WorkerSpec (spec) where\n\nimport Data.Time (UTCTime (..), fromGregorian, secondsToDiffTime)\nimport Effectful.Git (BranchName (..), CommitID (..), RepoName (..))\nimport Test.Hspec hiding (pending)\nimport Vira.State.Acid (ActiveJobs (..))\nimport Vira.State.Type (Job (..), JobId (..), JobStatus (..))\n\n-- Import internal function for testing\nimport Vira.CI.Worker (selectJobsToStart)\n\n-- Visual bindings for job statuses\n(🏃) :: JobStatus\n(🏃) = JobRunning\n\n(⏳) :: JobStatus\n(⏳) = JobPending\n\n____ :: Bool\n____ = False\n\nspec :: Spec\nspec = describe \"Vira.CI.Worker\" $ do\n  describe \"selectJobsToStart\" $ do\n    it \"respects max concurrent limit\" $\n      runBuildQueueTest\n        2\n        [ ((🏃), ____, \"test-repo\", \"main\")\n        , ((🏃), ____, \"test-repo\", \"dev\")\n        , ((⏳), ____, \"test-repo\", \"feature\")\n        , ((⏳), ____, \"test-repo\", \"hotfix\")\n        ]\n\n    it \"fills available slots with FIFO order\" $\n      runBuildQueueTest\n        3\n        [ ((🏃), ____, \"test-repo\", \"main\")\n        , ((⏳), True, \"test-repo\", \"dev\")\n        , ((⏳), True, \"test-repo\", \"feature\")\n        , ((⏳), ____, \"test-repo\", \"hotfix\")\n        ]\n\n    it \"starts all pending when under limit\" $\n      runBuildQueueTest\n        5\n        [ ((⏳), True, \"test-repo\", \"main\")\n        , ((⏳), True, \"test-repo\", \"dev\")\n        ]\n\n    it \"allows max 1 running job per (repo, branch) pair\" $\n      runBuildQueueTest\n        3\n        [ ((🏃), ____, \"test-repo\", \"main\")\n        , ((⏳), ____, \"test-repo\", \"main\") -- blocked by running main\n        , ((⏳), True, \"test-repo\", \"dev\")\n        ]\n\n-- Run a build queue test with given max concurrent limit and job specs\nrunBuildQueueTest :: Int -> [(JobStatus, Bool, RepoName, BranchName)] -> IO ()\nrunBuildQueueTest maxConcurrent specs = do\n  let jobs = mkJobs specs\n      activeJobs = mkActiveJobs (partitionJobs jobs)\n      result = selectJobsToStart maxConcurrent activeJobs\n  result `shouldBe` expectedToStart specs jobs\n\n-- Build jobs with auto-incrementing IDs and timestamps\n-- The Bool indicates whether the job is expected to be started\nmkJobs :: [(JobStatus, Bool, RepoName, BranchName)] -> [Job]\nmkJobs specs = flip evalState 1 $ forM specs $ \\(status, _, repo, branch) -> do\n  n <- get\n  put (n + 1)\n  let time = UTCTime (fromGregorian 2025 1 1) (secondsToDiffTime ((n - 1) * 100))\n  pure $\n    Job\n      { repo\n      , branch\n      , commit = CommitID \"abc123\"\n      , jobId = JobId (fromIntegral n)\n      , jobWorkingDir = \"/tmp/job/\" <> show n\n      , jobStatus = status\n      , jobCreatedTime = time\n      }\n\n-- Extract expected jobs to start based on the Bool flag\nexpectedToStart :: [(JobStatus, Bool, RepoName, BranchName)] -> [Job] -> [Job]\nexpectedToStart specs allJobs = [job | (job, (_, shouldStart, _, _)) <- zip allJobs specs, shouldStart]\n\n-- Helper to partition jobs by status\npartitionJobs :: [Job] -> ([Job], [Job])\npartitionJobs jobs = (running, queued)\n  where\n    running = filter (\\j -> case j.jobStatus of JobRunning -> True; _ -> False) jobs\n    queued = filter (\\j -> case j.jobStatus of JobPending -> True; _ -> False) jobs\n\n-- Convert partition to ActiveJobs\nmkActiveJobs :: ([Job], [Job]) -> ActiveJobs\nmkActiveJobs (running, pending) = ActiveJobs {running, pending}\n"
+    },
+    {
+      "path": "packages/vira/test/Vira/CI/ConfigurationSpec.hs",
+      "sha": null,
+      "content_sha256": "298827d6ef0b641a522c87b683d0d4aa9c122a68ef48733f855d9efecc0f75dc",
+      "score": 122,
+      "content": "{-# LANGUAGE OverloadedRecordDot #-}\n{-# LANGUAGE OverloadedStrings #-}\n\nmodule Vira.CI.ConfigurationSpec (spec) where\n\nimport Data.Time (UTCTime (UTCTime), fromGregorian, secondsToDiffTime)\nimport Effectful.Git (BranchName (..), Commit (..), CommitID (..), RepoName (..))\nimport Paths_vira (getDataFileName)\nimport Test.Hspec\nimport Vira.CI.Configuration\nimport Vira.CI.Context (CIMode (..), ViraContext (..))\nimport Vira.CI.Pipeline.Implementation (defaultPipeline)\nimport Vira.CI.Pipeline.Type (BuildStage (..), Flake (..), NixConfig (..), SignoffStage (..), ViraPipeline (..), validateNixOptions)\nimport Vira.State.Type (Branch (..))\nimport Prelude hiding (id)\n\n-- Test data\ntestBranchStaging :: Branch\ntestBranchStaging =\n  Branch\n    { repoName = RepoName \"test-repo\"\n    , branchName = BranchName \"staging\"\n    , headCommit =\n        Commit\n          { id = CommitID \"abc123\"\n          , message = \"Test commit\"\n          , date = UTCTime (fromGregorian 2024 1 1) (secondsToDiffTime 0)\n          , author = \"Test Author\"\n          , authorEmail = \"test@example.com\"\n          }\n    , deleted = False\n    }\n\ntestContextStaging :: ViraContext\ntestContextStaging =\n  ViraContext\n    { branch = testBranchStaging.branchName\n    , ciMode = FullBuild\n    , commitId = testBranchStaging.headCommit.id\n    , cloneUrl = Just \"https://example.com/test-repo.git\"\n    , repoDir = \"/tmp/test-repo\"\n    }\n\nspec :: Spec\nspec = describe \"Vira.CI.Configuration\" $ do\n  describe \"applyConfig\" $ do\n    it \"applies valid config correctly\" $ do\n      configPath <- getDataFileName \"test/sample-configs/simple-example.hs\"\n      configCode <- decodeUtf8 <$> readFileBS configPath\n      result <- applyConfig configCode testContextStaging defaultPipeline\n      case result of\n        Right pipeline -> do\n          pipeline.signoff.enable `shouldBe` True\n          let (rootFlake :| _) = pipeline.build.flakes\n          rootFlake.path `shouldBe` \".\"\n          rootFlake.overrideInputs `shouldBe` [(\"local\", \"github:boolean-option/false\")]\n        Left err -> expectationFailure $ \"Config application failed: \" <> show err\n\n    it \"applies nix options correctly\" $ do\n      configPath <- getDataFileName \"test/sample-configs/nix-options-example.hs\"\n      configCode <- decodeUtf8 <$> readFileBS configPath\n      result <- applyConfig configCode testContextStaging defaultPipeline\n      case result of\n        Right pipeline -> do\n          pipeline.nix.options\n            `shouldBe` ( [ (\"sandbox\", \"relaxed\")\n                         , (\"cores\", \"4\")\n                         , (\"max-jobs\", \"2\")\n                         , (\"allow-import-from-derivation\", \"true\")\n                         ] ::\n                           [(Text, Text)]\n                       )\n        Left err -> expectationFailure $ \"Config application failed: \" <> show err\n\n  describe \"validateNixOptions\" $ do\n    it \"accepts all whitelisted options\" $ do\n      let opts = [(\"sandbox\", \"relaxed\"), (\"cores\", \"4\"), (\"max-jobs\", \"2\"), (\"allow-import-from-derivation\", \"true\")]\n      validateNixOptions opts `shouldBe` []\n\n    it \"rejects disallowed options\" $ do\n      let opts = [(\"sandbox\", \"relaxed\"), (\"access-tokens\", \"secret\")]\n      validateNixOptions opts `shouldBe` [\"access-tokens\"]\n\n    it \"returns empty for empty options\" $ do\n      validateNixOptions [] `shouldBe` []\n"
+    },
+    {
+      "path": "packages/vira/test/Vira/CI/Pipeline/ImplementationSpec.hs",
+      "sha": null,
+      "content_sha256": "c4887e21f613eeecaddab38dc396157d17455e13ab58cf44eb3baf859122ea3c",
+      "score": 120,
+      "content": "{-# LANGUAGE OverloadedStrings #-}\n\nmodule Vira.CI.Pipeline.ImplementationSpec (spec) where\n\nimport Control.Exception (finally)\nimport Data.List (lookup)\nimport Effectful.Git (BranchName (..), CommitID (..))\nimport LogSink (Sink (..))\nimport System.Directory (removeFile)\nimport System.Environment (setEnv, unsetEnv)\nimport System.IO (hClose, openTempFile)\nimport System.Posix.Files (ownerExecuteMode, ownerReadMode, ownerWriteMode, setFileMode, unionFileModes)\nimport Test.Hspec\nimport Vira.CI.Context (CIMode (..), ViraContext (..))\nimport Vira.CI.Pipeline.PostBuildHook (HookError (..), hookEnvVars, runHook)\nimport Prelude hiding (id)\n\n-- | Sink that throws away anything written, for tests that don't inspect subprocess output.\ndiscardSink :: Sink Text\ndiscardSink = Sink {sinkWrite = const pass, sinkFlush = pass, sinkClose = pass}\n\n-- | Write @body@ to a fresh temp file, mark it user-executable, and return its path.\nwriteTempScript :: Text -> IO FilePath\nwriteTempScript body = do\n  (path, h) <- openTempFile \"/tmp\" \"vira-hook-script.sh\"\n  hClose h\n  writeFileBS path (encodeUtf8 body)\n  setFileMode path (ownerReadMode `unionFileModes` ownerWriteMode `unionFileModes` ownerExecuteMode)\n  pure path\n\n-- Test data\ntestContext :: ViraContext\ntestContext =\n  ViraContext\n    { branch = BranchName \"main\"\n    , ciMode = FullBuild\n    , commitId = CommitID \"deadbeef\"\n    , cloneUrl = Just \"https://example.com/test-repo.git\"\n    , repoDir = \"/tmp\"\n    }\n\nspec :: Spec\nspec = describe \"Vira.CI.Pipeline.Implementation\" $ do\n  describe \"hookEnvVars\" $ do\n    it \"sets VIRA_BRANCH from context\" $ do\n      let vars = hookEnvVars testContext\n      lookup \"VIRA_BRANCH\" vars `shouldBe` Just \"main\"\n\n    it \"sets VIRA_COMMIT_ID from context\" $ do\n      let vars = hookEnvVars testContext\n      lookup \"VIRA_COMMIT_ID\" vars `shouldBe` Just \"deadbeef\"\n\n    it \"sets VIRA_REPO_CLONE_URL to the raw clone URL\" $ do\n      let vars = hookEnvVars testContext\n      lookup \"VIRA_REPO_CLONE_URL\" vars `shouldBe` Just \"https://example.com/test-repo.git\"\n\n    it \"omits VIRA_REPO_CLONE_URL when cloneUrl is absent\" $ do\n      let vars = hookEnvVars testContext {cloneUrl = Nothing}\n      lookup \"VIRA_REPO_CLONE_URL\" vars `shouldBe` Nothing\n\n  describe \"runHook\" $ do\n    it \"returns Right () for a successful script\" $ do\n      script <- writeTempScript \"#!/bin/sh\\nexit 0\\n\"\n      result <- runHook script [] \"/tmp\" discardSink Nothing `finally` removeFile script\n      result `shouldBe` Right ()\n\n    it \"returns Left with the exit code for a failing script\" $ do\n      script <- writeTempScript \"#!/bin/sh\\nexit 1\\n\"\n      result <- runHook script [] \"/tmp\" discardSink Nothing `finally` removeFile script\n      result `shouldBe` Left (HookExited 1)\n\n    it \"passes environment variables to the script\" $ do\n      (outPath, outHandle) <- openTempFile \"/tmp\" \"vira-hook-out\"\n      hClose outHandle\n      script <- writeTempScript $ \"#!/bin/sh\\necho \\\"$VIRA_BRANCH\\\" > \" <> toText outPath <> \"\\n\"\n      ( do\n          result <- runHook script [(\"VIRA_BRANCH\", \"staging\")] \"/tmp\" discardSink Nothing\n          result `shouldBe` Right ()\n          content <- readFileBS outPath\n          decodeUtf8 content `shouldContain` \"staging\"\n        )\n        `finally` (removeFile script >> removeFile outPath)\n\n    it \"times out when the script runs longer than the limit\" $ do\n      script <- writeTempScript \"#!/bin/sh\\nsleep 5\\n\"\n      result <- runHook script [] \"/tmp\" discardSink (Just 200_000) `finally` removeFile script\n      case result of\n        Left (HookTimedOut _) -> pass\n        Left other -> expectationFailure $ \"Expected HookTimedOut, got \" <> show other\n        Right () -> expectationFailure \"Expected timeout, hook returned Right ()\"\n\n    it \"hook envVars override the inherited environment\" $ do\n      let varName = \"VIRA_TEST_PARENT_OVERRIDE_XYZ\"\n      setEnv varName \"from-parent\"\n      (outPath, outHandle) <- openTempFile \"/tmp\" \"vira-hook-out\"\n      hClose outHandle\n      script <- writeTempScript $ \"#!/bin/sh\\necho \\\"$\" <> toText varName <> \"\\\" > \" <> toText outPath <> \"\\n\"\n      ( do\n          result <- runHook script [(toText varName, \"from-hook\")] \"/tmp\" discardSink Nothing\n          result `shouldBe` Right ()\n          content <- readFileBS outPath\n          decodeUtf8 content `shouldContain` \"from-hook\"\n        )\n        `finally` (removeFile script >> removeFile outPath >> unsetEnv varName)\n"
+    },
+    {
+      "path": "packages/stm-circular-buffer/test/Control/Concurrent/STM/CircularBufferSpec.hs",
+      "sha": null,
+      "content_sha256": "9a9ee9201de2f446664bd957d98839826483197a1a8a3583676aaa78fce35729",
+      "score": 120,
+      "content": "{-# LANGUAGE TypeApplications #-}\n\nmodule Control.Concurrent.STM.CircularBufferSpec where\n\nimport Control.Concurrent.STM.CircularBuffer qualified as CB\nimport Test.Hspec\n\nspec :: Spec\nspec = describe \"CircularBuffer\" $ do\n  it \"adds and drains items\" $ do\n    result <- atomically $ do\n      buf <- CB.new @String 5\n      CB.add \"first\" buf\n      CB.add \"second\" buf\n      CB.drain buf\n    result `shouldBe` Just (\"first\" :| [\"second\"])\n\n  it \"drops oldest when full\" $ do\n    result <- atomically $ do\n      buf <- CB.new @String 2\n      CB.add \"1\" buf\n      CB.add \"2\" buf\n      CB.add \"3\" buf -- Drops \"1\"\n      CB.drain buf\n    result `shouldBe` Just (\"2\" :| [\"3\"])\n\n  it \"returns Nothing when closed\" $ do\n    result <- atomically $ do\n      buf <- CB.new @String 5\n      CB.close buf\n      CB.drain buf\n    result `shouldBe` Nothing\n\n  it \"clone copies items to new buffer\" $ do\n    (original, cloned) <- atomically $ do\n      buf <- CB.new @String 3\n      CB.add \"a\" buf\n      CB.add \"b\" buf\n      clonedBuf <- CB.clone buf\n      o <- CB.drain buf\n      c <- CB.drain clonedBuf\n      pure (o, c)\n    original `shouldBe` Just (\"a\" :| [\"b\"])\n    cloned `shouldBe` Just (\"a\" :| [\"b\"])\n"
+    },
+    {
+      "path": ".codex/agents/lowy.toml",
+      "sha": null,
+      "content_sha256": "c57b72c43687ef255a4490f65984fe556325cb9847a5626e43c2a7addea049e4",
+      "score": 106,
+      "content": "name = \"lowy\"\ndescription = \"Evaluate architecture and module boundaries for volatility-based decomposition using Juval Lowy's framework (from \\\"Righting Software\\\", building on Parnas 1972). Use when reviewing module splits, service boundaries, new abstractions, or any decomposition decision. Trigger on phrases like \\\"where should this boundary be\\\", \\\"how to split this\\\", \\\"module boundaries\\\", \\\"encapsulate change\\\", \\\"volatility\\\", or references to Lowy, Parnas, or \\\"Righting Software\\\". Complements hickey (interleaved concerns) with a different lens (change encapsulation).\"\ndeveloper_instructions = \"# Lowy sub-agent\\n\\nYou are the lowy reviewer. Invoke the `lowy` skill (via the `Skill` tool, `skill: \\\"lowy\\\"`) on whatever task, diff, or decomposition decision the caller hands you, then return the findings exactly in the Output Format that skill specifies. The skill holds the methodology and is the single source of truth — do not paraphrase, summarize, or reimplement any of its steps here; just delegate.\"\n"
+    },
+    {
+      "path": ".codex/agents/hickey.toml",
+      "sha": null,
+      "content_sha256": "f508bacedcac2916cf1e29a11f2ac161483ffc2acf182c8f1c00c26d14073c00",
+      "score": 106,
+      "content": "name = \"hickey\"\ndescription = \"Evaluate code (especially LLM-generated) for structural simplicity using Rich Hickey's \\\"Simple Made Easy\\\" framework. Use this agent whenever reviewing a PR, diff, or code snippet for accidental complexity — particularly when the code was generated by an AI coding assistant and line-by-line review isn't feasible. Also use when the user asks about complecting, simplicity vs. easiness, structural coupling, or concept deduplication. Trigger on phrases like \\\"is this simple\\\", \\\"does this complect\\\", \\\"review for complexity\\\", \\\"structural analysis\\\", or any reference to Hickey, Simple Made Easy, or grey-box review.\"\ndeveloper_instructions = \"# Hickey sub-agent\\n\\nYou are the hickey reviewer. Invoke the `hickey` skill (via the `Skill` tool, `skill: \\\"hickey\\\"`) on whatever task, diff, or code the caller hands you, then return the findings exactly in the Output Format that skill specifies. The skill holds the methodology and is the single source of truth — do not paraphrase, summarize, or reimplement any of its steps here; just delegate.\"\n"
+    },
+    {
+      "path": "packages/acid-state-events/package.yaml",
+      "sha": null,
+      "content_sha256": "37f9937af1613328b4001f0e4a9d7bfda33390daca1e73ede07ed10083cbcb61",
+      "score": 103,
+      "content": "defaults:\n  - local: ../../hpack-common.yaml\n\nname: acid-state-events\nversion: 0.1.0.0\nsynopsis: Generic event bus for acid-state applications\ndescription: |\n  A generic event bus implementation for acid-state applications.\n  Provides publish/subscribe with event logging and replay capabilities.\ncategory: Database\nhomepage: https://github.com/juspay/vira/tree/main/packages/acid-state-events\nlicense: MIT\ncopyright: 2025 Sridhar Ratnakumar\nauthor: Sridhar Ratnakumar\nmaintainer: srid@srid.ca\n\ndependencies:\n  - acid-state\n  - stm\n  - containers\n  - time\n\nlibrary:\n  source-dirs: src\n  dependencies: []\n"
+    },
+    {
+      "path": "packages/vira-ci-types/package.yaml",
+      "sha": null,
+      "content_sha256": "0de809a2ed51d0f25eecef0b2e4d69d8027ed7da0066a373ce6ac9988575d09d",
+      "score": 103,
+      "content": "defaults:\n  - local: ../../hpack-common.yaml\n  - local: ../../hpack-relude.yaml\n\nname: vira-ci-types\nversion: 0.1.0.0\nlicense: AGPL-3.0-or-later\ncopyright: 2024 Juspay\nmaintainer: srid@srid.ca\nauthor: Sridhar Ratnakumar\ncategory: Web\nhomepage: https://github.com/juspay/vira\nsynopsis: Vira CI-specific types\ndescription: CI-specific types and data structures for vira, separated for use in hint configuration\n\ndependencies:\n  - aeson\n  - attic\n  - base16-bytestring\n  - bytestring\n  - containers\n  - data-default\n  - deriving-aeson\n  - effectful\n  - effectful-core\n  - filepath\n  - git-effectful\n  - http-api-data\n  - ixset-typed\n  - modern-uri\n  - nix\n  - optics-core\n  - optics-th\n  - safecopy\n  - servant\n  - text\n  - time\n  - record-hasfield\n\nlibrary:\n  source-dirs: src\n"
+    },
+    {
+      "path": "packages/htmx-lucid-contrib/package.yaml",
+      "sha": null,
+      "content_sha256": "48fd40a7c0d505f0bb65a66750ac0f2174deabc4f3ff4978f96c42b446a7e307",
+      "score": 103,
+      "content": "defaults:\n  - local: ../../hpack-common.yaml\n  - local: ../../hpack-relude.yaml\n\nname: htmx-lucid-contrib\nversion: 0.1.0.0\nlicense: MIT\ncopyright: 2024 Juspay\nmaintainer: srid@srid.ca\nauthor: Sridhar Ratnakumar\ncategory: Web\nsynopsis: Additional HTMX utilities for Lucid (upstream candidates)\ndescription: Additional utilities for working with HTMX and Lucid that are candidates for upstreaming to htmx-lucid\n\ndependencies:\n  - htmx\n  - htmx-lucid\n  - lucid2\n  - servant\n  - servant-server\n  - text\n\nlibrary:\n  source-dirs: src\n"
+    },
+    {
+      "path": "packages/stm-circular-buffer/package.yaml",
+      "sha": null,
+      "content_sha256": "2df2abbe8d2842a905b3b711f845d5628df038d2ed37495d6d977a99fd1173f9",
+      "score": 103,
+      "content": "defaults:\n  - local: ../../hpack-common.yaml\n  - local: ../../hpack-relude.yaml\n\nname: stm-circular-buffer\nversion: 0.1.0.0\nlicense: MIT\ncopyright: 2026 Sridhar Ratnakumar\nmaintainer: srid@srid.ca\nauthor: Sridhar Ratnakumar\ncategory: Concurrency\nhomepage: https://github.com/juspay/vira/tree/main/packages/stm-circular-buffer\nsynopsis: Circular buffer with drop-oldest semantics using STM\ndescription: |\n  A circular buffer implementation using STM TBMQueue with drop-oldest semantics.\n  When the buffer is full, adding new items causes the oldest items to be dropped.\n\ndependencies:\n  - stm\n  - stm-chans\n\nlibrary:\n  source-dirs: src\n\ntests:\n  stm-circular-buffer-test:\n    main: Spec.hs\n    source-dirs: test\n    ghc-options:\n      - -threaded\n      - -rtsopts\n      - -with-rtsopts=-N\n    dependencies:\n      - stm-circular-buffer\n      - hspec\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "6c862f53c28e204bbd47373810435b3dff9acd6455187147e8b240cb9b39b320",
+      "score": 100,
+      "content": "# vira\n\n_/வீரா/_\n\nNo-frills CI for teams using Nix.\n\n<img src=\"https://raw.githubusercontent.com/juspay/vira/refs/heads/main/packages/vira/static/vira-logo.svg\" style=\"height: 64px;\" />\n\n## Usage\n\n> [!WARNING]\n> The project is currently in beta stage. Contact [@srid](https://github.com/srid) for details. See <https://vira.nixos.asia/> for full documentation.\n\n```sh\nnix --accept-flake-config run github:juspay/vira -- web --port 5005\n```\n\nYou can now add your repositories in the web app.\n\n## Development\n\n```sh\n# Run the development server (HTTPS)\njust run\n\n# Or, if you need to start from empty database (useful if you have changed the acid-state types)\n# NOTE: This won't delete TLS certs.\njust resetdb run\n```\n\n## Contributing\n\nSee <https://vira.nixos.asia/contrib>\n"
+    },
+    {
+      "path": ".agency/README.md",
+      "sha": null,
+      "content_sha256": "e70ba7131042afdf4f5df491eb87ec14e2d384bb9b3e05233fffff585f8548bc",
+      "score": 98,
+      "content": "# .agency/\n\nProject-specific config for [agency](https://agency.srid.ca/) skills.\n"
+    },
+    {
+      "path": "packages/README",
+      "sha": null,
+      "content_sha256": "6c1eb02b62e22d32a28dc93f191c0882f7e4f465373d08e9c0b7b903ac1cc0eb",
+      "score": 98,
+      "content": "When adding or removing a package here, please also update:\n\n- cabal-repl\n- cabal.project\n"
+    },
+    {
+      "path": "packages/vira/README.md",
+      "sha": null,
+      "content_sha256": "e19668127a02602d5a8b65f3ce72f827abf10837237fdd7335e93b6ce18c51a4",
+      "score": 96,
+      "content": "The main Haskell package for Vira application. See repo-root README.md for more information.\n"
+    },
+    {
+      "path": "packages/git-effectful/README.md",
+      "sha": null,
+      "content_sha256": "978b180befd73f71ffd290f782af788a24b25fb416cd33cb3231ac8e414d96fe",
+      "score": 96,
+      "content": "# git-effectful\n\nA Haskell library for Git operations using the [effectful](https://hackage.haskell.org/package/effectful) effect system.\n\n## Example\n\n```haskell\nimport Effectful.Git\n\n-- Fetch remote branches\nbranches <- remoteBranches \"https://github.com/user/repo.git\"\n\n-- Access commit information\nlet commits = Map.elems branches\nlet firstCommit = head commits\nputStrLn $ commitMessage firstCommit\n```\n"
+    },
+    {
+      "path": "packages/nix/README.md",
+      "sha": null,
+      "content_sha256": "d01652e6f550020a234faa71d376e8442cbbd4b6d884f72af6181b555d7b572e",
+      "score": 96,
+      "content": "# nix\n\nHaskell wrapper for the Nix CLI providing a clean API for interacting with Nix commands and environments.\n\n> [!NOTE]\n> Work in progress. More features will be added.\n"
+    },
+    {
+      "path": "packages/co-log-effectful-simple/README.md",
+      "sha": null,
+      "content_sha256": "517e62c7517057ac405bcf1afedba83d9ab44f7bb2ff99708ee7b8b2d550beaa",
+      "score": 96,
+      "content": "# co-log-effectful-simple\n\nSimple context-aware logging for [co-log](https://hackage.haskell.org/package/co-log) with [effectful](https://hackage.haskell.org/package/effectful).\n\n## Overview\n\nThis library combines `co-log`'s `RichMessage` with `effectful`'s `Reader` effect to provide context-aware structured logging with minimal ceremony.\n\n## Features\n\n- **Context accumulation**: Add key-value pairs that automatically propagate to nested operations\n- **Thread labeling**: Tag threads with human-readable labels for better debugging\n- **Rich formatting**: Timestamps, severity colors, thread IDs, and custom context in log output\n- **Composable effects**: Uses standard `Log (RichMessage IO)` and `Reader LogContext` effects\n\n## Usage\n\n```haskell\nimport Effectful.Colog.Simple\n\nmain :: IO ()\nmain = runEff . runLogActionStdout Info $ do\n  log Info \"Starting application\"\n\n  withLogContext [(\"user\", \"alice\"), (\"action\", \"login\")] $ do\n    log Info \"Processing request\"  -- Includes {user=alice, action=login}\n\n    withLogContext [(\"step\", \"validate\")] $ do\n      log Debug \"Checking credentials\"  -- Includes all three context pairs\n```\n\n## API\n\n### Logging\n\n- `log :: Severity -> Text -> Eff es ()` - Log a message with context\n- `withLogContext :: [(Text, Text)] -> Eff es a -> Eff es a` - Add context to nested operations\n- `tagCurrentThread :: String -> m ()` - Label current thread for debugging\n\n### Running\n\n- `runLogActionStdout :: Severity -> Eff '[Reader LogContext, Log (RichMessage IO), IOE] a -> Eff '[IOE] a` - Run with stdout output\n\n### Types\n\n- `LogContext` - Accumulated key-value context (Semigroup/Monoid)\n- `Severity` - Log levels (Debug, Info, Warning, Error) from `co-log-core`\n\n## Design\n\nRather than creating a custom effect, this library composes two orthogonal concerns:\n\n1. **`Log (RichMessage IO)`** - The logging mechanism (from co-log-effectful)\n2. **`Reader LogContext`** - The contextual data (from effectful)\n"
+    },
+    {
+      "path": "packages/devour-flake/README.md",
+      "sha": null,
+      "content_sha256": "f4209daef76dfa322ce126ca06063a86006d7c6596913ff9cb29b5a70006cae4",
+      "score": 96,
+      "content": "# devour-flake\n\nHaskell library for building flakes using [devour-flake](https://github.com/srid/devour-flake).\n"
+    },
+    {
+      "path": "packages/nix-cache-server/package.yaml",
+      "sha": null,
+      "content_sha256": "112e77421bf24d4c9be989ee7992141edc284ae5ed72ed7ce4bf95903d2bb2a3",
+      "score": 89,
+      "content": "defaults:\n  - local: ../../hpack-common.yaml\n  - local: ../../hpack-relude.yaml\n\nname: nix-cache-server\nversion: 0.1.0.0\nlicense: MIT\ncopyright: 2025 Sridhar Ratnakumar\nmaintainer: srid@srid.ca\nauthor: Sridhar Ratnakumar\ncategory: System\nhomepage: https://github.com/juspay/vira/tree/main/packages/nix-cache-server\nsynopsis: Nix binary cache server using nix-serve-ng\ndescription: WAI application for serving a Nix binary cache using nix-serve-ng\n\nlibrary:\n  source-dirs: src\n  dependencies:\n    - bytestring\n    - nix\n    - nix-serve-ng\n    - wai\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:18.877789+00:00"
+}

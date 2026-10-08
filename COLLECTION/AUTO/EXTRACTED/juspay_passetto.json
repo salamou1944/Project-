@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:juspay/passetto",
+  "repo": "juspay/passetto",
+  "revision_sha": "bb92cf1dd9699662d2a7bb96cd6a6aed6f20e8ff",
+  "default_branch": "master",
+  "pushed_at": "2024-01-16T09:26:59Z",
+  "repo_updated_at": "2026-04-05T07:12:59Z",
+  "license": "BSD-3-Clause",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "tests/README.md",
+      "sha": null,
+      "content_sha256": "278ce65f9f51db1f3fa19023f8892c086896d43b54cdab350d75afb8ce8bd724",
+      "score": 158,
+      "content": "# Passetto-tests\n\nVarious tests for passetto service.\n\nRun them with the dedicated [test script](/scripts/test.sh) in `scripts` folder level above.\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "444fdf8ba391234bc75eb99b6c02de9915a5ca8e53d61af61e270b6d41167cda",
+      "score": 100,
+      "content": "# Passetto\n\nEncryption service implemented in Haskell.\n\nFor launching a server see [passetto-service page](./service/README.md).\n\nFor Haskell client bindings see [passetto-client page](./client/README.md).\n"
+    },
+    {
+      "path": "service/README.md",
+      "sha": null,
+      "content_sha256": "afaf8d628b5a5f48d8419375bf3c39116769900c8012ec03bb2345bdf8c18421",
+      "score": 98,
+      "content": "# Passetto-service\n\nEncryption server.\n\n## Build\n\nThis project requires [`libsodium`](https://libsodium.gitbook.io/doc/installation) of version `1.0.18` to be installed.\n\nThen you can build\n\n* with stack: `stack build`.\n\n## Setup\n\n### Initialising keystorage\n\nTo generate keys, run\n\n```sh\nstack exec passetto-init -- <password> <number of keys>\n```\n\nor\n\n```sh\nstack exec passetto-init-interactive -- addkeys <number of keys>\n```\n\nThe `-interactive` version allows the user to enter the password interactively from the keyboard.\n\nIf the storage isn't yet initialized, it becomes initialized with the password supplied (becoming storage current password) and the set of fresh `<number of keys>`.\n\nIf the storage is already initialized, the password supplied is checked against storage current password and if ok, the set of fresh `<number of keys>` is generated and added to the storage.\n\nKeys are stored in [acid-state](https://hackage.haskell.org/package/acid-state) database which is kept in `state` folder of the working directory.\n\n### Specifying TLS certificate\n\nRunning the server properly requires a valid TLS certificate, make sure to prepare one.\n\n## Running server\n\nEncryption server can be run as follows:\n\n```sh\nstack exec passetto-server\n```\n\nParameters are accepted via environmental variables:\n\n* `MASTER_PASSWORD` - password for decrypting master key.\n* `PORT` - port to serve at. Default is 8012.\n* `USE_TLS` flag - accept HTTPS connections and only them.\n* `TLS_KEY` and `TLS_CERT` - path to TLS key and certificate (viable when `USE_TLS` is set). By default, self-signed certificate from `./cert` folder is used.\n\n### Usage example\n\nExamples provided using [httpie](https://httpie.org/docs) utility.\n\nFurther we assume the app running in testing enviroment at 8012 port.\n\n#### Checking service status:\n\n```sh\n> http :8012/status\nHTTP/1.1 200 OK\n{\n    \"keys_number\": 5\n}\n```\n\n#### Encrypting a value\n\n```sh\n> http :8012/encrypt value='My text'\nHTTP/1.1 200 OK\n{\n    \"value\": \"0.1.0|3|G8iq1rbeyA+IvM9EIe7beYEi33JEwSm+q+d+Iww8Xk8pqdbGM+4WvuGu4tKk5NCazGu3WovX1hs=\"\n}\n```\n\n#### Decrypting a value\n\n```sh\n> echo '{ \"value\": \"...\" }' | http :8012/decrypt\nHTTP/1.1 200 OK\n{\n    \"value\": \"My text\"\n}\n```\n\n#### Encrypting an object\n\n```sh\n> echo '{ \"value\": { \"name\": \"User\", \"phone\": 123 } }' \\\n  | http :8012/encrypt/obj\nHTTP/1.1 200 OK\n{\n    \"value\": {\n        \"name\": \"0.1.0|0|7cGcOgDAJETHmvjXEvponxger2L+QZOPRcXfToomqxZ9myXRpMU1VWUnwVNCzahV+0EH4WU=\",\n        \"phone\": \"0.1.0|1|pQyOJEiXPOH69UfD4QBvfWPx50z1COiQ0Djnw48yM24sYr3sP3lQFRTtxB9GYT+vEBHiLBMZ\"\n    }\n}\n```\n\n#### Decrypting an object\n\n```sh\n> echo '{ \"value\": { \"name\": \"...\", \"phone\": \"...\" } }' \\\n  | http :8012/decrypt/obj\nHTTP/1.1 200 OK\n{\n    \"value\": {\n        \"name\": \"User\",\n        \"phone\": \"123\"\n    }\n}\n```\n\n## Implementation considerations\n\nThis project is mostly a port of [another encryption service](https://github.com/project-sunbird/enc-service/).\n\nHowever, that service contains some security flaws as described in [Passetto cryptography analysis by Serokell](https://www.notion.so/Passetto-cryptography-076da8b7c05f4d519d86b434d7a5efa0), which we address here via using high-level crypto library [Sodium](https://libsodium.org):\n\n1. Replaced the custom symmetric encryption code with the use of the [`crypto_secretbox`](https://nacl.cr.yp.to/secretbox.html) primitive, that provides authenticated secret-key encryption.\nThe underlying low-level primitives are the [Salsa20 stream cypher](https://en.wikipedia.org/wiki/Salsa20) and [Poly1305 MAC](https://en.wikipedia.org/wiki/Poly1305) (see [“Cryptography in NaCl”](https://nacl.cr.yp.to/valid.html) for details).\n\n2. Derived the symmetric encryption key from password using the [Argon2id](https://en.wikipedia.org/wiki/Argon2) algorithm.\nIt is mostly what [`crypto_pwhash`](https://doc.libsodium.org/password_hashing/default_phf#key-derivation) [key derivation function](https://en.wikipedia.org/wiki/Key_derivation_function) does.\nIt is implemented in Sodium, though lacks Haskell bindings yet.\n\n3. Replaced the custom code that uses RSA with the [`crypto_box`](https://nacl.cr.yp.to/box.html) high-level primitive, which provides authenticated public-key encryption.\nThe underlying low-level primitives are [Curve25519](https://en.wikipedia.org/wiki/Curve25519), which is used in [elliptic-curve Diffie–Helman](https://en.wikipedia.org/wiki/Elliptic-curve_Diffie%E2%80%93Hellman) to establish a shared symmetric session key, and the message is then encrypted and authenticated as above with Salsa20 and Poly1305 (see [“Cryptography in NaCl”](https://nacl.cr.yp.to/valid.html) for details).\n"
+    },
+    {
+      "path": "client/README.md",
+      "sha": null,
+      "content_sha256": "4b25e7cad3047876ccd9573a7a0d7093705c797115717796cbba5760bbcb5db7",
+      "score": 98,
+      "content": "# Passetto-client\n\nTo work with passetto server from Haskell use [`Passetto.Client`](./src/Passetto/Client.hs) module.\n\nExample of client call:\n\n```haskell\nλ> withPassettoCtx (mkDefPassettoContext \"localhost\" 8012) $ cliEncrypt @(Encrypted Int) 123\nRight (Encrypted {unEncrypted = \"0.1.0|3|UR4CY0+0v/8aYXbAGRtyumpkC/arM9+VAeOa+jYzjhfU3w37VjXc6C/D1iC9UC/51lM95LuQ\"})\n```\n"
+    },
+    {
+      "path": "core/README.md",
+      "sha": null,
+      "content_sha256": "55040665db609dfe26cf62ee24c5d5da9e3f71509bd60209fb4879959d0f9e0d",
+      "score": 98,
+      "content": "# Passetto-core\n\nProvides API for passetto service.\n"
+    },
+    {
+      "path": "service/pgsql/README",
+      "sha": null,
+      "content_sha256": "0cc84db654c5128dee4cafcf17b25e529ac67d8b4d90e11b7cb3c18929d77509",
+      "score": 96,
+      "content": "You shall set \"PASSETTO_PG_BACKEND_CONN_STRING\" environment variable to\nthe valid Postgresql connection string for your database instance, e.g\n\n`export PASSETTO_PG_BACKEND_CONN_STRING=\"port=5432 dbname='postgres' user='postgres' password='postgres'\"`\n"
+    },
+    {
+      "path": "scripts/test.sh",
+      "sha": null,
+      "content_sha256": "6572c12f58272e78e9576d14d6697433f5a561f8c46ce14f1a4490ac5b819378",
+      "score": 93,
+      "content": "#!/usr/bin/env bash\n\n# This scripts runs the tests providing all the necessary environment.\n#\n# It has to be run from the project root.\n# \"pg_tmp\" utility must be installed.\n\nset -e\n\nconn_str=$(pg_tmp)\n\npsql \"$conn_str\" -c \"create role passetto\"\npsql \"$conn_str\" -f ./service/pgsql/create_schema.sql\nPASSETTO_PG_BACKEND_CONN_STRING=$conn_str stack test passetto-tests\n"
+    },
+    {
+      "path": "tests/package.yaml",
+      "sha": null,
+      "content_sha256": "5314ff35b0116e1e9decfe4e8efd25c7d26cad33013fb219c3539a3a34d4e606",
+      "score": 93,
+      "content": "<<: !include \"../hpack/module.yaml\"\n\nname:                passetto-tests\nsynopsis:            Various tests for passetto service\n\nextra-source-files:\n- README.md\n\ndescription:         Please see the README on GitHub at <https://github.com/juspay/passetto#readme>\n\ntests:\n  passetto-test:\n    <<: *test-common\n    main:                Main.hs\n    source-dirs:         test\n    dependencies:\n    - universum\n    - passetto-service\n    - passetto-client\n    - aeson\n    - hspec\n    - http-client\n    - hedgehog\n    - hspec-hedgehog\n    - memory\n    - saltine\n    - semver\n    - servant-client\n    - servant-client-core\n    - unordered-containers\n    - warp\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "c70f696451740261440107d1a7d5fdfa34a376d55c06623e8a402c097fc68789",
+      "score": 85,
+      "content": "FROM haskell:8.6.5 as deps\nWORKDIR /opt/build\n\nRUN \\\n  curl https://download.libsodium.org/libsodium/releases/libsodium-1.0.18-stable.tar.gz --output libsodium.tar.gz && \\\n  tar -xvf libsodium.tar.gz && \\\n  rm libsodium.tar.gz && \\\n  cd libsodium-stable && \\\n  ./configure && \\\n  make && \\\n  make check && \\\n  make install\n\nRUN apt-get update && apt-get install -y libpq-dev=9.6.17-0+deb9u1\n\nCOPY stack.yaml /opt/build/\nCOPY hpack /opt/build/hpack\nCOPY core/package.yaml /opt/build/core/\nCOPY client/package.yaml /opt/build/client/\nCOPY service/package.yaml /opt/build/service/\nCOPY tests/package.yaml /opt/build/tests/\nRUN stack build -j4 --only-dependencies\n\n\nFROM haskell:8.6.5 as build\nWORKDIR /opt/build\nCOPY . /opt/build/\nCOPY --from=deps /root/.stack /root/.stack\nCOPY --from=deps /opt/build /opt/build\nRUN cd libsodium-stable && make install && ldconfig\nRUN apt-get update && apt-get install -y libpq-dev=9.6.17-0+deb9u1\n\nRUN stack install\nRUN mv \"$(stack path --local-install-root --system-ghc)/bin\" /opt/build/bin\n\n\nFROM postgres:9.6.17 as app\nWORKDIR /opt/app\nCOPY ./scripts /opt/app\nCOPY ./cert /opt/app/cert\nCOPY ./service/pgsql/create_schema.sql /opt/app/create_schema.sql\nCOPY --from=build /opt/build/bin .\nCOPY --from=deps /opt/build/libsodium-stable /opt/app/libsodium-stable\nRUN apt-get update && apt-get install -y make gcc\nRUN cd libsodium-stable && make install && ldconfig\n\nEXPOSE 8012\nENTRYPOINT [\"./launcher.sh\"]"
+    },
+    {
+      "path": "tests/passetto-tests.cabal",
+      "sha": null,
+      "content_sha256": "07c29d1838dc3ee91a63cd5763d499bbfd32254ca254bfda276e95be655b9bfc",
+      "score": 58,
+      "content": "cabal-version: 2.2\n\n-- This file has been generated from package.yaml by hpack version 0.33.0.\n--\n-- see: https://github.com/sol/hpack\n--\n-- hash: 37b099421a6a40b3b92430d5e92d83b9851e37612c770c79a19b963690365372\n\nname:           passetto-tests\nversion:        0.1.0\nsynopsis:       Various tests for passetto service\ndescription:    Please see the README on GitHub at <https://github.com/juspay/passetto#readme>\ncategory:       Cryptography\nhomepage:       https://github.com/juspay/passetto#readme\nbug-reports:    https://github.com/juspay/passetto/issues\nauthor:         Juspay\nmaintainer:     Juspay\ncopyright:      2020 Juspay\nlicense:        BSD-3-Clause\nbuild-type:     Simple\nextra-source-files:\n    README.md\n\nsource-repository head\n  type: git\n  location: https://github.com/juspay/passetto\n\ntest-suite passetto-test\n  type: exitcode-stdio-1.0\n  main-is: Main.hs\n  other-modules:\n      Spec\n      Test.Passetto.ClientSpec\n      Test.Passetto.CryptoSpec\n      Test.Passetto.PayloadEncryptionSpec\n      Test.Passetto.Util\n      Paths_passetto_tests\n  hs-source-dirs:\n      test\n  default-extensions: AllowAmbiguousTypes BangPatterns ConstraintKinds DataKinds DefaultSignatures DeriveDataTypeable DerivingStrategies DeriveGeneric DuplicateRecordFields EmptyCase FlexibleContexts FlexibleInstances FunctionalDependencies GeneralizedNewtypeDeriving LambdaCase MultiParamTypeClasses MultiWayIf NamedFieldPuns NoImplicitPrelude OverloadedStrings RankNTypes RecordWildCards ScopedTypeVariables StandaloneDeriving TemplateHaskell TupleSections TypeFamilies UndecidableInstances ViewPatterns TypeApplications TypeOperators\n  ghc-options: -Weverything -Wno-missing-exported-signatures -Wno-missing-import-lists -Wno-missed-specialisations -Wno-all-missed-specialisations -Wno-unsafe -Wno-safe -Wno-missing-local-signatures -Wno-monomorphism-restriction -Wno-implicit-prelude -threaded -rtsopts -with-rtsopts=-N\n  build-tool-depends:\n      tasty-discover:tasty-discover\n  build-depends:\n      aeson\n    , base >=4.7 && <5\n    , hedgehog\n    , hspec\n    , hspec-hedgehog\n    , http-client\n    , memory\n    , passetto-client\n    , passetto-service\n    , saltine\n    , semver\n    , servant-client\n    , servant-client-core\n    , universum\n    , unordered-containers\n    , warp\n  default-language: Haskell2010\n"
+    },
+    {
+      "path": "tests/test/Spec.hs",
+      "sha": null,
+      "content_sha256": "432762241e95c98ac67208f426fe0b431a3cbf6d21e17aa29a42257089023e68",
+      "score": 56,
+      "content": "{-# OPTIONS_GHC -Wno-missing-export-lists #-}\n{-# OPTIONS_GHC -F -pgmF hspec-discover -optF --module-name=Spec #-}\n"
+    },
+    {
+      "path": "tests/test/Main.hs",
+      "sha": null,
+      "content_sha256": "9340c370dfb1737df8557af44adb5ab35b45ad5238894a47701c3280c463266e",
+      "score": 56,
+      "content": "module Main (main) where\n\nimport Prelude\n\nimport Spec (spec)\nimport Test.Hspec (hspec)\n\nmain :: IO ()\nmain = hspec spec\n"
+    },
+    {
+      "path": "tests/test/Test/Passetto/CryptoSpec.hs",
+      "sha": null,
+      "content_sha256": "0ca8687c46ecab43116ee60ce1fc6bbdbe83f86c7339c9673ddfa78918d4bb6c",
+      "score": 52,
+      "content": "module Test.Passetto.CryptoSpec\n  ( spec\n  ) where\n\nimport Universum\n\nimport qualified Crypto.Saltine.Core.Box as Box\nimport qualified Crypto.Saltine.Core.SecretBox as SecretBox\nimport qualified Data.ByteArray as BA\nimport Hedgehog ((===))\nimport qualified Hedgehog as H\nimport qualified Hedgehog.Gen as HG\nimport qualified Hedgehog.Range as HR\nimport Test.Hspec (Spec, describe, it, runIO)\nimport Test.Hspec.Hedgehog (hedgehog, modifyMaxSuccess)\n\nimport Passetto.Crypto\n\nspec :: Spec\nspec = do\n  runIO sodiumInit\n\n  describe \"Payload encryption\" $ do\n    it \"Roundtrip\" . hedgehog $ do\n      key <- liftIO Box.newKeypair\n      payload <- H.forAll $ HG.bytes (HR.exponential 1 4096)\n      enc <- encrypt (snd key) payload\n      let res = decrypt key enc\n      res === Just payload\n\n  describe \"Key encryption\" $ do\n    it \"Roundtrip\" . hedgehog $ do\n      master <- liftIO SecretBox.newKey\n      key <- liftIO Box.newKeypair\n      enc <- encryptKey master key\n      let res = decryptKey master enc\n      fmap H.Opaque res === Just (H.Opaque key)\n\n  describe \"Master encryption\" $ do\n    modifyMaxSuccess (max 1 . (`div` 10)) . it \"Roundtrip\" . hedgehog $ do\n      password <- H.forAllWith (const \"<password>\") genPassword\n      master <- liftIO SecretBox.newKey\n      encMaster <- encryptMasterKey password master\n      let res = decryptMasterKey encMaster password\n      fmap H.Opaque res === Just (H.Opaque master)\n\ngenPassword :: H.Gen Password\ngenPassword = Password . BA.convert <$> HG.bytes (HR.constant 1 100)\n"
+    },
+    {
+      "path": "tests/test/Test/Passetto/ClientSpec.hs",
+      "sha": null,
+      "content_sha256": "bc33c200b0444bca12e36732f50803a015146887065c68ce02955f6b8a64ef34",
+      "score": 52,
+      "content": "{-# LANGUAGE PartialTypeSignatures #-}\n{-# OPTIONS_GHC -Wno-partial-type-signatures #-}\n\n-- | Tests on high-level passetto client functionality.\nmodule Test.Passetto.ClientSpec (spec) where\n\nimport Universum hiding (keys)\n\nimport qualified Data.Aeson as Aeson\nimport Data.Typeable (typeRep)\nimport Hedgehog (Gen, PropertyT, evalEither, evalM, forAll, (===))\nimport qualified Hedgehog.Gen as HG\nimport qualified Hedgehog.Range as HR\nimport Network.Wai.Handler.Warp (Port, testWithApplication)\nimport Test.Hspec (Spec, SpecWith, around, describe, it)\nimport Test.Hspec.Hedgehog (hedgehog)\n\nimport Passetto.Client\nimport Passetto.Client.EncryptedItem\nimport Passetto.Crypto (Password, passwordFromText)\nimport Passetto.Db\nimport Passetto.KeysContext\nimport Passetto.Version\nimport Passetto.Web.Server\n\nimport Test.Passetto.Util\n\nmasterPassword :: Password\nmasterPassword = passwordFromText \"123\"\n\nwithRunServer :: (Port -> IO a) -> IO a\nwithRunServer action = do\n  acidState <- openDb\n  appendDb masterPassword 3 acidState\n    >>= either throwM pure\n  keys <- readAndDecryptDb masterPassword acidState\n    >>= either throwM pure\n  let keysCtx = KeysContext\n        { storedKeys = keys\n        , modelVersion = encryptedContentVersion\n        }\n  testWithApplication (pure $ server keysCtx) action\n\nwithClientCtx :: (PassettoContext -> IO a) -> IO a\nwithClientCtx action =\n  withRunServer $ \\port ->\n    mkDefPassettoContext \"localhost\" (fromIntegral port) >>= action\n\nrunCli :: PassettoContext -> ReaderT PassettoContext m a -> m a\nrunCli ctx action = runReaderT action ctx\n\ndata EncType a = EncType\n  { etInt :: Int\n  , etItem :: a\n  } deriving stock (Eq, Show, Generic)\n\ninstance (EncryptedOrPlainItem e (Unencrypted e)) =>\n         EncryptedItem (EncType e) where\n  type Unencrypted (EncType e) = EncType (Unencrypted e)\n  encryptItem = genericEncryptItem\n  decryptItem = genericDecryptItem\n\nroundtripProp\n  :: forall e a.\n      (Show a, Eq a, EncryptedItem e, Unencrypted e ~ a)\n  => PassettoContext -> Gen a -> PropertyT IO ()\nroundtripProp cliCtx gen = hedgehog $ do\n  val <- forAll gen\n  val' <- runCli cliCtx $ do\n    enc <- cliEncrypt @e val >>= evalEither\n    cliDecrypt enc >>= evalEither\n  val' === val\n\nroundtrip\n  :: forall e a.\n      (Typeable a, Show a, Eq a, EncryptedItem e, Unencrypted e ~ a)\n  => Gen a -> SpecWith PassettoContext\nroundtrip gen =\n  it (show (typeRep $ Proxy @a)) $ \\cliCtx ->\n    hedgehog $ roundtripProp @e cliCtx gen\n\nspec :: Spec\nspec = do\n  around withClientCtx $ do\n    describe \"Plain encrypt\" $ do\n      describe \"Roundtrip\" $ do\n        roundtrip @(Encrypted Int) $ HG.int (HR.linear 1 10)\n        roundtrip @(Encrypted Text) $ HG.text (HR.linear 1 10) HG.unicodeAll\n        roundtrip @(Encrypted Bool) $ HG.bool\n        roundtrip @(Encrypted [Bool]) $ HG.list (HR.linear 1 10) HG.bool\n        roundtrip @(Encrypted Aeson.Value) $ genJson\n\n    describe \"Binary encrypt\" $ do\n      describe \"Roundtrip\" $ do\n        roundtrip @EncryptedBase64 (HG.bytes $ HR.linear 0 100)\n\n    describe \"Bulk encrypt\" $ do\n      describe \"Roundtrip\" $ do\n        roundtrip @[Encrypted Aeson.Value] $\n          HG.list (HR.linear 1 3) genJson\n\n        roundtrip @(Encrypted Int, Encrypted Text) $\n          (,) <$> HG.int (HR.linear 1 10)\n              <*> HG.text (HR.linear 1 10) HG.unicodeAll\n\n    describe \"Generic encryption\" $ do\n      it \"Roundtrip\" $ \\cliCtx -> hedgehog $\n        roundtripProp @(EncType $ Encrypted Int) cliCtx $\n          EncType <$> HG.int (HR.linear 1 10) <*> HG.int (HR.linear 1 10)\n\n  it \"Empty submission does not require connection to the server\" $ do\n    fakeCliCtx <- mkDefPassettoContext \"localhost\" 8999\n    hedgehog . runCli fakeCliCtx $ do\n      enc <- evalM $ cliEncrypt @(Maybe (Encrypted Int), ()) (Nothing, ())\n                     >>= evalEither\n      void . evalM $ cliDecrypt enc >>= evalEither\n"
+    },
+    {
+      "path": "tests/test/Test/Passetto/Util.hs",
+      "sha": null,
+      "content_sha256": "b7ea924c88725287d9d1565dd08341cf03c61cfcb775e36032274fe90a5d1aff",
+      "score": 52,
+      "content": "module Test.Passetto.Util\n  ( newKeysContext\n  , genJson\n  ) where\n\nimport Universum\n\nimport qualified Crypto.Saltine.Core.Box as Box\nimport qualified Data.Aeson as A\nimport qualified Data.HashMap.Strict as HM\nimport qualified Data.SemVer as V\nimport GHC.Exts (fromList)\nimport qualified Hedgehog as H\nimport qualified Hedgehog.Gen as HG\nimport qualified Hedgehog.Range as HR\n\nimport Passetto.Crypto\nimport Passetto.KeysContext\n\n-- | Make a sample of keys context.\nnewKeysContext :: MonadIO m => m KeysContext\nnewKeysContext = liftIO $ do\n  sodiumInit\n  let modelVersion = V.initial\n  storedKeys <- fromList <$> replicateM 3 Box.newKeypair\n  return KeysContext{..}\n\n-- We could use hedgehog-gen-json package, but it requires too many dependencies\n-- not from LTS\ngenJson :: H.Gen A.Value\ngenJson = HG.recursive HG.choice\n  [ A.String <$> HG.text (HR.linear 1 5) HG.unicodeAll\n  , A.Number <$> HG.realFrac_ (HR.constant (-100) 100)\n  , A.Bool <$> HG.bool\n  , pure A.Null\n  ]\n  [ A.Array . fromList <$> HG.list (HR.linear 1 3) genJson\n  , A.Object . HM.fromList <$> HG.list (HR.linear 1 3) genKeyValue\n  ]\n  where\n    genKeyValue :: H.Gen (Text, A.Value)\n    genKeyValue = (,) <$> HG.text (HR.constant 1 5) HG.unicodeAll <*> genJson\n"
+    },
+    {
+      "path": "tests/test/Test/Passetto/PayloadEncryptionSpec.hs",
+      "sha": null,
+      "content_sha256": "30294bbcf5fd694f819a83fcc5e67f7ec386fbac611166c11d276916e22dfe11",
+      "score": 52,
+      "content": "module Test.Passetto.PayloadEncryptionSpec\n  ( spec\n  ) where\n\nimport Universum\n\nimport Hedgehog ((===))\nimport qualified Hedgehog as H\nimport qualified Hedgehog.Gen as HG\nimport qualified Hedgehog.Range as HR\nimport Test.Hspec (Spec, describe, it, runIO)\nimport Test.Hspec.Hedgehog (hedgehog)\n\nimport Passetto.JsonEncryption\n\nimport Test.Passetto.Util\n\nspec :: Spec\nspec = do\n  keysCtx <- runIO newKeysContext\n\n  describe \"Single value\" $ do\n    it \"Roundtrip\" . hedgehog $ do\n      payload <- H.forAll $ HG.text (HR.exponential 1 4096) HG.unicodeAll\n      flip runReaderT keysCtx $ do\n        res <- encryptPayload payload >>= runExceptT . decryptPayload\n        res === Right payload\n\n  describe \"JSON object\" $ do\n    it \"Roundtrip\" . hedgehog $ do\n      payload <- H.forAll genJson\n      flip runReaderT keysCtx $ do\n        res <- encryptJsonPayload payload >>= runExceptT . decryptJsonPayload\n        res === Right payload\n"
+    },
+    {
+      "path": "bitbucket-pipelines.yml",
+      "sha": null,
+      "content_sha256": "f163a557f9b128b6755770bf52e88b7a9f0a20d84f7bfa6f57a0bc2616ceef80",
+      "score": 35,
+      "content": "image: haskell:8.4.4\n\npipelines:\n  default:\n    - step:\n        script:\n          - stack test\n"
+    },
+    {
+      "path": "stack.yaml",
+      "sha": null,
+      "content_sha256": "7abb637de8237e69e0476d376231029ed47f16a8123d7f82adc5b4b2604fba11",
+      "score": 35,
+      "content": "resolver: lts-15.15\n\npackages:\n- core\n- service\n- client\n- tests\n\nextra-deps:\n- acid-state-0.16.0.1\n- cryptostore-0.2.1.0\n- hedgehog-1.0.2\n- hspec-hedgehog-0.0.1.2\n- libsodium-1.0.18.1\n- saltine-0.1.1.0\n"
+    },
+    {
+      "path": ".stylish-haskell.yaml",
+      "sha": null,
+      "content_sha256": "d898ecc90dc1debafab72e7fd9fc23527768b1235afdc8734720a3b3432d16ed",
+      "score": 35,
+      "content": "# SPDX-FileCopyrightText: 2019 Serokell <https://serokell.io>\n#\n# SPDX-License-Identifier: Unlicense\n\n# Default stylish-haskell config used in Serokell.\n\nsteps:\n  - simple_align:\n      cases: false\n      top_level_patterns: false\n      records: false\n  - imports:\n      align: none\n      list_align: after_alias\n      pad_module_names: false\n      long_list_align: new_line\n      empty_list_align: inherit\n      list_padding: 2\n      separate_lists: false\n      space_surround: false\n  - language_pragmas:\n      style: vertical\n      remove_redundant: true\n  - trailing_whitespace: {}\ncolumns: 100\nnewline: native\nlanguage_extensions:\n  - BangPatterns\n  - BlockArguments\n  - ConstraintKinds\n  - DataKinds\n  - DefaultSignatures\n  - DeriveAnyClass\n  - DeriveDataTypeable\n  - DeriveGeneric\n  - DerivingStrategies\n  - EmptyCase\n  - ExistentialQuantification\n  - ExplicitNamespaces\n  - FlexibleContexts\n  - FlexibleInstances\n  - FunctionalDependencies\n  - GADTs\n  - GeneralizedNewtypeDeriving\n  - LambdaCase\n  - MultiParamTypeClasses\n  - MultiWayIf\n  - NamedFieldPuns\n  - NoImplicitPrelude\n  - OverloadedLabels\n  - OverloadedStrings\n  - PatternSynonyms\n  - RebindableSyntax\n  - RecordWildCards\n  - RecursiveDo\n  - ScopedTypeVariables\n  - StandaloneDeriving\n  - TemplateHaskell\n  - TemplateHaskellQuotes\n  - TupleSections\n  - TypeApplications\n  - TypeFamilies\n  - TypeOperators\n  - ViewPatterns\n"
+    },
+    {
+      "path": "scripts/launcher.sh",
+      "sha": null,
+      "content_sha256": "d574d772ecaa1639a0c5b3b6fec37f492fc51dd6d9f5631bf25da9eb4544cd8d",
+      "score": 33,
+      "content": "#! /usr/bin/env bash\n\n# This script allows running any of the project executables,\n# primarily used as Docker container's entrypoint.\n\nset -e\n\nif [[ \"$1\" == \"init\" ]]; then\n    exec=\"passetto-init\"\nelif [[ \"$1\" == \"init-interactive\" ]]; then\n    exec=\"passetto-init-interactive\"\nelif [[ \"$1\" == \"server\" ]]; then\n    exec=\"passetto-server\"\nelif [[ \"$1\" == \"demo\" ]]; then\n    demo=true\nelse\n    echo \"Allowed commands: 'init', 'init-interactive', 'server', 'demo'.\"\n    exit 1\nfi\n\nshift\n\n/docker-entrypoint.sh postgres &\nuntil pg_isready -U postgres > /dev/null; do sleep 1; done\n{ createdb passetto -U postgres 2> /dev/null \\\n      && psql passetto -U postgres < ./create_schema.sql > /dev/null \\\n      && echo \"Database found\"; \\\n    } \\\n    || echo \"Database creation is not needed\"\n\nexport PASSETTO_PG_BACKEND_CONN_STRING=postgresql://postgres@/passetto\n\nif [[ ! \"$demo\" ]]; then\n    eval \"./$exec\" \"$@\"\nelse\n    password=\"1\"\n    keys=3\n    ./passetto-init $password $keys\n    MASTER_PASSWORD=$password ./passetto-server\nfi\n"
+    },
+    {
+      "path": "hpack/module.yaml",
+      "sha": null,
+      "content_sha256": "c54738d48298d2303b078145281ef4579c94fab46887cf3a7f13fe16426b45cc",
+      "score": 33,
+      "content": "<<: !include \"definitions.yaml\"\n\n<<: *meta\ndefault-extensions: *default-extensions\ndependencies: *dependencies\nghc-options: *ghc-options\n"
+    },
+    {
+      "path": "client/package.yaml",
+      "sha": null,
+      "content_sha256": "ca0b81a6fa2e7bc328cb473a0eb7aa38d07299c65188ee44114fa243840fefd5",
+      "score": 33,
+      "content": "<<: !include \"../hpack/module.yaml\"\n\nname:                passetto-client\nsynopsis:            Client methods for working with passetto service\n\nextra-source-files:\n- README.md\n- ChangeLog.md\n\ndescription:         Please see the README on GitHub at <https://github.com/juspay/passetto#readme>\n\ndependencies:\n- base >= 4.7 && < 5\n- aeson\n- connection\n- exceptions\n- http-client\n- http-client-tls\n- mtl\n- passetto-core\n- servant\n- servant-client\n- servant-client-core\n- universum\n- warp\n- warp-tls\n- wai\n\nlibrary:\n  <<: *lib-common\n"
+    },
+    {
+      "path": "service/package.yaml",
+      "sha": null,
+      "content_sha256": "ef77cd869e399835b1198de252c59fdfce43190a0a925812ec1e13a2263d32f6",
+      "score": 33,
+      "content": "<<: !include \"../hpack/module.yaml\"\n\nname:                passetto-service\nsynopsis:            HTTP based Encryption Service\n\nextra-source-files:\n- README.md\n- ChangeLog.md\n\ndescription:         Please see the README on GitHub at <https://github.com/juspay/passetto#readme>\n\nflags:\n  pg-backend:\n    description:  Use Postgresql backend instead of AcidState\n    default:      True\n    manual:       True\n\ndependencies:\n- base >= 4.7 && < 5\n- universum\n\nwhen:\n- condition: flag(pg-backend)\n  then:\n    dependencies: [postgresql-simple]\n  else:\n    dependencies: [acid-state, safecopy]\n\nlibrary:\n  <<: *lib-common\n  when:\n  - condition: flag(pg-backend)\n    then:\n      source-dirs: src_pg\n    else:\n      source-dirs: src_as\n  dependencies:\n  - aeson\n  - binary\n  - bytestring\n  - cryptonite\n  - cryptostore\n  - haskeline\n  - exceptions\n  - memory\n  - mtl\n  - passetto-core\n  - saltine >= 0.1.1.0  # has Generic instances for keys\n  - safe-exceptions\n  - servant-server\n  - semver\n  - text\n  - vector\n  - random\n  - x509\n  - pem\n  - warp\n  - warp-tls\n  - wai\n\nexecutables:\n  passetto-server:\n    <<: *exec-common\n    main:                Main.hs\n    source-dirs:         app/server\n    dependencies:\n    - passetto-service\n    - exceptions\n    - safe-exceptions\n\n  passetto-init:\n    <<: *exec-common\n    main:                KeysDb.hs\n    source-dirs:         app/init\n    ghc-options:\n    - -main-is KeysDb\n    dependencies:\n    - passetto-service\n    - saltine\n\n  passetto-init-interactive:\n    main:                KeysDbInteractive.hs\n    source-dirs:         app/init\n    ghc-options:\n    - -main-is KeysDbInteractive\n    dependencies:\n    - passetto-service\n    - saltine\n"
+    },
+    {
+      "path": "core/package.yaml",
+      "sha": null,
+      "content_sha256": "a0ff46914cedb6ef2d347717549237d50023900e63d502ab62f39d5d3994e6c7",
+      "score": 33,
+      "content": "<<: !include \"../hpack/module.yaml\"\n\nname:                passetto-core\nsynopsis:            Core functionality for encryption service\n\nextra-source-files:\n- README.md\n- ChangeLog.md\n\ndescription:         Please see the README on GitHub at <https://github.com/juspay/passetto#readme>\n\ndependencies:\n- base >= 4.7 && < 5\n- aeson\n- aeson-casing\n- base64-bytestring\n- servant\n- universum\n\nlibrary:\n  <<: *lib-common\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:11.812586+00:00"
+}

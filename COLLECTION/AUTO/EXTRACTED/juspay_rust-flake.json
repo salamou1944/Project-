@@ -1,0 +1,155 @@
+{
+  "canonical_source": "github:juspay/rust-flake",
+  "repo": "juspay/rust-flake",
+  "revision_sha": "ae133ab42d622ac17d4847480422574f51f61e9a",
+  "default_branch": "main",
+  "pushed_at": "2026-10-04T01:16:02Z",
+  "repo_updated_at": "2026-08-31T20:17:58Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yaml",
+      "sha": null,
+      "content_sha256": "342c0d606ef32ae77283f9b86e8cc55e5c42dd8de360a2561f09b01878693779",
+      "score": 198,
+      "content": "# CI, ported from vira.hs (Vira <https://vira.nixos.asia/>).\n#\n# Same coverage as before: the four flakes devoured (srid/devour-flake — what\n# Vira itself uses to build a flake), with the same input overrides, built for\n# x86_64-linux and aarch64-darwin (via the matrix). The Vira \"signoff\" check\n# is replaced by this workflow's own check runs across the matrix (one\n# `devour-flake (os, subflake)` per combination), and the build cache by\n# `cache-nix-action` (store cache persisted across runs).\nname: ci\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\njobs:\n  devour-flake:\n    name: \"devour-flake (${{ matrix.os }}, ${{ matrix.flake.name }})\"\n    strategy:\n      fail-fast: false\n      matrix:\n        os:\n          # build.systems in the old vira.hs\n          - ubuntu-latest # x86_64-linux\n          - macos-latest  # aarch64-darwin\n        flake:\n          # build.flakes (with overrideInputs) in the old vira.hs. nix input\n          # path suffix is relative to the repo root ($PWD); the subflake path\n          # is relative to the root too.\n          - name: crate-parser\n            path: nix/crate-parser/test\n            input: crate-parser\n            inputPath: /nix/crate-parser\n          - name: dev\n            path: dev\n            input: rust-flake\n            inputPath: \"\"\n          - name: single-crate\n            path: examples/single-crate\n            input: rust-flake\n            inputPath: \"\"\n          - name: multi-crate\n            path: examples/multi-crate\n            input: rust-flake\n            inputPath: \"\"\n    runs-on: ${{ matrix.os }}\n    permissions:\n      contents: read\n      actions: write # cache-nix-action's purge: true requires it\n    steps:\n      - uses: actions/checkout@v4\n      - uses: nixbuild/nix-quick-install-action@v34\n      - uses: nix-community/cache-nix-action@v6\n        with:\n          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/flake.lock') }}\n          restore-prefixes-first-match: nix-${{ runner.os }}-\n          gc-max-store-size-linux: 5G\n          gc-max-store-size-macos: 5G\n          purge: true\n          purge-prefixes: nix-${{ runner.os }}-\n          purge-last-accessed: 604800\n          purge-primary-key: never\n\n      # Devour the subflake exactly how Vira builds it (see\n      # packages/devour-flake/src/DevourFlake.hs in juspay/vira): builds every\n      # package, check, devShell, app, ... of the flake for the current system.\n      - name: \"devour ${{ matrix.flake.name }}\"\n        run: >\n          nix build github:srid/devour-flake#default -L --print-out-paths\n          --no-write-lock-file --no-link\n          --override-input flake \"path:$PWD/${{ matrix.flake.path }}\"\n          --override-input \"flake/${{ matrix.flake.input }}\" \"path:$PWD${{ matrix.flake.inputPath }}\"\n"
+    },
+    {
+      "path": "nix/crate-parser/test/crates/crate-a/Cargo.toml",
+      "sha": null,
+      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "score": 170,
+      "content": ""
+    },
+    {
+      "path": ".github/workflows/update-flake-lock.yaml",
+      "sha": null,
+      "content_sha256": "55a7039f3ca3bf4c0db7cf454d5180d2a097263762145bdbf4fa2cb3e256f8c8",
+      "score": 126,
+      "content": "name: update-flake-lock\non:\n  workflow_dispatch: # allows manual triggering\n  schedule:\n    - cron: '0 0 * * 0' # runs weekly on Sunday at 00:00\n\njobs:\n  example-lock:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n      pull-requests: write\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n      - name: Install Nix\n        uses: DeterminateSystems/nix-installer-action@main\n      - name: Update flake.lock\n        uses: DeterminateSystems/update-flake-lock@main\n        with:\n          commit-msg: \"nix: Update flake.lock\"\n          pr-title: \"Update flake.lock\"\n          pr-labels: |\n            automated\n          branch: \"update_flake_lock\"\n      - name: Enable auto-merge\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n        run: |\n          pr=$(gh pr list --head update_flake_lock --state open --json number --jq '.[0].number')\n          [ -n \"$pr\" ] && gh pr merge \"$pr\" --auto --squash || echo \"no PR to auto-merge\"\n"
+    },
+    {
+      "path": "examples/multi-crate/Cargo.toml",
+      "sha": null,
+      "content_sha256": "c63381e8eaa4d9394d149f1a99184fb0563eb940c2fcf6c8d715e18f9217c9ed",
+      "score": 116,
+      "content": "[workspace]\nmembers = [\"crates/*\"]\n"
+    },
+    {
+      "path": "examples/single-crate/Cargo.toml",
+      "sha": null,
+      "content_sha256": "0fe36b9d20238a93f120ac31ee97ef02d7f1e2e31cdc87f3f79bd0ec3372d1e0",
+      "score": 116,
+      "content": "[package]\nname = \"single-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\ndescription = \"A simple Hello World example for rust-flake\"\n\n[dependencies]\nclap = { version = \"4.0\", features = [\"derive\"] }\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-c/Cargo.toml",
+      "sha": null,
+      "content_sha256": "b981cd4318ac052be1d5536e651ca96023f3910389f8b14012b3674869769da9",
+      "score": 112,
+      "content": "[package]\nname = \"crate-c\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-a/Cargo.toml",
+      "sha": null,
+      "content_sha256": "404b95002d44e8034007b471440a7eeeedcde4903c40172760e775a94fc8330d",
+      "score": 112,
+      "content": "[package]\nname = \"crate-a\"\nversion = \"0.1.0\"\nedition = \"2024\"\ndescription = \"A crate that depends on crate-b\"\n\n[dependencies]\ncrate-b = { path = \"../crate-b\" }\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-b/Cargo.toml",
+      "sha": null,
+      "content_sha256": "2e64210a1a128c382fdfa7a695c219f944663c3b40385e22991b4b1bced72455",
+      "score": 112,
+      "content": "[package]\nname = \"crate-b\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\ncrate-c = { path = \"../crate-c\" }\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "2db7f8383e2a19c8b7f933dbd57c7b1977c07816746dc1a3f4242c6025053e4d",
+      "score": 100,
+      "content": "[![project chat](https://img.shields.io/badge/zulip-join_chat-brightgreen.svg)](https://nixos.zulipchat.com/#narrow/stream/446608-rust-flake)\n\n# rust-flake\n\nA simple flake module for Rust development, based on [Crane](https://crane.dev/). `rust-flake` is inspired by [`haskell-flake`](https://github.com/srid/haskell-flake).\n\n## Examples\n\n- Single crates\n    - https://github.com/srid/rust-nix-template\n    - https://github.com/juspay/nix-rs\n- Multi-crate workspace\n    - https://github.com/juspay/omnix\n    - https://github.com/juspay/superposition\n- Desktop apps\n    - https://github.com/srid/dioxus-desktop-template\n    - https://github.com/juspay/omnix\n\n## Comparison with other tools\n\n| | rust-flake | [nix-cargo-integration](https://github.com/yusdacra/nix-cargo-integration) |\n| --- | --- | --- |\n| Stable over time | ✔️ | ✖️[^crane] |\n\n[^crane]: `rust-flake` uses [crane](https://crane.dev/) directly, which is known to be stable. Whereas `nix-cargo-integration` uses `dream2nix` which is known to be unstable. See [here](https://matrix.to/#/!gcrYWdPsIUOFpXFDHB:matrix.org/$vJGlKFLKj4uRp-QkokK_0ISnnXHaXQ5tv7A_PcDYl7A?via=matrix.org&via=nixos.dev&via=goblin.sh) and [here](https://github.com/srid/rust-nix-template/pull/27)\n"
+    },
+    {
+      "path": "nix/crate-parser/README.md",
+      "sha": null,
+      "content_sha256": "8174d129db13f0db9322dbc8005e2be04049aeed47a5f0a9c700f53a66927709",
+      "score": 96,
+      "content": "# `crate-parser`\n**crate-parser** provides parsers for Rust-associated files.\n\n## Features\n\n- Currently, the main available function is [`findCrates`](./default.nix), which processes `workspace.members` globs from `Cargo.toml`.\n\nFor example:\n```toml\n[workspace]\nmembers = [ \"crates/*\" ]\n````\n\nThis will be handled correctly by `findCrates`, resolving the paths accordingly.\n\n## Contributing\n\nFeel free to create a PR to improve **crate-parser** — contributions are welcome!\n"
+    },
+    {
+      "path": "nix/crate-parser/parser_tests.nix",
+      "sha": null,
+      "content_sha256": "fe159ca0e4464b2d3a83a430825c9c34a1761cee1c22cafa537aaa8501edb92a",
+      "score": 56,
+      "content": "{ pkgs ? import <nixpkgs> { }, lib ? pkgs.lib, ... }:\nlet\n  inherit (pkgs.callPackage ./. { }) findCrates;\n\n  cargoMembersTest = {\n    testStar = {\n      expr = findCrates [ \"crates/*\" ] ./test;\n      expected = [ \"crates/crate-a\" ];\n    };\n\n  };\n  # Like lib.runTests, but actually fails if any test fails.\n  runTestsFailing = tests:\n    let\n      res = lib.runTests tests;\n    in\n    if res == builtins.trace \"✅ All tests passed\" [ ]\n    then res\n    else builtins.throw \"Some tests failed: ${builtins.toJSON res}\" res;\nin\n{\n  \"cargo.members\" = runTestsFailing cargoMembersTest;\n}\n"
+    },
+    {
+      "path": "nix/crate-parser/test/flake.nix",
+      "sha": null,
+      "content_sha256": "d6bb85ce4bcc2e448440367d2038c13e9e832d0fb477b683b5732d12f356bbae",
+      "score": 54,
+      "content": "{\n  inputs = {\n    nixpkgs.url = \"github:nixos/nixpkgs/nixpkgs-unstable\";\n    flake-parts.url = \"github:hercules-ci/flake-parts\";\n    crate-parser = { flake = false; }; # Overriden by omci (see top-level flake.nix)\n  };\n  outputs = inputs:\n    inputs.flake-parts.lib.mkFlake { inherit inputs; } {\n      systems = inputs.nixpkgs.lib.systems.flakeExposed;\n      perSystem = { pkgs, lib, ... }: {\n        checks.tests =\n          let\n            result = import (inputs.crate-parser + /parser_tests.nix) { inherit pkgs lib; };\n          in\n          pkgs.writeTextFile {\n            name = \"crate-parsers-test-results\";\n            text = builtins.toJSON result;\n          };\n      };\n    };\n}\n"
+    },
+    {
+      "path": "examples/single-crate/rust-toolchain.toml",
+      "sha": null,
+      "content_sha256": "e5cc0545f232bde807bd9394c2433322d1cd2cf42b060ceab2ac7329bc9cdaa2",
+      "score": 31,
+      "content": "[toolchain]\nchannel = \"stable\"\n"
+    },
+    {
+      "path": "examples/multi-crate/rust-toolchain.toml",
+      "sha": null,
+      "content_sha256": "e5cc0545f232bde807bd9394c2433322d1cd2cf42b060ceab2ac7329bc9cdaa2",
+      "score": 31,
+      "content": "[toolchain]\nchannel = \"stable\"\n"
+    },
+    {
+      "path": "examples/single-crate/src/main.rs",
+      "sha": null,
+      "content_sha256": "54fc94d9d74501c1cca1193321b19bdaefc522f8f5e8d7fa46498417056cf8d8",
+      "score": 29,
+      "content": "use clap::Parser;\n\n#[derive(Parser)]\n#[command(name = \"hello-world\")]\n#[command(about = \"A simple Hello World CLI application\")]\nstruct Cli {\n    /// Name to greet\n    #[arg(short, long, default_value = \"World\")]\n    name: String,\n\n    /// Number of times to greet\n    #[arg(short, long, default_value_t = 1)]\n    count: u8,\n}\n\nfn main() {\n    let cli = Cli::parse();\n\n    for i in 1..=cli.count {\n        if cli.count > 1 {\n            println!(\"{}. Hello, {}!\", i, cli.name);\n        } else {\n            println!(\"Hello, {}!\", cli.name);\n        }\n    }\n}\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-a/src/main.rs",
+      "sha": null,
+      "content_sha256": "de1a940f29a985e3d415cd350617bf8fc2bd0e7b956d5c92f19de5c877c9795d",
+      "score": 25,
+      "content": "fn main() {\n    println!(\"{}\", crate_a::a_hello());\n}\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-a/src/lib.rs",
+      "sha": null,
+      "content_sha256": "1e8e03d7a7292ab871b34fa6a4ec6bc3f7744303d4a7d90f53ed1d5d6a94ef97",
+      "score": 25,
+      "content": "pub fn a_hello() -> String {\n    format!(\"A says: {}\", crate_b::b_hello())\n}\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-b/src/lib.rs",
+      "sha": null,
+      "content_sha256": "dcc10d12d3609daf2485136f3bdb61579f043f38576dcb7c2b7e6e728da07e19",
+      "score": 25,
+      "content": "pub fn b_hello() -> String {\n    format!(\"B says: {}\", crate_c::c_hello())\n}\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-c/src/lib.rs",
+      "sha": null,
+      "content_sha256": "f548b7bf5d95dcac195745a9f243cac709b9d7a141f8df6fded61220f22d8e06",
+      "score": 25,
+      "content": "pub fn c_hello() -> String {\n    // To avoid infinite recursion, just return a message (do not call crate_a::a_hello())\n    \"Hello from C!\".to_string()\n}\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:16.275708+00:00"
+}

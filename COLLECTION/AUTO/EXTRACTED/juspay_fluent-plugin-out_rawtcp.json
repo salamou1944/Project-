@@ -1,0 +1,64 @@
+{
+  "canonical_source": "github:juspay/fluent-plugin-out_rawtcp",
+  "repo": "juspay/fluent-plugin-out_rawtcp",
+  "revision_sha": "88a79affc146c3fb059223e1b922520ec462cfa8",
+  "default_branch": "master",
+  "pushed_at": "2019-11-12T06:16:09Z",
+  "repo_updated_at": "2019-11-12T06:16:11Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "de3eebd36e813e1c1d9b3731082d70f154b4e86e798b0e3ed11fe62b34bf0fb4",
+      "score": 100,
+      "content": "# Raw MsgPack for Fluentd\n\nUsed to chain fluentd -> logstash\n\nFluentd's `out_forward` plugin uses a custom serialization mechanism that prevents interaction with logstash (input tcp + msgpack codec).  \nThis plugin implements a simple TCP forward, without heartbeats or any other out-of-band checks.\n\n## Installation\n\n    gem install fluent-plugin-out_rawtcp-godel\n\n## Usage\n\n    <match **>\n      type rawtcp\n      buffer_type file\n      buffer_path /var/log/fluent/logcentral\n      <server>\n        name log1\n        host 10.0.1.165\n        port 24224\n      </server>\n    </match>\n\nMultiple `<server>` entries can be configured and logs will be sent to the first active one.\n\n\n## Acknowledgement\n\nInspired by fluentd's out_forward plugin by FURUHASHI Sadayuki\n"
+    },
+    {
+      "path": "test/helper.rb",
+      "sha": null,
+      "content_sha256": "56255d85ab559c3ce93cca1c82a8738ab644c20abf1a5f16a87bca7e35f23fe7",
+      "score": 93,
+      "content": "require 'minitest/pride'\n"
+    },
+    {
+      "path": "test/plugin/test_pure_json_output.rb",
+      "sha": null,
+      "content_sha256": "d4795982e51fc74b34cb772dbe137f745af6c4548623ffc4c74b597f962cbe60",
+      "score": 91,
+      "content": "require 'test/unit'\n\nrequire 'fluent/test'\nrequire 'fluent/plugin/out_rawtcp'\n\nrequire 'json'\nrequire 'helper'\n\nclass TestRawTcpOutput < Test::Unit::TestCase\n  \n  def convert_hash_to_fd_configuration(conf = {})\n    conf = Fluent::Config::Element.new('default_regexp_conf', '', conf, [])\n  end\n  \n  def test_output_as_json()\n    # prepare\n    conf = { \"output_type\" => \"json\" }\n\n    sut = Fluent::RawTcpOutput.new()\n    sut.configure(convert_hash_to_fd_configuration(conf))\n  \n    tag = \"testme\"\n    time = 123456789\n    record = { \"do\" => \"don't\" }\n    \n    # perform - call private method here :)\n    data = sut.send(:prepare_data_to_send, tag, time, record)\n    \n    # validate\n    data_json = JSON.parse(data)\n    assert(data.is_a?(String), \"prepare data to send must return a String but returned #{data.class}\")\n    assert(data_json[\"do\"] == \"don't\", \"wrong json has been created\")\n    # endline_test = data.end_with? \"\\n\"\n    assert(!(data.end_with? '\\n'), \"there is new line at the end of the record to be sent\")\n  end\n\n  def test_output_ends_with_newline_when_setup()\n    # prepare\n    conf = { \"output_type\" => \"json\", \"output_append_newline\" => true }\n\n    sut = Fluent::RawTcpOutput.new()\n    sut.configure(convert_hash_to_fd_configuration(conf))\n\n    tag = \"testme\"\n    time = 123456789\n    record = { \"do\" => \"don't\" }\n\n    # perform - call private method here :)\n    data = sut.send(:prepare_data_to_send, tag, time, record)\n\n    # validate\n    assert(data.end_with? \"\\n\", \"new line has not been appended to the data to be sent\")\n  end\n\nend"
+    },
+    {
+      "path": "test/plugin/test_out_rawtcp.rb",
+      "sha": null,
+      "content_sha256": "a2ea522cf3aafd964ad514d375b78cb457b6f192294d91ec797a33111b4bb9cb",
+      "score": 91,
+      "content": "require 'test/unit'\n\nrequire 'fluent/test'\nrequire 'fluent/plugin/out_rawtcp'\n\nrequire 'webmock/test_unit'\nrequire 'date'\n\nrequire 'helper'\n\n$:.push File.expand_path(\"../lib\", __FILE__)\n$:.push File.dirname(__FILE__)\n\nWebMock.disable_net_connect!\n\nclass TestRawTcpOutput < Test::Unit::TestCase\n  def setup\n    Fluent::Test.setup\n    stub_socket\n    @driver = driver('test', \"<server>\n                                      host 127.0.0.1\n                                      port 24225\n                              </server>\")\n  end\n\n  def driver(tag='test', conf='')\n    @driver ||= Fluent::Test::BufferedOutputTestDriver.new(Fluent::RawTcpOutput, tag).configure(conf)\n  end\n\n  def sample_record\n    {'age' => 26, 'request_id' => '42', 'parent_id' => 'parent', 'sub' => {'field'=>{'pos'=>15}}}\n  end\n\n  def stub_socket\n    server = TCPServer.new 24225\n    Thread.start do\n      loop do\n        Thread.start(server.accept) do |client|\n          while (b = client.read)\n            #puts \">> #{b}\"\n          end\n          client.close\n        end\n      end\n    end\nend\n\n  def test_writes_to_default_index\n    100.times.each do |t|\n      @driver.emit(sample_record)\n    end\n    @driver.run\n  end\nend\n"
+    },
+    {
+      "path": "fluent-plugin-out_rawtcp.gemspec",
+      "sha": null,
+      "content_sha256": "b8670e999de092b0b5e1f671712eaa8bcde492e4806a496fe73c501b8a53d90b",
+      "score": 60,
+      "content": "$:.push File.expand_path(\"../lib\", __FILE__)\n\nGem::Specification.new do |s|\n  s.name          = \"fluent-plugin-out_rawtcp-godel\"\n  s.version       = `cat VERSION`\n  s.authors       = [\"lxfontes\"]\n  s.email         = [\"lxfontes+rawtcp@gmail.com\"]\n  s.description   = %q{Raw tcp output plugin for Fluentd}\n  s.summary       = %q{output plugin for fluentd}\n  s.homepage      = \"https://github.com/puneetpahuja/fluent-plugin-out_rawtcp\"\n  s.license       = 'MIT'\n\n  s.files         = `git ls-files`.split($/)\n  s.executables   = s.files.grep(%r{^bin/}).map{ |f| File.basename(f) }\n  s.test_files    = s.files.grep(%r{^(test|spec|features)/})\n  s.require_paths = [\"lib\"]\n\n  s.add_runtime_dependency \"fluentd\"\n\n  s.add_development_dependency \"rake\"\n  s.add_development_dependency \"webmock\"\nend\n"
+    },
+    {
+      "path": "lib/fluent/plugin/out_rawtcp.rb",
+      "sha": null,
+      "content_sha256": "2ead001603b5cfdd0eab8c863dffd8fdaa83d1b2c401639ec996fff702b0ede9",
+      "score": 29,
+      "content": "# coding: utf-8\nmodule Fluent\n  class RawTcpOutput < BufferedOutput\n    Plugin.register_output('rawtcp', self)\n\n    def initialize\n      super\n      require 'socket'\n      require 'timeout'\n      require 'fileutils'\n      @nodes = []  #=> [Node]\n    end\n\n    config_param :send_timeout, :time, :default => 60\n    config_param :connect_timeout, :time, :default => 5\n    config_param :output_type, :string, :default => \"msgpack\"\n    config_param :output_append_newline, :bool, :default => false\n    attr_reader :nodes\n\n    def configure(conf)\n      super\n\n      conf.elements.each do |e|\n        next if e.name != \"server\"\n\n        host = e['host']\n        port = e['port']\n        port = port ? port.to_i : DEFAULT_LISTEN_PORT\n\n        name = e['name']\n        unless name\n          name = \"#{host}:#{port}\"\n        end\n\n        @nodes << RawNode.new(name, host, port)\n        log.info \"adding forwarding server '#{name}'\", :host=>host, :port=>port\n      end\n    end\n\n    def start\n      super\n    end\n\n    def shutdown\n      super\n    end\n\n    def format(tag, time, record)\n      [tag, time, record].to_msgpack\n    end\n\n    def write(chunk)\n      return if chunk.empty?\n\n      error = nil\n\n      @nodes.each do |node|\n        begin\n          send_data(node, chunk)\n          return\n        rescue\n          error = $!\n        end\n      end\n\n      raise error if error\n      raise \"No nodes available\"\n    end\n\n    private\n    def send_data(node, chunk)\n      sock = connect(node)\n      begin\n        opt = [1, @send_timeout.to_i].pack('I!I!')  # { int l_onoff; int l_linger; }\n        sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_LINGER, opt)\n\n        opt = [@send_timeout.to_i, 0].pack('L!L!')  # struct timeval\n        sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, opt)\n\n        chunk.msgpack_each do |tag, time, record|\n          next unless record.is_a? Hash\n          sock.write(prepare_data_to_send(tag, time, record))\n        end\n      ensure\n        sock.close\n      end\n    end\n\n    def prepare_data_to_send(tag, time, record)\n      if @output_type == \"json\"\n        new_line_suf = \"\"\n        if @output_append_newline\n          new_line_suf = \"\\n\"\n        end\n        return \"#{record.to_json}#{new_line_suf}\"\n      else\n        return [tag, time, record.to_json].to_msgpack\n      end\n    end\n\n    def connect(node)\n      Timeout.timeout(@connect_timeout) do\n        return TCPSocket.new(node.resolved_host, node.port)\n      end\n    end\n\n    class RawNode\n      attr_reader :name, :host, :port\n\n      def initialize(name, host, port)\n        @name = name\n        @host = host\n        @port = port\n        resolved_host\n      end\n\n      def resolved_host\n        @sockaddr = Socket.pack_sockaddr_in(@port, @host)\n        _, rhost = Socket.unpack_sockaddr_in(@sockaddr)\n        rhost\n      end\n    end\n  end\nend\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:09.634335+00:00"
+}

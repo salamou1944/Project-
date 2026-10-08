@@ -1,0 +1,48 @@
+{
+  "canonical_source": "github:juspay/hyperswitch-html-ruby",
+  "repo": "juspay/hyperswitch-html-ruby",
+  "revision_sha": "8e2c061b463ba107b199f0c1fe57dc523dce0038",
+  "default_branch": "main",
+  "pushed_at": "2023-08-25T07:46:20Z",
+  "repo_updated_at": "2023-12-28T06:27:21Z",
+  "license": null,
+  "topics": [
+    "css",
+    "html",
+    "javascript",
+    "ruby"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "ac434de1b451e29f308d748275730c47ce3c4d4f081c3c87c8fbe268141fc508",
+      "score": 100,
+      "content": "# Hyperswitch HTML + Ruby Integration\n\nBuild a simple checkout web-app to collect payment details and make a test payment. Included are some basic build and run scripts you can use to run the demo application.\n\n## Introduction\n\nThis demo application uses the following tech-stack :\n\n**Frontend :** `HTML + CSS` with `JavaScript`\n\n**Backend :** `Ruby`  \n\n## Prerequisites\n\nBefore running the demo app, please make sure to activate your Hyperswitch secret keys (API Key and Publishable Key) in your [Hyperswitch Dashboard](https://app.hyperswitch.io/developers). \n\nDon't have a Hyperswitch account? [Sign up here!](https://app.hyperswitch.io/register) \n\n## Running the sample\n\n1. Add your keys :\n    - Navigate to `public/script.js` and replace the placeholder `HYPERSWITCH_PUBLISHABLE_KEY` with your publishable key.\n    - Navigate to `server.rb` and replace the placeholder `HYPERSWITCH_API_KEY` with your API key.\n\n2. Install the dependencies / build the server :\n~~~\nbundle install\n~~~\n\n3. Run the server :\n~~~\nruby server.rb -o 0.0.0.0\n~~~\n\n4. The sample app will now be accessible here : [http://localhost:4242/index.html](http://localhost:4242/index.html).\n"
+    },
+    {
+      "path": "server.rb",
+      "sha": null,
+      "content_sha256": "ff9617e32fc33818fc29c559049a1369cf9e2c115c2db8393eede9f3f647bb40",
+      "score": 35,
+      "content": "require 'net/http'\nrequire 'sinatra'\nrequire 'json'\nrequire 'uri'\n\nhyper_switch_api_key = 'HYPERSWITCH_API_KEY'\nhyper_switch_api_base_url = 'https://sandbox.hyperswitch.io/payments'\n\nset :static, true\nset :port, 4242\n\n# Securely calculate the order amount\ndef calculate_order_amount(_items)\n  # Replace this constant with a calculation of the order's amount\n  # Calculate the order total on the server to prevent\n  # people from directly manipulating the amount on the client\n  1400\nend\n\n# An endpoint to start the payment process\npost '/create-payment' do\n\n  data = JSON.parse(request.body.read)\n\n  # If you have two or more “business_country” + “business_label” pairs configured in your Hyperswitch dashboard,\n  # please pass the fields business_country and business_label in this request body.\n  # For accessing more features, you can check out the request body schema for payments-create API here :\n  # https://api-reference.hyperswitch.io/docs/hyperswitch-api-reference/60bae82472db8-payments-create\n          \n  payload = { amount: calculate_order_amount(data['items']), currency: 'USD', customer_id: 'hyperswitch_customer' }.to_json\n  uri = URI.parse(hyper_switch_api_base_url)\n  http = Net::HTTP.new(uri.host, uri.port)\n  http.use_ssl = true\n  request = Net::HTTP::Post.new(uri.path,\n                                'Content-Type' => 'application/json',\n                                'Accept' => 'application/json',\n                                'api-key' => hyper_switch_api_key)\n  request.body = payload\n  response = http.request(request)\n  response_data = JSON.parse(response.body)\n  {\n    client_secret: response_data['client_secret']\n  }.to_json\n\nend\n"
+    },
+    {
+      "path": "public/script.js",
+      "sha": null,
+      "content_sha256": "1d12261a5f9aa4ff047c6372099670b4f5477f641dd876e4c834629ae2de5e0c",
+      "score": 33,
+      "content": "//Follow this doc for HTML and REST API integration: https://hyperswitch.io/docs/sdkIntegrations/unifiedCheckoutWeb/restAPIBackendAndHTMLFrontend\n// Update your publishable key here\n\nconst hyper = Hyper(\"HYPERSWITCH_PUBLISHABLE_KEY\");\n\nconst items = [{ id: \"xl-tshirt\" }];\n\nasync function initialize() {\n  // For demo purpose we are calling the hyperswitch API directly here, but in actual setup this should be backend call to your server and call the hyperswitch API internally with your API key\n  const response = await fetch(\"/create-payment\", {\n    method: \"POST\",\n    headers: { \"Content-Type\": \"application/json\" },\n    body: JSON.stringify({ items }),\n  });\n  const {\n    client_secret\n  } = await response.json();\n\n  // You can change the apperance of the SDK by adding field here\n  const appearance = {\n    // theme: \"midnight\",\n  };\n\n  widgets = hyper.widgets({\n    appearance,\n    clientSecret: client_secret\n  });\n\n  const unifiedCheckoutOptions = {\n    layout: \"tabs\",\n    wallets: {\n      walletReturnUrl: \"https://example.com/complete\",\n      //Mandatory parameter for Wallet Flows such as Googlepay, Paypal and Applepay\n    },\n  };\n\n  const unifiedCheckout = widgets.create(\"payment\", unifiedCheckoutOptions);\n  unifiedCheckout.mount(\"#unified-checkout\");\n}\ninitialize();\n\nasync function handleSubmit(e) {\n  setLoading(true);\n  const { error, data, status } = await hyper.confirmPayment({\n    widgets,\n    confirmParams: {\n      // Make sure to change this to your payment completion page\n      return_url: \"https://example.com/complete\",\n    },\n  });\n\n  // This point will only be reached if there is an immediate error occurring while confirming the payment. Otherwise, your customer will be redirected to your `return_url`.\n\n  // For some payment flows such as Sofort, iDEAL, your customer will be redirected to an intermediate page to complete authorization of the payment, and then redirected to the `return_url`.\n\n  if (error && error.type === \"validation_error\") {\n    showMessage(error.message);\n  }\n  else if (status === \"succeeded\") {\n    addClass(\"#hypers-sdk\", \"hidden\")\n    removeClass(\"#orderSuccess\", \"hidden\")\n  }\n  else {\n    showMessage(\"An unexpected error occurred.\");\n  }\n\n  setLoading(false);\n}\n\n// Fetches the payment status after payment submission\nasync function checkStatus() {\n  const clientSecret = new URLSearchParams(window.location.search).get(\n    \"payment_intent_client_secret\"\n  );\n\n  if (!clientSecret) {\n    return;\n  }\n\n  const { payment } = await hyper.retrievePayment(clientSecret);\n\n  switch (payment.status) {\n    case \"succeeded\":\n      showMessage(\"Payment succeeded!\");\n      break;\n    case \"processing\":\n      showMessage(\"Your payment is processing.\");\n      break;\n    case \"requires_payment_method\":\n      showMessage(\"Your payment was not successful, please try again.\");\n      break;\n    default:\n      showMessage(\"Something went wrong.\");\n      break;\n  }\n}\n\nfunction setLoading(showLoader) {\n  if (showLoader) {\n    show('.spinner');\n    hide('#button-text');\n  }\n  else {\n    hide('.spinner');\n    show('#button-text');\n  }\n}\n\nfunction show(id) {\n  removeClass(id, 'hidden');\n}\nfunction hide(id) {\n  addClass(id, 'hidden');\n}\n\nfunction showMessage(msg) {\n  show('#payment-message');\n  addText('#payment-message', msg);\n}\n\nfunction addText(id, msg) {\n  var element = document.querySelector(id);\n  element.innerText = msg;\n}\n\nfunction addClass(id, className) {\n  var element = document.querySelector(id);\n  element.classList.add(className);\n}\n\nfunction removeClass(id, className) {\n  var element = document.querySelector(id);\n  element.classList.remove(className);\n}\n\nfunction retryPayment() {\n  hide('#orderSuccess');\n  show('.Container');\n  initialize();\n}\n\nfunction showSDK(e) {\n  hide('.Container');\n  show('#hypers-sdk');\n};"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:13.594595+00:00"
+}

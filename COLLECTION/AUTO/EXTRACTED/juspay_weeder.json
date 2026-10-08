@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:juspay/weeder",
+  "repo": "juspay/weeder",
+  "revision_sha": "a959f2e35ac30fff6e9c330e319832a7266e1a5c",
+  "default_branch": "master",
+  "pushed_at": "2024-09-23T09:47:16Z",
+  "repo_updated_at": "2023-11-14T07:59:06Z",
+  "license": "BSD-3-Clause",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/nix-build.yml",
+      "sha": null,
+      "content_sha256": "5dcb50cdf280cb4aa06589bdea645219ace8232baccb34e759d211e9006fe686",
+      "score": 126,
+      "content": "name: Build\non: [push, pull_request, release]\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/checkout@v3.5.3\n      with:\n          persist-credentials: false\n          submodules: true\n\n    - uses: cachix/install-nix-action@v22\n      with:\n        nix_path: nixpkgs=channel:nixos-unstable\n        extra_nix_config: |\n          trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=\n          substituters = https://cache.nixos.org/ https://cache.iog.io\n\n    - uses: cachix/cachix-action@v12\n      with:\n        name: weeder\n        authToken: '${{ secrets.CACHIX_AUTH_TOKEN }}'\n\n    - run: nix build .#devShells.x86_64-linux.default --print-build-logs\n    - run: nix build --print-build-logs\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "00ca807b67bbf502be64d304976654e352a23e92aa37a272d996f0f3e2e4f598",
+      "score": 100,
+      "content": "# Weeder\n\nWeeder is an application to perform whole-program dead-code analysis. Dead code\nis code that is written, but never reachable from any other code. Over the\nlifetime of a project, this happens as code is added and removed, and leftover\ncode is never cleaned up. While GHC has warnings to detect dead code is a single\nmodule, these warnings don't extend across module boundaries - this is where\nWeeder comes in.\n\nWeeder uses HIE files produced by GHC - these files can be thought of as source\ncode that has been enhanced by GHC, adding full symbol resolution and type\ninformation. Weeder builds a dependency graph from these files to understand how\ncode interacts. Once all analysis is done, Weeder performs a traversal of this\ngraph from a set of roots (e.g., your `main` function), and determines which\ncode is reachable and which code is dead.\n\n# Using Weeder\n\n## Preparing Your Code for Weeder\n\nTo use Weeder, you will need to generate `.hie` files from your source code.\n\n### Cabal\n\nIf you use Cabal, this is easily done by adding one line to your\n`cabal.project.local` file:\n\n``` cabal\npackage *\n  ghc-options: -fwrite-ide-info\n```\n\nOnce this has been added, perform a full rebuild of your project:\n\n``` shell\ncabal clean\ncabal build all\n```\n\n### Stack\n\nIf you use `stack`, add the following to your `stack.yaml`:\n\n``` yaml\nghc-options:\n  \"$locals\": -fwrite-ide-info\n```\n\nand rebuild:\n\n``` shell\nstack clean\nstack build\n```\n\n## Calling Weeder\n\nTo call Weeder, you first need to provide a configuration file, `weeder.toml`. Weeder uses\n[TOML](https://toml.io/en/) as its configuration format.\n\n`roots` is a list of regular expressions of symbols that are considered as\nalive. If you're building an executable, the pattern `^Main.main$` is a\ngood starting point - specifying that `main` is a root. Weeder currently doesn't\nadd all exported functions as roots automatically but in many cases `main` from a\ntest suite could be a good workaround for that\n\n`type-class-roots` configures whether or not Weeder should consider all instances\nof type classes as roots. Defaults to `false`.\n\n``` toml\nroots = [ \"^Main.main$\" ]\ntype-class-roots = true\n```\n\nNow invoke the `weeder` executable, and - if your project has weeds - you will\nsee something like the following:\n\n``` shell\n$ weeder\nsrc/Dhall/TH.hs:187: toDeclaration\nsrc/Dhall/TH.hs:196: toNestedHaskellType\n```\n\n… which indicates the location of two unused symbols.\n(Please note these warnings are just for demonstration and not necessarily weeds\nin the Dhall project).\n\n## Configuration options\n\n| Name             | Default value                        | Description |\n| ---------------- | ------------------------------------ | --- |\n| roots            | `[ \"Main.main\", \"^Paths_weeder.*\" ]` | Any declarations matching these regular expressions will be considered as alive. |\n| type-class-roots | `false`                              | Consider all instances of type classes as roots. Overrides `root-instances`. |\n| root-instances   | `[ {class = '\\.IsString$'}, {class = '\\.IsList$'} ]` | Type class instances that match on all specified fields will be considered as roots. Accepts the fields `instance` matching on the pretty-printed type of the instance (visible in the output), `class` matching on its parent class declaration, and `module` matching on the module the instance is in. |\n| unused-types     | `false`                              | Enable analysis of unused types. |\n\n`root-instances` can also accept string literals as a shorthand for writing a table\ncontaining only the `instance` field. See the following example from the test suite:\n\n``` toml\nroot-instances = [ { module = \"Spec.ConfigInstanceModules.Module1\", instance = \"Bounded T\" }\n                 , \"Read T\" \n                 , { module = \"Spec.ConfigInstanceModules.Module3\" }\n                 , { class = '\\.Enum$' }\n                 , { module = \"Spec.ConfigInstanceModules.Module2\", class = '\\.Show$' }\n                 ]\n```\n\n## Exit codes\n\nWeeder emits the following exit codes:\n\n| Exit code | Cause |\n| --- | --- |\n|  0  | No weeds were found |\n| 228 | One or more weeds found |\n|  1  | Generic failing exit code |\n|  2  | Failure to read HIE file due to GHC version mismatch |\n|  3  | Failure to parse config file |\n|  4  | No HIE files found |\n\n# Tips\n\n- You may want to add `^Paths_.*` to the roots in `weeder.toml` to ignore the\n  `Paths_packageName` module automatically generated by Cabal.\n\n- You can automatically write and use a default configuration file by calling \n  Weeder with the `--write-default-config` flag, if no configuration file is\n  found.\n\n- You can mandate explicitly specifying every option in the configuration by \n  calling Weeder with the `--no-default-fields` flag. This can prevent being\n  caught off guard by new configuration options or changes to default values.\n\n- To mark all instances in a module `M` as roots, add `{ module = \"^M$\" }`\n  to `root-instances`.\n\n# Limitations\n\nWeeder currently has a few limitations:\n\n## Overloaded syntax\n\nOn some versions of GHC, Weeder might report various type classes that are used\nfor syntax extensions as weeds. For example, `Num` and `IsString` classes might be\nflagged as weeds if they are only used for overloaded literal syntax (that is,\nthe `fromInteger` and `fromString` methods).\n\nYou can add instances of specific type classes as roots with the `root-instances` \nfield, or toggle whether Weeder considers all type class instances as roots with \nthe `type-class-roots` configuration option.\n\n## Type families\n\nWeeder cannot yet analyse uses of type family instances. For this reason type\nfamily instances will be marked as implicit roots if analysis of types is\nenabled via `unused-types`.\n\n## Template Haskell\n\nWeeder is currently unable to parse the result of a Template Haskell splice. If\nsome Template Haskell code refers to other source code, this dependency won't be\ntracked by Weeder, and thus Weeder might end up with false positives.\n"
+    },
+    {
+      "path": "test/Spec/InstanceTypeclass.toml",
+      "sha": null,
+      "content_sha256": "07c8ee22494ada9096be3e2dc993f0fa81be5c82a67316a7c14a7edad0843807",
+      "score": 91,
+      "content": "roots = []\n\ntype-class-roots = false\n\nroot-instances = [ \"RootClass Char\" ]\n"
+    },
+    {
+      "path": "test/Spec/NumInstance.toml",
+      "sha": null,
+      "content_sha256": "b55ebfacac1de6ac159daa422e304907a43163c7df6f53fa4457f1cdb44929cc",
+      "score": 91,
+      "content": "roots = [ \"Spec.NumInstance.NumInstance.two\" ]\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/TypesUnused.toml",
+      "sha": null,
+      "content_sha256": "49425e71557366e5a15ba8c8dfdc98e05d79d2c08d00bb296dc89a7a3602af79",
+      "score": 91,
+      "content": "roots = []\n\ntype-class-roots = false\n\nunused-types = true\n"
+    },
+    {
+      "path": "test/Spec/TypeAliasGADT.toml",
+      "sha": null,
+      "content_sha256": "906c3f153b53145749d7bc668bdc7cee601190286b56142bd479b7cd2e022128",
+      "score": 91,
+      "content": "roots = [ \"Spec.TypeAliasGADT.TypeAliasGADT.root\" ]\n\ntype-class-roots = false\n\nunused-types = true\n\nroot-instances = []\n"
+    },
+    {
+      "path": "test/Spec/DeriveGeneric.toml",
+      "sha": null,
+      "content_sha256": "1f562e09d9f9e9e18234ce9d75def9fac25203ea85be13e1ccab85d4493859bc",
+      "score": 91,
+      "content": "roots = [ \"Spec.DeriveGeneric.DeriveGeneric.t\" ]\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/InstanceRootConstraint.toml",
+      "sha": null,
+      "content_sha256": "2a4630cbd4aef990e64627537ed40aca2513f7cb8be44b8a0f6d958c980109a4",
+      "score": 91,
+      "content": "roots = []\n\ntype-class-roots = false\n\nroot-instances = [ 'Foo a => Foo \\[a\\]' ]\n"
+    },
+    {
+      "path": "test/Spec/OverloadedLabels.toml",
+      "sha": null,
+      "content_sha256": "1d86b62620963ce50c42ff43a9ea32a55f535422f47a8ebe2aa3cc3a592aee8c",
+      "score": 91,
+      "content": "roots = [ \"Spec.OverloadedLabels.OverloadedLabels.root\" ]\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/BasicExample.toml",
+      "sha": null,
+      "content_sha256": "e510cdd4f18177a1e5be0347c8443ab6acc9c81bfda574165645a5a991dc3356",
+      "score": 91,
+      "content": "roots = [ \"Spec.BasicExample.BasicExample.root\" ]\n\ntype-class-roots = true\n"
+    },
+    {
+      "path": "test/Spec/RangeEnum.toml",
+      "sha": null,
+      "content_sha256": "bd9df5b9bcaba41fcc2861510a82a1d06404277dbda1888bbef6fc32045082b4",
+      "score": 91,
+      "content": "roots = [ \"Spec.RangeEnum.RangeEnum.planets\"\n        , \"Spec.RangeEnum.RangeEnum.letters\" \n        , \"Spec.RangeEnum.RangeEnum.shapes\"\n        , \"Spec.RangeEnum.RangeEnum.colours\"\n        ]\n\ntype-class-roots = false \n"
+    },
+    {
+      "path": "test/Spec/TypeFamilies.toml",
+      "sha": null,
+      "content_sha256": "5224ea2157eaab764e60467b9d9feb078fb61551398dd97bc3d6b97e7a3e061b",
+      "score": 91,
+      "content": "roots = [ \"Spec.TypeFamilies.TypeFamilyUsage.root\" ]\n\ntype-class-roots = false\n\nunused-types = true\n"
+    },
+    {
+      "path": "test/Spec/NumInstanceLiteral.toml",
+      "sha": null,
+      "content_sha256": "c8a01f1b9c5c0420f3d1d9f0c1eddeb643f5345945d72aaf74854445e6fd9111",
+      "score": 91,
+      "content": "roots = [ \"Spec.NumInstanceLiteral.NumInstanceLiteral.zero\"\n        , \"Spec.NumInstanceLiteral.NumInstanceLiteral.Modulo1\"\n        ]\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/ApplicativeDo.toml",
+      "sha": null,
+      "content_sha256": "67240cbf9043e61ef14f5216e3095f2c0238265c2c1a7e9e1980a67aab11d7b9",
+      "score": 91,
+      "content": "roots = [ \"Spec.ApplicativeDo.ApplicativeDo.root\" ]\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/StandaloneDeriving.toml",
+      "sha": null,
+      "content_sha256": "91668f351d8561342962f05eab3a1260ae31d2babbedb6bf9fb66d418356a7ca",
+      "score": 91,
+      "content": "roots = [ \"Spec.StandaloneDeriving.StandaloneDeriving.root\"\n        , \"Spec.StandaloneDeriving.StandaloneDeriving.A\"\n        ]\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/Types.toml",
+      "sha": null,
+      "content_sha256": "b2e1c7c757c345d0ce8976c32282ec2804ce34e20a57ba356833c7349db2fce7",
+      "score": 91,
+      "content": "roots = [ \"Spec.Types.Usages.numberUsage\"\n        , \"Spec.Types.Usages.modulo1Usage\"\n        , \"Spec.Types.Usages.recordUsage\"\n        , \"Spec.Types.Usages.vectorUsage\"\n        ]\n\ntype-class-roots = false\n\nunused-types = true\n"
+    },
+    {
+      "path": "test/Spec/Monads.toml",
+      "sha": null,
+      "content_sha256": "b0163d6e721c3a6d7c173abc8c640e4e104cd873f74a835cc650edc6ffb34bf6",
+      "score": 91,
+      "content": "roots = [ \"Spec.Monads.Monads.foo\", \"Spec.Monads.Monads.bar\" ]\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/ConfigInstanceModules.toml",
+      "sha": null,
+      "content_sha256": "4683de8fbcd6e6b94ef6ccae5bcbad6cc9fa0858528f357fe86f7f9a6987a075",
+      "score": 91,
+      "content": "root-instances = [ { module = \"Spec.ConfigInstanceModules.Module1\", instance = \"Bounded T\" }\n                 , \"Read T\" \n                 , { module = \"Spec.ConfigInstanceModules.Module3\" }\n                 , { class = '\\.Enum$' }\n                 , { module = \"Spec.ConfigInstanceModules.Module2\", class = '\\.Show$' } \n                 ]\n"
+    },
+    {
+      "path": "test/Spec/TypeDataDecl.toml",
+      "sha": null,
+      "content_sha256": "bd42d948267f8435abbc3932855bf83eebad7bf4876d8adb93d61affcab6121e",
+      "score": 91,
+      "content": "roots = [ \"Spec.TypeDataDecl.TypeDataDecl.Root\" ]\n\ntype-class-roots = false\n\nunused-types = true\n\nroot-instances = []\n"
+    },
+    {
+      "path": "test/Spec/OverloadedLists.toml",
+      "sha": null,
+      "content_sha256": "18340a0701c452952163ba298025983c7e435216ec3686a1d1c0b159e8444144",
+      "score": 91,
+      "content": "roots = [ \"Spec.OverloadedLists.OverloadedLists.root\"\n        , \"Spec.OverloadedLists.OverloadedLists.BetterList\" ]\n\nroot-instances = []\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/OverloadedStrings.toml",
+      "sha": null,
+      "content_sha256": "76e888450a8e551a131617d1e37955bde25755ffbe1f4f34cdbb70fe64289173",
+      "score": 91,
+      "content": "roots = [ \"Spec.OverloadedStrings.OverloadedStrings.root\"\n        , \"Spec.OverloadedStrings.OverloadedStrings.root'\" \n        , \"Spec.OverloadedStrings.OverloadedStrings.BetterString\"\n        ]\n\nroot-instances = []\n\ntype-class-roots = false\n"
+    },
+    {
+      "path": "test/Spec/RootClasses.toml",
+      "sha": null,
+      "content_sha256": "ef403b94bd7c1d4ac47cce519aaef67ce418fa4107e6d4700daf809cded88a34",
+      "score": 91,
+      "content": "roots = []\n\ntype-class-roots = false\n\nroot-instances = [ {class = '\\.Show$'}, {class = '\\.Ord$'}, {class = '\\.Bar$'} ]\n"
+    },
+    {
+      "path": "test/UnitTests.hs",
+      "sha": null,
+      "content_sha256": "54dbc2491e72fc5494a9afba37596fc5ff65d2016659fbe3d6105824b45e836b",
+      "score": 58,
+      "content": "{-# OPTIONS_GHC -F -pgmF hspec-discover -optF --module-name=UnitTests #-}\n"
+    },
+    {
+      "path": "test/Spec.hs",
+      "sha": null,
+      "content_sha256": "96edde73dd5bcf53439051609c899a7fcbd3985e21b81957d71be7e2feef80ac",
+      "score": 58,
+      "content": "import qualified Weeder.Main\nimport qualified Weeder.Run\nimport qualified Weeder\nimport qualified TOML\nimport qualified UnitTests\n\nimport Algebra.Graph.Export.Dot\nimport GHC.Types.Name.Occurrence (occNameString)\nimport System.Directory\nimport System.Environment (getArgs, withArgs)\nimport System.FilePath\nimport System.Process\nimport System.IO (stderr, hPrint)\nimport Test.Hspec\nimport Control.Monad (zipWithM_, when)\nimport Control.Exception ( throwIO, IOException, handle )\nimport Data.Maybe (isJust)\nimport Data.List (find, sortOn)\n\nmain :: IO ()\nmain = do\n  args <- getArgs\n  testOutputFiles <- fmap sortTests discoverIntegrationTests\n  let hieDirectories = map (dropExtension . snd) testOutputFiles\n      drawDots = mapM_ (drawDot . (<.> \".dot\")) hieDirectories\n      graphviz = \"--graphviz\" `elem` args\n  withArgs (filter (/=\"--graphviz\") args) $\n    hspec $ afterAll_ (when graphviz drawDots) $ do\n      describe \"Weeder.Run\" $\n        describe \"runWeeder\" $\n          zipWithM_ (uncurry integrationTestSpec) testOutputFiles hieDirectories\n      UnitTests.spec\n  where\n    -- Draw a dotfile via graphviz\n    drawDot f = callCommand $ \"dot -Tpng \" ++ f ++ \" -o \" ++ (f -<.> \".png\")\n    -- Sort the output files such that the failing ones go last\n    sortTests = sortOn (isJust . fst)\n\n-- | Run weeder on @hieDirectory@, comparing the output to @stdoutFile@.\n--\n-- The directory containing @hieDirectory@ must also have a @.toml@ file\n-- with the same name as @hieDirectory@.\n--\n-- If @failingFile@ is @Just@, it is used as the expected output instead of\n-- @stdoutFile@, and a different failure message is printed if the output\n-- matches @stdoutFile@.\nintegrationTestSpec :: Maybe FilePath -> FilePath -> FilePath -> Spec\nintegrationTestSpec failingFile stdoutFile hieDirectory = do\n  it (integrationTestText ++ hieDirectory) $ do\n    expectedOutput <- readFile stdoutFile\n    actualOutput <- integrationTestOutput hieDirectory\n    case failingFile of\n      Just f -> do\n        failingOutput <- readFile f\n        actualOutput `shouldNotBe` expectedOutput\n        actualOutput `shouldBe` failingOutput\n      Nothing ->\n        actualOutput `shouldBe` expectedOutput\n  where\n    integrationTestText = case failingFile of\n      Nothing -> \"produces the expected output for \"\n      Just _ -> \"produces the expected (wrong) output for \"\n\n-- | Returns detected .failing and .stdout files in ./test/Spec\ndiscoverIntegrationTests :: IO [(Maybe FilePath, FilePath)]\ndiscoverIntegrationTests = do\n  contents <- listDirectory testPath\n  let stdoutFiles = map (testPath </>) $\n        filter (\".stdout\" `isExtensionOf`) contents\n  pure . map (\\s -> (findFailing s contents, s)) $ stdoutFiles\n    where\n      findFailing s = fmap (testPath </>) . find (takeBaseName s <.> \".failing\" ==)\n      testPath = \"./test/Spec\"\n\n-- | Run weeder on the given directory for .hie files, returning stdout\n-- Also creates a dotfile containing the dependency graph as seen by Weeder\nintegrationTestOutput :: FilePath -> IO String\nintegrationTestOutput hieDirectory = do\n  hieFiles <- Weeder.Main.getHieFiles \".hie\" [hieDirectory] True\n  weederConfig <- TOML.decodeFile configExpr >>= either throwIO pure\n  let (weeds, analysis) = Weeder.Run.runWeeder weederConfig hieFiles\n      graph = Weeder.dependencyGraph analysis\n      graph' = export (defaultStyle (occNameString . Weeder.declOccName)) graph\n  handle (\\e -> hPrint stderr (e :: IOException)) $\n    writeFile (hieDirectory <.> \".dot\") graph'\n  pure (unlines $ map Weeder.Run.formatWeed weeds)\n  where\n    configExpr = hieDirectory <.> \".toml\"\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:14.915392+00:00"
+}

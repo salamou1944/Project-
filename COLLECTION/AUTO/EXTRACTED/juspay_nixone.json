@@ -1,0 +1,78 @@
+{
+  "canonical_source": "github:juspay/nixone",
+  "repo": "juspay/nixone",
+  "revision_sha": "8910d41ee7a73395a9b94287003680575689034e",
+  "default_branch": "main",
+  "pushed_at": "2026-07-16T11:42:52Z",
+  "repo_updated_at": "2026-07-16T11:42:50Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/website.yaml",
+      "sha": null,
+      "content_sha256": "b0a73162040f94eccd09cbf767341e147ffe71848d38ea9c351e5fd8ed4053af",
+      "score": 126,
+      "content": "name: Deploy setup.sh to GitHub Pages\n\non:\n  push:\n    branches:\n      - main\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n\n      - name: Create GitHub Pages content\n        run: |\n          mkdir public\n          cp setup.sh public/setup\n          cp health.sh public/health\n          cp install-nix.sh public/install-nix\n          cp setup-hm.sh public/setup-hm\n          cp self-service.sh public/self-service\n          cp index.html public/index.html\n          cp nixos-juspay-logo.svg public/logo.svg\n\n      - name: Deploy to GitHub Pages\n        uses: peaceiris/actions-gh-pages@v4\n        with:\n          github_token: ${{ secrets.GITHUB_TOKEN }}\n          publish_dir: ./public\n"
+    },
+    {
+      "path": "install-nix.sh",
+      "sha": null,
+      "content_sha256": "9ce928816263231b337ef6a6ee68fc70a4b0199700cf7ed2f7b80dc6accd1c9d",
+      "score": 117,
+      "content": "#!/bin/sh\nset -eu\n\nTARGET_USER=\"$(id -un)\"\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    --user) shift; TARGET_USER=\"$1\" ;;\n  esac\n  shift\ndone\n\nif [ -d \"/nix\" ]; then\n  echo \"Nix is already installed.\"\n  echo \"Run `Nix Uninstaller` from self-service and then re-run the current app to re-install\"\n  exit 0\nfi\n\ncurl --proto '=https' --tlsv1.2 -sSf -L \\\n  https://artifacts.nixos.org/nix-installer/tag/2.34.6/nix-installer.sh | \\\n  sh -s -- install --no-confirm --extra-conf \"trusted-users = ${TARGET_USER}\" --enable-flakes\n\n# Resolves https://github.com/juspay/nixone/issues/19\nif [ ! -d \"/nix/var/nix/profiles/per-user/${TARGET_USER}/\" ]; then\n  sudo mkdir \"/nix/var/nix/profiles/per-user/${TARGET_USER}/\"\n  sudo chown \"${TARGET_USER}\" \"/nix/var/nix/profiles/per-user/${TARGET_USER}\"\nfi\n\n"
+    },
+    {
+      "path": "setup.sh",
+      "sha": null,
+      "content_sha256": "1c8b8ea7c701a35b2b197966ca22fa82eeedd7b2bdfbbbb53a9871782f98fff0",
+      "score": 117,
+      "content": "#!/bin/sh\nset -eu\n\n# Parse CLI args\nRESET_HM=0\nfor arg in \"$@\"; do\n  case \"$arg\" in\n    --reset-hm)\n      RESET_HM=1\n      ;;\n  esac\ndone\n\n# Check if nix is already installed\nif ! which nix > /dev/null; then\n  # Install Nix\n  curl --proto '=https' --tlsv1.2 -sSf -L https://artifacts.nixos.org/nix-installer/tag/2.34.6/nix-installer.sh | \\\n    sh -s -- install --no-confirm --extra-conf \"trusted-users = $(whoami)\" --enable-flakes\n\n  # Resolves https://github.com/juspay/nixone/issues/19\n  if [ ! -d \"/nix/var/nix/profiles/per-user/$(id -un)/\" ]; then\n    sudo mkdir /nix/var/nix/profiles/per-user/$(id -un)/\n    sudo chown $(id -un) /nix/var/nix/profiles/per-user/$(id -un)\n  fi\n\n  # Source nix configuration\n  . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh\nfi\n\n_om() {\n  nix --extra-experimental-features \"flakes nix-command\" --accept-flake-config run github:juspay/omnix -- \"$@\"\n}\n\n_jq() {\n  nix --extra-experimental-features \"flakes nix-command\" run nixpkgs#jq -- \"$@\"\n}\n\n# Run `om health`\n# Note: Using `|| true` to ignore exit-code of commands that shouldn't crash the script on failure\necho \"\\n# Check nix health\"\n{ _om health; health_status=$?; } || true\n\nhealth_out=$(_om health --json 2>/dev/null) || true\n\n# Check if <https://github.com/DeterminateSystems/nix-installer> is used or required health checks are failing.\n# We are better off recommending uninstalling for latter as well, see https://github.com/juspay/nixone/pull/27#issuecomment-2681094571\nif [ $health_status -ne 0 ] || echo \"$health_out\" | _jq -e '.info.nix_installer.type != \"DetSys\"' > /dev/null; then\n  echo \"\\n# Uninstall Nix: <https://nixos.asia/en/howto/uninstall-nix>. Post uninstall, re-run the script.\"\n  echo \"\\n# Note: You will be recommended to uninstall even if your health checks pass, because you are using an unsupported Nix installer\"\n  exit 1\nfi\n\n# Initialize template, activate home-manager, and initialize git\n_setup_hm() {\n  # Setup nixos-unified-template\n  echo \"\\n# Setting up home-manager & direnv\"\n  nix --accept-flake-config run github:juspay/omnix -- \\\n    init github:juspay/nixos-unified-template#home -o ~/.config/home-manager \\\n    --non-interactive \\\n    --params '{\"username\":\"'$(id -un)'\", \"git-name\":\"'$(id -un)'\", \"git-email\":\"'$(id -un)'@juspay.in\", \"work\": true}'\n\n  cd ~/.config/home-manager && USER=$(id -un) nix run\n\n  echo \"\\n# Initialize a git repo\"\n  git init && git add . && git commit -m Init\n\n  echo \"\\n# All done 🥳 Please start a **new terminal window**\"\n  # TODO: Can we automate this? This doesn't work\n  # env -i HOME=\"$HOME\" \"$SHELL\" -l\n}\n\n# If --reset-hm is passed, reset regardless of shell health status being Green\nif [ \"$RESET_HM\" -eq 1 ]; then\n  echo \"\\n# Resetting home-manager\"\n  if [ -d ~/.config/home-manager ]; then\n    if [ -d ~/.config/home-manager-backup ]; then\n      # time-stamped backups can have unbounded growth\n      # instead, we assume user wants to keep only the latest config\n      echo \"\\n# Removing existing backup\"\n      rm -rf ~/.config/home-manager-backup\n    fi\n    mv ~/.config/home-manager ~/.config/home-manager-backup\n    echo \"\\n# Backed up ~/.config/home-manager to ~/.config/home-manager-backup\"\n  else\n    echo \"No existing ~/.config/home-manager to backup.\"\n  fi\n\n  _setup_hm\nelif echo \"$health_out\" | _jq -e '.checks.shell.result != \"Green\"' > /dev/null; then\n  if [ -d ~/.config/home-manager ]; then\n    echo \"\\n# Directory ~/.config/home-manager already exists.\"\n    echo \"Run: \\`cd ~/.config/home-manager && nix run\\`\"\n    echo \"To activate existing home-manager configuration, or remove the directory and re-run the curl to setup afresh.\"\n    exit 1\n  fi\n\n  _setup_hm\nfi\n\n"
+    },
+    {
+      "path": "setup-hm.sh",
+      "sha": null,
+      "content_sha256": "d398ec82b99050b393d9411564552f8d050c839daac5947367b62549d3bb66e3",
+      "score": 117,
+      "content": "#!/bin/sh\nset -eu\n\nRESET_HM=0\nfor arg in \"$@\"; do\n  case \"$arg\" in --reset-hm) RESET_HM=1 ;; esac\ndone\n\n# Source nix if not in PATH (standalone mode after separate install-nix)\nif ! which nix > /dev/null 2>&1; then\n  if [ -f /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]; then\n    . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh\n  else\n    echo \"Error: Nix is not installed. Install it first:\"\n    echo \"  curl --proto '=https' --tlsv1.2 -sSf -L https://juspay.github.io/nixone/install-nix | sh -s\"\n    exit 1\n  fi\nfi\n\n_om() {\n  nix --extra-experimental-features \"flakes nix-command\" --accept-flake-config run github:juspay/omnix -- \"$@\"\n}\n\n_jq() {\n  nix --extra-experimental-features \"flakes nix-command\" run nixpkgs#jq -- \"$@\"\n}\n\n# Run `om health`\n# Note: Using `|| true` to ignore exit-code of commands that shouldn't crash the script on failure\necho \"\\n# Check nix health\"\n{ _om health; health_status=$?; } || true\n\nhealth_out=$(_om health --json 2>/dev/null) || true\n\n# Initialize template, activate home-manager, and initialize git\n_setup_hm() {\n  # Setup nixos-unified-template\n  echo \"\\n# Setting up home-manager & direnv\"\n  nix --accept-flake-config run github:juspay/omnix -- \\\n    init github:juspay/nixos-unified-template#home -o ~/.config/home-manager \\\n    --non-interactive \\\n    --params '{\"username\":\"'$(id -un)'\", \"git-name\":\"'$(id -un)'\", \"git-email\":\"'$(id -un)'@juspay.in\", \"work\": true}'\n\n  cd ~/.config/home-manager && USER=$(id -un) nix run\n\n  echo \"\\n# Initialize a git repo\"\n  git init && git add . && git commit -m Init\n\n  echo \"\\n# All done 🥳 Please start a **new terminal window**\"\n  # TODO: Can we automate this? This doesn't work\n  # env -i HOME=\"$HOME\" \"$SHELL\" -l\n}\n\n# If --reset-hm is passed, reset regardless of shell health status being Green\nif [ \"$RESET_HM\" -eq 1 ]; then\n  echo \"\\n# Resetting home-manager\"\n  if [ -d ~/.config/home-manager ]; then\n    if [ -d ~/.config/home-manager-backup ]; then\n      # time-stamped backups can have unbounded growth\n      # instead, we assume user wants to keep only the latest config\n      echo \"\\n# Removing existing backup\"\n      rm -rf ~/.config/home-manager-backup\n    fi\n    mv ~/.config/home-manager ~/.config/home-manager-backup\n    echo \"\\n# Backed up ~/.config/home-manager to ~/.config/home-manager-backup\"\n  else\n    echo \"No existing ~/.config/home-manager to backup.\"\n  fi\n\n  _setup_hm\nelif echo \"$health_out\" | _jq -e '.checks.shell.result != \"Green\"' > /dev/null; then\n  if [ -d ~/.config/home-manager ]; then\n    echo \"\\n# Activating existing home-manager configuration\"\n    cd ~/.config/home-manager && USER=$(id -un) nix run\n    exit $?\n  fi\n\n  _setup_hm\nfi\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "bd6a50b9b51451b0c3ddf34b41fd2c85bf764ef8580d073d1108ab6f6274d4db",
+      "score": 100,
+      "content": "# nixone\n\n**Status**: Beta\n\nOne-click setup of all things Nix for Juspay'ers. We provide an one-line CLI that will install Nix, all the way to setting up home-manager (obviating homebrew) on your Juspay provided Macbook, as well as other Linux machines.\n\n## Getting Started\n\nOn a macOS machine that does not already have Nix installed run the following after getting \"Temp admin access\" from Kandji,\n\n```sh\ncurl --proto '=https' --tlsv1.2 -sSf -L https://juspay.github.io/nixone/setup | sh -s\n```\n\n>[!NOTE]\n> You may still run this command if you installed Nix already using [experimental-nix-installer]. The script will then setup `nixos-unified-template` for you (see below).\n\n## Running health check only\n\n```sh\ncurl --proto '=https' --tlsv1.2 -sSf -L https://juspay.github.io/nixone/health | sh -s\n```\n\n## What it does\n\n- [Install Nix](https://nixos.asia/en/install)\n- [Run `om health`](https://omnix.page/om/health.html)\n- [Setup home-manager via `nixos-unified-template`](https://github.com/juspay/nixos-unified-template)\n    - Resulting config will be accessible at `~/.config/home-manager`. You can modify this later.\n\n\n[experimental-nix-installer]: https://github.com/NixOS/experimental-nix-installer\n"
+    },
+    {
+      "path": "health.sh",
+      "sha": null,
+      "content_sha256": "d8fe4ca3a91d9a756f62a273e4c0d66911db15461d54393f8eca1b1dfe77c635",
+      "score": 35,
+      "content": "#!/bin/sh\nset -eux\n\nnix --extra-experimental-features \"flakes nix-command\" --accept-flake-config run github:juspay/omnix health github:juspay/nixone\n\n"
+    },
+    {
+      "path": "om.yaml",
+      "sha": null,
+      "content_sha256": "372fd7798bf361d220abc595590af666fbc1f35c6e0dfcc28d267f470057e70c",
+      "score": 35,
+      "content": "health:\n  default:\n    nix-version:\n      supported: \">=2.16.0\"\n    direnv:\n      required: true\n    homebrew:\n      enable: true\n      required: true\n    trusted-users:\n      enable: true\n    # TODO: Add the attic cache after https://github.com/juspay/omnix/issues/474\n    # caches:\n    #   required:\n    #     - https://euler.cachix.org\n"
+    },
+    {
+      "path": "self-service.sh",
+      "sha": null,
+      "content_sha256": "7fff915a5a4c441c74c8d21d2a40aa6b79a1f47db0cf02f7e205ca73075d379b",
+      "score": 35,
+      "content": "#!/bin/sh\n# MDM self-service script for installing Nix on managed Macs where the user is\n# not a sudoer.\n#\n# This entire script runs as root. It installs Nix silently, then\n# opens Terminal in the console user's GUI session to run home-manager setup.\n# On install failure, Terminal is opened showing the error logs.\nset -eu\n\nNIXONE_BASE_URL=\"https://juspay.github.io/nixone\"\nLOG_FILE=\"/tmp/nixone-install.log\"\n\nCONSOLE_USER=$(stat -f%Su /dev/console)\n\nif [ -z \"${CONSOLE_USER}\" ] || \\\n   [ \"${CONSOLE_USER}\" = \"loginwindow\" ] || \\\n   [ \"${CONSOLE_USER}\" = \"root\" ]; then\n  echo \"Error: No valid console user (got: '${CONSOLE_USER:-<empty>}')\"\n  exit 1\nfi\n\nCONSOLE_USER_UID=$(id -u \"${CONSOLE_USER}\")\n\nif ! curl --proto '=https' --tlsv1.2 -sSf -L \"${NIXONE_BASE_URL}/install-nix\" | \\\n     sh -s -- --user \"${CONSOLE_USER}\" > \"${LOG_FILE}\" 2>&1; then\n\n  chown \"${CONSOLE_USER}\" \"${LOG_FILE}\"\n  launchctl asuser \"${CONSOLE_USER_UID}\" \\\n    osascript -e \"tell application \\\"Terminal\\\"\n      activate\n      do script \\\"echo 'Nix installation failed:'; echo; cat ${LOG_FILE}\\\"\n    end tell\"\n  exit 1\nfi\n\nlaunchctl asuser \"${CONSOLE_USER_UID}\" \\\n  osascript -e \"tell application \\\"Terminal\\\"\n    activate\n    do script \\\"curl --proto '=https' --tlsv1.2 -sSf -L ${NIXONE_BASE_URL}/setup-hm | sh -s\\\"\n  end tell\"\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:18.179802+00:00"
+}

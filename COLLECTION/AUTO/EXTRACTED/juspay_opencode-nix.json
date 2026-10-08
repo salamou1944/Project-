@@ -1,0 +1,64 @@
+{
+  "canonical_source": "github:juspay/opencode-nix",
+  "repo": "juspay/opencode-nix",
+  "revision_sha": "53085a60cc57d0342027e6aaa70487f6d4f3734c",
+  "default_branch": "main",
+  "pushed_at": "2026-09-30T19:36:33Z",
+  "repo_updated_at": "2026-09-30T19:40:39Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "6ad591d14a9f051a8444d2107fc36de1cce7c1d198a8a53b3e3a8639c65be8e3",
+      "score": 198,
+      "content": "name: CI\n\non:\n  pull_request:\n  push:\n    branches: [main]\n  # The updater explicitly dispatches CI for PRs created with GITHUB_TOKEN.\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\njobs:\n  build:\n    name: Build (${{ matrix.os }})\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - uses: actions/checkout@v4\n      - uses: cachix/install-nix-action@v31\n      - name: Build\n        run: nix build .#default -L\n      - name: Check version\n        shell: bash\n        run: |\n          expected=$(jq -r .version sources.json)\n          actual=$(./result/bin/opencode --version)\n          echo \"OpenCode version: $actual\"\n          test \"$actual\" = \"$expected\"\n"
+    },
+    {
+      "path": ".github/workflows/update.yml",
+      "sha": null,
+      "content_sha256": "e78cdbfe2c89741999ce96e33aba0aff5dd477c305d9d4b0496e35440e7b197b",
+      "score": 126,
+      "content": "name: Update OpenCode\n\non:\n  schedule:\n    - cron: '0 10 * * *'\n  workflow_dispatch:\n\npermissions:\n  contents: write\n  pull-requests: write\n  actions: write\n\nconcurrency:\n  group: update-opencode\n  cancel-in-progress: false\n\njobs:\n  update:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: main\n      - uses: cachix/install-nix-action@v31\n      - name: Update release hashes\n        id: update\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n        run: bash scripts/update.sh\n      - name: Update nixpkgs dependencies\n        run: nix flake update\n      # Run even when only flake.lock changed; no diff means no new PR.\n      - name: Create pull request\n        id: pr\n        uses: peter-evans/create-pull-request@v8\n        with:\n          branch: update\n          base: main\n          delete-branch: true\n          add-paths: |\n            sources.json\n            flake.lock\n          commit-message: \"${{ steps.update.outputs.before != steps.update.outputs.after && format('chore: opencode {0} → {1}', steps.update.outputs.before, steps.update.outputs.after) || 'chore: update nixpkgs dependencies' }}\"\n          title: \"${{ steps.update.outputs.before != steps.update.outputs.after && format('chore: opencode {0} → {1}', steps.update.outputs.before, steps.update.outputs.after) || 'chore: update nixpkgs dependencies' }}\"\n          body: |\n            ${{ steps.update.outputs.before != steps.update.outputs.after && format('Updates OpenCode from {0} to {1} and refreshes nixpkgs dependencies.', steps.update.outputs.before, steps.update.outputs.after) || 'Refreshes nixpkgs dependencies; the OpenCode release pin is unchanged.' }}\n\n            [Release notes](https://github.com/anomalyco/opencode/releases/tag/v${{ steps.update.outputs.after }})\n      - name: Run CI for the update branch\n        if: steps.pr.outputs.pull-request-number\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n        # GITHUB_TOKEN-created PRs do not trigger pull_request workflows.\n        # The dispatched run reports on the PR head commit required by the ruleset.\n        run: gh workflow run ci.yml --ref update\n      - name: Enable auto-merge\n        if: steps.pr.outputs.pull-request-number\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}\n          PR_HEAD: ${{ steps.pr.outputs.pull-request-head-sha }}\n        run: gh pr merge \"$PR_NUMBER\" --auto --squash --match-head-commit \"$PR_HEAD\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "886054146e10ab3a73ef65b8818aa2eaadc98f62a0473a54e25ae666be9c75cc",
+      "score": 100,
+      "content": "# opencode-nix\n\nOpenCode releases several times a day while nixpkgs can lag weeks; this flake follows tagged releases within a day using upstream’s own binaries.\n\n```sh\nnix run github:juspay/opencode-nix\n```\n\nAdd it to your flake:\n\n```nix\ninputs.opencode = {\n  url = \"github:juspay/opencode-nix\";\n  inputs.nixpkgs.follows = \"nixpkgs\";\n};\n# Use opencode.packages.${system}.default in your package list.\n```\n\nSupports `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`.\n\n## How it stays current\n\nAt **10:00 UTC** daily, the updater refreshes the latest tagged release and nixpkgs.\nChanges open a PR with release hashes and the updated lockfile.\nAuto-merge lands it after the Ubuntu and macOS build/version checks pass.\n\n## Repository settings\n\n- Allow GitHub Actions to create and approve pull requests.\n- Enable auto-merge and squash merging.\n- Protect `main` with required checks **`Build (ubuntu-latest)`** and **`Build (macos-latest)`**.\n"
+    },
+    {
+      "path": "sources.json",
+      "sha": null,
+      "content_sha256": "5ecd3ffdf4cbe8de6e7ac56c1228314075344022870aaeddbe78ac8f4f214b4c",
+      "score": 35,
+      "content": "{\n  \"version\": \"1.18.33\",\n  \"hashes\": {\n    \"x86_64-linux\": \"sha256-5UYSMhOuR5CaQmhpKqS5SVDQEa/pysmTh1OiGU8cFtU=\",\n    \"aarch64-linux\": \"sha256-xjSGYkYhkkv0O+XAGr0lKIVmGnNIFCJPbXAYijOuqFg=\",\n    \"aarch64-darwin\": \"sha256-JLEoc+YFs9szh8s1X0O6dFHNYGXBgNjBiGYzN9LutVM=\"\n  }\n}\n"
+    },
+    {
+      "path": "platforms.json",
+      "sha": null,
+      "content_sha256": "1feab59e04bb4744fa9fc5e45a9c3d8f89e466058fc1792705a1b95cb46db750",
+      "score": 35,
+      "content": "{\n  \"x86_64-linux\": \"opencode-linux-x64.tar.gz\",\n  \"aarch64-linux\": \"opencode-linux-arm64.tar.gz\",\n  \"aarch64-darwin\": \"opencode-darwin-arm64.zip\"\n}\n"
+    },
+    {
+      "path": "scripts/update.sh",
+      "sha": null,
+      "content_sha256": "9122b7afb1d93e10c03719d38c56fe7189565aea5c4d45de558bd3998fc1856a",
+      "score": 33,
+      "content": "#!/usr/bin/env bash\nset -euo pipefail\n\ncd \"$(dirname \"${BASH_SOURCE[0]}\")/..\"\n\nbefore=$(jq -er '.version' sources.json)\ntag=$(gh release view --repo anomalyco/opencode --json tagName --jq .tagName)\nafter=${tag#v}\n\n# Compare numeric components, without depending on GNU sort on macOS.\nversion_pattern='^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$'\nif [[ \"$tag\" != v* || ! \"$before\" =~ $version_pattern || ! \"$after\" =~ $version_pattern ]]; then\n  echo \"Expected stable vMAJOR.MINOR.PATCH release; got $tag (current: $before)\" >&2\n  exit 1\nfi\n\nif ! jq -en --arg before \"$before\" --arg after \"$after\" \\\n  '($after | split(\".\") | map(tonumber)) > ($before | split(\".\") | map(tonumber))' >/dev/null; then\n  echo \"Keeping OpenCode $before (latest release: $after).\"\n  after=$before\nelse\n  assets=$(jq -r 'to_entries[] | [.key, .value] | @tsv' platforms.json)\n  hashes='{}'\n  while IFS=$'\\t' read -r system asset; do\n    echo \"Prefetching $asset for OpenCode $after...\"\n    hash=$(nix store prefetch-file --json \\\n      \"https://github.com/anomalyco/opencode/releases/download/$tag/$asset\" \\\n      | jq -er '.hash | select(test(\"^sha256-[A-Za-z0-9+/]{43}=$\"))')\n    hashes=$(jq --arg system \"$system\" --arg hash \"$hash\" \\\n      '. + {($system): $hash}' <<< \"$hashes\")\n  done <<< \"$assets\"\n\n  # Publish the new version only after all downloads have succeeded.\n  temporary=$(mktemp ./sources.json.XXXXXX)\n  trap 'rm -f \"$temporary\"' EXIT\n  jq -n --arg version \"$after\" --argjson hashes \"$hashes\" \\\n    '{version: $version, hashes: $hashes}' > \"$temporary\"\n  chmod 644 \"$temporary\"\n  mv \"$temporary\" sources.json\n  echo \"Updated OpenCode $before → $after.\"\nfi\n\nif [[ -n \"${GITHUB_OUTPUT:-}\" ]]; then\n  printf 'before=%s\\nafter=%s\\n' \"$before\" \"$after\" >> \"$GITHUB_OUTPUT\"\nfi\n"
+    }
+  ],
+  "generated_at": "2026-10-08T03:25:26.656093+00:00"
+}
