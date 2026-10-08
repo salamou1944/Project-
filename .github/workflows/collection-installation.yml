@@ -1,0 +1,36 @@
+name: collection-installation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "COLLECTION/AUTO/install_assets.py"
+      - "COLLECTION/AUTO/DEEP-EXTRACTED/MANIFEST.json"
+      - "COLLECTION/SOURCES/**"
+  schedule:
+    - cron: "17 */6 * * *"
+
+concurrency:
+  group: collection-installation
+  cancel-in-progress: false
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install collected OSS sources
+        run: |
+          set -euo pipefail
+          python3 -m py_compile COLLECTION/AUTO/install_assets.py
+          python3 COLLECTION/AUTO/install_assets.py --workers 8 --max-mb 250
+      - name: Commit installed assets and report
+        run: |
+          set -euo pipefail
+          git config user.name "collection-bot"
+          git config user.email "collection-bot@users.noreply.github.com"
+          git add COLLECTION/INSTALLED COLLECTION/MASTER/INSTALLATION-REPORT.json
+          git diff --cached --quiet || git commit -m "chore(collection): install verified OSS sources"
+          git push
