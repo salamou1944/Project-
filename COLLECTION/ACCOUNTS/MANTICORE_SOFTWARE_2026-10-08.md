@@ -1,0 +1,121 @@
+# Russian GitHub Frontier — Account Capture
+
+- Owner: `manticoresoftware`
+- Captured: 2026-10-08
+- Scope: current public repositories returned by owner-scoped GitHub search; this is not an exhaustion claim.
+- Public repositories returned now: 100
+
+## Why this account is in the frontier
+
+Russian-origin search/infrastructure source surfaced by the curated frontier. Manticore Search is a search engine family. Full account sweep required before any extraction.
+
+## Current public repository frontier
+
+- manticoresoftware/manticoresearch
+- manticoresoftware/manticoresearch-php
+- manticoresoftware/columnar
+- manticoresoftware/docker
+- manticoresoftware/manticoresearch-java
+- manticoresoftware/manticoresearch-python
+- manticoresoftware/manticoresearch-go
+- manticoresoftware/go-sdk
+- manticoresoftware/manticoresearch-net
+- manticoresoftware/manticoresearch-helm
+- manticoresoftware/manticoresearch-buddy
+- manticoresoftware/manticoresearch-javascript
+- manticoresoftware/manticoresearch-elixir
+- manticoresoftware/manticoresearch-typescript
+- manticoresoftware/manticoresearch-rust
+- manticoresoftware/manticore-github-issue-search
+- manticoresoftware/manticore-image-search
+- manticoresoftware/es2ms
+- manticoresoftware/openapi
+- manticoresoftware/manticoresearch-prometheus
+- manticoresoftware/manticoresearch-python-asyncio
+- manticoresoftware/clt
+- manticoresoftware/manticore-load
+- manticoresoftware/lemmatizer-uk
+- manticoresoftware/plugins
+- manticoresoftware/executor
+- manticoresoftware/manticoresearch-backup
+- manticoresoftware/kibana-demo
+- manticoresoftware/php-ext-model
+- manticoresoftware/mcp-manticore
+- manticoresoftware/demos
+- manticoresoftware/homebrew-tap-old
+- manticoresoftware/benchmarks
+- manticoresoftware/homebrew-tap
+- manticoresoftware/buddy-core
+- manticoresoftware/wordpress
+- manticoresoftware/PHP-SQL-Parser
+- manticoresoftware/translator
+- manticoresoftware/manticoresearch-auto-replication
+- manticoresoftware/download_artifact_with_retries
+- manticoresoftware/upload_artifact_with_retries
+- manticoresoftware/hnswlib
+- manticoresoftware/rust-min-libc
+- manticoresoftware/galera
+- manticoresoftware/publish_to_repo
+- manticoresoftware/phar_builder
+- manticoresoftware/upload-artifact-verify-action
+- manticoresoftware/bm25-benchmarks
+- manticoresoftware/llm-php-ext
+- manticoresoftware/manticore-tzdata
+- manticoresoftware/wiki-dpr-disk-rescore-benchmark
+- manticoresoftware/grafana-dashboard
+- manticoresoftware/PGM-index
+- manticoresoftware/semver-tagger-action
+- manticoresoftware/doc-tests
+- manticoresoftware/homebrew-tap-rc
+- manticoresoftware/demo-conversational-search
+- manticoresoftware/actions-run-on-arch-action
+- manticoresoftware/jieba
+- manticoresoftware/SphinxQL-Query-Builder
+- manticoresoftware/vector-db-benchmark
+- manticoresoftware/xxHash
+- manticoresoftware/php-catalog-demo
+- manticoresoftware/homebrew-tap-dev
+- manticoresoftware/php-ext-tokenizer
+- manticoresoftware/cppjieba
+- manticoresoftware/conversational-search-quality-benchmark
+- manticoresoftware/kafka-demo
+- manticoresoftware/buddy-plugin-create-table
+- manticoresoftware/llm-functions
+- manticoresoftware/paths-filter
+- manticoresoftware/manticoresearch-text-embeddings
+- manticoresoftware/s3-upload
+- manticoresoftware/annoy
+- manticoresoftware/actions-hugo
+- manticoresoftware/manticoresearch-language-packs
+- manticoresoftware/fluent-bit
+- manticoresoftware/buddy-plugin-show-hostname
+- manticoresoftware/kafka-offset-exporter
+- manticoresoftware/buddy-plugin-show-fields-deprecated
+- manticoresoftware/learn
+- manticoresoftware/krakjoe-parallel
+- manticoresoftware/actions-build-rpm-action
+- manticoresoftware/manticoresearch-msmarco
+- manticoresoftware/buddy-plugin-lock-tables
+- manticoresoftware/CRoaring
+- manticoresoftware/logparser
+- manticoresoftware/buddy-plugin-test
+- manticoresoftware/buddy-plugin-emulate-elastic
+- manticoresoftware/manticore-tool
+- manticoresoftware/laradock
+- manticoresoftware/homebrew-dev
+- manticoresoftware/buddy-plugin-distributed-insert
+- manticoresoftware/buddy-plugin-show
+- manticoresoftware/homebrew-core
+- manticoresoftware/buddy-plugin-select
+- manticoresoftware/buddy-plugin-show-full-tables-deprecated
+- manticoresoftware/slack-translate
+- manticoresoftware/lucene2manticore
+- manticoresoftware/buddy-plugin-cli-table
+
+## Collection boundary
+
+- Account target -> all public repositories -> relevant files/components -> newly discovered accounts -> repeat.
+- No wholesale import.
+- Preserve source, revision, license, dependencies and evidence.
+- Discovery is not readiness; no runtime/prod claim is made by this capture.
+- Before creating a Skill or implementation, perform semantic dedupe against existing Collection and canonical agent-skills/API Factory/SOAT contracts.
