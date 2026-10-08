@@ -54,3 +54,25 @@ Reward chart: warmup $1–200, easy $201–500, medium $501–1,999, hard $2,000
 4. Verify current assignment status immediately before any user action.
 5. If a candidate requires a physical device unavailable to us, downgrade it.
 6. User must personally perform identity/assignment/payment steps.
+
+
+## COLLECTION-assisted capability match — 2026-10-08
+
+Collection evidence confirms we already retain reusable material around Python, API testing, automation, DevOps and deployment. This makes **#58986 (cumsum)** and **#51655 (typecast)** the most plausible $1k candidates from the currently visible Tenstorrent list, but neither should be claimed yet: both require Tenstorrent hardware validation and the program requires assignment before the PR.
+
+### New live candidates found by Collection-guided sweep
+- **#58495 — $750 — fused scale-mask softmax tile-padding leakage**. Labeled Easy; still requires device validation. Prefer over deep $3k/$5k bounties if assignment is available.
+- **#58227 — $1,500 — BF16 reciprocal rounding**. Medium; current issue shows an assignee/PR activity, so WATCH rather than claim.
+- **#55105 — $1,500 — polygamma numerical defect**. High technical complexity; WATCH.
+- **#49307 — $2,500 — Command-R bringup**. Requires 4x N300 hardware and multi-stage model bringup; not a first target.
+- **#56908 — $3,000 — distributed LayerNorm/RMSNorm stride corruption**. Requires Wormhole hardware; WATCH.
+- **#53787 — $5,000 — log_sigmoid**. High complexity and hardware CI; WATCH.
+
+### Current execution ranking
+1. **#58495 / $750** — investigate first because it is explicitly Easy and has a concrete correctness bug.
+2. **#58986 / $1,000** — second; localized compensation guard plus regression/performance work.
+3. **#51655 / $1,000** — third; localized typecast contract fix but touches architecture-specific kernels and host/test goldens.
+4. Higher-value items remain WATCH until hardware/assignment constraints are cleared.
+
+### Rule
+Collection is now being used as the matching layer: **opportunity → acceptance criteria → existing capability/evidence → required missing resource → payout gate**. Do not start implementation on a bounty until assignment/eligibility and required hardware are confirmed.
