@@ -1,0 +1,43 @@
+{
+  "canonical_source": "github:NVIDIA/torch-nccl",
+  "repo": "NVIDIA/torch-nccl",
+  "revision_sha": "ad5a27fc5e09830741f9747b6861e39299f109f1",
+  "default_branch": "master",
+  "pushed_at": "2016-06-23T16:32:03Z",
+  "repo_updated_at": "2026-07-21T12:24:36Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "88dfae347cff274c939ab312d8e6367e00d4321a11e2f0b1b40b6a756a491b41",
+      "score": 100,
+      "content": "# nccl.torch\nTorch7 FFI bindings for NVidia NCCL library.\n\n# Installation\n - Install NCCL from https://github.com/NVIDIA/nccl\n - Have at least Cuda 7.0\n - Have libnccl.so in your library path \n\n# Collective operations supported\n - allReduce\n - reduce\n - broadcast\n - allGather\n\n# Example usage\nArgument to the collective call should be a table of contiguous tensors located on the different devices. \nExample: perform in-place allReduce on the table of tensors:\n\n```lua\nrequire 'nccl'\nnccl.allReduce(inputs)\n```\nwhere inputs is a table of contiguous tensors of the same size located on the different devices.\n\n\n\n"
+    },
+    {
+      "path": "nccl-scm-1.rockspec",
+      "sha": null,
+      "content_sha256": "b29ab5e76cf024ad4b89d94395137207e04f01cd3b5347def9768148a10ed041",
+      "score": 60,
+      "content": "package = \"nccl\"\nversion = \"scm-1\"\n\nsource = {\n   url = \"git://github.com/ngimel/nccl.torch.git\",\n}\n\ndescription = {\n   summary = \"Torch7 FFI bindings for NVIDIA nccl kernels!\",\n   homepage = \"https://github.com/ngimel/nccl.torch\",\n   license = \"BSD\"\n}\n\ndependencies = {\n   \"torch >= 7.0\",\n   \"cutorch\",\n   \"nn\"\n}\n\nbuild = {\n   type = \"command\",\n   build_command = [[\ncmake -E make_directory build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=\"$(LUA_BINDIR)/..\" -DCMAKE_INSTALL_PREFIX=\"$(PREFIX)\" && $(MAKE)\n]],\n   install_command = \"cd build && $(MAKE) install\"\n}\n"
+    },
+    {
+      "path": "test/testnccl.lua",
+      "sha": null,
+      "content_sha256": "b6a3743424bcc3ce965be38daabc4e24f528b861874e5f5aa6d0e4ae0265edf3",
+      "score": 58,
+      "content": "require 'nccl'\nrequire 'cutorch'\n\n\nlocal cmd = torch.CmdLine()\ncmd:text()\ncmd:text('nccl test script')\ncmd:text()\ncmd:text('Options:')\ncmd:option('-nGPU',               2, 'Number of GPUs to use by default')\ncmd:option('-tensorSize',       128, 'size of CudaTensor (float) to reduce')\ncmd:option('-outOfPlace',          false, 'whether to perform reduction in-place or out-of-place')\ncmd:option('-operation',      'allReduce','what collective to perform, allReduce, reduce, allGather, bcast')\ncmd:option('-nsizes', 1, 'number of sizes to test')\ncmd:option('-nrepetitions', 10, 'number of times to repeat operation for benchmarking')\ncmd:text()\n\nlocal opt = cmd:parse(arg or {})\n--no point in in-place broadcast\nif opt.operation == 'bcast' then opt.outOfPlace = false end\n--allGather can not be done in-place\nif opt.operation == 'allGather' then opt.outOfPlace = true end\n\n\nlocal inputs = {}\nlocal size = opt.tensorSize\nlocal sizeOfFloat = 4\nprint(\"size\\t\",\"elapsed time\\t\", \"alg bw\\t\", \"link bw\\t\")\nlocal val = 1\nfor i=1,opt.nsizes do\n   for i=1,opt.nGPU do\n      cutorch.setDevice(i)\n      inputs[i] = torch.CudaTensor(size):fill(val)\n   end\n   local nrep = opt.nrepetitions   \n   local outputs, result\n   if opt.outOfPlace then      \n      outputs = {}\n      for i=1,opt.nGPU do\n         cutorch.setDevice(i)\n         outputs[i] = torch.CudaTensor(size)         \n      end\n      result = outputs\n   else\n      outputs = nil\n      result = inputs\n   end\n   --warm-up   \n   nccl.allReduce(inputs,outputs)\n   --reset inputs and outputs\n   for i=1,opt.nGPU do\n      cutorch.setDevice(i)\n      inputs[i]:fill(val)\n      if opt.outOfPlace then\n         outputs[i]:fill(0)\n      end\n   end\n   local tm = torch.Timer()\n   for i=1,nrep do\n      if opt.operation == 'allReduce' then\n         nccl.allReduce(inputs,outputs)\n      elseif opt.operation == 'reduce' then         \n         nccl.reduce(inputs,outputs,nil,1)         \n      elseif opt.operation == 'bcast' then\n         for i=2,opt.nGPU do\n            cutorch.setDevice(i)\n            inputs[i]:fill(0)\n         end\n         nccl.bcast(inputs,nil,1)\n      elseif opt.operation == 'allGather' then\n         for i=1,opt.nGPU do\n            cutorch.setDevice(i)\n            outputs[i]:resize(size*opt.nGPU)     \n         end\n         nccl.allGather(inputs,outputs)\n      end\n   end\n   local elapsed=tm:time().real/nrep\n   local algbw = size * sizeOfFloat / elapsed * 1e-9\n   local linkbw = algbw\n   if opt.operation == 'allReduce' then\n      linkbw = algbw * 2 * (opt.nGPU-1)/ opt.nGPU\n   elseif opt.operation == 'allGather' then\n      algbw = algbw * opt.nGPU\n      linkbw = algbw * (opt.nGPU-1)/opt.nGPU\n   end\n   print(size*sizeOfFloat, elapsed, algbw, linkbw)\n   local expected\n   if opt.operation == 'allReduce' then\n      if opt.outOfPlace then\n         expected = opt.nGPU * val\n      else\n         expected = opt.nGPU^(nrep) * val\n      end\n   elseif opt.operation == 'bcast' or opt.operation == 'allGather' then\n      expected = val\n   elseif opt.operation == 'reduce' then\n      if opt.outOfPlace then\n         expected = opt.nGPU * val\n      else\n         expected = val + nrep * (opt.nGPU - 1)\n      end\n   end\n   local lastGpu\n   if opt.operation == 'allReduce' or opt.operation == 'allGather' or \n      opt.operation == 'bcast' then --check results on all the gpus\n      lastGpu = opt.nGPU\n   else\n      lastGpu = result[1]:getDevice()      \n   end\n   for i=1, lastGpu do\n      cutorch.setDevice(result[i]:getDevice())      \n      assert(result[i]:max()==expected)         \n      assert(result[i]:min()==expected)         \n      if opt.outOfPlace then\n         assert(inputs[i]:max(),val)         \n         assert(inputs[i]:min(),val)\n      end\n   end\n   size = size*2\nend\n\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:25:27.973226+00:00"
+}

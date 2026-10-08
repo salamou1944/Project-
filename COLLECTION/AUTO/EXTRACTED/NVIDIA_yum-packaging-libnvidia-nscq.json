@@ -1,0 +1,40 @@
+{
+  "canonical_source": "github:NVIDIA/yum-packaging-libnvidia-nscq",
+  "repo": "NVIDIA/yum-packaging-libnvidia-nscq",
+  "revision_sha": "25fcd80eb2b4cc00eb5975964937297dbbc75082",
+  "default_branch": "main",
+  "pushed_at": "2023-06-28T19:27:47Z",
+  "repo_updated_at": "2026-07-21T12:30:28Z",
+  "license": "MIT",
+  "topics": [
+    "libnvidia-nscq",
+    "nvidia-driver-packages",
+    "yum-packaging"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3a7820538ff0346d448d90e74722f7aca952e99c55a496f6a8429c0ccf4d39fa",
+      "score": 100,
+      "content": "# yum packaging libnvidia nscq\n\n[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT-license)\n[![Contributing](https://img.shields.io/badge/Contributing-Developer%20Certificate%20of%20Origin-violet)](https://developercertificate.org)\n\n## Overview\n\nPackaging templates for `yum`, `dnf`, and `zypper` based Linux distros to build libnvidia-nscq packages.\n\nNVIDIA NVSwitch Configuration and Query (NSCQ) library provides a stable driver API used by [DCGM](https://github.com/NVIDIA/DCGM) for monitoring NVSwitch devices.\n\n> _note:_ the version of libnvidia-nscq must match the NVIDIA driver installed.\n\n## Table of Contents\n\n- [Overview](#Overview)\n- [Deliverables](#Deliverables)\n- [Installation](#Installation)\n- [Prerequisites](#Prerequisites)\n  * [Clone this git repository](#Clone-this-git-repository)\n  * [Install build dependencies](#Install-build-dependencies)\n- [Building Manually](#Building-Manually)\n- [Related](#Related)\n  * [Fabric Manager](#Fabric-Manager)\n  * [NVIDIA driver](#NVIDIA-driver)\n- [See also](#See-also)\n  * [Debian](#Debian)\n- [Contributing](#Contributing)\n\n\n## Deliverables\n\nThis repo contains the `.spec` file used to build the following **RPM** packages:\n\n\n> _note:_ `XXX` is the first `.` delimited field in the driver version, ex: `525` in `525.85.12`\n\n```shell\n- libnvidia-nscq-XXX\n> ex: libnvidia-nscq-525-525.85.12-1.x86_64.rpm\n```\n\n\n## Installation\n\n* **RHEL8**, **RHEL9**, or **Fedora** streams: `XXX`, `XXX-dkms`, `latest`, and `latest-dkms`\n\n  The NvSwitch modularity profile (`fm`) installs all of the NVIDIA driver packages, as well as Fabric Manager and NCSQ\n\n  ```shell\n  dnf module install nvidia-driver:${stream}/fm\n  ```\n\n* **RHEL7**\n\n  ```shell\n  yum install libnvidia-nscq-XXX\n  ```\n\n* **openSUSE15** or **SLES15**\n\n  ```shell\n  zypper install libnvidia-nscq-XXX\n  ```\n\n\n## Prerequisites\n\n### Clone this git repository:\n\nSupported branches as described in the [NVIDIA Datacenter Drivers](https://docs.nvidia.com/datacenter/tesla/drivers/index.html#cuda-drivers) documentation.\n\n```shell\ngit clone https://github.com/NVIDIA/yum-packaging-libnvidia-nscq\n```\n\n### Download a NSCQ tarball:\n\n* https://developer.download.nvidia.com/compute/nvidia-driver/redist/libnvidia_nscq/\n\n  *ex:* libnvidia_nscq-linux-x86_64-525.85.12-archive.tar.xz\n\n### Install build dependencies\n> *note:* these are only needed for building not installation\n\n```shell\n# objdump\nyum install binutils\n# Packaging\nyum install rpm-build\n```\n\n\n## Building Manually\n\n### Download tarball via redistrib JSON\n```shell\nbaseURL=\"https://developer.download.nvidia.com/compute/nvidia-driver/redist\"\ndownloadURL=$(curl -s $baseURL/redistrib_525.85.12.json | \\\njq -r '.\"libnvidia_nscq\" | .\"linux-x86_64\" | .\"relative_path\"' | \\\nsed \"s|^|$baseURL/|\")\ncurl -O $downloadURL\n```\n\n### Prepare build directory\n```shell\ncd yum-packaging-libnvidia-nscq\nmkdir SPECS SOURCES\ncp *.spec SPECS/\ncp ../libnvidia_nscq*.tar.xz SOURCES/\n```\n\n### Check API version\n```shell\ntar -tvf SOURCES/libnvidia_nscq*.tar.xz | \\\n    grep ^l | awk '{print $(NF-2)}' | grep \".so.\" | \\\n    sort -uVr | awk -F \".so.\" '{print $2}' | awk NR==1\n> 2.0\n```\n\n### Check SONAME\n```shell\ntar -C SOURCES/ -xf SOURCES/libnvidia_nscq*.tar.xz\nobjdump -p /dev/stdin < $(find SOURCES -type f -name \"libnvidia-nscq.so.*\") | \\\ngrep SONAME | awk -F \".so.\" '{print $2}'\n> 2\n```\n\n### Generate .rpm packages\n```shell\nrpmbuild \\\n    --define \"%_topdir $(pwd)\" \\\n    --define \"%version 525.85.12\" \\\n    --define \"%branch 525\" \\\n    --define \"%so_api 2.0\" \\\n    --define \"%SONAME 2\" \\\n    --define \"%_arch x86_64\" \\\n    --define \"%_build_arch x86_64\" \\\n    --define \"%_repo_arch x86_64\" \\\n    --target=x86_64 \\\n    -v -ba SPECS/*.spec\n\ncd RPMS/x86_64\nls *.rpm\n```\n> _note:_ branch is the first `.` delimited field in the driver version, ex: `525` in `525.85.12`\n> _note:_ for arm64/aarch64 set `_build_arch` to `aarch64` and `_repo_arch` to `sbsa`\n\n\n## Related\n\n### Fabric Manager\n\n- fabricmanager\n  * [https://github.com/NVIDIA/yum-packaging-fabric-manager](https://github.com/NVIDIA/yum-packaging-fabric-manager)\n\n### NVIDIA driver\n\n- nvidia-driver\n  * [https://github.com/NVIDIA/yum-packaging-nvidia-driver](https://github.com/NVIDIA/yum-packaging-nvidia-driver)\n\n\n## See also\n\n### Debian\n\n  * [https://github.com/NVIDIA/apt-packaging-libnvidia-nscq](https://github.com/NVIDIA/apt-packaging-libnvidia-nscq)\n\n\n## Contributing\n\nSee [CONTRIBUTING.md](CONTRIBUTING.md)\n"
+    },
+    {
+      "path": "libnvidia_nscq.spec",
+      "sha": null,
+      "content_sha256": "530f2d6c814384143ce4fbd84ca3fd015906f620d628e0f9e7a270e628dddddf",
+      "score": 60,
+      "content": "# The MIT License (MIT)\n# \n# Copyright (c) 2020 NVIDIA Corporation\n# \n# Permission is hereby granted, free of charge, to any person obtaining a copy of\n# this software and associated documentation files (the \"Software\"), to deal in\n# the Software without restriction, including without limitation the rights to\n# use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of\n# the Software, and to permit persons to whom the Software is furnished to do so,\n# subject to the following conditions:\n# \n# The above copyright notice and this permission notice shall be included in all\n# copies or substantial portions of the Software.\n# \n# THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS\n# FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR\n# COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER\n# IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN\n# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n\n%define tar_arch %{?_repo_arch}%{?!_repo_arch:%{_arch}}\n%global _enable_debug_package 0\n%global debug_package %{nil}\n%global __os_install_post /usr/lib/rpm/brp-compress %{nil}\n%global pkg_folder libnvidia_nscq-linux-%{tar_arch}-%{version}-archive\n\nName:       libnvidia-nscq-%{branch}\nVersion:    %{version}\nRelease:    1\nSummary:    NVSwitch Configuration and Query library\nLicense:    NVIDIA Proprietary\nURL:        http://nvidia.com\nSource:     %{pkg_folder}.tar.xz\n#AutoReq:    0\n\nProvides:   nscq%{SONAME} = %{so_api}\nProvides:   libnvidia-nscq = %{version}\nObsoletes:  libnvidia-nscq < %{version}\nConflicts:  libnvidia-nscq\n\n%description\nNVIDIA NVSwitch Configuration and Query (NSCQ) library provides a\nstable driver API used by DCGM for monitoring NVSwitch devices.\n\n%post -n libnvidia-nscq-%{branch} -p /sbin/ldconfig\n\n%postun -n libnvidia-nscq-%{branch} -p /sbin/ldconfig\n\n%prep\n%setup -c\n\n#%build\n\n%install\nexport DONT_STRIP=1\nrm -rf %{buildroot}\nmkdir -p %{buildroot}/%{_libdir}\ncp -R -a %{pkg_folder}/lib/* %{buildroot}/%{_libdir}\n\n%files\n%license %{pkg_folder}/LICENSE\n%{_libdir}/libnvidia-nscq.so*\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:25:34.917527+00:00"
+}

@@ -1,0 +1,190 @@
+{
+  "canonical_source": "github:NVIDIA/trt-samples-for-hackathon-cn",
+  "repo": "NVIDIA/trt-samples-for-hackathon-cn",
+  "revision_sha": "a7d5daeef6549ee0fe731b7fe0d944e4f5da20a3",
+  "default_branch": "master",
+  "pushed_at": "2026-09-13T17:24:30Z",
+  "repo_updated_at": "2026-10-07T18:18:27Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "cookbook/02-API/Layer/KVCacheUpdate/README.md",
+      "sha": null,
+      "content_sha256": "dc6ad154ac1e9c241d0934f600a650810c3e6a8c42bf2a05cee918ef9cd21c1b",
+      "score": 225,
+      "content": "# KV cache update layer\n\n+ KV cache update layer.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n\n+ Write newly computed key/value vectors into an existing KV cache at per-batch positions. The update is performed in place: the output shares its device memory address with the `cache` input. Requires a strongly-typed network. Refer to `case_simple`.\n\n+ Available values of `trt.KVCacheMode`.\n\n| Name   | Comment                                                                                                                                                     |\n| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| LINEAR | For each batch element `i` and sequence position `s`: `output[i, :, writeIndices[i] + s, :] = update[i, :, s, :]`, i.e. contiguous write starting at `writeIndices[i]`. |\n\n+ Input / output tensors.\n\n| Tensor       | Role     | Data Type                              | Shape             | Notes                                             |\n| ------------ | -------- | -------------------------------------- | ----------------- | ------------------------------------------------- |\n| cache        | Input    | `float32`, `float16`, `bfloat16` (`T`) | `[b, d, s_max, h]`| Must be a network input with static `s_max`       |\n| update       | Input    | `T`                                    | `[b, d, s, h]`    | `s <= s_max`                                       |\n| writeIndices | Input    | `int32`, `int64` (`M`)                 | `[b]`             | `writeIndices[i] + s <= s_max`                    |\n| output       | Output   | `T`                                    | `[b, d, s_max, h]`| In-place update; aliases the `cache` input memory |\n\n+ Shape: `b` = batch size, `d` = number of heads, `s_max` = max (static) sequence length, `s` = update sequence length, `h` = head size.\n\n+ Notes.\n\n+ Because the output aliases the `cache` input, the example queries `engine.get_aliased_input_tensor(...)` and binds the output buffer to the aliased input address before inference.\n\n+ DLA is not supported.\n\n## Attributes\n\n| Attribute | Description                                                                                                                                                     | Default |\n| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |\n| cacheMode | Specifies the cache update mode (currently only `LINEAR`). See the `trt.KVCacheMode` table above.                                                             | LINEAR  |\n"
+    },
+    {
+      "path": "cookbook/02-API/Layer/KVCacheUpdate/unit_test.yaml",
+      "sha": null,
+      "content_sha256": "416d80234d3a0fada74fa3e36acc742ed86adb29c00ebfd5bd09dbff931c209f",
+      "score": 220,
+      "content": "version: 1\nname: 02-API/Layer/KVCacheUpdate\nenabled: true\ntags:\n  - api\n  - layer\nrun:\n  - python3 main.py > log-main.py.log\nclean:\n  - rm -rf *.log\n"
+    },
+    {
+      "path": "cookbook/07-Tool/TritonServerDeploy/install-tritonserver-without-docker.sh",
+      "sha": null,
+      "content_sha256": "572b5ae0661195a6626a3bee3d38f78c398b04bef125d087c0536848a6c982fb",
+      "score": 183,
+      "content": "#!/bin/bash\n# Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES.\n# All rights reserved.\n#\n# SPDX-License-Identifier: Apache-2.0\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n#\n# Install a runnable `tritonserver` + TensorRT backend WITHOUT docker and WITHOUT root.\n#\n# Why this exists: `tritonserver` is only distributed inside `nvcr.io/nvidia/tritonserver`, the\n# PyPI package of the same name is Python bindings only, and building from source pulls a large\n# toolchain. But a container image is just tar files behind an HTTP API, and NGC serves this\n# repository to anonymous tokens, so the two directories that matter can be unpacked directly.\n#\n# What it does:\n#   1. anonymous token -> manifest list -> amd64 manifest -> image config (prints the TensorRT\n#      version the image was built against, which the engine has to match),\n#   2. downloads image layers from the last one backwards until it finds the one holding\n#      `opt/tritonserver`, then extracts `bin/`, `lib/` and `backends/tensorrt/` only (~55 MB),\n#   3. adds the two shared libraries that live outside `/opt/tritonserver` (`libb64.so.0d` from\n#      Ubuntu, `libdcgm.so.4` from the CUDA repository), taken out of their `.deb` with `dpkg-deb`.\n#\n# Requirements: curl, python3, tar, dpkg-deb. No docker, no root, no apt install.\n#\n# Usage:\n#   ./install-tritonserver-without-docker.sh [-o <install-dir>] [-t <image-tag>]\n#\n# Afterwards:\n#   export TRITONSERVER_BIN=<install-dir>/opt/tritonserver/bin/tritonserver\n#   export LD_LIBRARY_PATH=<install-dir>/opt/tritonserver/lib:$LD_LIBRARY_PATH\n#   python3 main.py\n\nset -euo pipefail\n\nINSTALL_DIR=\"${PWD}/tritonserver-install\"\nIMAGE_TAG=\"26.07-py3\"\nREPOSITORY=\"nvidia/tritonserver\"\n\nwhile getopts \"o:t:h\" option; do\n    case $option in\n        o) INSTALL_DIR=$(realpath -m \"$OPTARG\") ;;\n        t) IMAGE_TAG=\"$OPTARG\" ;;\n        h) sed -n '18,40p' \"$0\"; exit 0 ;;\n        *) exit 1 ;;\n    esac\ndone\n\nWORK_DIR=\"${INSTALL_DIR}/.download\"\nmkdir -p \"$WORK_DIR\"\n\n# The token expires in a couple of minutes, so it is fetched again for every blob rather than once.\nget_token() {\n    curl -s \"https://nvcr.io/proxy_auth?scope=repository:${REPOSITORY}:pull&service=registry\" |\n        python3 -c \"import sys, json; print(json.load(sys.stdin)['token'])\"\n}\n\nfetch_blob() {  # <digest> <output file>\n    curl -sL -H \"Authorization: Bearer $(get_token)\" -o \"$2\" \"https://nvcr.io/v2/${REPOSITORY}/blobs/$1\"\n}\n\necho \"==== 1/3 Resolving ${REPOSITORY}:${IMAGE_TAG}\"\nACCEPT=\"application/vnd.docker.distribution.manifest.v2+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.oci.image.index.v1+json\"\ncurl -s -H \"Authorization: Bearer $(get_token)\" -H \"Accept: ${ACCEPT}\" \\\n    \"https://nvcr.io/v2/${REPOSITORY}/manifests/${IMAGE_TAG}\" > \"${WORK_DIR}/manifest-list.json\"\n\nAMD64_DIGEST=$(python3 -c \"\nimport json\nmanifest = json.load(open('${WORK_DIR}/manifest-list.json'))\nif 'manifests' in manifest:  # A manifest list, pick the amd64 entry\n    print(next(m['digest'] for m in manifest['manifests'] if m['platform']['architecture'] == 'amd64'))\nelse:  # Already a single-platform manifest\n    print('')\n\")\nif [ -n \"$AMD64_DIGEST\" ]; then\n    curl -s -H \"Authorization: Bearer $(get_token)\" -H \"Accept: ${ACCEPT}\" \\\n        \"https://nvcr.io/v2/${REPOSITORY}/manifests/${AMD64_DIGEST}\" > \"${WORK_DIR}/manifest.json\"\nelse\n    cp \"${WORK_DIR}/manifest-list.json\" \"${WORK_DIR}/manifest.json\"\nfi\n\nCONFIG_DIGEST=$(python3 -c \"import json; print(json.load(open('${WORK_DIR}/manifest.json'))['config']['digest'])\")\nfetch_blob \"$CONFIG_DIGEST\" \"${WORK_DIR}/config.json\"\npython3 -c \"\nimport json\nconfig = json.load(open('${WORK_DIR}/config.json'))['config']\nwanted = ('TRT_VERSION', 'CUDA_VERSION', 'CUDNN_VERSION', 'TRITON_SERVER_VERSION', 'NVIDIA_TRITON_SERVER_VERSION')\nfor item in config.get('Env', []):\n    if item.split('=')[0] in wanted:\n        print('    ' + item)\n\"\necho \"    ^ the engine served later must be built with THIS TensorRT version\"\n\necho \"==== 2/3 Extracting opt/tritonserver from the image layers\"\npython3 -c \"\nimport json\nfor layer in json.load(open('${WORK_DIR}/manifest.json'))['layers']:\n    print(layer['digest'], layer['size'])\n\" > \"${WORK_DIR}/layers.txt\"\n\nN_LAYER=$(wc -l < \"${WORK_DIR}/layers.txt\")\necho \"    ${N_LAYER} layers, scanning from the last one backwards\"\nFOUND=\"\"\nfor n in $(seq \"$N_LAYER\" -1 1); do\n    DIGEST=$(sed -n \"${n}p\" \"${WORK_DIR}/layers.txt\" | cut -d' ' -f1)\n    SIZE=$(sed -n \"${n}p\" \"${WORK_DIR}/layers.txt\" | cut -d' ' -f2)\n    [ \"$SIZE\" -lt 1000000 ] && continue  # Metadata-only layers cannot hold the server\n    echo \"    layer ${n} ($((SIZE / 1000000)) MB) ...\"\n    fetch_blob \"$DIGEST\" \"${WORK_DIR}/layer.tar.gz\"\n    # The listing goes to a file rather than into `grep -q`: under `set -o pipefail`, `grep -q`\n    # closing the pipe early makes `tar` die of SIGPIPE and the whole pipeline report 141, so the\n    # layer that *does* contain the server would be reported as a miss.\n    tar -tzf \"${WORK_DIR}/layer.tar.gz\" > \"${WORK_DIR}/listing.txt\" 2>/dev/null || true\n    if grep -q \"^opt/tritonserver/bin/tritonserver$\" \"${WORK_DIR}/listing.txt\"; then\n        echo \"    found in layer ${n}, extracting\"\n        tar -xzf \"${WORK_DIR}/layer.tar.gz\" -C \"$INSTALL_DIR\" \\\n            opt/tritonserver/bin opt/tritonserver/lib opt/tritonserver/backends/tensorrt\n        FOUND=\"yes\"\n        rm -f \"${WORK_DIR}/layer.tar.gz\"\n        break\n    fi\n    rm -f \"${WORK_DIR}/layer.tar.gz\" \"${WORK_DIR}/listing.txt\"\ndone\n[ -n \"$FOUND\" ] || { echo \"Failed to find opt/tritonserver in any layer\"; exit 1; }\n\necho \"==== 3/3 Adding the shared libraries that live outside /opt/tritonserver\"\n# Both are hard dependencies of the binary, so the server will not even start without them:\n#   libb64.so.0d  - base64 helper, Ubuntu universe\n#   libdcgm.so.4  - GPU telemetry, needed even with --allow-metrics=false because it is linked in\nDEB_DIR=\"${WORK_DIR}/deb\"\nmkdir -p \"$DEB_DIR\"\ncurl -sL -o \"${DEB_DIR}/libb64.deb\" \"http://archive.ubuntu.com/ubuntu/pool/universe/libb/libb64/libb64-0d_1.2-4_amd64.deb\"\nDCGM_DEB=$(curl -s \"https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/\" |\n    grep -oE \"datacenter-gpu-manager-4-core_[0-9.]+-1_amd64\\.deb\" | sort -V | tail -1)\necho \"    ${DCGM_DEB}\"\ncurl -sL -o \"${DEB_DIR}/dcgm.deb\" \"https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/${DCGM_DEB}\"\nfor package in \"${DEB_DIR}\"/*.deb; do\n    dpkg-deb -x \"$package\" \"${DEB_DIR}/extracted\"\ndone\n# The parentheses matter: without them `-exec` binds to the last `-name` only, so `libb64.so.0d`\n# is found and then not copied, and the server fails to start with that one library missing.\nfind \"${DEB_DIR}/extracted\" \\( -name \"libb64.so*\" -o -name \"libdcgm.so*\" \\) -exec cp -a {} \"${INSTALL_DIR}/opt/tritonserver/lib/\" \\;\n\nrm -rf \"$WORK_DIR\"\n\necho\necho \"==== Done: $(du -sh \"${INSTALL_DIR}\" | cut -f1) in ${INSTALL_DIR}\"\nMISSING=$(LD_LIBRARY_PATH=\"${INSTALL_DIR}/opt/tritonserver/lib\" ldd \"${INSTALL_DIR}/opt/tritonserver/bin/tritonserver\" | grep \"not found\" || true)\nif [ -n \"$MISSING\" ]; then\n    echo \"Still missing shared libraries:\"\n    echo \"$MISSING\"\n    exit 1\nfi\necho \"All shared libraries resolve. Use it with:\"\necho \"    export TRITONSERVER_BIN=${INSTALL_DIR}/opt/tritonserver/bin/tritonserver\"\necho \"    export LD_LIBRARY_PATH=${INSTALL_DIR}/opt/tritonserver/lib:\\$LD_LIBRARY_PATH\"\necho \"    python3 main.py\"\n"
+    },
+    {
+      "path": "cookbook/02-API/README.outline.txt",
+      "sha": null,
+      "content_sha256": "175a0fd5a35e3534d667bb7ca444ffc4fcc56e55c4b51f2cacd7f381022233c0",
+      "score": 171,
+      "content": "+ Examples of TensorRT APIs shown in Python, since those are mostly one-to-one correspondence to C++.\n"
+    },
+    {
+      "path": "cookbook/09-TensorRT-LLM/README.md",
+      "sha": null,
+      "content_sha256": "18f79a816131d96aa39d0229ebfd194bbd246ed5bd862916c7402e361321fcf2",
+      "score": 171,
+      "content": "# 09-TensorRT-LLM\n\n+ TensorRT workflow extracted from deprecated TensorRT-LLM engine workflow.\n"
+    },
+    {
+      "path": "cookbook/02-API/README.md",
+      "sha": null,
+      "content_sha256": "7428af60dcb547510a96cd5713286eb20313f75530f819cd6d13d6e2d6e5879c",
+      "score": 171,
+      "content": "# 02-API\n\n+ Examples of TensorRT APIs shown in Python, since those are mostly one-to-one correspondence to C++.\n\n## Builder\n\n+ Simple usage of Builder's API.\n\n## BuilderConfig\n\n+ Simple usage of BuilderConfig's APIs.\n\n## Builder Flag\n\n+ Every `trt.BuilderFlag`, what it costs, and where in the cookbook each one is really demonstrated.\n\n## CudaEngine\n\n+ Simple usage of CudaEngine's API.\n\n## Dims API\n\n+ Examples of basic `trt.Dims` container usage and common shape helper classes.\n\n## ExecutionContext\n\n+ Simple usage of ExecutionContext's API.\n\n## HostMemory\n\n+ Simple usage of HostMemory's API.\n\n## ISymExprs API\n\n+ Examples of symbolic-dimension related APIs (`ISymExpr`, `ISymExprs`, `IDimensionExpr`, `DimsExprs`).\n\n## Layer\n\n+ Information of the layers.\n\n## Network\n\n+ Steps to run.\n\n## NodeIndices\n\n+ Minimal example of `trt.NodeIndices`, a mutable integer container used by some parser/runtime APIs.\n\n## ONNX Parser\n\n+ Steps to run.\n\n## Optimization-Profile\n\n+ Steps to run.\n\n## Runtime\n\n+ Steps to run.\n\n## Shape Tensor\n\n+ The input whose **values** are shapes: how it differs from an execution tensor, and the four ways to get it wrong.\n\n## Tensor\n\n+ Steps to run.\n\n## Weights API\n\n+ Minimal usage of `trt.Weights` in a small convolution build.\n"
+    },
+    {
+      "path": "cookbook/02-API/CudaEngine/README.md",
+      "sha": null,
+      "content_sha256": "561b426058b272f8c91c1c4b3122f5af9c980f13e62bb9cf56de3d98d0640b0e",
+      "score": 169,
+      "content": "# CudaEngine\n\n+ Simple usage of CudaEngine's API.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/ONNXParser/README.md",
+      "sha": null,
+      "content_sha256": "04ef1466438f35c400b07222102225ddcdeaf52de7a409ea3bd2dc8020c29691",
+      "score": 169,
+      "content": "# ONNX Parser\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/Tensor/README.md",
+      "sha": null,
+      "content_sha256": "52b6171e5d4283ff6e5c856bfd93cc2977d7a79520957210fe4971a4ebafa504",
+      "score": 169,
+      "content": "# Tensor\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/Builder/README.md",
+      "sha": null,
+      "content_sha256": "5191384407a9bea66d9d14fa346476181ae768b6def452e5cd92aa31c529ffb3",
+      "score": 169,
+      "content": "# Builder\n\n+ Simple usage of Builder's API.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/Runtime/README.md",
+      "sha": null,
+      "content_sha256": "ca448bbb860f6bf854400685b1dccf33c9675090403128d977fa52a24cfc34c3",
+      "score": 169,
+      "content": "# Runtime\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/ExecutionContext/README.md",
+      "sha": null,
+      "content_sha256": "5d9ed632b32a895f6f3f43b2e0a62f6ec6537f7bbaf3dafb760217181d0ae16b",
+      "score": 169,
+      "content": "# ExecutionContext\n\n+ Simple usage of ExecutionContext's API.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/07-Tool/ListAPIs/README.md",
+      "sha": null,
+      "content_sha256": "82531ddec5a9611f5c079b5a639c57114af5519d3d450e1ae688aef6b8bb54fe",
+      "score": 169,
+      "content": "# List APIs\n\n+ List all the APIs in TensorRT package.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/BuilderConfig/README.md",
+      "sha": null,
+      "content_sha256": "b1407fe099b6454c9b49b49f219c5bcdc9bdd76526a17880d59dfc1c7eea4954",
+      "score": 169,
+      "content": "# BuilderConfig\n\n+ Simple usage of BuilderConfig's APIs.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/HostMemory/README.md",
+      "sha": null,
+      "content_sha256": "e342da9aab931073cdf842ae4ab066933e98a26437c23f04a34a2d416508f847",
+      "score": 169,
+      "content": "# HostMemory\n\n+ Simple usage of HostMemory's API.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/OptimizationProfile/README.md",
+      "sha": null,
+      "content_sha256": "14309194e3e737770fb443fc518f612a7310da581c709edc7dc8bb28c17eff72",
+      "score": 169,
+      "content": "# Optimization-Profile\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n\n+ Refer to `class TRTWrapperV1` and `class TRTWrapperShapeInput` in file `include/utils_class.py` to see a complete usage of Optimization-Profile.\n+ Refer to file `02-API/ExecutionContext/main.py` to see a short usage example of Optimization-Profile.\n"
+    },
+    {
+      "path": "cookbook/02-API/NodeIndices/README.md",
+      "sha": null,
+      "content_sha256": "16ec24d3a5b9f11397e5c108392591944298f77f6dd1c1d3c8810fd5f8b7aaa6",
+      "score": 169,
+      "content": "# NodeIndices\n\n+ Minimal example of `trt.NodeIndices`, a mutable integer container used by some parser/runtime APIs.\n+\n+ Steps to run.\n+\n+ ```bash\n+ python3 main.py\n+ ```\n"
+    },
+    {
+      "path": "cookbook/02-API/Dims/README.md",
+      "sha": null,
+      "content_sha256": "47c42259fd355b32a1db6afe2b98ea22289678927441f28b1b1a9b4b5512f37f",
+      "score": 169,
+      "content": "# Dims API\n\n+ Examples of basic `trt.Dims` container usage and common shape helper classes.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/Layer/README.md",
+      "sha": null,
+      "content_sha256": "1e4db2d409f093625dbcdb235371b152bce407aa02101c7c2b5a837404201a76",
+      "score": 169,
+      "content": "# Layer\n\n+ Information of the layers.\n\n+ All scripts `./*/main.py` are independently executable, we can go into the directory and follow the README.md inside.\n"
+    },
+    {
+      "path": "cookbook/02-API/Weights/README.md",
+      "sha": null,
+      "content_sha256": "3a7c4b4bbe6aa9c844d49855f7625a5deececbd2b642e468eb908aabbcc06d37",
+      "score": 169,
+      "content": "# Weights API\n\n+ Minimal usage of `trt.Weights` in a small convolution build.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/06-DLFrameworkTRT/ModelOptimizer/README.md",
+      "sha": null,
+      "content_sha256": "adc8068ff74e789140eb061e52a196584b833dad2e5a302e8b0ecb87e9e451c8",
+      "score": 169,
+      "content": "# Model Optimizer\n\n+ FP8 and INT8 post-training quantization with ModelOpt, compiled by the Torch-TensorRT Dynamo frontend.\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n\nThe path is **PyTorch model → `mtq.quantize` inserts Q/DQ → `torch_tensorrt.dynamo.compile` builds a\nstrongly-typed engine.** Since TensorRT 11 removed weak-typing INT8 calibration, this is the\nsanctioned way to get a quantized engine out of PyTorch: the Q/DQ nodes are what tell the builder\nwhere the precision changes.\n\nMeasured on B200, TensorRT 11.1.0.106, `torch_tensorrt` 2.14.0a0, `nvidia-modelopt` 0.44.0,\nsmall CNN (4 conv + classifier), batch 32:\n\n| precision | quantizers | eager max abs diff | TensorRT max abs diff | latency |\n| --- | ---: | ---: | ---: | ---: |\n| FP32 | – | – | – | 0.079 ms |\n| FP8 | 19 | 2.687e-03 (3.46%) | 2.653e-03 | 0.088 ms |\n| INT8 | 19 | 8.919e-04 (1.15%) | 8.676e-04 | 0.084 ms |\n\n## Read the eager column first\n\nThe quantized module is **still a PyTorch module** — it runs eagerly before TensorRT is involved at\nall. That makes the eager column the quantization error *alone*, and it is the right place to find a\ncalibration problem: if the eager error is already unacceptable, no amount of engine debugging will\nhelp.\n\nThe TensorRT column then answers a different question: did the builder honour the Q/DQ, or did it\nre-invent the precisions? Here TRT tracks eager closely (2.653e-03 vs 2.687e-03), which is what a\ncorrectly honoured Q/DQ graph looks like. A TensorRT error much *smaller* than eager would mean the\nquantization was quietly dropped.\n\nNote the model is small enough that quantization does not pay for itself in latency (0.088 vs\n0.079 ms) — the point here is the mechanism and the numerics, not a speed-up.\n\n## Calibration is a loop, not a config\n\n`mtq.quantize(model, config, forward_loop)` calls `forward_loop` with the model, and whatever it\npushes through sets the amax values. Unrepresentative data produces a quantized model that is wrong\nin a way no shape check will find. The calibration set here is synthetic but **fixed** (seeded), so\nthe amax values — and therefore the engine and the numbers above — are reproducible.\n\n## Two things that bite\n\n### The export needs ModelOpt's context manager\n\n`torch.export.export` on a quantized module fails with:\n\n```txt\nRuntimeError: We found a fake tensor in the exported program constant's list.\n```\n\nThe message names neither ModelOpt nor quantization. The quantizers hold fake tensors that only\nresolve in export mode, so the export must happen inside\n`modelopt.torch.quantization.utils.export_torch_mode()`. Without it, both FP8 and INT8 fail at this\nstep and it looks like a Torch-export bug.\n\n### `use_explicit_typing` + `enabled_precisions` is **accepted**, not rejected\n\nComing from TensorRT 8/10 habits the instinct is to *ask* for a precision with `enabled_precisions`;\nthe strongly-typed way is to put Q/DQ in the graph and let it speak. Documentation for other\nversions says passing both is an error.\n\n**In `torch_tensorrt` 2.14.0a0 it is accepted silently.** That is worse than a rejection — the two\nsettings can disagree with nothing to tell you. Pass one or the other, and do not rely on being\nwarned.\n\n## Why not ViT / CIFAR\n\nUpstream (`quantize_vit_fp8.py`, `vgg16_ptq.py`) uses a timm ViT and CIFAR downloads. The cookbook\ndoes not download at run time, and what matters here is the *structure* — conv stack, pooling,\nclassifier — plus a reproducible calibration set. See\n[`../../03-Workflow/pyTorch-ModelOptimizer-ONNX-TensorRT/`](../../03-Workflow/pyTorch-ModelOptimizer-ONNX-TensorRT/README.md)\nfor the ONNX-route equivalent.\n\n## Related\n\n+ [`../../03-Workflow/pyTorch-ModelOptimizer-ONNX-TensorRT/`](../../03-Workflow/pyTorch-ModelOptimizer-ONNX-TensorRT/README.md)\n  — the same idea via ONNX rather than the Dynamo frontend.\n+ [`../../02-API/Layer/QDQStructure/`](../../02-API/Layer/QDQStructure/README.md) — what Q/DQ\n  placement means at the network level, including block quantization.\n+ [`../../07-Tool/OnnxFP8QDQConvert/`](../../07-Tool/OnnxFP8QDQConvert/README.md) — converting\n  Transformer-Engine's custom FP8 Q/DQ into the standard operators.\n"
+    },
+    {
+      "path": "cookbook/02-API/Network/README.md",
+      "sha": null,
+      "content_sha256": "1b97acb247964db0836145f561956b0881bffa2f0a9136ec75fe5fdcc0ac063a",
+      "score": 169,
+      "content": "# Network\n\n+ Steps to run.\n\n```bash\npython3 main.py               # INetworkDefinition attributes\npython3 weight_transport.py   # move a trained state_dict into a hand-built network, without ONNX\n```\n\n## `weight_transport.py` — the `.wts` convention\n\n+ The question this answers: *I have a PyTorch `state_dict` and I want to call `add_convolution_nd`\n  myself. How do the weights get from one to the other?* ONNX is the usual answer; this is what the\n  other path looks like, using the `.wts` format from\n  [wang-xinyu/tensorrtx](https://github.com/wang-xinyu/tensorrtx).\n\n### The format\n\n```\n<blob-count>\n<name> <n-value> <hex0> <hex1> ...\n...\n```\n\nEach float32 is `struct.pack(\">f\", value).hex()` — big-endian IEEE-754, eight ASCII characters. The\nfile is pure text, so there is no byte order to get wrong when it moves between machines, and it can\nbe diffed, grepped and pasted into a bug report.\n\n| | |\n| --- | --- |\n| Round trip | **bit-exact** for every blob — hex float32 is lossless, not \"close enough\" |\n| Size | 81,870 bytes for 9,088 values = **2.25x** the raw 36,352 bytes, and **2.2x** an `.npz` |\n| Load | **2x** slower than `np.load` |\n| Shapes | **not stored.** Only a flat count, so the consumer must know every blob's layout |\n\nFor anything large this is a bad trade — use `.npz` or safetensors. What survives is the *idea*:\nship named weights beside the plan so a hand-built network can look them up.\n\n### `register_buffer` — exporting things that are not parameters\n\n`state_dict()` serializes buffers as well as parameters, so anything registered as a buffer is\nexported for free. This is how `yolov5/gen_wts.py` ships its anchor grid: a tensor *derived* from\nother tensors at export time that the TensorRT network would rather not recompute. The example\nregisters a per-channel norm the same way and reads it back out of the file.\n\n### Two things that bite, both silent\n\n**1. The default builder config enables TF32.** Same weights, same graph, one flag:\n\n| | max &#124;TensorRT − torch&#124; |\n| --- | --- |\n| default (TF32 on) | 2.643e-04 |\n| `clear_flag(trt.BuilderFlag.TF32)` | 8.941e-08 |\n\nA **2956x** difference, and nothing is wrong with the weights. TF32 rounds the mantissa to 10 bits\ninside the MatMul. This is the first thing to check when a hand-built network \"does not match\", and\nit is very easy to misread as a transposed blob or a bad reshape.\n\n**2. `trt.Weights` wraps a pointer — it does not copy and does not keep the object alive.** The\nvalues are read when the engine is *built*, not when `add_convolution_nd` is called. The example\nhands TensorRT a bias array, overwrites it with `999.0` before `build()`, and the engine computes\n`999.0`. Letting the array be garbage collected instead is a use-after-free with no error message.\nEvery hand-built network needs a keep-alive list.\n\n### Also worth knowing\n\n`.wts` stores no shapes and `nn.Linear` stores its weight as `(out_features, in_features)`, so the\nmatmul has to transpose the second operand. Both are supplied by hand here, and both are silent if\nyou get them wrong in a way that still has the right element count.\n"
+    },
+    {
+      "path": "cookbook/05-Plugin/APIs/README.md",
+      "sha": null,
+      "content_sha256": "951925e990fb7a6851c62e7a7ba59857cc5fcebeb20ca510bc71bab7e36d36d5",
+      "score": 169,
+      "content": "# APIs\n\n+ Example of showing all APIs of plugin.\n\n+ Use class `PluginV3`.\n\n+ Steps to run.\n\n```bash\nmake build\npython3 main.py\n```\n"
+    },
+    {
+      "path": "cookbook/02-API/ISymExprs/README.md",
+      "sha": null,
+      "content_sha256": "fb746972ae3028f7eda4080b0006a774c4c376c283516218122ecec8394134c1",
+      "score": 169,
+      "content": "# ISymExprs API\n\n+ Examples of symbolic-dimension related APIs (`ISymExpr`, `ISymExprs`, `IDimensionExpr`, `DimsExprs`).\n\n+ Steps to run.\n\n```bash\npython3 main.py\n```\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:25:36.470200+00:00"
+}

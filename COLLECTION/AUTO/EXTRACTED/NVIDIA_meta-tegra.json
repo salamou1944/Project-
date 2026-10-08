@@ -1,0 +1,36 @@
+{
+  "canonical_source": "github:NVIDIA/meta-tegra",
+  "repo": "NVIDIA/meta-tegra",
+  "revision_sha": "62c9a6fc1698d44ecafa778717fa16dc400a2f2d",
+  "default_branch": "main",
+  "pushed_at": "2026-10-07T21:23:16Z",
+  "repo_updated_at": "2026-08-28T23:06:41Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/sync-upstream.yml",
+      "sha": null,
+      "content_sha256": "b4a127cded25cc2a23df714e4507821b8055c1f3a4125f851f694219c956b3ef",
+      "score": 126,
+      "content": "name: Sync upstream OE4T branches\n\n# Scheduled workflows only run from the default branch. Keep this file on\n# `main` (NVIDIA control branch) and set `main` as the repository default.\non:\n  schedule:\n    - cron: \"*/5 * * * *\" # every 5 minutes\n  workflow_dispatch:\n\npermissions:\n  contents: write\n\nconcurrency:\n  group: sync-upstream\n  cancel-in-progress: false\n\njobs:\n  sync:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v6\n        with:\n          fetch-depth: 0\n\n      - name: Configure git\n        run: |\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"\n\n      - name: Fetch upstream OE4T\n        run: |\n          git remote add upstream https://github.com/OE4T/meta-tegra.git 2>/dev/null || \\\n            git remote set-url upstream https://github.com/OE4T/meta-tegra.git\n          git fetch upstream --prune\n          git fetch origin --prune\n\n      - name: Mirror allowlisted upstream branches to origin\n        shell: bash\n        run: |\n          set -euo pipefail\n\n          # Only sync these OE4T lines. Keep NVIDIA-only branches\n          # (`main`, `master+*`) out of this list.\n          BRANCHES=(\n            master\n            wrynose\n            whinlatter\n            walnascar\n            scarthgap\n            nanbield\n          )\n\n          synced=0\n          skipped=0\n          created=0\n          updated=0\n\n          for branch in \"${BRANCHES[@]}\"; do\n            if ! git rev-parse --verify \"refs/remotes/upstream/${branch}\" >/dev/null 2>&1; then\n              echo \"missing upstream: ${branch}\"\n              skipped=$((skipped + 1))\n              continue\n            fi\n\n            upstream_sha=\"$(git rev-parse \"refs/remotes/upstream/${branch}\")\"\n\n            if ! git rev-parse --verify \"refs/remotes/origin/${branch}\" >/dev/null 2>&1; then\n              echo \"create: ${branch} -> ${upstream_sha}\"\n              git push origin \"refs/remotes/upstream/${branch}:refs/heads/${branch}\"\n              created=$((created + 1))\n              synced=$((synced + 1))\n              continue\n            fi\n\n            origin_sha=\"$(git rev-parse \"refs/remotes/origin/${branch}\")\"\n            if [[ \"${origin_sha}\" == \"${upstream_sha}\" ]]; then\n              echo \"up-to-date: ${branch}\"\n              skipped=$((skipped + 1))\n              continue\n            fi\n\n            if git merge-base --is-ancestor \"${origin_sha}\" \"${upstream_sha}\"; then\n              echo \"fast-forward: ${branch} ${origin_sha:0:8}..${upstream_sha:0:8}\"\n              git push origin \"refs/remotes/upstream/${branch}:refs/heads/${branch}\"\n            else\n              # Mirror policy: OE4T is source of truth for shared branch names.\n              echo \"force-with-lease (diverged mirror): ${branch} ${origin_sha:0:8}..${upstream_sha:0:8}\"\n              git push --force-with-lease=\"refs/heads/${branch}:${origin_sha}\" \\\n                origin \"refs/remotes/upstream/${branch}:refs/heads/${branch}\"\n            fi\n            updated=$((updated + 1))\n            synced=$((synced + 1))\n          done\n\n          echo \"summary: synced=${synced} created=${created} updated=${updated} skipped=${skipped}\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "53228b4662e35c134e451a950b3ae74776c897fbf4f6db279aced9fadf0a6fef",
+      "score": 100,
+      "content": "# NVIDIA meta-tegra (control branch)\n\nThis `main` branch is the **NVIDIA control branch** for [NVIDIA/meta-tegra](https://github.com/NVIDIA/meta-tegra).\n\nIt is intentionally separate from OE4T content branches (`master`, `wrynose`, Yocto release lines, etc.).\n\n## Purpose\n\n- Host GitHub Actions that keep OE4T branches mirrored into this fork\n- Remain the repository **default branch** so scheduled workflows can run\n- Never receive OE4T content syncs (protected by the sync workflow)\n\n## Branch policy\n\n| Branch | Role |\n|--------|------|\n| `main` | NVIDIA control (this branch); Actions only |\n| `master`, `wrynose`, `whinlatter`, `walnascar`, `scarthgap`, `nanbield` | Allowlisted mirrors of [OE4T/meta-tegra](https://github.com/OE4T/meta-tegra) |\n| `master+*` | NVIDIA-only integration branches; never overwritten by sync |\n\n## Sync workflow\n\n`.github/workflows/sync-upstream.yml` runs every 5 minutes (and on manual dispatch) and mirrors only the allowlisted OE4T branches above. Edit the `BRANCHES` array in that workflow to add or remove lines.\n\nAfter pushing this branch, set **Settings → General → Default branch** to `main`.\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:26:04.069639+00:00"
+}

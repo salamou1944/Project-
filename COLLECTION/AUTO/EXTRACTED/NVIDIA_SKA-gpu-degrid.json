@@ -1,0 +1,50 @@
+{
+  "canonical_source": "github:NVIDIA/SKA-gpu-degrid",
+  "repo": "NVIDIA/SKA-gpu-degrid",
+  "revision_sha": "99fa55fbc1a652fb7b826c1e1828c002c3903a5d",
+  "default_branch": "master",
+  "pushed_at": "2016-09-19T22:32:18Z",
+  "repo_updated_at": "2026-07-21T12:24:16Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "setup_psg.sh",
+      "sha": null,
+      "content_sha256": "d22293fb750b43d2bc21e6357b5fdcc914c5380f9f867eef9e5fe5b47a8caf65",
+      "score": 117,
+      "content": "#! /bin/sh\nmodule load cuda/7.0\nmodule load gcc/4.8.2\n\nexport CUDA_VISIBLE_DEVICES=0\nnvidia-smi -i 0 -ac 3004,875\n"
+    },
+    {
+      "path": "setup_wilkes.sh",
+      "sha": null,
+      "content_sha256": "f94eaddabcd309101a532304a560fc0186effcfbdf9eab3b92ad1a07199a9fb7",
+      "score": 117,
+      "content": "#! /bin/sh\nmodule purge\nmodule load cuda/6.5\nmodule load gcc/4.8.1\n\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "ad438cbc9b1bdf5406b0b884499e8e43aefcf0fffbe33cc933c7a98b4884fb60",
+      "score": 100,
+      "content": "# GPUDegrid\n\nRadio astronomy degridding on the GPU. Not optimized. \n\nInvoke \"make\" to make and \"degrid\" to run.\n\n===Make options in brief===\n\n- PRECISION (float/double) specifies the precision. Default is double\n- MANAGED (1 to enable) uses managed memory. Default is off\n- CPU_CHECK (1 to enable) computes on both CPU and GPU and checks results\n- SCATTER (1 to enable) computes with 1 image point per thread. Default\n                        is 1 visibility per 32 threads. Details below \n- DEBUG (1 to enable) compiles with debug flags for GPU and CPU. Also\n                      enables CPU_CHECK\n- MOVING_WINDOW (1 to enable) similar to gather implementation only a \n                      window around the visibility moves as the visbility\n                      positions do. Similar to John Romein's gridding code\n- COMPUTE_GCF (1 to enable) compute the GCF in the kernel rather than\n                            reading from memory\n\n===Make option details===\nSpecify PRECISION on the make line to switch between\ndouble and single precision, i.e. \n%> make PRECISION=float\n\nTo use unified virtual memory, add MANAGED=1 to the build line\n\n%> make PRECISION=float MANAGED=1\n\nTo check results against a CPU computation, add CPU_CHECK=1 to\nyour make line\n\n%> make PRECISION=float MANAGED=1 CPU_CHECK=1\n\nYou can any either of 3 methods to compute. By default, each visibility\nis computed by a set of 32 consecutive threads. This method currently \ngives the best performance. A second method assigns each thread to a \nsingle point on the image and pushes data to each visibility. There is \ncooperation between threads in a threadblock. Multiple threadblocks \ncontribute to the same visibilty via an atomic addition. To enable\nthis alternate method, call make with SCATTER=1. For example,\n\n%> make PRECISION=float MANAGED=1 CPU_CHECK=1 SCATTER=1\n\nThe third method is quite similar to the gather except that each thread\ncamps on a few image points on a grid of the same dimension as the GCF.\nAs the visibilities move in the image plane, threads leap to the next\npoint on their grid as they fall out of the window around the visibility.\nThis implementation is inspired by John Romein's gridding code and is \nquite similar. To use this method, added MOVING_WINDOW=1 to the build \ncommand:\n\n%> make PRECISION=float MANAGED=1 CPU_CHECK=1 MOVING_WINDOW=1\n\nIf you specify COMPUTE_GCF=1, the GCF will not be loaded from memory.\nInstead, the first value of gcf[] will be read as (T,w) with T and w\nused to compute gcf(x,y) via\n\ngcf(x,y) = exp(2*pi*j*w*(1-T*sqrt(x**2+y**2)))\n\nwhere x,y is the distance from the image point to the visibility.\nThis is for exploration purposes only. The values do not match the\nresults in crocodile or the randomly generated gcf in degrid.cu.\n\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "e467cb9f8b8702359bfa5d71e62705e0d470c32dcf11bc20de4daeb7ccbc0d0e",
+      "score": 85,
+      "content": "PRECISION ?= double\nifeq ($(MANAGED),1)\n\tUSERFLAGS += -D__MANAGED \nendif\nifeq ($(DEBUG),1)\n\tUSERFLAGS += -g -G -lineinfo -D__CPU_CHECK\nendif\nifeq ($(SCATTER),1)\n\tUSERFLAGS += -D__SCATTER\nendif\nifeq ($(CPU_CHECK),1)\n\tUSERFLAGS += -D__CPU_CHECK\nendif\nifeq ($(MOVING_WINDOW),1)\n\tUSERFLAGS += -D__MOVING_WINDOW\nendif\nifeq ($(COMPUTE_GCF),1)\n\tUSERFLAGS += -D__COMPUTE_GCF\nendif\nUSERFLAGS += -Xcompiler -fopenmp\n\nall:  degrid GPUDegrid.so\n\nclean:\n\trm *.o\n\trm GPUDegrid.so\n\trm degrid\n\ndegrid: degrid.cu cucommon.cuh degrid_gpu.cuh degrid_gpu.o Defines.h\n\tnvcc -arch=sm_35 -std=c++11 -DPRECISION=${PRECISION} $(USERFLAGS) -o degrid degrid.cu degrid_gpu.o\n\ndegrid_gpu.o: degrid_gpu.cu degrid_gpu.cuh cucommon.cuh Defines.h\n\tnvcc -c -arch=sm_35 -std=c++11 $(USERFLAGS) -o degrid_gpu.o degrid_gpu.cu\n\ndegrid_gpu_pic.o: degrid_gpu.cu degrid_gpu.cuh cucommon.cuh Defines.h\n\tnvcc -Xcompiler -fPIC -c -arch=sm_35 -std=c++11 $(USERFLAGS) -o degrid_gpu_pic.o degrid_gpu.cu\n\ndegrid-debug: degrid.cu degrid_gpu-debug.o cucommon.cuh Defines.h\n\tnvcc -arch=sm_35 -std=c++11 -DPRECISION=${PRECISION} -g -G -lineinfo $(USERFLAGS) -o degrid-debug degrid_gpu-debug.o degrid.cu\n\ndegrid_gpu-debug.o: degrid_gpu.cu degrid_gpu.cuh cucommon.cuh Defines.h\n\tnvcc -c -arch=sm_35 -std=c++11 -g -G -lineinfo $(USERFLAGS) -o degrid_gpu-debug.o degrid_gpu.cu\n\nGPUDegrid.so: GPUDegrid.cpp degrid_gpu_pic.o\n\tnvcc -std=c++11 -shared -Xcompiler -fPIC -I/usr/include/python2.7/ -lpython2.7 -o GPUDegrid.so GPUDegrid.cpp  degrid_gpu_pic.o\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:25:27.302966+00:00"
+}

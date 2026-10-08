@@ -1,0 +1,211 @@
+{
+  "canonical_source": "github:NVIDIA/raft",
+  "repo": "NVIDIA/raft",
+  "revision_sha": "89ba23d8d5d7554a07c45354793e001424e0d2af",
+  "default_branch": "main",
+  "pushed_at": "2026-10-08T00:48:40Z",
+  "repo_updated_at": "2026-10-07T16:14:44Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "anns",
+    "building-blocks",
+    "clustering",
+    "cuda",
+    "distance",
+    "gpu",
+    "information-retrieval",
+    "linear-algebra",
+    "llm",
+    "machine-learning",
+    "nearest-neighbors",
+    "neighborhood-methods",
+    "primitives",
+    "random-sampling",
+    "solvers",
+    "sparse",
+    "statistics",
+    "vector-search",
+    "vector-similarity",
+    "vector-store"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/test.yaml",
+      "sha": null,
+      "content_sha256": "b0a375e717e1df4edd4756f651bc5eb6c3fcae7ceabf1519061cdbd7c2508859",
+      "score": 186,
+      "content": "name: test\n\non:\n  workflow_dispatch:\n    inputs:\n      branch:\n        description: |\n          branch: git branch the workflow run targets.\n          Required even when 'sha' is provided because it is also used for organizing artifacts.\n        required: true\n        type: string\n      date:\n        description: \"date: Date (YYYY-MM-DD) this run is for. Used to organize artifacts produced by nightly builds\"\n        required: true\n        type: string\n      sha:\n        description: \"sha: full git commit SHA to check out\"\n        required: true\n        type: string\n      build_type:\n        description: \"build_type: one of [branch, nightly, pull-request]\"\n        type: string\n        default: nightly\n\npermissions: {}\n\njobs:\n  conda-cpp-checks:\n    permissions:\n      actions: read\n      contents: read\n      id-token: write\n      packages: read\n      pull-requests: read\n    secrets: inherit # zizmor: ignore[secrets-inherit]\n    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@main\n    with:\n      build_type: ${{ inputs.build_type }}\n      branch: ${{ inputs.branch }}\n      date: ${{ inputs.date }}\n      sha: ${{ inputs.sha }}\n      package_name: libraft\n  conda-cpp-tests:\n    permissions:\n      actions: read\n      contents: read\n      id-token: write\n      packages: read\n      pull-requests: read\n    secrets: inherit # zizmor: ignore[secrets-inherit]\n    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@main\n    with:\n      build_type: ${{ inputs.build_type }}\n      branch: ${{ inputs.branch }}\n      date: ${{ inputs.date }}\n      script: ci/test_cpp.sh\n      sha: ${{ inputs.sha }}\n  conda-python-tests:\n    permissions:\n      actions: read\n      contents: read\n      id-token: write\n      packages: read\n      pull-requests: read\n    secrets: inherit # zizmor: ignore[secrets-inherit]\n    uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@main\n    with:\n      build_type: ${{ inputs.build_type }}\n      branch: ${{ inputs.branch }}\n      date: ${{ inputs.date }}\n      script: ci/test_python.sh\n      sha: ${{ inputs.sha }}\n  wheel-tests-pylibraft:\n    permissions:\n      actions: read\n      contents: read\n      id-token: write\n      packages: read\n      pull-requests: read\n    secrets: inherit # zizmor: ignore[secrets-inherit]\n    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main\n    with:\n      build_type: ${{ inputs.build_type }}\n      branch: ${{ inputs.branch }}\n      date: ${{ inputs.date }}\n      sha: ${{ inputs.sha }}\n      script: ci/test_wheel_pylibraft.sh\n  wheel-tests-raft-dask:\n    permissions:\n      actions: read\n      contents: read\n      id-token: write\n      packages: read\n      pull-requests: read\n    secrets: inherit # zizmor: ignore[secrets-inherit]\n    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@main\n    with:\n      build_type: ${{ inputs.build_type }}\n      branch: ${{ inputs.branch }}\n      date: ${{ inputs.date }}\n      sha: ${{ inputs.sha }}\n      script: ci/test_wheel_raft_dask.sh\n"
+    },
+    {
+      "path": "docs/README.md",
+      "sha": null,
+      "content_sha256": "b116051ed97b7c12f026a6c6447a63c09ae5d81505b4b464e83313536a9c9d57",
+      "score": 168,
+      "content": "# Building Documentation\n## Building locally:\n\n#### [Build and install RAFT](source/build.md)\n\n#### Generate the docs\n```shell script\nbash build.sh docs\n```\n\n#### Once the process finishes, documentation can be found in build/html\n```shell script\nxdg-open build/html/index.html`\n```\n"
+    },
+    {
+      "path": "ci/test_python.sh",
+      "sha": null,
+      "content_sha256": "3c4b2e845f9c6ad24ee6b346416382c87dad3f66fbdcb65ce2e9812e3e49b780",
+      "score": 165,
+      "content": "#!/bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\nset -euo pipefail\n\n# Support invoking test_python.sh outside the script directory\ncd \"$(dirname \"$(realpath \"${BASH_SOURCE[0]}\")\")\"/../\n\n. /opt/conda/etc/profile.d/conda.sh\n\nrapids-logger \"Configuring conda strict channel priority\"\nconda config --set channel_priority strict\n\nrapids-logger \"Downloading artifacts from previous jobs\"\nCPP_CHANNEL=$(rapids-download-from-github \"$(rapids-artifact-name conda_cpp libraft raft --cuda \"$RAPIDS_CUDA_VERSION\")\")\nPYTHON_CHANNEL=$(rapids-download-from-github \"$(rapids-artifact-name conda_python raft raft --stable --cuda \"$RAPIDS_CUDA_VERSION\")\")\n\nrapids-logger \"Generate Python testing dependencies\"\nrapids-dependency-file-generator \\\n  --output conda \\\n  --file-key test_python \\\n  --matrix \"cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION};dependencies=${RAPIDS_DEPENDENCIES}\" \\\n  --prepend-channel \"${CPP_CHANNEL}\" \\\n  --prepend-channel \"${PYTHON_CHANNEL}\" \\\n  | tee env.yaml\n\nrapids-mamba-retry env create --yes -f env.yaml -n test\n\n# Temporarily allow unbound variables for conda activation.\nset +u\nconda activate test\nset -u\n\nRAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-\"${PWD}/test-results\"}\nRAPIDS_COVERAGE_DIR=${RAPIDS_COVERAGE_DIR:-\"${PWD}/coverage-results\"}\nmkdir -p \"${RAPIDS_TESTS_DIR}\" \"${RAPIDS_COVERAGE_DIR}\"\n\nrapids-print-env\n\nrapids-logger \"Check GPU usage\"\nnvidia-smi\n\nEXITCODE=0\ntrap \"EXITCODE=1\" ERR\nset +e\n\nrapids-logger \"pytest pylibraft\"\n./ci/run_pylibraft_pytests.sh \\\n  --junitxml=\"${RAPIDS_TESTS_DIR}/junit-pylibraft.xml\" \\\n  --cov-config=../.coveragerc \\\n  --cov=pylibraft \\\n  --cov-report=xml:\"${RAPIDS_COVERAGE_DIR}/pylibraft-coverage.xml\" \\\n  --cov-report=term\n\nrapids-logger \"pytest raft-dask\"\n./ci/run_raft_dask_pytests.sh \\\n  --junitxml=\"${RAPIDS_TESTS_DIR}/junit-raft-dask.xml\" \\\n  --cov-config=../.coveragerc \\\n  --cov=raft_dask \\\n  --cov-report=xml:\"${RAPIDS_COVERAGE_DIR}/raft-dask-coverage.xml\" \\\n  --cov-report=term \\\n  -vvs\n\nrapids-logger \"pytest raft-dask (ucxx only)\"\n./ci/run_raft_dask_pytests.sh \\\n  --junitxml=\"${RAPIDS_TESTS_DIR}/junit-raft-dask-ucxx.xml\" \\\n  --cov-config=../.coveragerc \\\n  --cov=raft_dask \\\n  --cov-report=xml:\"${RAPIDS_COVERAGE_DIR}/raft-dask-ucxx-coverage.xml\" \\\n  --cov-report=term \\\n  -vvs \\\n  --run_ucx\n\nrapids-logger \"Test script exiting with value: $EXITCODE\"\nexit ${EXITCODE}\n"
+    },
+    {
+      "path": "ci/run_ctests.sh",
+      "sha": null,
+      "content_sha256": "526085ab2abc83cada59ef39aa9a7b94057db8a1d98b3f5b37cd34a50654d0b2",
+      "score": 165,
+      "content": "#!/bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.\n# SPDX-License-Identifier: Apache-2.0\n\nset -euo pipefail\n\n# Support customizing the ctests' install location\n# First, try the installed location (CI/conda environments)\ninstalled_test_location=\"${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/gtests/libraft/\"\n# Fall back to the build directory (devcontainer environments)\ndevcontainers_test_location=\"$(dirname \"$(realpath \"${BASH_SOURCE[0]}\")\")/../cpp/build/latest\"\n\nif [[ -d \"${installed_test_location}\" ]]; then\n    cd \"${installed_test_location}\"\nelif [[ -d \"${devcontainers_test_location}\" ]]; then\n    cd \"${devcontainers_test_location}\"\nelse\n    echo \"Error: Test location not found. Searched:\" >&2\n    echo \"  - ${installed_test_location}\" >&2\n    echo \"  - ${devcontainers_test_location}\" >&2\n    exit 1\nfi\n\nctest --output-on-failure --no-tests=error \"$@\"\n"
+    },
+    {
+      "path": "ci/test_cpp.sh",
+      "sha": null,
+      "content_sha256": "1348d1c55317bab2c62fc5fc0b997c6af2d35e57556f8c2b2c16b84ff8a49e31",
+      "score": 165,
+      "content": "#!/bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.\n# SPDX-License-Identifier: Apache-2.0\n\nset -euo pipefail\n\n# Support invoking test_cpp.sh outside the script directory\ncd \"$(dirname \"$(realpath \"${BASH_SOURCE[0]}\")\")\"/../\n\n. /opt/conda/etc/profile.d/conda.sh\n\nrapids-logger \"Configuring conda strict channel priority\"\nconda config --set channel_priority strict\n\nCPP_CHANNEL=$(rapids-download-from-github \"$(rapids-artifact-name conda_cpp libraft raft --cuda \"$RAPIDS_CUDA_VERSION\")\")\nRAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-\"${PWD}/test-results\"}/\nmkdir -p \"${RAPIDS_TESTS_DIR}\"\n\nrapids-logger \"Generate C++ testing dependencies\"\nrapids-dependency-file-generator \\\n  --output conda \\\n  --file-key test_cpp \\\n  --matrix \"cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)\" \\\n  --prepend-channel \"${CPP_CHANNEL}\" \\\n  | tee env.yaml\n\nrapids-mamba-retry env create --yes -f env.yaml -n test\n\n# Temporarily allow unbound variables for conda activation.\nset +u\nconda activate test\nset -u\n\nrapids-print-env\n\nrapids-logger \"Check GPU usage\"\nnvidia-smi\n\nexport GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/\n# Run libraft gtests from libraft-tests package\n./ci/run_ctests.sh -j8 && EXITCODE=$? || EXITCODE=$?;\n\nrapids-logger \"Test script exiting with value: $EXITCODE\"\nexit \"${EXITCODE}\"\n"
+    },
+    {
+      "path": "ci/test_wheel_pylibraft.sh",
+      "sha": null,
+      "content_sha256": "ec1da61a637c54d8af6a298ad06308e8b7d71bb3ede08ce8ebdbeeab0ab84de2",
+      "score": 165,
+      "content": "#!/bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.\n# SPDX-License-Identifier: Apache-2.0\n\nset -euo pipefail\n\nsource rapids-init-pip\n\nLIBRAFT_WHEELHOUSE=$(rapids-download-from-github \"$(rapids-artifact-name wheel_cpp libraft raft --cuda \"$RAPIDS_CUDA_VERSION\")\")\nPYLIBRAFT_WHEELHOUSE=$(rapids-download-from-github \"$(rapids-artifact-name wheel_python pylibraft raft --stable --cuda \"$RAPIDS_CUDA_VERSION\")\")\n\n# generate constraints (possibly pinning to oldest support versions of dependencies)\nrapids-generate-pip-constraints test_python \"${PIP_CONSTRAINT}\"\n\n# notes:\n#\n#   * echo to expand wildcard before adding `[test]` requires for pip\n#   * just providing --constraint=\"${PIP_CONSTRAINT}\" to be explicit, and because\n#     that environment variable is ignored if any other --constraint are passed via the CLI\n#\nrapids-pip-retry install \\\n    --constraint \"${PIP_CONSTRAINT}\" \\\n    \"${LIBRAFT_WHEELHOUSE}\"/libraft*.whl \\\n    \"$(echo \"${PYLIBRAFT_WHEELHOUSE}\"/pylibraft*.whl)[test]\"\n\npython -m pytest ./python/pylibraft/pylibraft/tests\n"
+    },
+    {
+      "path": "ci/run_pylibraft_pytests.sh",
+      "sha": null,
+      "content_sha256": "156d4a5b7c5618ca8636ea4c521e6dd8d8d54fd63db9b70ca429ecca1512ef4a",
+      "score": 165,
+      "content": "#!/bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.\n# SPDX-License-Identifier: Apache-2.0\n\nset -euo pipefail\n\n# Support invoking run_pylibraft_pytests.sh outside the script directory\ncd \"$(dirname \"$(realpath \"${BASH_SOURCE[0]}\")\")\"/../python/pylibraft/pylibraft\n\npytest --cache-clear \"$@\" tests\n"
+    },
+    {
+      "path": "ci/test_wheel_raft_dask.sh",
+      "sha": null,
+      "content_sha256": "1f141291212ad5d341c577249d4ca23d2f646cc4e14166f1ac3b01a02b502a4e",
+      "score": 165,
+      "content": "#!/bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.\n# SPDX-License-Identifier: Apache-2.0\n\nset -euo pipefail\n\nsource rapids-init-pip\n\n# Delete system libnccl.so to ensure the wheel is used\nrm -rf /usr/lib64/libnccl*\n\nRAPIDS_PY_CUDA_SUFFIX=\"$(rapids-wheel-ctk-name-gen \"${RAPIDS_CUDA_VERSION}\")\"\nLIBRAFT_WHEELHOUSE=$(rapids-download-from-github \"$(rapids-artifact-name wheel_cpp libraft raft --cuda \"$RAPIDS_CUDA_VERSION\")\")\nPYLIBRAFT_WHEELHOUSE=$(rapids-download-from-github \"$(rapids-artifact-name wheel_python pylibraft raft --stable --cuda \"$RAPIDS_CUDA_VERSION\")\")\nRAFT_DASK_WHEELHOUSE=$(rapids-download-from-github \"$(rapids-artifact-name wheel_python raft_dask raft --stable --cuda \"$RAPIDS_CUDA_VERSION\")\")\n\n# generate constraints (possibly pinning to oldest support versions of dependencies)\nrapids-generate-pip-constraints test_python \"${PIP_CONSTRAINT}\"\n\n# notes:\n#\n#   * echo to expand wildcard before adding `[test]` requires for pip\n#   * just providing --constraint=\"${PIP_CONSTRAINT}\" to be explicit, and because\n#     that environment variable is ignored if any other --constraint are passed via the CLI\n#\nrapids-pip-retry install -v \\\n    --constraint \"${PIP_CONSTRAINT}\" \\\n    \"${LIBRAFT_WHEELHOUSE}\"/libraft*.whl \\\n    \"${PYLIBRAFT_WHEELHOUSE}\"/pylibraft*.whl \\\n    \"$(echo \"${RAFT_DASK_WHEELHOUSE}\"/raft_dask_\"${RAPIDS_PY_CUDA_SUFFIX}\"*.whl)[test]\"\n\ntest_dir=\"python/raft-dask/raft_dask/tests\"\n\nrapids-logger \"pytest raft-dask\"\npython -m pytest --import-mode=append ${test_dir}\n\nrapids-logger \"pytest raft-dask (ucxx only)\"\npython -m pytest --import-mode=append ${test_dir} --run_ucx\n"
+    },
+    {
+      "path": "ci/run_raft_dask_pytests.sh",
+      "sha": null,
+      "content_sha256": "844264ee711d0dd7a7a7635bef7dc0b4d39aedcee08c263524f88fd01f897a12",
+      "score": 165,
+      "content": "#!/bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.\n# SPDX-License-Identifier: Apache-2.0\n\nset -euo pipefail\n\n# Support invoking run_raft_dask_pytests.sh outside the script directory\ncd \"$(dirname \"$(realpath \"${BASH_SOURCE[0]}\")\")\"/../python/raft-dask/raft_dask\n\npytest --cache-clear --import-mode=append \"$@\" tests\n"
+    },
+    {
+      "path": "docs/Makefile",
+      "sha": null,
+      "content_sha256": "29df0f46e9155d04b689266b93473db681260354704552c8a8285fc33c16b9aa",
+      "score": 153,
+      "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.\n# SPDX-License-Identifier: Apache-2.0\n\n# Minimal makefile for Sphinx documentation\n#\n\n# You can set these variables from the command line.\nSPHINXOPTS    =\nSPHINXBUILD   = sphinx-build\nSPHINXPROJ    = RAFT\nSOURCEDIR     = source\nBUILDDIR      = build\n\n# Put it first so that \"make\" without argument is like \"make help\".\nhelp:\n\t@$(SPHINXBUILD) -M help -v \"$(SOURCEDIR)\" \"$(BUILDDIR)\" $(SPHINXOPTS) $(O)\n\n.PHONY: help Makefile\n\n# Catch-all target: route all unknown targets to Sphinx using the new\n# \"make mode\" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).\n%: Makefile\n\t@$(SPHINXBUILD) -M $@ \"$(SOURCEDIR)\" \"$(BUILDDIR)\" $(SPHINXOPTS) $(O)\n"
+    },
+    {
+      "path": "docs/source/cpp_api.rst",
+      "sha": null,
+      "content_sha256": "7b6112a87d6a187fc0bf646ba8ed7025d9838468f5abb71111ce7b2aa4dba61e",
+      "score": 141,
+      "content": "~~~~~~~\nC++ API\n~~~~~~~\n\n.. _api:\n\n.. toctree::\n   :maxdepth: 4\n\n   cpp_api/core.rst\n   cpp_api/linalg.rst\n   cpp_api/matrix.rst\n   cpp_api/mdspan.rst\n   cpp_api/mnmg.rst\n   cpp_api/random.rst\n   cpp_api/solver.rst\n   cpp_api/sparse.rst\n   cpp_api/stats.rst\n   cpp_api/utils.rst\n"
+    },
+    {
+      "path": "docs/source/raft_dask_api.rst",
+      "sha": null,
+      "content_sha256": "081851d8e2f0749513c70091c0428ef3759a45551263f713e4e91eb931856bbb",
+      "score": 141,
+      "content": "~~~~~~~~~~~~~\nRAFT Dask API\n~~~~~~~~~~~~~\n\n.. role:: py(code)\n   :language: python\n   :class: highlight\n\nDask-based Multi-Node Multi-GPU Communicator\n--------------------------------------------\n\n.. autoclass:: raft_dask.common.Comms\n    :members:\n"
+    },
+    {
+      "path": "docs/source/pylibraft_api.rst",
+      "sha": null,
+      "content_sha256": "fb01d6dd2b25fdced4acf0db37cf316ec05c070ff23571138430a804444a40c8",
+      "score": 141,
+      "content": "~~~~~~~~~~\nPython API\n~~~~~~~~~~\n\n.. _api:\n\n.. toctree::\n   :maxdepth: 4\n\n   pylibraft_api/common.rst\n   pylibraft_api/random.rst\n   pylibraft_api/sparse.rst\n"
+    },
+    {
+      "path": "docs/source/cpp_api/core_bitset.rst",
+      "sha": null,
+      "content_sha256": "84e2b4050931d07a87c2e9fc48df393c025df8e816f4a7578c3bf9803e2fd436",
+      "score": 139,
+      "content": "Bitset\n======\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n``#include <raft/core/bitset.cuh>``\n\nnamespace *raft::core*\n\n.. doxygengroup:: bitset\n    :project: RAFT\n    :members:\n    :content-only:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/memory_type_dispatcher.rst",
+      "sha": null,
+      "content_sha256": "eade9347ba436fd22934b877e7911cf815c821380cba0edd72a96dcd02fc09c6",
+      "score": 139,
+      "content": "memory_type_dispatcher\n======================\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n``#include <raft/util/memory_type_dispatcher.cuh>``\n\n.. doxygengroup:: memory_type_dispatcher\n    :project: RAFT\n    :members:\n    :content-only:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/core_logger.rst",
+      "sha": null,
+      "content_sha256": "971eaa54fb0c3e9b727bc9b63924e16260f87a8b8d59e1d6df3ffaac89ab0647",
+      "score": 139,
+      "content": "logger\n======\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n``#include <raft/core/logger.hpp>``\n\nnamespace *raft::core*\n\n.. doxygenclass:: raft::logger\n    :project: RAFT\n    :members:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/sparse_linalg.rst",
+      "sha": null,
+      "content_sha256": "d028ef93b3f342d7a5333eba898d1a7c2e7944f6319ed0dffcd95ad63a032ab4",
+      "score": 139,
+      "content": "Sparse Linear Algebra\n=====================\n\n.. doxygennamespace:: raft::sparse::linalg\n    :project: RAFT\n    :members:\n    :content-only:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/core_kvp.rst",
+      "sha": null,
+      "content_sha256": "14b78e4c054a21fdf97227c5d2ba8915069ca81aa4e1cefdef35f82dd41b7e13",
+      "score": 139,
+      "content": "Key-Value Pair\n==============\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n``#include <raft/core/kvp.hpp>``\n\nnamespace *raft::core*\n\n.. doxygenstruct:: raft::KeyValuePair\n    :project: RAFT\n    :members:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/core_nvtx.rst",
+      "sha": null,
+      "content_sha256": "a60aafead276b0bc0126c3c66fccc386bdfed93bacfd6f3e7782823f1c06af2b",
+      "score": 139,
+      "content": "NVTX\n====\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n``#include <raft/core/nvtx.hpp>``\n\nnamespace *raft::core*\n\n.. doxygennamespace:: raft::common::nvtx\n    :project: RAFT\n    :members:\n    :content-only:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/sparse_matrix.rst",
+      "sha": null,
+      "content_sha256": "0df3c549e14425811f555e7c94f09eaaf1456a61b889c85f0a2796554444dfe2",
+      "score": 139,
+      "content": "Sparse Matrix Operations\n========================\n\n.. doxygennamespace:: raft::sparse::op\n    :project: RAFT\n    :members:\n    :content-only:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/core_operators.rst",
+      "sha": null,
+      "content_sha256": "1b0fa2d7f50cea852926920fff61b7349dcd55b30cdee6386b60f0a08f145708",
+      "score": 139,
+      "content": "Operators and Functors\n======================\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n\n``#include <raft/core/operators.hpp>``\n\nnamespace *raft::core*\n\n.. doxygengroup:: operators\n    :project: RAFT\n    :members:\n    :content-only:\n"
+    },
+    {
+      "path": "docs/source/cpp_api/core_interruptible.rst",
+      "sha": null,
+      "content_sha256": "9ec076f160a3dfa79e4d4099a91d4773b0fdd89be40a00ff1e36dbcfa04f9ba6",
+      "score": 139,
+      "content": "Interruptible\n=============\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n\n``#include <raft/core/interruptible.hpp>``\n\nnamespace *raft::core*\n\n .. doxygengroup:: interruptible\n     :project: RAFT\n     :members:\n     :content-only:\n"
+    },
+    {
+      "path": "docs/source/pylibraft_api/random.rst",
+      "sha": null,
+      "content_sha256": "7378eb9e4eae66e725bf48e35fe07dfd6b178f426a6ffb2db71749047315d41f",
+      "score": 139,
+      "content": "Random\n======\n\nThis page provides pylibraft class references for the publicly-exposed elements of the `pylibraft.random` package.\n\n\n.. role:: py(code)\n   :language: python\n   :class: highlight\n\n\n.. autofunction:: pylibraft.random.rmat\n"
+    },
+    {
+      "path": "docs/source/cpp_api/core_bitmap.rst",
+      "sha": null,
+      "content_sha256": "782857b376da926b9e53c03334622fbb801256ba12bbb0a39d2c028ccbaa4c46",
+      "score": 139,
+      "content": "Bitmap\n======\n\n.. role:: py(code)\n   :language: c++\n   :class: highlight\n\n``#include <raft/core/bitmap.cuh>``\n\nnamespace *raft::core*\n\n.. doxygengroup:: bitmap\n    :project: RAFT\n    :members:\n    :content-only:\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:25:31.322995+00:00"
+}

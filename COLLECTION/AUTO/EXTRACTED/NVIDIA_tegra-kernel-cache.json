@@ -1,0 +1,36 @@
+{
+  "canonical_source": "github:NVIDIA/tegra-kernel-cache",
+  "repo": "NVIDIA/tegra-kernel-cache",
+  "revision_sha": "4960397321e21b981ff5a813054209bc768c93c7",
+  "default_branch": "main",
+  "pushed_at": "2026-09-21T19:57:31Z",
+  "repo_updated_at": "2026-08-24T09:29:03Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/sync-upstream.yml",
+      "sha": null,
+      "content_sha256": "a16f356063bffd6bb8d6258036ed7b11ca2b2a1f68e6ffc55600df74ae5953d7",
+      "score": 126,
+      "content": "name: Sync upstream OE4T branches\n\n# Scheduled workflows only run from the default branch. Keep this file on\n# `main` (NVIDIA control branch) and set `main` as the repository default.\non:\n  schedule:\n    - cron: \"*/5 * * * *\" # every 5 minutes\n  workflow_dispatch:\n\npermissions:\n  contents: write\n\nconcurrency:\n  group: sync-upstream\n  cancel-in-progress: false\n\njobs:\n  sync:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v6\n        with:\n          fetch-depth: 0\n\n      - name: Configure git\n        run: |\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"\n\n      - name: Fetch upstream OE4T\n        run: |\n          git remote add upstream https://github.com/OE4T/tegra-kernel-cache.git 2>/dev/null || \\\n            git remote set-url upstream https://github.com/OE4T/tegra-kernel-cache.git\n          git fetch upstream --prune\n          git fetch origin --prune\n\n      - name: Mirror allowlisted upstream branches to origin\n        shell: bash\n        run: |\n          set -euo pipefail\n\n          # tegra-kernel-cache uses kernel-series branch names, not Yocto\n          # release names. Keep NVIDIA-only branches (`main`, `*-nvidia`,\n          # `master+*`) out of this list.\n          BRANCHES=(\n            yocto-6.18\n          )\n\n          synced=0\n          skipped=0\n          created=0\n          updated=0\n\n          for branch in \"${BRANCHES[@]}\"; do\n            if ! git rev-parse --verify \"refs/remotes/upstream/${branch}\" >/dev/null 2>&1; then\n              echo \"missing upstream: ${branch}\"\n              skipped=$((skipped + 1))\n              continue\n            fi\n\n            upstream_sha=\"$(git rev-parse \"refs/remotes/upstream/${branch}\")\"\n\n            if ! git rev-parse --verify \"refs/remotes/origin/${branch}\" >/dev/null 2>&1; then\n              echo \"create: ${branch} -> ${upstream_sha}\"\n              git push origin \"refs/remotes/upstream/${branch}:refs/heads/${branch}\"\n              created=$((created + 1))\n              synced=$((synced + 1))\n              continue\n            fi\n\n            origin_sha=\"$(git rev-parse \"refs/remotes/origin/${branch}\")\"\n            if [[ \"${origin_sha}\" == \"${upstream_sha}\" ]]; then\n              echo \"up-to-date: ${branch}\"\n              skipped=$((skipped + 1))\n              continue\n            fi\n\n            if git merge-base --is-ancestor \"${origin_sha}\" \"${upstream_sha}\"; then\n              echo \"fast-forward: ${branch} ${origin_sha:0:8}..${upstream_sha:0:8}\"\n              git push origin \"refs/remotes/upstream/${branch}:refs/heads/${branch}\"\n            else\n              # Mirror policy: OE4T is source of truth for shared branch names.\n              echo \"force-with-lease (diverged mirror): ${branch} ${origin_sha:0:8}..${upstream_sha:0:8}\"\n              git push --force-with-lease=\"refs/heads/${branch}:${origin_sha}\" \\\n                origin \"refs/remotes/upstream/${branch}:refs/heads/${branch}\"\n            fi\n            updated=$((updated + 1))\n            synced=$((synced + 1))\n          done\n\n          echo \"summary: synced=${synced} created=${created} updated=${updated} skipped=${skipped}\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "eb441b2c5864884b4d29898c79d75089ed8f472d7c61489daf81721775772b98",
+      "score": 100,
+      "content": "# NVIDIA tegra-kernel-cache (control branch)\n\nThis `main` branch is the **NVIDIA control branch** for [NVIDIA/tegra-kernel-cache](https://github.com/NVIDIA/tegra-kernel-cache).\n\nIt is intentionally separate from OE4T content branches (`yocto-*` kernel-series lines).\n\n## Purpose\n\n- Host GitHub Actions that keep OE4T branches mirrored into this fork\n- Remain the repository **default branch** so scheduled workflows can run\n- Never receive OE4T content syncs (protected by the sync workflow)\n\n## Branch policy\n\n| Branch | Role |\n|--------|------|\n| `main` | NVIDIA control (this branch); Actions only |\n| `yocto-6.18` | Allowlisted mirror of [OE4T/tegra-kernel-cache](https://github.com/OE4T/tegra-kernel-cache) |\n\nOE4T currently publishes only `yocto-6.18` on this repository (no Yocto release-name branches like `master` / `wrynose`).\n\n## Sync workflow\n\n`.github/workflows/sync-upstream.yml` runs every 5 minutes (and on manual dispatch) and mirrors only the allowlisted OE4T branches above. Edit the `BRANCHES` array in that workflow when OE4T adds new `yocto-*` lines.\n\nAfter pushing this branch, set **Settings → General → Default branch** to `main`.\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:26:04.597143+00:00"
+}

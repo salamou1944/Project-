@@ -1,0 +1,57 @@
+{
+  "canonical_source": "github:NVIDIA/nvidia-pcm",
+  "repo": "NVIDIA/nvidia-pcm",
+  "revision_sha": "0fa5599455fe93f643372b2769ab67b0efb69bf2",
+  "default_branch": "develop",
+  "pushed_at": "2026-02-17T04:25:08Z",
+  "repo_updated_at": "2026-07-21T12:36:24Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "score": 100,
+      "content": ""
+    },
+    {
+      "path": "Readme.md",
+      "sha": null,
+      "content_sha256": "4fbae9678252bdb4a1e81aa28eaca7eeb4ee6a2c90fbb95f42ba9571cfc57906",
+      "score": 100,
+      "content": "# nvidia-pcm\n\nNvidia Platform Configuration Manager"
+    },
+    {
+      "path": "src/platform_actions.cpp",
+      "sha": null,
+      "content_sha256": "ac6307496eed96decd4d3fb76365df62496e0f273fd4ed8768fc948fbff4d1ff",
+      "score": 80,
+      "content": "/*\n * SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION &\n * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0\n *\n * Licensed under the Apache License, Version 2.0 (the \"License\");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n * http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\n\n#include \"platform_actions.hpp\"\n\n#include \"constants.hpp\"\n#include \"log.hpp\"\n\n#include <filesystem>\n#include <fstream>\n#include <iostream>\n#include <string>\n\nnamespace fs = std::filesystem;\n\nnamespace platform_actions\n{\n\nint Actions_t::performActions(const std::string& name, bool& fileCreated)\n{\n    int rc = 0;\n    // Open default Environment File\n    std::ofstream envFile;\n    if (fileCreated)\n    {\n        logs_dbg(\"Opening Environment File: %s\\n\",\n                 constants::PCM_ENV_FILE.c_str());\n        envFile.open(constants::PCM_ENV_FILE,\n                     std::ofstream::out | std::ofstream::app);\n    }\n    else\n    {\n        logs_dbg(\"Creating and Opening Environment File: %s\\n\",\n                 constants::PCM_ENV_FILE.c_str());\n        envFile.open(constants::PCM_ENV_FILE,\n                     std::ofstream::out | std::ofstream::trunc);\n        fileCreated = true;\n\n        // set the permission of the file to 664\n        // Read and write for owner\n        // Read and write for group\n        // Read for others\n        logs_dbg(\"Setting permissions to the EnvironmentFile.\\n\");\n        fs::perms permission = fs::perms::owner_write | fs::perms::owner_read |\n                               fs::perms::group_read | fs::perms::group_write |\n                               fs::perms::others_read;\n        fs::permissions(constants::PCM_ENV_FILE, permission);\n    }\n    if (!envFile.good())\n    {\n        logs_err(\"Failed to open Environment File: %s\\n\",\n                 constants::PCM_ENV_FILE.c_str());\n        return 1;\n    }\n\n    // Write name of the Platform Configuration Matched to the EnvironmentFile\n    // e.g. NAME=H100\n    envFile << \"NAME=\" << name << std::endl;\n\n    // Access Variables and add all the Env variables to the Env file\n    // e.g.\n    // AML_DAT=/usr/share/oobaml/...\n    // AML_EVENT_INFO=/usr/share/oobaml/...\n    for (const auto& variable : this->variables)\n    {\n        logs_dbg(\"Adding variable: %s to EnvironmentFile\\n\", variable.c_str());\n        envFile << variable << std::endl;\n        if (!envFile.good())\n        {\n            logs_err(\n                \"Failed to write variable to Environment File, Aborting.\\n\");\n            return 2;\n        }\n    }\n\n    logs_dbg(\"Closing Environment File.\\n\");\n    envFile.close();\n    if (!envFile.good())\n    {\n        logs_err(\"Failed to close the Environment File cleanly.\\n\");\n        return 3;\n    }\n\n    logs_dbg(\"All Actions performed.\\n\");\n    return rc;\n}\n\n} // namespace platform_actions\n"
+    },
+    {
+      "path": "include/platform_actions.hpp",
+      "sha": null,
+      "content_sha256": "2c404567ed645362c229f5c1dae0ced0a7970937df8203bc163dc45f7cf71841",
+      "score": 80,
+      "content": "/*\n * SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION &\n * AFFILIATES. All rights reserved. SPDX-License-Identifier: Apache-2.0\n *\n * Licensed under the Apache License, Version 2.0 (the \"License\");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n * http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\n\n#pragma once\n\n#include <iostream>\n#include <map>\n#include <string>\n#include <vector>\n\nnamespace platform_actions\n{\n\nstruct Actions_t\n{\n    /** @brief Variables contains the list of Environment Variables to be set.\n     */\n    std::vector<std::string> variables;\n\n  public:\n    /** @brief Perform the actions present in the struct */\n    int performActions(const std::string& name, bool& fileCreated);\n\n    /**\n     * @brief Print this object to the output stream @c os (e.g. std::cout,\n     * std::cerr, std::stringstream) with every line prefixed with @c indent.\n     *\n     * For the use with logging framework use the following construct:\n     *\n     * @code\n     *   std::stringstream ss;\n     *   obj.print(ss, indent);\n     *   log_dbg(\"%s\", ss.str().c_str());\n     * @endcode\n     */\n    template <class CharT>\n    void print(std::basic_ostream<CharT>& os = std::cout,\n               std::string indent = std::string(\"\")) const\n    {\n        os << indent << \"-variables:  \"\n           << \"\\t\"\n           << \"[\" << std::endl;\n        for (auto& variable : variables)\n        {\n            os << indent << \"         \\t\" << variable << std::endl;\n        }\n        os << indent << \"           \"\n           << \"\\t\"\n           << \"]\" << std::endl;\n    }\n};\n\n} // namespace platform_actions\n"
+    },
+    {
+      "path": "example/plat_config_h100.json",
+      "sha": null,
+      "content_sha256": "b3be5d947f52079b54cb18c4a5a3da4d1e5b9f212fc990945f7a0e4a72080dd9",
+      "score": 33,
+      "content": "{\n    \"Name\": \"HGX H100 8-GPU\",\n    \"Checks\": [\n        {\n            \"rule\": \"MatchAll\",\n            \"objects\":[\n            ],\n            \"interface\": \"xyz.openbmc_project.Inventory.Decorator.Asset\",\n            \"property\": \"Model\",\n            \"value\": \"NVIDIA HGX H100 8-GPU\"\n        }\n    ],\n    \"Actions\": [\n        {\n            \"type\": \"\",\n            \"variables\": [\n                \"GPUMGR_MANIFEST=/run/initramfs/ro/usr/share/gpuoob/oob_manifest_pcie_vulcan.json\",\n                \"GPUMGR_PROFILE=/run/initramfs/ro/usr/share/gpuoob/oob_profile_vulcan.json\",\n                \"GPUMGR_PROPERTIES=/run/initramfs/ro/usr/share/gpuoob/oob_properties_vulcan.json\"\n            ]\n        }\n    ]\n}"
+    }
+  ],
+  "generated_at": "2026-10-08T08:25:42.378224+00:00"
+}

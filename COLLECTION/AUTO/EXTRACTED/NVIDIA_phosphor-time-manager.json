@@ -1,0 +1,64 @@
+{
+  "canonical_source": "github:NVIDIA/phosphor-time-manager",
+  "repo": "NVIDIA/phosphor-time-manager",
+  "revision_sha": "3e060996e4f29032e37ef7ebcd80346f9018ff0a",
+  "default_branch": "develop",
+  "pushed_at": "2026-09-02T14:31:38Z",
+  "repo_updated_at": "2026-09-02T14:46:07Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "8f7387879f832c6de76ad528d1fd579bc7cb17ec7ab63e562811f6f29d22caaf",
+      "score": 100,
+      "content": "# Introduction\n\n`phosphor-time-manager` is the time manager service that implements D-Bus\ninterface `xyz/openbmc_project/Time/EpochTime.interface.yaml`. The user can get\nor set the BMC's time via this interface.\n\n## Configuration\n\nphosphor-time-manager is configured by setting `-D` flags that correspond to\noptions in `phosphor-time-manager/meson.options`. The option names become C++\npreprocessor symbols that control which code is compiled into the program.\n\n- Compile phosphor-time-manager with default options:\n\n  ```bash\n     meson setup builddir\n     meson compile -C builddir\n  ```\n\n- Compile phosphor-time-manager with some configurable options:\n\n  ```bash\n     meson setup builddir -Dbuildtype=minsize  -Dtests=false\n     meson compile -C builddir\n  ```\n\n- Generate test coverage report:\n\n  ```bash\n     meson setup builddir -Db_coverage=true -Dtests=true\n     meson compile -C builddir\n     meson test -C builddir\n     ninja -C builddir coverage\n  ```\n\n### General usage\n\nThe service `xyz.openbmc_project.Time.Manager` provides an object on D-Bus:\n\n- /xyz/openbmc_project/time/bmc\n\nwhere each object implements interface `xyz.openbmc_project.Time.EpochTime`.\n\nThe user can directly get or set the property `Elapsed` of the objects to get or\nset the time. For example on an authenticated session:\n\n- To get BMC's time:\n\n  ```bash\n  ### With busctl on BMC\n  busctl get-property xyz.openbmc_project.Time.Manager \\\n      /xyz/openbmc_project/time/bmc xyz.openbmc_project.Time.EpochTime Elapsed\n\n  ### With REST API on remote host\n  curl -b cjar -k https://${BMC_IP}/xyz/openbmc_project/time/bmc\n  ```\n\n- To set BMC's time:\n\n  ```bash\n  ### With busctl on BMC\n  busctl set-property xyz.openbmc_project.Time.Manager \\\n      /xyz/openbmc_project/time/bmc xyz.openbmc_project.Time.EpochTime \\\n      Elapsed t <value-in-microseconds>\n\n  ### With REST API on remote host\n  curl -b cjar -k -H \"Content-Type: application/json\" -X PUT \\\n      -d '{\"data\": 1487304700000000}' \\\n      https://${BMC_IP}/xyz/openbmc_project/time/bmc/attr/Elapsed\n  ```\n\n### Time settings\n\nGetting BMC time is always allowed, but setting the time may not be allowed\ndepending on the below two settings in the settings manager.\n\n- TimeSyncMethod\n  - NTP: The time is set via NTP server.\n  - MANUAL: The time is set manually.\n\nA summary of which cases the time can be set on BMC or HOST:\n\n| Mode   | Set BMC Time |\n| ------ | ------------ |\n| NTP    | Fail to set  |\n| MANUAL | OK           |\n\n- To set an NTP [server](https://tf.nist.gov/tf-cgi/servers.cgi):\n\n  ```bash\n  ### With busctl on BMC\n  busctl set-property  xyz.openbmc_project.Network \\\n     /xyz/openbmc_project/network/eth0 \\\n     xyz.openbmc_project.Network.EthernetInterface NTPServers \\\n     as 1 \"<ntp_server>\"\n\n  ### With REST API on remote host\n  curl -c cjar -b cjar -k -H \"Content-Type: application/json\" -X  PUT  -d \\\n      '{\"data\": [\"<ntp_server>\"] }' \\\n      https://${BMC_IP}/xyz/openbmc_project/network/eth0/attr/NTPServers\n  ```\n\n- To go into NTP mode\n\n  ```bash\n  ### With busctl on BMC\n  busctl set-property xyz.openbmc_project.Settings \\\n      /xyz/openbmc_project/time/sync_method xyz.openbmc_project.Time.Synchronization \\\n      TimeSyncMethod s \"xyz.openbmc_project.Time.Synchronization.Method.NTP\"\n\n  ### With REST API on remote host\n  curl -c cjar -b cjar -k -H \"Content-Type: application/json\" -X  PUT  -d \\\n      '{\"data\": \"xyz.openbmc_project.Time.Synchronization.Method.NTP\" }' \\\n      https://${BMC_IP}/xyz/openbmc_project/time/sync_method/attr/TimeSyncMethod\n  ```\n\n### Special note on changing NTP setting\n\nStarting from OpenBMC 2.6 (with systemd v239), systemd's timedated introduces a\nnew beahvior that it checks the NTP services' status during setting time,\ninstead of checking the NTP setting:\n\n- When NTP server is set to disabled, and the NTP service is stopping but not\n  stopped, setting time will get an error.\n\nIn OpenBMC 2.4 (with systemd v236), the above will always succeed.\n\nThis results in [openbmc/openbmc#3459][1], and the related test cases are\nupdated to cooperate with this behavior change.\n\n[1]: https://github.com/openbmc/openbmc/issues/3459\n"
+    },
+    {
+      "path": "test/mocked_property_change_listener.hpp",
+      "sha": null,
+      "content_sha256": "f6ee0beb227af45b84e0df7465a67116a9e4e3eeb296dba059746948a181f4c0",
+      "score": 58,
+      "content": "#pragma once\n#include \"property_change_listener.hpp\"\n\n#include <gmock/gmock.h>\n\nnamespace phosphor\n{\nnamespace time\n{\n\nclass MockPropertyChangeListener : public PropertyChangeListener\n{\n  public:\n    MOCK_METHOD(void, onModeChanged, (Mode mode), (override));\n};\n\n} // namespace time\n} // namespace phosphor\n"
+    },
+    {
+      "path": "test/TestManager.cpp",
+      "sha": null,
+      "content_sha256": "011bd00852f7fd8b58298fc27c817b774cfe48fa7cff5d3564338b4337678a76",
+      "score": 58,
+      "content": "#include \"manager.hpp\"\n#include \"mocked_property_change_listener.hpp\"\n#include \"types.hpp\"\n\n#include <sdbusplus/bus.hpp>\n\n#include <gtest/gtest.h>\n\nnamespace phosphor\n{\nnamespace time\n{\n\nclass TestManager : public testing::Test\n{\n  public:\n    sdbusplus::bus_t bus;\n    Manager manager;\n\n    TestManager() : bus(sdbusplus::bus::new_default()), manager(bus) {}\n\n    void notifyPropertyChanged(const std::string& key, const std::string& value)\n    {\n        manager.onPropertyChanged(key, value);\n    }\n};\n\nTEST_F(TestManager, propertyChanged)\n{\n    notifyPropertyChanged(\n        \"TimeSyncMethod\",\n        \"xyz.openbmc_project.Time.Synchronization.Method.Manual\");\n    EXPECT_EQ(Mode::Manual, manager.getTimeMode());\n\n    notifyPropertyChanged(\n        \"TimeSyncMethod\",\n        \"xyz.openbmc_project.Time.Synchronization.Method.NTP\");\n    EXPECT_EQ(Mode::NTP, manager.getTimeMode());\n\n    ASSERT_DEATH(notifyPropertyChanged(\"invalid property\", \"whatever\"), \"\");\n}\n\n} // namespace time\n} // namespace phosphor\n"
+    },
+    {
+      "path": "test/meson.build",
+      "sha": null,
+      "content_sha256": "e2cbb025bcbcec5c70198b8c5d5546098551e01b62ae82979f0028f457fb124d",
+      "score": 58,
+      "content": "#################################################################################\n# Enforce the test dependencies when tests are enabled\ngtest = dependency(\n    'gtest',\n    main: true,\n    disabler: true,\n    required: get_option('tests'),\n)\ngmock = dependency('gmock', required: get_option('tests'))\n\n##################################################################################\n# declare the test sources\ntest_list = [\n    'TestBmcEpoch.cpp',\n    'TestManager.cpp',\n    'TestUtils.cpp',\n    'mocked_property_change_listener.hpp',\n]\n\n###################################################################################\n# Run the tests\nforeach tests : test_list\n    test_name = tests.split('.')[0]\n    test(\n        test_name,\n        executable(\n            test_name,\n            tests,\n            include_directories: ['.', '../'],\n            link_with: libtimemanager,\n            dependencies: [gtest, gmock] + deps,\n        ),\n    )\nendforeach\n\n"
+    },
+    {
+      "path": "test/TestBmcEpoch.cpp",
+      "sha": null,
+      "content_sha256": "ad4eb2eb247ba21d4cfdec868a9eefc78c65fea4f201ba4b812fcaaf96b1c894",
+      "score": 58,
+      "content": "#include \"config.h\"\n\n#include \"bmc_epoch.hpp\"\n#include \"manager.hpp\"\n#include \"types.hpp\"\n\n#include <sdbusplus/bus.hpp>\n\n#include <gtest/gtest.h>\n\nnamespace phosphor\n{\nnamespace time\n{\n\nclass TestBmcEpoch : public testing::Test\n{\n  public:\n    sdbusplus::bus_t bus;\n    Manager manager;\n    sd_event* event = nullptr;\n    std::unique_ptr<BmcEpoch> bmcEpoch;\n\n    TestBmcEpoch() : bus(sdbusplus::bus::new_default()), manager(bus)\n    {\n        // BmcEpoch requires sd_event to init\n        sd_event_default(&event);\n        bus.attach_event(event, SD_EVENT_PRIORITY_NORMAL);\n        bmcEpoch = std::make_unique<BmcEpoch>(bus, objpathBmc, manager);\n    }\n\n    ~TestBmcEpoch() override\n    {\n        bus.detach_event();\n        sd_event_unref(event);\n    }\n\n    // Explicitly delete the special member functions\n    TestBmcEpoch(const TestBmcEpoch&) = delete;\n    TestBmcEpoch& operator=(const TestBmcEpoch&) = delete;\n    TestBmcEpoch(TestBmcEpoch&&) = delete;\n    TestBmcEpoch& operator=(TestBmcEpoch&&) = delete;\n};\n\nTEST_F(TestBmcEpoch, onModeChange)\n{\n    bmcEpoch->onModeChanged(Mode::NTP);\n    EXPECT_EQ(Mode::NTP, manager.getTimeMode());\n\n    bmcEpoch->onModeChanged(Mode::Manual);\n    EXPECT_EQ(Mode::Manual, manager.getTimeMode());\n}\n\nTEST_F(TestBmcEpoch, empty)\n{\n    // Default mode is MANUAL\n    EXPECT_EQ(Mode::Manual, manager.getTimeMode());\n}\n\nTEST_F(TestBmcEpoch, getElapsed)\n{\n    auto t1 = bmcEpoch->elapsed();\n    EXPECT_NE(0, t1);\n    auto t2 = bmcEpoch->elapsed();\n    EXPECT_GE(t2, t1);\n}\n\nTEST_F(TestBmcEpoch, setElapsedOK)\n{\n    // TODO: setting time will call sd-bus functions and it will fail on host\n    // if we have gmock for sdbusplus::bus, we can test setElapsed.\n    // But for now we can not test it\n}\n\n} // namespace time\n} // namespace phosphor\n"
+    },
+    {
+      "path": "test/TestUtils.cpp",
+      "sha": null,
+      "content_sha256": "20a418c7ac803e5ff7956539291d09735d05b7dc78e38d7a88d2c920148044c9",
+      "score": 58,
+      "content": "#include \"utils.hpp\"\n\n#include <xyz/openbmc_project/Common/error.hpp>\n\n#include <gtest/gtest.h>\n\nnamespace phosphor\n{\nnamespace time\n{\nnamespace utils\n{\n\nusing InvalidEnumString = sdbusplus::exception::InvalidEnumString;\n\nTEST(TestUtil, strToMode)\n{\n    EXPECT_EQ(Mode::NTP,\n              strToMode(\"xyz.openbmc_project.Time.Synchronization.Method.NTP\"));\n    EXPECT_EQ(\n        Mode::Manual,\n        strToMode(\"xyz.openbmc_project.Time.Synchronization.Method.Manual\"));\n\n    // All unrecognized strings result in InvalidEnumString exception\n    EXPECT_THROW(strToMode(\"\"), InvalidEnumString);\n    EXPECT_THROW(\n        strToMode(\"xyz.openbmc_project.Time.Synchronization.Method.MANUAL\"),\n        InvalidEnumString);\n    EXPECT_THROW(strToMode(\"whatever\"), InvalidEnumString);\n}\n\nTEST(TestUtil, modeToStr)\n{\n    EXPECT_EQ(\"xyz.openbmc_project.Time.Synchronization.Method.NTP\",\n              modeToStr(Mode::NTP));\n    EXPECT_EQ(\"xyz.openbmc_project.Time.Synchronization.Method.Manual\",\n              modeToStr(Mode::Manual));\n\n    // All unrecognized strings result in exception\n    EXPECT_ANY_THROW(modeToStr(static_cast<Mode>(100)));\n}\n\n} // namespace utils\n} // namespace time\n} // namespace phosphor\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:25:44.284298+00:00"
+}

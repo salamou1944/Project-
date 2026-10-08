@@ -1,0 +1,47 @@
+{
+  "canonical_source": "github:NVIDIA/oncrpc-ping",
+  "repo": "NVIDIA/oncrpc-ping",
+  "revision_sha": "69ae2f7d1350c086b632c2b8a6286c3c1e067313",
+  "default_branch": "main",
+  "pushed_at": "2026-09-23T15:58:38Z",
+  "repo_updated_at": "2026-09-23T15:58:42Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "linux",
+    "oncrpc",
+    "sunrpc"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "e80e4782530459411b2b881f05ef25f9bbd0b2f62f348e30dd40e81db5e5f33a",
+      "score": 100,
+      "content": "# ONC RPC Ping Utility\n\n## Intro\n\nThe `oncrpc-ping` is a utility designed to measure actual ONC RPC(Sun RPC) service latency over both TCP and UDP transport protocols. By bypassing the RPC Bind service, the utility avoids unnecessary service inquiries, ensuring accurate, end-to-end latency measurements.\n\n## Dependency\n\n| Library | Purpose |\n|---|---|\n| [libtirpc](https://git.linux-nfs.org/?p=steved/libtirpc.git) | ONC RPC client API |\n\n## Measurement Methodology\n\nONC RPC specifications define a standardized 'NULL' procedure (procedure number 0). This 'do-nothing' operation is supported by all ONC RPC servers and is ideal for service latency measurement.\n\n## Measurement Workflow\n\nTo capture pure client-server RPC latency, the program utilizes low-level ONC RPC interfaces to control client behavior. The measurement lifecycle is as follows:\n\n- Create a network socket configured for the specified transport (TCP/UDP).\n- Initialize an ONC RPC client.\n- Execute a `connect()` call.\n- Issue an ONC RPC NULL request to the remote server and record the latency.\n- Terminate the ONC RPC client connection.\n\nThe following simplified data flow graph shows where the program measures the latency (the box section):\n\n```\n      Client                                        Server\n         |                                             |\n         |  ------- Connect Request / Handshake ---->  |\n         |  <--------- Handshake Response ------------ |\n         |                                             |\n       ---------------------------------------------------  \n      |  |                                             |  |\n      |  |  --- ONC RPC NULL PROC (Ping Request) ----> |  |\n      |  |  <--------- ONC RPC NULL PROC Reply ------- |  |\n      |  |                                             |  |\n       ---------------------------------------------------\n         |                                             |\n         |  --------- Destroy ONC RPC Client --------> |\n         |  <--------- Close Connection -------------- |\n         |                                             |\n```\n\n## Compilation\n\n```\n$ make\ngcc -g -Wall -Wextra -Wpedantic -Wconversion -Wdouble-promotion -Wunused -Wshadow -Wsign-conversion -fsanitize=undefined -I/usr/include/tirpc -c oncrpc-ping.c -o oncrpc-ping.o\ngcc -g -Wall -Wextra -Wpedantic -Wconversion -Wdouble-promotion -Wunused -Wshadow -Wsign-conversion -fsanitize=undefined oncrpc-ping.o -o oncrpc-ping -lm -ltirpc\n```\n\n## Usage\n\n```\n$ ./oncrpc-ping -h\nONC RPC Ping - Version 1.1.0\nusage: oncrpc-ping -n|--hostname <target hostname / IP>\n                   -P|--port <port number>\n                   -p|--program-number <RPC program number>\n                   -v|--program-version <RPC program version>\n                   -T|--transport tcp|udp\n                   [-i|--interval <second(s)>] default: 1 second\n                   [-t|--rpc-timeout <second(s)>] default: 10 seconds\n                   [-c|--connect-timeout <second(s)>] default: 5 seconds\n                   [-C|--count <count number>]\n                   [-h|--help]\n```\n\n- `-n` or `--hostname <hostname / IP>`: target hostname or IP address of the RPC server\n\n- `-P` or `--port <port>`: port number the RPC server is listening on\n\n- `-p` or `--program-number <number>`: ONC RPC program number registered by the target service\n\n- `-v` or `--program-version <version>`: ONC RPC program version number of the target service\n\n- `-T` or `--transport <tcp|udp>`: transport protocol\n\n- `-i` or `--interval <seconds>`: interval in whole seconds between successive RPC NULL calls\n\n- `-t` or `--rpc-timeout <seconds>`: timeout in whole seconds for each individual RPC NULL call\n\n- `-c` or `--connect-timeout <seconds>`: timeout in whole seconds for the initial `connect()` call\n\n- `-C` or `--count <number>`: number of RPC NULL calls to send before printing statistics and exiting. if omitted, the program runs indefinitely until interrupted with `Ctrl+C` (SIGINT), at which point it prints final statistics and exits cleanly\n\n- `-h` or `--help`: print usage information and exit\n\n## ChangeLog\n\n```\n[07/24/2026] 1.0.0 - initial commit\n\n[09/23/2026] 1.1.0 - enhance pselect() handling on errors\n```\n\n## Demo\n\n```\n$ ./oncrpc-ping -n 10.x.x.x -P 2049 -p 100003 -v 3 -T tcp -C 5\nINFO: socket file descriptor number: 3\nindex 1 from 10.x.x.x: RPC program=100003 version=3 time=0.084 ms | XID=0x948041C3\nindex 2 from 10.x.x.x: RPC program=100003 version=3 time=0.093 ms | XID=0x938041C3\nindex 3 from 10.x.x.x: RPC program=100003 version=3 time=0.070 ms | XID=0x928041C3\nindex 4 from 10.x.x.x: RPC program=100003 version=3 time=0.104 ms | XID=0x918041C3\nindex 5 from 10.x.x.x: RPC program=100003 version=3 time=0.149 ms | XID=0x908041C3\n\n--- 10.x.x.x ONC RPC ping statistics ---\nrtt min/avg/max/stddev = 0.070/0.100/0.149/0.027 ms\n```\n\n## Reference\n\n[libtirpc](https://git.linux-nfs.org/?p=steved/libtirpc.git)\n\n[ONC+ Developer's Guide](https://docs.oracle.com/cd/E18752_01/html/816-1435/)\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "9f2639d1bd8241cbbe920a664c3e18e286b178f850932c34dcfbb385249533cf",
+      "score": 85,
+      "content": "# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n# http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nCC       := gcc\nCFLAGS   := -g -Wall -Wextra -Wpedantic -Wconversion -Wdouble-promotion \\\n            -Wunused -Wshadow -Wsign-conversion -fsanitize=undefined\n            \nINCLUDES := -I/usr/include/tirpc\nLIBS     := -lm -ltirpc\n\nTARGET   := oncrpc-ping\nSRC      := oncrpc-ping.c\nOBJ      := $(SRC:.c=.o)\n\n.PHONY: all\nall: $(TARGET)\n\n$(TARGET): $(OBJ)\n\t$(CC) $(CFLAGS) $(OBJ) -o $(TARGET) $(LIBS)\n\n%.o: %.c\n\t$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@\n\n.PHONY: clean\nclean:\n\trm -f $(TARGET) $(OBJ)\n"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha": null,
+      "content_sha256": "2d1650ffb3287940005d3714bb380dd5aea3e6b73167d34b9a8142e3a00696e4",
+      "score": 80,
+      "content": "## Security\n\nNVIDIA is dedicated to the security and trust of our software products and services, including all source code repositories managed through our organization.\n\nIf you need to report a security issue, please use the appropriate contact points outlined below. **Please do not report security vulnerabilities through GitHub.** If a potential security issue is inadvertently reported via a public issue or pull request, NVIDIA maintainers may limit public discussion and redirect the reporter to the appropriate private disclosure channels.\n\n## Reporting Potential Security Vulnerability in an NVIDIA Product\n\nTo report a potential security vulnerability in any NVIDIA product:\n- Web: [Security Vulnerability Submission Form](https://www.nvidia.com/object/submit-security-vulnerability.html)\n- E-Mail: psirt@nvidia.com\n    - We encourage you to use the following PGP key for secure email communication: [NVIDIA public PGP Key for communication](https://www.nvidia.com/en-us/security/pgp-key)\n    - Please include the following information:\n        - Product/Driver name and version/branch that contains the vulnerability\n        - Type of vulnerability (code execution, denial of service, buffer overflow, etc.)\n        - Instructions to reproduce the vulnerability\n        - Proof-of-concept or exploit code\n        - Potential impact of the vulnerability, including how an attacker could exploit the vulnerability\n\nWhile NVIDIA currently does not have a bug bounty program, we do offer acknowledgement when an externally reported security issue is addressed under our coordinated vulnerability disclosure policy. Please visit our [Product Security Incident Response Team (PSIRT)](https://www.nvidia.com/en-us/security/psirt-policies/) policies page for more information.\n\n## NVIDIA Product Security\n\nFor all security-related concerns, please visit NVIDIA's Product Security portal at https://www.nvidia.com/en-us/security\n"
+    }
+  ],
+  "generated_at": "2026-10-08T08:26:03.738420+00:00"
+}
