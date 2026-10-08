@@ -1,0 +1,121 @@
+# Russian GitHub Frontier — Account Capture
+
+- Owner: `deeppavlov`
+- Captured: 2026-10-08
+- Scope: current public repositories returned by owner-scoped GitHub search; this is not an exhaustion claim.
+- Public repositories returned now: 100
+
+## Why this account is in the frontier
+
+Russian-origin AI/NLP project family surfaced by the curated frontier. DeepPavlov is a high-value conversational AI/NLP source. Full account sweep required; verify current activity and licenses per repository.
+
+## Current public repository frontier
+
+- deeppavlov/DeepPavlov
+- deeppavlov/ner
+- deeppavlov/tdl
+- deeppavlov/dream
+- deeppavlov/question_generation
+- deeppavlov/chatsky
+- deeppavlov/deep-nlp-seminars
+- deeppavlov/dlschl
+- deeppavlov/intent_classifier
+- deeppavlov/Slavic-BERT-NER
+- deeppavlov/dp-agent
+- deeppavlov/dp_notebooks
+- deeppavlov/AutoIntent
+- deeppavlov/ru_sentence_tokenizer
+- deeppavlov/ConvAI-baseline
+- deeppavlov/tdl2
+- deeppavlov/dp_tutorials
+- deeppavlov/deep-rl-seminars
+- deeppavlov/kpi2017
+- deeppavlov/dialog_flow_engine
+- deeppavlov/agentic-course-itmo
+- deeppavlov/dl-frameworks-course
+- deeppavlov/dp-dream-demos
+- deeppavlov/dialog2graph
+- deeppavlov/NLPCourseBot
+- deeppavlov/hcn-dialogue-manager
+- deeppavlov/expected_bleu
+- deeppavlov/RDLS_NLP_2022
+- deeppavlov/research
+- deeppavlov/turing-data
+- deeppavlov/chatsky-ui
+- deeppavlov/demo-cisco
+- deeppavlov/Allen_HCN
+- deeppavlov/deepPavlovEval
+- deeppavlov/raai_summer_school_nlp_2021
+- deeppavlov/demo
+- deeppavlov/bert
+- deeppavlov/tagging_tool_js
+- deeppavlov/babel-baseline
+- deeppavlov/seq2seq_scg
+- deeppavlov/char-language-model
+- deeppavlov/stand_kubernetes_cluster
+- deeppavlov/learning-to-learn
+- deeppavlov/demo2
+- deeppavlov/fewshot_NER
+- deeppavlov/diff_beam_search
+- deeppavlov/lm
+- deeppavlov/infinite-width_nets
+- deeppavlov/deeppavlov-gsoc-ideas
+- deeppavlov/dialog_flow_sdk
+- deeppavlov/neural-state-machines
+- deeppavlov/explainable_qa
+- deeppavlov/learning-to-learn-deepmind
+- deeppavlov/ipavlov.ai
+- deeppavlov/convai_router_bot
+- deeppavlov/h-elmo
+- deeppavlov/dialog_flow_designer_prototype
+- deeppavlov/dd-idde
+- deeppavlov/deeppavlov_annotation_tools
+- deeppavlov/dialog_flow_demo
+- deeppavlov/convai_sample_bot
+- deeppavlov/dream-builder
+- deeppavlov/Dialogue-generator
+- deeppavlov/partial-mcp
+- deeppavlov/deeppavlov_dreamtools
+- deeppavlov/ParlAI
+- deeppavlov/sberdemo
+- deeppavlov/convai-testing-system
+- deeppavlov/transformers
+- deeppavlov/AdvText2SQL
+- deeppavlov/ner-meta
+- deeppavlov/dp_aiml_speller_chat_bot
+- deeppavlov/EasyIntentCacther
+- deeppavlov/stand_ranking_en
+- deeppavlov/Deepy1000
+- deeppavlov/neuron-correlation
+- deeppavlov/sbrf_bot
+- deeppavlov/custom_kg_svc
+- deeppavlov/chatsky-template
+- deeppavlov/mcp-evals
+- deeppavlov/survey-bot
+- deeppavlov/rus_ner_dataset
+- deeppavlov/entity_extraction_svc
+- deeppavlov/dialog_flow_db_connector
+- deeppavlov/stand_squad_ru
+- deeppavlov/p_srv
+- deeppavlov/mds_skills_hackathon
+- deeppavlov/dream-landing
+- deeppavlov/convai_router_bot_poller
+- deeppavlov/audio-captioning-dcase
+- deeppavlov/dialogmteb
+- deeppavlov/dream-uno-messenger
+- deeppavlov/dialog_flow_tutorials
+- deeppavlov/dff_sphinx_theme
+- deeppavlov/kb
+- deeppavlov/qa_metrics
+- deeppavlov/translation-enru
+- deeppavlov/deepreply
+- deeppavlov/kgbot
+- deeppavlov/stand_docker_base
+
+## Collection boundary
+
+- Account target -> all public repositories -> relevant files/components -> newly discovered accounts -> repeat.
+- No wholesale import.
+- Preserve source, revision, license, dependencies and evidence.
+- Discovery is not readiness; no runtime/prod claim is made by this capture.
+- Before creating a Skill or implementation, perform semantic dedupe against existing Collection and canonical agent-skills/API Factory/SOAT contracts.
