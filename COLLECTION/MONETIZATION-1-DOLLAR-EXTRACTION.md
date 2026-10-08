@@ -120,7 +120,6 @@ Provider-neutral creative boundary exists, but production claims require real pr
 - Upfront spend: **$0**.
 - Sellable scoped capability: **YES**.
 
-
 ## 2026-10-04 recovery: previously blocked ledger updates
 
 This section records the material findings from the monetization sweeps whose GitHub ledger writes were previously reported as blocked. The entries below are historical evidence from the corresponding sweep reports; they are not retroactively treated as customer or revenue evidence.
@@ -184,7 +183,6 @@ For every future monetization sweep:
 ### No-duplicate rule
 Do not create another monetization ledger under the repository root, COLLECTION, or another project directory unless the user explicitly changes the architecture. Search the repository for existing monetization ledgers before creating a new one.
 
-
 ## 2026-10-04 blocker correction — delivery path + valid outreach
 
 ### Valid outreach delivered
@@ -212,3 +210,54 @@ Do not create another monetization ledger under the repository root, COLLECTION,
 
 ### Rule reinforced
 A blocker is considered removed only when the next external acceptance step is executable and evidence can be captured. Source code, workflow creation, listing, outreach delivery, provider availability and capability are not interchangeable with customer acceptance or payment.
+
+## 2026-10-08 commercial demand validation
+
+### What is sellable now
+The live Salamou-31 commercial catalog defines scoped offers that match the reusable delivery assets:
+1. Automation Repair Sprint — $75–$250, 1–2 days.
+2. AI/API Integration Pilot — $150–$500, 2–5 days.
+3. Lead Automation Pilot — $250–$750, 3–7 days.
+4. Customer Support AI Pilot — $300–$1,000, 3–7 days.
+5. Document Automation Pilot — $250–$900, 3–7 days.
+6. CRM + WhatsApp Automation — $500–$2,500+.
+7. E-commerce Automation — $500–$3,000+.
+8. AI/Automation Technical Audit — $100–$500.
+9. Monthly Automation Maintenance — $300–$1,500+/month.
+
+Source: `salamou1944/Salamou-31/AI-API-HUB/OFFERS-AND-PRICING.md`.
+
+### Current market-demand evidence checked 2026-10-08
+Fresh Upwork listings independently match our core stack:
+- n8n lead routing + CRM workflow: $20 fixed; web forms/Typeform/Sheets/webhooks/email → validation/deduplication → CRM → notifications including WhatsApp. citeturn0search3
+- AI lead capture + WhatsApp + CRM: $65 fixed, explicitly seeking n8n, AI agents, WhatsApp, CRM, APIs/webhooks and follow-up; contract-to-hire/ongoing intent. citeturn0search4
+- Production n8n/API/AI/CRM automation: $50 fixed with API auth/webhooks, AI processing, CRM dedupe, notifications, retries and QA; ongoing potential. citeturn0search5
+- Lead management workflow: $50 fixed, Facebook/web forms → Google Sheets, dedupe, routing and notifications; additional work possible. citeturn0search6
+- Larger lead-capture system: $800 fixed milestones for Meta Lead Ads + website + WhatsApp + CRM, with later phases for WhatsApp Cloud API and LLM agent. citeturn0search7
+- WhatsApp automation/integration: $250 fixed for welcome messages, follow-ups, triggers, reminders, CRM connection and human handoff. citeturn0search8
+- GHL + n8n + Make + API/webhook + AI automation: $40 fixed with ongoing/contract-to-hire intent. citeturn0search9
+
+### Commercial interpretation
+- **Market demand: VERIFIED.** These are active paid listings requesting the same categories of work.
+- **Our capability: VERIFIED at source/catalog level.** The repository contains reusable API, webhook/OAuth, n8n repair, lead qualification, CRM sync, WhatsApp/SMS/voice, document/OCR, Shopify and support-automation building blocks.
+- **Customer acquisition: NOT VERIFIED.** No reply/acceptance/payment has been found in this validation.
+- **Revenue: $0 verified.**
+- Therefore: we have **sellable capabilities with demonstrated market demand**, but we do not yet have a proven customer acquisition engine.
+
+### First-dollar offer set
+Prioritize these three:
+1. **n8n/API Repair Sprint — $75–$150 entry pilot.**
+2. **Lead → CRM → Follow-up Pilot — $250–$500.**
+3. **WhatsApp + CRM Automation Pilot — $250–$750.**
+
+Reason: they map directly to multiple live listings, have bounded scope, can be delivered without building a new SaaS product, and have clear acceptance criteria.
+
+### Acquisition rule for the next run
+Do not broaden the toolbox. Search only for:
+- fresh paid demand matching these three offers;
+- direct/free contact paths where permitted;
+- small scopes with clear acceptance criteria;
+- buyers with evidence of hiring/spend;
+- opportunities that can be pursued without upfront API spend.
+
+Never classify a listing, proposal, sent email, or technical capability as a customer or revenue event without acceptance/payment evidence.
