@@ -44,17 +44,28 @@ def source_records():
             pass
     for p in sorted(SOURCES.glob("*.md")):
         text = p.read_text(encoding="utf-8", errors="ignore")
-        m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
-        r = re.search(r"^- Repository:\s*([^\s]+)", text, re.M)
-        rev = re.search(r"^- Main revision inspected:\s*([0-9a-f]{7,40})", text, re.M)
-        lic = re.search(r"^- License:\s*([^\n]+)", text, re.M)
-        if not (m and r and rev and lic):
+        m = re.search(r"^- Source:\\s*(https?://github\\.com/[^\\s]+)", text, re.M)
+        r = re.search(r"^- Repository:\\s*([^\\s]+)", text, re.M)
+        owner = re.search(r"^- Owner:\\s*([^\\s]+)", text, re.M)
+        rev = re.search(r"^- Main revision inspected:\\s*([0-9a-f]{7,40})", text, re.M)
+        lic = re.search(r"^- License:\\s*([^\\n]+)", text, re.M)
+        if not (m and rev and lic):
             continue
         url = m.group(1).rstrip("/")
         license_name = lic.group(1).strip()
         if license_name not in ALLOWED:
             continue
-        owner_repo = r.group(1).strip()
+        repo_value = r.group(1).strip() if r else ""
+        owner_value = owner.group(1).strip() if owner else ""
+        if "/" in repo_value:
+            owner_repo = repo_value
+        elif owner_value and repo_value:
+            owner_repo = owner_value.rstrip("/") + "/" + repo_value.lstrip("/")
+        else:
+            parts = url.split("github.com/", 1)[-1].strip("/").split("/")
+            owner_repo = "/".join(parts[:2]) if len(parts) >= 2 else ""
+        if not owner_repo or owner_repo.count("/") != 1:
+            continue
         out.append({
             "source_record": p.name,
             "repo": owner_repo,
