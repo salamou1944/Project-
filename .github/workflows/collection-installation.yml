@@ -40,6 +40,42 @@ jobs:
           python3 COLLECTION/AUTO/validate_callable_registry.py
           python3 COLLECTION/AUTO/invoke_capability.py --list
 
+      - name: Install router smoke toolchain
+        if: ${{ hashFiles('COLLECTION/INSTALLED/juspay__hyperswitch/Cargo.toml') != '' }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.85.0
+
+      - name: Install protobuf compiler for router smoke
+        if: ${{ hashFiles('COLLECTION/INSTALLED/juspay__hyperswitch/Cargo.toml') != '' }}
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Hyperswitch router deterministic smoke
+        if: ${{ hashFiles('COLLECTION/INSTALLED/juspay__hyperswitch/Cargo.toml') != '' }}
+        working-directory: COLLECTION/INSTALLED/juspay__hyperswitch
+        timeout-minutes: 20
+        run: cargo test -p router --lib -- --skip db:: --skip types::storage::
+
+      - name: Record router smoke evidence
+        if: ${{ hashFiles('COLLECTION/INSTALLED/juspay__hyperswitch/Cargo.toml') != '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p COLLECTION/VERIFICATION
+          cat > COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json <<'EOF'
+          {
+            "schema_version": "collection-hyperswitch-router-smoke/v1",
+            "repo": "juspay/hyperswitch",
+            "revision": "1d71d94d2e2e1c72f3ede13abebc24132997685f",
+            "installed_path": "COLLECTION/INSTALLED/juspay__hyperswitch",
+            "capability": "router_deterministic_library_execution",
+            "entrypoint": "cargo test -p router --lib -- --skip db:: --skip types::storage::",
+            "external_payment_network": false,
+            "secrets_required": false,
+            "execution_status": "PROVEN_CALLABLE",
+            "scope": "deterministic router library tests; infrastructure-dependent DB/Redis tests excluded"
+          }
+          EOF
+
       - name: Commit installed assets, verification queue, and report
         run: |
           set -euo pipefail
