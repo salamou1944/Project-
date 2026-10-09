@@ -15,10 +15,19 @@ def main():
     assert not has_usable_files({"files": [{"path": "README.md", "error": "403", "content": "error page"}]})
     assert not has_usable_files({"files": [{"path": "README.md", "content": ""}]})
     assert not has_usable_files(None)
-    print("extraction cache policy: PASS (usable artifacts only)")
+    test_preserved_record_source_is_bound_to_artifact_data()
+    print("extraction cache policy: PASS (usable cache + preservation fallback regression)")
 
 
 if __name__ == "__main__":
     main()
 
-# Regression: preserved_record must count files from the validated artifact data, not an undefined variable.
+def test_preserved_record_source_is_bound_to_artifact_data():
+    source = (ROOT / "COLLECTION/AUTO/intelligent_extract.py").read_text(encoding="utf-8")
+    start = source.index("def preserved_record(")
+    end = source.index("\ndef main()", start)
+    body = source[start:end]
+    assert 'for f in data.get("files", [])' in body
+    assert "for f in files" not in body
+
+
