@@ -22,7 +22,7 @@ def main() -> int:
     counts = {}
 
     for item in report.get("results", []):
-        if item.get("status") != "INSTALLED":
+        if item.get("status") not in {"INSTALLED", "ALREADY_INSTALLED"}:
             continue
 
         repo = item.get("repo", "")
