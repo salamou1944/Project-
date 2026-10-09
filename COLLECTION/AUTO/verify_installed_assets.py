@@ -73,14 +73,23 @@ def main() -> int:
         items.append(row)
         counts[state] = counts.get(state, 0) + 1
 
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps({
+    payload = {
         "schema_version": "collection-installed-verification/v1",
         "rule": "installed is not callable; callable requires explicit entrypoint and execution evidence",
         "candidate_count": len(items),
         "counts": counts,
         "items": items,
-    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    }
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    # Publish a complete report or keep the previous valid report on interruption.
+    tmp = OUT.with_name(OUT.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="\\n") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\\n")
+        handle.flush()
+        import os
+        os.fsync(handle.fileno())
+    tmp.replace(OUT)
 
     print(json.dumps({"candidate_count": len(items), "counts": counts}, sort_keys=True))
     return 0 if not counts.get("INSTALLATION_INTEGRITY_FAILED") else 1
