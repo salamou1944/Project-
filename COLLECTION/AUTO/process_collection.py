@@ -70,10 +70,62 @@ def inspect_file(path):
         })
     return records
 
+def source_files_from_manifest():
+    """Process only artifacts declared extracted in the current manifest.
+
+    Stale JSON files left behind after a blocked refresh must never silently
+    re-enter the active evidence pipeline.
+    """
+    manifest_path = EXTRACTED / "MANIFEST.json"
+    if not manifest_path.is_file() or manifest_path.stat().st_size == 0:
+        raise SystemExit("missing or empty extraction manifest; refusing stale-source processing")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"invalid extraction manifest; refusing stale-source processing: {exc}")
+    sources = manifest.get("sources")
+    if not isinstance(sources, list):
+        raise SystemExit("extraction manifest sources must be a list")
+    paths = []
+    seen = set()
+    for item in sources:
+        if not isinstance(item, dict) or item.get("state") != "extracted":
+            continue
+        raw_path = item.get("path")
+        if not raw_path:
+            raise SystemExit(f"extracted source has no artifact path: {item.get('canonical_source')}")
+        path = Path(raw_path)
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        path = path.resolve()
+        root = EXTRACTED.resolve()
+        if root not in path.parents or path.name == "MANIFEST.json" or path.suffix != ".json":
+            raise SystemExit(f"manifest source path escapes extracted root: {raw_path}")
+        if path in seen:
+            continue
+        seen.add(path)
+        if not path.is_file() or path.stat().st_size == 0:
+            raise SystemExit(f"manifest declares missing/empty extracted artifact: {path}")
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"invalid extracted artifact {path}: {exc}")
+        if data.get("state") != "extracted":
+            raise SystemExit(f"artifact state disagrees with manifest: {path}")
+        if data.get("canonical_source") != item.get("canonical_source"):
+            raise SystemExit(f"artifact source identity disagrees with manifest: {path}")
+        if item.get("revision_sha") and data.get("revision_sha") != item.get("revision_sha"):
+            raise SystemExit(f"artifact revision disagrees with manifest: {path}")
+        paths.append(path)
+    if not paths:
+        raise SystemExit("manifest contains no valid extracted source artifacts; refusing empty state regeneration")
+    return sorted(paths)
+
+
 def main():
     MASTER.mkdir(parents=True,exist_ok=True)
     VERIFY.mkdir(parents=True,exist_ok=True)
-    files=[p for p in EXTRACTED.glob("*.json") if p.name!="MANIFEST.json"]
+    files=source_files_from_manifest()
     all_records=[]
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
         futures=[ex.submit(inspect_file,p) for p in files]
