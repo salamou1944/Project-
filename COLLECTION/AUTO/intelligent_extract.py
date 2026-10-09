@@ -295,8 +295,47 @@ def extract_gist(gid, owner):
         "files": files, "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
 
+def load_previous_manifest():
+    """Read last source inventory without trusting missing/corrupt artifacts."""
+    path = ROOT / "MANIFEST.json"
+    if not path.is_file() or path.stat().st_size == 0:
+        return []
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [item for item in doc.get("sources", []) if isinstance(item, dict)]
+
+
+def preserved_record(item):
+    """Preserve a prior extraction only when its artifact still validates."""
+    if item.get("state") != "extracted" or not item.get("path"):
+        return None
+    path = Path(item["path"])
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    root = ROOT.resolve()
+    try:
+        resolved = path.resolve()
+        if root not in resolved.parents or resolved.name == "MANIFEST.json":
+            return None
+        data = json.loads(resolved.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if data.get("state") != "extracted":
+        return None
+    if data.get("canonical_source") != item.get("canonical_source"):
+        return None
+    if item.get("revision_sha") and data.get("revision_sha") != item.get("revision_sha"):
+        return None
+    kept = dict(item)
+    kept["mode"] = "preserved_after_refresh_failure"
+    return kept
+
+
 def main():
     ROOT.mkdir(parents=True, exist_ok=True)
+    previous_sources = load_previous_manifest()
     repos, gists, blocked, accounts = discover()
     manifest = {
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -346,6 +385,21 @@ def main():
                     "error": str(ex)
                 })
 
+    # Preserve validated prior artifacts missing from this refresh. Temporary
+    # API/rate-limit/permission failures must not erase usable Collection inventory.
+    current_sources = {x.get("canonical_source"): x for x in manifest["sources"] if x.get("canonical_source")}
+    preserved_count = 0
+    for previous in previous_sources:
+        canonical = previous.get("canonical_source")
+        if not canonical or canonical in current_sources:
+            continue
+        kept = preserved_record(previous)
+        if kept:
+            manifest["sources"].append(kept)
+            current_sources[canonical] = kept
+            preserved_count += 1
+
+    manifest["preserved_sources_after_refresh_failure"] = preserved_count
     manifest["extracted_sources"] = sum(x["state"] == "extracted" for x in manifest["sources"])
     manifest["cached_sources"] = sum(x.get("mode") == "cached" for x in manifest["sources"])
     manifest["refreshed_sources"] = sum(x.get("mode") == "refreshed" for x in manifest["sources"])
@@ -354,7 +408,7 @@ def main():
     print(json.dumps({
         k: manifest[k] for k in (
             "account_count","repo_count","gist_count","extracted_sources",
-            "cached_sources","refreshed_sources","blocked_sources"
+            "cached_sources","refreshed_sources","blocked_sources","preserved_sources_after_refresh_failure"
         )
     }, sort_keys=True))
 
