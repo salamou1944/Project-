@@ -63,7 +63,21 @@ jobs:
           git diff --check
           git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION
           git diff --cached --quiet || git commit -m "chore(collection): refresh prioritized source extraction"
-          git push
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+            else
+              git rebase --abort || true
+              echo "Rebase conflict; refusing to overwrite concurrent Collection state" >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "Push failed after 3 attempts" >&2
+          exit 1
 
 # Manual verification trigger: run the current Collection harvester and policy checks.
 # Trigger verification 2026-10-08T05:00Z
