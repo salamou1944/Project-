@@ -43,16 +43,40 @@ def main():
     restricted = loaded[str(REQUIRED[3])]
 
     counts = ready.get("counts", {})
+    decisions = ready.get("decisions")
+    promotion_items = promotion.get("items")
+    readiness_items = readiness.get("items")
+    restricted_items = restricted.get("items")
     if int(counts.get("files_scanned", 0)) <= 0:
         raise SystemExit("READY.json reports zero scanned extracted files")
-    if not isinstance(ready.get("decisions"), list):
-        raise SystemExit("READY.json decisions must be a list")
-    if not isinstance(promotion.get("items"), list):
+    if int(counts.get("evidence_records", 0)) <= 0:
+        raise SystemExit("READY.json reports zero evidence records")
+    if int(counts.get("capability_groups", 0)) <= 0:
+        raise SystemExit("READY.json reports zero capability groups")
+    if not isinstance(decisions, list) or not decisions:
+        raise SystemExit("READY.json decisions must be a non-empty list")
+    if not isinstance(promotion_items, list):
         raise SystemExit("PROMOTION-QUEUE.json items must be a list")
-    if not isinstance(readiness.get("items"), list):
+    if not isinstance(readiness_items, list):
         raise SystemExit("READINESS-QUEUE.json items must be a list")
-    if not isinstance(restricted.get("items"), list):
+    if not isinstance(restricted_items, list):
         raise SystemExit("RESTRICTED-QUEUE.json items must be a list")
+    expected_keys = {item.get("capability_key") for item in decisions}
+    readiness_keys = {item.get("capability_key") for item in readiness_items}
+    if expected_keys != readiness_keys:
+        raise SystemExit("readiness queue does not cover exactly the generated capability decisions")
+    expected_promotion = {item.get("capability_key") for item in decisions if item.get("action") != "QUARANTINE"}
+    expected_restricted = {item.get("capability_key") for item in decisions if item.get("action") == "QUARANTINE"}
+    actual_promotion = {item.get("capability_key") for item in promotion_items}
+    actual_restricted = {item.get("capability_key") for item in restricted_items}
+    if expected_promotion != actual_promotion:
+        raise SystemExit("promotion queue differs from generated non-quarantined decisions")
+    if expected_restricted != actual_restricted:
+        raise SystemExit("restricted queue differs from generated quarantined decisions")
+    if int(counts.get("capability_groups", 0)) != len(decisions):
+        raise SystemExit("READY.json capability_groups count disagrees with decisions")
+    if int(counts.get("review_merge_or_upgrade", 0)) + int(counts.get("review_new_or_upgrade", 0)) + int(counts.get("quarantine", 0)) != len(decisions):
+        raise SystemExit("READY.json action counts disagree with decisions")
 
     print({
         "status": "PASS",
