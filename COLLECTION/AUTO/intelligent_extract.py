@@ -356,8 +356,9 @@ def preserved_record(item):
         return None
     kept = dict(item)
     kept["files_extracted"] = sum(
-        1 for f in files
-        if isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"]
+        1 for f in data.get("files", [])
+        if isinstance(f, dict) and not f.get("error")
+        and isinstance(f.get("content"), str) and f["content"]
     )
     kept["mode"] = "preserved_after_refresh_failure"
     return kept
