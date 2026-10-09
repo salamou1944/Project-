@@ -47,6 +47,11 @@ def main():
     promotion_items = promotion.get("items")
     readiness_items = readiness.get("items")
     restricted_items = restricted.get("items")
+    if extracted != extracted_with_files:
+        raise SystemExit(
+            f"manifest marks {extracted - extracted_with_files} source(s) extracted with zero usable files; "
+            "harvester must refresh them or mark them blocked before publishing state"
+        )
     if int(counts.get("files_scanned", 0)) <= 0:
         raise SystemExit("READY.json reports zero scanned extracted files")
     if int(counts.get("evidence_records", 0)) <= 0:
