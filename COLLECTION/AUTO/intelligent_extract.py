@@ -230,7 +230,7 @@ def extract_repo(item):
     # A stale artifact marked extracted but containing no usable files must be
     # refreshed even when upstream pushed_at is unchanged.
     if (
-        cached
+        isinstance(cached, dict)
         and cached.get("pushed_at") == pushed_at
         and cached.get("state") == "extracted"
         and has_usable_files(cached)
@@ -341,7 +341,7 @@ def preserved_record(item):
         data = json.loads(resolved.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if data.get("state") != "extracted":
+    if not isinstance(data, dict) or data.get("state") != "extracted":
         return None
     if not has_usable_files(data):
         # Do not preserve an empty/stale artifact as extracted. Its bytes stay
