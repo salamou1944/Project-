@@ -1,0 +1,70 @@
+name: collection-derived-state-recovery
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/collection-derived-state-recovery.yml"
+      - "COLLECTION/AUTO/process_collection.py"
+      - "COLLECTION/AUTO/collection_state_guard.py"
+      - "COLLECTION/AUTO/collection_value_operator.py"
+
+concurrency:
+  group: collection-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild-derived-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate source manifest and process existing extracted artifacts
+        run: |
+          set -euo pipefail
+          python3 -m py_compile COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/validate_callable_registry.py
+          python3 COLLECTION/AUTO/process_collection.py
+          python3 COLLECTION/AUTO/collection_state_guard.py
+          python3 COLLECTION/AUTO/collection_value_operator.py
+
+      - name: Verify readiness and callable contracts
+        run: |
+          set -euo pipefail
+          python3 COLLECTION/AUTO/test_collection_policy.py
+          python3 COLLECTION/AUTO/validate_readiness.py
+          python3 COLLECTION/AUTO/validate_callable_registry.py
+          python3 COLLECTION/AUTO/invoke_capability.py --list
+
+      - name: Publish derived state atomically without triggering another cycle
+        run: |
+          set -euo pipefail
+          git config user.name "collection-bot"
+          git config user.email "collection-bot@users.noreply.github.com"
+          git diff --check
+          git add COLLECTION/MASTER/READY.json COLLECTION/MASTER/PROMOTION-QUEUE.json COLLECTION/MASTER/READINESS-QUEUE.json COLLECTION/MASTER/VALUE-OPERATOR-QUEUE.json COLLECTION/VERIFICATION/RESTRICTED-QUEUE.json
+          if git diff --cached --quiet; then
+            echo "Derived state is already current."
+            exit 0
+          fi
+          git commit -m "chore(collection): recover derived state from preserved extraction"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+            else
+              git rebase --abort || true
+              echo "Concurrent Collection change detected; refusing to overwrite state." >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "Push failed after 3 attempts." >&2
+          exit 1
