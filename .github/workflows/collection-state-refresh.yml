@@ -1,0 +1,73 @@
+name: collection-state-refresh
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# Share the same lock as the harvester: generated Collection state must have one writer.
+concurrency:
+  group: collection-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate inputs and compile pipeline
+        run: |
+          set -euo pipefail
+          test -s COLLECTION/AUTO/EXTRACTED/MANIFEST.json
+          python3 -m py_compile \
+            COLLECTION/AUTO/process_collection.py \
+            COLLECTION/AUTO/collection_state_guard.py \
+            COLLECTION/AUTO/collection_value_operator.py \
+            COLLECTION/AUTO/validate_readiness.py \
+            COLLECTION/AUTO/validate_callable_registry.py \
+            COLLECTION/AUTO/invoke_capability.py
+
+      - name: Rebuild derived state from the latest completed extraction manifest
+        run: |
+          set -euo pipefail
+          python3 COLLECTION/AUTO/invoke_capability.py collection.process_collection
+          python3 COLLECTION/AUTO/collection_state_guard.py
+          python3 COLLECTION/AUTO/collection_value_operator.py
+
+      - name: Verify policy and callable registry
+        run: |
+          set -euo pipefail
+          python3 COLLECTION/AUTO/test_collection_policy.py
+          python3 COLLECTION/AUTO/validate_readiness.py
+          python3 COLLECTION/AUTO/validate_callable_registry.py
+          python3 COLLECTION/AUTO/invoke_capability.py --list
+          git diff --check
+
+      - name: Publish derived state without overwriting concurrent changes
+        run: |
+          set -euo pipefail
+          git config user.name "collection-bot"
+          git config user.email "collection-bot@users.noreply.github.com"
+          git add COLLECTION/MASTER/READY.json COLLECTION/MASTER/PROMOTION-QUEUE.json COLLECTION/MASTER/READINESS-QUEUE.json COLLECTION/MASTER/VALUE-OPERATOR-QUEUE.json COLLECTION/VERIFICATION/RESTRICTED-QUEUE.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(collection): refresh derived state from completed extraction"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+            else
+              git rebase --abort || true
+              echo "Concurrent state conflict; refusing to overwrite Collection outputs" >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "State publication failed after 3 attempts" >&2
+          exit 1
