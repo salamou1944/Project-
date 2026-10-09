@@ -180,18 +180,63 @@ def packet(d, f):
             "reuse_boundary":"extract narrow implementation pattern/contract; do not wholesale-copy source",
             "evidence_excerpt":f["content"][:700].replace("\n"," ")}
 
+def atomic_json(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="\\n") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
+    previous = {}
+    manifest_path = OUT / "MANIFEST.json"
+    if manifest_path.exists():
+        try:
+            prior = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for row in prior.get("repos", []):
+                if isinstance(row, dict) and row.get("repo"):
+                    previous[row["repo"]] = row
+        except (OSError, ValueError):
+            raise SystemExit("existing deep-extraction manifest is invalid; refusing destructive refresh")
+
     os_ = owners()
     rs = {}
+    owner_errors = {}
     for o in os_:
-        for r in repos(o):
-            if not r.get("archived", False):
-                rs[r["full_name"]] = r
-    manifest = {"schema_version":"collection-deep-extraction/v1",
-                "generated_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                "owners":os_, "repo_count":len(rs), "repos":[]}
-    packets = []
+        discovered = False
+        errors = []
+        for ep in (f"/users/{urllib.parse.quote(o, safe='')}/repos?type=all",
+                   f"/orgs/{urllib.parse.quote(o, safe='')}/repos"):
+            try:
+                found = list(paged(ep))
+                if found:
+                    discovered = True
+                    for repo_meta in found:
+                        if not repo_meta.get("archived", False):
+                            rs[repo_meta["full_name"]] = repo_meta
+                    break
+            except Exception as exc:
+                errors.append(str(exc))
+        if not discovered and errors:
+            owner_errors[o] = errors[-1]
+
+    rows = {}
+    # Preserve the latest successful packet for a repo when a refresh is blocked.
+    for repo, row in previous.items():
+        packet_path = OUT / (repo.replace("/", "__") + ".json")
+        if packet_path.is_file() and row.get("revision_sha"):
+            try:
+                d = json.loads(packet_path.read_text(encoding="utf-8"))
+                if d.get("repo") == repo and d.get("revision_sha") == row.get("revision_sha"):
+                    rows[repo] = row
+            except (OSError, ValueError):
+                pass
+
+    failures = []
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
         jobs = {ex.submit(extract, repo):repo for repo in rs}
         for fut in as_completed(jobs):
@@ -200,21 +245,43 @@ def main():
                 d = fut.result()
                 out = OUT / (repo.replace("/","__") + ".json")
                 d["generated_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-                out.write_text(json.dumps(d, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-                manifest["repos"].append({"repo":repo,"revision_sha":d["revision_sha"],"files":len(d["files"]),"path":str(out)})
-                packets.extend(packet(d, f) for f in d["files"])
-            except Exception as e:
-                manifest["repos"].append({"repo":repo,"state":"BLOCKED_EXTERNAL_ACCESS","error":str(e)})
-    manifest["packet_count"] = len(packets)
-    manifest["asset_type_counts"] = {}
-    for p in packets:
-        manifest["asset_type_counts"][p["asset_type"]] = manifest["asset_type_counts"].get(p["asset_type"], 0) + 1
-    (OUT/"MANIFEST.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    (OUT/"EXTRACTION-READY-QUEUE.json").write_text(json.dumps(
-        {"schema_version":"collection-extraction-ready/v1",
-         "rule":"ready for canonical dedupe/adaptation, never runtime readiness",
-         "items":packets}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"owners":len(os_), "repos":len(rs), "packets":len(packets),
+                atomic_json(out, d)
+                rows[repo] = {"repo":repo,"revision_sha":d["revision_sha"],"files":len(d["files"]),"path":str(out)}
+            except Exception as exc:
+                failures.append({"repo":repo,"state":"BLOCKED_EXTERNAL_ACCESS","error":str(exc)})
+                if repo not in rows:
+                    rows[repo] = {"repo":repo,"state":"BLOCKED_EXTERNAL_ACCESS","error":str(exc)}
+
+    for owner, error in owner_errors.items():
+        failures.append({"owner":owner,"state":"OWNER_DISCOVERY_BLOCKED","error":error})
+
+    packets = []
+    for repo, row in sorted(rows.items()):
+        packet_path = OUT / (repo.replace("/", "__") + ".json")
+        if not packet_path.is_file():
+            continue
+        try:
+            d = json.loads(packet_path.read_text(encoding="utf-8"))
+            if d.get("repo") != repo or not d.get("revision_sha"):
+                continue
+            packets.extend(packet(d, f) for f in d.get("files", []))
+        except (OSError, ValueError):
+            continue
+
+    manifest = {"schema_version":"collection-deep-extraction/v1",
+                "generated_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "owners":os_, "repo_count":len(rows), "repos":[rows[k] for k in sorted(rows)],
+                "owner_discovery_errors":owner_errors,"refresh_failures":failures,
+                "packet_count":len(packets),"asset_type_counts":{}}
+    for item in packets:
+        manifest["asset_type_counts"][item["asset_type"]] = manifest["asset_type_counts"].get(item["asset_type"], 0) + 1
+    atomic_json(manifest_path, manifest)
+    atomic_json(OUT/"EXTRACTION-READY-QUEUE.json", {
+        "schema_version":"collection-extraction-ready/v1",
+        "rule":"ready for canonical dedupe/adaptation, never runtime readiness",
+        "items":packets})
+    print(json.dumps({"owners":len(os_), "discovered_repos":len(rs), "retained_or_extracted_repos":len(rows),
+                      "refresh_failures":len(failures), "packets":len(packets),
                       "asset_types":manifest["asset_type_counts"]}, sort_keys=True))
 
 if __name__ == "__main__":
