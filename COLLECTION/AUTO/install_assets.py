@@ -28,20 +28,25 @@ def source_records():
     if manifest.exists():
         try:
             data = json.loads(manifest.read_text(encoding="utf-8"))
-            for x in data.get("repos", []):
-                repo = x.get("repo")
-                rev = x.get("revision_sha")
-                lic = x.get("license")
-                if repo and rev and lic in ALLOWED:
-                    out.append({
-                        "source_record": "DEEP-EXTRACTED/MANIFEST.json",
-                        "repo": repo,
-                        "url": "https://github.com/" + repo,
-                        "revision": rev,
-                        "license": lic,
-                    })
-        except Exception:
-            pass
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"invalid deep-extraction manifest; refusing partial install selection: {exc}")
+        repos = data.get("repos", [])
+        if not isinstance(repos, list):
+            raise SystemExit("deep-extraction manifest repos must be a list")
+        for x in repos:
+            if not isinstance(x, dict):
+                continue
+            repo = x.get("repo")
+            rev = x.get("revision_sha")
+            lic = x.get("license")
+            if repo and rev and lic in ALLOWED:
+                out.append({
+                    "source_record": "DEEP-EXTRACTED/MANIFEST.json",
+                    "repo": repo,
+                    "url": "https://github.com/" + repo,
+                    "revision": rev,
+                    "license": lic,
+                })
     for p in sorted(SOURCES.glob("*.md")):
         text = p.read_text(encoding="utf-8", errors="ignore")
         m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
@@ -129,9 +134,26 @@ def main():
     unique = {}
     for x in items:
         unique[(x["repo"],x["revision"])] = x
+    # The destination path is repo-scoped, not revision-scoped. Installing two
+    # revisions of one repo concurrently would race and could mislabel the final tree.
+    by_repo = {}
+    for item in unique.values():
+        by_repo.setdefault(item["repo"], []).append(item)
+    installable = []
     results = []
+    for repo, versions in sorted(by_repo.items()):
+        revisions = sorted({x["revision"] for x in versions})
+        if len(revisions) > 1:
+            results.append({
+                "repo": repo,
+                "status": "BLOCKED_REVISION_CONFLICT",
+                "revisions": revisions,
+                "reason": "multiple pinned revisions target the same repository-scoped install path; choose one explicitly"
+            })
+        else:
+            installable.append(versions[0])
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, ns.workers)) as ex:
-        futures = [ex.submit(install_one,x) for x in unique.values()]
+        futures = [ex.submit(install_one,x) for x in installable]
         for f in concurrent.futures.as_completed(futures):
             results.append(f.result())
     results.sort(key=lambda x:(x["status"],x["repo"]))
