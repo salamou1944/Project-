@@ -153,7 +153,11 @@ def discover():
                     "kind": "repo", "full_name": item["full_name"],
                     "owner": owner, "owner_kind": kind
                 }
-            if kind == "user":
+            # Gists are optional enrichment, not a prerequisite for repo collection.
+            # They consume the same GitHub API quota and frequently return 403 for
+            # fine-grained tokens even when public repositories are readable. Keep the
+            # default cycle fast and useful; enable them explicitly when quota permits.
+            if kind == "user" and os.getenv("COLLECTION_INCLUDE_GISTS", "0").strip().lower() in {"1", "true", "yes"}:
                 try:
                     for item in paged(f"/users/{urllib.parse.quote(owner, safe='')}/gists"):
                         gists[item["id"]] = {"kind": "gist", "id": item["id"], "owner": owner}
