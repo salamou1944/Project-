@@ -51,14 +51,14 @@ This audit covers the repository-visible Collection pipeline and its GitHub Acti
 4. **The classifier is keyword-based.** It can misclassify benign documentation containing words such as “secret”, “token”, “exploit”, or “bypass”. Quarantine is conservative, but false positives need review and a test corpus.
 5. **Readiness declarations validate evidence shape, not runtime behavior.** `validate_readiness.py` explicitly does not execute activation commands. Runtime states must remain gated by actual environment-specific smoke evidence.
 6. **Installation is not runtime integration.** A vendored source directory and marker do not establish buildability, callable entrypoints, security suitability, or production behavior.
-7. **The installer replaces an existing target directory after the new clone is prepared.** A staged atomic swap/rollback should be added before claiming interruption-safe replacement of already-installed assets.
+7. **Installer replacement safety — corrective change committed, runtime proof pending.** Commit `1914fee4ce5ed8d55cc8dc0d9d00001b9a16d79c` prepares a staged tree beside the destination, preserves the previous tree as a backup during the rename, restores it if activation fails, refuses to overwrite a stale backup, and publishes the installation report atomically. The continuous workflow now includes `install_assets.py` in its Python compile gate. This reduces interruption risk but still needs a real CI run and fault-injection tests before calling the installer production-proven.
 8. **Workflow concurrency protects the configured writer group only.** All workflows that write the same generated files must continue to share a compatible concurrency policy; direct manual edits to generated files during runs can still conflict.
 9. **The value operator produces a review plan, not autonomous verified integration.** Its `execution_state` remains `NOT_EXECUTED`; a separate evidence-backed adapter/test gate is required before promoting a candidate.
 10. **No zero-failure guarantee is possible for production systems.** The realistic goal is no silent failure, deterministic rollback/recovery, measured service-level objectives, and explicit evidence for each promoted capability.
 
 ## Acceptance gates before declaring Collection recovered
 
-- [ ] A real `collection-continuous` run completes on current `main`.
+- [ ] A real `collection-continuous` run completes on current `main` after the installer-swap fix and compile-gate update.
 - [ ] `MANIFEST.json` has non-empty sources and distinguishes extracted, cached, refreshed, and blocked outcomes accurately.
 - [ ] Each source declared extracted has a non-empty artifact, matching canonical source and exact revision.
 - [ ] `READY.json`, `PROMOTION-QUEUE.json`, `READINESS-QUEUE.json`, `RESTRICTED-QUEUE.json`, and `VALUE-OPERATOR-QUEUE.json` parse as JSON and agree on counts.
