@@ -24,9 +24,23 @@ def load_nonempty(path):
 
 def main():
     manifest = load_nonempty(MANIFEST)
-    extracted = int(manifest.get("extracted_sources", 0))
-    if extracted <= 0:
-        raise SystemExit(f"Collection extraction produced no extracted sources: {extracted}")
+    sources = manifest.get("sources", [])
+    if not isinstance(sources, list):
+        raise SystemExit("manifest sources must be a list")
+    extracted_records = [
+        item for item in sources
+        if isinstance(item, dict) and item.get("state") == "extracted"
+    ]
+    extracted = len(extracted_records)
+    extracted_with_files = sum(
+        1 for item in extracted_records
+        if int(item.get("files_extracted", 0) or 0) > 0
+    )
+    if extracted <= 0 or extracted_with_files <= 0:
+        raise SystemExit(
+            f"Collection manifest has no usable extracted sources: "
+            f"extracted={extracted}, extracted_with_files={extracted_with_files}"
+        )
 
     loaded = {str(p): load_nonempty(p) for p in REQUIRED}
     ready = loaded[str(REQUIRED[0])]
@@ -49,6 +63,7 @@ def main():
     print({
         "status": "PASS",
         "extracted_sources": extracted,
+        "extracted_sources_with_files": extracted_with_files,
         "files_scanned": counts.get("files_scanned", 0),
         "capability_groups": counts.get("capability_groups", 0),
         "promotion_items": len(promotion["items"]),
