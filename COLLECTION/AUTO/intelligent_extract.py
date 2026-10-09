@@ -230,19 +230,30 @@ def extract_repo(item):
     ]
     candidates.sort(key=lambda e: (score(e["path"]), -e.get("size", 0)), reverse=True)
     selected = candidates[:MAX_FILES]
-    files = []
+    fetch_results = []
     with ThreadPoolExecutor(max_workers=min(RAW_WORKERS, max(1, len(selected)))) as ex:
         futures = [ex.submit(raw_fetch, repo, e["path"], revision) for e in selected]
         for fut in as_completed(futures):
-            files.append(fut.result())
+            fetch_results.append(fut.result())
+    # Failed/empty raw fetches are diagnostics, never extracted evidence.
+    fetch_errors = [
+        {"path": f.get("path"), "error": f.get("error", "empty content")}
+        for f in fetch_results
+        if f.get("error") or not f.get("content")
+    ]
+    files = [f for f in fetch_results if not f.get("error") and f.get("content")]
     files.sort(key=lambda x: x["score"], reverse=True)
     total, bounded = 0, []
     for f in files:
         size = len(f.get("content", "").encode())
-        if size and total + size > MAX_BYTES_PER_SOURCE:
+        if total + size > MAX_BYTES_PER_SOURCE:
             continue
         bounded.append(f)
         total += size
+    if not bounded:
+        raise RuntimeError(
+            f"raw_file_extraction_empty:{repo}:selected={len(selected)}:errors={len(fetch_errors)}"
+        )
     data = {
         "canonical_source": f"github:{repo}", "repo": repo,
         "revision_sha": revision, "default_branch": branch,
@@ -256,6 +267,8 @@ def extract_repo(item):
             "raw_fetch": True, "incremental": True
         },
         "files": bounded,
+        "fetch_errors": fetch_errors,
+        "fetch_error_count": len(fetch_errors),
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
     return data, "refreshed"
