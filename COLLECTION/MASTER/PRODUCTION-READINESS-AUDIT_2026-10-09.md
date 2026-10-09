@@ -8,13 +8,13 @@ This is an evidence-based snapshot from the repository's current `main` branch, 
 
 ## Observed blockers
 
-### P0 — Generated state files are empty at the repository interface
-The following tracked paths returned empty content despite having blob SHAs:
+### P0 — Generated state cannot be verified through the current connector response
+The GitHub file-fetch tool returned empty *content fields* for these tracked JSON paths while still returning non-empty blob SHAs:
 - `COLLECTION/MASTER/READY.json`
 - `COLLECTION/MASTER/PROMOTION-QUEUE.json`
 - `COLLECTION/MASTER/READINESS-QUEUE.json`
 
-The existing `COLLECTION/AUTO/collection_state_guard.py` correctly fails closed for missing/empty/invalid state and requires a usable extraction manifest. This means the current generated state cannot be accepted as healthy.
+A non-empty blob SHA is not proof that the file contains valid JSON, but it also means the empty connector response alone does **not** prove the Git blob is zero bytes (large-file/API response limitations may be responsible). Treat this as **UNVERIFIED**, not as a confirmed zero-byte defect. The read-only checkout diagnostic and the actual recovery workflow must determine file size, JSON validity, and queue consistency inside GitHub Actions. The state guard remains the authoritative fail-closed check.
 
 ### P0 — Latest extraction manifest is stale relative to this audit
 The manifest's `generated_at` is `2026-10-08T15:25:11.489185+00:00`. It lists 42 accounts and 1,948 repositories. The inventory is valuable and must be preserved, but this timestamp does not prove that the scheduled harvest is currently progressing.
