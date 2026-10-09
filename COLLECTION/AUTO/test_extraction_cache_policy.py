@@ -20,3 +20,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# Regression: preserved_record must count files from the validated artifact data, not an undefined variable.
