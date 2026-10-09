@@ -83,9 +83,9 @@ def main() -> int:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     # Publish a complete report or keep the previous valid report on interruption.
     tmp = OUT.with_name(OUT.name + ".tmp")
-    with tmp.open("w", encoding="utf-8", newline="\\n") as handle:
+    with tmp.open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
-        handle.write("\\n")
+        handle.write("\n")
         handle.flush()
         import os
         os.fsync(handle.fileno())
