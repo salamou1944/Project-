@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import os
 from pathlib import Path
 
 REGISTRY = Path("COLLECTION/MASTER/CALLABLE-REGISTRY.json")
@@ -17,6 +18,16 @@ def main():
         return 0
     if not evidence.get("workflow_run") or not evidence.get("workflow_attempt"):
         print("router promotion: missing workflow identity; fail-closed")
+        return 0
+    # Evidence must belong to this exact Actions run/attempt; a stale file from a prior
+    # successful smoke must never promote the capability after a skipped/failed current smoke.
+    current_run = os.getenv("GITHUB_RUN_ID")
+    current_attempt = os.getenv("GITHUB_RUN_ATTEMPT")
+    if current_run and str(evidence.get("workflow_run")) != current_run:
+        print("router promotion: evidence belongs to a different workflow run; fail-closed")
+        return 0
+    if current_attempt and str(evidence.get("workflow_attempt")) != current_attempt:
+        print("router promotion: evidence belongs to a different workflow attempt; fail-closed")
         return 0
 
     registry = json.loads(REGISTRY.read_text())
