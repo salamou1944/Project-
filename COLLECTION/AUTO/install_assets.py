@@ -110,13 +110,36 @@ def install_one(item):
         if size_mb > MAX_MB:
             return {**item, "status":"BLOCKED_SIZE", "size_mb":size_mb, "limit_mb":MAX_MB}
         target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists():
-            shutil.rmtree(target)
-        shutil.copytree(clone, target, ignore=shutil.ignore_patterns(".git"))
-        marker.write_text(json.dumps({
-            **item, "status":"INSTALLED", "install_mode":"vendored_source",
-            "revision_pinned":True, "size_mb":size_mb
-        }, indent=2)+"\n", encoding="utf-8")
+        # Prepare the complete replacement beside the target so rename stays
+        # on the same filesystem. Never delete the last known-good install first.
+        staged = Path(tempfile.mkdtemp(prefix=f".{target.name}.staged-", dir=target.parent))
+        backup = target.with_name(f".{target.name}.backup-{os.getpid()}")
+        try:
+            shutil.rmtree(staged)
+            shutil.copytree(clone, staged, ignore=shutil.ignore_patterns(".git"))
+            staged_marker = staged / ".collection-install.json"
+            staged_marker.write_text(json.dumps({
+                **item, "status":"INSTALLED", "install_mode":"vendored_source",
+                "revision_pinned":True, "size_mb":size_mb
+            }, indent=2)+"\n", encoding="utf-8")
+            # A stale backup is not silently deleted: fail closed to preserve recovery material.
+            if backup.exists():
+                raise RuntimeError(f"install_backup_already_exists:{backup}")
+            moved_old = False
+            if target.exists():
+                target.rename(backup)
+                moved_old = True
+            try:
+                staged.rename(target)
+            except Exception:
+                if moved_old and backup.exists() and not target.exists():
+                    backup.rename(target)
+                raise
+            if moved_old:
+                shutil.rmtree(backup)
+        finally:
+            if staged.exists():
+                shutil.rmtree(staged, ignore_errors=True)
         return {**item, "status":"INSTALLED", "path":str(target), "size_mb":size_mb}
     except Exception as exc:
         return {**item, "status":"FAILED", "error":str(exc)[:1000]}
@@ -167,7 +190,13 @@ def main():
     for x in results:
         report["counts"][x["status"]] = report["counts"].get(x["status"],0)+1
     REPORT.parent.mkdir(parents=True, exist_ok=True)
-    REPORT.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    tmp_report = REPORT.with_name(REPORT.name + ".tmp")
+    with tmp_report.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(report, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp_report, REPORT)
     print(json.dumps({"candidates":len(unique),"counts":report["counts"]},sort_keys=True))
 
 if __name__=="__main__":
