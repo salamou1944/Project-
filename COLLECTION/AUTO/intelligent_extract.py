@@ -219,7 +219,17 @@ def extract_repo(item):
             cached = json.loads(out.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             cached = None
-    if cached and cached.get("pushed_at") == pushed_at and cached.get("state") == "extracted":
+    cached_files = cached.get("files") if isinstance(cached, dict) else None
+    # A stale artifact marked extracted but containing no usable files must be
+    # refreshed even when upstream pushed_at is unchanged. Otherwise the cache
+    # silently perpetuates a false extraction forever.
+    if (
+        cached
+        and cached.get("pushed_at") == pushed_at
+        and cached.get("state") == "extracted"
+        and isinstance(cached_files, list)
+        and any(isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"] for f in cached_files)
+    ):
         return cached, "cached"
 
     branch = meta["default_branch"]
@@ -327,6 +337,14 @@ def preserved_record(item):
     except (OSError, ValueError):
         return None
     if data.get("state") != "extracted":
+        return None
+    files = data.get("files")
+    if not isinstance(files, list) or not any(
+        isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"]
+        for f in files
+    ):
+        # Do not preserve an empty/stale artifact as extracted. Its bytes stay
+        # in the repository for forensics, but it must be retried or marked blocked.
         return None
     if data.get("canonical_source") != item.get("canonical_source"):
         return None
