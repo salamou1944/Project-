@@ -73,6 +73,16 @@ def main() -> int:
         items.append(row)
         counts[state] = counts.get(state, 0) + 1
 
+    eligible_count = sum(
+        1 for item in report.get("results", [])
+        if isinstance(item, dict) and item.get("status") in {"INSTALLED", "ALREADY_INSTALLED"}
+    )
+    if eligible_count != len(items):
+        raise SystemExit(
+            f"verification queue/report mismatch: eligible_installations={eligible_count}, "
+            f"verified_queue_items={len(items)}"
+        )
+
     payload = {
         "schema_version": "collection-installed-verification/v1",
         "rule": "installed is not callable; callable requires explicit entrypoint and execution evidence",
