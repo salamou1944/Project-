@@ -95,7 +95,10 @@ def has_usable_files(data):
     """True only when an extracted artifact contains at least one non-empty file."""
     files = data.get("files") if isinstance(data, dict) else None
     return isinstance(files, list) and any(
-        isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"]
+        isinstance(f, dict)
+        and not f.get("error")
+        and isinstance(f.get("content"), str)
+        and f["content"]
         for f in files
     )
 
