@@ -53,14 +53,24 @@ def main() -> None:
     summary = {}
     for item in plan:
         summary[item["operator_action"]] = summary.get(item["operator_action"], 0) + 1
-    OUT.write_text(json.dumps({
+    payload = {
         "schema_version": "collection-value-operator/v1",
         "source": "COLLECTION/MASTER/PROMOTION-QUEUE.json",
         "rule": "plan next action from existing evidence; never infer readiness or execution",
         "generated_at": doc.get("generated_at"),
         "summary": summary,
         "items": plan,
-    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    }
+    # Publish atomically: a cancelled workflow must not leave a truncated operator queue.
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    tmp = OUT.with_name(OUT.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+        handle.flush()
+        import os
+        os.fsync(handle.fileno())
+    tmp.replace(OUT)
     print(json.dumps({"status": "PASS", "items": len(plan), "summary": summary}, sort_keys=True))
 
 if __name__ == "__main__":
