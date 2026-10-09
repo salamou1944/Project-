@@ -26,6 +26,18 @@ API_WORKERS = int(os.getenv("COLLECTION_API_WORKERS", "16"))
 RAW_WORKERS = int(os.getenv("COLLECTION_RAW_WORKERS", "32"))
 _cache = {}
 
+def atomic_write_json(path, payload):
+    """Write each artifact via same-directory replace to avoid truncated cache files."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+
+
 def api(path):
     if path in _cache:
         return _cache[path]
@@ -312,7 +324,7 @@ def main():
                         "path": str(out), "files_extracted": len(data["files"]), "mode": "refreshed"
                     }
                 if mode != "cached":
-                    out.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                    atomic_write_json(out, data)
                 manifest["sources"].append(record)
             except Exception as ex:
                 canonical = f"github:{item['full_name']}" if kind == "repo" else f"github-gist:{item['id']}"
@@ -325,7 +337,7 @@ def main():
     manifest["cached_sources"] = sum(x.get("mode") == "cached" for x in manifest["sources"])
     manifest["refreshed_sources"] = sum(x.get("mode") == "refreshed" for x in manifest["sources"])
     manifest["blocked_sources"] = sum(x["state"] == "BLOCKED_EXTERNAL_ACCESS" for x in manifest["sources"]) + len(blocked)
-    (ROOT / "MANIFEST.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    atomic_write_json(ROOT / "MANIFEST.json", manifest)
     print(json.dumps({
         k: manifest[k] for k in (
             "account_count","repo_count","gist_count","extracted_sources",
