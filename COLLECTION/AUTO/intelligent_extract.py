@@ -13,7 +13,7 @@ import datetime, hashlib, json, os, re, time, urllib.error, urllib.parse, urllib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-TOKEN = os.environ["GH_TOKEN"]
+TOKEN = os.getenv("GH_TOKEN", "")
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
 ROOT = Path("COLLECTION/AUTO/EXTRACTED")
@@ -90,6 +90,14 @@ def paged(path):
         if len(data) < 100:
             return
         page += 1
+
+def has_usable_files(data):
+    """True only when an extracted artifact contains at least one non-empty file."""
+    files = data.get("files") if isinstance(data, dict) else None
+    return isinstance(files, list) and any(
+        isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"]
+        for f in files
+    )
 
 def safe_name(value):
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
@@ -219,16 +227,13 @@ def extract_repo(item):
             cached = json.loads(out.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             cached = None
-    cached_files = cached.get("files") if isinstance(cached, dict) else None
     # A stale artifact marked extracted but containing no usable files must be
-    # refreshed even when upstream pushed_at is unchanged. Otherwise the cache
-    # silently perpetuates a false extraction forever.
+    # refreshed even when upstream pushed_at is unchanged.
     if (
         cached
         and cached.get("pushed_at") == pushed_at
         and cached.get("state") == "extracted"
-        and isinstance(cached_files, list)
-        and any(isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"] for f in cached_files)
+        and has_usable_files(cached)
     ):
         return cached, "cached"
 
@@ -338,11 +343,7 @@ def preserved_record(item):
         return None
     if data.get("state") != "extracted":
         return None
-    files = data.get("files")
-    if not isinstance(files, list) or not any(
-        isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"]
-        for f in files
-    ):
+    if not has_usable_files(data):
         # Do not preserve an empty/stale artifact as extracted. Its bytes stay
         # in the repository for forensics, but it must be retried or marked blocked.
         return None
