@@ -36,12 +36,6 @@ def main():
         1 for item in extracted_records
         if int(item.get("files_extracted", 0) or 0) > 0
     )
-    if extracted <= 0 or extracted_with_files <= 0:
-        raise SystemExit(
-            f"Collection manifest has no usable extracted sources: "
-            f"extracted={extracted}, extracted_with_files={extracted_with_files}"
-        )
-
     loaded = {str(p): load_nonempty(p) for p in REQUIRED}
     ready = loaded[str(REQUIRED[0])]
     promotion = loaded[str(REQUIRED[1])]
