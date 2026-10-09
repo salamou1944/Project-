@@ -1,0 +1,77 @@
+name: collection-manifest-recovery
+
+on:
+  push:
+    paths:
+      - "COLLECTION/AUTO/repair_extraction_manifest.py"
+      - ".github/workflows/collection-manifest-recovery.yml"
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+# Serialize every Collection writer; never race the extractor or installer.
+concurrency:
+  group: collection-writer
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  recover-derived-state:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile recovery and downstream gates
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            COLLECTION/AUTO/repair_extraction_manifest.py \
+            COLLECTION/AUTO/process_collection.py \
+            COLLECTION/AUTO/collection_state_guard.py \
+            COLLECTION/AUTO/collection_value_operator.py \
+            COLLECTION/AUTO/test_collection_policy.py \
+            COLLECTION/AUTO/validate_readiness.py \
+            COLLECTION/AUTO/validate_callable_registry.py \
+            COLLECTION/AUTO/invoke_capability.py
+
+      - name: Reconcile manifest against preserved artifacts
+        run: python3 COLLECTION/AUTO/repair_extraction_manifest.py
+
+      - name: Rebuild and verify complete derived state
+        run: |
+          set -euo pipefail
+          python3 COLLECTION/AUTO/invoke_capability.py collection.process_collection
+          python3 COLLECTION/AUTO/collection_state_guard.py
+          python3 COLLECTION/AUTO/collection_value_operator.py
+          python3 COLLECTION/AUTO/test_collection_policy.py
+          python3 COLLECTION/AUTO/validate_readiness.py
+          python3 COLLECTION/AUTO/validate_callable_registry.py
+          python3 COLLECTION/AUTO/invoke_capability.py --list
+          git diff --check
+
+      - name: Publish validated state with bounded non-destructive retry
+        run: |
+          set -euo pipefail
+          git config user.name "collection-bot"
+          git config user.email "collection-bot@users.noreply.github.com"
+          git add COLLECTION/AUTO/EXTRACTED/MANIFEST.json COLLECTION/MASTER/READY.json COLLECTION/MASTER/PROMOTION-QUEUE.json COLLECTION/MASTER/READINESS-QUEUE.json COLLECTION/MASTER/VALUE-OPERATOR-QUEUE.json COLLECTION/VERIFICATION/RESTRICTED-QUEUE.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(collection): recover validated derived state"
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+            else
+              git rebase --abort || true
+              echo "Collection changed concurrently; refusing to overwrite generated state." >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "State publication failed after 3 attempts." >&2
+          exit 1
