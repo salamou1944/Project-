@@ -10,7 +10,7 @@ evidence can place an item ON_SHELF or QUARANTINED; READY_ON_DEMAND and
 READY_TO_USE require a separate readiness declaration with activation and
 runtime evidence.
 """
-import datetime, hashlib, json, re
+import datetime, hashlib, json, re, os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -18,6 +18,18 @@ EXTRACTED=Path("COLLECTION/AUTO/EXTRACTED")
 MASTER=Path("COLLECTION/MASTER")
 VERIFY=Path("COLLECTION/VERIFICATION")
 MAX_WORKERS=16
+
+def atomic_json_write(path: Path, payload: dict) -> None:
+    """Publish complete JSON files atomically so interrupted runs never leave zero-byte state."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8", newline="\n") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(tmp, path)
+
 
 SIGNALS={
 "agent_orchestration":("agent","orchestration","workflow","tool calling","multi-agent"),
@@ -162,13 +174,13 @@ def main():
     }
 
     ready={"generated_at":now,"pipeline":["extract","normalize","classify","dedupe","decide","verify"],"counts":counts,"decisions":decisions}
-    (MASTER/"READY.json").write_text(json.dumps(ready,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    atomic_json_write(MASTER/"READY.json", ready)
 
     queue=[d for d in decisions if d["action"]!="QUARANTINE"]
-    (MASTER/"PROMOTION-QUEUE.json").write_text(json.dumps({"generated_at":now,"items":queue},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    atomic_json_write(MASTER/"PROMOTION-QUEUE.json", {"generated_at":now,"items":queue})
 
     restricted_queue=[d for d in decisions if d["action"]=="QUARANTINE"]
-    (VERIFY/"RESTRICTED-QUEUE.json").write_text(json.dumps({"generated_at":now,"items":restricted_queue},ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+    atomic_json_write(VERIFY/"RESTRICTED-QUEUE.json", {"generated_at":now,"items":restricted_queue})
 
     readiness_items=[]
     for d in decisions:
@@ -184,15 +196,13 @@ def main():
             "readiness_state":"QUARANTINED" if d["action"]=="QUARANTINE" else "ON_SHELF",
             "next_readiness_gate":"safety/authorization" if d["action"]=="QUARANTINE" else "explicit readiness declaration + activation/smoke evidence"
         })
-    (MASTER/"READINESS-QUEUE.json").write_text(
-        json.dumps({
-            "schema_version":"collection-readiness-queue/v1",
-            "generated_at":now,
-            "rule":"collection evidence is provenance; readiness is never inferred",
-            "states":["ON_SHELF","READY_FOR_ADAPTATION","READY_ON_DEMAND","READY_TO_USE","INTEGRATED","TESTED","HUMAN_READY","PRODUCTION_PROVEN","QUARANTINED"],
-            "items":readiness_items
-        },ensure_ascii=False,indent=2)+"\n",encoding="utf-8"
-    )
+    atomic_json_write(MASTER/"READINESS-QUEUE.json", {
+        "schema_version":"collection-readiness-queue/v1",
+        "generated_at":now,
+        "rule":"collection evidence is provenance; readiness is never inferred",
+        "states":["ON_SHELF","READY_FOR_ADAPTATION","READY_ON_DEMAND","READY_TO_USE","INTEGRATED","TESTED","HUMAN_READY","PRODUCTION_PROVEN","QUARANTINED"],
+        "items":readiness_items
+    })
     print(json.dumps(counts))
 
 if __name__=="__main__":
