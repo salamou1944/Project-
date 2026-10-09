@@ -403,10 +403,26 @@ def main():
                 manifest["sources"].append(record)
             except Exception as ex:
                 canonical = f"github:{item['full_name']}" if kind == "repo" else f"github-gist:{item['id']}"
-                manifest["sources"].append({
-                    "canonical_source": canonical, "state": "BLOCKED_EXTERNAL_ACCESS",
-                    "error": str(ex)
-                })
+                previous = next(
+                    (record for record in previous_sources if record.get("canonical_source") == canonical),
+                    None,
+                )
+                preserved = preserved_record(previous) if previous else None
+                if preserved:
+                    # Keep the last validated artifact active while surfacing the
+                    # failed refresh separately. A transient API/raw-fetch failure
+                    # must not demote usable inventory or erase its provenance.
+                    manifest["sources"].append(preserved)
+                    manifest["blocked"].append({
+                        "canonical_source": canonical,
+                        "state": "REFRESH_BLOCKED_PRESERVED_PRIOR",
+                        "error": str(ex),
+                    })
+                else:
+                    manifest["sources"].append({
+                        "canonical_source": canonical, "state": "BLOCKED_EXTERNAL_ACCESS",
+                        "error": str(ex)
+                    })
 
     # Preserve validated prior artifacts missing from this refresh. Temporary
     # API/rate-limit/permission failures must not erase usable Collection inventory.
