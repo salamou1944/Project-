@@ -352,6 +352,10 @@ def preserved_record(item):
     if item.get("revision_sha") and data.get("revision_sha") != item.get("revision_sha"):
         return None
     kept = dict(item)
+    kept["files_extracted"] = sum(
+        1 for f in files
+        if isinstance(f, dict) and isinstance(f.get("content"), str) and f["content"]
+    )
     kept["mode"] = "preserved_after_refresh_failure"
     return kept
 
