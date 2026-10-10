@@ -99,7 +99,24 @@ def main():
             old_ev = a.get("evidence", [])
             new_ev = b.get("evidence", [])
             if isinstance(old_ev, list) and isinstance(new_ev, list) and len(old_ev) != len(new_ev):
-                evidence_count_changes.append({"capability_key": key, "old": len(old_ev), "new": len(new_ev)})
+                def ev_id(item):
+                    if not isinstance(item, dict):
+                        return {"malformed": repr(item)[:100]}
+                    return {
+                        "source": item.get("source"),
+                        "source_revision": item.get("source_revision"),
+                        "file": item.get("file"),
+                        "content_sha256": item.get("content_sha256"),
+                    }
+                old_ids = {json.dumps(ev_id(item), sort_keys=True) for item in old_ev}
+                new_ids = {json.dumps(ev_id(item), sort_keys=True) for item in new_ev}
+                evidence_count_changes.append({
+                    "capability_key": key,
+                    "old": len(old_ev),
+                    "new": len(new_ev),
+                    "removed_evidence": [json.loads(item) for item in sorted(old_ids - new_ids)],
+                    "added_evidence": [json.loads(item) for item in sorted(new_ids - old_ids)],
+                })
 
     old_evidence, new_evidence = evidence_map(old), evidence_map(new)
     missing_evidence = old_evidence.keys() - new_evidence.keys()
