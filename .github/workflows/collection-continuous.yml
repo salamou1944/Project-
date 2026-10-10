@@ -64,6 +64,14 @@ jobs:
           python3 COLLECTION/AUTO/invoke_capability.py --list
 
       - name: Commit extracted evidence and manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COLLECTION_WORKERS: "32"
+          COLLECTION_API_WORKERS: "4"
+          COLLECTION_RAW_WORKERS: "32"
+          COLLECTION_MAX_FILES: "24"
+          COLLECTION_MAX_FILE_BYTES: "60000"
+          COLLECTION_MAX_SOURCE_BYTES: "1000000"
         run: |
           set -euo pipefail
           git config user.name "collection-bot"
@@ -71,7 +79,7 @@ jobs:
           git diff --check
           git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION
           git diff --cached --quiet || git commit -m "chore(collection): refresh prioritized source extraction"
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             git fetch origin main
             if git rebase origin/main; then
               if git push origin HEAD:main; then
@@ -79,12 +87,28 @@ jobs:
               fi
             else
               git rebase --abort || true
-              echo "Rebase conflict; refusing to overwrite concurrent Collection state" >&2
-              exit 1
+              git reset --hard origin/main
+              echo "Concurrent generated-state update detected; rebuilding from latest main" >&2
+              python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py
+              python3 COLLECTION/AUTO/test_extraction_cache_policy.py
+              python3 COLLECTION/AUTO/intelligent_extract.py
+              python3 COLLECTION/AUTO/repair_extraction_manifest.py
+              python3 COLLECTION/AUTO/invoke_capability.py collection.process_collection
+              python3 COLLECTION/AUTO/collection_state_guard.py
+              python3 COLLECTION/AUTO/collection_value_operator.py
+              python3 COLLECTION/AUTO/reconcile_canonical_skills.py || echo "Canonical Skills enrichment failed; continuing with core Collection outputs"
+              python3 COLLECTION/AUTO/collection_state_guard.py
+              python3 COLLECTION/AUTO/test_collection_policy.py
+              python3 COLLECTION/AUTO/validate_readiness.py
+              python3 COLLECTION/AUTO/validate_callable_registry.py
+              python3 COLLECTION/AUTO/invoke_capability.py --list
+              git diff --check
+              git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION
+              git diff --cached --quiet || git commit -m "chore(collection): rebuild generated state on latest main"
             fi
             sleep $((attempt * 3))
           done
-          echo "Push failed after 3 attempts" >&2
+          echo "Push failed after 5 attempts" >&2
           exit 1
 
 # Manual verification trigger: run the current Collection harvester and policy checks.
