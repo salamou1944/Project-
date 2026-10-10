@@ -18,6 +18,66 @@ EXTRACTED=Path("COLLECTION/AUTO/EXTRACTED")
 MASTER=Path("COLLECTION/MASTER")
 VERIFY=Path("COLLECTION/VERIFICATION")
 MAX_WORKERS=16
+QUARANTINE_LOCKS=MASTER/"QUARANTINE-LOCKS.json"
+
+def load_previous_quarantine_keys(path=MASTER/"READY.json"):
+    """Carry quarantine forward; a source refresh must not silently release it."""
+    if not path.exists():
+        return set()
+    try:
+        previous=json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"existing READY.json is invalid; refusing to lose quarantine state: {exc}")
+    decisions=previous.get("decisions")
+    if not isinstance(decisions, list):
+        raise SystemExit("existing READY.json has no valid decisions list; refusing to lose quarantine state")
+    return {
+        item.get("capability_key")
+        for item in decisions
+        if isinstance(item, dict)
+        and isinstance(item.get("capability_key"), str)
+        and item.get("action")=="QUARANTINE"
+    }
+
+def load_quarantine_locks(path=QUARANTINE_LOCKS):
+    """Load explicit quarantine locks and require an auditable approval to release one."""
+    if not path.exists():
+        return {}
+    try:
+        document=json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"invalid quarantine lock registry; refusing unsafe regeneration: {exc}")
+    items=document.get("items")
+    if not isinstance(items, dict):
+        raise SystemExit("quarantine lock registry items must be an object")
+    for key, item in items.items():
+        if not isinstance(key, str) or not isinstance(item, dict):
+            raise SystemExit("invalid quarantine lock entry")
+        status=item.get("status")
+        if status not in {"QUARANTINED","RELEASED"}:
+            raise SystemExit(f"invalid quarantine lock status for {key}: {status}")
+        if status=="RELEASED" and not all(
+            isinstance(item.get(field), str) and item[field].strip()
+            for field in ("reviewer","approved_at","reason")
+        ):
+            raise SystemExit(f"quarantine release for {key} requires reviewer, approved_at, and reason")
+    return items
+
+def is_quarantined(key, group, previous_quarantine_keys=None, quarantine_locks=None):
+    """A restriction signal or unresolved prior quarantine always wins over a source refresh."""
+    previous_quarantine_keys=previous_quarantine_keys or set()
+    quarantine_locks=quarantine_locks or {}
+    if any(item.get("classification")=="RESTRICTED" for item in group if isinstance(item, dict)):
+        return True
+    lock=quarantine_locks.get(key, {})
+    if lock.get("status")=="QUARANTINED":
+        return True
+    released=(
+        lock.get("status")=="RELEASED"
+        and all(isinstance(lock.get(field), str) and lock[field].strip()
+                for field in ("reviewer","approved_at","reason"))
+    )
+    return key in previous_quarantine_keys and not released
 
 def atomic_json_write(path: Path, payload: dict) -> None:
     """Publish complete JSON files atomically so interrupted runs never leave zero-byte state."""
@@ -140,6 +200,10 @@ def source_files_from_manifest():
 def main():
     MASTER.mkdir(parents=True,exist_ok=True)
     VERIFY.mkdir(parents=True,exist_ok=True)
+    # Read previous safety state before replacing READY.json. A missing/invalid prior file
+    # cannot silently clear existing quarantine; explicit releases live in the lock registry.
+    previous_quarantine_keys=load_previous_quarantine_keys()
+    quarantine_locks=load_quarantine_locks()
     files=source_files_from_manifest()
     all_records=[]
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
@@ -154,7 +218,7 @@ def main():
     decisions=[]
     for key,group in sorted(by_key.items()):
         sources=sorted({x["source"] for x in group})
-        restricted=any(x["classification"]=="RESTRICTED" for x in group)
+        restricted=is_quarantined(key, group, previous_quarantine_keys, quarantine_locks)
         action="QUARANTINE" if restricted else ("REVIEW_MERGE_OR_UPGRADE" if len(sources)>1 else "REVIEW_NEW_OR_UPGRADE")
         decisions.append({
             "capability_key":key,
