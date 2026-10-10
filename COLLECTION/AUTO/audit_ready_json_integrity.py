@@ -243,4 +243,27 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main())    changed_common_decisions = []
+    changed_field_counts = {}
+    changed_decision_samples = []
+    for key in sorted(old_keys & new_keys):
+        old_item, new_item = old_by_key[key], new_by_key[key]
+        if old_item != new_item:
+            fields = sorted(set(old_item) | set(new_item))
+            changed_fields = [field for field in fields if old_item.get(field) != new_item.get(field)]
+            changed_common_decisions.append(key)
+            for field in changed_fields:
+                changed_field_counts[field] = changed_field_counts.get(field, 0) + 1
+            if len(changed_decision_samples) < 40:
+                sample = {"capability_key": key, "changed_fields": changed_fields}
+                for field in changed_fields:
+                    ov, nv = old_item.get(field), new_item.get(field)
+                    if field in ("evidence", "sources", "files"):
+                        sample[field] = {
+                            "old_count": len(ov) if isinstance(ov, list) else None,
+                            "new_count": len(nv) if isinstance(nv, list) else None,
+                        }
+                    else:
+                        sample[field] = {"old": repr(ov)[:180], "new": repr(nv)[:180]}
+                changed_decision_samples.append(sample)
+
