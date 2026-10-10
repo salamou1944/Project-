@@ -86,6 +86,8 @@ def main():
         if old_counts.get(key) != new_counts.get(key)
     }
     changed_common_decisions = []
+    changed_decision_field_counts = {}
+    changed_decision_field_samples = []
     old_by_key = {
         item.get("capability_key"): item
         for item in old_data.get("decisions", [])
@@ -176,6 +178,8 @@ def main():
         "decision_identities_missing_sample": sorted(old_keys - new_keys)[:50],
         "common_decisions_with_changed_content_count": len(changed_common_decisions),
         "common_decisions_with_changed_content_sample": changed_common_decisions[:50],
+        "changed_decision_field_counts": dict(sorted(changed_decision_field_counts.items())),
+        "changed_decision_field_samples": changed_decision_field_samples,
         "changed_decision_fields_frequency": dict(sorted(changed_field_counts.items())),
         "changed_decision_samples": changed_decision_samples,
         "evidence_change_samples": evidence_change_samples,
