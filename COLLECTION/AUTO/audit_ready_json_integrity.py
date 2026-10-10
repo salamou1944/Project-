@@ -92,8 +92,8 @@ def main():
         and (not isinstance(new_counts.get(key), (int, float)) or new_counts[key] < old_counts[key])
     }
     changed_common_decisions = []
-    changed_field_counts = {}
-    changed_decision_samples = []
+    changed_decision_field_counts = {}
+    changed_decision_field_samples = []
     old_by_key = {
         item.get("capability_key"): item
         for item in old_data.get("decisions", [])
@@ -104,13 +104,16 @@ def main():
         for item in new_data.get("decisions", [])
         if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
     }
+    changed_field_counts = {}
+    changed_decision_samples = []
+    evidence_change_samples = []
     for key in sorted(old_keys & new_keys):
-        before_item, after_item = old_by_key[key], new_by_key[key]
-        if before_item != after_item:
+        old_item, new_item = old_by_key[key], new_by_key[key]
+        if old_item != new_item:
             changed_common_decisions.append(key)
             changed_fields = sorted(
-                field for field in set(before_item) | set(after_item)
-                if before_item.get(field) != after_item.get(field)
+                field for field in set(old_item) | set(new_item)
+                if old_item.get(field) != new_item.get(field)
             )
             for field in changed_fields:
                 changed_field_counts[field] = changed_field_counts.get(field, 0) + 1
@@ -118,9 +121,172 @@ def main():
                 changed_decision_samples.append({
                     "capability_key": key,
                     "changed_fields": changed_fields,
-                    "before": {field: before_item.get(field) for field in changed_fields},
-                    "after": {field: after_item.get(field) for field in changed_fields},
+                    "old_evidence_count": len(old_item.get("evidence", [])) if isinstance(old_item.get("evidence"), list) else None,
+                    "new_evidence_count": len(new_item.get("evidence", [])) if isinstance(new_item.get("evidence"), list) else None,
                 })
+            if "evidence" in changed_fields and len(evidence_change_samples) < 5:
+                old_evidence = old_item.get("evidence", [])
+                new_evidence = new_item.get("evidence", [])
+                old_serialized = {json.dumps(item, sort_keys=True, ensure_ascii=False) for item in old_evidence}
+                new_serialized = {json.dumps(item, sort_keys=True, ensure_ascii=False) for item in new_evidence}
+                evidence_change_samples.append({
+                    "capability_key": key,
+                    "old_evidence_count": len(old_evidence) if isinstance(old_evidence, list) else None,
+                    "new_evidence_count": len(new_evidence) if isinstance(new_evidence, list) else None,
+                    "old_only_sample": [json.loads(item) for item in sorted(old_serialized - new_serialized)[:2]],
+                    "new_only_sample": [json.loads(item) for item in sorted(new_serialized - old_serialized)[:2]],
+                })
+
+    # Compare evidence independently of source revision so refreshed revisions
+    # do not look like lost evidence when the same file/content is still present.
+    def evidence_identity(item):
+        if not isinstance(item, dict):
+            return json.dumps(item, sort_keys=True, ensure_ascii=False)
+        return json.dumps({
+            key: item.get(key)
+            for key in ("capability_key", "source", "file", "content_sha256", "evidence_id")
+        }, sort_keys=True, ensure_ascii=False)
+
+    old_evidence = [
+        ev for decision in old_data.get("decisions", []) if isinstance(decision, dict)
+        for ev in decision.get("evidence", []) if isinstance(decision.get("evidence"), list)
+    ]
+    new_evidence = [
+        ev for decision in new_data.get("decisions", []) if isinstance(decision, dict)
+        for ev in decision.get("evidence", []) if isinstance(decision.get("evidence"), list)
+    ]
+    old_evidence_ids = {evidence_identity(item) for item in old_evidence}
+    new_evidence_ids = {evidence_identity(item) for item in new_evidence}
+
+    # Match evidence by decision/source/file to distinguish changed source content
+    # from missing evidence records. Report field names and counts only.
+    def evidence_group(items):
+        grouped = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            key = (item.get("capability_key"), item.get("source"), item.get("file"))
+            grouped.setdefault(key, []).append(item)
+        return grouped
+
+    old_grouped, new_grouped = evidence_group(old_evidence), evidence_group(new_evidence)
+    matched_evidence_records = 0
+    missing_evidence_records = 0
+    added_evidence_records = 0
+    evidence_field_changes = {}
+    evidence_field_change_samples = []
+    missing_evidence_record_samples = []
+    added_evidence_record_samples = []
+    for key in sorted(set(old_grouped) | set(new_grouped), key=lambda item: tuple(str(x) for x in item)):
+        olds = old_grouped.get(key, [])
+        news = new_grouped.get(key, [])
+        # Pair exact hashes first, then pair remaining entries by stable order.
+        remaining_old = list(olds)
+        remaining_new = list(news)
+        for old_ev in list(remaining_old):
+            match = next((new_ev for new_ev in remaining_new
+                          if new_ev.get("content_sha256") == old_ev.get("content_sha256")), None)
+            if match is not None:
+                remaining_old.remove(old_ev)
+                remaining_new.remove(match)
+                matched_evidence_records += 1
+                changed = sorted(field for field in set(old_ev) | set(match)
+                                 if old_ev.get(field) != match.get(field))
+                for field in changed:
+                    evidence_field_changes[field] = evidence_field_changes.get(field, 0) + 1
+                if changed and len(evidence_field_change_samples) < 20:
+                    evidence_field_change_samples.append({
+                        "capability_key": key[0], "source": key[1], "file": key[2],
+                        "changed_fields": changed,
+                    })
+        paired = min(len(remaining_old), len(remaining_new))
+        for index in range(paired):
+            old_ev, new_ev = remaining_old[index], remaining_new[index]
+            matched_evidence_records += 1
+            changed = sorted(field for field in set(old_ev) | set(new_ev)
+                             if old_ev.get(field) != new_ev.get(field))
+            for field in changed:
+                evidence_field_changes[field] = evidence_field_changes.get(field, 0) + 1
+            if changed and len(evidence_field_change_samples) < 20:
+                evidence_field_change_samples.append({
+                    "capability_key": key[0], "source": key[1], "file": key[2],
+                    "changed_fields": changed,
+                })
+        missing_evidence_records += len(remaining_old) - paired
+        added_evidence_records += len(remaining_new) - paired
+        for item in remaining_old[paired:]:
+            if len(missing_evidence_record_samples) < 100:
+                missing_evidence_record_samples.append({
+                    "capability_key": key[0], "source": key[1], "file": key[2],
+                    "source_revision": item.get("source_revision"),
+                    "content_sha256": item.get("content_sha256"),
+                })
+        for item in remaining_new[paired:]:
+            if len(added_evidence_record_samples) < 100:
+                added_evidence_record_samples.append({
+                    "capability_key": key[0], "source": key[1], "file": key[2],
+                    "source_revision": item.get("source_revision"),
+                    "content_sha256": item.get("content_sha256"),
+                })
+    archive_cache = {}
+    archived_old_evidence_verified = 0
+    archived_old_evidence_missing = []
+    for ev in old_evidence:
+        if not isinstance(ev, dict) or evidence_identity(ev) in new_evidence_ids:
+            continue
+        source, revision, file_path = ev.get("source"), ev.get("source_revision"), ev.get("file")
+        if not all(isinstance(v, str) and v for v in (source, revision, file_path)):
+            continue
+        slug = source.removeprefix("github:").replace("/", "_")
+        paths = [f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{revision}.json",
+                 f"COLLECTION/AUTO/EXTRACTED/{slug}.json"]
+        found = False
+        for path in paths:
+            if path not in archive_cache:
+                p = subprocess.run(["git", "show", f"HEAD:{path}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                try:
+                    archive_cache[path] = json.loads(p.stdout) if p.returncode == 0 else None
+                except Exception:
+                    archive_cache[path] = None
+            artifact = archive_cache[path]
+            if not isinstance(artifact, dict) or artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
+                continue
+            if any(isinstance(f, dict) and f.get("path") == file_path and
+                   (not ev.get("content_sha256") or f.get("content_sha256") == ev.get("content_sha256"))
+                   for f in artifact.get("files", [])):
+                found = True
+                break
+        if found:
+            archived_old_evidence_verified += 1
+        elif len(archived_old_evidence_missing) < 50:
+            archived_old_evidence_missing.append({"key": ev.get("capability_key"), "source": source,
+                                                  "revision": revision, "file": file_path})
+    old_hashes = {
+        (item.get("source"), item.get("file"), item.get("content_sha256"))
+        for item in old_evidence if isinstance(item, dict) and item.get("content_sha256")
+    }
+    new_hashes = {
+        (item.get("source"), item.get("file"), item.get("content_sha256"))
+        for item in new_evidence if isinstance(item, dict) and item.get("content_sha256")
+    }
+
+    changed_field_counts = {}
+    changed_decision_samples = []
+    for key in changed_common_decisions:
+        before_item, after_item = old_by_key[key], new_by_key[key]
+        changed_fields = sorted(
+            field for field in set(before_item) | set(after_item)
+            if before_item.get(field) != after_item.get(field)
+        )
+        for field in changed_fields:
+            changed_field_counts[field] = changed_field_counts.get(field, 0) + 1
+        if len(changed_decision_samples) < 30:
+            changed_decision_samples.append({
+                "capability_key": key,
+                "changed_fields": changed_fields,
+                "before": {field: before_item.get(field) for field in changed_fields},
+                "after": {field: after_item.get(field) for field in changed_fields},
+            })
 
     result = {
         "status": "PASS" if diff is None else "DATA_DIFFERENCE",
@@ -141,8 +307,6 @@ def main():
         "decision_identities_missing_sample": sorted(old_keys - new_keys)[:50],
         "common_decisions_with_changed_content_count": len(changed_common_decisions),
         "common_decisions_with_changed_content_sample": changed_common_decisions[:50],
-        "changed_decision_field_counts": dict(sorted(changed_field_counts.items())),
-        "changed_decision_samples": changed_decision_samples,
         "changed_decision_field_counts": changed_field_counts,
         "changed_decision_details_sample": changed_decision_samples,
         "changed_field_counts": dict(sorted(changed_field_counts.items())),
