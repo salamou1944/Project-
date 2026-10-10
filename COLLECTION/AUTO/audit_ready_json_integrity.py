@@ -98,6 +98,7 @@ def main():
     }
     changed_field_counts = {}
     changed_decision_samples = []
+    evidence_change_samples = []
     for key in sorted(old_keys & new_keys):
         old_item, new_item = old_by_key[key], new_by_key[key]
         if old_item != new_item:
@@ -114,6 +115,18 @@ def main():
                     "changed_fields": changed_fields,
                     "old_evidence_count": len(old_item.get("evidence", [])) if isinstance(old_item.get("evidence"), list) else None,
                     "new_evidence_count": len(new_item.get("evidence", [])) if isinstance(new_item.get("evidence"), list) else None,
+                })
+            if "evidence" in changed_fields and len(evidence_change_samples) < 5:
+                old_evidence = old_item.get("evidence", [])
+                new_evidence = new_item.get("evidence", [])
+                old_serialized = {json.dumps(item, sort_keys=True, ensure_ascii=False) for item in old_evidence}
+                new_serialized = {json.dumps(item, sort_keys=True, ensure_ascii=False) for item in new_evidence}
+                evidence_change_samples.append({
+                    "capability_key": key,
+                    "old_evidence_count": len(old_evidence) if isinstance(old_evidence, list) else None,
+                    "new_evidence_count": len(new_evidence) if isinstance(new_evidence, list) else None,
+                    "old_only_sample": [json.loads(item) for item in sorted(old_serialized - new_serialized)[:2]],
+                    "new_only_sample": [json.loads(item) for item in sorted(new_serialized - old_serialized)[:2]],
                 })
 
     result = {
@@ -136,6 +149,7 @@ def main():
         "common_decisions_with_changed_content_sample": changed_common_decisions[:50],
         "changed_decision_fields_frequency": dict(sorted(changed_field_counts.items())),
         "changed_decision_samples": changed_decision_samples,
+        "evidence_change_samples": evidence_change_samples,
     }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0 if diff is None else 1
