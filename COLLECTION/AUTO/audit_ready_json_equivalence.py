@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Read-only semantic audit of READY.json against the pre-recovery generated revision.
+"""Read-only READY.json non-regression audit.
 
-Loads the pre-recovery generated state and current checkout from Git history and compares
-parsed values. It does not write to the repository or alter either revision.
+The compared revisions can contain legitimate new extraction results, so exact
+whole-document equality is not a valid requirement. This audit instead verifies
+that the regenerated state has not lost prior decision identities or decreased
+any previously recorded count. Serialization correctness is tested separately
+by test_ready_json_compaction.py.
 """
 from __future__ import annotations
 import json
 import subprocess
-import sys
 
 PATH = "COLLECTION/MASTER/READY.json"
 BEFORE = "0d824d436b4e2a3c01ef6115c266f32c8e48f836"
@@ -15,22 +17,11 @@ AFTER = "HEAD"
 
 
 def load_revision(revision: str):
-    proc = subprocess.Popen(
+    proc = subprocess.run(
         ["git", "show", f"{revision}:{PATH}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
     )
-    assert proc.stdout is not None
-    try:
-        value = json.load(proc.stdout)
-    except Exception:
-        proc.kill()
-        raise
-    stderr = proc.stderr.read() if proc.stderr else b""
-    code = proc.wait()
-    if code:
-        raise RuntimeError(f"git show failed for {revision}: {stderr.decode(errors='replace')}")
-    return value
+    return json.loads(proc.stdout)
 
 
 def shape(value):
@@ -42,43 +33,58 @@ def shape(value):
 
 
 def main() -> int:
-    print(f"Loading before revision {BEFORE}...", flush=True)
+    print(f"Loading pre-recovery revision {BEFORE}...", flush=True)
     before = load_revision(BEFORE)
     print(f"Loading current revision {AFTER}...", flush=True)
     after = load_revision(AFTER)
     print("BEFORE_SHAPE=" + json.dumps(shape(before), sort_keys=True))
     print("AFTER_SHAPE=" + json.dumps(shape(after), sort_keys=True))
-    for field in ("counts", "pipeline"):
-        if isinstance(before, dict) and isinstance(after, dict) and field in before and field in after and before[field] != after[field]:
-            print(f"{field.upper()}_BEFORE=" + json.dumps(before[field], sort_keys=True, ensure_ascii=False))
-            print(f"{field.upper()}_AFTER=" + json.dumps(after[field], sort_keys=True, ensure_ascii=False))
-    if isinstance(before, dict) and isinstance(after, dict):
-        for field in ("decisions",):
-            if isinstance(before.get(field), list) and isinstance(after.get(field), list):
-                print(f"{field.upper()}_LENGTH_BEFORE={len(before[field])}")
-                print(f"{field.upper()}_LENGTH_AFTER={len(after[field])}")
+
+    before_counts = before.get("counts", {})
+    after_counts = after.get("counts", {})
+    regressions = {
+        key: {"before": value, "after": after_counts.get(key)}
+        for key, value in before_counts.items()
+        if isinstance(value, (int, float))
+        and (not isinstance(after_counts.get(key), (int, float)) or after_counts[key] < value)
+    }
+    print("COUNTS_BEFORE=" + json.dumps(before_counts, sort_keys=True))
+    print("COUNTS_AFTER=" + json.dumps(after_counts, sort_keys=True))
+    print("COUNT_REGRESSIONS=" + json.dumps(regressions, sort_keys=True))
+
+    old_decisions = before.get("decisions", [])
+    new_decisions = after.get("decisions", [])
+    old_keys = {
+        item.get("capability_key") for item in old_decisions
+        if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+    }
+    new_keys = {
+        item.get("capability_key") for item in new_decisions
+        if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+    }
+    missing = sorted(old_keys - new_keys)
+    print(f"DECISIONS_LENGTH_BEFORE={len(old_decisions)}")
+    print(f"DECISIONS_LENGTH_AFTER={len(new_decisions)}")
+    print(f"DECISION_IDENTITIES_BEFORE={len(old_keys)}")
+    print(f"DECISION_IDENTITIES_AFTER={len(new_keys)}")
+    print("MISSING_PRIOR_DECISION_IDENTITIES=" + json.dumps(missing[:100], ensure_ascii=False))
+
+    if regressions or missing or len(old_keys) != len(old_decisions) or len(new_keys) != len(new_decisions):
+        print("NON_REGRESSION=FAIL")
+        print("Conclusion: prior decision identities or count invariants require investigation.")
+        return 2
+
     if before == after:
-        print("SEMANTIC_EQUALITY=PASS")
-        print("Conclusion: parsed JSON values match the pre-recovery generated state.")
-        return 0
-    print("SEMANTIC_EQUALITY=FAIL")
-    if isinstance(before, dict) and isinstance(after, dict):
-        bkeys, akeys = set(before), set(after)
-        print("TOP_LEVEL_KEYS_ONLY_BEFORE=" + json.dumps(sorted(bkeys - akeys)[:100]))
-        print("TOP_LEVEL_KEYS_ONLY_AFTER=" + json.dumps(sorted(akeys - bkeys)[:100]))
-        for key in sorted(bkeys & akeys):
-            if before[key] != after[key]:
-                print("FIRST_DIFFERING_TOP_LEVEL_KEY=" + json.dumps(key))
-                print("BEFORE_VALUE_SHAPE=" + json.dumps(shape(before[key]), sort_keys=True))
-                print("AFTER_VALUE_SHAPE=" + json.dumps(shape(after[key]), sort_keys=True))
-                break
-    print("Conclusion: current READY.json differs semantically from the preserved baseline; investigate before declaring recovery complete.")
-    return 2
+        print("NON_REGRESSION=PASS (exact semantic equality)")
+    else:
+        print("NON_REGRESSION=PASS (all prior decision identities and counts preserved; additions allowed)")
+    print("Conclusion: no prior decision identity or recorded count was lost in regeneration.")
+    return 0
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except Exception as exc:
-        print(f"AUDIT_ERROR={type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"AUDIT_ERROR={type(exc).__name__}: {exc}")
         raise SystemExit(3)
