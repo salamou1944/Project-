@@ -106,6 +106,22 @@ def main():
     diff = first_difference(old_data, new_data)
     normalized_old, normalized_new = normalize_ready(old_data), normalize_ready(new_data)
     semantic_diff = first_difference(normalized_old, normalized_new)
+    old_by_key_normalized = {
+        item.get("capability_key"): item
+        for item in normalized_old.get("decisions", [])
+        if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+    }
+    new_by_key_normalized = {
+        item.get("capability_key"): item
+        for item in normalized_new.get("decisions", [])
+        if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+    }
+    common_keys = sorted(set(old_by_key_normalized) & set(new_by_key_normalized))
+    changed_common_after_order_normalization = [
+        key for key in common_keys
+        if old_by_key_normalized[key] != new_by_key_normalized[key]
+    ]
+    common_decisions_equal = not changed_common_after_order_normalization
     old_keys, new_keys = decision_keys(old_data), decision_keys(new_data)
     old_counts = old_data.get("counts", {}) if isinstance(old_data, dict) else {}
     new_counts = new_data.get("counts", {}) if isinstance(new_data, dict) else {}
@@ -331,6 +347,9 @@ def main():
         "first_difference": diff,
         "order_normalized_semantic_equal": semantic_diff is None,
         "first_semantic_difference": semantic_diff,
+        "common_decisions_equal_after_evidence_order_normalization": common_decisions_equal,
+        "common_decisions_still_changed_count": len(changed_common_after_order_normalization),
+        "common_decisions_still_changed_sample": changed_common_after_order_normalization[:50],
         "count_changes": count_changes,
         "count_regressions": count_regressions,
         "decision_identity_counts": {"old": len(old_keys), "new": len(new_keys)},
