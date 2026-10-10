@@ -24,12 +24,10 @@ def atomic_json_write(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     with tmp.open("w", encoding="utf-8", newline="\n") as handle:
-        if path.name == "READY.json":
-            # READY.json contains the full evidence graph and can exceed GitHub's 50 MB recommendation.
-            # Compact JSON preserves the schema/data while removing formatting-only whitespace.
-            json.dump(payload, handle, ensure_ascii=False, separators=(",", ":"))
-        else:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
+        # Keep generated JSON readable and diffable. Do not collapse the
+        # large READY evidence graph into one line: line-count collapse hides
+        # data regressions in reviews and makes recovery harder.
+        json.dump(payload, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
         handle.flush()
         os.fsync(handle.fileno())
