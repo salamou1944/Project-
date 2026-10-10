@@ -96,9 +96,25 @@ def main():
         for item in new_data.get("decisions", [])
         if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
     }
+    changed_field_counts = {}
+    changed_decision_samples = []
     for key in sorted(old_keys & new_keys):
-        if old_by_key[key] != new_by_key[key]:
+        old_item, new_item = old_by_key[key], new_by_key[key]
+        if old_item != new_item:
             changed_common_decisions.append(key)
+            changed_fields = sorted(
+                field for field in set(old_item) | set(new_item)
+                if old_item.get(field) != new_item.get(field)
+            )
+            for field in changed_fields:
+                changed_field_counts[field] = changed_field_counts.get(field, 0) + 1
+            if len(changed_decision_samples) < 20:
+                changed_decision_samples.append({
+                    "capability_key": key,
+                    "changed_fields": changed_fields,
+                    "old_evidence_count": len(old_item.get("evidence", [])) if isinstance(old_item.get("evidence"), list) else None,
+                    "new_evidence_count": len(new_item.get("evidence", [])) if isinstance(new_item.get("evidence"), list) else None,
+                })
 
     result = {
         "status": "PASS" if diff is None else "DATA_DIFFERENCE",
@@ -118,6 +134,8 @@ def main():
         "decision_identities_missing_sample": sorted(old_keys - new_keys)[:50],
         "common_decisions_with_changed_content_count": len(changed_common_decisions),
         "common_decisions_with_changed_content_sample": changed_common_decisions[:50],
+        "changed_decision_fields_frequency": dict(sorted(changed_field_counts.items())),
+        "changed_decision_samples": changed_decision_samples,
     }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0 if diff is None else 1
