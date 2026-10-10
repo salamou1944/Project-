@@ -13,7 +13,9 @@ import json
 import subprocess
 
 PATH = "COLLECTION/MASTER/READY.json"
+MANIFEST_PATH = "COLLECTION/AUTO/EXTRACTED/MANIFEST.json"
 BEFORE = "0d824d436b4e2a3c01ef6115c266f32c8e48f836"
+MANIFEST_BEFORE = "49aac90e"
 AFTER = "HEAD"
 
 
@@ -25,6 +27,74 @@ def load_revision(revision: str):
     return json.loads(proc.stdout)
 
 
+def load_revision_path(revision: str, path: str):
+    proc = subprocess.run(
+        ["git", "show", f"{revision}:{path}"],
+        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    return json.loads(proc.stdout)
+
+
+def audit_manifest_preservation() -> list[dict]:
+    """Ensure harvested source identities/states survive and changed revisions are archived."""
+    print(f"Loading pre-recovery manifest {MANIFEST_BEFORE}...", flush=True)
+    before = load_revision_path(MANIFEST_BEFORE, MANIFEST_PATH)
+    print(f"Loading current manifest {AFTER}...", flush=True)
+    after = load_revision_path(AFTER, MANIFEST_PATH)
+    old_sources = before.get("sources", [])
+    new_sources = after.get("sources", [])
+    old_by_source = {item.get("canonical_source"): item for item in old_sources
+                     if isinstance(item, dict) and isinstance(item.get("canonical_source"), str)}
+    new_by_source = {item.get("canonical_source"): item for item in new_sources
+                     if isinstance(item, dict) and isinstance(item.get("canonical_source"), str)}
+    missing_sources = sorted(set(old_by_source) - set(new_by_source))
+    state_regressions = [
+        {"source": source, "before": old_by_source[source].get("state"),
+         "after": new_by_source[source].get("state")}
+        for source in old_by_source.keys() & new_by_source.keys()
+        if old_by_source[source].get("state") == "extracted"
+        and new_by_source[source].get("state") != "extracted"
+    ]
+    missing_archives = []
+    changed_revisions = 0
+    for source, old in old_by_source.items():
+        current = new_by_source.get(source)
+        if current is None or old.get("state") != "extracted":
+            continue
+        old_revision = old.get("revision_sha")
+        new_revision = current.get("revision_sha")
+        if not isinstance(old_revision, str) or not old_revision or old_revision == new_revision:
+            continue
+        changed_revisions += 1
+        slug = source.removeprefix("github:").replace("/", "_")
+        archive = f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{old_revision}.json"
+        proc = subprocess.run(["git", "show", f"HEAD:{archive}"],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if proc.returncode:
+            missing_archives.append({"source": source, "revision": old_revision, "archive": archive})
+            continue
+        try:
+            artifact = json.loads(proc.stdout)
+        except Exception:
+            missing_archives.append({"source": source, "revision": old_revision,
+                                     "archive": archive, "reason": "invalid_json"})
+            continue
+        if artifact.get("canonical_source") != source or artifact.get("revision_sha") != old_revision:
+            missing_archives.append({"source": source, "revision": old_revision,
+                                     "archive": archive, "reason": "identity_mismatch"})
+    print(f"MANIFEST_SOURCES_BEFORE={len(old_sources)}")
+    print(f"MANIFEST_SOURCES_AFTER={len(new_sources)}")
+    print(f"MANIFEST_PRIOR_SOURCES_MISSING={len(missing_sources)}")
+    print("MANIFEST_PRIOR_SOURCES_MISSING_SAMPLE=" + json.dumps(missing_sources[:30], ensure_ascii=False))
+    print(f"MANIFEST_EXTRACTED_STATE_REGRESSIONS={len(state_regressions)}")
+    print("MANIFEST_STATE_REGRESSION_SAMPLE=" + json.dumps(state_regressions[:30], ensure_ascii=False))
+    print(f"MANIFEST_CHANGED_REVISIONS={changed_revisions}")
+    print(f"MANIFEST_PRIOR_REVISION_ARCHIVES_MISSING={len(missing_archives)}")
+    print("MANIFEST_MISSING_ARCHIVE_SAMPLE=" + json.dumps(missing_archives[:30], ensure_ascii=False))
+    return ([{"kind": "missing_source", "source": source} for source in missing_sources]
+            + [{"kind": "state_regression", **item} for item in state_regressions]
+            + [{"kind": "missing_archive", **item} for item in missing_archives])
+
 def shape(value):
     if isinstance(value, dict):
         return {"type": "object", "keys": len(value), "keys_sample": sorted(value)[:30]}
@@ -34,6 +104,7 @@ def shape(value):
 
 
 def main() -> int:
+    manifest_errors = audit_manifest_preservation()
     print(f"Loading pre-recovery revision {BEFORE}...", flush=True)
     before = load_revision(BEFORE)
     print(f"Loading current revision {AFTER}...", flush=True)
@@ -133,7 +204,7 @@ def main() -> int:
     print(f"PRIOR_EVIDENCE_NOT_FOUND={len(missing_evidence)}")
     print("PRIOR_EVIDENCE_NOT_FOUND_SAMPLE=" + json.dumps(missing_evidence[:50], ensure_ascii=False))
 
-    if regressions or missing_evidence or len(old_keys) != len(old_decisions) or len(new_keys) != len(new_decisions):
+    if manifest_errors or regressions or missing_evidence or len(old_keys) != len(old_decisions) or len(new_keys) != len(new_decisions):
         print("NON_REGRESSION=FAIL")
         print("Conclusion: prior evidence or count invariants require investigation.")
         return 2
