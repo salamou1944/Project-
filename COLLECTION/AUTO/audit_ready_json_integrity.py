@@ -184,6 +184,14 @@ def main():
         "evidence_identities_added_ignoring_revision_count": len(new_evidence_ids - old_evidence_ids),
         "source_file_content_hashes_missing_count": len(old_hashes - new_hashes),
         "source_file_content_hashes_added_count": len(new_hashes - old_hashes),
+        "source_file_content_hashes_missing_sample": [
+            {"source": source, "file": file_path, "content_sha256": digest}
+            for source, file_path, digest in sorted(old_hashes - new_hashes)[:25]
+        ],
+        "source_file_content_hashes_added_sample": [
+            {"source": source, "file": file_path, "content_sha256": digest}
+            for source, file_path, digest in sorted(new_hashes - old_hashes)[:25]
+        ],
     }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0 if diff is None else 1
