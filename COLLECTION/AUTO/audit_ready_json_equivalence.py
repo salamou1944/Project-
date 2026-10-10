@@ -48,6 +48,15 @@ def main() -> int:
     after = load_revision(AFTER)
     print("BEFORE_SHAPE=" + json.dumps(shape(before), sort_keys=True))
     print("AFTER_SHAPE=" + json.dumps(shape(after), sort_keys=True))
+    for field in ("counts", "pipeline"):
+        if isinstance(before, dict) and isinstance(after, dict) and field in before and field in after and before[field] != after[field]:
+            print(f"{field.upper()}_BEFORE=" + json.dumps(before[field], sort_keys=True, ensure_ascii=False))
+            print(f"{field.upper()}_AFTER=" + json.dumps(after[field], sort_keys=True, ensure_ascii=False))
+    if isinstance(before, dict) and isinstance(after, dict):
+        for field in ("decisions",):
+            if isinstance(before.get(field), list) and isinstance(after.get(field), list):
+                print(f"{field.upper()}_LENGTH_BEFORE={len(before[field])}")
+                print(f"{field.upper()}_LENGTH_AFTER={len(after[field])}")
     if before == after:
         print("SEMANTIC_EQUALITY=PASS")
         print("Conclusion: parsed JSON values match the preserved baseline.")
