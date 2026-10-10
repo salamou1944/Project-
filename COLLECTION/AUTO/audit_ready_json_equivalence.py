@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only semantic audit of READY.json around the 2026-10-10 compaction commit.
+"""Read-only semantic audit of READY.json against the last known-good revision.
 
-Loads the two committed JSON documents from Git history and compares parsed values.
-It does not write to the repository or alter either revision.
+Loads the preserved baseline and current checkout from Git history and compares
+parsed values. It does not write to the repository or alter either revision.
 """
 from __future__ import annotations
 import json
@@ -11,7 +11,7 @@ import sys
 
 PATH = "COLLECTION/MASTER/READY.json"
 BEFORE = "147872fbdb542b0f9b3d403695742ca941018449"
-AFTER = "0d824d436b4e2a3c01ef6115c266f32c8e48f836"
+AFTER = "HEAD"
 
 
 def load_revision(revision: str):
@@ -44,13 +44,13 @@ def shape(value):
 def main() -> int:
     print(f"Loading before revision {BEFORE}...", flush=True)
     before = load_revision(BEFORE)
-    print(f"Loading compaction revision {AFTER}...", flush=True)
+    print(f"Loading current revision {AFTER}...", flush=True)
     after = load_revision(AFTER)
     print("BEFORE_SHAPE=" + json.dumps(shape(before), sort_keys=True))
     print("AFTER_SHAPE=" + json.dumps(shape(after), sort_keys=True))
     if before == after:
         print("SEMANTIC_EQUALITY=PASS")
-        print("Conclusion: parsed JSON values are exactly equal; only serialization/formatting differs.")
+        print("Conclusion: parsed JSON values match the preserved baseline.")
         return 0
     print("SEMANTIC_EQUALITY=FAIL")
     if isinstance(before, dict) and isinstance(after, dict):
@@ -63,7 +63,7 @@ def main() -> int:
                 print("BEFORE_VALUE_SHAPE=" + json.dumps(shape(before[key]), sort_keys=True))
                 print("AFTER_VALUE_SHAPE=" + json.dumps(shape(after[key]), sort_keys=True))
                 break
-    print("Conclusion: the commit changed parsed JSON data; do not treat it as formatting-only.")
+    print("Conclusion: current READY.json differs semantically from the preserved baseline; investigate before declaring recovery complete.")
     return 2
 
 
