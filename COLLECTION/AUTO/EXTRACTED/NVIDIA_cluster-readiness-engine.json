@@ -1,10 +1,10 @@
 {
   "canonical_source": "github:NVIDIA/cluster-readiness-engine",
   "repo": "NVIDIA/cluster-readiness-engine",
-  "revision_sha": "40df4f204d4039d3a8278dbeb1b8f8ce8dc3ea1d",
+  "revision_sha": "7d05e51573802e3d2af398e08051dc959c1211fa",
   "default_branch": "main",
-  "pushed_at": "2026-10-08T05:07:43Z",
-  "repo_updated_at": "2026-10-07T22:33:40Z",
+  "pushed_at": "2026-10-09T21:52:42Z",
+  "repo_updated_at": "2026-10-09T21:26:51Z",
   "license": "Apache-2.0",
   "topics": [
     "accelerators",
@@ -30,11 +30,18 @@
       "content": "crdPresent: true\nreleaseState: not installed\n"
     },
     {
-      "path": "pkg/setup/testdata/init-recovery/lookalike-helm-storage-blocks/input_objects.yaml",
+      "path": "pkg/setup/testdata/jobset-ownership/supported-nonhelm-chart-identities/expected.json",
       "sha": null,
-      "content_sha256": "8fd336131e28b2deb5c2d58e385ba3d33d1ead053a09b628cfccf08e3a8174b9",
+      "content_sha256": "101accae9e9c9cd1bc759bddb02083b0aa33729dfa2674c19b18a60df0fe97ae",
       "score": 299,
-      "content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: sh.helm.release.v1.other-tool.v1\n  namespace: kubeflow-system\n  uid: other-release-uid\n  labels:\n    owner: helm\n    name: other-tool\n    status: deployed\ntype: helm.sh/release.v1\ndata:\n  release: e30=\n"
+      "content": "{\n  \"mode\": \"external\",\n  \"evidence\": [\n    \"verified supported non-Helm JobSet controller pattern\"\n  ],\n  \"installJobSet\": false,\n  \"manifestCalls\": 0\n}\n"
+    },
+    {
+      "path": "pkg/setup/testdata/jobset-ownership/supported-nonhelm-controller/input.yaml",
+      "sha": null,
+      "content_sha256": "7cd93ab3d9ffc3b393fd28842a4c89c7e761cdb0cc4920e095a07712e35e8208",
+      "score": 299,
+      "content": "crdPresent: true\nreleaseState: not installed\n"
     },
     {
       "path": "pkg/setup/testdata/jobset-ownership/supported-nonhelm-controller/input_objects.yaml",
@@ -44,7 +51,7 @@
       "content": "# The upstream kustomize install, `kubectl apply -f\n# https://github.com/kubernetes-sigs/jobset/releases/download/v0.12.0/manifests.yaml`.\n# Identities and labels are taken from that published build: ClusterRole\n# `jobset-manager-role` (the only ClusterRole there carrying jobset.x-k8s.io\n# rules), Deployment `jobset-controller-manager`, the two hardcoded webhook\n# configuration names, and two webhooks per configuration — one for JobSets,\n# one for their Pods — both against a single `jobset-webhook-service`.\n#\n# `app.kubernetes.io/managed-by: kustomize` is what keeps this channel\n# distinguishable from `helm template | kubectl apply`, which stamps\n# `managed-by: Helm` without any release record and stays ambiguous.\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: jobset-manager-role\n  uid: manager-role-uid\n  labels:\n    app.kubernetes.io/instance: jobset\n    app.kubernetes.io/managed-by: kustomize\n    app.kubernetes.io/name: jobset\nrules:\n  - apiGroups: [\"\"]\n    resources: [nodes]\n    verbs: [get, list, watch]\n  - apiGroups: [jobset.x-k8s.io]\n    resources: [jobsets]\n    verbs: [create, delete, get, list, patch, update, watch]\n  - apiGroups: [jobset.x-k8s.io]\n    resources: [jobsets/finalizers]\n    verbs: [get, patch, update]\n  - apiGroups: [jobset.x-k8s.io]\n    resources: [jobsets/status]\n    verbs: [get, patch, update]\n---\napiVersion: admissionregistration.k8s.io/v1\nkind: MutatingWebhookConfiguration\nmetadata:\n  name: jobset-mutating-webhook-configuration\n  uid: mutating-uid\n  labels:\n    app.kubernetes.io/instance: jobset\n    app.kubernetes.io/managed-by: kustomize\n    app.kubernetes.io/name: jobset\nwebhooks:\n  - name: mjobset.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /mutate-jobset-x-k8s-io-v1alpha2-jobset\n    rules:\n      - apiGroups: [jobset.x-k8s.io]\n        apiVersions: [v1alpha2]\n        operations: [CREATE]\n        resources: [jobsets]\n  - name: mpod.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /mutate--v1-pod\n    objectSelector:\n      matchExpressions:\n        - key: jobset.sigs.k8s.io/jobset-name\n          operator: Exists\n    rules:\n      - apiGroups: [\"\"]\n        apiVersions: [v1]\n        operations: [CREATE]\n        resources: [pods]\n---\napiVersion: admissionregistration.k8s.io/v1\nkind: ValidatingWebhookConfiguration\nmetadata:\n  name: jobset-validating-webhook-configuration\n  uid: validating-uid\n  labels:\n    app.kubernetes.io/instance: jobset\n    app.kubernetes.io/managed-by: kustomize\n    app.kubernetes.io/name: jobset\nwebhooks:\n  - name: vjobset.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /validate-jobset-x-k8s-io-v1alpha2-jobset\n    rules:\n      - apiGroups: [jobset.x-k8s.io]\n        apiVersions: [v1alpha2]\n        operations: [CREATE, UPDATE, DELETE]\n        resources: [jobsets]\n  - name: vpod.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /validate--v1-pod\n    objectSelector:\n      matchExpressions:\n        - key: jobset.sigs.k8s.io/jobset-name\n          operator: Exists\n    rules:\n      - apiGroups: [\"\"]\n        apiVersions: [v1]\n        operations: [CREATE]\n        resources: [pods]\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: jobset-webhook-service\n  namespace: jobset-system\n  labels:\n    app.kubernetes.io/component: webhook\n    app.kubernetes.io/created-by: jobset\n    app.kubernetes.io/instance: jobset\n    app.kubernetes.io/managed-by: kustomize\n    app.kubernetes.io/name: jobset\n    app.kubernetes.io/part-of: jobset\nspec:\n  ports:\n    - port: 443\n      protocol: TCP\n      targetPort: 9443\n  selector:\n    app.kubernetes.io/instance: jobset\n    app.kubernetes.io/managed-by: kustomize\n    app.kubernetes.io/name: jobset\n    control-plane: controller-manager\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: jobset-controller-manager\n  namespace: jobset-system\n  labels:\n    app.kubernetes.io/component: manager\n    app.kubernetes.io/created-by: jobset\n    app.kubernetes.io/instance: jobset\n    app.kubernetes.io/managed-by: kustomize\n    app.kubernetes.io/name: jobset\n    app.kubernetes.io/part-of: jobset\n    control-plane: controller-manager\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app.kubernetes.io/instance: jobset\n      app.kubernetes.io/managed-by: kustomize\n      app.kubernetes.io/name: jobset\n      control-plane: controller-manager\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/instance: jobset\n        app.kubernetes.io/managed-by: kustomize\n        app.kubernetes.io/name: jobset\n        control-plane: controller-manager\n    spec:\n      containers:\n        - name: manager\n          image: example.invalid/jobset:test\n"
     },
     {
-      "path": "pkg/setup/testdata/jobset-ownership/supported-nonhelm-chart-identities/expected.json",
+      "path": "pkg/setup/testdata/jobset-ownership/supported-nonhelm-controller/expected.json",
       "sha": null,
       "content_sha256": "101accae9e9c9cd1bc759bddb02083b0aa33729dfa2674c19b18a60df0fe97ae",
       "score": 299,
@@ -58,11 +65,11 @@
       "content": "# Synthetic. This is a compatibility fixture, not a published install\n# channel: it pins the second identity set the non-Helm pattern accepts, the\n# chart's `jobset-controller` name for both the ClusterRole and the controller\n# Deployment, with no ownership metadata from any installer. The real non-Helm\n# channel is the upstream kustomize build, covered by\n# supported-nonhelm-controller.\n#\n# It is explicitly NOT `helm template | kubectl apply`, and must not be read\n# as evidence that channel works. That channel renders\n# `app.kubernetes.io/managed-by: Helm` from `jobset.labels` with no\n# `meta.helm.sh/*` annotations, which the detector refuses as partial\n# ownership evidence. No label here claims any installer.\n# TestSupportedNonHelmEvidenceConflictsWithBundledOrPartialHelmMetadata pins\n# that refusal.\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: jobset-controller\n  uid: manager-role-uid\n  labels:\n    app.kubernetes.io/name: jobset\nrules:\n  - apiGroups: [\"\"]\n    resources: [nodes]\n    verbs: [get, list, watch]\n  - apiGroups: [jobset.x-k8s.io]\n    resources: [jobsets]\n    verbs: [create, delete, get, list, patch, update, watch]\n  - apiGroups: [jobset.x-k8s.io]\n    resources: [jobsets/finalizers]\n    verbs: [get, patch, update]\n  - apiGroups: [jobset.x-k8s.io]\n    resources: [jobsets/status]\n    verbs: [get, patch, update]\n---\napiVersion: admissionregistration.k8s.io/v1\nkind: MutatingWebhookConfiguration\nmetadata:\n  name: jobset-mutating-webhook-configuration\n  uid: mutating-uid\n  labels:\n    app.kubernetes.io/name: jobset\nwebhooks:\n  - name: mjobset.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /mutate-jobset-x-k8s-io-v1alpha2-jobset\n    rules:\n      - apiGroups: [jobset.x-k8s.io]\n        apiVersions: [v1alpha2]\n        operations: [CREATE]\n        resources: [jobsets]\n  - name: mpod.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /mutate--v1-pod\n    objectSelector:\n      matchExpressions:\n        - key: jobset.sigs.k8s.io/jobset-name\n          operator: Exists\n    rules:\n      - apiGroups: [\"\"]\n        apiVersions: [v1]\n        operations: [CREATE]\n        resources: [pods]\n---\napiVersion: admissionregistration.k8s.io/v1\nkind: ValidatingWebhookConfiguration\nmetadata:\n  name: jobset-validating-webhook-configuration\n  uid: validating-uid\n  labels:\n    app.kubernetes.io/name: jobset\nwebhooks:\n  - name: vjobset.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /validate-jobset-x-k8s-io-v1alpha2-jobset\n    rules:\n      - apiGroups: [jobset.x-k8s.io]\n        apiVersions: [v1alpha2]\n        operations: [CREATE, UPDATE, DELETE]\n        resources: [jobsets]\n  - name: vpod.kb.io\n    admissionReviewVersions: [v1]\n    failurePolicy: Fail\n    sideEffects: None\n    clientConfig:\n      service:\n        name: jobset-webhook-service\n        namespace: jobset-system\n        path: /validate--v1-pod\n    objectSelector:\n      matchExpressions:\n        - key: jobset.sigs.k8s.io/jobset-name\n          operator: Exists\n    rules:\n      - apiGroups: [\"\"]\n        apiVersions: [v1]\n        operations: [CREATE]\n        resources: [pods]\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: jobset-webhook-service\n  namespace: jobset-system\n  labels:\n    app.kubernetes.io/component: webhook\n    app.kubernetes.io/name: jobset\nspec:\n  ports:\n    - port: 443\n      protocol: TCP\n      targetPort: 9443\n  selector:\n    app.kubernetes.io/name: jobset\n    control-plane: controller-manager\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: jobset-controller\n  namespace: jobset-system\n  labels:\n    app.kubernetes.io/component: manager\n    app.kubernetes.io/name: jobset\n    control-plane: controller-manager\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: jobset\n      control-plane: controller-manager\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: jobset\n        control-plane: controller-manager\n    spec:\n      containers:\n        - name: manager\n          image: example.invalid/jobset:test\n"
     },
     {
-      "path": "pkg/setup/testdata/jobset-ownership/supported-nonhelm-controller/input.yaml",
+      "path": "pkg/setup/testdata/init-recovery/lookalike-helm-storage-blocks/input_objects.yaml",
       "sha": null,
-      "content_sha256": "7cd93ab3d9ffc3b393fd28842a4c89c7e761cdb0cc4920e095a07712e35e8208",
+      "content_sha256": "8fd336131e28b2deb5c2d58e385ba3d33d1ead053a09b628cfccf08e3a8174b9",
       "score": 299,
-      "content": "crdPresent: true\nreleaseState: not installed\n"
+      "content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: sh.helm.release.v1.other-tool.v1\n  namespace: kubeflow-system\n  uid: other-release-uid\n  labels:\n    owner: helm\n    name: other-tool\n    status: deployed\ntype: helm.sh/release.v1\ndata:\n  release: e30=\n"
     },
     {
       "path": "pkg/setup/testdata/init-recovery/lookalike-helm-storage-blocks/input.yaml",
@@ -72,39 +79,11 @@
       "content": "# A Helm storage Secret for a different release in kubeflow-system is not the exact Trainer release record: it blocks.\nreleaseState: failed\nseedRecovery: true\nextendedDiscovery: true\ninstallResults:\n  - fail: true\n    output: |\n      Error: UPGRADE FAILED: cannot patch Secret \"kubeflow-trainer-webhook-cert\" in namespace kubeflow-system: conflict with manager: .data.tls.crt\n"
     },
     {
-      "path": "pkg/setup/testdata/jobset-ownership/supported-nonhelm-controller/expected.json",
-      "sha": null,
-      "content_sha256": "101accae9e9c9cd1bc759bddb02083b0aa33729dfa2674c19b18a60df0fe97ae",
-      "score": 299,
-      "content": "{\n  \"mode\": \"external\",\n  \"evidence\": [\n    \"verified supported non-Helm JobSet controller pattern\"\n  ],\n  \"installJobSet\": false,\n  \"manifestCalls\": 0\n}\n"
-    },
-    {
       "path": "pkg/setup/testdata/init-recovery/lookalike-helm-storage-blocks/expected.txt",
       "sha": null,
       "content_sha256": "94f8073a09b24062dd2d0d7a5db73b677d9b5ea261db77456b7d36de93d21af7",
       "score": 264,
       "content": "[deps] JobSet detection covers the verified chart fingerprint only; operators with customized or uncertain prior installations must use operator-managed installation.\n[deps] Installing the bundled JobSet controller using the retained JobSet CRD; its schema is not refreshed.\n[deps] Kubeflow Trainer release is in state \"failed\"; attempting install of v2.2.1...\n[deps] Installing Kubeflow Trainer Helm release \"kubeflow-trainer\" in namespace kubeflow-system...\nError: UPGRADE FAILED: cannot patch Secret \"kubeflow-trainer-webhook-cert\" in namespace kubeflow-system: conflict with manager: .data.tls.crt\n[deps] Install failed with webhook Secret field-ownership conflicts and the release is failed (issue #180).\n[deps] Secret field ownership in namespace kubeflow-system:\n  sh.helm.release.v1.other-tool.v1: (no field managers recorded)\n[deps] Recovery prerequisite: keep kubeflow-system protected-resource writes and Trainer custom-resource writes quiescent until recovery stops or completes.\n[deps] If recovery removes the bundled JobSet controller, JobSet creation must also remain quiescent. --auto-approve does not establish this condition.\n[deps] Automatic recovery refused:\n  - protected Secret kubeflow-system/sh.helm.release.v1.other-tool.v1 is not a verified Trainer release resource or UID-linked descendant\n\n[deps] Operator-managed recovery guidance (issue #180):\n  1. helm uninstall kubeflow-trainer --namespace kubeflow-system\n  2. kubectl delete crd trainjobs.trainer.kubeflow.org trainingruntimes.trainer.kubeflow.org clustertrainingruntimes.trainer.kubeflow.org  # retain jobsets.jobset.x-k8s.io\n  3. Inventory kubeflow-system and delete it only after applying the same protected-resource and quiescence checks.\n  4. Re-run 'nvcrectl setup init' to reinstall Kubeflow Trainer v2.2.1. Earlier cleanup is not rolled back.\n\n--- result ---\nerror: [deps] helm upgrade: exit status 1\ninstallCalls: 1\ninstallModes: [crd-only]\nuninstallCalls: 0\ncrdDeletes: 0\njobSetCRDPresent: true\nnamespacePresent: true\ntrainerCRDsPresent: [trainjobs.trainer.kubeflow.org trainingruntimes.trainer.kubeflow.org clustertrainingruntimes.trainer.kubeflow.org]\n"
-    },
-    {
-      "path": "pkg/setup/testdata/jobset-ownership/wildcard-only-rbac/input_objects.yaml",
-      "sha": null,
-      "content_sha256": "3043a98445c03d5c0a92e97c9bf9427571dbebcf9a9790b2c55a015f2bf663e4",
-      "score": 247,
-      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: cluster-admin\nrules:\n  - apiGroups: ['*']\n    resources: ['*']\n    verbs: ['*']\n"
-    },
-    {
-      "path": "pkg/setup/testdata/print-retained-resources/pull-secret-absent/input_config.yaml",
-      "sha": null,
-      "content_sha256": "722987baa3b197a908f0a9dbc7ca2d33fed52a530e333558e224fc8b68690d19",
-      "score": 247,
-      "content": "skipPhases: \"\"\n"
-    },
-    {
-      "path": "pkg/setup/testdata/jobset-ownership/wildcard-only-rbac/input.yaml",
-      "sha": null,
-      "content_sha256": "e2a46fde5f457228b72cf9beade572640f4442f740a4c2b4d2c5ca4aaed31023",
-      "score": 247,
-      "content": "crdPresent: false\nreleaseState: not installed\n"
     },
     {
       "path": "pkg/setup/testdata/print-retained-resources/pull-secret-absent/input_objects.yaml",
@@ -114,11 +93,32 @@
       "content": "apiVersion: v1\nkind: Namespace\nmetadata:\n  name: nvcre\n---\napiVersion: v1\nkind: Namespace\nmetadata:\n  name: kubeflow-system\n"
     },
     {
+      "path": "pkg/setup/testdata/print-retained-resources/pull-secret-absent/input_config.yaml",
+      "sha": null,
+      "content_sha256": "722987baa3b197a908f0a9dbc7ca2d33fed52a530e333558e224fc8b68690d19",
+      "score": 247,
+      "content": "skipPhases: \"\"\n"
+    },
+    {
       "path": "pkg/setup/testdata/init-recovery/foreign-secret-blocks-before-uninstall/input.yaml",
       "sha": null,
       "content_sha256": "d9eb90a5e5c3acb2a2c00d5b007f289ae39838fc79c7a856966a76e2d4055a2e",
       "score": 247,
       "content": "# An unrelated Secret in kubeflow-system is not a Trainer release resource: the initial gate refuses before uninstall.\nreleaseState: failed\nseedRecovery: true\nextendedDiscovery: true\ninstallResults:\n  - fail: true\n    output: |\n      Error: UPGRADE FAILED: cannot patch Secret \"kubeflow-trainer-webhook-cert\" in namespace kubeflow-system: conflict with manager: .data.tls.crt\n"
+    },
+    {
+      "path": "pkg/setup/testdata/init-recovery/foreign-secret-blocks-before-uninstall/input_objects.yaml",
+      "sha": null,
+      "content_sha256": "9e236aa60d41cfa81adcb918b8e0d26022dde63e0c207be4a8ae0f589eb895a0",
+      "score": 247,
+      "content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: team-registry-credentials\n  namespace: kubeflow-system\n  uid: foreign-secret-uid\ntype: kubernetes.io/dockerconfigjson\ndata:\n  .dockerconfigjson: e30=\n"
+    },
+    {
+      "path": "pkg/setup/testdata/jobset-ownership/wildcard-only-rbac/input.yaml",
+      "sha": null,
+      "content_sha256": "e2a46fde5f457228b72cf9beade572640f4442f740a4c2b4d2c5ca4aaed31023",
+      "score": 247,
+      "content": "crdPresent: false\nreleaseState: not installed\n"
     },
     {
       "path": "pkg/setup/testdata/jobset-ownership/wildcard-only-rbac/expected.json",
@@ -128,11 +128,11 @@
       "content": "{\n  \"mode\": \"absent\",\n  \"evidence\": [\n    \"JobSet CRD is absent and the supported fingerprint scan is clean; this does not prove arbitrary controller absence\"\n  ],\n  \"installJobSet\": true,\n  \"manifestCalls\": 0\n}\n"
     },
     {
-      "path": "pkg/setup/testdata/init-recovery/foreign-secret-blocks-before-uninstall/input_objects.yaml",
+      "path": "pkg/setup/testdata/jobset-ownership/wildcard-only-rbac/input_objects.yaml",
       "sha": null,
-      "content_sha256": "9e236aa60d41cfa81adcb918b8e0d26022dde63e0c207be4a8ae0f589eb895a0",
+      "content_sha256": "3043a98445c03d5c0a92e97c9bf9427571dbebcf9a9790b2c55a015f2bf663e4",
       "score": 247,
-      "content": "apiVersion: v1\nkind: Secret\nmetadata:\n  name: team-registry-credentials\n  namespace: kubeflow-system\n  uid: foreign-secret-uid\ntype: kubernetes.io/dockerconfigjson\ndata:\n  .dockerconfigjson: e30=\n"
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: cluster-admin\nrules:\n  - apiGroups: ['*']\n    resources: ['*']\n    verbs: ['*']\n"
     },
     {
       "path": "pkg/setup/helm_test.go",
@@ -149,7 +149,35 @@
       "content": "releaseState: failed\nseedRecovery: true\ndiscoveryEmptyCall: 2\ninstallResults:\n  - fail: true\n    output: |\n      Error: UPGRADE FAILED: cannot patch Secret \"kubeflow-trainer-webhook-cert\" in namespace kubeflow-system: conflict with manager: .data.tls.crt\n"
     },
     {
+      "path": "pkg/setup/testdata/jobset-ownership-failure/incidental-jobset/expected.json",
+      "sha": null,
+      "content_sha256": "032842270ad381b4ab4b185ecf2978b99ee89f54cbde67057ae3760ce406a305",
+      "score": 239,
+      "content": "{\n  \"jobSetOwnership\": false\n}\n"
+    },
+    {
       "path": "pkg/setup/testdata/jobset-ownership-failure/helm3-upgrade-install-fresh-collision/expected.json",
+      "sha": null,
+      "content_sha256": "b1bd552841f77b33111cde074ae47ba4cce200e2fd9863aef3e592b6a20b4160",
+      "score": 239,
+      "content": "{\n  \"jobSetOwnership\": true\n}\n"
+    },
+    {
+      "path": "pkg/setup/testdata/print-retained-resources/skip-helm-omits-nvcre-entries/input_config.yaml",
+      "sha": null,
+      "content_sha256": "37ec39df7cb67d1f86b8e8ae53fefe710a52e8bfe88219f36dec85ccab1a8bef",
+      "score": 239,
+      "content": "skipPhases: \"helm\"\n"
+    },
+    {
+      "path": "pkg/setup/testdata/asymmetric-chart-refs-warning/nvcre-ghcr-but-helm-skipped/expected.json",
+      "sha": null,
+      "content_sha256": "996cc2371a03bd1aa5f00597eca0ee81db2fe6297cf896b0c17ffb57754f1b8f",
+      "score": 239,
+      "content": "{\n  \"warning\": \"\"\n}\n"
+    },
+    {
+      "path": "pkg/setup/testdata/jobset-ownership-failure/helm3-managed-by-label-collision/expected.json",
       "sha": null,
       "content_sha256": "b1bd552841f77b33111cde074ae47ba4cce200e2fd9863aef3e592b6a20b4160",
       "score": 239,
@@ -161,35 +189,9 @@
       "content_sha256": "b1bd552841f77b33111cde074ae47ba4cce200e2fd9863aef3e592b6a20b4160",
       "score": 239,
       "content": "{\n  \"jobSetOwnership\": true\n}\n"
-    },
-    {
-      "path": "pkg/setup/testdata/jobset-ownership-failure/incidental-jobset/expected.json",
-      "sha": null,
-      "content_sha256": "032842270ad381b4ab4b185ecf2978b99ee89f54cbde67057ae3760ce406a305",
-      "score": 239,
-      "content": "{\n  \"jobSetOwnership\": false\n}\n"
-    },
-    {
-      "path": "pkg/setup/testdata/jobset-ownership-failure/helm3-managed-by-label-collision/expected.json",
-      "sha": null,
-      "content_sha256": "b1bd552841f77b33111cde074ae47ba4cce200e2fd9863aef3e592b6a20b4160",
-      "score": 239,
-      "content": "{\n  \"jobSetOwnership\": true\n}\n"
-    },
-    {
-      "path": "pkg/setup/testdata/asymmetric-chart-refs-warning/nvcre-ghcr-but-helm-skipped/expected.json",
-      "sha": null,
-      "content_sha256": "996cc2371a03bd1aa5f00597eca0ee81db2fe6297cf896b0c17ffb57754f1b8f",
-      "score": 239,
-      "content": "{\n  \"warning\": \"\"\n}\n"
-    },
-    {
-      "path": "pkg/setup/testdata/print-retained-resources/skip-helm-omits-nvcre-entries/input_config.yaml",
-      "sha": null,
-      "content_sha256": "37ec39df7cb67d1f86b8e8ae53fefe710a52e8bfe88219f36dec85ccab1a8bef",
-      "score": 239,
-      "content": "skipPhases: \"helm\"\n"
     }
   ],
-  "generated_at": "2026-10-08T08:26:05.150308+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-10T00:52:29.832715+00:00"
 }

@@ -1,10 +1,10 @@
 {
   "canonical_source": "github:stablyai/homebrew-orca",
   "repo": "stablyai/homebrew-orca",
-  "revision_sha": "882db4d35d2678884f3059ee6872f9e6e82b13b2",
+  "revision_sha": "3fb2dc61042a1604b4b52d1b3225cb902309f6c9",
   "default_branch": "main",
-  "pushed_at": "2026-10-07T02:22:20Z",
-  "repo_updated_at": "2026-10-07T02:22:23Z",
+  "pushed_at": "2026-10-08T22:10:46Z",
+  "repo_updated_at": "2026-10-08T22:10:48Z",
   "license": null,
   "topics": [],
   "tree_truncated": false,
@@ -25,19 +25,21 @@
       "content": "# Homebrew Orca\n\nHomebrew tap for [Orca](https://github.com/stablyai/orca) — an IDE for orchestrating AI coding agents.\n\n## Install\n\n```bash\nbrew tap stablyai/orca\nbrew install --cask orca\n```\n\nOr in one command:\n\n```bash\nbrew install --cask stablyai/orca/orca\n```\n\n## Updates\n\nOrca updates itself in place via its built-in updater. `brew upgrade` is a no-op unless you pass `--greedy`. `brew uninstall --cask orca` still works normally.\n\n## About this repo\n\nThis tap is generated automatically from [stablyai/orca](https://github.com/stablyai/orca). The source of truth for `Casks/orca.rb` lives at [`Casks/orca.rb` in that repo](https://github.com/stablyai/orca/blob/main/Casks/orca.rb); do not hand-edit here.\n"
     },
     {
+      "path": "Casks/orca.rb",
+      "sha": null,
+      "content_sha256": "2215e7a98f2ced505c8f38ab24b7b510b3848b79c44f7a58dcb4914365b32188",
+      "score": 33,
+      "content": "cask \"orca\" do\n  arch arm: \"arm64\", intel: \"x64\"\n\n  version \"1.4.223\"\n  sha256 arm:   \"cf898e4a34295b81beb7030d36e4f5174f16bc3c7db241eb5bb8f413e832dcb2\",\n         intel: \"fd9ab48bd97dfe16bfa34ac891b7ae68c7b221a77c4e0ef15d0c96e8ebb2df09\"\n\n  url \"https://github.com/stablyai/orca/releases/download/v#{version}/orca-macos-#{arch}.dmg\"\n  name \"Orca\"\n  desc \"IDE for orchestrating AI coding agents across terminals and worktrees\"\n  homepage \"https://onorca.dev/\"\n\n  livecheck do\n    url :url\n    strategy :github_latest\n  end\n\n  # Why: electron-updater (src/main/updater.ts) handles in-place updates by\n  # writing a new Orca.app into /Applications. Marking the cask auto_updates\n  # tells Homebrew not to compete with the in-app updater — `brew upgrade`\n  # becomes a no-op unless the user passes --greedy, and brew's version\n  # metadata stays aligned with whatever the app has swapped itself to.\n  auto_updates true\n  conflicts_with cask: \"orca@rc\"\n  depends_on macos: :big_sur\n\n  app \"Orca.app\"\n\n  # Why: expose the bundled `orca` CLI on PATH at install time (Homebrew symlinks\n  # this into its already-on-PATH bin dir). Without it, the CLI is only registered\n  # by the in-app \"Install CLI\" action, which a headless host can never trigger —\n  # so `orca serve` on a server would be unreachable from the shell. The shim\n  # resolves the real app by walking symlinks, so the Homebrew symlink works.\n  binary \"#{appdir}/Orca.app/Contents/Resources/bin/orca\"\n\n  # Why: Orca writes user data under ~/.orca (worktrees, agent state) and\n  # Electron's standard userData directories. Zap removes everything the app\n  # creates during normal use so `brew uninstall --zap` is a clean slate.\n  zap trash: [\n    \"~/.orca\",\n    \"~/Library/Application Support/Orca\",\n    \"~/Library/Caches/com.stablyai.orca\",\n    \"~/Library/Caches/com.stablyai.orca.ShipIt\",\n    \"~/Library/HTTPStorages/com.stablyai.orca\",\n    \"~/Library/Preferences/com.stablyai.orca.plist\",\n    \"~/Library/Saved Application State/com.stablyai.orca.savedState\",\n  ]\nend\n"
+    },
+    {
       "path": "Casks/orca@rc.rb",
       "sha": null,
       "content_sha256": "9de4c60ce3a3c882c313a753f2dc13e3ef33cf8d44c8eaca2bfd9d65a5d6c8f7",
       "score": 33,
       "content": "cask \"orca@rc\" do\n  arch arm: \"arm64\", intel: \"x64\"\n\n  version \"1.4.184-rc.0\"\n  sha256 arm:   \"c5958761fe2afa735ed02dbdad3d566c7463364e3fa61e47da22f4133f6e169e\",\n         intel: \"dc5283e1ee181194653c3805e473187367a8c44886ccb2d181320ab2fae998c2\"\n\n  url \"https://github.com/stablyai/orca/releases/download/v#{version}/orca-macos-#{arch}.dmg\",\n      verified: \"github.com/stablyai/orca/\"\n  name \"Orca RC\"\n  desc \"IDE for orchestrating AI coding agents across terminals and worktrees\"\n  homepage \"https://onorca.dev/\"\n\n  livecheck do\n    url \"https://github.com/stablyai/orca\"\n    regex(/^v?(\\d+(?:\\.\\d+)+-rc\\.\\d+)$/i)\n    strategy :github_releases do |json, regex|\n      json.map do |release|\n        next if release[\"draft\"]\n        next unless release[\"prerelease\"]\n\n        match = release[\"tag_name\"]&.match(regex)\n        next if match.blank?\n\n        match[1]\n      end\n    end\n  end\n\n  # Why: RC installs should follow Orca's prerelease-aware updater instead of\n  # waiting for Homebrew metadata churn between frequent release candidates.\n  auto_updates true\n  conflicts_with cask: \"orca\"\n  depends_on macos: :big_sur\n\n  app \"Orca.app\"\n\n  # Why: expose the bundled `orca` CLI on PATH at install time (Homebrew symlinks\n  # this into its already-on-PATH bin dir). Without it, the CLI is only registered\n  # by the in-app \"Install CLI\" action, which a headless host can never trigger —\n  # so `orca serve` on a server would be unreachable from the shell. The shim\n  # resolves the real app by walking symlinks, so the Homebrew symlink works.\n  binary \"#{appdir}/Orca.app/Contents/Resources/bin/orca\"\n\n  # Why: Orca writes user data under ~/.orca (worktrees, agent state) and\n  # Electron's standard userData directories. Zap removes everything the app\n  # creates during normal use so `brew uninstall --zap` is a clean slate.\n  zap trash: [\n    \"~/.orca\",\n    \"~/Library/Application Support/Orca\",\n    \"~/Library/Caches/com.stablyai.orca\",\n    \"~/Library/Caches/com.stablyai.orca.ShipIt\",\n    \"~/Library/HTTPStorages/com.stablyai.orca\",\n    \"~/Library/Preferences/com.stablyai.orca.plist\",\n    \"~/Library/Saved Application State/com.stablyai.orca.savedState\",\n  ]\nend\n"
-    },
-    {
-      "path": "Casks/orca.rb",
-      "sha": null,
-      "content_sha256": "6c1dfedd9979443799256647198e96d6706ba1e2bb23efbfd4adfaa71a67ae57",
-      "score": 33,
-      "content": "cask \"orca\" do\n  arch arm: \"arm64\", intel: \"x64\"\n\n  version \"1.4.222\"\n  sha256 arm:   \"b7711276c57b35f67e4b86d55c98f610a3181f37bafa156eca197238d9a35159\",\n         intel: \"4ed7582dc91ce0290992f4ff11951783e57d5270e4d0752bc76bdcd0ef47c639\"\n\n  url \"https://github.com/stablyai/orca/releases/download/v#{version}/orca-macos-#{arch}.dmg\"\n  name \"Orca\"\n  desc \"IDE for orchestrating AI coding agents across terminals and worktrees\"\n  homepage \"https://onorca.dev/\"\n\n  livecheck do\n    url :url\n    strategy :github_latest\n  end\n\n  # Why: electron-updater (src/main/updater.ts) handles in-place updates by\n  # writing a new Orca.app into /Applications. Marking the cask auto_updates\n  # tells Homebrew not to compete with the in-app updater — `brew upgrade`\n  # becomes a no-op unless the user passes --greedy, and brew's version\n  # metadata stays aligned with whatever the app has swapped itself to.\n  auto_updates true\n  conflicts_with cask: \"orca@rc\"\n  depends_on macos: :big_sur\n\n  app \"Orca.app\"\n\n  # Why: expose the bundled `orca` CLI on PATH at install time (Homebrew symlinks\n  # this into its already-on-PATH bin dir). Without it, the CLI is only registered\n  # by the in-app \"Install CLI\" action, which a headless host can never trigger —\n  # so `orca serve` on a server would be unreachable from the shell. The shim\n  # resolves the real app by walking symlinks, so the Homebrew symlink works.\n  binary \"#{appdir}/Orca.app/Contents/Resources/bin/orca\"\n\n  # Why: Orca writes user data under ~/.orca (worktrees, agent state) and\n  # Electron's standard userData directories. Zap removes everything the app\n  # creates during normal use so `brew uninstall --zap` is a clean slate.\n  zap trash: [\n    \"~/.orca\",\n    \"~/Library/Application Support/Orca\",\n    \"~/Library/Caches/com.stablyai.orca\",\n    \"~/Library/Caches/com.stablyai.orca.ShipIt\",\n    \"~/Library/HTTPStorages/com.stablyai.orca\",\n    \"~/Library/Preferences/com.stablyai.orca.plist\",\n    \"~/Library/Saved Application State/com.stablyai.orca.savedState\",\n  ]\nend\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:25.226627+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-10T00:52:13.889230+00:00"
 }
