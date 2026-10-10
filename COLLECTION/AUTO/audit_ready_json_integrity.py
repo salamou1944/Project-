@@ -104,6 +104,24 @@ def main():
     old_evidence, new_evidence = evidence_map(old), evidence_map(new)
     missing_evidence = old_evidence.keys() - new_evidence.keys()
     added_evidence = new_evidence.keys() - old_evidence.keys()
+
+    def evidence_identity_sets(data):
+        full, without_revision, content = set(), set(), set()
+        for key, decision in decision_map(data).items():
+            for item in decision.get("evidence", []):
+                if not isinstance(item, dict):
+                    continue
+                source, revision, file_path, digest = (
+                    item.get("source"), item.get("source_revision"),
+                    item.get("file"), item.get("content_sha256")
+                )
+                full.add((key, source, revision, file_path, digest))
+                without_revision.add((key, source, file_path, digest))
+                content.add((source, file_path, digest))
+        return full, without_revision, content
+
+    old_full, old_without_revision, old_content = evidence_identity_sets(old)
+    new_full, new_without_revision, new_content = evidence_identity_sets(new)
     old_counts = old.get("counts", {}) if isinstance(old, dict) else {}
     new_counts = new.get("counts", {}) if isinstance(new, dict) else {}
     count_changes = {
@@ -144,6 +162,14 @@ def main():
             for k, s, rev, path, digest in sorted(missing_evidence, key=lambda x: tuple(str(v) for v in x))[:50]
         ],
         "new_evidence_identities_count": len(added_evidence),
+        "evidence_missing_after_ignoring_revision_count": len(old_without_revision - new_without_revision),
+        "evidence_added_after_ignoring_revision_count": len(new_without_revision - old_without_revision),
+        "source_file_content_hashes_missing_count": len(old_content - new_content),
+        "source_file_content_hashes_added_count": len(new_content - old_content),
+        "source_file_content_hashes_missing_sample": [
+            {"source": source, "file": file_path, "content_sha256": digest}
+            for source, file_path, digest in sorted(old_content - new_content, key=lambda x: tuple(str(v) for v in x))[:25]
+        ],
         "new_evidence_identities_sample": [
             {"capability_key": k, "source": s, "revision": rev, "file": path, "content_sha256": digest}
             for k, s, rev, path, digest in sorted(added_evidence, key=lambda x: tuple(str(v) for v in x))[:50]
