@@ -105,6 +105,22 @@ def has_usable_files(data):
 def safe_name(value):
     return re.sub(r"[^A-Za-z0-9_.-]+", "_", value)
 
+
+def archive_prior_revision(out, cached, new_data, history_root=None):
+    """Preserve a validated prior snapshot before replacing it with a newer revision."""
+    if not isinstance(cached, dict) or cached.get("state") != "extracted" or not has_usable_files(cached):
+        return None
+    old_revision = cached.get("revision_sha")
+    new_revision = new_data.get("revision_sha") if isinstance(new_data, dict) else None
+    if not isinstance(old_revision, str) or not old_revision or old_revision == new_revision:
+        return None
+    history_root = Path(history_root) if history_root is not None else ROOT / "HISTORY"
+    identity = safe_name(cached.get("repo") or Path(out).stem)
+    archive_path = history_root / f"{identity}__{safe_name(old_revision)}.json"
+    if not archive_path.exists():
+        atomic_write_json(archive_path, cached)
+    return str(archive_path)
+
 def owner_from_url(url):
     m = re.search(r"https?://github\.com/([^/]+)/?(?:#.*)?$", url.strip())
     return m.group(1) if m else None
@@ -302,6 +318,9 @@ def extract_repo(item):
         "fetch_error_count": len(fetch_errors),
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
     }
+    archived_revision = archive_prior_revision(out, cached, data)
+    if archived_revision:
+        data["previous_revision_archive"] = archived_revision
     return data, "refreshed"
 
 def extract_gist(gid, owner):
