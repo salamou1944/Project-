@@ -85,11 +85,33 @@ def main():
     changed_samples = []
     non_evidence_change_samples = []
     evidence_count_changes = []
+    quarantine_release_transitions = []
     for key in sorted(common):
         a, b = old_decisions[key], new_decisions[key]
         fields = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
         if fields:
             changed_fields.update(fields)
+            old_action, new_action = a.get("action"), b.get("action")
+            if old_action == "QUARANTINE" and new_action != "QUARANTINE":
+                def evidence_brief(items):
+                    return [
+                        {
+                            "source": item.get("source"),
+                            "source_revision": item.get("source_revision"),
+                            "file": item.get("file"),
+                            "content_sha256": item.get("content_sha256"),
+                        }
+                        for item in items if isinstance(item, dict)
+                    ] if isinstance(items, list) else []
+                quarantine_release_transitions.append({
+                    "capability_key": key,
+                    "old_action": old_action,
+                    "new_action": new_action,
+                    "old_sources": a.get("sources"),
+                    "new_sources": b.get("sources"),
+                    "old_evidence": evidence_brief(a.get("evidence", [])),
+                    "new_evidence": evidence_brief(b.get("evidence", [])),
+                })
             non_evidence_fields = [field for field in fields if field != "evidence"]
             if non_evidence_fields and len(non_evidence_change_samples) < 25:
                 non_evidence_change_samples.append({
@@ -281,14 +303,18 @@ def main():
     )
     if exact_diff is None:
         audit_status = "EXACT_DATA_EQUAL"
-    elif preservation_verified:
-        audit_status = "PRESERVATION_VERIFIED_WITH_REGENERATION"
-    else:
+    elif not preservation_verified:
         audit_status = "PRESERVATION_GAP_REQUIRES_REPAIR"
+    elif quarantine_release_transitions:
+        audit_status = "POLICY_TRANSITION_REQUIRES_REVIEW"
+    else:
+        audit_status = "PRESERVATION_VERIFIED_WITH_REGENERATION"
     result = {
         "status": audit_status,
         "preservation_verified": preservation_verified,
         "active_evidence_count_change_count": len(evidence_count_changes),
+        "quarantine_release_transition_count": len(quarantine_release_transitions),
+        "quarantine_release_transition_samples": quarantine_release_transitions[:25],
         "non_evidence_changed_decision_samples": non_evidence_change_samples,
         "commit": commit,
         "path": READY_PATH,
@@ -343,7 +369,7 @@ def main():
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     # Fail only when historical preservation cannot be verified.
     # Data differences with preserved history are classified as safe regeneration.
-    return 2 if audit_status == "PRESERVATION_GAP_REQUIRES_REPAIR" else 0
+    return 2 if audit_status in {"PRESERVATION_GAP_REQUIRES_REPAIR", "POLICY_TRANSITION_REQUIRES_REVIEW"} else 0
 
 
 if __name__ == "__main__":
