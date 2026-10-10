@@ -321,4 +321,80 @@ def main():
 
 
 if __name__ == "__main__":
+    raise SystemExit(main())    diff = first_difference(old_data, new_data)
+    old_keys, new_keys = decision_keys(old_data), decision_keys(new_data)
+    old_counts = old_data.get("counts", {}) if isinstance(old_data, dict) else {}
+    new_counts = new_data.get("counts", {}) if isinstance(new_data, dict) else {}
+    count_changes = {
+        key: {"old": old_counts.get(key), "new": new_counts.get(key)}
+        for key in sorted(set(old_counts) | set(new_counts))
+        if old_counts.get(key) != new_counts.get(key)
+    }
+    count_regressions = {
+        key: {"old": value, "new": new_counts.get(key)}
+        for key, value in old_counts.items()
+        if isinstance(value, (int, float))
+        and (not isinstance(new_counts.get(key), (int, float)) or new_counts[key] < value)
+    }
+    old_by_key = {
+        item.get("capability_key"): item
+        for item in old_data.get("decisions", [])
+        if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+    }
+    new_by_key = {
+        item.get("capability_key"): item
+        for item in new_data.get("decisions", [])
+        if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+    }
+    changed_field_counts = {}
+    changed_examples = []
+    for key in sorted(old_keys & new_keys):
+        before, after = old_by_key[key], new_by_key[key]
+        changed_fields = sorted(
+            field for field in set(before) | set(after)
+            if before.get(field) != after.get(field)
+        )
+        if changed_fields:
+            for field in changed_fields:
+                changed_field_counts[field] = changed_field_counts.get(field, 0) + 1
+            if len(changed_examples) < 30:
+                changed_examples.append({"capability_key": key, "changed_fields": changed_fields})
+
+    missing_keys = sorted(old_keys - new_keys)
+    added_keys = sorted(new_keys - old_keys)
+    if diff is None:
+        status = "EXACT_MATCH"
+    elif not missing_keys and not count_regressions:
+        status = "PASS_WITH_REGENERATED_DATA_DIFFERENCES"
+    else:
+        status = "DATA_REGRESSION"
+
+    result = {
+        "status": status,
+        "commit": commit,
+        "path": READY_PATH,
+        "old_bytes": len(old_raw.encode("utf-8")),
+        "new_bytes": len(new_raw.encode("utf-8")),
+        "old_summary": summarize(old_data),
+        "new_summary": summarize(new_data),
+        "parsed_data_equal": diff is None,
+        "first_difference": diff,
+        "count_changes": count_changes,
+        "count_regressions": count_regressions,
+        "decision_identity_counts": {"old": len(old_keys), "new": len(new_keys)},
+        "decision_identities_added_count": len(added_keys),
+        "decision_identities_added_sample": added_keys[:50],
+        "decision_identities_missing_count": len(missing_keys),
+        "decision_identities_missing_sample": missing_keys[:50],
+        "common_decisions_with_changed_content_count": len(changed_examples) if len(changed_examples) < 30 else sum(
+            1 for key in old_keys & new_keys if old_by_key[key] != new_by_key[key]
+        ),
+        "changed_field_counts": dict(sorted(changed_field_counts.items())),
+        "changed_decision_examples": changed_examples,
+    }
+    print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+    return 1 if status == "DATA_REGRESSION" else 0
+
+
+if __name__ == "__main__":
     raise SystemExit(main())
