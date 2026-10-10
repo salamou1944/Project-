@@ -2,10 +2,11 @@
 """Read-only READY.json non-regression audit.
 
 The compared revisions can contain legitimate new extraction results, so exact
-whole-document equality is not a valid requirement. This audit instead verifies
-that the regenerated state has not lost prior decision identities or decreased
-any previously recorded count. Serialization correctness is tested separately
-by test_ready_json_compaction.py.
+whole-document equality is not a valid requirement. This audit verifies that
+recorded counts do not regress and that evidence behind any prior decision no
+longer active is still available in the exact archived source revision. It does
+not assert that every prior decision remains active. Serialization correctness
+is tested separately by test_ready_json_compaction.py.
 """
 from __future__ import annotations
 import json
