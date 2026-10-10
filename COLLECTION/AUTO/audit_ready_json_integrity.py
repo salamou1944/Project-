@@ -289,6 +289,8 @@ def main():
         "decision_identities_missing_sample": sorted(old_keys - new_keys)[:50],
         "common_decisions_with_changed_content_count": len(changed_common_decisions),
         "common_decisions_with_changed_content_sample": changed_common_decisions[:50],
+        "changed_field_counts": dict(sorted(changed_field_counts.items())),
+        "changed_decision_detail_sample": changed_decision_samples,
         "changed_decision_field_counts": dict(sorted(changed_decision_field_counts.items())),
         "changed_decision_field_samples": changed_decision_field_samples,
         "changed_decision_fields_frequency": dict(sorted(changed_field_counts.items())),
