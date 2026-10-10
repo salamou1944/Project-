@@ -1,0 +1,117 @@
+{
+  "canonical_source": "github:senamakel/factorio-llm",
+  "repo": "senamakel/factorio-llm",
+  "revision_sha": "3ce6e1dff7ca5035d5c639f854c8afc67de8e006",
+  "default_branch": "main",
+  "pushed_at": "2026-10-10T14:30:09Z",
+  "repo_updated_at": "2026-10-10T14:30:13Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "scripts/check_readme_toml.py",
+      "sha": null,
+      "content_sha256": "9f1ab6c90759a52e14c285941731326c71e5e28f1d8fc63f4ffef2893c19817b",
+      "score": 133,
+      "content": "\"\"\"Validate the README's TOML snippet parses and its paths exist.\"\"\"\nimport json\nimport os\nimport re\n\nrepo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\nreadme = open(os.path.join(repo, \"README.md\")).read()\nblock = re.search(r\"```toml\\n(.*?)```\", readme, re.S).group(1)\ntry:\n    import tomllib\nexcept ImportError:\n    import tomli as tomllib\n\ncfg = tomllib.loads(block)\nsrv = cfg[\"mcp_client\"][\"servers\"][0]\nprint(\"name:\", srv[\"name\"])\nprint(\"command exists:\", os.path.isfile(srv[\"command\"]), \"->\", srv[\"command\"])\nprint(\"args:\", srv[\"args\"])\nprint(\"working_dir exists:\", os.path.isdir(srv[\"working_dir\"]))\nprint(\"env keys:\", sorted(srv[\"env\"]))\nassert os.path.isfile(srv[\"command\"]), \"venv python missing\"\nassert os.path.isdir(srv[\"working_dir\"])\nassert srv[\"args\"] == [\"-m\", \"mcp_server.server\"]\nassert sorted(srv[\"env\"]) == [\"FACTORIO_HOST\", \"FACTORIO_PORT\", \"FACTORIO_RCON_PASSWORD\"]\nprint(\"TOML SNIPPET VALID\")\n"
+    },
+    {
+      "path": "docker/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "d3f319cda69d0e457aeffeab91db7be02b7e37b5ee6fc65f1c8b874ec8830b25",
+      "score": 118,
+      "content": "services:\n  factorio-mcp:\n    build:\n      context: ..\n      dockerfile: docker/Dockerfile\n    environment:\n      FACTORIO_HOST: ${FACTORIO_HOST:-host.docker.internal}\n      FACTORIO_PORT: ${FACTORIO_PORT:-27015}\n      FACTORIO_RCON_PASSWORD: ${FACTORIO_RCON_PASSWORD:?set in .env}\n    stdin_open: true\n    tty: true\n"
+    },
+    {
+      "path": "mcp_server/server.py",
+      "sha": null,
+      "content_sha256": "8f2ced03c2de5e475b55cbd0b1720674124fec526f75a9a5ed4e50d990758a8f",
+      "score": 108,
+      "content": "\"\"\"Factorio Control MCP server (FastMCP, mcp 1.x).\n\nTools:\n  - rcon_command: run any console command on the Factorio server\n  - get_status:   call the control-bridge mod's status() RPC\n\nEnv vars: FACTORIO_HOST, FACTORIO_PORT, FACTORIO_RCON_PASSWORD\n\"\"\"\nimport os\n\nfrom mcp.server.fastmcp import FastMCP\n\nfrom rcon_client.client import RconClient\n\nHOST = os.environ.get(\"FACTORIO_HOST\", \"127.0.0.1\")\nPORT = int(os.environ.get(\"FACTORIO_PORT\", \"27015\"))\nPASSWORD = os.environ.get(\"FACTORIO_RCON_PASSWORD\", \"\")\n\nmcp = FastMCP(\"factorio-control\")\n\n\ndef run(cmd: str) -> str:\n    with RconClient(HOST, PORT, PASSWORD) as c:\n        return c.command(cmd)\n\n\n@mcp.tool()\ndef rcon_command(command: str) -> str:\n    \"\"\"Run a Factorio console command via RCON, e.g. '/c game.print(1+1)'.\"\"\"\n    return run(command)\n\n\n@mcp.tool()\ndef get_status() -> str:\n    \"\"\"Query server status via the control-bridge mod (tick, player count).\"\"\"\n    return run(\n        '/c rcon.print(serpent.block(remote.call(\"control-bridge\", \"status\")))'\n    )\n\n\nif __name__ == \"__main__\":\n    mcp.run()\n"
+    },
+    {
+      "path": "scripts/smoke_mcp.py",
+      "sha": null,
+      "content_sha256": "d5acbac222362085be05a6118e730264071b6565ffd9ce9cbf4b75eaab384818",
+      "score": 108,
+      "content": "\"\"\"Live MCP session test: initialize, list tools, call both tools against a running server.\n\nEnv: FACTORIO_HOST / FACTORIO_PORT / FACTORIO_RCON_PASSWORD must point at a live server.\n\"\"\"\nimport json\nimport os\nimport subprocess\nimport sys\n\nproc = subprocess.Popen(\n    [\"./.venv/bin/python\", \"-m\", \"mcp_server.server\"],\n    stdin=subprocess.PIPE,\n    stdout=subprocess.PIPE,\n    stderr=subprocess.PIPE,\n    env=os.environ.copy(),\n    cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),\n)\n\n\ndef rpc(obj):\n    proc.stdin.write((json.dumps(obj) + \"\\n\").encode())\n    proc.stdin.flush()\n    return json.loads(proc.stdout.readline())\n\n\ntry:\n    rpc({\n        \"jsonrpc\": \"2.0\", \"id\": 1, \"method\": \"initialize\",\n        \"params\": {\n            \"protocolVersion\": \"2024-11-05\", \"capabilities\": {},\n            \"clientInfo\": {\"name\": \"t\", \"version\": \"0\"},\n        },\n    })\n    proc.stdin.write(b'{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\\n')\n    proc.stdin.flush()\n\n    r = rpc({\"jsonrpc\": \"2.0\", \"id\": 2, \"method\": \"tools/call\",\n             \"params\": {\"name\": \"get_status\", \"arguments\": {}}})\n    print(\"get_status LIVE:\", json.dumps(r[\"result\"][\"content\"]))\n\n    r2 = rpc({\"jsonrpc\": \"2.0\", \"id\": 3, \"method\": \"tools/call\",\n              \"params\": {\"name\": \"rcon_command\",\n                         \"arguments\": {\"command\": \"/c rcon.print('mcp round trip ok')\"}}})\n    print(\"rcon_command LIVE:\", json.dumps(r2[\"result\"][\"content\"]))\nfinally:\n    proc.stdin.close()\n    proc.wait(timeout=5)\n    err = proc.stderr.read().decode()\n    if err.strip():\n        print(\"STDERR:\", err[:200])\nsys.exit(0)\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "be83018b59d9c97b27e123d6ea51e086a3121406b084d4849e668a23fc9dfb9b",
+      "score": 100,
+      "content": "# factorio-control\n\nProgrammatic control of a Factorio server: RCON client, Lua mod helpers, and an MCP server exposing them as tools.\n\nRepo: https://github.com/senamakel/factorio-llm\n\n## Layout\n- `rcon_client/` - stdlib RCON client + CLI (`python -m rcon_client.cli '/c game.print(game.tick)')`\n- `mod/` - `control-bridge` mod exposing `remote.call(\"control-bridge\", ...)` RPCs\n- `mcp_server/` - MCP server with `rcon_command` and `get_status` tools\n- `docker/` - Dockerfile + compose to run the MCP server as a container\n- `scripts/` - helper launch scripts and tests\n\n## OpenHuman MCP registration\nConnections -> MCP -> Add server (or a `[[mcp_client.servers]]` entry in the user config):\n\n```toml\n[[mcp_client.servers]]\nname = \"factorio-control\"\ncommand = \"/Users/enamakel/OpenHuman/projects/factorio-control/.venv/bin/python\"\nargs = [\"-m\", \"mcp_server.server\"]\nworking_dir = \"/Users/enamakel/OpenHuman/projects/factorio-control\"\n\n[mcp_client.servers.env]\nFACTORIO_HOST = \"127.0.0.1\"\nFACTORIO_PORT = \"27015\"\nFACTORIO_RCON_PASSWORD = \"<your rcon password>\"\n```\n\n## Server setup\nEnable RCON by launching Factorio with:\n\n    factorio --start-server your-save.zip \\\n        --rcon-port 27015 --rcon-password YOURPASSWORD \\\n        --mod-directory ../mods\n\n## Install the mod\nCopy or symlink `mod/` into your Factorio `mods` directory as `control-bridge_0.1.0/`.\n\n## Run the MCP server directly\n\n    pip install -r requirements.txt\n    export FACTORIO_HOST=127.0.0.1 FACTORIO_PORT=27015 FACTORIO_RCON_PASSWORD=...\n    python -m mcp_server.server\n\nOr with Docker (from `docker/`; needs DOCKER_BUILDKIT=0 on some hosts):\n\n    docker compose up --build\n\nThe MCP server speaks stdio, so point your MCP client at the command above.\n"
+    },
+    {
+      "path": "scripts/test_rcon.py",
+      "sha": null,
+      "content_sha256": "bf41b47f7a16022ac3b5f5a94214964ef39c75b971e9ab520204cfb39ae2e3a2",
+      "score": 93,
+      "content": "\"\"\"Test RconClient against an in-process fake RCON server.\"\"\"\nimport socket\nimport struct\nimport threading\n\nfrom rcon_client.client import RconClient\n\n\ndef fake_server(host, port, results):\n    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n    srv.bind((host, port))\n    srv.listen(1)\n    results[\"ready\"] = True\n    conn, _ = srv.accept()\n\n    def recv_exact(n):\n        data = b\"\"\n        while len(data) < n:\n            data += conn.recv(n - len(data))\n        return data\n\n    while True:\n        header = recv_exact(4)\n        (length,) = struct.unpack(\"<i\", header)\n        body = recv_exact(length)\n        req_id, ptype = struct.unpack(\"<ii\", body[:8])\n        if ptype == 3:  # AUTH: empty RESPONSE_VALUE then AUTH_RESPONSE\n            for rid, pt in [(0, 0), (req_id, 2)]:\n                payload = struct.pack(\"<ii\", rid, pt) + b\"\\x00\\x00\"\n                conn.sendall(struct.pack(\"<i\", len(payload)) + payload)\n        elif ptype == 2:  # EXECCOMMAND: echo back\n            text = body[8:-2].decode()\n            reply = f\"pong: {text}\".encode()\n            payload = struct.pack(\"<ii\", req_id, 0) + reply + b\"\\x00\\x00\"\n            conn.sendall(struct.pack(\"<i\", len(payload)) + payload)\n        else:\n            break\n    conn.close()\n    srv.close()\n\n\nresults = {}\nt = threading.Thread(target=fake_server, args=(\"127.0.0.1\", 27999, results), daemon=True)\nt.start()\nimport time\ntime.sleep(0.2)\n\nwith RconClient(\"127.0.0.1\", 27999, \"pw\") as c:\n    out = c.command(\"/c game.print('hello')\")\nprint(\"RCON reply:\", out)\nassert out == \"pong: /c game.print('hello')\", out\nprint(\"PASS\")\n"
+    },
+    {
+      "path": "scripts/test_rcon_adversarial.py",
+      "sha": null,
+      "content_sha256": "01ded2e2aad6d5da67c09ac8ac2fdfe12bc8e3a5c021aad322480aea47353ffd",
+      "score": 93,
+      "content": "\"\"\"Adversarial RCON tests against an in-process fake server.\n\nThe fake mirrors the client's framing rules (payload = everything between\nthe 8-byte header and the trailing two NULs) rather than the spec's framing;\ngood enough to exercise transport edge cases, not a spec oracle.\n\"\"\"\nimport socket\nimport struct\nimport threading\nimport time\n\nfrom rcon_client.client import RconClient\n\n\ndef fake_server(host, port, expected_password, seen, stop):\n    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n    srv.bind((host, port))\n    srv.listen(5)\n    srv.settimeout(0.2)\n    while not stop.is_set():\n        try:\n            conn, _ = srv.accept()\n        except socket.timeout:\n            continue\n        handle_connection(conn, expected_password, seen)\n    srv.close()\n\n\ndef handle_connection(conn, expected_password, seen):\n    def recv_exact(n):\n        data = b\"\"\n        while len(data) < n:\n            chunk = conn.recv(n - len(data))\n            if not chunk:\n                raise ConnectionError(\"closed\")\n            data += chunk\n        return data\n\n    try:\n        while True:\n            (length,) = struct.unpack(\"<i\", recv_exact(4))\n            body = recv_exact(length)\n            req_id, ptype = struct.unpack(\"<ii\", body[:8])\n            payload = body[8:-2]\n            if ptype == 3:  # AUTH\n                reply_id = req_id if payload == expected_password else -1\n                for rid, pt in [(0, 0), (reply_id, 2)]:\n                    out = struct.pack(\"<ii\", rid, pt) + b\"\\x00\\x00\"\n                    conn.sendall(struct.pack(\"<i\", len(out)) + out)\n            elif ptype == 2:  # EXECCOMMAND\n                seen.append(payload)\n                reply = b\"OK:\" + payload\n                out = struct.pack(\"<ii\", req_id, 0) + reply + b\"\\x00\\x00\"\n                conn.sendall(struct.pack(\"<i\", len(out)) + out)\n            else:\n                break\n    except (ConnectionError, OSError):\n        pass\n    finally:\n        conn.close()\n\n\ndef start_server(password):\n    seen = []\n    stop = threading.Event()\n    t = threading.Thread(target=fake_server, args=(\"127.0.0.1\", 27998, password, seen, stop), daemon=True)\n    t.start()\n    time.sleep(0.2)\n    return seen\n\n\n# 1. happy path\nseen = start_server(b\"pw\")\nwith RconClient(\"127.0.0.1\", 27998, \"pw\") as c:\n    out = c.command(\"/c game.print('hello')\")\nassert out == \"OK:/c game.print('hello')\", out\nassert seen == [b\"/c game.print('hello')\"], seen\nprint(\"PASS: happy path, payload intact (header + 2 NULs stripped correctly)\")\n\n# 2. empty command\nwith RconClient(\"127.0.0.1\", 27998, \"pw\") as c:\n    out = c.command(\"\")\nassert out == \"OK:\", repr(out)\nprint(\"PASS: empty command\")\n\n# 3. unicode command (multi-byte utf-8)\ncmd = \"/c game.print('pl\\u00e4tzen \\u2699 \\U0001f600')\"\nwith RconClient(\"127.0.0.1\", 27998, \"pw\") as c:\n    out = c.command(cmd)\nassert out == \"OK:\" + cmd, out\nprint(\"PASS: unicode command round-trips\")\n\n# 4. large command (10 KB)\ncmd = \"/c \" + \"x\" * 10000\nwith RconClient(\"127.0.0.1\", 27998, \"pw\") as c:\n    out = c.command(cmd)\nassert out == \"OK:\" + cmd and len(out) > 10000\nprint(\"PASS: 10KB command (recv loop coalesces fragments)\")\n\n# 5. sequential commands on one connection, ids must differ\nwith RconClient(\"127.0.0.1\", 27998, \"pw\") as c:\n    a = c.command(\"one\")\n    b = c.command(\"two\")\nassert a == \"OK:one\" and b == \"OK:two\", (a, b)\nprint(\"PASS: two sequential commands on one connection\")\n\n# 6. wrong password -> RconError('authentication failed')\ntry:\n    RconClient(\"127.0.0.1\", 27998, \"wrong\").connect()\n    raise AssertionError(\"should have raised\")\nexcept Exception as e:\n    assert \"authentication failed\" in str(e), e\n    print(\"PASS: wrong password -> authentication failed\")\n\n# 7. connection refused -> error, not hang\ntry:\n    RconClient(\"127.0.0.1\", 27997, \"pw\", timeout=2).connect()\n    raise AssertionError(\"should have raised\")\nexcept Exception as e:\n    print(\"PASS: refused connection ->\", type(e).__name__)\n\nprint(\"ALL RCON ADVERSARIAL TESTS PASS\")\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "e025b8102010644155e2d089980c727236d13c8bdd2b4a15462d966c546b4793",
+      "score": 85,
+      "content": "mcp>=1.0,<2.0\n"
+    },
+    {
+      "path": "docker/Dockerfile",
+      "sha": null,
+      "content_sha256": "b1e8d96c1bddd9f086200d2573f400a08925518c8fe12caded4e17bac821dca9",
+      "score": 83,
+      "content": "FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY rcon_client/ rcon_client/\nCOPY mcp_server/ mcp_server/\nENV FACTORIO_HOST=host.docker.internal FACTORIO_PORT=27015\nCMD [\"python\", \"-m\", \"mcp_server.server\"]\n"
+    },
+    {
+      "path": "mod/info.json",
+      "sha": null,
+      "content_sha256": "dabbf3727894f3f3aae3c8aee263cdd854e1fabd3a672c8ab61b765837eb3d46",
+      "score": 33,
+      "content": "{\n  \"name\": \"control-bridge\",\n  \"version\": \"0.1.0\",\n  \"title\": \"Control Bridge\",\n  \"description\": \"Remote control helpers exposed over RCON: status, item giving, teleport, custom RPCs.\",\n  \"author\": \"you\",\n  \"factorio_version\": \"2.1\",\n  \"dependencies\": []\n}"
+    },
+    {
+      "path": "rcon_client/client.py",
+      "sha": null,
+      "content_sha256": "222f5bb4f48976cb9e71bc13f98bd98a055c1065d2d837f8f92270d9de2a5013",
+      "score": 33,
+      "content": "\"\"\"Minimal Factorio RCON client (pure stdlib, protocol per https://wiki.rcon.online).\"\"\"\nimport socket\nimport struct\n\nSERVERDATA_AUTH = 3\nSERVERDATA_AUTH_RESPONSE = 2\nSERVERDATA_EXECCOMMAND = 2\nSERVERDATA_RESPONSE_VALUE = 0\n\n\nclass RconError(Exception):\n    pass\n\n\nclass RconClient:\n    def __init__(self, host=\"127.0.0.1\", port=27015, password=\"\", timeout=5.0):\n        self.host, self.port, self.password, self.timeout = host, port, password, timeout\n        self.sock = None\n        self._id = 0\n\n    def _next_id(self):\n        self._id += 1\n        return self._id\n\n    def connect(self):\n        self.sock = socket.create_connection((self.host, self.port), timeout=self.timeout)\n        return self.authenticate()\n\n    def _send(self, req_id, ptype, payload: bytes):\n        body = struct.pack(\"<ii\", req_id, ptype) + payload + b\"\\x00\\x00\"\n        self.sock.sendall(struct.pack(\"<i\", len(body)) + body)\n\n    def _recv_exact(self, n):\n        data = b\"\"\n        while len(data) < n:\n            chunk = self.sock.recv(n - len(data))\n            if not chunk:\n                raise RconError(\"connection closed\")\n            data += chunk\n        return data\n\n    def _recv(self):\n        (length,) = struct.unpack(\"<i\", self._recv_exact(4))\n        body = self._recv_exact(length)\n        req_id, ptype = struct.unpack(\"<ii\", body[:8])\n        payload = body[8:-2]\n        return req_id, ptype, payload\n\n    def authenticate(self):\n        rid = self._next_id()\n        self._send(rid, SERVERDATA_AUTH, self.password.encode(\"utf-8\"))\n        # Factorio may send an empty RESPONSE_VALUE before AUTH_RESPONSE\n        rid2, ptype, _ = self._recv()\n        if ptype == SERVERDATA_RESPONSE_VALUE:\n            rid2, ptype, _ = self._recv()\n        if ptype != SERVERDATA_AUTH_RESPONSE or rid2 == -1:\n            raise RconError(\"authentication failed\")\n        return True\n\n    def command(self, cmd: str) -> str:\n        rid = self._next_id()\n        self._send(rid, SERVERDATA_EXECCOMMAND, cmd.encode(\"utf-8\"))\n        got_id, ptype, payload = self._recv()\n        if ptype != SERVERDATA_RESPONSE_VALUE:\n            raise RconError(f\"unexpected packet type {ptype}\")\n        return payload.decode(\"utf-8\", errors=\"replace\")\n\n    def close(self):\n        if self.sock:\n            self.sock.close()\n            self.sock = None\n\n    def __enter__(self):\n        self.connect()\n        return self\n\n    def __exit__(self, *a):\n        self.close()\n"
+    },
+    {
+      "path": "rcon_client/cli.py",
+      "sha": null,
+      "content_sha256": "ef366242d038fd3d8e5f7b64d480d32b21a509593887c6993616fc5b0f05c883",
+      "score": 33,
+      "content": "\"\"\"CLI: python -m rcon_client.cli '<command>'\"\"\"\nimport argparse\nimport json\nimport os\nimport sys\n\nfrom .client import RconClient\n\n\ndef config_from_env_or_args(host, port, password):\n    return (\n        host or os.environ.get(\"FACTORIO_HOST\", \"127.0.0.1\"),\n        int(port or os.environ.get(\"FACTORIO_PORT\", 27015)),\n        password or os.environ.get(\"FACTORIO_RCON_PASSWORD\", \"\"),\n    )\n\n\ndef main(argv=None):\n    p = argparse.ArgumentParser(description=\"Send a command to a Factorio server via RCON\")\n    p.add_argument(\"command\", help=\"e.g. '/c game.print(game.tick)'\")\n    p.add_argument(\"--host\")\n    p.add_argument(\"--port\")\n    p.add_argument(\"--password\")\n    args = p.parse_args(argv)\n    host, port, password = config_from_env_or_args(args.host, args.port, args.password)\n    try:\n        with RconClient(host, port, password) as c:\n            print(c.command(args.command))\n    except Exception as e:\n        print(json.dumps({\"error\": str(e)}), file=sys.stderr)\n        return 1\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"
+    }
+  ],
+  "fetch_errors": [
+    {
+      "path": "mcp_server/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "rcon_client/__init__.py",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 2,
+  "generated_at": "2026-10-10T20:30:25.576079+00:00"
+}
