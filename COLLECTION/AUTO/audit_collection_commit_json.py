@@ -121,7 +121,7 @@ def main():
                     source = old_data.get("canonical_source") or new_data.get("canonical_source")
                     slug = source.removeprefix("github:").replace("/", "_") if isinstance(source, str) else path.rsplit("/", 1)[-1][:-5]
                     archive_path = f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{old_rev}.json" if old_rev else None
-                    archive = git_json(f"{commit}:{archive_path}") if archive_path else None
+                    archive = git_json(f"HEAD:{archive_path}") if archive_path else None
                     old_hashes, archive_hashes = file_hashes(old_data), file_hashes(archive) if archive else {}
                     content_preserved = bool(archive) and old_hashes == archive_hashes
                     source_artifact_checks.append({
