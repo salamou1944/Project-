@@ -128,7 +128,10 @@ def main():
                     and old_data is not None and new_data is not None
                     and isinstance(old_data, dict) and isinstance(new_data, dict)):
                 old_rev, new_rev = old_data.get("revision_sha"), new_data.get("revision_sha")
-                if old_rev != new_rev or file_hashes(old_data) != file_hashes(new_data):
+                old_payload_map, new_payload_map = file_payloads(old_data), file_payloads(new_data)
+                if (old_rev != new_rev
+                        or file_hashes(old_data) != file_hashes(new_data)
+                        or old_payload_map != new_payload_map):
                     source = old_data.get("canonical_source") or new_data.get("canonical_source")
                     slug = source.removeprefix("github:").replace("/", "_") if isinstance(source, str) else path.rsplit("/", 1)[-1][:-5]
                     archive_path = f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{old_rev}.json" if old_rev else None
@@ -152,7 +155,10 @@ def main():
                         "archive_file_payloads_match_old": payloads_preserved,
                         "archive_payload_mismatch_count": len(payload_mismatches),
                         "archive_payload_mismatch_sample": payload_mismatches[:10],
-                        "same_revision_content_drift": old_rev == new_rev and old_hashes != file_hashes(new_data),
+                        "same_revision_content_drift": old_rev == new_rev and (
+                            old_hashes != file_hashes(new_data)
+                            or old_payloads != file_payloads(new_data)
+                        ),
                     })
         missing_archives = [x for x in source_artifact_checks if not x["archive_found"]]
         archive_mismatches = [x for x in source_artifact_checks if x["archive_found"] and not x["archive_file_hashes_match_old"]]
