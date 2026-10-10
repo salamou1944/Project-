@@ -148,23 +148,27 @@ def main():
             f"COLLECTION/AUTO/EXTRACTED/{slug}.json",
         ]
         found = False
-        for candidate in candidates:
-            proc = subprocess.run(
-                ["git", "show", f"{commit}:{candidate}"],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            )
-            if proc.returncode:
-                continue
-            try:
-                artifact = json.loads(proc.stdout)
-            except Exception:
-                continue
-            if artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
-                continue
-            for file_item in artifact.get("files", []):
-                if isinstance(file_item, dict) and file_item.get("path") == file_path and file_item.get("content_sha256") == digest:
-                    archived_old_hashes_verified.append((source, revision, file_path, digest))
-                    found = True
+        # Check both the post-refresh tree and the pre-refresh parent tree.
+        for tree_ref in (commit, f"{commit}^"):
+            for candidate in candidates:
+                proc = subprocess.run(
+                    ["git", "show", f"{tree_ref}:{candidate}"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+                if proc.returncode:
+                    continue
+                try:
+                    artifact = json.loads(proc.stdout)
+                except Exception:
+                    continue
+                if artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
+                    continue
+                for file_item in artifact.get("files", []):
+                    if isinstance(file_item, dict) and file_item.get("path") == file_path and file_item.get("content_sha256") == digest:
+                        archived_old_hashes_verified.append((source, revision, file_path, digest))
+                        found = True
+                        break
+                if found:
                     break
             if found:
                 break
