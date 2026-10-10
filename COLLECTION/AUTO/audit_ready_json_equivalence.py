@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Read-only semantic audit of READY.json against the last known-good revision.
+"""Read-only semantic audit of READY.json against the pre-recovery generated revision.
 
-Loads the preserved baseline and current checkout from Git history and compares
+Loads the pre-recovery generated state and current checkout from Git history and compares
 parsed values. It does not write to the repository or alter either revision.
 """
 from __future__ import annotations
@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 PATH = "COLLECTION/MASTER/READY.json"
-BEFORE = "147872fbdb542b0f9b3d403695742ca941018449"
+BEFORE = "0d824d436b4e2a3c01ef6115c266f32c8e48f836"
 AFTER = "HEAD"
 
 
@@ -59,7 +59,7 @@ def main() -> int:
                 print(f"{field.upper()}_LENGTH_AFTER={len(after[field])}")
     if before == after:
         print("SEMANTIC_EQUALITY=PASS")
-        print("Conclusion: parsed JSON values match the preserved baseline.")
+        print("Conclusion: parsed JSON values match the pre-recovery generated state.")
         return 0
     print("SEMANTIC_EQUALITY=FAIL")
     if isinstance(before, dict) and isinstance(after, dict):
