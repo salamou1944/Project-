@@ -191,6 +191,63 @@ def main():
                 break
         if not found:
             archived_old_hashes_missing.append((source, revision, file_path, digest))
+    # Verify every prior READY evidence identity that no longer appears exactly
+    # in current READY can still be recovered from the pre-refresh Git tree or its
+    # revision-specific history artifact. Cache parsed artifacts by tree/path.
+    prior_evidence_artifact_cache = {}
+    prior_evidence_records_verified = []
+    prior_evidence_records_missing = []
+    checked_prior_records = set()
+
+    def verify_prior_evidence(source, revision, file_path, digest):
+        slug = source.removeprefix("github:").replace("/", "_")
+        candidates = [
+            f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{revision}.json",
+            f"COLLECTION/AUTO/EXTRACTED/{slug}.json",
+        ]
+        for tree_ref in (f"{commit}^", commit):
+            for candidate in candidates:
+                cache_key = (tree_ref, candidate)
+                if cache_key not in prior_evidence_artifact_cache:
+                    proc = subprocess.run(
+                        ["git", "show", f"{tree_ref}:{candidate}"],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    )
+                    artifact = None
+                    if proc.returncode == 0:
+                        try:
+                            artifact = json.loads(proc.stdout)
+                        except Exception:
+                            artifact = None
+                    prior_evidence_artifact_cache[cache_key] = artifact
+                artifact = prior_evidence_artifact_cache[cache_key]
+                if not isinstance(artifact, dict):
+                    continue
+                if artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
+                    continue
+                for file_item in artifact.get("files", []):
+                    if (isinstance(file_item, dict)
+                            and file_item.get("path") == file_path
+                            and file_item.get("content_sha256") == digest):
+                        return True
+        return False
+
+    for key, source, revision, file_path, digest in sorted(
+        missing_evidence, key=lambda x: tuple(str(v) for v in x)
+    ):
+        identity = (source, revision, file_path, digest)
+        if identity in checked_prior_records:
+            continue
+        checked_prior_records.add(identity)
+        record = {
+            "source": source, "revision": revision,
+            "file": file_path, "content_sha256": digest,
+        }
+        if verify_prior_evidence(source, revision, file_path, digest):
+            prior_evidence_records_verified.append(record)
+        else:
+            prior_evidence_records_missing.append(record)
+
     old_counts = old.get("counts", {}) if isinstance(old, dict) else {}
     new_counts = new.get("counts", {}) if isinstance(new, dict) else {}
     count_changes = {
@@ -226,6 +283,10 @@ def main():
         "changed_decision_samples": changed_samples,
         "evidence_identity_counts": {"old": len(old_evidence), "new": len(new_evidence)},
         "prior_evidence_identities_missing_count": len(missing_evidence),
+        "prior_evidence_records_to_verify_unique_count": len(checked_prior_records),
+        "prior_evidence_records_archived_verified_count": len(prior_evidence_records_verified),
+        "prior_evidence_records_archive_missing_count": len(prior_evidence_records_missing),
+        "prior_evidence_records_archive_missing_sample": prior_evidence_records_missing[:30],
         "prior_evidence_identities_missing_sample": [
             {"capability_key": k, "source": s, "revision": rev, "file": path, "content_sha256": digest}
             for k, s, rev, path, digest in sorted(missing_evidence, key=lambda x: tuple(str(v) for v in x))[:50]
