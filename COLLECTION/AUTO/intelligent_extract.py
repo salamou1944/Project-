@@ -262,6 +262,7 @@ def extract_repo(item):
         and cached.get("pushed_at") == pushed_at
         and cached.get("state") == "extracted"
         and has_usable_files(cached)
+        and os.getenv("COLLECTION_FORCE_REFRESH", "0").strip().lower() not in {"1", "true", "yes"}
     ):
         return cached, "cached"
 
