@@ -85,6 +85,12 @@ def main():
         for key in sorted(set(old_counts) | set(new_counts))
         if old_counts.get(key) != new_counts.get(key)
     }
+    count_regressions = {
+        key: {"old": old_counts.get(key), "new": new_counts.get(key)}
+        for key in sorted(old_counts)
+        if isinstance(old_counts.get(key), (int, float))
+        and (not isinstance(new_counts.get(key), (int, float)) or new_counts[key] < old_counts[key])
+    }
     changed_common_decisions = []
     changed_decision_field_counts = {}
     changed_decision_field_samples = []
@@ -171,6 +177,7 @@ def main():
         "parsed_data_equal": diff is None,
         "first_difference": diff,
         "count_changes": count_changes,
+        "count_regressions": count_regressions,
         "decision_identity_counts": {"old": len(old_keys), "new": len(new_keys)},
         "decision_identities_added_count": len(new_keys - old_keys),
         "decision_identities_added_sample": sorted(new_keys - old_keys)[:50],
@@ -198,7 +205,11 @@ def main():
         ],
     }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
-    return 0 if diff is None else 1
+    # Exact equality is informative, but a regenerated READY may legitimately
+    # change as sources refresh. Fail only on a real count regression or when
+    # a prior decision identity disappears; historical evidence is checked by
+    # the separate semantic-preservation audit.
+    return 2 if count_regressions or (old_keys - new_keys) else 0
 
 
 if __name__ == "__main__":
