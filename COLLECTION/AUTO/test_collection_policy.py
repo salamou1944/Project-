@@ -1,6 +1,7 @@
 """Deterministic Collection promotion/readiness-policy consistency checks."""
 from pathlib import Path
 import json
+from process_collection import is_quarantined
 
 ROOT = Path(__file__).resolve().parents[2]
 PROMOTION = ROOT / "COLLECTION/MASTER/PROMOTION-QUEUE.json"
@@ -19,7 +20,20 @@ READINESS_STATES = {
 def actions(doc):
     return {item.get("action") for item in doc.get("items", []) if item.get("action")}
 
+def test_sticky_quarantine():
+    key = "sample-capability"
+    review = [{"classification": "REVIEW"}]
+    restricted = [{"classification": "RESTRICTED"}]
+    released = {key: {"status": "RELEASED", "reviewer": "reviewer", "approved_at": "2026-10-10T20:00:00Z", "reason": "reviewed"}}
+    invalid_release = {key: {"status": "RELEASED", "reason": "no approval"}}
+    assert is_quarantined(key, review, {key}, {})
+    assert is_quarantined(key, review, set(), {key: {"status": "QUARANTINED"}})
+    assert is_quarantined(key, review, {key}, invalid_release)
+    assert not is_quarantined(key, review, {key}, released)
+    assert is_quarantined(key, restricted, set(), released)
+
 def main():
+    test_sticky_quarantine()
     promotion = json.loads(PROMOTION.read_text())
     restricted = json.loads(RESTRICTED.read_text())
     readiness = json.loads(READINESS.read_text())
