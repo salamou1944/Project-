@@ -122,6 +122,54 @@ def main():
 
     old_full, old_without_revision, old_content = evidence_identity_sets(old)
     new_full, new_without_revision, new_content = evidence_identity_sets(new)
+
+    # Verify old source-file hashes no longer represented in READY remain recoverable.
+    old_changed_records = {}
+    for key, decision in decision_map(old).items():
+        for item in decision.get("evidence", []):
+            if not isinstance(item, dict):
+                continue
+            source, revision, file_path, digest = (
+                item.get("source"), item.get("source_revision"),
+                item.get("file"), item.get("content_sha256")
+            )
+            if not all(isinstance(v, str) and v for v in (source, revision, file_path, digest)):
+                continue
+            if (source, file_path, digest) in new_content:
+                continue
+            old_changed_records[(source, revision, file_path, digest)] = item
+
+    archived_old_hashes_verified = []
+    archived_old_hashes_missing = []
+    for source, revision, file_path, digest in sorted(old_changed_records, key=lambda x: tuple(str(v) for v in x)):
+        slug = source.removeprefix("github:").replace("/", "_")
+        candidates = [
+            f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{revision}.json",
+            f"COLLECTION/AUTO/EXTRACTED/{slug}.json",
+        ]
+        found = False
+        for candidate in candidates:
+            proc = subprocess.run(
+                ["git", "show", f"{commit}:{candidate}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            if proc.returncode:
+                continue
+            try:
+                artifact = json.loads(proc.stdout)
+            except Exception:
+                continue
+            if artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
+                continue
+            for file_item in artifact.get("files", []):
+                if isinstance(file_item, dict) and file_item.get("path") == file_path and file_item.get("content_sha256") == digest:
+                    archived_old_hashes_verified.append((source, revision, file_path, digest))
+                    found = True
+                    break
+            if found:
+                break
+        if not found:
+            archived_old_hashes_missing.append((source, revision, file_path, digest))
     old_counts = old.get("counts", {}) if isinstance(old, dict) else {}
     new_counts = new.get("counts", {}) if isinstance(new, dict) else {}
     count_changes = {
@@ -166,6 +214,13 @@ def main():
         "evidence_added_after_ignoring_revision_count": len(new_without_revision - old_without_revision),
         "source_file_content_hashes_missing_count": len(old_content - new_content),
         "source_file_content_hashes_added_count": len(new_content - old_content),
+        "changed_old_content_records_checked_in_history": len(old_changed_records),
+        "changed_old_content_records_archived_verified": len(archived_old_hashes_verified),
+        "changed_old_content_records_archive_missing_count": len(archived_old_hashes_missing),
+        "changed_old_content_records_archive_missing_sample": [
+            {"source": source, "revision": revision, "file": file_path, "content_sha256": digest}
+            for source, revision, file_path, digest in archived_old_hashes_missing[:30]
+        ],
         "source_file_content_hashes_missing_sample": [
             {"source": source, "file": file_path, "content_sha256": digest}
             for source, file_path, digest in sorted(old_content - new_content, key=lambda x: tuple(str(v) for v in x))[:25]
