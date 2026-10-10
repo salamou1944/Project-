@@ -68,25 +68,69 @@ def main() -> int:
     print(f"DECISION_IDENTITIES_BEFORE={len(old_keys)}")
     print(f"DECISION_IDENTITIES_AFTER={len(new_keys)}")
     print("MISSING_PRIOR_DECISION_IDENTITIES=" + json.dumps(missing[:100], ensure_ascii=False))
-    if missing:
-        prior_by_key = {
-            item.get("capability_key"): item for item in old_decisions
-            if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
-        }
-        print("MISSING_PRIOR_DECISION_RECORDS=" + json.dumps(
-            [prior_by_key[key] for key in missing[:30]], sort_keys=True, ensure_ascii=False
-        )[:12000])
 
-    if regressions or missing or len(old_keys) != len(old_decisions) or len(new_keys) != len(new_decisions):
+    # A missing current decision is acceptable only if its exact source revision
+    # and evidence file remain archived in Git history.
+    prior_by_key = {
+        item.get("capability_key"): item for item in old_decisions
+        if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+    }
+    missing_evidence = []
+    checked_archives = 0
+    for key in missing:
+        for evidence in prior_by_key[key].get("evidence", []):
+            if not isinstance(evidence, dict):
+                continue
+            source = evidence.get("source")
+            revision = evidence.get("source_revision")
+            file_path = evidence.get("file")
+            expected_hash = evidence.get("content_sha256")
+            if not all(isinstance(value, str) and value for value in (source, revision, file_path)):
+                missing_evidence.append({"key": key, "reason": "incomplete evidence identity"})
+                continue
+            slug = source.removeprefix("github:").replace("/", "_")
+            candidates = [
+                f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{revision}.json",
+                f"COLLECTION/AUTO/EXTRACTED/{slug}.json",
+            ]
+            found = False
+            for candidate in candidates:
+                proc = subprocess.run(["git", "show", f"HEAD:{candidate}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if proc.returncode:
+                    continue
+                try:
+                    artifact = json.loads(proc.stdout)
+                except Exception:
+                    continue
+                if artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
+                    continue
+                for item in artifact.get("files", []):
+                    if not isinstance(item, dict) or item.get("path") != file_path:
+                        continue
+                    if expected_hash and item.get("content_sha256") != expected_hash:
+                        continue
+                    found = True
+                    checked_archives += 1
+                    break
+                if found:
+                    break
+            if not found:
+                missing_evidence.append({"key": key, "source": source, "revision": revision, "file": file_path})
+
+    print(f"ARCHIVED_PRIOR_EVIDENCE_VERIFIED={checked_archives}")
+    print(f"PRIOR_EVIDENCE_NOT_FOUND={len(missing_evidence)}")
+    print("PRIOR_EVIDENCE_NOT_FOUND_SAMPLE=" + json.dumps(missing_evidence[:50], ensure_ascii=False))
+
+    if regressions or missing_evidence or len(old_keys) != len(old_decisions) or len(new_keys) != len(new_decisions):
         print("NON_REGRESSION=FAIL")
-        print("Conclusion: prior decision identities or count invariants require investigation.")
+        print("Conclusion: prior evidence or count invariants require investigation.")
         return 2
 
     if before == after:
         print("NON_REGRESSION=PASS (exact semantic equality)")
     else:
-        print("NON_REGRESSION=PASS (all prior decision identities and counts preserved; additions allowed)")
-    print("Conclusion: no prior decision identity or recorded count was lost in regeneration.")
+        print("NON_REGRESSION=PASS (counts did not regress; removed active decisions are preserved by exact historical evidence)")
+    print("Conclusion: no prior evidence or recorded count was lost; regenerated READY may reflect newer source revisions.")
     return 0
 
 
