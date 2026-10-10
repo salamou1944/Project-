@@ -129,6 +129,35 @@ def main():
                     "new_only_sample": [json.loads(item) for item in sorted(new_serialized - old_serialized)[:2]],
                 })
 
+    # Compare evidence independently of source revision so refreshed revisions
+    # do not look like lost evidence when the same file/content is still present.
+    def evidence_identity(item):
+        if not isinstance(item, dict):
+            return json.dumps(item, sort_keys=True, ensure_ascii=False)
+        return json.dumps({
+            key: item.get(key)
+            for key in ("capability_key", "source", "file", "content_sha256", "evidence_id")
+        }, sort_keys=True, ensure_ascii=False)
+
+    old_evidence = [
+        ev for decision in old_data.get("decisions", []) if isinstance(decision, dict)
+        for ev in decision.get("evidence", []) if isinstance(decision.get("evidence"), list)
+    ]
+    new_evidence = [
+        ev for decision in new_data.get("decisions", []) if isinstance(decision, dict)
+        for ev in decision.get("evidence", []) if isinstance(decision.get("evidence"), list)
+    ]
+    old_evidence_ids = {evidence_identity(item) for item in old_evidence}
+    new_evidence_ids = {evidence_identity(item) for item in new_evidence}
+    old_hashes = {
+        (item.get("source"), item.get("file"), item.get("content_sha256"))
+        for item in old_evidence if isinstance(item, dict) and item.get("content_sha256")
+    }
+    new_hashes = {
+        (item.get("source"), item.get("file"), item.get("content_sha256"))
+        for item in new_evidence if isinstance(item, dict) and item.get("content_sha256")
+    }
+
     result = {
         "status": "PASS" if diff is None else "DATA_DIFFERENCE",
         "commit": commit,
@@ -150,6 +179,11 @@ def main():
         "changed_decision_fields_frequency": dict(sorted(changed_field_counts.items())),
         "changed_decision_samples": changed_decision_samples,
         "evidence_change_samples": evidence_change_samples,
+        "evidence_item_counts": {"old": len(old_evidence), "new": len(new_evidence)},
+        "evidence_identities_missing_ignoring_revision_count": len(old_evidence_ids - new_evidence_ids),
+        "evidence_identities_added_ignoring_revision_count": len(new_evidence_ids - old_evidence_ids),
+        "source_file_content_hashes_missing_count": len(old_hashes - new_hashes),
+        "source_file_content_hashes_added_count": len(new_hashes - old_hashes),
     }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0 if diff is None else 1
