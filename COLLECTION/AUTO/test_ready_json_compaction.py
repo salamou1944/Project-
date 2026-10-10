@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression test: compact READY.json without changing its JSON data."""
+"""Regression test: READY.json remains readable and round-trips without data loss."""
 import json
 import tempfile
 from pathlib import Path
@@ -16,21 +16,14 @@ def main() -> None:
         ],
     }
     with tempfile.TemporaryDirectory() as directory:
-        root = Path(directory)
-        ready = root / "READY.json"
-        regular = root / "REGULAR.json"
+        ready = Path(directory) / "READY.json"
         atomic_json_write(ready, payload)
-        atomic_json_write(regular, payload)
+        rendered = ready.read_text(encoding="utf-8")
+        assert json.loads(rendered) == payload
+        assert ": " in rendered and "\n  " in rendered
+        assert rendered.endswith("\n")
 
-        compact_text = ready.read_text(encoding="utf-8")
-        pretty_text = regular.read_text(encoding="utf-8")
-        assert json.loads(compact_text) == payload
-        assert json.loads(pretty_text) == payload
-        assert ready.stat().st_size < regular.stat().st_size
-        assert ": " not in compact_text and "\n  " not in compact_text
-        assert ": " in pretty_text and "\n  " in pretty_text
-
-    print("READY.json compact serialization: PASS (round-trip preserved; formatting whitespace removed)")
+    print("READY.json readable JSON round-trip: PASS")
 
 
 if __name__ == "__main__":
