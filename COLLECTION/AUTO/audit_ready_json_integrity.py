@@ -175,6 +175,8 @@ def main():
     added_evidence_records = 0
     evidence_field_changes = {}
     evidence_field_change_samples = []
+    missing_evidence_record_samples = []
+    added_evidence_record_samples = []
     for key in sorted(set(old_grouped) | set(new_grouped), key=lambda item: tuple(str(x) for x in item)):
         olds = old_grouped.get(key, [])
         news = new_grouped.get(key, [])
@@ -249,6 +251,8 @@ def main():
         "evidence_record_match_counts": {"matched_by_decision_source_file": matched_evidence_records, "missing_records": missing_evidence_records, "added_records": added_evidence_records},
         "evidence_field_changes": dict(sorted(evidence_field_changes.items())),
         "evidence_field_change_samples": evidence_field_change_samples,
+        "missing_evidence_record_samples": missing_evidence_record_samples,
+        "added_evidence_record_samples": added_evidence_record_samples,
         "evidence_identities_missing_ignoring_revision_count": len(old_evidence_ids - new_evidence_ids),
         "evidence_identities_added_ignoring_revision_count": len(new_evidence_ids - old_evidence_ids),
         "source_file_content_hashes_missing_count": len(old_hashes - new_hashes),
