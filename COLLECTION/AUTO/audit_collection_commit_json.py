@@ -67,6 +67,17 @@ def file_hashes(artifact):
     return result
 
 
+def file_payloads(artifact):
+    result = {}
+    for item in artifact.get("files", []) if isinstance(artifact, dict) else []:
+        if isinstance(item, dict) and isinstance(item.get("path"), str):
+            result[item["path"]] = {
+                "content_sha256": item.get("content_sha256"),
+                "content": item.get("content"),
+            }
+    return result
+
+
 def git_json(spec):
     proc = run_git("show", spec, check=False)
     if proc.returncode:
@@ -123,7 +134,14 @@ def main():
                     archive_path = f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{old_rev}.json" if old_rev else None
                     archive = git_json(f"HEAD:{archive_path}") if archive_path else None
                     old_hashes, archive_hashes = file_hashes(old_data), file_hashes(archive) if archive else {}
+                    old_payloads = file_payloads(old_data)
+                    archive_payloads = file_payloads(archive) if archive else {}
+                    payload_mismatches = sorted(
+                        item_path for item_path, payload in old_payloads.items()
+                        if archive_payloads.get(item_path) != payload
+                    )
                     content_preserved = bool(archive) and old_hashes == archive_hashes
+                    payloads_preserved = bool(archive) and not payload_mismatches and set(old_payloads) == set(archive_payloads)
                     source_artifact_checks.append({
                         "path": path, "canonical_source": source,
                         "old_revision": old_rev, "new_revision": new_rev,
@@ -131,11 +149,15 @@ def main():
                         "old_file_hashes_equal_new": old_hashes == file_hashes(new_data),
                         "archive_path": archive_path, "archive_found": archive is not None,
                         "archive_file_hashes_match_old": content_preserved,
+                        "archive_file_payloads_match_old": payloads_preserved,
+                        "archive_payload_mismatch_count": len(payload_mismatches),
+                        "archive_payload_mismatch_sample": payload_mismatches[:10],
                         "same_revision_content_drift": old_rev == new_rev and old_hashes != file_hashes(new_data),
                     })
         missing_archives = [x for x in source_artifact_checks if not x["archive_found"]]
         archive_mismatches = [x for x in source_artifact_checks if x["archive_found"] and not x["archive_file_hashes_match_old"]]
         same_revision_drift = [x for x in source_artifact_checks if x["same_revision_content_drift"]]
+        archive_payload_mismatches = [x for x in source_artifact_checks if not x.get("archive_file_payloads_match_old", False)]
         result = {
             "status": "PASS" if all(x["semantic_equal"] for x in files) else "DIFFERENCES_REPORTED",
             "commit": commit,
@@ -145,6 +167,7 @@ def main():
             "source_artifacts_with_revision_or_content_changes": len(source_artifact_checks),
             "source_artifacts_missing_old_revision_archive": len(missing_archives),
             "source_artifact_archives_with_hash_mismatch": len(archive_mismatches),
+            "source_artifact_archives_with_payload_mismatch": len(archive_payload_mismatches),
             "same_revision_content_drift_count": len(same_revision_drift),
             "source_artifact_checks": source_artifact_checks,
             "files": files,
