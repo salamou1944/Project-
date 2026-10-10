@@ -1,7 +1,7 @@
 """Deterministic Collection promotion/readiness-policy consistency checks."""
 from pathlib import Path
 import json
-from process_collection import is_quarantined
+from process_collection import is_quarantined, load_quarantine_locks
 
 ROOT = Path(__file__).resolve().parents[2]
 PROMOTION = ROOT / "COLLECTION/MASTER/PROMOTION-QUEUE.json"
@@ -31,6 +31,8 @@ def test_sticky_quarantine():
     assert is_quarantined(key, review, {key}, invalid_release)
     assert not is_quarantined(key, review, {key}, released)
     assert is_quarantined(key, restricted, set(), released)
+    real_locks = load_quarantine_locks()
+    assert is_quarantined("evaluation-reliability-test-runtime", review, set(), real_locks), "known quarantine lock must survive refresh"
 
 def main():
     test_sticky_quarantine()
