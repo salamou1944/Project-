@@ -56,6 +56,33 @@ def summarize(value):
     return {"root_type": type(value).__name__}
 
 
+def normalize_ready(value):
+    """Normalize only order-insensitive READY collections before semantic comparison."""
+    import copy
+    normalized = copy.deepcopy(value)
+    if not isinstance(normalized, dict):
+        return normalized
+    decisions = normalized.get("decisions")
+    if isinstance(decisions, list):
+        for decision in decisions:
+            if not isinstance(decision, dict):
+                continue
+            evidence = decision.get("evidence")
+            if isinstance(evidence, list):
+                evidence.sort(key=lambda item: (
+                    str(item.get("source", "")) if isinstance(item, dict) else "",
+                    str(item.get("source_revision", "")) if isinstance(item, dict) else "",
+                    str(item.get("file", "")) if isinstance(item, dict) else "",
+                    str(item.get("content_sha256", "")) if isinstance(item, dict) else "",
+                    str(item.get("evidence_id", "")) if isinstance(item, dict) else "",
+                ))
+        decisions.sort(key=lambda item: (
+            str(item.get("capability_key", "")) if isinstance(item, dict) else "",
+            json.dumps(item, sort_keys=True, ensure_ascii=False) if isinstance(item, dict) else repr(item),
+        ))
+    return normalized
+
+
 def decision_keys(value):
     decisions = value.get("decisions", []) if isinstance(value, dict) else []
     return {
@@ -77,6 +104,8 @@ def main():
         return 2
 
     diff = first_difference(old_data, new_data)
+    normalized_old, normalized_new = normalize_ready(old_data), normalize_ready(new_data)
+    semantic_diff = first_difference(normalized_old, normalized_new)
     old_keys, new_keys = decision_keys(old_data), decision_keys(new_data)
     old_counts = old_data.get("counts", {}) if isinstance(old_data, dict) else {}
     new_counts = new_data.get("counts", {}) if isinstance(new_data, dict) else {}
@@ -300,6 +329,8 @@ def main():
         "new_summary": summarize(new_data),
         "parsed_data_equal": diff is None,
         "first_difference": diff,
+        "order_normalized_semantic_equal": semantic_diff is None,
+        "first_semantic_difference": semantic_diff,
         "count_changes": count_changes,
         "count_regressions": count_regressions,
         "decision_identity_counts": {"old": len(old_keys), "new": len(new_keys)},
