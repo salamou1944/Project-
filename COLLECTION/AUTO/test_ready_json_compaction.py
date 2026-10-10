@@ -27,8 +27,8 @@ def main() -> None:
         assert json.loads(compact_text) == payload
         assert json.loads(pretty_text) == payload
         assert ready.stat().st_size < regular.stat().st_size
-        assert ": " not in compact_text and ", " not in compact_text
-        assert ": " in pretty_text and ", " in pretty_text
+        assert ": " not in compact_text and "\n  " not in compact_text
+        assert ": " in pretty_text and "\n  " in pretty_text
 
     print("READY.json compact serialization: PASS (round-trip preserved; formatting whitespace removed)")
 
