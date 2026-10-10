@@ -228,6 +228,39 @@ def main():
                     "source_revision": item.get("source_revision"),
                     "content_sha256": item.get("content_sha256"),
                 })
+    archive_cache = {}
+    archived_old_evidence_verified = 0
+    archived_old_evidence_missing = []
+    for ev in old_evidence:
+        if not isinstance(ev, dict) or evidence_identity(ev) in new_evidence_ids:
+            continue
+        source, revision, file_path = ev.get("source"), ev.get("source_revision"), ev.get("file")
+        if not all(isinstance(v, str) and v for v in (source, revision, file_path)):
+            continue
+        slug = source.removeprefix("github:").replace("/", "_")
+        paths = [f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{revision}.json",
+                 f"COLLECTION/AUTO/EXTRACTED/{slug}.json"]
+        found = False
+        for path in paths:
+            if path not in archive_cache:
+                p = subprocess.run(["git", "show", f"HEAD:{path}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                try:
+                    archive_cache[path] = json.loads(p.stdout) if p.returncode == 0 else None
+                except Exception:
+                    archive_cache[path] = None
+            artifact = archive_cache[path]
+            if not isinstance(artifact, dict) or artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
+                continue
+            if any(isinstance(f, dict) and f.get("path") == file_path and
+                   (not ev.get("content_sha256") or f.get("content_sha256") == ev.get("content_sha256"))
+                   for f in artifact.get("files", [])):
+                found = True
+                break
+        if found:
+            archived_old_evidence_verified += 1
+        elif len(archived_old_evidence_missing) < 50:
+            archived_old_evidence_missing.append({"key": ev.get("capability_key"), "source": source,
+                                                  "revision": revision, "file": file_path})
     old_hashes = {
         (item.get("source"), item.get("file"), item.get("content_sha256"))
         for item in old_evidence if isinstance(item, dict) and item.get("content_sha256")
@@ -262,6 +295,9 @@ def main():
         "changed_decision_samples": changed_decision_samples,
         "evidence_change_samples": evidence_change_samples,
         "evidence_item_counts": {"old": len(old_evidence), "new": len(new_evidence)},
+        "archived_old_evidence_verified": archived_old_evidence_verified,
+        "archived_old_evidence_missing_count": len(archived_old_evidence_missing),
+        "archived_old_evidence_missing_sample": archived_old_evidence_missing,
         "evidence_record_match_counts": {"matched_by_decision_source_file": matched_evidence_records, "missing_records": missing_evidence_records, "added_records": added_evidence_records},
         "evidence_field_changes": dict(sorted(evidence_field_changes.items())),
         "evidence_field_change_samples": evidence_field_change_samples,
