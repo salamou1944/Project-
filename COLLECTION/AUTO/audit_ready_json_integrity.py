@@ -270,6 +270,24 @@ def main():
         for item in new_evidence if isinstance(item, dict) and item.get("content_sha256")
     }
 
+    changed_field_counts = {}
+    changed_decision_samples = []
+    for key in changed_common_decisions:
+        before_item, after_item = old_by_key[key], new_by_key[key]
+        changed_fields = sorted(
+            field for field in set(before_item) | set(after_item)
+            if before_item.get(field) != after_item.get(field)
+        )
+        for field in changed_fields:
+            changed_field_counts[field] = changed_field_counts.get(field, 0) + 1
+        if len(changed_decision_samples) < 30:
+            changed_decision_samples.append({
+                "capability_key": key,
+                "changed_fields": changed_fields,
+                "before": {field: before_item.get(field) for field in changed_fields},
+                "after": {field: after_item.get(field) for field in changed_fields},
+            })
+
     result = {
         "status": "PASS" if diff is None else "DATA_DIFFERENCE",
         "commit": commit,
@@ -289,6 +307,8 @@ def main():
         "decision_identities_missing_sample": sorted(old_keys - new_keys)[:50],
         "common_decisions_with_changed_content_count": len(changed_common_decisions),
         "common_decisions_with_changed_content_sample": changed_common_decisions[:50],
+        "changed_decision_field_counts": changed_field_counts,
+        "changed_decision_details_sample": changed_decision_samples,
         "changed_field_counts": dict(sorted(changed_field_counts.items())),
         "changed_decision_detail_sample": changed_decision_samples,
         "changed_decision_field_counts": dict(sorted(changed_decision_field_counts.items())),
