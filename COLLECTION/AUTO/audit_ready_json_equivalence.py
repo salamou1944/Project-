@@ -68,6 +68,14 @@ def main() -> int:
     print(f"DECISION_IDENTITIES_BEFORE={len(old_keys)}")
     print(f"DECISION_IDENTITIES_AFTER={len(new_keys)}")
     print("MISSING_PRIOR_DECISION_IDENTITIES=" + json.dumps(missing[:100], ensure_ascii=False))
+    if missing:
+        prior_by_key = {
+            item.get("capability_key"): item for item in old_decisions
+            if isinstance(item, dict) and isinstance(item.get("capability_key"), str)
+        }
+        print("MISSING_PRIOR_DECISION_RECORDS=" + json.dumps(
+            [prior_by_key[key] for key in missing[:30]], sort_keys=True, ensure_ascii=False
+        )[:12000])
 
     if regressions or missing or len(old_keys) != len(old_decisions) or len(new_keys) != len(new_decisions):
         print("NON_REGRESSION=FAIL")
