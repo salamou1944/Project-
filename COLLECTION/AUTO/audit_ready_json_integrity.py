@@ -138,6 +138,8 @@ def main():
     }
     changed_common_decisions = []
     changed_field_counts = {}
+    changed_field_samples = []
+    changed_field_counts = {}
     changed_field_samples = {}
     value_size_deltas = {}
     old_by_key = {
@@ -196,6 +198,8 @@ def main():
         "decision_identities_missing_sample": sorted(old_keys - new_keys)[:50],
         "common_decisions_with_changed_content_count": len(changed_common_decisions),
         "common_decisions_with_changed_content_sample": changed_common_decisions[:50],
+        "changed_decision_field_counts": dict(sorted(changed_field_counts.items())),
+        "changed_decision_field_samples": changed_field_samples,
         "changed_decision_field_counts": changed_field_counts,
         "changed_decision_field_samples": changed_field_samples,
         "changed_decision_fields_frequency": dict(sorted(changed_decision_fields.items())),
