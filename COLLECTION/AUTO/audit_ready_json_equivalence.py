@@ -79,8 +79,14 @@ def main() -> int:
     missing_evidence = []
     checked_archives = 0
     for key in missing:
-        for evidence in prior_by_key[key].get("evidence", []):
+        prior_evidence = prior_by_key[key].get("evidence", [])
+        if not isinstance(prior_evidence, list) or not prior_evidence:
+            missing_evidence.append({"key": key, "reason": "prior decision has no evidence records to verify"})
+            continue
+        verified_for_decision = 0
+        for evidence in prior_evidence:
             if not isinstance(evidence, dict):
+                missing_evidence.append({"key": key, "reason": "malformed prior evidence record"})
                 continue
             source = evidence.get("source")
             revision = evidence.get("source_revision")
@@ -112,11 +118,16 @@ def main() -> int:
                         continue
                     found = True
                     checked_archives += 1
+                    verified_for_decision += 1
                     break
                 if found:
                     break
             if not found:
                 missing_evidence.append({"key": key, "source": source, "revision": revision, "file": file_path})
+        if verified_for_decision == 0 and not any(
+            item.get("key") == key for item in missing_evidence
+        ):
+            missing_evidence.append({"key": key, "reason": "no prior evidence record could be verified"})
 
     print(f"ARCHIVED_PRIOR_EVIDENCE_VERIFIED={checked_archives}")
     print(f"PRIOR_EVIDENCE_NOT_FOUND={len(missing_evidence)}")
