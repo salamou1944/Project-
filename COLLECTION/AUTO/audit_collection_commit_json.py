@@ -85,7 +85,7 @@ def main():
         files = []
         source_artifact_checks = []
         for row in names:
-            parts = row.split("\\t")
+            parts = row.split(chr(9))
             status, path = parts[0], parts[-1]
             if not path.lower().endswith(".json"):
                 continue
