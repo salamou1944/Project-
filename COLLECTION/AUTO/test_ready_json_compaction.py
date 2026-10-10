@@ -11,7 +11,8 @@ def main() -> None:
     payload = {
         "generated_at": "2026-10-10T00:00:00+00:00",
         "decisions": [
-            {"capability_key": "sample capability", "description": "preserve meaningful spaces", "evidence_count": 2}
+            {"capability_key": "sample capability", "description": "preserve meaningful spaces", "evidence_count": 2},
+            {"capability_key": "second sample", "description": "keep commas in arrays", "evidence_count": 1},
         ],
     }
     with tempfile.TemporaryDirectory() as directory:
