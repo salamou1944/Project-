@@ -214,6 +214,20 @@ def main():
                 })
         missing_evidence_records += len(remaining_old) - paired
         added_evidence_records += len(remaining_new) - paired
+        for item in remaining_old[paired:]:
+            if len(missing_evidence_record_samples) < 100:
+                missing_evidence_record_samples.append({
+                    "capability_key": key[0], "source": key[1], "file": key[2],
+                    "source_revision": item.get("source_revision"),
+                    "content_sha256": item.get("content_sha256"),
+                })
+        for item in remaining_new[paired:]:
+            if len(added_evidence_record_samples) < 100:
+                added_evidence_record_samples.append({
+                    "capability_key": key[0], "source": key[1], "file": key[2],
+                    "source_revision": item.get("source_revision"),
+                    "content_sha256": item.get("content_sha256"),
+                })
     old_hashes = {
         (item.get("source"), item.get("file"), item.get("content_sha256"))
         for item in old_evidence if isinstance(item, dict) and item.get("content_sha256")
