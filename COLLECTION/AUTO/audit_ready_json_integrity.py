@@ -83,12 +83,21 @@ def main():
     common = old_keys & new_keys
     changed_fields = Counter()
     changed_samples = []
+    non_evidence_change_samples = []
     evidence_count_changes = []
     for key in sorted(common):
         a, b = old_decisions[key], new_decisions[key]
         fields = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
         if fields:
             changed_fields.update(fields)
+            non_evidence_fields = [field for field in fields if field != "evidence"]
+            if non_evidence_fields and len(non_evidence_change_samples) < 25:
+                non_evidence_change_samples.append({
+                    "capability_key": key,
+                    "changed_fields": non_evidence_fields,
+                    "old_values": {field: repr(a.get(field))[:300] for field in non_evidence_fields},
+                    "new_values": {field: repr(b.get(field))[:300] for field in non_evidence_fields},
+                })
             if len(changed_samples) < 40:
                 changed_samples.append({
                     "capability_key": key,
@@ -262,8 +271,25 @@ def main():
         and (not isinstance(new_counts.get(key), (int, float)) or new_counts[key] < value)
     }
     exact_diff = first_difference(old, new)
+    preservation_verified = (
+        not count_regressions
+        and not (old_keys - new_keys)
+        and not prior_evidence_records_missing
+        and len(checked_prior_records) == len(prior_evidence_records_verified)
+        and not archived_old_hashes_missing
+        and len(old_changed_records) == len(archived_old_hashes_verified)
+    )
+    if exact_diff is None:
+        audit_status = "EXACT_DATA_EQUAL"
+    elif preservation_verified:
+        audit_status = "PRESERVATION_VERIFIED_WITH_REGENERATION"
+    else:
+        audit_status = "PRESERVATION_GAP_REQUIRES_REPAIR"
     result = {
-        "status": "EXACT_DATA_EQUAL" if exact_diff is None else "DATA_DIFFERENCE_REPORTED",
+        "status": audit_status,
+        "preservation_verified": preservation_verified,
+        "active_evidence_count_change_count": len(evidence_count_changes),
+        "non_evidence_changed_decision_samples": non_evidence_change_samples,
         "commit": commit,
         "path": READY_PATH,
         "old_bytes": len(old_raw),
@@ -315,9 +341,9 @@ def main():
         "first_structural_difference": exact_diff,
     }
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
-    # Diagnostic audit: return failure only if the report itself could not be made.
-    # A real data difference is intentionally reported in the JSON above.
-    return 0
+    # Fail only when historical preservation cannot be verified.
+    # Data differences with preserved history are classified as safe regeneration.
+    return 2 if audit_status == "PRESERVATION_GAP_REQUIRES_REPAIR" else 0
 
 
 if __name__ == "__main__":
