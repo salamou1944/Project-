@@ -162,7 +162,16 @@ def discover():
             for item in items:
                 repos[item["full_name"]] = {
                     "kind": "repo", "full_name": item["full_name"],
-                    "owner": owner, "owner_kind": kind
+                    "owner": owner, "owner_kind": kind,
+                    # The owner-repository listing already contains this metadata.
+                    # Reuse it instead of issuing one extra API request per repo.
+                    "repo_meta": {
+                        "pushed_at": item.get("pushed_at"),
+                        "default_branch": item.get("default_branch"),
+                        "updated_at": item.get("updated_at"),
+                        "license": item.get("license"),
+                        "topics": item.get("topics", []),
+                    },
                 }
             # Gists are optional enrichment, not a prerequisite for repo collection.
             # They consume the same GitHub API quota and frequently return 403 for
@@ -221,7 +230,7 @@ def raw_fetch(repo, path, revision):
 
 def extract_repo(item):
     repo = item["full_name"]
-    meta = api(f"/repos/{repo}")
+    meta = item.get("repo_meta") or api(f"/repos/{repo}")
     pushed_at = meta.get("pushed_at")
     out = ROOT / f"{safe_name(repo)}.json"
     cached = None
