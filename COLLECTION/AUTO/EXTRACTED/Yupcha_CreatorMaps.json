@@ -80,18 +80,18 @@
       "content": "# Trip Reel music tracks\n\nDrop license-cleared, loopable audio here matching the ids in\n`src/lib/stores/tripReelStore.ts` → `TRIP_MUSIC`:\n\n- `wander.mp3`  (120 BPM)\n- `voyage.mp3`  (100 BPM)\n- `sunrise.mp3` (90 BPM)\n\nVERIFY LICENSING before shipping any track.\n\nThese are NOT wired into the exported video yet: Foundation v1\n(`attachAudioTrack` in `src/lib/reels/beat.ts`) is a no-op pass-through and\n`recordReel` records video-only. The music picker currently (a) drives the\nbeat grid / arrival quantization timing and (b) is saved into the share-link so\nit round-trips. Audio merge lands when the Foundation `recordReel` exposes an\naudio option (see beat.ts jsdoc for the AudioContext → createMediaStreamDestination merge).\n"
     },
     {
-      "path": "src/lib/reels/aspect.ts",
-      "sha": null,
-      "content_sha256": "5e26d985b877a02d408030629291336442da60d1bc68dbfd18ff5d0c3d471bb2",
-      "score": 89,
-      "content": "/**\n * Aspect ratio + resolution presets for reel/poster export.\n *\n * The single source of truth for output dimensions across ALL four reels and\n * the poster exporter. Aspect is realized by the offscreen-canvas size (and/or\n * the map container resize) — `map.resize()` re-derives the projection, so no\n * engine change is needed beyond feeding these width/height pairs.\n */\n\nexport type AspectKey = '9:16' | '1:1' | '16:9';\n\n/** Quality tier — scales the base aspect dimensions. */\nexport type ResolutionKey = 'sd' | 'hd' | 'fhd' | '4k';\n\nexport interface Dimensions {\n  w: number;\n  h: number;\n}\n\n/**\n * Base dimensions per aspect (at \"fhd\" quality). 9:16 → 1080×1920 portrait,\n * 1:1 → 1080×1080 square, 16:9 → 1920×1080 landscape.\n */\nexport const ASPECT_PRESETS: Record<AspectKey, Dimensions> = {\n  '9:16': { w: 1080, h: 1920 },\n  '1:1': { w: 1080, h: 1080 },\n  '16:9': { w: 1920, h: 1080 }\n};\n\n/** Scale factor applied to the base aspect dimensions per quality tier. */\nexport const RESOLUTION_SCALE: Record<ResolutionKey, number> = {\n  sd: 0.5, // e.g. 540×960 for 9:16\n  hd: 0.6667, // ~720 short edge\n  fhd: 1, // base (1080 short edge)\n  '4k': 2 // 2160 short edge\n};\n\n/** Even integer (H.264/VP9 encoders prefer even dimensions). */\nfunction even(n: number): number {\n  const r = Math.round(n);\n  return r % 2 === 0 ? r : r + 1;\n}\n\n/**\n * Resolve final output {w,h} for a given aspect + quality tier.\n * Dimensions are clamped to even integers.\n */\nexport function resolveDimensions(aspect: AspectKey, resolution: ResolutionKey = 'fhd'): Dimensions {\n  const base = ASPECT_PRESETS[aspect];\n  const scale = RESOLUTION_SCALE[resolution];\n  return { w: even(base.w * scale), h: even(base.h * scale) };\n}\n\n/**\n * Pick a sensible video bitrate (bits/sec) for a given pixel count.\n * Ladder mirrors CinematicBar: 4k≈50Mbps, 1080p≈25Mbps, 720p≈12Mbps,\n * with a 9:16 1080×1920 (~2.07MP) ≈ 18Mbps tier in between.\n */\nexport function bitrateForPixels(w: number, h: number): number {\n  const px = w * h;\n  if (px >= 3840 * 2160 * 0.9) return 50_000_000; // ~4k\n  if (px >= 1920 * 1080 * 0.9) return 25_000_000; // ~1080p landscape\n  if (px >= 1080 * 1920 * 0.9) return 18_000_000; // ~9:16 1080×1920\n  if (px >= 1280 * 720 * 0.9) return 12_000_000; // ~720p\n  return 8_000_000;\n}\n\n/** Frame rate heuristic — drop to 30fps for very large frames to avoid drops. */\nexport function fpsForPixels(w: number, h: number): number {\n  return w * h >= 3840 * 2160 * 0.9 ? 30 : 60;\n}\n"
-    },
-    {
       "path": "src/lib/stores/pgliteStore.ts",
       "sha": null,
       "content_sha256": "c86eada722bd3821761b8428674b46df161f0dc2eff0f233b6bfd0f985877dc1",
       "score": 89,
       "content": "// PGlite — client-side Postgres for persistent caching\n// Lazy-loaded to avoid 3MB blocking the initial render\n\nimport type { PGlite } from '@electric-sql/pglite';\n\nlet db: PGlite | null = null;\nlet initPromise: Promise<PGlite> | null = null;\n\n/**\n * Lazy-initialize PGlite with IndexedDB persistence.\n * Returns the same instance on subsequent calls.\n */\nexport async function getDB(): Promise<PGlite> {\n  if (db) return db;\n  if (initPromise) return initPromise;\n\n  initPromise = (async () => {\n    const { PGlite: PGliteClass } = await import('@electric-sql/pglite');\n    db = new PGliteClass('idb://yupcha-map');\n\n    // Create cache table if not exists\n    await db.exec(`\n      CREATE TABLE IF NOT EXISTS cached_api_responses (\n        key TEXT PRIMARY KEY,\n        data JSONB NOT NULL,\n        fetched_at TIMESTAMPTZ DEFAULT NOW()\n      );\n    `);\n\n    return db;\n  })();\n\n  return initPromise;\n}\n\n/**\n * Get cached data by key. Returns null if not found or expired.\n */\nexport async function getCachedData<T>(key: string, maxAgeMs = 30 * 60 * 1000): Promise<T | null> {\n  try {\n    const pg = await getDB();\n    const result = await pg.query<{ data: T; fetched_at: string }>(\n      `SELECT data, fetched_at FROM cached_api_responses WHERE key = $1`,\n      [key]\n    );\n    if (result.rows.length === 0) return null;\n\n    const row = result.rows[0];\n    const age = Date.now() - new Date(row.fetched_at).getTime();\n    if (age > maxAgeMs) return null;\n\n    return row.data;\n  } catch {\n    return null;\n  }\n}\n\n/**\n * Store data in the PGlite cache.\n */\nexport async function setCachedData<T>(key: string, data: T): Promise<void> {\n  try {\n    const pg = await getDB();\n    await pg.exec(\n      `INSERT INTO cached_api_responses (key, data, fetched_at)\n       VALUES ($1, $2, NOW())\n       ON CONFLICT (key) DO UPDATE SET data = $2, fetched_at = NOW()`,\n      // PGlite parameterized query\n    );\n    // Use query method for parameterized queries\n    await pg.query(\n      `INSERT INTO cached_api_responses (key, data, fetched_at)\n       VALUES ($1, $2::jsonb, NOW())\n       ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, fetched_at = NOW()`,\n      [key, JSON.stringify(data)]\n    );\n  } catch (e) {\n    console.warn('[PGlite] Cache write failed:', e);\n  }\n}\n\n/**\n * Clear all cached data.\n */\nexport async function clearCache(): Promise<void> {\n  try {\n    const pg = await getDB();\n    await pg.exec('DELETE FROM cached_api_responses');\n  } catch {\n    // silently fail\n  }\n}\n"
+    },
+    {
+      "path": "src/lib/reels/aspect.ts",
+      "sha": null,
+      "content_sha256": "5e26d985b877a02d408030629291336442da60d1bc68dbfd18ff5d0c3d471bb2",
+      "score": 89,
+      "content": "/**\n * Aspect ratio + resolution presets for reel/poster export.\n *\n * The single source of truth for output dimensions across ALL four reels and\n * the poster exporter. Aspect is realized by the offscreen-canvas size (and/or\n * the map container resize) — `map.resize()` re-derives the projection, so no\n * engine change is needed beyond feeding these width/height pairs.\n */\n\nexport type AspectKey = '9:16' | '1:1' | '16:9';\n\n/** Quality tier — scales the base aspect dimensions. */\nexport type ResolutionKey = 'sd' | 'hd' | 'fhd' | '4k';\n\nexport interface Dimensions {\n  w: number;\n  h: number;\n}\n\n/**\n * Base dimensions per aspect (at \"fhd\" quality). 9:16 → 1080×1920 portrait,\n * 1:1 → 1080×1080 square, 16:9 → 1920×1080 landscape.\n */\nexport const ASPECT_PRESETS: Record<AspectKey, Dimensions> = {\n  '9:16': { w: 1080, h: 1920 },\n  '1:1': { w: 1080, h: 1080 },\n  '16:9': { w: 1920, h: 1080 }\n};\n\n/** Scale factor applied to the base aspect dimensions per quality tier. */\nexport const RESOLUTION_SCALE: Record<ResolutionKey, number> = {\n  sd: 0.5, // e.g. 540×960 for 9:16\n  hd: 0.6667, // ~720 short edge\n  fhd: 1, // base (1080 short edge)\n  '4k': 2 // 2160 short edge\n};\n\n/** Even integer (H.264/VP9 encoders prefer even dimensions). */\nfunction even(n: number): number {\n  const r = Math.round(n);\n  return r % 2 === 0 ? r : r + 1;\n}\n\n/**\n * Resolve final output {w,h} for a given aspect + quality tier.\n * Dimensions are clamped to even integers.\n */\nexport function resolveDimensions(aspect: AspectKey, resolution: ResolutionKey = 'fhd'): Dimensions {\n  const base = ASPECT_PRESETS[aspect];\n  const scale = RESOLUTION_SCALE[resolution];\n  return { w: even(base.w * scale), h: even(base.h * scale) };\n}\n\n/**\n * Pick a sensible video bitrate (bits/sec) for a given pixel count.\n * Ladder mirrors CinematicBar: 4k≈50Mbps, 1080p≈25Mbps, 720p≈12Mbps,\n * with a 9:16 1080×1920 (~2.07MP) ≈ 18Mbps tier in between.\n */\nexport function bitrateForPixels(w: number, h: number): number {\n  const px = w * h;\n  if (px >= 3840 * 2160 * 0.9) return 50_000_000; // ~4k\n  if (px >= 1920 * 1080 * 0.9) return 25_000_000; // ~1080p landscape\n  if (px >= 1080 * 1920 * 0.9) return 18_000_000; // ~9:16 1080×1920\n  if (px >= 1280 * 720 * 0.9) return 12_000_000; // ~720p\n  return 8_000_000;\n}\n\n/** Frame rate heuristic — drop to 30fps for very large frames to avoid drops. */\nexport function fpsForPixels(w: number, h: number): number {\n  return w * h >= 3840 * 2160 * 0.9 ? 30 : 60;\n}\n"
     },
     {
       "path": "src/lib/components/LocationSearch.svelte",
@@ -122,11 +122,11 @@
       "content": "import { sveltekit } from '@sveltejs/kit/vite';\nimport { defineConfig } from 'vite';\n\nexport default defineConfig({\n\tplugins: [sveltekit()],\n\tssr: {\n\t\tnoExternal: ['@lucide/svelte', '@deck.gl/layers', '@deck.gl/mapbox', 'deck.gl'],\n\t},\n});\n"
     },
     {
-      "path": "tsconfig.json",
+      "path": "svelte.config.js",
       "sha": null,
-      "content_sha256": "7a19bf2d57ef51ed3d7ddb0ed6ac3c4aa89025ab1cc2b0271132477905763134",
+      "content_sha256": "8dfa9b62a0c6d590913d529a0b4abfd564c94bd0128d30e40118c50d13462946",
       "score": 35,
-      "content": "{\n\t\"extends\": \"./.svelte-kit/tsconfig.json\",\n\t\"compilerOptions\": {\n\t\t\"rewriteRelativeImportExtensions\": true,\n\t\t\"allowJs\": true,\n\t\t\"checkJs\": true,\n\t\t\"esModuleInterop\": true,\n\t\t\"forceConsistentCasingInFileNames\": true,\n\t\t\"resolveJsonModule\": true,\n\t\t\"skipLibCheck\": true,\n\t\t\"sourceMap\": true,\n\t\t\"strict\": true,\n\t\t\"moduleResolution\": \"bundler\"\n\t}\n\t// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias\n\t// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files\n\t//\n\t// To make changes to top-level options such as include and exclude, we recommend extending\n\t// the generated config; see https://svelte.dev/docs/kit/configuration#typescript\n}\n"
+      "content": "import adapter from '@sveltejs/adapter-cloudflare';\n\n/** @type {import('@sveltejs/kit').Config} */\nconst config = {\n\tcompilerOptions: {\n\t\t// Force runes mode for the project, except for libraries. Can be removed in svelte 6.\n\t\trunes: ({ filename }) => (filename.split(/[/\\\\]/).includes('node_modules') ? undefined : true)\n\t},\n\tkit: {\n\t\t// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.\n\t\t// If your environment is not supported, or you settled on a specific environment, switch out the adapter.\n\t\t// See https://svelte.dev/docs/kit/adapters for more information about adapters.\n\t\tadapter: adapter()\n\t}\n};\n\nexport default config;\n"
     },
     {
       "path": "wrangler.toml",
@@ -136,18 +136,18 @@
       "content": "name = \"yupcha-map\"\ncompatibility_date = \"2025-01-01\"\ncompatibility_flags = [\"nodejs_compat\"]\npages_build_output_dir = \".svelte-kit/cloudflare\"\n\n[vars]\nPUBLIC_POSTHOG_KEY = \"\"\nPUBLIC_SENTRY_DSN = \"\"\n"
     },
     {
-      "path": "svelte.config.js",
+      "path": "tsconfig.json",
       "sha": null,
-      "content_sha256": "8dfa9b62a0c6d590913d529a0b4abfd564c94bd0128d30e40118c50d13462946",
+      "content_sha256": "7a19bf2d57ef51ed3d7ddb0ed6ac3c4aa89025ab1cc2b0271132477905763134",
       "score": 35,
-      "content": "import adapter from '@sveltejs/adapter-cloudflare';\n\n/** @type {import('@sveltejs/kit').Config} */\nconst config = {\n\tcompilerOptions: {\n\t\t// Force runes mode for the project, except for libraries. Can be removed in svelte 6.\n\t\trunes: ({ filename }) => (filename.split(/[/\\\\]/).includes('node_modules') ? undefined : true)\n\t},\n\tkit: {\n\t\t// adapter-auto only supports some environments, see https://svelte.dev/docs/kit/adapter-auto for a list.\n\t\t// If your environment is not supported, or you settled on a specific environment, switch out the adapter.\n\t\t// See https://svelte.dev/docs/kit/adapters for more information about adapters.\n\t\tadapter: adapter()\n\t}\n};\n\nexport default config;\n"
+      "content": "{\n\t\"extends\": \"./.svelte-kit/tsconfig.json\",\n\t\"compilerOptions\": {\n\t\t\"rewriteRelativeImportExtensions\": true,\n\t\t\"allowJs\": true,\n\t\t\"checkJs\": true,\n\t\t\"esModuleInterop\": true,\n\t\t\"forceConsistentCasingInFileNames\": true,\n\t\t\"resolveJsonModule\": true,\n\t\t\"skipLibCheck\": true,\n\t\t\"sourceMap\": true,\n\t\t\"strict\": true,\n\t\t\"moduleResolution\": \"bundler\"\n\t}\n\t// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias\n\t// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files\n\t//\n\t// To make changes to top-level options such as include and exclude, we recommend extending\n\t// the generated config; see https://svelte.dev/docs/kit/configuration#typescript\n}\n"
     },
     {
-      "path": "src/hooks.client.ts",
+      "path": ".vscode/extensions.json",
       "sha": null,
-      "content_sha256": "568970fa3690e019e0120f4c3f0a34810bfea6e47132a5feb164a5397f236fff",
+      "content_sha256": "613d3fbe180f7d0ef4381a7c5cd15e7ff5a7f35313cfe4d96b82c2215c3c796a",
       "score": 33,
-      "content": "// Client-side hooks — Sentry error boundary\nimport { initSentry } from '$lib/utils/sentry';\n\n// Initialize Sentry on client load\ninitSentry();\n\nexport async function handleError({ error, event }: { error: unknown; event: any }) {\n  const { captureException } = await import('$lib/utils/sentry');\n  captureException(error);\n  console.error('[Client Error]', error);\n}\n"
+      "content": "{\n\t\"recommendations\": [\"svelte.svelte-vscode\"]\n}\n"
     },
     {
       "path": "src/app.d.ts",
@@ -157,11 +157,11 @@
       "content": "// See https://svelte.dev/docs/kit/types#app.d.ts\n// for information about these interfaces\ndeclare global {\n\tnamespace App {\n\t\t// interface Error {}\n\t\t// interface Locals {}\n\t\t// interface PageData {}\n\t\t// interface PageState {}\n\t\t// interface Platform {}\n\t}\n}\n\nexport {};\n"
     },
     {
-      "path": ".vscode/extensions.json",
+      "path": "src/hooks.client.ts",
       "sha": null,
-      "content_sha256": "613d3fbe180f7d0ef4381a7c5cd15e7ff5a7f35313cfe4d96b82c2215c3c796a",
+      "content_sha256": "568970fa3690e019e0120f4c3f0a34810bfea6e47132a5feb164a5397f236fff",
       "score": 33,
-      "content": "{\n\t\"recommendations\": [\"svelte.svelte-vscode\"]\n}\n"
+      "content": "// Client-side hooks — Sentry error boundary\nimport { initSentry } from '$lib/utils/sentry';\n\n// Initialize Sentry on client load\ninitSentry();\n\nexport async function handleError({ error, event }: { error: unknown; event: any }) {\n  const { captureException } = await import('$lib/utils/sentry');\n  captureException(error);\n  console.error('[Client Error]', error);\n}\n"
     },
     {
       "path": "src/lib/index.ts",
@@ -176,13 +176,6 @@
       "content_sha256": "d6b9dfe85e8409efd6a57b85542d83145152e466e6c3f07f54e582371cab6505",
       "score": 31,
       "content": "import { decodeScene } from '$lib/reels';\n\nexport const ssr = false;\nexport const prerender = false;\n\n/**\n * Decode any `?scene=` reel/poster share-link on load (runs client-side since\n * ssr=false). +page.svelte hydrates the matching feature store from `data.scene`\n * after the map instance is ready. Returns `{ scene: null }` for normal loads.\n */\nexport function load({ url }: { url: URL }) {\n  return { scene: decodeScene(url.searchParams) };\n}\n"
-    },
-    {
-      "path": "src/lib/utils/weather.ts",
-      "sha": null,
-      "content_sha256": "606c75a5a10fe28a52dcf0ebae845759b74307616fcaf074309dd221016530e2",
-      "score": 29,
-      "content": "export interface WeatherData {\n  temp: string;\n  condition: string;\n}\n\nconst cache = new Map<string, { data: WeatherData; timestamp: number }>();\n\nexport async function fetchWeather(location: string): Promise<WeatherData | null> {\n  const CACHE_TTL = 1000 * 60 * 30; // 30 minutes\n  const key = location.toLowerCase();\n\n  if (cache.has(key)) {\n    const cached = cache.get(key)!;\n    if (Date.now() - cached.timestamp < CACHE_TTL) {\n      return cached.data;\n    }\n  }\n\n  try {\n    const res = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=j1`);\n    if (!res.ok) return null;\n    const data = await res.json();\n    \n    const weather: WeatherData = {\n      temp: data.current_condition[0].temp_C,\n      condition: data.current_condition[0].weatherDesc[0].value,\n    };\n    \n    cache.set(key, { data: weather, timestamp: Date.now() });\n    return weather;\n  } catch (e) {\n    console.warn('Weather fetch failed for', location, e);\n    return null;\n  }\n}\n"
     },
     {
       "path": "src/lib/reel/titlePresets.ts",
@@ -204,7 +197,16 @@
       "content_sha256": "8228f58724e5468fc8907314a2bfd0ddbbb2e352bbc5a1f7cbd4672f40d899cd",
       "score": 29,
       "content": "/**\n * Thin re-export + a counter-friendly formatter for the Data Reel.\n *\n * The rolling counter passes through fractional in-between values (e.g. 1.4e8),\n * so we format them the same way METRIC_CONFIGS does, with a couple of guards\n * for the in-flight values (integers for population/area, the configured\n * decimals for gdp/literacy).\n */\n\nimport {\n  METRIC_CONFIGS as _METRIC_CONFIGS,\n  type OverlayMetric as _OverlayMetric\n} from '$lib/data/indiaConstants';\n\nexport const METRIC_CONFIGS = _METRIC_CONFIGS;\nexport type OverlayMetric = _OverlayMetric;\n\n/** Format an (possibly mid-roll) metric value for the counter display. */\nexport function formatMetric(metric: OverlayMetric, value: number): string {\n  const v = Number.isFinite(value) ? value : 0;\n  switch (metric) {\n    case 'gdpBillionUsd':\n      return `$${Math.round(v)}B`;\n    case 'literacy':\n      return `${v.toFixed(1)}%`;\n    case 'area':\n      return `${Math.round(v).toLocaleString('en-IN')} km²`;\n    case 'population':\n    default:\n      // population formatter (Cr/L style) — use config format on rounded value\n      return _METRIC_CONFIGS[metric].format(Math.round(v));\n  }\n}\n"
+    },
+    {
+      "path": "src/lib/utils/weather.ts",
+      "sha": null,
+      "content_sha256": "606c75a5a10fe28a52dcf0ebae845759b74307616fcaf074309dd221016530e2",
+      "score": 29,
+      "content": "export interface WeatherData {\n  temp: string;\n  condition: string;\n}\n\nconst cache = new Map<string, { data: WeatherData; timestamp: number }>();\n\nexport async function fetchWeather(location: string): Promise<WeatherData | null> {\n  const CACHE_TTL = 1000 * 60 * 30; // 30 minutes\n  const key = location.toLowerCase();\n\n  if (cache.has(key)) {\n    const cached = cache.get(key)!;\n    if (Date.now() - cached.timestamp < CACHE_TTL) {\n      return cached.data;\n    }\n  }\n\n  try {\n    const res = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=j1`);\n    if (!res.ok) return null;\n    const data = await res.json();\n    \n    const weather: WeatherData = {\n      temp: data.current_condition[0].temp_C,\n      condition: data.current_condition[0].weatherDesc[0].value,\n    };\n    \n    cache.set(key, { data: weather, timestamp: Date.now() });\n    return weather;\n  } catch (e) {\n    console.warn('Weather fetch failed for', location, e);\n    return null;\n  }\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:08.678611+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:00.555752+00:00"
 }

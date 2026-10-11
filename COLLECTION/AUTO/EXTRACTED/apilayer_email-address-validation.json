@@ -32,18 +32,18 @@
       "content": "'use strict';\n\nvar _ = require('lodash');\n\nvar API = {};\n\nAPI.check = require('./check');\n\nAPI.get = function (name) {\n    var api = _.get(this, name);\n    return api;\n};\n\n/**\n * Exports the APIs\n * @type {Object}\n */\nmodule.exports = API;"
     },
     {
-      "path": "api/check.js",
-      "sha": null,
-      "content_sha256": "0fc1e903507487fcc92a6f0a6291bcb642e52cdd6fe31a9847800e6ed5fbbf78",
-      "score": 108,
-      "content": "'use strict';\n\nvar async = require('async');\nvar path = require('path');\nvar utils = require('../lib/utils');\nvar Promise = require('../lib/promise');\nvar APIError = require('../lib/apirequest-error');\n\n\n// Declare our main module scope\nvar API;\n\n\n/**\n * Check Email\n *\n * @param  {object} params - Parameters for request\n * @param  {callback} callback - The callback that handles the response.\n * @return {object} Result\n */\nAPI = function (params, callback, options) {\n\n\n    options = utils.defaults({}, options, this.options, {\n            service: API.SERVICE_NAME,\n            method: API.SERVICE_METHOD\n        }\n    );\n\n\n    // Declare the promise we will use to wrap the request call\n    var promise = new Promise(function (resolve, reject) {\n\n        // Input Validation (we only do the most basic, and let the server do the most so validation will always be up to date)\n        if (!params) {\n            return reject(new APIError.MissingArgumentError(API.SERVICE_NAME, 'params'));\n        }\n        else if (!utils.has(params, API.PARAM_EMAIL)) {\n            return reject(new APIError.MissingArgumentError(API.SERVICE_NAME, 'params.' + API.PARAM_EMAIL));\n        }\n\n        // Prepare Parameters and prepare it for the Request modus\n        var query = {\n            options: options,\n            params: {\n                json: true,\n                qs: params\n            }\n        };\n\n\n        var APIRequest = require('../lib/apirequest');\n        APIRequest.request(query, function (err, result) {\n\n            if (utils.isNull(err) && utils.has(result, 'error')) {\n                err = utils.get(result, 'error');\n            }\n\n            // If an error happens, we return early\n            if (err) {\n                return reject(err);\n            }\n\n            return resolve(result);\n        });\n    });\n\n\n    // Ensure callback is set to make the main functions slightly simpler by avoiding nested conditionals\n    callback = callback || utils.noop;\n\n    // We offer callback support in addition to promise style (we know callback is set as we default it in the beginning)\n    promise\n        .then(function (result) {\n            callback(null, result);\n        })\n        .catch(function (err) {\n            callback(err);\n        });\n\n\n    // return the promise to the caller\n    return promise;\n};\n\n\nvar CheckQuery = function (email) {\n    this.email = email;\n};\nAPI.CheckQuery = CheckQuery;\n\n\nAPI.SERVICE_NAME = 'check';\nAPI.SERVICE_METHOD = 'GET';\n\nAPI.PARAM_EMAIL = 'email';\nAPI.PARAM_SMTP = 'smtp';\nAPI.PARAM_SMTP_TRUE = 1;\nAPI.PARAM_SMTP_FALSE = 0;\nAPI.PARAM_DID_YOU_MEAN = 'did_you_mean';\nAPI.PARAM_USER = 'user';\nAPI.PARAM_DOMAIN = 'domain';\nAPI.PARAM_FORMAT_VALID = 'format_valid';\nAPI.PARAM_MX_FOUND = 'mx_found';\nAPI.PARAM_SMTP_CHECK = 'smtp_check';\nAPI.PARAM_CATCH_ALL = 'catch_all';\nAPI.PARAM_CATCH_ALL_TRUE = 1;\nAPI.PARAM_CATCH_ALL_FALSE = 0;\nAPI.PARAM_ROLE = 'role';\nAPI.PARAM_DISPOSABLE = 'disposable';\nAPI.PARAM_FREE = 'free';\nAPI.PARAM_SCORE = 'score';\n\n\n/**\n * Exports the APIs\n * @type {Object}\n */\nmodule.exports = API;"
-    },
-    {
       "path": "lib/apirequest-result.js",
       "sha": null,
       "content_sha256": "6291f1a41d393eed1a8c78cf18f1ce1d8eca432c329410621a9908d71d53cd10",
       "score": 108,
       "content": "'use strict';\n\nvar ResultStatus = {};\n\nResultStatus.OK = 200;\nResultStatus.NOT_CHANGED = 304;\n\nResultStatus.BODY_EXPR = 'body';\nResultStatus.BODY_RESULTS_EXPR = 'body.results';\nResultStatus.BODY_SUCCESS_EXPR = 'body.success';\nResultStatus.BODY_ERROR_EXPR = 'body.error';\n\n/**\n * Exports ResultStatus\n * @type {Function}\n */\nmodule.exports = ResultStatus;"
+    },
+    {
+      "path": "lib/apirequest.js",
+      "sha": null,
+      "content_sha256": "478b9f718740814ac74ad5a18910bb91f2c6a1cfb7c6f0149695dabe5ff10261",
+      "score": 108,
+      "content": "'use strict';\n\nvar _ = require('lodash');\nvar Transporter = require('./transporter');\nvar APIResult = require('./apirequest-result');\n\n\nvar APIRequest = {};\n\n\n/**\n * Create and send request to the API\n * @param  {object}   parameters Parameters used to form request\n * @param  {Function} callback   Callback when request finished or error found\n * @return {Request}             Returns Request object or null\n */\nvar requestFn = function (parameters, callback) {\n\n    var url = parameters.options.secure ? 'https' : 'http';\n    url += '://';\n    url += parameters.options.host;\n    url += '/';\n    url += parameters.options.context;\n    url += '/';\n    url += parameters.options.service;\n    url += '?' + parameters.options.key_type + '=' + parameters.options.access_key;\n\n    parameters.options.url = url;\n\n    // We need to be able to support using native HTTP since the Live endpoint is causing errors on the 304 which cant be handled by request.js library\n    // Refer: https://github.com/request/request/issues/2048\n\n    var transporter = new Transporter(parameters.options);\n    transporter.req = transporter.request(parameters.params, function (err, result, response) {\n\n        if (err) {\n            return callback(err);\n        }\n        else if (response.statusCode != APIResult.OK || !result) {\n            err = _.get(response, APIResult.BODY_ERROR_EXPR);\n            return callback(err, result, response);\n        }\n\n        result = result || _.get(result, APIResult.BODY_EXPR) || null;\n\n        return callback(null, result, response);\n    });\n    return transporter;\n};\nAPIRequest.request = requestFn;\n\n\n/**\n * Exports APIRequest\n * @type {Function}\n */\nmodule.exports = APIRequest;"
     },
     {
       "path": "lib/apirequest-error.js",
@@ -53,11 +53,11 @@
       "content": "'use strict';\n\nvar Errors = {};\n\nErrors.MissingArgumentError = function(contextName, argumentName) {\n    this.message = 'The following argument is required for the `'+ contextName +'` function: '+ argumentName;\n};\n\nErrors.MissingRecommendedArgumentError = function(contextName, argumentName) {\n    this.message = 'The following argument is recommended for the `'+ contextName +'` function: '+ argumentName;\n};\n\nErrors.NotSupportedArgumentError = function(contextName, argumentName) {\n    this.message = 'The following argument is not yet supported for the `'+ contextName +'` function: '+ argumentName;\n};\n\nErrors.InvalidArgumentError = function(contextName, argumentName, errorLabel) {\n    this.message = 'The '+ argumentName +' argument is invalid for the `'+ contextName +'` function: '+ errorLabel;\n};\n\nErrors.APIError = {\n    MISSING_ACCESS_KEY: 101,\n    INVALID_ACCESS_KEY: 101,\n    INVALID_API_FUNCTION: 103,\n    USAGE_LIMIT_REACHED: 104,\n    HTTPS_ACCESS_RESTRICTED: 105,\n    FUNCTION_ACCESS_RESTRICTED: 106,\n    INACTIVE_USER: 102,\n    QUERY_TEXT_IS_ARRAY: 211,\n    QUERY_TEXT_NO_ARRAY: 212,\n    TOO_MANY_QUERIES: 221,\n    DETECTION_FAILED: 910,\n    BATCH_DETECTION_FAILED: 911,\n    NO_QUERY_TEXT_PROVIDED: 210,\n    '404_NOT_FOUND': 404\n};\n\n/**\n * Exports ResultStatus\n * @type {Function}\n */\nmodule.exports = Errors;"
     },
     {
-      "path": "lib/apirequest.js",
+      "path": "api/check.js",
       "sha": null,
-      "content_sha256": "478b9f718740814ac74ad5a18910bb91f2c6a1cfb7c6f0149695dabe5ff10261",
+      "content_sha256": "0fc1e903507487fcc92a6f0a6291bcb642e52cdd6fe31a9847800e6ed5fbbf78",
       "score": 108,
-      "content": "'use strict';\n\nvar _ = require('lodash');\nvar Transporter = require('./transporter');\nvar APIResult = require('./apirequest-result');\n\n\nvar APIRequest = {};\n\n\n/**\n * Create and send request to the API\n * @param  {object}   parameters Parameters used to form request\n * @param  {Function} callback   Callback when request finished or error found\n * @return {Request}             Returns Request object or null\n */\nvar requestFn = function (parameters, callback) {\n\n    var url = parameters.options.secure ? 'https' : 'http';\n    url += '://';\n    url += parameters.options.host;\n    url += '/';\n    url += parameters.options.context;\n    url += '/';\n    url += parameters.options.service;\n    url += '?' + parameters.options.key_type + '=' + parameters.options.access_key;\n\n    parameters.options.url = url;\n\n    // We need to be able to support using native HTTP since the Live endpoint is causing errors on the 304 which cant be handled by request.js library\n    // Refer: https://github.com/request/request/issues/2048\n\n    var transporter = new Transporter(parameters.options);\n    transporter.req = transporter.request(parameters.params, function (err, result, response) {\n\n        if (err) {\n            return callback(err);\n        }\n        else if (response.statusCode != APIResult.OK || !result) {\n            err = _.get(response, APIResult.BODY_ERROR_EXPR);\n            return callback(err, result, response);\n        }\n\n        result = result || _.get(result, APIResult.BODY_EXPR) || null;\n\n        return callback(null, result, response);\n    });\n    return transporter;\n};\nAPIRequest.request = requestFn;\n\n\n/**\n * Exports APIRequest\n * @type {Function}\n */\nmodule.exports = APIRequest;"
+      "content": "'use strict';\n\nvar async = require('async');\nvar path = require('path');\nvar utils = require('../lib/utils');\nvar Promise = require('../lib/promise');\nvar APIError = require('../lib/apirequest-error');\n\n\n// Declare our main module scope\nvar API;\n\n\n/**\n * Check Email\n *\n * @param  {object} params - Parameters for request\n * @param  {callback} callback - The callback that handles the response.\n * @return {object} Result\n */\nAPI = function (params, callback, options) {\n\n\n    options = utils.defaults({}, options, this.options, {\n            service: API.SERVICE_NAME,\n            method: API.SERVICE_METHOD\n        }\n    );\n\n\n    // Declare the promise we will use to wrap the request call\n    var promise = new Promise(function (resolve, reject) {\n\n        // Input Validation (we only do the most basic, and let the server do the most so validation will always be up to date)\n        if (!params) {\n            return reject(new APIError.MissingArgumentError(API.SERVICE_NAME, 'params'));\n        }\n        else if (!utils.has(params, API.PARAM_EMAIL)) {\n            return reject(new APIError.MissingArgumentError(API.SERVICE_NAME, 'params.' + API.PARAM_EMAIL));\n        }\n\n        // Prepare Parameters and prepare it for the Request modus\n        var query = {\n            options: options,\n            params: {\n                json: true,\n                qs: params\n            }\n        };\n\n\n        var APIRequest = require('../lib/apirequest');\n        APIRequest.request(query, function (err, result) {\n\n            if (utils.isNull(err) && utils.has(result, 'error')) {\n                err = utils.get(result, 'error');\n            }\n\n            // If an error happens, we return early\n            if (err) {\n                return reject(err);\n            }\n\n            return resolve(result);\n        });\n    });\n\n\n    // Ensure callback is set to make the main functions slightly simpler by avoiding nested conditionals\n    callback = callback || utils.noop;\n\n    // We offer callback support in addition to promise style (we know callback is set as we default it in the beginning)\n    promise\n        .then(function (result) {\n            callback(null, result);\n        })\n        .catch(function (err) {\n            callback(err);\n        });\n\n\n    // return the promise to the caller\n    return promise;\n};\n\n\nvar CheckQuery = function (email) {\n    this.email = email;\n};\nAPI.CheckQuery = CheckQuery;\n\n\nAPI.SERVICE_NAME = 'check';\nAPI.SERVICE_METHOD = 'GET';\n\nAPI.PARAM_EMAIL = 'email';\nAPI.PARAM_SMTP = 'smtp';\nAPI.PARAM_SMTP_TRUE = 1;\nAPI.PARAM_SMTP_FALSE = 0;\nAPI.PARAM_DID_YOU_MEAN = 'did_you_mean';\nAPI.PARAM_USER = 'user';\nAPI.PARAM_DOMAIN = 'domain';\nAPI.PARAM_FORMAT_VALID = 'format_valid';\nAPI.PARAM_MX_FOUND = 'mx_found';\nAPI.PARAM_SMTP_CHECK = 'smtp_check';\nAPI.PARAM_CATCH_ALL = 'catch_all';\nAPI.PARAM_CATCH_ALL_TRUE = 1;\nAPI.PARAM_CATCH_ALL_FALSE = 0;\nAPI.PARAM_ROLE = 'role';\nAPI.PARAM_DISPOSABLE = 'disposable';\nAPI.PARAM_FREE = 'free';\nAPI.PARAM_SCORE = 'score';\n\n\n/**\n * Exports the APIs\n * @type {Object}\n */\nmodule.exports = API;"
     },
     {
       "path": "README.md",
@@ -88,25 +88,11 @@
       "content": "language: node_js\nnode_js:\n  - node"
     },
     {
-      "path": "example/preview.js",
-      "sha": null,
-      "content_sha256": "a9ad540dc8d7e7c881a309c7e0e6bf24e16dc03959b889e149d23d76083e55c8",
-      "score": 33,
-      "content": "var API = require('email-address-validation');\nvar api = new API({\n    access_key: 'access_key'\n});\n\nvar checkQuery = {\n    email: 'this.is.a@test.io'\n};\n\napi.check(checkQuery)\n    .then(function (result) {\n        console.log('Check Promise Resolve' + JSON.stringify(result));\n    })\n    .catch(function (err) {\n        console.log('Check Promise Reject: ' + JSON.stringify(err));\n    });"
-    },
-    {
       "path": "lib/transporter.js",
       "sha": null,
       "content_sha256": "c8ac74f66607a19eb615a4ec257a078cd13dc472163620307685600a6be75020",
       "score": 33,
       "content": "'use strict';\n\nvar request = require('request');\nvar _ = require('lodash');\n\nvar utils = require('./utils');\nvar pkg = require('../package.json');\n\n\n/**\n * Default transporter constructor.\n * Wraps request and callback functions.\n */\nfunction Transporter(options) {\n    this.options = options;\n}\n\n/**\n * Default user agent.\n */\nTransporter.prototype.USER_AGENT = pkg.name + '.' + pkg.version;\n\n/**\n * Configures request options before making a request.\n * @param {object} opts Options to configure.\n * @return {object} Configured options.\n */\nTransporter.prototype.configure = function (args) {\n\n    // set transporter user agent\n    var headers = this.options.headers || {};\n    headers['User-Agent'] = this.USER_AGENT;\n\n    args = utils.extend(\n        this.options,\n        args,\n        {headers: headers}\n    );\n\n    return args;\n};\n\n/**\n * Makes a request with given options and invokes callback.\n * @param {object} opts Options.\n * @param {Function=} opt_callback Optional callback.\n * @return {Request} Request object\n */\nTransporter.prototype.request = function (args, callback) {\n\n    args = this.configure(args);\n\n    var req = request(args, function (err, response, body) {\n        if (err) {\n            return callback(err);\n        }\n        callback(null, body, response)\n    });\n    return req;\n};\n\n/**\n * Exports Transporter.\n */\nmodule.exports = Transporter;"
-    },
-    {
-      "path": "lib/promise.js",
-      "sha": null,
-      "content_sha256": "c9a8f81ce023668cc65a3fa1ef66605e6c77f3d7d579b7a56c2bc7ae5281319f",
-      "score": 33,
-      "content": "'use strict';\n\nvar Promise = require('promise');\n\n/**\n * Exports Promise Factory\n * @type {Function}\n */\nmodule.exports = Promise;"
     },
     {
       "path": "lib/utils.js",
@@ -121,7 +107,23 @@
       "content_sha256": "382b30a4846d8cfc458998068d7d6851ac093a41a9fee8fc6d2c6312b1dc9080",
       "score": 33,
       "content": "var path = require('path');\n\nvar APIPath = path.join(__dirname, '../', 'index');\nvar API = require(APIPath);\n\nvar api = new API({\n    access_key: process.env.ACCESS_KEY\n});\n\nvar email = 'this.is.a@test.io';\n\nvar checkQuery = {\n    email: email\n};\n\napi.check(checkQuery, function (err, result) {\n    if (err) {\n        return console.log('Check Callback (Error): ' + JSON.stringify(err));\n    }\n    console.log('Check Callback (Success): '+ JSON.stringify(result));\n});"
+    },
+    {
+      "path": "example/preview.js",
+      "sha": null,
+      "content_sha256": "a9ad540dc8d7e7c881a309c7e0e6bf24e16dc03959b889e149d23d76083e55c8",
+      "score": 33,
+      "content": "var API = require('email-address-validation');\nvar api = new API({\n    access_key: 'access_key'\n});\n\nvar checkQuery = {\n    email: 'this.is.a@test.io'\n};\n\napi.check(checkQuery)\n    .then(function (result) {\n        console.log('Check Promise Resolve' + JSON.stringify(result));\n    })\n    .catch(function (err) {\n        console.log('Check Promise Reject: ' + JSON.stringify(err));\n    });"
+    },
+    {
+      "path": "lib/promise.js",
+      "sha": null,
+      "content_sha256": "c9a8f81ce023668cc65a3fa1ef66605e6c77f3d7d579b7a56c2bc7ae5281319f",
+      "score": 33,
+      "content": "'use strict';\n\nvar Promise = require('promise');\n\n/**\n * Exports Promise Factory\n * @type {Function}\n */\nmodule.exports = Promise;"
     }
   ],
-  "generated_at": "2026-10-08T02:25:15.066743+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:57.047630+00:00"
 }

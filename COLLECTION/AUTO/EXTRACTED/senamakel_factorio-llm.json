@@ -81,6 +81,13 @@
       "content": "FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY rcon_client/ rcon_client/\nCOPY mcp_server/ mcp_server/\nENV FACTORIO_HOST=host.docker.internal FACTORIO_PORT=27015\nCMD [\"python\", \"-m\", \"mcp_server.server\"]\n"
     },
     {
+      "path": "rcon_client/cli.py",
+      "sha": null,
+      "content_sha256": "ef366242d038fd3d8e5f7b64d480d32b21a509593887c6993616fc5b0f05c883",
+      "score": 33,
+      "content": "\"\"\"CLI: python -m rcon_client.cli '<command>'\"\"\"\nimport argparse\nimport json\nimport os\nimport sys\n\nfrom .client import RconClient\n\n\ndef config_from_env_or_args(host, port, password):\n    return (\n        host or os.environ.get(\"FACTORIO_HOST\", \"127.0.0.1\"),\n        int(port or os.environ.get(\"FACTORIO_PORT\", 27015)),\n        password or os.environ.get(\"FACTORIO_RCON_PASSWORD\", \"\"),\n    )\n\n\ndef main(argv=None):\n    p = argparse.ArgumentParser(description=\"Send a command to a Factorio server via RCON\")\n    p.add_argument(\"command\", help=\"e.g. '/c game.print(game.tick)'\")\n    p.add_argument(\"--host\")\n    p.add_argument(\"--port\")\n    p.add_argument(\"--password\")\n    args = p.parse_args(argv)\n    host, port, password = config_from_env_or_args(args.host, args.port, args.password)\n    try:\n        with RconClient(host, port, password) as c:\n            print(c.command(args.command))\n    except Exception as e:\n        print(json.dumps({\"error\": str(e)}), file=sys.stderr)\n        return 1\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"
+    },
+    {
       "path": "mod/info.json",
       "sha": null,
       "content_sha256": "dabbf3727894f3f3aae3c8aee263cdd854e1fabd3a672c8ab61b765837eb3d46",
@@ -93,25 +100,18 @@
       "content_sha256": "222f5bb4f48976cb9e71bc13f98bd98a055c1065d2d837f8f92270d9de2a5013",
       "score": 33,
       "content": "\"\"\"Minimal Factorio RCON client (pure stdlib, protocol per https://wiki.rcon.online).\"\"\"\nimport socket\nimport struct\n\nSERVERDATA_AUTH = 3\nSERVERDATA_AUTH_RESPONSE = 2\nSERVERDATA_EXECCOMMAND = 2\nSERVERDATA_RESPONSE_VALUE = 0\n\n\nclass RconError(Exception):\n    pass\n\n\nclass RconClient:\n    def __init__(self, host=\"127.0.0.1\", port=27015, password=\"\", timeout=5.0):\n        self.host, self.port, self.password, self.timeout = host, port, password, timeout\n        self.sock = None\n        self._id = 0\n\n    def _next_id(self):\n        self._id += 1\n        return self._id\n\n    def connect(self):\n        self.sock = socket.create_connection((self.host, self.port), timeout=self.timeout)\n        return self.authenticate()\n\n    def _send(self, req_id, ptype, payload: bytes):\n        body = struct.pack(\"<ii\", req_id, ptype) + payload + b\"\\x00\\x00\"\n        self.sock.sendall(struct.pack(\"<i\", len(body)) + body)\n\n    def _recv_exact(self, n):\n        data = b\"\"\n        while len(data) < n:\n            chunk = self.sock.recv(n - len(data))\n            if not chunk:\n                raise RconError(\"connection closed\")\n            data += chunk\n        return data\n\n    def _recv(self):\n        (length,) = struct.unpack(\"<i\", self._recv_exact(4))\n        body = self._recv_exact(length)\n        req_id, ptype = struct.unpack(\"<ii\", body[:8])\n        payload = body[8:-2]\n        return req_id, ptype, payload\n\n    def authenticate(self):\n        rid = self._next_id()\n        self._send(rid, SERVERDATA_AUTH, self.password.encode(\"utf-8\"))\n        # Factorio may send an empty RESPONSE_VALUE before AUTH_RESPONSE\n        rid2, ptype, _ = self._recv()\n        if ptype == SERVERDATA_RESPONSE_VALUE:\n            rid2, ptype, _ = self._recv()\n        if ptype != SERVERDATA_AUTH_RESPONSE or rid2 == -1:\n            raise RconError(\"authentication failed\")\n        return True\n\n    def command(self, cmd: str) -> str:\n        rid = self._next_id()\n        self._send(rid, SERVERDATA_EXECCOMMAND, cmd.encode(\"utf-8\"))\n        got_id, ptype, payload = self._recv()\n        if ptype != SERVERDATA_RESPONSE_VALUE:\n            raise RconError(f\"unexpected packet type {ptype}\")\n        return payload.decode(\"utf-8\", errors=\"replace\")\n\n    def close(self):\n        if self.sock:\n            self.sock.close()\n            self.sock = None\n\n    def __enter__(self):\n        self.connect()\n        return self\n\n    def __exit__(self, *a):\n        self.close()\n"
-    },
-    {
-      "path": "rcon_client/cli.py",
-      "sha": null,
-      "content_sha256": "ef366242d038fd3d8e5f7b64d480d32b21a509593887c6993616fc5b0f05c883",
-      "score": 33,
-      "content": "\"\"\"CLI: python -m rcon_client.cli '<command>'\"\"\"\nimport argparse\nimport json\nimport os\nimport sys\n\nfrom .client import RconClient\n\n\ndef config_from_env_or_args(host, port, password):\n    return (\n        host or os.environ.get(\"FACTORIO_HOST\", \"127.0.0.1\"),\n        int(port or os.environ.get(\"FACTORIO_PORT\", 27015)),\n        password or os.environ.get(\"FACTORIO_RCON_PASSWORD\", \"\"),\n    )\n\n\ndef main(argv=None):\n    p = argparse.ArgumentParser(description=\"Send a command to a Factorio server via RCON\")\n    p.add_argument(\"command\", help=\"e.g. '/c game.print(game.tick)'\")\n    p.add_argument(\"--host\")\n    p.add_argument(\"--port\")\n    p.add_argument(\"--password\")\n    args = p.parse_args(argv)\n    host, port, password = config_from_env_or_args(args.host, args.port, args.password)\n    try:\n        with RconClient(host, port, password) as c:\n            print(c.command(args.command))\n    except Exception as e:\n        print(json.dumps({\"error\": str(e)}), file=sys.stderr)\n        return 1\n    return 0\n\n\nif __name__ == \"__main__\":\n    sys.exit(main())\n"
     }
   ],
   "fetch_errors": [
     {
-      "path": "mcp_server/__init__.py",
+      "path": "rcon_client/__init__.py",
       "error": "empty content"
     },
     {
-      "path": "rcon_client/__init__.py",
+      "path": "mcp_server/__init__.py",
       "error": "empty content"
     }
   ],
   "fetch_error_count": 2,
-  "generated_at": "2026-10-10T20:30:25.576079+00:00"
+  "generated_at": "2026-10-11T01:13:31.133541+00:00"
 }

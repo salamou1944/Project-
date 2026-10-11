@@ -32,13 +32,6 @@
       "content": "# Nix training\n\n> **Note**\n>\n> This is actively a **work-in-progress** 🚧.\n\n## Goal\n\nThis training series will start with a bunch of demos--the cool things [Nix](https://nixos.org/) can do--to motivate the user. Then we iteratively build up on Nix knowledge, starting with the foundations, then going on to flakes, and thereon to the module system which is necessary for understanding flake-parts that is integral to many real-world projects using Nix.\n\nThe goal is to enable the audience to work towards grasping all the concepts involved in writing and creating the likes of [haskell-template](https://github.com/srid/haskell-template/blob/master/flake.nix) or [haskell-flake](https://github.com/srid/haskell-flake), and more generally get comfortable with writing Nix.\n\n## Prerequisites\n\nYou must have Nix installed on your system. We recommend [the Determinate installer](https://github.com/DeterminateSystems/nix-installer). You can of course also install [NixOS](https://nixos.org/) (a Linux distribution based on Nix) if you are feeling adventurous.\n\n## Outline\n\n| Level | Title | Description |\n| --- | --- | --- |\n| [0](./levels/0/README.md) | Intro | Demos for motivation |\n| [1](./levels/1/README.md) | Nix foundations | Nix store, the language, standard library, derivations; `pc.nix` |\n| 2 | Flakes | Reproduce `pc.nix` in flake; Nixify full Rust project with devShell |\n| 3 | Module system | Write a module to simplify the Rust flake |\n| 4 | flake-parts | Convert that Rust project from level 2/3 to use flake-parts. Make a mono repo, and add frontend (eg: rescript), with its own flake-parts module - Combine the two modules at top-level flake (like we do for nammayatri). |\n| 5 | Advanced | Write your own flake-parts modules (use process-compose/mission-control module as examples) |\n\n## Structure of a level\n\nEach level includes a video presentation with hands-on demo of the code involved. They also include:\n\n- Further readings\n- Exercises\n"
     },
     {
-      "path": "levels/0/README.md",
-      "sha": null,
-      "content_sha256": "ed5f3ca6b71c23e0bc9667cb1ff9cc6e6da1fa2802127461cfcdf6cbb850afa1",
-      "score": 96,
-      "content": "# Level 0\n\nIn this level, we will see the various things Nix is capable of. This provides the needed motivation for learning Nix.\n\nWIP: Outline\n- [x] Nix as a package manager\n- [x] Isolated development environments\n- [x] Process runner \n- [x] Building docker images\n- [ ] Linux distribution (NixOS)\n- [ ] Dotfile manager (home-manager)\n\n## Nix as a package manager\n\nAt its basic level, Nix is a package manager. It is capable of installing packages from the [Nixpkgs][nixpkgs] repository, which is a collection of packages maintained by the NixOS community.\n\nSearch for a package,\n\n```sh\n# nix search nixpkgs <keyword>\nnix search nixpkgs ripgrep\n```\n\nInstalling a package (to your home directory),\n\n```sh\nnix profile install nixpkgs#ripgrep\n```\n\n**Warning** The above command will imperatively install the package. It is not recommended to use this command. We will see a better way to install packages in the NixOS and home-manager section.\n\n## Isolated development environments\n\nNix is capable of creating isolated development environments for your project. All of your project dependencies are available from this environment, without polluting your global environment.\n\nCreating a development environment (aka. `devShell`) is simple in Nix. \n\n![[devshell/README]]\n\n\n## Process runner\n\nAnd now for something completely different. Nix can not only build packages, but also build their configuration files. The whole thing can in turn be wrapped in script (another Nix package). We'll package up and run a bunch of processes using [process-compose](https://github.com/F1bonacc1/process-compose).\n\n![[process-compose/README]]\n\n## Building docker image\n\nDocker images can be created (via `docker load`) from tarballs, and Nix can build these tarballs just like regular packages.\n\n![[docker-image/README]]\n\n\n[nixpkgs]: https://zero-to-nix.com/concepts/nixpkgs"
-    },
-    {
       "path": "levels/1/README.md",
       "sha": null,
       "content_sha256": "93e4fa8c45dc7b8edcb73b0df7b3a0de83c387fe481cd4b00956bd0befe47a55",
@@ -46,11 +39,11 @@
       "content": "# Level 1\n\n## Nix Store\n\n### Store Paths\n\n- Files & folders under `/nix/store` each with unique hash\n- CLI to create these:\n    ```\n    nix store add-file\n    nix store add-path\n    nix store delete\n\n    # Downloaded off internet\n    nix store prefetch-file https://nammayatri.in/\n    ```\n\n### Derivation\n\n- `.drv`: Recipes or functions that knows how to produce a store path, using nothing but other store paths as input.\n- `nix-build` (or `:b` in `nix repl`) will evaluate the derivation to produce the output in the Nix store.\n\n## Writing Nix to produce derivations\n\n### Builtin\n\nSimplest example,\n\n```sh\nnix-build -E '\n    derivation {\n        name=\"test\"; \n        src=./.; \n        builder=\"/bin/bash\"; \n        system=\"aarch64-darwin\"; \n        args=[\"-c\" \"echo Hello > $out\"];\n    }'\n```\n\n### `mkDerivation`\n\nThat's too lowel, though. Let's use nixpkgs (the \"standard library\" of Nix)\n\n```nix\nlet \n    pkgs = import <nixpkgs> {};\nin \n    pkgs.stdenv.mkDerivation {\n        name = \"test\";\n        src = ./.;\n        installPhase = ''\n            echo Hello > $out\n        '';\n    }\n```\n\n### `runCommand`\n\nLet's go one step higher:\n\n### `writeFile`\n\nEven higher.\n\n## process-compose example!\n\npc.nix"
     },
     {
-      "path": "levels/0/devshell/README.md",
+      "path": "levels/0/README.md",
       "sha": null,
-      "content_sha256": "43b0de9cc3e48fa546cde725729e9ac05230ed742fad5bfc75dd23079ed6a871",
-      "score": 94,
-      "content": "# devshell demo\n\nIn this directory, run `nix develop` to enter the development shell, wherein the the mentioned programs are available in your PATH. When you exit the devShell (<kbd>Ctrl+C</kbd>), the programs are no longer available.\n\n![[devshell/flake.nix]]"
+      "content_sha256": "ed5f3ca6b71c23e0bc9667cb1ff9cc6e6da1fa2802127461cfcdf6cbb850afa1",
+      "score": 96,
+      "content": "# Level 0\n\nIn this level, we will see the various things Nix is capable of. This provides the needed motivation for learning Nix.\n\nWIP: Outline\n- [x] Nix as a package manager\n- [x] Isolated development environments\n- [x] Process runner \n- [x] Building docker images\n- [ ] Linux distribution (NixOS)\n- [ ] Dotfile manager (home-manager)\n\n## Nix as a package manager\n\nAt its basic level, Nix is a package manager. It is capable of installing packages from the [Nixpkgs][nixpkgs] repository, which is a collection of packages maintained by the NixOS community.\n\nSearch for a package,\n\n```sh\n# nix search nixpkgs <keyword>\nnix search nixpkgs ripgrep\n```\n\nInstalling a package (to your home directory),\n\n```sh\nnix profile install nixpkgs#ripgrep\n```\n\n**Warning** The above command will imperatively install the package. It is not recommended to use this command. We will see a better way to install packages in the NixOS and home-manager section.\n\n## Isolated development environments\n\nNix is capable of creating isolated development environments for your project. All of your project dependencies are available from this environment, without polluting your global environment.\n\nCreating a development environment (aka. `devShell`) is simple in Nix. \n\n![[devshell/README]]\n\n\n## Process runner\n\nAnd now for something completely different. Nix can not only build packages, but also build their configuration files. The whole thing can in turn be wrapped in script (another Nix package). We'll package up and run a bunch of processes using [process-compose](https://github.com/F1bonacc1/process-compose).\n\n![[process-compose/README]]\n\n## Building docker image\n\nDocker images can be created (via `docker load`) from tarballs, and Nix can build these tarballs just like regular packages.\n\n![[docker-image/README]]\n\n\n[nixpkgs]: https://zero-to-nix.com/concepts/nixpkgs"
     },
     {
       "path": "levels/0/docker-image/README.md",
@@ -58,6 +51,13 @@
       "content_sha256": "35510aaea9a9ed750dec8c7204fb9c31629755c9f0067e859648cd4ee11432fa",
       "score": 94,
       "content": "# docker-image demo\n\nTo build the docker image, run `docker load -i $(nix build --print-out-paths)`\n\n![[docker-image/flake.nix]]"
+    },
+    {
+      "path": "levels/0/devshell/README.md",
+      "sha": null,
+      "content_sha256": "43b0de9cc3e48fa546cde725729e9ac05230ed742fad5bfc75dd23079ed6a871",
+      "score": 94,
+      "content": "# devshell demo\n\nIn this directory, run `nix develop` to enter the development shell, wherein the the mentioned programs are available in your PATH. When you exit the devShell (<kbd>Ctrl+C</kbd>), the programs are no longer available.\n\n![[devshell/flake.nix]]"
     },
     {
       "path": "levels/0/process-compose/.gitignore",
@@ -95,5 +95,7 @@
       "content": "fn main () {\n    println!(\"Hello, world!\");\n}"
     }
   ],
-  "generated_at": "2026-10-08T03:25:13.333716+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:20.949306+00:00"
 }

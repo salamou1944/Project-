@@ -39,13 +39,6 @@
       "content": "image: buildpack-deps:18.04\n\ncache:\n  key: purty\n  paths:\n    - .stack-root\n    - .stack-work\n\nvariables:\n  STACK_ROOT: $CI_PROJECT_DIR/.stack-root\n  \nstages:\n  - build\n\nBuild purty:\n  before_script:\n    - apt-get update\n    - apt-get install --yes haskell-stack\n    - stack upgrade --binary-only\n    - export PATH=$HOME/.local/bin:$PATH\n    - stack setup\n  script:\n    - ci/lint/stylish-haskell.sh --verbose\n    - ci/lint/hlint.sh --verbose\n    - stack build --copy-bins --coverage --local-bin-path bin --no-run-tests --test\n    - stack build --coverage --test\n    - test/acceptance.sh --verbose\n  stage: build\n"
     },
     {
-      "path": "ci/bintray-osx.json",
-      "sha": null,
-      "content_sha256": "09c2a6d30be0fef93d5daedb31d163cbc556c7c4a486a6748e1321dd2621d00f",
-      "score": 105,
-      "content": "{\n  \"files\": [\n    {\n      \"includePattern\": \"purty-2.0.0-osx.tar.gz\",\n      \"uploadPattern\": \"purty-2.0.0-osx.tar.gz\"\n    }\n  ],\n  \"package\": {\n    \"licenses\": [\n      \"BSD 3-Clause\"\n    ],\n    \"name\": \"purty\",\n    \"repo\": \"generic\",\n    \"subject\": \"joneshf\",\n    \"vcs_url\": \"https://gitlab.com/joneshf/purty.git\"\n  },\n  \"version\": {\n    \"name\": \"2.0.0\",\n    \"released\": \"2018-07-02\"\n  }\n}\n"
-    },
-    {
       "path": "ci/bintray-linux.json",
       "sha": null,
       "content_sha256": "cae6ccbe1999f039b576edf098a027ae13b4599ac99abc638d8d1825df038e41",
@@ -53,11 +46,11 @@
       "content": "{\n  \"files\": [\n    {\n      \"includePattern\": \"purty-2.0.0-linux.tar.gz\",\n      \"uploadPattern\": \"purty-2.0.0-linux.tar.gz\"\n    }\n  ],\n  \"package\": {\n    \"licenses\": [\n      \"BSD 3-Clause\"\n    ],\n    \"name\": \"purty\",\n    \"repo\": \"generic\",\n    \"subject\": \"joneshf\",\n    \"vcs_url\": \"https://gitlab.com/joneshf/purty.git\"\n  },\n  \"version\": {\n    \"name\": \"2.0.0\",\n    \"released\": \"2018-07-02\"\n  }\n}\n"
     },
     {
-      "path": "ci/lint/stylish-haskell.sh",
+      "path": "ci/bintray-osx.json",
       "sha": null,
-      "content_sha256": "80c56ed2297be5ede0738ba813874f13c3cf308d94298efc62074ff2767bef85",
-      "score": 103,
-      "content": "#!/usr/bin/env bash\n\nset -o errexit\nset -o nounset\nset -o pipefail\nIFS=$'\\n\\t'\n\nreadonly DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nreadonly THIS_SCRIPT=\"${0}\"\nreadonly SCRIPT_NAME=\"$(basename \"${THIS_SCRIPT}\")\"\nreadonly TEMPORARY_DIR=\"$(mktemp --directory -t \"${SCRIPT_NAME}.XXXXXXXXXX\")\"\nreadonly LOG_FILE=\"$(mktemp -t \"${SCRIPT_NAME}.log.XXXXXXXXXX\")\"\n\nSYSTEM_GHC=''\nVERBOSE=''\n\nlog() {\n    local level=\"${1}\"\n    local msg=\"${2}\"\n\n    if [[ 'DEBUG' = \"${level}\" && -z \"${VERBOSE}\" ]]; then\n        printf '%-12s %s\\n' \"[${level}]\" \"${msg}\" >> \"${LOG_FILE}\"\n    else\n        printf '%-12s %s\\n' \"[${level}]\" \"${msg}\" | tee --append \"${LOG_FILE}\" >&2\n    fi\n}\n\ndebug()     { log 'DEBUG'     \"${1}\" ; }\ninfo()      { log 'INFO'      \"${1}\" ; }\nwarning()   { log 'WARNING'   \"${1}\" ; }\nerror()     { log 'ERROR'     \"${1}\" ; }\nemergency() { log 'EMERGENCY' \"${1}\" ; exit 1 ; }\n\n#/ Install the stack binary at a specific path\n#/\n#/ Mandatory arguments to long options are mandatory for short options too.\n#/       --help                 display this help and exit\n#/       --system-ghc           use the GHC version already installed\n#/   -V, --verbose              display logs from all levels\n#/                                normally only displays logs above 'DEBUG'\n#/                                will still output all logs to the log file\nusage() {\n    grep '^#/' \"${THIS_SCRIPT}\" | cut --characters 4-\n    exit 0\n}\n\nwhile [[ $# -gt 0 ]]; do\n    option=\"${1}\"\n    case \"${option}\" in\n        --help) usage;;\n        --system-ghc) SYSTEM_GHC='true';;\n        -V|--verbose) VERBOSE='verbose';;\n        *)\n            error \"${THIS_SCRIPT}: unrecognized option '${option}'\"\n            error \"Try '${THIS_SCRIPT} --help' for more information\"\n            exit 2;;\n    esac\n    shift\ndone\n\ncleanup() {\n    local exit_code=\"$?\"\n\n    debug 'Removing temp directory'\n    rm --force --recursive \"${TEMPORARY_DIR}\"\n\n    exit \"$exit_code\"\n}\n\ntrap cleanup EXIT\n\ndebug \"Created temp directory: ${TEMPORARY_DIR}\"\ndebug \"Created log file: ${LOG_FILE}\"\n\n# End Boilerplate\n\ndebug \"Building 'stylish-haskell'\"\nif [[ 'true' = \"${SYSTEM_GHC}\" ]]; then\n    stack --system-ghc build stylish-haskell\nelse\n    stack build stylish-haskell\nfi\n\ninfo \"Running 'stylish-haskell'\"\nif [[ 'true' = \"${SYSTEM_GHC}\" ]]; then\n    git ls-files -z '*.hs' \\\n        | xargs -I {} --null \\\n                stack --system-ghc exec stylish-haskell -- --inplace {}\nelse\n    git ls-files -z '*.hs' \\\n        | xargs -I {} --null \\\n                stack exec stylish-haskell -- --inplace {}\nfi\n\ndebug 'Checking for changed files'\nCHANGED_FILES=\"$(git status --porcelain '*.hs')\"\n\nif [[ -n \"${CHANGED_FILES}\"  ]]; then\n    error 'Some Haskell files are not formatted properly'\n    error \"$(git diff -- '*.hs')\"\n    error ''\n    error \"You can fix this by running '${THIS_SCRIPT}' locally and committing\"\n\n    exit 1\nfi\n"
+      "content_sha256": "09c2a6d30be0fef93d5daedb31d163cbc556c7c4a486a6748e1321dd2621d00f",
+      "score": 105,
+      "content": "{\n  \"files\": [\n    {\n      \"includePattern\": \"purty-2.0.0-osx.tar.gz\",\n      \"uploadPattern\": \"purty-2.0.0-osx.tar.gz\"\n    }\n  ],\n  \"package\": {\n    \"licenses\": [\n      \"BSD 3-Clause\"\n    ],\n    \"name\": \"purty\",\n    \"repo\": \"generic\",\n    \"subject\": \"joneshf\",\n    \"vcs_url\": \"https://gitlab.com/joneshf/purty.git\"\n  },\n  \"version\": {\n    \"name\": \"2.0.0\",\n    \"released\": \"2018-07-02\"\n  }\n}\n"
     },
     {
       "path": "ci/lint/hlint.sh",
@@ -72,6 +65,13 @@
       "content_sha256": "4a428b274cccbd3f5c1dacf7661345a4d38b2c281ecc6a6927b24590df34837c",
       "score": 103,
       "content": "#!/usr/bin/env bash\n\nset -o errexit\nset -o nounset\nset -o pipefail\nIFS=$'\\n\\t'\n\nreadonly DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nreadonly THIS_SCRIPT=\"${0}\"\nreadonly SCRIPT_NAME=\"$(basename \"${THIS_SCRIPT}\")\"\nreadonly TEMPORARY_DIR=\"$(mktemp --directory -t \"${SCRIPT_NAME}.XXXXXXXXXX\")\"\nreadonly LOG_FILE=\"$(mktemp -t \"${SCRIPT_NAME}.log.XXXXXXXXXX\")\"\n\nVERBOSE=''\nVERSION=\"${npm_package_version:?npm_package_version env var is required}\"\n\nBASE_URL='https://dl.bintray.com/joneshf/generic'\nLINUX_URL=\"${BASE_URL}/purty-${VERSION}-linux.tar.gz\"\nOSX_URL=\"${BASE_URL}/purty-${VERSION}-osx.tar.gz\"\nWIN_URL=\"${BASE_URL}/purty-${VERSION}-win.tar.gz\"\n\nlog() {\n    local level=\"${1}\"\n    local msg=\"${2}\"\n\n    if [[ 'DEBUG' = \"${level}\" && -z \"${VERBOSE}\" ]]; then\n        printf '%-12s %s\\n' \"[${level}]\" \"${msg}\" >> \"${LOG_FILE}\"\n    else\n        printf '%-12s %s\\n' \"[${level}]\" \"${msg}\" | tee --append \"${LOG_FILE}\" >&2\n    fi\n}\n\ndebug()     { log 'DEBUG'     \"${1}\" ; }\ninfo()      { log 'INFO'      \"${1}\" ; }\nwarning()   { log 'WARNING'   \"${1}\" ; }\nerror()     { log 'ERROR'     \"${1}\" ; }\nemergency() { log 'EMERGENCY' \"${1}\" ; exit 1 ; }\n\n#/ Sets up npm package for packaging\n#/\n#/ Mandatory arguments to long options are mandatory for short options too.\n#/       --help                 display this help and exit\n#/   -V, --verbose              display logs from all levels\n#/                                normally only displays logs above 'DEBUG'\n#/                                will still output all logs to the log file\nusage() {\n    grep '^#/' \"${THIS_SCRIPT}\" | cut --characters 4-\n    exit 0\n}\n\nwhile [[ $# -gt 0 ]]; do\n    option=\"${1}\"\n    case \"${option}\" in\n        --help) usage;;\n        -V|--verbose) VERBOSE='verbose';;\n        *)\n            error \"${THIS_SCRIPT}: unrecognized option '${option}'\"\n            error \"Try '${THIS_SCRIPT} --help' for more information\"\n            exit 2;;\n    esac\n    shift\ndone\n\ncleanup() {\n    local exit_code=\"$?\"\n\n    debug 'Removing temp directory'\n    rm --force --recursive \"${TEMPORARY_DIR}\"\n\n    exit \"$exit_code\"\n}\n\ntrap cleanup EXIT\n\ndebug \"Created temp directory: ${TEMPORARY_DIR}\"\ndebug \"Created log file: ${LOG_FILE}\"\n\n# End Boilerplate\n\ncd \"${DIR}/../..\"\n\ndebug \"version: ${VERSION}\"\ndebug 'creating directories for binaries'\nmkdir --parents bin/linux bin/osx bin/win\n\ninfo 'Packaging linux binary'\ndebug \"Downloading linux tar from ${LINUX_URL}\"\ncurl --location --output \"${TEMPORARY_DIR}/linux.tar.gz\" \"${LINUX_URL}\" 2>&1 \\\n    | tee --append \"${LOG_FILE}\"\n\ndebug 'Extracting linux binary'\ntar --extract \\\n    --file \"${TEMPORARY_DIR}/linux.tar.gz\" \\\n    --directory \"${TEMPORARY_DIR}\" \\\n    --gzip\n\ndebug 'Moving linux binary to the appropriate location'\nmv \"${TEMPORARY_DIR}/purty\" \"bin/linux/purty\"\n\ninfo 'Packaging osx binary'\ndebug \"Downloading osx tar from ${OSX_URL}\"\ncurl --location --output \"${TEMPORARY_DIR}/osx.tar.gz\" \"${OSX_URL}\" 2>&1 \\\n    | tee --append \"${LOG_FILE}\"\n\ndebug 'Extracting osx binary'\ntar --extract \\\n    --file \"${TEMPORARY_DIR}/osx.tar.gz\" \\\n    --directory \"${TEMPORARY_DIR}\" \\\n    --gzip\n\ndebug 'Moving osx binary to the appropriate location'\nmv \"${TEMPORARY_DIR}/purty\" \"bin/osx/purty\"\n\ninfo 'Packaging win binary'\ndebug \"Downloading win tar from ${WIN_URL}\"\ncurl --location --output \"${TEMPORARY_DIR}/win.tar.gz\" \"${WIN_URL}\" 2>&1 \\\n    | tee --append \"${LOG_FILE}\"\n\ndebug 'Extracting win binary'\ntar --extract \\\n    --file \"${TEMPORARY_DIR}/win.tar.gz\" \\\n    --directory \"${TEMPORARY_DIR}\" \\\n    --gzip\n\ndebug 'Moving win binary to the appropriate location'\nmv \"${TEMPORARY_DIR}/purty.exe\" \"bin/win/purty.exe\"\n"
+    },
+    {
+      "path": "ci/lint/stylish-haskell.sh",
+      "sha": null,
+      "content_sha256": "80c56ed2297be5ede0738ba813874f13c3cf308d94298efc62074ff2767bef85",
+      "score": 103,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\nset -o nounset\nset -o pipefail\nIFS=$'\\n\\t'\n\nreadonly DIR=\"$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\"\nreadonly THIS_SCRIPT=\"${0}\"\nreadonly SCRIPT_NAME=\"$(basename \"${THIS_SCRIPT}\")\"\nreadonly TEMPORARY_DIR=\"$(mktemp --directory -t \"${SCRIPT_NAME}.XXXXXXXXXX\")\"\nreadonly LOG_FILE=\"$(mktemp -t \"${SCRIPT_NAME}.log.XXXXXXXXXX\")\"\n\nSYSTEM_GHC=''\nVERBOSE=''\n\nlog() {\n    local level=\"${1}\"\n    local msg=\"${2}\"\n\n    if [[ 'DEBUG' = \"${level}\" && -z \"${VERBOSE}\" ]]; then\n        printf '%-12s %s\\n' \"[${level}]\" \"${msg}\" >> \"${LOG_FILE}\"\n    else\n        printf '%-12s %s\\n' \"[${level}]\" \"${msg}\" | tee --append \"${LOG_FILE}\" >&2\n    fi\n}\n\ndebug()     { log 'DEBUG'     \"${1}\" ; }\ninfo()      { log 'INFO'      \"${1}\" ; }\nwarning()   { log 'WARNING'   \"${1}\" ; }\nerror()     { log 'ERROR'     \"${1}\" ; }\nemergency() { log 'EMERGENCY' \"${1}\" ; exit 1 ; }\n\n#/ Install the stack binary at a specific path\n#/\n#/ Mandatory arguments to long options are mandatory for short options too.\n#/       --help                 display this help and exit\n#/       --system-ghc           use the GHC version already installed\n#/   -V, --verbose              display logs from all levels\n#/                                normally only displays logs above 'DEBUG'\n#/                                will still output all logs to the log file\nusage() {\n    grep '^#/' \"${THIS_SCRIPT}\" | cut --characters 4-\n    exit 0\n}\n\nwhile [[ $# -gt 0 ]]; do\n    option=\"${1}\"\n    case \"${option}\" in\n        --help) usage;;\n        --system-ghc) SYSTEM_GHC='true';;\n        -V|--verbose) VERBOSE='verbose';;\n        *)\n            error \"${THIS_SCRIPT}: unrecognized option '${option}'\"\n            error \"Try '${THIS_SCRIPT} --help' for more information\"\n            exit 2;;\n    esac\n    shift\ndone\n\ncleanup() {\n    local exit_code=\"$?\"\n\n    debug 'Removing temp directory'\n    rm --force --recursive \"${TEMPORARY_DIR}\"\n\n    exit \"$exit_code\"\n}\n\ntrap cleanup EXIT\n\ndebug \"Created temp directory: ${TEMPORARY_DIR}\"\ndebug \"Created log file: ${LOG_FILE}\"\n\n# End Boilerplate\n\ndebug \"Building 'stylish-haskell'\"\nif [[ 'true' = \"${SYSTEM_GHC}\" ]]; then\n    stack --system-ghc build stylish-haskell\nelse\n    stack build stylish-haskell\nfi\n\ninfo \"Running 'stylish-haskell'\"\nif [[ 'true' = \"${SYSTEM_GHC}\" ]]; then\n    git ls-files -z '*.hs' \\\n        | xargs -I {} --null \\\n                stack --system-ghc exec stylish-haskell -- --inplace {}\nelse\n    git ls-files -z '*.hs' \\\n        | xargs -I {} --null \\\n                stack exec stylish-haskell -- --inplace {}\nfi\n\ndebug 'Checking for changed files'\nCHANGED_FILES=\"$(git status --porcelain '*.hs')\"\n\nif [[ -n \"${CHANGED_FILES}\"  ]]; then\n    error 'Some Haskell files are not formatted properly'\n    error \"$(git diff -- '*.hs')\"\n    error ''\n    error \"You can fix this by running '${THIS_SCRIPT}' locally and committing\"\n\n    exit 1\nfi\n"
     },
     {
       "path": "README.md",
@@ -95,13 +95,6 @@
       "content": "import Distribution.Simple\nmain = defaultMain\n"
     },
     {
-      "path": "test/acceptance/Test.purs",
-      "sha": null,
-      "content_sha256": "07a5da1e42e30793810c457992b109c6f8b44e3cff7ef490fb254c48abf1b065",
-      "score": 56,
-      "content": "module Test where\n\ndata Foo\n"
-    },
-    {
       "path": "test/golden/Main.hs",
       "sha": null,
       "content_sha256": "346d620cced9390b9eb05949ba0975b883ea1b39377439581994c25915de2756",
@@ -123,6 +116,13 @@
       "content": "module Main where\n\nimport \"rio\" RIO\n\nimport \"prettyprinter\" Data.Text.Prettyprint.Doc             (Doc, layoutSmart)\nimport \"prettyprinter\" Data.Text.Prettyprint.Doc.Render.Text (renderStrict)\nimport \"purescript\" Language.PureScript\n    ( Type(ParensInType, RCons, REmpty, TypeApp, TypeVar)\n    , tyRecord\n    )\nimport \"tasty\" Test.Tasty\n    ( TestTree\n    , defaultMain\n    , testGroup\n    )\nimport \"tasty-hunit\" Test.Tasty.HUnit\n    ( assertEqual\n    , testCase\n    )\n\nimport \"purty\" Purty (defaultPrettyPrintConfig, layoutOptions)\n\nimport qualified \"purty\" Doc.Dynamic\nimport qualified \"purty\" Doc.Static\n\nmain :: IO ()\nmain = defaultMain unitTests\n\nunitTests :: TestTree\nunitTests =\n  testGroup\n    \"Doc\"\n    [ testGroup \"record\" recordTests\n    , testGroup \"row\" rowTests\n    ]\n\nrecordTests :: [TestTree]\nrecordTests =\n  [ testGroup \"Empty record\" emptyRecordTests\n  , testGroup \"Open record\" openRecordTests\n  ]\n\nemptyRecordTests :: [TestTree]\nemptyRecordTests =\n  [ testGroup\n    \"Empty record types have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"{}\" (renderText $ Doc.Dynamic.fromType emptyRecord))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"{}\" (renderText $ Doc.Static.fromType emptyRecord))\n    ]\n  , testGroup\n    \"Empty record types in parens have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"({})\" (renderText $ Doc.Dynamic.fromType $ ParensInType emptyRecord))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"({})\" (renderText $ Doc.Static.fromType $ ParensInType emptyRecord))\n    ]\n  ]\n\nopenRecordTests :: [TestTree]\nopenRecordTests =\n  [ testGroup\n    \"Open record types have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"{ | foo}\" (renderText $ Doc.Dynamic.fromType openRecord))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"{ | foo}\" (renderText $ Doc.Static.fromType openRecord))\n    ]\n  , testGroup\n    \"Open record types in parens have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"({ | foo})\" (renderText $ Doc.Dynamic.fromType $ ParensInType openRecord))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"({ | foo})\" (renderText $ Doc.Static.fromType $ ParensInType openRecord))\n    ]\n  , testGroup\n    \"Open record types with one label have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"{a :: b | r}\" (renderText $ Doc.Dynamic.fromType $ TypeApp tyRecord openRow1))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"{a :: b | r}\" (renderText $ Doc.Static.fromType $ TypeApp tyRecord openRow1))\n    ]\n  , testGroup\n    \"Open record types with one label in parens have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"({a :: b | r})\" (renderText $ Doc.Dynamic.fromType $ ParensInType $ TypeApp tyRecord openRow1))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"({a :: b | r})\" (renderText $ Doc.Static.fromType $ ParensInType $ TypeApp tyRecord openRow1))\n    ]\n  , testGroup\n    \"Open record types with multiple labels have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"{a :: b, c :: d | r}\" (renderText $ Doc.Dynamic.fromType $ TypeApp tyRecord openRow2))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"{a :: b, c :: d | r}\" (renderText $ Doc.Static.fromType $ TypeApp tyRecord openRow2))\n    ]\n  , testGroup\n    \"Open record types with multiple labels in parens have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"({a :: b, c :: d | r})\" (renderText $ Doc.Dynamic.fromType $ ParensInType $ TypeApp tyRecord openRow2))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"({a :: b, c :: d | r})\" (renderText $ Doc.Static.fromType $ ParensInType $ TypeApp tyRecord openRow2))\n    ]\n  ]\n\nrowTests :: [TestTree]\nrowTests =\n  [ testGroup\n    \"Open row types with one label have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"(a :: b | r)\" (renderText $ Doc.Dynamic.fromType openRow1))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"(a :: b | r)\" (renderText $ Doc.Static.fromType openRow1))\n    ]\n  , testGroup\n    \"Open row types with one label in parens have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"((a :: b | r))\" (renderText $ Doc.Dynamic.fromType $ ParensInType openRow1))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"((a :: b | r))\" (renderText $ Doc.Static.fromType $ ParensInType openRow1))\n    ]\n  , testGroup\n    \"Open row types with multiple labels have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"(a :: b, c :: d | r)\" (renderText $ Doc.Dynamic.fromType openRow2))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"(a :: b, c :: d | r)\" (renderText $ Doc.Static.fromType openRow2))\n    ]\n  , testGroup\n    \"Open row types with multiple labels in parens have the same spacing in both formatters\"\n    [ testCase\n      \"dynamic\"\n      (assertEqual \"\" \"((a :: b, c :: d | r))\" (renderText $ Doc.Dynamic.fromType $ ParensInType openRow2))\n    , testCase\n      \"static\"\n      (assertEqual \"\" \"((a :: b, c :: d | r))\" (renderText $ Doc.Static.fromType $ ParensInType openRow2))\n    ]\n  ]\n\nemptyRecord :: Language.PureScript.Type\nemptyRecord = TypeApp tyRecord REmpty\n\nopenRecord :: Language.PureScript.Type\nopenRecord = TypeApp tyRecord (TypeVar \"foo\")\n\nopenRow1 :: Language.PureScript.Type\nopenRow1 = RCons \"a\" (TypeVar \"b\") (TypeVar \"r\")\n\nopenRow2 :: Language.PureScript.Type\nopenRow2 = RCons \"a\" (TypeVar \"b\") (RCons \"c\" (TypeVar \"d\") (TypeVar \"r\"))\n\nrenderText :: Doc a -> Text\nrenderText = renderStrict . layoutSmart (layoutOptions defaultPrettyPrintConfig)\n"
     },
     {
+      "path": "test/acceptance/Test.purs",
+      "sha": null,
+      "content_sha256": "07a5da1e42e30793810c457992b109c6f8b44e3cff7ef490fb254c48abf1b065",
+      "score": 56,
+      "content": "module Test where\n\ndata Foo\n"
+    },
+    {
       "path": "test/golden/files/dynamic/ModuleHeader.purs",
       "sha": null,
       "content_sha256": "a048ae67631866866a9f48683499a8f84db96a1a57eac57766267f3a6a8fc8cc",
@@ -137,18 +137,39 @@
       "content": "module EmptyData where\n\ndata Foo\n  \n"
     },
     {
-      "path": "test/golden/files/dynamic/TypeSynonym.purs",
-      "sha": null,
-      "content_sha256": "9ab9ed34ec3c0d482d223dd4f5cfab3d3f9083a8408e9b790b93a7ce89a56278",
-      "score": 52,
-      "content": "module TypeSynonym where\n\ntype Foo\n  = Int\n"
-    },
-    {
       "path": "test/golden/files/static/ModuleHeader.purs",
       "sha": null,
       "content_sha256": "a048ae67631866866a9f48683499a8f84db96a1a57eac57766267f3a6a8fc8cc",
       "score": 52,
       "content": "module ModuleHeader where"
+    },
+    {
+      "path": "test/golden/files/dynamic/EmptyData.purs",
+      "sha": null,
+      "content_sha256": "41f51f526c8f1ca4a50ff52cabd5bc7dbe01ed340f7b1cfc45e69e239002037e",
+      "score": 52,
+      "content": "module EmptyData where\n\ndata Foo\n  \n"
+    },
+    {
+      "path": "test/golden/files/static/DataWithParameters.purs",
+      "sha": null,
+      "content_sha256": "1a252def5b4ca5a6b643d0df6cd4b4ac531a2d539f0d36a990b848e642b1141f",
+      "score": 52,
+      "content": "module DataWithParameters where\n\ndata Foo a\n  = Foo\n"
+    },
+    {
+      "path": "test/golden/files/dynamic/Booleans.purs",
+      "sha": null,
+      "content_sha256": "2ffc3519bf1c77e0548774a46332ce1697a064d4d274b9ab2d1e2e4c9c730bdb",
+      "score": 52,
+      "content": "module Booleans where\n\nx = true\n\ny = false\n\nf true = \"\"\n"
+    },
+    {
+      "path": "test/golden/files/dynamic/TypeSynonym.purs",
+      "sha": null,
+      "content_sha256": "9ab9ed34ec3c0d482d223dd4f5cfab3d3f9083a8408e9b790b93a7ce89a56278",
+      "score": 52,
+      "content": "module TypeSynonym where\n\ntype Foo\n  = Int\n"
     },
     {
       "path": "test/golden/files/dynamic/DataWithParameters.purs",
@@ -163,28 +184,9 @@
       "content_sha256": "9ab9ed34ec3c0d482d223dd4f5cfab3d3f9083a8408e9b790b93a7ce89a56278",
       "score": 52,
       "content": "module TypeSynonym where\n\ntype Foo\n  = Int\n"
-    },
-    {
-      "path": "test/golden/files/static/DataWithParameters.purs",
-      "sha": null,
-      "content_sha256": "1a252def5b4ca5a6b643d0df6cd4b4ac531a2d539f0d36a990b848e642b1141f",
-      "score": 52,
-      "content": "module DataWithParameters where\n\ndata Foo a\n  = Foo\n"
-    },
-    {
-      "path": "test/golden/files/dynamic/EmptyData.purs",
-      "sha": null,
-      "content_sha256": "41f51f526c8f1ca4a50ff52cabd5bc7dbe01ed340f7b1cfc45e69e239002037e",
-      "score": 52,
-      "content": "module EmptyData where\n\ndata Foo\n  \n"
-    },
-    {
-      "path": "test/golden/files/dynamic/Booleans.purs",
-      "sha": null,
-      "content_sha256": "2ffc3519bf1c77e0548774a46332ce1697a064d4d274b9ab2d1e2e4c9c730bdb",
-      "score": 52,
-      "content": "module Booleans where\n\nx = true\n\ny = false\n\nf true = \"\"\n"
     }
   ],
-  "generated_at": "2026-10-08T03:25:10.938582+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:19.376555+00:00"
 }

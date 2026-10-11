@@ -39,13 +39,6 @@
       "content": "[tool.poetry]\nname = \"fastapi-cerbos\"\nversion = \"0.1.0\"\ndescription = \"\"\nauthors = [\"Rohit Ghumare <ghumare64@gmail.com>\"]\nreadme = \"README.md\"\n\n[tool.poetry.dependencies]\npython = \"^3.10\"\nfastapi = \"^0.110.0\"\npython-dotenv = \"^1.0.1\"\nhttpx = \"^0.27.0\"\npyjwt = \"^2.8.0\"\nsqlalchemy = \"^2.0.29\"\nalembic = \"^1.13.1\"\nuvicorn = \"^0.29.0\"\npymysql = \"^1.1.0\"\ncerbos = \"^0.10.5\"\ncryptography = \"^42.0.5\"\n\n\n[tool.poetry.group.dev.dependencies]\npre-commit = \"^3.7.0\"\n\n[build-system]\nrequires = [\"poetry-core\"]\nbuild-backend = \"poetry.core.masonry.api\"\n"
     },
     {
-      "path": "utils/auth/__init__.py",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 111,
-      "content": ""
-    },
-    {
       "path": "utils/auth/session.py",
       "sha": null,
       "content_sha256": "c6caafada41805c7abedcdd55ddaec0847af4769b31d9fb7719faa51e3d9e97a",
@@ -60,13 +53,6 @@
       "content": "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: fastapi-cerbos-demo-config\n  labels:\n    app.kubernetes.io/name: fastapi-cerbos-demo\n    app.kubernetes.io/component: cerbos\ndata:\n  \"config.yaml\": |-\n      server:\n        httpListenAddr: \":3592\"\n        adminAPI:\n          enabled: true\n          adminCredentials:\n            username: cerbos\n            passwordHash: JDJ5JDEwJElUMnV4Zy5qL0NOdHV6MEIwLjY0Zy4wdEdzUFplMGpWYW5XLndVemJSYXFQS2R1VFZVZ1guCgo=\n      storage:\n        driver: \"disk\" \n        disk: \n          directory: /policies\n          watchForChanges: true\n      schema:\n        enforcement: warn\n      audit:\n        enabled: true \n        accessLogsEnabled: true \n        decisionLogsEnabled: true \n        backend: file \n        file:\n          path: stdout\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: fastapi-cerbos-demo-policies\n  labels:\n    app.kubernetes.io/name: fastapi-cerbos-demo\n    app.kubernetes.io/component: cerbos\ndata:\n  \"common_roles.yaml\": |-\n    apiVersion: api.cerbos.dev/v1\n    description: |-\n      Common dynamic roles used within this Demo app\n    derivedRoles:\n      name: common_roles\n      definitions:\n        - name: owner\n          parentRoles: \n            - user\n          condition:\n            match:\n              expr: request.resource.attr.ownerId == request.principal.id\n\n  \"principal_policy.yaml\": |-\n    apiVersion: api.cerbos.dev/v1\n    principalPolicy:\n      version: default\n      principal: auditor@google.com\n      rules:\n        - resource: video\n          actions:\n            - action: \"*\"\n              effect: EFFECT_ALLOW\n  \"resource_policy.yaml\": |-\n    apiVersion: api.cerbos.dev/v1\n    resourcePolicy:\n      version: default\n      importDerivedRoles:\n        - common_roles\n\n      resource: video\n      rules:\n        - actions: [\"read\", \"create\"]\n          effect: EFFECT_ALLOW\n          roles:\n            - manager\n            - user\n\n        - actions: [\"delete\"]\n          effect: EFFECT_ALLOW\n          derivedRoles:\n            - owner\n\n        - actions: [\"update\"]\n          effect: EFFECT_ALLOW\n          roles:\n            - manager\n          condition:\n            match:\n              expr: request.resource.attr.region == request.principal.attr.region\n\n        - actions: [\"read\", \"create\", \"update\", \"delete\"]\n          effect: EFFECT_ALLOW\n          roles:\n            - admin\n      schemas:\n        principalSchema:\n          ref: cerbos:///principal.json\n        resourceSchema:\n          ref: cerbos:///video.json\n          ignoreWhen:\n            actions: [ 'create' ]\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: fastapi-cerbos-demo\n  labels:\n    app.kubernetes.io/name: fastapi-cerbos-demo\n    app.kubernetes.io/component: fastapi-cerbos-demo\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app.kubernetes.io/name: fastapi-cerbos-demo\n      app.kubernetes.io/component: fastapi-cerbos-demo\n  template:\n    metadata:\n      labels:\n        app.kubernetes.io/name: fastapi-cerbos-demo\n        app.kubernetes.io/component: fastapi-cerbos-demo\n    spec:\n      containers:\n        - name: fastapi-cerbos-demo\n          image: \"rohitghumare64/fastapi-cerbos-demo:v2\"\n          command: [\"python\", \"-m\", \"gunicorn\", \"-c\", \"gunicorn_config.py\", \"main:app\"]\n          imagePullPolicy: IfNotPresent\n          ports:\n            - name: http\n              containerPort: 8000\n        - name: cerbos\n          image: \"ghcr.io/cerbos/cerbos:0.34.0\"\n          imagePullPolicy: IfNotPresent\n          args:\n            - \"server\"\n            - \"--config=/config/config.yaml\"\n            - \"--log-level=INFO\"\n          volumeMounts:\n            - name: config\n              mountPath: /config\n              readOnly: true\n            - name: policies\n              mountPath: /policies\n      volumes:\n        - name: sock\n          emptyDir: {}\n        - name: config\n          configMap:\n            name: fastapi-cerbos-demo-config\n        - name: policies\n          configMap:\n            name: fastapi-cerbos-demo-policies"
     },
     {
-      "path": "cms/videos/models.py",
-      "sha": null,
-      "content_sha256": "b2f522a56221fb2c4e02e8eceb063cd73225676c35a8d64749638f92b08849ef",
-      "score": 106,
-      "content": "from sqlalchemy import Boolean\nfrom sqlalchemy import Column\nfrom sqlalchemy import Integer\nfrom sqlalchemy import String\n\nfrom conf.db.models import Model\n\n\nclass StatusChoice:\n    NOT_PROCESSED = \"NOT_PROCESSED\"\n    PROCESSED = \"PROCESSED\"\n    PROCESSING = \"PROCESSING\"\n    FAILED = \"FAILED\"\n\n\nclass Video(Model):\n    __tablename__ = \"videos\"\n\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    description = Column(String)\n    is_active = Column(Boolean, default=True)\n    file = Column(String)\n    status = Column(String, default=StatusChoice.NOT_PROCESSED)\n"
-    },
-    {
       "path": "conf/db/models.py",
       "sha": null,
       "content_sha256": "89aa844b9c544226c3fa70a073d608199e59af75b2fd0cfd17c739375d3e9c3e",
@@ -74,11 +60,11 @@
       "content": "from sqlalchemy import create_engine\nfrom sqlalchemy.ext.declarative import declarative_base\nfrom sqlalchemy.orm import sessionmaker\n\nfrom conf.settings import Settings\n\nSQLALCHEMY_DATABASE_URL = (\n    f\"mysql+pymysql://{Settings.MYSQL_USER}:{Settings.MYSQL_PASSWORD}@\"\n    f\"{Settings.MYSQL_HOST}:{Settings.MYSQL_PORT}/{Settings.MYSQL_DB}\"\n)\n\nengine = create_engine(SQLALCHEMY_DATABASE_URL)\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\n\nModel = declarative_base()\n"
     },
     {
-      "path": "policies/common_roles.yaml",
+      "path": "cms/videos/models.py",
       "sha": null,
-      "content_sha256": "4fd2710524dd050775d2599744e61960d1f40a6598fcee400f6663b44d344d9b",
-      "score": 105,
-      "content": "apiVersion: api.cerbos.dev/v1\ndescription: |-\n  Common dynamic roles used within this Demo app\nderivedRoles:\n  name: common_roles\n  definitions:\n    - name: owner\n      parentRoles: \n        - user\n      condition:\n        match:\n          expr: request.resource.attr.ownerId == request.principal.id\n"
+      "content_sha256": "b2f522a56221fb2c4e02e8eceb063cd73225676c35a8d64749638f92b08849ef",
+      "score": 106,
+      "content": "from sqlalchemy import Boolean\nfrom sqlalchemy import Column\nfrom sqlalchemy import Integer\nfrom sqlalchemy import String\n\nfrom conf.db.models import Model\n\n\nclass StatusChoice:\n    NOT_PROCESSED = \"NOT_PROCESSED\"\n    PROCESSED = \"PROCESSED\"\n    PROCESSING = \"PROCESSING\"\n    FAILED = \"FAILED\"\n\n\nclass Video(Model):\n    __tablename__ = \"videos\"\n\n    id = Column(Integer, primary_key=True)\n    title = Column(String)\n    description = Column(String)\n    is_active = Column(Boolean, default=True)\n    file = Column(String)\n    status = Column(String, default=StatusChoice.NOT_PROCESSED)\n"
     },
     {
       "path": "policies/resource_policy.yaml",
@@ -86,6 +72,13 @@
       "content_sha256": "42b420b002f4f29e2e0767574783163fa9982cef4ae33ce71193ff44d816d929",
       "score": 105,
       "content": "apiVersion: api.cerbos.dev/v1\nresourcePolicy:\n  version: default\n  importDerivedRoles:\n    - common_roles\n\n  resource: video\n  rules:\n    - actions: [\"read\", \"create\"]\n      effect: EFFECT_ALLOW\n      roles:\n        - manager\n        - user\n\n    - actions: [\"delete\"]\n      effect: EFFECT_ALLOW\n      derivedRoles:\n        - owner\n\n    - actions: [\"update\"]\n      effect: EFFECT_ALLOW\n      roles:\n        - manager\n      condition:\n        match:\n          expr: request.resource.attr.region == request.principal.attr.region\n   \n    - actions: [\"read\", \"create\", \"update\", \"delete\"]\n      effect: EFFECT_ALLOW\n      roles:\n        - admin\n  \n  schemas:\n    principalSchema:\n      ref: cerbos:///principal.json\n    resourceSchema:\n      ref: cerbos:///video.json\n      ignoreWhen:\n        actions: [ 'create' ]\n"
+    },
+    {
+      "path": "policies/common_roles.yaml",
+      "sha": null,
+      "content_sha256": "4fd2710524dd050775d2599744e61960d1f40a6598fcee400f6663b44d344d9b",
+      "score": 105,
+      "content": "apiVersion: api.cerbos.dev/v1\ndescription: |-\n  Common dynamic roles used within this Demo app\nderivedRoles:\n  name: common_roles\n  definitions:\n    - name: owner\n      parentRoles: \n        - user\n      condition:\n        match:\n          expr: request.resource.attr.ownerId == request.principal.id\n"
     },
     {
       "path": "policies/principal_policy.yaml",
@@ -170,21 +163,22 @@
       "content_sha256": "c5226fe3b118e4cd1e4f2bd67480d7931e1ded045dd8e06c0a56c32a6543f6ab",
       "score": 33,
       "content": "import os\n\nfrom dotenv import load_dotenv\n\nBASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))\nload_dotenv(os.path.join(BASE_DIR, \".env\"))\n\n\nclass Settings:\n    DEBUG: bool = os.getenv(\"DEBUG\", False)\n    CORS_ORIGINS = os.getenv(\"CORS_ORIGINS\").split(\",\")\n    SECRET_KEY = os.getenv(\"SECRET_KEY\")\n\n    MYSQL_USER = os.getenv(\"MYSQL_USER\")\n    MYSQL_PASSWORD = os.getenv(\"MYSQL_PASSWORD\")\n    MYSQL_HOST = os.getenv(\"MYSQL_HOST\")\n    MYSQL_DB = os.getenv(\"MYSQL_DB\")\n    MYSQL_PORT = os.getenv(\"MYSQL_PORT\")\n"
-    },
+    }
+  ],
+  "fetch_errors": [
     {
-      "path": "utils/__init__.py",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 33,
-      "content": ""
+      "path": "utils/auth/__init__.py",
+      "error": "empty content"
     },
     {
       "path": "cms/__init__.py",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 33,
-      "content": ""
+      "error": "empty content"
+    },
+    {
+      "path": "utils/__init__.py",
+      "error": "empty content"
     }
   ],
-  "generated_at": "2026-10-08T02:26:03.820033+00:00"
+  "fetch_error_count": 3,
+  "generated_at": "2026-10-11T01:13:39.298350+00:00"
 }

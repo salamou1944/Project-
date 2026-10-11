@@ -4,7 +4,7 @@
   "revision_sha": "ae1f92b280038d977cadd95ccb453a68e735ab36",
   "default_branch": "master",
   "pushed_at": "2022-12-08T01:27:47Z",
-  "repo_updated_at": "2026-07-23T05:09:38Z",
+  "repo_updated_at": "2026-10-09T22:35:44Z",
   "license": "MIT",
   "topics": [],
   "tree_truncated": false,
@@ -39,11 +39,11 @@
       "content": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<browserconfig>\n    <msapplication>\n        <tile>\n            <square150x150logo src=\"/static/favicon/mstile-150x150.png\"/>\n            <TileColor>#ffc40d</TileColor>\n        </tile>\n    </msapplication>\n</browserconfig>\n"
     },
     {
-      "path": "middleware.py",
+      "path": "app.json",
       "sha": null,
-      "content_sha256": "5e0f1107e64f165192d9caf4c97d3368a83ba9b64352838014ee8702631ced48",
+      "content_sha256": "d0073c3497c2cb7c0002bcc7481a5a898b8458239f90f11e4f5bc773f86f68e9",
       "score": 35,
-      "content": "from starlette.datastructures import URL\nfrom starlette.responses import RedirectResponse\nfrom starlette.types import ASGIApp, ASGIInstance, Scope\n\n\nclass WWWRedirectMiddleware:\n    def __init__(self, app: ASGIApp) -> None:\n        self.app = app\n\n    def __call__(self, scope: Scope) -> ASGIInstance:\n        if scope[\"type\"] in (\"http\"):\n\n            host = None\n            for key, value in scope[\"headers\"]:\n                if key == b\"host\":\n                    host = value.decode(\"latin-1\")\n                    break\n\n            if host and not host.startswith(\"www.\"):\n                url = URL(scope=scope)\n                url = url.replace(hostname=f\"www.{host}\")\n                return RedirectResponse(url, status_code=301)\n\n        return self.app(scope)\n"
+      "content": "{\n    \"name\": \"IP Geolocation API\",\n    \"description\": \"A painless Geolocation API\",\n    \"website\": \"https://ipgeolocationapi.com\",\n    \"repository\": \"https://github.com/madisvain/geolocationapi\",\n    \"logo\": \"https://ipgeolocationapi.io/static/logo.svg\",\n    \"keywords\": [\n      \"python\",\n      \"starlette\",\n      \"api\",\n      \"geolocation\"\n    ],\n    \"env\": {\n      \"GUNICORN_WORKERS\": {\n        \"description\": \"The number of gunicorn workers to run.\",\n        \"value\": \"4\"\n      }\n    }\n  }"
     },
     {
       "path": "app.py",
@@ -53,19 +53,21 @@
       "content": "import os\nimport jinja2\nimport ujson\nimport uvicorn\n\nfrom geoip2 import database\nfrom starlette.applications import Starlette\nfrom starlette.middleware.cors import CORSMiddleware\nfrom starlette.staticfiles import StaticFiles\nfrom starlette.responses import HTMLResponse, UJSONResponse\n\nfrom middleware import WWWRedirectMiddleware\n\napp = Starlette()\napp.debug = False\n\n# Middleware\napp.add_middleware(\n    CORSMiddleware, allow_origins=[\"*\"], allow_methods=[\"GET\", \"OPTIONS\"]\n)\napp.add_middleware(WWWRedirectMiddleware)\n\n# Static\napp.mount(\"/static\", StaticFiles(directory=\"static\"))\n\n\n@app.on_event(\"startup\")\nasync def startup():\n    # Open GeoIp2 database\n    app.geoip2 = database.Reader(os.path.join(\"data\", \"GeoLite2-Country.mmdb\"))\n    # Load countries into memory\n    with open(os.path.join(\"data\", \"countries.json\")) as f:\n        app.countries = ujson.loads(f.read())\n\n\n@app.route(\"/\", methods=[\"GET\", \"HEAD\"])\nasync def homepage(request):\n    path = os.path.join(\"templates\", \"index.html\")\n    with open(path, \"r\") as f:\n        template = jinja2.Template(f.read())\n        return HTMLResponse(template.render())\n\n\n@app.route(\"/api/geolocate\", methods=[\"GET\", \"HEAD\"])\nasync def geolocate(request):\n    country_code = request.headers.get(\"CF-IPCountry\", \"\").upper()\n    country = app.countries.get(country_code)\n    if country:\n        return UJSONResponse(country)\n    else:\n        return UJSONResponse({\"message\": \"Could not geocode request.\"})\n\n\n@app.route(\"/api/geolocate/{ip}\", methods=[\"GET\", \"HEAD\"])\nasync def geolocate_ip(request):\n    r = app.geoip2.country(request.path_params[\"ip\"])\n    country = app.countries.get(r.country.iso_code)\n    if country:\n        return UJSONResponse(country)\n    else:\n        return UJSONResponse({\"message\": \"Could not geocode request.\"})\n\n\n@app.route(\"/api/countries\", methods=[\"GET\", \"HEAD\"])\nasync def countries_list(request):\n    return UJSONResponse(app.countries)\n\n\n@app.route(\"/api/countries/{country_code}\", methods=[\"GET\", \"HEAD\"])\nasync def countries_detail(request):\n    country_code = request.path_params[\"country_code\"].upper()\n    country = app.countries.get(country_code)\n    if country:\n        return UJSONResponse(country)\n    else:\n        return UJSONResponse({\"message\": \"Country code not found.\"})\n\n\nif __name__ == \"__main__\":\n    uvicorn.run(app, host=\"0.0.0.0\", port=8000, access_log=False)\n"
     },
     {
+      "path": "middleware.py",
+      "sha": null,
+      "content_sha256": "5e0f1107e64f165192d9caf4c97d3368a83ba9b64352838014ee8702631ced48",
+      "score": 35,
+      "content": "from starlette.datastructures import URL\nfrom starlette.responses import RedirectResponse\nfrom starlette.types import ASGIApp, ASGIInstance, Scope\n\n\nclass WWWRedirectMiddleware:\n    def __init__(self, app: ASGIApp) -> None:\n        self.app = app\n\n    def __call__(self, scope: Scope) -> ASGIInstance:\n        if scope[\"type\"] in (\"http\"):\n\n            host = None\n            for key, value in scope[\"headers\"]:\n                if key == b\"host\":\n                    host = value.decode(\"latin-1\")\n                    break\n\n            if host and not host.startswith(\"www.\"):\n                url = URL(scope=scope)\n                url = url.replace(hostname=f\"www.{host}\")\n                return RedirectResponse(url, status_code=301)\n\n        return self.app(scope)\n"
+    },
+    {
       "path": "release.py",
       "sha": null,
       "content_sha256": "e3a5142c6a86b2455b800781298b2ffd734265f211eb66058c4a02f9a801c42f",
       "score": 35,
       "content": "import io\nimport os\nimport shutil\nimport tarfile\nimport requests\n\nGEOIP2_DB_URL = (\n    \"http://geolite.maxmind.com/download/geoip/database/GeoLite2-Country.tar.gz\"\n)\n\nr = requests.get(GEOIP2_DB_URL)\ntar = tarfile.open(mode=\"r:gz\", fileobj=io.BytesIO(r.content))\nfor member in tar.getmembers():\n    if member.name.endswith(\"GeoLite2-Country.mmdb\"):\n        member.name = os.path.basename(member.name)\n        tar.extract(member, path=\"data\")\n"
-    },
-    {
-      "path": "app.json",
-      "sha": null,
-      "content_sha256": "d0073c3497c2cb7c0002bcc7481a5a898b8458239f90f11e4f5bc773f86f68e9",
-      "score": 35,
-      "content": "{\n    \"name\": \"IP Geolocation API\",\n    \"description\": \"A painless Geolocation API\",\n    \"website\": \"https://ipgeolocationapi.com\",\n    \"repository\": \"https://github.com/madisvain/geolocationapi\",\n    \"logo\": \"https://ipgeolocationapi.io/static/logo.svg\",\n    \"keywords\": [\n      \"python\",\n      \"starlette\",\n      \"api\",\n      \"geolocation\"\n    ],\n    \"env\": {\n      \"GUNICORN_WORKERS\": {\n        \"description\": \"The number of gunicorn workers to run.\",\n        \"value\": \"4\"\n      }\n    }\n  }"
     }
   ],
-  "generated_at": "2026-10-08T02:25:15.489964+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:57.481828+00:00"
 }

@@ -25,7 +25,7 @@
       "content": "{{/* Render the config.yaml file as a secret for iotedged. */}}\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: iotedged-config\n  namespace: {{ include \"edge-kubernetes.namespace\" . | quote }}\n  labels:\n    app.kubernetes.io/managed-by: {{.Release.Service | quote }}\n    app.kubernetes.io/instance: {{.Release.Name | quote }}\n    helm.sh/chart: {{ include \"edge-kubernetes.chart\" . }}\ntype: Opaque\ndata:\n    config.yaml: |-\n      {{ include \"edge-kubernetes.iotedgedconfig\" . | b64enc }}\n...\n{{/* Render all the registry credentials as secrets. */}}\n{{- if .Values.registryCredentials }}\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: regcreds\n  namespace: {{ include \"edge-kubernetes.namespace\" . | quote }}\n  labels:\n    app.kubernetes.io/managed-by: {{.Release.Service | quote }}\n    app.kubernetes.io/instance: {{.Release.Name | quote }}\n    helm.sh/chart: {{ include \"edge-kubernetes.chart\" . }}\ntype: kubernetes.io/dockerconfigjson\ndata:\n  {{- /*\n    The \"fromYaml | toJson\" pipeline below is a hack to convert the YAML string\n    returned by the \"regcreds\" template into a JSON. Without first converting it\n    to YAML (i.e. a Go Map object), \"toJson\" just JSONifies the raw YAML string.\n    Generating a JSON directly from the \"regcreds\" template also doesn't work\n    because we are iterating over a map from \".Values.registryCredentials\"\n    using the \"range\" action and it doesn't provide a way to detect if we are\n    at the end of the iteration so we can omit the trailing comma for the last\n    entry.\n  */}}\n  .dockerconfigjson: |-\n    {{ include \"edge-kubernetes.regcreds\" . | fromYaml | toJson | b64enc }}\n...\n{{ end }}\n"
     },
     {
-      "path": "azure-iot/azure-iot-runtime-old/templates/edge-rbac.yaml",
+      "path": "azure-iot/azure-iot-runtime/templates/edge-rbac.yaml",
       "sha": null,
       "content_sha256": "c23e85b77699b37b6e24cf0d92cfdd2649e29cdecb6e5ffb9642ba7a0432333b",
       "score": 109,
@@ -39,7 +39,7 @@
       "content": "{{/* Render the config.yaml file as a secret for iotedged. */}}\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: iotedged-config\n  namespace: {{ include \"edge-kubernetes.namespace\" . | quote }}\n  labels:\n    app.kubernetes.io/managed-by: {{.Release.Service | quote }}\n    app.kubernetes.io/instance: {{.Release.Name | quote }}\n    helm.sh/chart: {{ include \"edge-kubernetes.chart\" . }}\ntype: Opaque\ndata:\n    config.yaml: |-\n      {{ include \"edge-kubernetes.iotedgedconfig\" . | b64enc }}\n...\n{{/* Render all the registry credentials as secrets. */}}\n{{- if .Values.registryCredentials }}\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: regcreds\n  namespace: {{ include \"edge-kubernetes.namespace\" . | quote }}\n  labels:\n    app.kubernetes.io/managed-by: {{.Release.Service | quote }}\n    app.kubernetes.io/instance: {{.Release.Name | quote }}\n    helm.sh/chart: {{ include \"edge-kubernetes.chart\" . }}\ntype: kubernetes.io/dockerconfigjson\ndata:\n  {{- /*\n    The \"fromYaml | toJson\" pipeline below is a hack to convert the YAML string\n    returned by the \"regcreds\" template into a JSON. Without first converting it\n    to YAML (i.e. a Go Map object), \"toJson\" just JSONifies the raw YAML string.\n    Generating a JSON directly from the \"regcreds\" template also doesn't work\n    because we are iterating over a map from \".Values.registryCredentials\"\n    using the \"range\" action and it doesn't provide a way to detect if we are\n    at the end of the iteration so we can omit the trailing comma for the last\n    entry.\n  */}}\n  .dockerconfigjson: |-\n    {{ include \"edge-kubernetes.regcreds\" . | fromYaml | toJson | b64enc }}\n...\n{{ end }}\n---\napiVersion: v1\nkind: Secret\nmetadata:\n  name: edge-authentication\n  labels:\n    app.kubernetes.io/managed-by: {{.Release.Service | quote }}\n    app.kubernetes.io/instance: {{.Release.Name | quote }}\n    helm.sh/chart: {{ include \"edge-kubernetes.chart\" . }}\ntype: Opaque\ndata:\n{{ (.Files.Glob \"config/*\").AsConfig | indent 4 }}\n\n"
     },
     {
-      "path": "azure-iot/azure-iot-runtime/templates/edge-rbac.yaml",
+      "path": "azure-iot/azure-iot-runtime-old/templates/edge-rbac.yaml",
       "sha": null,
       "content_sha256": "c23e85b77699b37b6e24cf0d92cfdd2649e29cdecb6e5ffb9642ba7a0432333b",
       "score": 109,
@@ -123,13 +123,6 @@
       "content": "\"\"\"\nAuthor: Vinay Bagde\nModifier: Anurag Guda\nMaintainer: Andrew Liu, Anurag Guda\nCopyright (c) 2018 NVIDIA Corporation.  All rights reserved.\n\"\"\"\nimport sys\nimport os\nfrom collections import OrderedDict\n\ntile_map = {1:(1,1), 2: (1,2), 4:(2,2), 6:(2,3), 8:(2,4), 10:(2,5), 12:(3,4), 15:(3,5), 18:(3,6)}\ntile_map = OrderedDict(tile_map)\n\ndef read_camera_file():\n    camera_path = '/etc/config'\n    files = os.listdir(camera_path)\n    camera_ips = []\n    for file in files:\n        current_file = os.path.join(camera_path,file)\n        if os.path.isfile(current_file):\n            camera_file = open(current_file)\n            camera_ip = camera_file.readline()\n            camera_ip = camera_ip.strip(\"\\n\")\n            camera_file.close()\n            camera_ips.append(camera_ip)\n    return camera_ips\n\n\ndef main():\n    ips = read_camera_file()\n    print(ips)\n    print(len(ips))\n    n_rows = None\n    n_columns = None\n    for key,val  in tile_map.items():\n        if len(ips) < key:\n            break\n        n_rows = val[0]\n        n_columns = val[1]\n\n    write_list = []\n    if len(ips) != 0:\n\n        with open(sys.argv[2]) as fp:\n            line = fp.readline()\n            while line:\n                pair = line.split(\"=\")\n                if pair[0] == \"rows\":\n                    pair[1] = str(n_rows)\n                elif pair[0] == \"columns\":\n                    pair[1] = str(n_columns)\n                elif pair[0] == \"batch-size\":\n                    pair[1] = str(len(ips))\n                output = line\n                if len(pair) > 1:\n                    output = \"=\".join(pair)\n                output = output.replace('\\n','')\n                write_list.append(output)\n                line = fp.readline()\n        fp.close()\n    else:\n        with open(sys.argv[2]) as fp:\n            line = fp.readline()\n            while line:\n                pair = line.split(\"=\")\n                if pair[0] == \"rows\":\n                    pair[1] = str(\"1\")\n                elif pair[0] == \"columns\":\n                    pair[1] = str(\"1\")\n                elif pair[0] == \"num-sources\":\n                    pair[1] = str(\"1\")\n                elif pair[0] == \"file-loop\":\n                    pair[1] = str(\"1\")\n                elif pair[0] == \"batch-size\":\n                    pair[1] = str(\"1\")\n                output = line\n                if len(pair) > 1:\n                    output = \"=\".join(pair)\n                output = output.replace('\\n','')\n                write_list.append(output)\n                line = fp.readline()\n        fp.close()\n\n\n    \n\n    if len(ips) != 0:\n        for index,ip in enumerate(ips):\n            write_list.append(\"\\n\")\n            write_list.append(\"[source{}]\".format(index))\n            write_list.append(\"enable=1\")\n            write_list.append(\"type=4\")\n            write_list.append(\"uri={}\".format(ip))\n            write_list.append(\"num-sources=1\")\n            write_list.append(\"gpu-id=0\")\n            write_list.append(\"cudadec-memtype=0\")\n            write_list.append(\"\\n\")\n\n        write_list.append(\"[sink0]\")\n        write_list.append(\"enable=1\")\n        write_list.append(\"type=4\")\n        write_list.append(\"container=1\")\n        write_list.append(\"codec=1\")\n        write_list.append(\"sync=0\")\n        write_list.append(\"bitrate=2000000\")\n        write_list.append(\"profile=0\")\n        write_list.append(\"output-file=out.mp4\")\n        write_list.append(\"source-id=0\")\n\n\n    if len(ips) == 0:\n        write_list.append(\"\\n\")\n        write_list.append(\"[sink0]\")\n        write_list.append(\"enable=1\")\n        write_list.append(\"type=1\")\n        write_list.append(\"sync=1\")\n        write_list.append(\"codec=1\")\n        write_list.append(\"bitrate=4000000\")\n        write_list.append(\"rtsp-port=8554\")\n        write_list.append(\"udp-port=5400\")\n        write_list.append(\"source-id=0\")\n        write_list.append(\"gpu-id=0\")\n        write_list.append(\"nvbuf-memory-type=0\")\n        write_list.append(\"\\n\")\n        write_list.append(\"[sink2]\")\n        write_list.append(\"enable=1\")\n        write_list.append(\"type=4\")\n        write_list.append(\"container=1\")\n        write_list.append(\"codec=1\")\n        write_list.append(\"sync=1\")\n        write_list.append(\"bitrate=2000000\")\n        write_list.append(\"rtsp-port=8554\")\n        write_list.append(\"udp-port=5400\")\n        write_list.append(\"profile=0\")\n        write_list.append(\"output-file=out.mp4\")\n        write_list.append(\"source-id=0\")\n\n    write_file = os.path.join(os.path.dirname(sys.argv[2]),'run.txt')\n    with open(write_file,\"w\") as file:\n        for line in write_list:\n            file.write(line)\n            file.write(\"\\n\")\n    file.close()\n    print(write_file)\n    os.system(\"{} -c {}\".format(sys.argv[1],write_file))\n\n\nif __name__ == '__main__':\n    main()\n"
     },
     {
-      "path": "azure-iot/video-analytics-demo-old/templates/tests/test-connection.yaml",
-      "sha": null,
-      "content_sha256": "a1126d4363bb281ffcfeefd764c56d3e339a5189be77262e01e741818e7710dd",
-      "score": 87,
-      "content": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: \"{{ include \"video-analytics-demo.fullname\" . }}-test-connection\"\n  labels:\n{{ include \"video-analytics-demo.labels\" . | indent 4 }}\n  annotations:\n    \"helm.sh/hook\": test-success\nspec:\n  containers:\n    - name: wget\n      image: busybox\n      command: ['wget']\n      args:  ['{{ include \"video-analytics-demo.fullname\" . }}:{{ .Values.service.port }}']\n  restartPolicy: Never\n"
-    },
-    {
       "path": "azure-iot/video-analytics-demo/templates/tests/test-connection.yaml",
       "sha": null,
       "content_sha256": "a1126d4363bb281ffcfeefd764c56d3e339a5189be77262e01e741818e7710dd",
@@ -137,11 +130,11 @@
       "content": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: \"{{ include \"video-analytics-demo.fullname\" . }}-test-connection\"\n  labels:\n{{ include \"video-analytics-demo.labels\" . | indent 4 }}\n  annotations:\n    \"helm.sh/hook\": test-success\nspec:\n  containers:\n    - name: wget\n      image: busybox\n      command: ['wget']\n      args:  ['{{ include \"video-analytics-demo.fullname\" . }}:{{ .Values.service.port }}']\n  restartPolicy: Never\n"
     },
     {
-      "path": "azure-iot/azure-iot-read/requirements.txt",
+      "path": "azure-iot/video-analytics-demo-old/templates/tests/test-connection.yaml",
       "sha": null,
-      "content_sha256": "c4104b9f0e28d2d12447cabdc21a604b4872c3db8c63de94413953f5dc7b28b0",
-      "score": 81,
-      "content": "azure-iot-device\nazure-iot-hub\nazure-eventhub\nasyncio\nsh\n"
+      "content_sha256": "a1126d4363bb281ffcfeefd764c56d3e339a5189be77262e01e741818e7710dd",
+      "score": 87,
+      "content": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: \"{{ include \"video-analytics-demo.fullname\" . }}-test-connection\"\n  labels:\n{{ include \"video-analytics-demo.labels\" . | indent 4 }}\n  annotations:\n    \"helm.sh/hook\": test-success\nspec:\n  containers:\n    - name: wget\n      image: busybox\n      command: ['wget']\n      args:  ['{{ include \"video-analytics-demo.fullname\" . }}:{{ .Values.service.port }}']\n  restartPolicy: Never\n"
     },
     {
       "path": "azure-iot/azure-iot-read/Dockerfile",
@@ -151,25 +144,11 @@
       "content": "FROM python:3.7\n\nCOPY . ./\n#COPY azure-send-message.py  .\n\nRUN pip3 install -r requirements.txt\n\nENTRYPOINT python azure-send-message-deviceto-cloud.py\n"
     },
     {
-      "path": "azure-iot/azure-iot-runtime/.helmignore",
+      "path": "azure-iot/azure-iot-read/requirements.txt",
       "sha": null,
-      "content_sha256": "0a1e8ed08a372234d8af441442044a88c27dc4409e039dbd3e113fec1ee91024",
-      "score": 68,
-      "content": "# Patterns to ignore when building packages.\n# This supports shell glob matching, relative path matching, and\n# negation (prefixed with !). Only one pattern per line.\n.DS_Store\n# Common VCS dirs\n.git/\n.gitignore\n.bzr/\n.bzrignore\n.hg/\n.hgignore\n.svn/\n# Common backup files\n*.swp\n*.bak\n*.tmp\n*~\n# Various IDEs\n.project\n.idea/\n*.tmproj\n"
-    },
-    {
-      "path": "azure-iot/video-analytics-demo-old/_helmignore",
-      "sha": null,
-      "content_sha256": "6a475186ccbaa9a0a4de5e96a5cb6ddcf9fad0d76bc38e04470ac84445b21a16",
-      "score": 68,
-      "content": "# Patterns to ignore when building packages.\n# This supports shell glob matching, relative path matching, and\n# negation (prefixed with !). Only one pattern per line.\n.DS_Store\n# Common VCS dirs\n.git/\n.gitignore\n.bzr/\n.bzrignore\n.hg/\n.hgignore\n.svn/\n# Common backup files\n*.swp\n*.bak\n*.tmp\n*~\n# Various IDEs\n.project\n.idea/\n*.tmproj\n.vscode/\n"
-    },
-    {
-      "path": "azure-iot/video-analytics-demo/_helmignore",
-      "sha": null,
-      "content_sha256": "6a475186ccbaa9a0a4de5e96a5cb6ddcf9fad0d76bc38e04470ac84445b21a16",
-      "score": 68,
-      "content": "# Patterns to ignore when building packages.\n# This supports shell glob matching, relative path matching, and\n# negation (prefixed with !). Only one pattern per line.\n.DS_Store\n# Common VCS dirs\n.git/\n.gitignore\n.bzr/\n.bzrignore\n.hg/\n.hgignore\n.svn/\n# Common backup files\n*.swp\n*.bak\n*.tmp\n*~\n# Various IDEs\n.project\n.idea/\n*.tmproj\n.vscode/\n"
+      "content_sha256": "c4104b9f0e28d2d12447cabdc21a604b4872c3db8c63de94413953f5dc7b28b0",
+      "score": 81,
+      "content": "azure-iot-device\nazure-iot-hub\nazure-eventhub\nasyncio\nsh\n"
     },
     {
       "path": "azure-iot/azure-iot-runtime-old/.helmignore",
@@ -179,6 +158,27 @@
       "content": "# Patterns to ignore when building packages.\n# This supports shell glob matching, relative path matching, and\n# negation (prefixed with !). Only one pattern per line.\n.DS_Store\n# Common VCS dirs\n.git/\n.gitignore\n.bzr/\n.bzrignore\n.hg/\n.hgignore\n.svn/\n# Common backup files\n*.swp\n*.bak\n*.tmp\n*~\n# Various IDEs\n.project\n.idea/\n*.tmproj\n"
     },
     {
+      "path": "azure-iot/azure-iot-runtime/.helmignore",
+      "sha": null,
+      "content_sha256": "0a1e8ed08a372234d8af441442044a88c27dc4409e039dbd3e113fec1ee91024",
+      "score": 68,
+      "content": "# Patterns to ignore when building packages.\n# This supports shell glob matching, relative path matching, and\n# negation (prefixed with !). Only one pattern per line.\n.DS_Store\n# Common VCS dirs\n.git/\n.gitignore\n.bzr/\n.bzrignore\n.hg/\n.hgignore\n.svn/\n# Common backup files\n*.swp\n*.bak\n*.tmp\n*~\n# Various IDEs\n.project\n.idea/\n*.tmproj\n"
+    },
+    {
+      "path": "azure-iot/video-analytics-demo/_helmignore",
+      "sha": null,
+      "content_sha256": "6a475186ccbaa9a0a4de5e96a5cb6ddcf9fad0d76bc38e04470ac84445b21a16",
+      "score": 68,
+      "content": "# Patterns to ignore when building packages.\n# This supports shell glob matching, relative path matching, and\n# negation (prefixed with !). Only one pattern per line.\n.DS_Store\n# Common VCS dirs\n.git/\n.gitignore\n.bzr/\n.bzrignore\n.hg/\n.hgignore\n.svn/\n# Common backup files\n*.swp\n*.bak\n*.tmp\n*~\n# Various IDEs\n.project\n.idea/\n*.tmproj\n.vscode/\n"
+    },
+    {
+      "path": "azure-iot/video-analytics-demo-old/_helmignore",
+      "sha": null,
+      "content_sha256": "6a475186ccbaa9a0a4de5e96a5cb6ddcf9fad0d76bc38e04470ac84445b21a16",
+      "score": 68,
+      "content": "# Patterns to ignore when building packages.\n# This supports shell glob matching, relative path matching, and\n# negation (prefixed with !). Only one pattern per line.\n.DS_Store\n# Common VCS dirs\n.git/\n.gitignore\n.bzr/\n.bzrignore\n.hg/\n.hgignore\n.svn/\n# Common backup files\n*.swp\n*.bak\n*.tmp\n*~\n# Various IDEs\n.project\n.idea/\n*.tmproj\n.vscode/\n"
+    },
+    {
       "path": "azure-iot/azure-iot-runtime-old/Chart.yaml",
       "sha": null,
       "content_sha256": "6e8f1c485bd6500ad6e2902ccf82ca613ac9ba453f0f2c50ab6544f86552309c",
@@ -186,5 +186,7 @@
       "content": "apiVersion: v1\nappVersion: '1.0'\ndescription: A Helm chart for running Azure IoT Edge on Kubernetes\nname: azure-iot-runtime\nversion: 0.2.10\n"
     }
   ],
-  "generated_at": "2026-10-08T08:25:36.012381+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:14:04.527014+00:00"
 }

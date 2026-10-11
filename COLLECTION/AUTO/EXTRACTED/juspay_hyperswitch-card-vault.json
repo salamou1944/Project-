@@ -60,13 +60,6 @@
       "content": "version: \"3.7\"\nvolumes:\n  k6_store:\n  pg_data:\nnetworks:\n  test_net:\n  grafana:\nservices:\n  locker_server:\n    image: locker:loadtest\n    ports:\n      - \"8080:8080\"\n    networks:\n      - test_net\n    cpu_count: ${CORES}\n    volumes:\n      - ../config/development.toml:/local/config/development.toml\n    environment:\n      - LOCKER__SERVER__HOST=0.0.0.0\n      - LOCKER__SERVER__PORT=8080\n      - LOCKER__LOG__CONSOLE__ENABLED=true\n      - LOCKER__LOG__CONSOLE__LEVEL=DEBUG\n      - LOCKER__LOG__CONSOLE__LOG_FORMAT=default\n      - LOCKER__DATABASE__URL=postgres://sam:damn@pg:5432/locker\n      - LOCKER__DATABASE__USERNAME=sam\n      - LOCKER__DATABASE__PASSWORD=damn\n      - LOCKER__DATABASE__HOST=pg\n      - LOCKER__DATABASE__PORT=5432\n      - LOCKER__DATABASE__DBNAME=locker\n      - LOCKER__SECRETS__TENANT=hyperswitch\n    depends_on:\n      migration:\n        condition: service_completed_successfully\n  pg:\n    image: postgres:14.5\n    ports:\n      - \"5432\"\n    networks:\n      - test_net\n    volumes:\n      - pg_data:/VAR/LIB/POSTGRESQL/DATA\n    environment:\n      - POSTGRES_USER=sam\n      - POSTGRES_PASSWORD=damn\n      - POSTGRES_DB=locker\n  migration:\n    image: rust:1.70\n    command: 'bash -c ''cargo install diesel_cli --no-default-features --features \"postgres\" && diesel migration --database-url postgres://sam:damn@pg:5432/locker run'''\n    working_dir: /app\n    networks:\n      - test_net\n    volumes:\n      - ../:/app\n    depends_on:\n      - pg\n  influxdb:\n    image: influxdb:1.8\n    networks:\n      - test_net\n      - grafana\n    ports:\n      - \"8086:8086\"\n    environment:\n      - INFLUXDB_DB=k6\n  grafana:\n    image: grafana/grafana:latest\n    networks:\n      - grafana\n    ports:\n      - \"3000:3000\"\n    environment:\n      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin\n      - GF_AUTH_ANONYMOUS_ENABLED=true\n      - GF_AUTH_BASIC_ENABLED=false\n    volumes:\n      - ./config/dashboards:/var/lib/grafana/dashboards\n      - ./config/grafana-dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboard.yaml\n      - ./config/grafana-datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml\n  k6:\n    image: grafana/k6:latest\n    command: run /scripts/${SCRIPT}\n    networks:\n      - test_net\n      - grafana\n    profiles:\n      - k6\n    ports:\n      - \"6565:6565\"\n    environment:\n      - K6_OUT=influxdb=http://influxdb:8086/k6\n    volumes:\n      - ./scripts:/scripts\n"
     },
     {
-      "path": "loadtest/README.md",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 158,
-      "content": ""
-    },
-    {
       "path": "loadtest/config/grafana-datasource.yaml",
       "sha": null,
       "content_sha256": "47e69a2446e8b8e6bfaf61b627f7e854be4d8fc2b06c1f1a65d78fbea5f37b3f",
@@ -137,18 +130,18 @@
       "content": "//! Setup logging subsystem.\n\nuse std::collections::{HashMap, HashSet};\n\nuse log_utils::{\n    AdditionalFieldsPlacement, ConsoleLogFormat, ConsoleLoggingConfig, DirectivePrintTarget,\n    LoggerConfig, LoggerError,\n};\nuse tracing_appender::non_blocking::WorkerGuard;\nuse tracing_subscriber::{Layer, prelude::*};\n\nuse super::config;\n\nfn get_envfilter_directive(\n    default_log_level: tracing::Level,\n    filter_log_level: tracing::Level,\n    crates_to_filter: &[&'static str],\n) -> String {\n    let mut workspace_members = build_info::cargo_workspace_members!();\n    workspace_members.extend(build_info::framework_libs_workspace_members());\n    workspace_members.extend(crates_to_filter.iter().copied());\n\n    workspace_members\n        .into_iter()\n        .zip(std::iter::repeat(filter_log_level))\n        .fold(\n            vec![default_log_level.to_string()],\n            |mut directives, (target, level)| {\n                directives.push(format!(\"{}={}\", target, level));\n                directives\n            },\n        )\n        .join(\",\")\n}\n\nfn get_logger_config(\n    config: &config::Log,\n    service_name: &str,\n    crates_to_filter: &[&'static str],\n) -> LoggerConfig {\n    let console_config = if config.console.enabled {\n        let console_filter_directive =\n            config\n                .console\n                .filtering_directive\n                .clone()\n                .unwrap_or_else(|| {\n                    get_envfilter_directive(\n                        tracing::Level::WARN,\n                        config.console.level.into_level(),\n                        crates_to_filter,\n                    )\n                });\n\n        let log_format = match config.console.log_format {\n            config::LogFormat::Default => ConsoleLogFormat::HumanReadable,\n            config::LogFormat::Json => {\n                error_stack::Report::set_color_mode(error_stack::fmt::ColorMode::None);\n                ConsoleLogFormat::CompactJson\n            }\n        };\n\n        Some(ConsoleLoggingConfig {\n            level: config.console.level.into_level(),\n            log_format,\n            filtering_directive: Some(console_filter_directive),\n            print_filtering_directive: DirectivePrintTarget::Stdout,\n        })\n    } else {\n        None\n    };\n\n    LoggerConfig {\n        static_top_level_fields: HashMap::from([\n            (\"service\".to_string(), serde_json::json!(service_name)),\n            #[cfg(feature = \"vergen\")]\n            (\n                \"build_version\".to_string(),\n                serde_json::json!(crate::version!()),\n            ),\n        ]),\n        top_level_keys: HashSet::new(),\n        persistent_keys: HashSet::new(),\n        log_span_lifecycles: false,\n        additional_fields_placement: AdditionalFieldsPlacement::TopLevel,\n        file_config: None,\n        console_config,\n        global_filtering_directive: None,\n    }\n}\n\n/// Contains guards necessary for logging\n#[derive(Debug)]\npub struct TelemetryGuard {\n    _log_guards: Vec<WorkerGuard>,\n}\n\n/// Setup logging sub-system specifying the logging configuration, service (binary) name, and a\n/// list of external crates for which a more verbose logging must be enabled. All crates within the\n/// current cargo workspace are automatically considered for verbose logging.\npub fn setup(\n    config: &config::Log,\n    service_name: &str,\n    crates_to_filter: impl AsRef<[&'static str]>,\n) -> Result<TelemetryGuard, LoggerError> {\n    let logger_config = get_logger_config(config, service_name, crates_to_filter.as_ref());\n\n    let components = log_utils::build_logging_components(logger_config)?;\n\n    let mut layers: Vec<Box<dyn Layer<_> + Send + Sync>> = Vec::new();\n    layers.push(components.storage_layer.boxed());\n\n    if let Some(console_layer) = components.console_log_layer {\n        layers.push(console_layer);\n    }\n\n    let subscriber = tracing_subscriber::registry().with(layers);\n\n    #[cfg(feature = \"console\")]\n    let subscriber = subscriber.with(console_subscriber::spawn());\n\n    subscriber.init();\n\n    Ok(TelemetryGuard {\n        _log_guards: components.guards,\n    })\n}\n"
     },
     {
-      "path": "migrations/00000000000000_diesel_initial_setup/down.sql",
-      "sha": null,
-      "content_sha256": "c431d45484ad90f730b3e7147c41ba4666d102d7527e587be5a14491ea610f20",
-      "score": 113,
-      "content": "-- This file was automatically created by Diesel to setup helper functions\n-- and other internal bookkeeping. This file is safe to edit, any future\n-- changes will be added to existing projects as new migrations.\n\nDROP FUNCTION IF EXISTS diesel_manage_updated_at(_tbl regclass);\nDROP FUNCTION IF EXISTS diesel_set_updated_at();\n"
-    },
-    {
       "path": "migrations/00000000000000_diesel_initial_setup/up.sql",
       "sha": null,
       "content_sha256": "bf8db785c8ba37ecf0f53888cc54e39886c3de06327a7ae33fd7670e69c2484b",
       "score": 113,
       "content": "-- This file was automatically created by Diesel to setup helper functions\n-- and other internal bookkeeping. This file is safe to edit, any future\n-- changes will be added to existing projects as new migrations.\n\n\n\n\n-- Sets up a trigger for the given table to automatically set a column called\n-- `updated_at` whenever the row is modified (unless `updated_at` was included\n-- in the modified columns)\n--\n-- # Example\n--\n-- ```sql\n-- CREATE TABLE users (id SERIAL PRIMARY KEY, updated_at TIMESTAMP NOT NULL DEFAULT NOW());\n--\n-- SELECT diesel_manage_updated_at('users');\n-- ```\nCREATE OR REPLACE FUNCTION diesel_manage_updated_at(_tbl regclass) RETURNS VOID AS $$\nBEGIN\n    EXECUTE format('CREATE TRIGGER set_updated_at BEFORE UPDATE ON %s\n                    FOR EACH ROW EXECUTE PROCEDURE diesel_set_updated_at()', _tbl);\nEND;\n$$ LANGUAGE plpgsql;\n\nCREATE OR REPLACE FUNCTION diesel_set_updated_at() RETURNS trigger AS $$\nBEGIN\n    IF (\n        NEW IS DISTINCT FROM OLD AND\n        NEW.updated_at IS NOT DISTINCT FROM OLD.updated_at\n    ) THEN\n        NEW.updated_at := current_timestamp;\n    END IF;\n    RETURN NEW;\nEND;\n$$ LANGUAGE plpgsql;\n"
+    },
+    {
+      "path": "migrations/00000000000000_diesel_initial_setup/down.sql",
+      "sha": null,
+      "content_sha256": "c431d45484ad90f730b3e7147c41ba4666d102d7527e587be5a14491ea610f20",
+      "score": 113,
+      "content": "-- This file was automatically created by Diesel to setup helper functions\n-- and other internal bookkeeping. This file is safe to edit, any future\n-- changes will be added to existing projects as new migrations.\n\nDROP FUNCTION IF EXISTS diesel_manage_updated_at(_tbl regclass);\nDROP FUNCTION IF EXISTS diesel_set_updated_at();\n"
     },
     {
       "path": "src/crypto/secrets_manager.rs",
@@ -158,18 +151,18 @@
       "content": "pub mod managers;\npub mod secrets_interface;\npub mod secrets_management;\n"
     },
     {
-      "path": "src/crypto/secrets_manager/managers.rs",
-      "sha": null,
-      "content_sha256": "0a6f1c29fb470dab15b93902a2f411c3d8f94281ee5223eec98ff7fabf8b619d",
-      "score": 109,
-      "content": "#[cfg(feature = \"kms-aws\")]\npub mod aws_kms;\n#[cfg(feature = \"kms-gcp\")]\npub mod gcp_kms;\n#[cfg(feature = \"kms-hashicorp-vault\")]\npub mod hcvault;\npub mod hollow;\n"
-    },
-    {
       "path": "src/crypto/secrets_manager/secrets_interface.rs",
       "sha": null,
       "content_sha256": "c124f801a89f719d682f31c207a25ed51847537b48fd8ebd742af7716e7f027b",
       "score": 109,
       "content": "//! Secrets management interface\n\nuse hyperswitch_masking::Secret;\n\n/// Trait defining the interface for managing application secrets\n#[async_trait::async_trait]\npub trait SecretManager: Send + Sync {\n    /// Given an input, decrypt/retrieve the secret\n    async fn get_secret(\n        &self,\n        input: Secret<String>,\n    ) -> error_stack::Result<Secret<String>, SecretsManagementError>;\n}\n\n/// Errors that may occur during secret management\n#[derive(Debug, thiserror::Error)]\npub enum SecretsManagementError {\n    /// An error occurred when retrieving raw data.\n    #[error(\"Failed to fetch the raw data\")]\n    FetchSecretFailed,\n\n    /// Failed while creating kms client\n    #[error(\"Failed while creating a secrets management client\")]\n    ClientCreationFailed,\n}\n"
+    },
+    {
+      "path": "src/crypto/secrets_manager/managers.rs",
+      "sha": null,
+      "content_sha256": "0a6f1c29fb470dab15b93902a2f411c3d8f94281ee5223eec98ff7fabf8b619d",
+      "score": 109,
+      "content": "#[cfg(feature = \"kms-aws\")]\npub mod aws_kms;\n#[cfg(feature = \"kms-gcp\")]\npub mod gcp_kms;\n#[cfg(feature = \"kms-hashicorp-vault\")]\npub mod hcvault;\npub mod hollow;\n"
     },
     {
       "path": "src/crypto/secrets_manager/secrets_management.rs",
@@ -193,5 +186,12 @@
       "content": "pub mod core;\n\npub mod implementers;\n"
     }
   ],
-  "generated_at": "2026-10-08T15:25:37.717881+00:00"
+  "fetch_errors": [
+    {
+      "path": "loadtest/README.md",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 1,
+  "generated_at": "2026-10-11T01:13:22.930304+00:00"
 }

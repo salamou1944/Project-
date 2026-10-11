@@ -53,6 +53,13 @@
       "content": "const packageJson = require('../package.json');\nconst schema = require('@uniswap/token-lists/src/tokenlist.schema.json');\nconst { expect } = require('chai');\nconst { getAddress } = require('@ethersproject/address');\nconst Ajv = require('ajv');\nconst buildList = require('../src/buildList');\n\nconst ajv = new Ajv({ allErrors: true, format: 'full' });\nconst validator = ajv.compile(schema);\nlet defaultTokenList;\n\nbefore(async function () {\n  this.timeout(150000);\n  defaultTokenList = await buildList();\n});\n\ndescribe('buildList', () => {\n\n  it('validates', () => {\n    expect(validator(defaultTokenList)).to.equal(true);\n  });\n\n  it('contains no duplicate addresses', () => {\n    const map = {};\n    for (let token of defaultTokenList.tokens) {\n      const key = `${token.chainId}-${token.address}`;\n      expect(typeof map[key])\n        .to.equal('undefined');\n      map[key] = true;\n    }\n  });\n\n  it('contains no duplicate symbols', () => {\n    // manual override to approve certain tokens with duplicate symbols\n    const approvedDuplicateSymbols = [\"ust\", 'alpha', 'boba', 'cvc', 'flx', 'imx', 'tru'];\n\n    const map = {};\n    for (let token of defaultTokenList.tokens) {\n      let symbol = token.symbol.toLowerCase();\n      if (approvedDuplicateSymbols.includes(symbol)) {\n        continue;\n      } else {\n        const key = `${token.chainId}-${symbol}`;\n        expect(typeof map[key])\n          .to.equal('undefined', `duplicate symbol: ${symbol}`);\n        map[key] = true;\n      }\n    }\n  })\n\n  it('contains no duplicate names', () => {\n    const map = {};\n    for (let token of defaultTokenList.tokens) {\n      const key = `${token.chainId}-${token.name.toLowerCase()}`;\n      expect(typeof map[key])\n        .to.equal('undefined', `duplicate name: ${token.name}`);\n      map[key] = true;\n    }\n  })\n\n  it('all addresses are valid and checksummed', () => {\n    for (let token of defaultTokenList.tokens) {\n      expect(getAddress(token.address)).to.eq(token.address);\n    }\n  });\n\n  it('version matches package.json', () => {\n    expect(packageJson.version).to.match(/^\\d+\\.\\d+\\.\\d+$/);\n    expect(packageJson.version).to.equal(`${defaultTokenList.version.major}.${defaultTokenList.version.minor}.${defaultTokenList.version.patch}`);\n  });\n});"
     },
     {
+      "path": "src/buildList.js",
+      "sha": null,
+      "content_sha256": "9c5c844d9a1b0c963f20b75fea9a47185aa651fef86e6e628ac51a7ae64f2c5d",
+      "score": 33,
+      "content": "const { version } = require(\"../package.json\");\nconst mainnet = require(\"./tokens/mainnet.json\");\nconst bridgeUtils = require('@uniswap/token-list-bridge-utils');\nconst defaultList = require('@uniswap/default-token-list/build/uniswap-default.tokenlist.json');\n\nmodule.exports = async function buildList() {\n  const parsed = version.split(\".\");\n\n  // build l1 extended list (without L2 data and default list entries)\n  const l1ExtendedList = {\n    name: \"Uniswap Labs Extended\",\n    timestamp: new Date().toISOString(),\n    version: {\n      major: +parsed[0],\n      minor: +parsed[1],\n      patch: +parsed[2],\n    },\n    tags: {},\n    logoURI: \"ipfs://QmNa8mQkrNKp1WEEeGjFezDmDeodkWRevGFN8JCV7b4Xir\",\n    keywords: [\"uniswap\", \"extended\"],\n    tokens: [...mainnet]\n      // sort them by symbol for easy readability\n      .sort((t1, t2) => {\n        if (t1.chainId === t2.chainId) {\n          return t1.symbol.toLowerCase() < t2.symbol.toLowerCase() ? -1 : 1;\n        }\n        return t1.chainId < t2.chainId ? -1 : 1;\n      }),\n  };\n\n  // add L2 data\n  const multichainExtendedList = await bridgeUtils.chainify(l1ExtendedList);\n\n  // add default list entries (resolves conflicts to default list)\n  const mergedExtendedList = bridgeUtils.mergeTokenLists(\n    defaultList,\n    multichainExtendedList);\n\n  // maintain original non-tokens properties of extended list (name, version, timestamp, etc) since mergeTokenLists overwrites them\n  const finalExtendedList = {\n    ...l1ExtendedList,\n    tokens: mergedExtendedList.tokens\n  };\n\n    return finalExtendedList;\n};"
+    },
+    {
       "path": "src/write.js",
       "sha": null,
       "content_sha256": "919c633a08904bedc56eee014c4e0ad181f7bebf7c23f4938c21cc360e910762",
@@ -60,11 +67,11 @@
       "content": "const buildList = require('./buildList');\n\nbuildList().then(data => console.log(JSON.stringify(data, null, 2)));"
     },
     {
-      "path": "src/buildList.js",
+      "path": "src/tokens/arbitrum.json",
       "sha": null,
-      "content_sha256": "9c5c844d9a1b0c963f20b75fea9a47185aa651fef86e6e628ac51a7ae64f2c5d",
-      "score": 33,
-      "content": "const { version } = require(\"../package.json\");\nconst mainnet = require(\"./tokens/mainnet.json\");\nconst bridgeUtils = require('@uniswap/token-list-bridge-utils');\nconst defaultList = require('@uniswap/default-token-list/build/uniswap-default.tokenlist.json');\n\nmodule.exports = async function buildList() {\n  const parsed = version.split(\".\");\n\n  // build l1 extended list (without L2 data and default list entries)\n  const l1ExtendedList = {\n    name: \"Uniswap Labs Extended\",\n    timestamp: new Date().toISOString(),\n    version: {\n      major: +parsed[0],\n      minor: +parsed[1],\n      patch: +parsed[2],\n    },\n    tags: {},\n    logoURI: \"ipfs://QmNa8mQkrNKp1WEEeGjFezDmDeodkWRevGFN8JCV7b4Xir\",\n    keywords: [\"uniswap\", \"extended\"],\n    tokens: [...mainnet]\n      // sort them by symbol for easy readability\n      .sort((t1, t2) => {\n        if (t1.chainId === t2.chainId) {\n          return t1.symbol.toLowerCase() < t2.symbol.toLowerCase() ? -1 : 1;\n        }\n        return t1.chainId < t2.chainId ? -1 : 1;\n      }),\n  };\n\n  // add L2 data\n  const multichainExtendedList = await bridgeUtils.chainify(l1ExtendedList);\n\n  // add default list entries (resolves conflicts to default list)\n  const mergedExtendedList = bridgeUtils.mergeTokenLists(\n    defaultList,\n    multichainExtendedList);\n\n  // maintain original non-tokens properties of extended list (name, version, timestamp, etc) since mergeTokenLists overwrites them\n  const finalExtendedList = {\n    ...l1ExtendedList,\n    tokens: mergedExtendedList.tokens\n  };\n\n    return finalExtendedList;\n};"
+      "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "score": 31,
+      "content": "[]"
     },
     {
       "path": "src/tokens/kovan.json",
@@ -74,14 +81,14 @@
       "content": "[]"
     },
     {
-      "path": "src/tokens/polygon.json",
+      "path": "src/tokens/mumbai.json",
       "sha": null,
       "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "score": 31,
       "content": "[]"
     },
     {
-      "path": "src/tokens/mumbai.json",
+      "path": "src/tokens/goerli.json",
       "sha": null,
       "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "score": 31,
@@ -102,7 +109,7 @@
       "content": "[]"
     },
     {
-      "path": "src/tokens/ropsten.json",
+      "path": "src/tokens/polygon.json",
       "sha": null,
       "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "score": 31,
@@ -116,19 +123,14 @@
       "content": "[]"
     },
     {
-      "path": "src/tokens/goerli.json",
-      "sha": null,
-      "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-      "score": 31,
-      "content": "[]"
-    },
-    {
-      "path": "src/tokens/arbitrum.json",
+      "path": "src/tokens/ropsten.json",
       "sha": null,
       "content_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
       "score": 31,
       "content": "[]"
     }
   ],
-  "generated_at": "2026-10-08T02:25:46.217881+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:30.978429+00:00"
 }

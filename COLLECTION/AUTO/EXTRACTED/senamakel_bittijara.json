@@ -74,13 +74,6 @@
       "content": "require 'spec_helper'\n\nmodule Authentications\n  describe EmailsController do\n    let(:member) { create(:member, email: nil, activated: false) }\n    before { session[:member_id] = member.id }\n\n    describe 'GET new' do\n      subject { get :new }\n\n      it { should be_success }\n\n      it  do\n        get :new\n        flash[:info].should == t('authentications.emails.new.setup_email')\n      end\n    end\n\n    describe 'POST create' do\n      let(:data) {\n        { email: { address: 'xman@xman.com', user_id: '2' } }\n      }\n\n      it \"should update current_user's email\" do\n        post :create, data\n        member.reload\n        member.email.should == 'xman@xman.com'\n        member.activated.should be_false\n      end\n    end\n\n  end\nend\n"
     },
     {
-      "path": "spec/models/payment_address_spec.rb",
-      "sha": null,
-      "content_sha256": "ac3637df452ee086d5c5cf2c9506921feb781fbdc2dcbed8fb641f926544938e",
-      "score": 226,
-      "content": "require 'spec_helper'\n\ndescribe PaymentAddress do\n\n  context \".create\" do\n    before do\n      PaymentAddress.any_instance.stubs(:id).returns(1)\n    end\n\n    it \"generate address after commit\" do\n      AMQPQueue.expects(:enqueue)\n        .with(:deposit_coin_address,\n              {payment_address_id: 1, currency: 'btc'},\n              {persistent: true})\n\n      PaymentAddress.create currency: :btc\n    end\n  end\n\nend\n"
-    },
-    {
       "path": "spec/support/api_helper.rb",
       "sha": null,
       "content_sha256": "b3dada5a7996bef5ab924414816c343d662276075f626fb94c1cac2e76d25d48",
@@ -88,11 +81,11 @@
       "content": "def time_to_milliseconds(t=Time.now)\n  (t.to_f*1000).to_i\nend\n\ndef sign(secret_key, method, uri, params)\n  req = mock('request', request_method: method.to_s.upcase, path_info: uri)\n  auth = APIv2::Auth::Authenticator.new(req, params)\n  APIv2::Auth::Utils.hmac_signature(secret_key, auth.payload)\nend\n\ndef signed_request(method, uri, opts={})\n  token = opts[:token] || create(:api_token)\n  path  = uri.sub(/^\\/api/, '')\n\n  params = opts[:params] || {}\n  params[:access_key] = token.access_key\n  params[:tonce]      = time_to_milliseconds\n  params[:signature]  = sign(token.secret_key, method, path, params)\n\n  send method, uri, params\nend\n\ndef signed_get(uri, opts={})\n  signed_request :get, uri, opts\nend\n\ndef signed_post(uri, opts={})\n  signed_request :post, uri, opts\nend\n\ndef signed_delete(uri, opts={})\n  signed_request :delete, uri, opts\nend\n"
     },
     {
-      "path": "db/migrate/20141105090746_add_oauth_columns_to_api_tokens.rb",
+      "path": "spec/models/payment_address_spec.rb",
       "sha": null,
-      "content_sha256": "54f0e671b3f2196ab8ce166e8c6647609bdb47f9fcf7cfd6f6968d1945e3664f",
-      "score": 186,
-      "content": "class AddOauthColumnsToAPITokens < ActiveRecord::Migration\n  def change\n    add_column :api_tokens, :oauth_access_token_id, :integer\n    add_column :api_tokens, :expire_at, :datetime\n    add_column :api_tokens, :scopes, :string\n  end\nend\n"
+      "content_sha256": "ac3637df452ee086d5c5cf2c9506921feb781fbdc2dcbed8fb641f926544938e",
+      "score": 226,
+      "content": "require 'spec_helper'\n\ndescribe PaymentAddress do\n\n  context \".create\" do\n    before do\n      PaymentAddress.any_instance.stubs(:id).returns(1)\n    end\n\n    it \"generate address after commit\" do\n      AMQPQueue.expects(:enqueue)\n        .with(:deposit_coin_address,\n              {payment_address_id: 1, currency: 'btc'},\n              {persistent: true})\n\n      PaymentAddress.create currency: :btc\n    end\n  end\n\nend\n"
     },
     {
       "path": "db/migrate/20141107031140_add_deleted_at_to_api_tokens_and_oauth_tokens.rb",
@@ -100,6 +93,13 @@
       "content_sha256": "5120c71ca283e6a039e8c6744d571f06ab31258a6afbddaacb2ca08b98910828",
       "score": 186,
       "content": "class AddDeletedAtToAPITokensAndOauthTokens < ActiveRecord::Migration\n  def change\n    add_column :api_tokens, :deleted_at, :datetime\n    add_column :oauth_access_tokens, :deleted_at, :datetime\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20141105090746_add_oauth_columns_to_api_tokens.rb",
+      "sha": null,
+      "content_sha256": "54f0e671b3f2196ab8ce166e8c6647609bdb47f9fcf7cfd6f6968d1945e3664f",
+      "score": 186,
+      "content": "class AddOauthColumnsToAPITokens < ActiveRecord::Migration\n  def change\n    add_column :api_tokens, :oauth_access_token_id, :integer\n    add_column :api_tokens, :expire_at, :datetime\n    add_column :api_tokens, :scopes, :string\n  end\nend\n"
     },
     {
       "path": "app/models/authentication.rb",
@@ -116,13 +116,6 @@
       "content": "module APIv2\n  module Auth\n    class Middleware < ::Grape::Middleware::Base\n\n      def before\n        if provided?\n          auth = Authenticator.new(request, params)\n          @env['api_v2.token'] = auth.authenticate!\n        end\n      end\n\n      def provided?\n        params[:access_key] && params[:tonce] && params[:signature]\n      end\n\n      def request\n        @request ||= ::Grape::Request.new(env)\n      end\n\n      def params\n        @params ||= request.params\n      end\n\n    end\n  end\nend\n"
     },
     {
-      "path": "app/api/api_v2/auth/authenticator.rb",
-      "sha": null,
-      "content_sha256": "e00932aeb3f36dc9c5ee34784ea02973cb571654a9237d2ea2c0e9f99ae35e4a",
-      "score": 182,
-      "content": "module APIv2\n  module Auth\n    class Authenticator\n\n      def initialize(request, params)\n        @request = request\n        @params  = params\n      end\n\n      def authenticate!\n        check_token!\n        check_tonce!\n        check_signature!\n        token\n      end\n\n      def token\n        @token ||= APIToken.joins(:member).where(access_key: @params[:access_key]).first\n      end\n\n      def check_token!\n        raise InvalidAccessKeyError, @params[:access_key] unless token\n        raise DisabledAccessKeyError, @params[:access_key] if token.member.api_disabled\n        raise ExpiredAccessKeyError, @params[:access_key] if token.expired?\n        raise OutOfScopeError unless token.in_scopes?(route_scopes)\n      end\n\n      def check_signature!\n        if @params[:signature] != Utils.hmac_signature(token.secret_key, payload)\n          Rails.logger.warn \"APIv2 auth failed: signature doesn't match. token: #{token.access_key} payload: #{payload}\"\n          raise IncorrectSignatureError, @params[:signature]\n        end\n      end\n\n      def check_tonce!\n        key = \"api_v2:tonce:#{token.access_key}:#{tonce}\"\n        if Utils.cache.read(key)\n          Rails.logger.warn \"APIv2 auth failed: used tonce. token: #{token.access_key} payload: #{payload} tonce: #{tonce}\"\n          raise TonceUsedError.new(token.access_key, tonce)\n        end\n        Utils.cache.write key, tonce, 61 # forget after 61 seconds\n\n        now = Time.now.to_i*1000\n        if tonce < now-30000 || tonce > now+30000 # within 30 seconds\n          Rails.logger.warn \"APIv2 auth failed: invalid tonce. token: #{token.access_key} payload: #{payload} tonce: #{tonce} current timestamp: #{now}\"\n          raise InvalidTonceError.new(tonce, now)\n        end\n      end\n\n      def tonce\n        @tonce ||= @params[:tonce].to_i\n      end\n\n      def payload\n        \"#{canonical_verb}|#{APIv2::Mount::PREFIX}#{canonical_uri}|#{canonical_query}\"\n      end\n\n      def canonical_verb\n        @request.request_method\n      end\n\n      def canonical_uri\n        @request.path_info\n      end\n\n      def canonical_query\n        hash = @params.select {|k,v| !%w(route_info signature format).include?(k) }\n        URI.unescape(hash.to_param)\n      end\n\n      def endpoint\n        @request.env['api.endpoint']\n      end\n\n      def route_scopes\n        endpoint.options[:route_options][:scopes]\n      end\n\n    end\n  end\nend\n"
-    },
-    {
       "path": "app/api/api_v2/auth/utils.rb",
       "sha": null,
       "content_sha256": "dfabd40a872a6080fe8fe997f1d188fe53d59153bc5d0dc76fd16432efe8364e",
@@ -130,11 +123,11 @@
       "content": "module APIv2\n  module Auth\n    module Utils\n      class <<self\n\n        def cache\n          # Simply use rack-attack cache wrapper\n          @cache ||= Rack::Attack::Cache.new\n        end\n\n        def urlsafe_string_40\n          # 30 is picked so generated string length is 40\n          SecureRandom.urlsafe_base64(30).tr('_-', 'xx')\n        end\n\n        alias :generate_access_key :urlsafe_string_40\n        alias :generate_secret_key :urlsafe_string_40\n\n        def hmac_signature(secret_key, payload)\n          OpenSSL::HMAC.hexdigest 'SHA256', secret_key, payload\n        end\n\n      end\n    end\n  end\nend\n"
     },
     {
-      "path": "app/models/concerns/hash_currencible.rb",
+      "path": "app/api/api_v2/auth/authenticator.rb",
       "sha": null,
-      "content_sha256": "58b4a81cae9fc67c4d8e1a9155471c69f96482d32383d3b1efde5fb3c3270d2c",
-      "score": 176,
-      "content": "module HashCurrencible\n  extend ActiveSupport::Concern\n\n  included do\n    def currency_obj\n      Currency.find_by_code(attributes[:currency])\n    end\n  end\nend\n"
+      "content_sha256": "e00932aeb3f36dc9c5ee34784ea02973cb571654a9237d2ea2c0e9f99ae35e4a",
+      "score": 182,
+      "content": "module APIv2\n  module Auth\n    class Authenticator\n\n      def initialize(request, params)\n        @request = request\n        @params  = params\n      end\n\n      def authenticate!\n        check_token!\n        check_tonce!\n        check_signature!\n        token\n      end\n\n      def token\n        @token ||= APIToken.joins(:member).where(access_key: @params[:access_key]).first\n      end\n\n      def check_token!\n        raise InvalidAccessKeyError, @params[:access_key] unless token\n        raise DisabledAccessKeyError, @params[:access_key] if token.member.api_disabled\n        raise ExpiredAccessKeyError, @params[:access_key] if token.expired?\n        raise OutOfScopeError unless token.in_scopes?(route_scopes)\n      end\n\n      def check_signature!\n        if @params[:signature] != Utils.hmac_signature(token.secret_key, payload)\n          Rails.logger.warn \"APIv2 auth failed: signature doesn't match. token: #{token.access_key} payload: #{payload}\"\n          raise IncorrectSignatureError, @params[:signature]\n        end\n      end\n\n      def check_tonce!\n        key = \"api_v2:tonce:#{token.access_key}:#{tonce}\"\n        if Utils.cache.read(key)\n          Rails.logger.warn \"APIv2 auth failed: used tonce. token: #{token.access_key} payload: #{payload} tonce: #{tonce}\"\n          raise TonceUsedError.new(token.access_key, tonce)\n        end\n        Utils.cache.write key, tonce, 61 # forget after 61 seconds\n\n        now = Time.now.to_i*1000\n        if tonce < now-30000 || tonce > now+30000 # within 30 seconds\n          Rails.logger.warn \"APIv2 auth failed: invalid tonce. token: #{token.access_key} payload: #{payload} tonce: #{tonce} current timestamp: #{now}\"\n          raise InvalidTonceError.new(tonce, now)\n        end\n      end\n\n      def tonce\n        @tonce ||= @params[:tonce].to_i\n      end\n\n      def payload\n        \"#{canonical_verb}|#{APIv2::Mount::PREFIX}#{canonical_uri}|#{canonical_query}\"\n      end\n\n      def canonical_verb\n        @request.request_method\n      end\n\n      def canonical_uri\n        @request.path_info\n      end\n\n      def canonical_query\n        hash = @params.select {|k,v| !%w(route_info signature format).include?(k) }\n        URI.unescape(hash.to_param)\n      end\n\n      def endpoint\n        @request.env['api.endpoint']\n      end\n\n      def route_scopes\n        endpoint.options[:route_options][:scopes]\n      end\n\n    end\n  end\nend\n"
     },
     {
       "path": "app/models/concerns/currencible.rb",
@@ -144,6 +137,13 @@
       "content": "module Currencible\n  extend ActiveSupport::Concern\n\n  included do\n    extend Enumerize\n    enumerize :currency, in: Currency.enumerize, scope: true\n    belongs_to_active_hash :currency_obj, class_name: 'Currency', foreign_key: 'currency_value'\n    delegate :key_text, to: :currency_obj, prefix: true\n  end\nend\n"
     },
     {
+      "path": "app/models/concerns/hash_currencible.rb",
+      "sha": null,
+      "content_sha256": "58b4a81cae9fc67c4d8e1a9155471c69f96482d32383d3b1efde5fb3c3270d2c",
+      "score": 176,
+      "content": "module HashCurrencible\n  extend ActiveSupport::Concern\n\n  included do\n    def currency_obj\n      Currency.find_by_code(attributes[:currency])\n    end\n  end\nend\n"
+    },
+    {
       "path": "db/migrate/20141003040822_add_payment_transaction_id_to_deposits.rb",
       "sha": null,
       "content_sha256": "8aa349cf746de23c66420a916d88c96cdd712badcd2adce79bfd37cece3c9387",
@@ -151,25 +151,11 @@
       "content": "class AddPaymentTransactionIdToDeposits < ActiveRecord::Migration\n  def change\n    add_column :deposits, :payment_transaction_id, :integer\n  end\nend\n"
     },
     {
-      "path": "db/migrate/20131110214254_add_currency_to_payment_transactions.rb",
+      "path": "db/migrate/20130912144526_add_receive_at_to_payment_transactions.rb",
       "sha": null,
-      "content_sha256": "fb3d7c4261a97f57a5f37f7f520a8bec148bff34487b4b2bce42762dd605ba34",
+      "content_sha256": "666823dc1de1ee2d44081facb72984f5e7a9bf6210b779a2257347bb9c57d1de",
       "score": 173,
-      "content": "class AddCurrencyToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :currency, :integer\n  end\nend\n\n"
-    },
-    {
-      "path": "db/migrate/20130926011813_change_to_enumerize_in_payment_transactions.rb",
-      "sha": null,
-      "content_sha256": "0f654a4ef471034bea330f12b87847b35599f8dd43fa4e5a6cdcbf28bca6c145",
-      "score": 173,
-      "content": "class ChangeToEnumerizeInPaymentTransactions < ActiveRecord::Migration\n  def up\n    change_column :payment_transactions, :state, :integer\n  end\n\n  def down\n    change_column :payment_transactions, :state, :string\n  end\nend\n"
-    },
-    {
-      "path": "db/migrate/20141002075102_add_tx_out_to_payment_transactions.rb",
-      "sha": null,
-      "content_sha256": "b681074e14f788aa55b473afcda25ddb8620a89149f8f6da0951185486989b14",
-      "score": 173,
-      "content": "class AddTxOutToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :txout, :integer\n    add_index :payment_transactions, [:txid, :txout]\n  end\nend\n"
+      "content": "class AddReceiveAtToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :receive_at, :datetime\n  end\nend\n"
     },
     {
       "path": "db/migrate/20140326191837_add_deposit_id_to_payment_transactions.rb",
@@ -179,12 +165,28 @@
       "content": "class AddDepositIdToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :aasm_state, :string, :after => :state\n    add_column :payment_transactions, :channel_id, :integer, :after => :aasm_state\n  end\nend\n"
     },
     {
-      "path": "db/migrate/20130912144526_add_receive_at_to_payment_transactions.rb",
+      "path": "db/migrate/20131110214254_add_currency_to_payment_transactions.rb",
       "sha": null,
-      "content_sha256": "666823dc1de1ee2d44081facb72984f5e7a9bf6210b779a2257347bb9c57d1de",
+      "content_sha256": "fb3d7c4261a97f57a5f37f7f520a8bec148bff34487b4b2bce42762dd605ba34",
       "score": 173,
-      "content": "class AddReceiveAtToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :receive_at, :datetime\n  end\nend\n"
+      "content": "class AddCurrencyToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :currency, :integer\n  end\nend\n\n"
+    },
+    {
+      "path": "db/migrate/20141002075102_add_tx_out_to_payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "b681074e14f788aa55b473afcda25ddb8620a89149f8f6da0951185486989b14",
+      "score": 173,
+      "content": "class AddTxOutToPaymentTransactions < ActiveRecord::Migration\n  def change\n    add_column :payment_transactions, :txout, :integer\n    add_index :payment_transactions, [:txid, :txout]\n  end\nend\n"
+    },
+    {
+      "path": "db/migrate/20130926011813_change_to_enumerize_in_payment_transactions.rb",
+      "sha": null,
+      "content_sha256": "0f654a4ef471034bea330f12b87847b35599f8dd43fa4e5a6cdcbf28bca6c145",
+      "score": 173,
+      "content": "class ChangeToEnumerizeInPaymentTransactions < ActiveRecord::Migration\n  def up\n    change_column :payment_transactions, :state, :integer\n  end\n\n  def down\n    change_column :payment_transactions, :state, :string\n  end\nend\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:45.716794+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:30.675348+00:00"
 }

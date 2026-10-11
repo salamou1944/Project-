@@ -74,20 +74,6 @@
       "content": "import { extractTwoSlashCompilerOptions } from \"../src/twoslashSupport\"\nimport typescript from \"typescript\"\n\nconst sandboxMock: any = (code: string) => ({\n  getText: () => code,\n  ts: typescript,\n})\n\ndescribe(\"gets twoslash compiler error messages\", () => {\n  it(\"gets the right vars\", () => {\n    const sandbox = sandboxMock(`\n// @noImplicitAny: false\n// @target: ES2015\n\n// This will not throw because of the noImplicitAny\nfunction fn(s) {\n  console.log(s.subtr(3))\n}\n\nfn(42)\n`)\n    const compilerOptions = extractTwoSlashCompilerOptions(sandbox.ts)(sandbox.getText())\n    expect(compilerOptions).toMatchInlineSnapshot(`\n      {\n        \"noImplicitAny\": false,\n        \"target\": 2,\n      }\n    `)\n  })\n\n  it(\"ignores unknown vars\", () => {\n    const sandbox = sandboxMock(`\n// @noImplicny: false\n// @target: ES2015\n\n// This will not throw because of the noImplicitAny\nfunction fn(s) {\n  console.log(s.subtr(3))\n}\n\nfn(42)\n`)\n    const compilerOptions = extractTwoSlashCompilerOptions(sandbox.ts)(sandbox.getText())\n    expect(compilerOptions).toMatchInlineSnapshot(`\n      {\n        \"target\": 2,\n      }\n    `)\n  })\n})\n"
     },
     {
-      "path": ".github/workflows/codeql.yml",
-      "sha": null,
-      "content_sha256": "8d5f842ec49cbf85f1ac06d168ad4c7f755aea613412dd1347e178cd68c1019c",
-      "score": 126,
-      "content": "# copied from microsoft/TypeScript and simplified slightly; see that file for boilerplate commentary\n# (which was likely copied from github/codeql-action)\nname: \"Code scanning - action\"\n\non:\n  push:\n  pull_request:\n  schedule:\n    - cron: '0 19 * * 0'\n\njobs:\n  CodeQL-Build:\n\n    runs-on: ubuntu-latest\n\n    steps:\n    - name: Checkout repository\n      uses: actions/checkout@v3\n      with:\n        # We must fetch at least the immediate parents so that if this is\n        # a pull request then we can checkout the head.\n        fetch-depth: 2\n\n    - name: Initialize CodeQL\n      uses: github/codeql-action/init@v2\n      with:\n        config-file: ./.github/codeql/codeql-configuration.yml\n\n    - name: Autobuild\n      uses: github/codeql-action/autobuild@v2\n\n    - name: Perform CodeQL Analysis\n      uses: github/codeql-action/analyze@v2\n"
-    },
-    {
-      "path": ".github/workflows/v2-merged-staging.yml",
-      "sha": null,
-      "content_sha256": "3a991ab03a1648911db5241114d7d52831a7f0a2a195933fd89cb37fd5e941a8",
-      "score": 126,
-      "content": "name: Build Website To Staging\n\non:\n  push:\n    branches: [v2]\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      # Check out, and set up the node/ruby infra\n      - uses: actions/checkout@v2\n        with:\n          # Fetch the full history, to build attribution.json\n          fetch-depth: 0\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n          registry-url: \"https://registry.npmjs.org/\"\n          cache: yarn\n\n      # For Azure uploads\n      - run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\n\n      - name: Prepare website v2\n        run: |\n          yarn install\n          yarn docs-sync pull microsoft/TypeScript-Website-localizations#main 1\n          yarn bootstrap\n          yarn workspace typescriptlang-org setup-playground-cache-bust\n          yarn workspace typescriptlang-org setup-staging\n          yarn build\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      - name: Build website v2\n        run: |\n          yarn build-site\n          cp -r packages/typescriptlang-org/public site\n\n      - name: Deploy + Publish to CDN\n        # You can find these keys here:\n        # https://ms.portal.azure.com/#@microsoft.onmicrosoft.com/resource/subscriptions/57bfeeed-c34a-4ffd-a06b-ccff27ac91b8/resourcegroups/typescriptlang-org/providers/Microsoft.Storage/storageAccounts/typescriptorgstaging/keys\n        env:\n          AZURE_STORAGE_ACCOUNT: \"typescriptorgstaging\"\n          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_CDN_STAGING_CONNECTION_STRING }}\n        run: az storage blob upload-batch --overwrite -s ./site -d \\$web\n\n      - name: Build And Deploy\n        id: builddeploy\n        uses: Azure/static-web-apps-deploy@v1\n        with:\n          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_NICE_MEADOW_0C9756810 }}\n          repo_token: ${{ secrets.GITHUB_TOKEN }}\n          action: \"upload\"\n          app_location: \"site\"\n          skip_app_build: true\n\n      # Deploy\n      - name: Deploy npm Packages\n        run: |\n          yarn pleb publish\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}\n\n      - name: Send a message to Microsoft Teams\n        if: ${{ failure() }}\n        uses: aliencube/microsoft-teams-actions@v0.8.0\n        with:\n          webhook_uri: ${{ secrets.TEAMS_WEB_BOT_INCOMING_URL }}\n          title: Staging deploy failed\n          summary: Could not build the site for staging\n          actions: '[{ \"@type\": \"OpenUri\", \"name\": \"View Logs\", \"targets\": [{ \"os\": \"default\", \"uri\": \"https://github.com/microsoft/TypeScript-Website/actions/runs/${{ github.run_id }}?check_suite_focus=true\" }] }]'\n"
-    },
-    {
       "path": ".github/workflows/weekly-stats.yml",
       "sha": null,
       "content_sha256": "aa47e0bb8e78e5fb3b41d87b1c16716798c7701e48925b0d2f3523deca6fe734",
@@ -95,11 +81,25 @@
       "content": "name: Push AI stats to Teams\n\non:\n  schedule:\n    # https://crontab.guru/#0_12_*_*_1\n    - cron: \"0 12 * * 1\"\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v2\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n          cache: yarn\n\n      # Build v2\n      - name: Deps\n        run: |\n          yarn install\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      # Update the site stats\n      - run: node packages/typescriptlang-org/scripts/pingTeamsWithAppInsightData.js\n        env:\n          APP_INSIGHTS_API_KEY: ${{ secrets.APP_INSIGHTS_API_KEY }}\n          APP_INSIGHTS_ID: ${{ secrets.APP_INSIGHTS_ID }}\n          STATS_WEBHOOK_INCOMING_URL: ${{ secrets.STATS_WEBHOOK_INCOMING_URL }}\n\n      - name: Send a message to Microsoft Teams\n        if: ${{ failure() }}\n        uses: aliencube/microsoft-teams-actions@v0.8.0\n        with:\n          webhook_uri: ${{ secrets.TEAMS_WEB_BOT_INCOMING_URL }}\n          title: Updating site stats failed\n          summary: Something failed in the GitHub Action workflow\n          actions: '[{ \"@type\": \"OpenUri\", \"name\": \"View Logs\", \"targets\": [{ \"os\": \"default\", \"uri\": \"https://github.com/microsoft/TypeScript-Website/actions/runs/${{ github.run_id }}?check_suite_focus=true\" }] }]'\n"
     },
     {
+      "path": ".github/workflows/codeql.yml",
+      "sha": null,
+      "content_sha256": "8d5f842ec49cbf85f1ac06d168ad4c7f755aea613412dd1347e178cd68c1019c",
+      "score": 126,
+      "content": "# copied from microsoft/TypeScript and simplified slightly; see that file for boilerplate commentary\n# (which was likely copied from github/codeql-action)\nname: \"Code scanning - action\"\n\non:\n  push:\n  pull_request:\n  schedule:\n    - cron: '0 19 * * 0'\n\njobs:\n  CodeQL-Build:\n\n    runs-on: ubuntu-latest\n\n    steps:\n    - name: Checkout repository\n      uses: actions/checkout@v3\n      with:\n        # We must fetch at least the immediate parents so that if this is\n        # a pull request then we can checkout the head.\n        fetch-depth: 2\n\n    - name: Initialize CodeQL\n      uses: github/codeql-action/init@v2\n      with:\n        config-file: ./.github/codeql/codeql-configuration.yml\n\n    - name: Autobuild\n      uses: github/codeql-action/autobuild@v2\n\n    - name: Perform CodeQL Analysis\n      uses: github/codeql-action/analyze@v2\n"
+    },
+    {
       "path": ".github/workflows/update_teams.yml",
       "sha": null,
       "content_sha256": "3d92b6ed73f2bf829fe370248b1b9355427037abf0695f9fdb6b0945cefd1856",
       "score": 126,
       "content": "name: Send comments from updates\non:\n  issue_comment: { types: created }\n\njobs:\n  apply-label:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/github-script@0.3.0\n        env:\n          TEAMS_INCOMING_WEBHOOK_URL: ${{secrets.TEAMS_INCOMING_WEBHOOK_URL}}\n        with:\n          github-token: ${{github.token}}\n\n          script: |\n            const fetch = require(\"node-fetch\")\n\n            const teamsURL = process.env.TEAMS_INCOMING_WEBHOOK_URL\n            if (!teamsURL) return console.log(\"Skipping sending the message because it's not the update repo\")\n\n            // console.log(context.payload)\n\n            const issue = context.payload.issue\n            const issue_comment = context.payload.comment\n\n            if (issue_comment.user.login !== \"orta\") return console.log(`Skipping because not orta`)\n\n            if (issue.id !== 524510895) return console.log(`Skipping sending the message because ${issue.id} is not the update post`)\n\n            const message = {\n              \"@type\": \"MessageCard\",\n              \"@context\": \"https://schema.org/extensions\",\n              summary: \"Website update\",\n              themeColor: \"0078D7\",\n              title: 'Website update',\n              sections: [\n                {\n                  activityTitle: \"Comment\",\n                  activitySubtitle: issue_comment.created_at,\n                  activityImage: issue_comment.user.avatar_url,\n                  \"text\": issue_comment.body\n                }\n              ],\n              potentialAction: [\n                {\n                  \"@type\": \"OpenUri\",\n                  name: \"View in GitHub\",\n                  targets: [\n                    {\n                      os: \"default\",\n                      uri: issue_comment.html_url\n                    }\n                  ]\n                }\n              ]\n            };\n\n            fetch(teamsURL, {\n              method: \"post\",\n              body: JSON.stringify(message),\n              headers: { \"Content-Type\": \"application/json\" }\n            });\n"
+    },
+    {
+      "path": ".github/workflows/v2-merged-staging.yml",
+      "sha": null,
+      "content_sha256": "3a991ab03a1648911db5241114d7d52831a7f0a2a195933fd89cb37fd5e941a8",
+      "score": 126,
+      "content": "name: Build Website To Staging\n\non:\n  push:\n    branches: [v2]\n  workflow_dispatch:\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      # Check out, and set up the node/ruby infra\n      - uses: actions/checkout@v2\n        with:\n          # Fetch the full history, to build attribution.json\n          fetch-depth: 0\n      - uses: actions/setup-node@v2\n        with:\n          node-version: \"16.x\"\n          registry-url: \"https://registry.npmjs.org/\"\n          cache: yarn\n\n      # For Azure uploads\n      - run: curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash\n\n      - name: Prepare website v2\n        run: |\n          yarn install\n          yarn docs-sync pull microsoft/TypeScript-Website-localizations#main 1\n          yarn bootstrap\n          yarn workspace typescriptlang-org setup-playground-cache-bust\n          yarn workspace typescriptlang-org setup-staging\n          yarn build\n        env:\n          YARN_CHECKSUM_BEHAVIOR: ignore\n\n      - name: Build website v2\n        run: |\n          yarn build-site\n          cp -r packages/typescriptlang-org/public site\n\n      - name: Deploy + Publish to CDN\n        # You can find these keys here:\n        # https://ms.portal.azure.com/#@microsoft.onmicrosoft.com/resource/subscriptions/57bfeeed-c34a-4ffd-a06b-ccff27ac91b8/resourcegroups/typescriptlang-org/providers/Microsoft.Storage/storageAccounts/typescriptorgstaging/keys\n        env:\n          AZURE_STORAGE_ACCOUNT: \"typescriptorgstaging\"\n          AZURE_STORAGE_CONNECTION_STRING: ${{ secrets.AZURE_CDN_STAGING_CONNECTION_STRING }}\n        run: az storage blob upload-batch --overwrite -s ./site -d \\$web\n\n      - name: Build And Deploy\n        id: builddeploy\n        uses: Azure/static-web-apps-deploy@v1\n        with:\n          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_NICE_MEADOW_0C9756810 }}\n          repo_token: ${{ secrets.GITHUB_TOKEN }}\n          action: \"upload\"\n          app_location: \"site\"\n          skip_app_build: true\n\n      # Deploy\n      - name: Deploy npm Packages\n        run: |\n          yarn pleb publish\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}\n\n      - name: Send a message to Microsoft Teams\n        if: ${{ failure() }}\n        uses: aliencube/microsoft-teams-actions@v0.8.0\n        with:\n          webhook_uri: ${{ secrets.TEAMS_WEB_BOT_INCOMING_URL }}\n          title: Staging deploy failed\n          summary: Could not build the site for staging\n          actions: '[{ \"@type\": \"OpenUri\", \"name\": \"View Logs\", \"targets\": [{ \"os\": \"default\", \"uri\": \"https://github.com/microsoft/TypeScript-Website/actions/runs/${{ github.run_id }}?check_suite_focus=true\" }] }]'\n"
     },
     {
       "path": ".github/workflows/close-preview.yml",
@@ -130,46 +130,11 @@
       "content": "{\n  \"name\": \"glossary\",\n  \"version\": \"0.0.1\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"generate-markdown\": \"yarn ts-node --project tsconfig.json scripts/generateMarkdown.ts \",\n    \"build\": \"yarn generate-markdown\",\n    \"test\": \"yarn build && yarn lint\",\n    \"lint\": \"node scripts/lint.js\"\n  },\n  \"prettier\": {\n    \"printWidth\": 100,\n    \"semi\": true\n  },\n  \"devDependencies\": {\n    \"remark\": \"^11.0.2\",\n    \"remark-html\": \"^10.0.0\",\n    \"ts-node\": \"*\"\n  }\n}\n"
     },
     {
-      "path": "packages/playground-worker/package.json",
-      "sha": null,
-      "content_sha256": "9b8ff0f3a49330ee19693402b5cc5d37ab92e709424a9b2c61efd9e71868ebac",
-      "score": 116,
-      "content": "{\n  \"name\": \"@typescript/playground-worker\",\n  \"version\": \"0.1.0\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"bootstrap\": \"echo 'NOOP'\",\n    \"build\": \"esbuild index.ts --outdir=../typescriptlang-org/static/js/playground-worker  --format=esm --target=es2020 --bundle\"\n  },\n  \"dependencies\": {\n    \"esbuild\": \"^0.13.4\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"*\"\n  }\n}\n"
-    },
-    {
       "path": "packages/ata/package.json",
       "sha": null,
       "content_sha256": "c43eb5792def12aa42070653d048d3c3268683eab4a1fc9408e8b982bdf3eb91",
       "score": 116,
       "content": "{\n  \"name\": \"@typescript/ata\",\n  \"version\": \"0.9.4\",\n  \"license\": \"MIT\",\n  \"homepage\": \"https://github.com/microsoft/TypeScript-Website\",\n  \"repository\": {\n    \"url\": \"https://github.com/microsoft/TypeScript-Website.git\",\n    \"directory\": \"packages/ata\",\n    \"type\": \"git\"\n  },\n  \"main\": \"dist/index.js\",\n  \"type\": \"module\",\n  \"types\": \"src/userFacingTypes.d.ts\",\n  \"scripts\": {\n    \"build\": \"esbuild src/index.ts --bundle --outfile=dist/index.js --format=esm --platform=node && cpy src/userFacingTypes.d.ts dist/ --rename=index.d.ts && cpy src/ ../sandbox/src/vendor/ata\",\n    \"test\": \"jest\",\n    \"bootstrap\": \"yarn build\"\n  },\n  \"publishConfig\": {\n    \"access\": \"public\"\n  },\n  \"devDependencies\": {\n    \"cpy-cli\": \"^3.1.1\",\n    \"esbuild\": \"^0.12.9\",\n    \"esbuild-jest\": \"^0.5.0\",\n    \"jest\": \"^29.5.0\"\n  },\n  \"peerDependencies\": {\n    \"typescript\": \"^4.4.4\"\n  }\n}\n"
-    },
-    {
-      "path": "packages/playground-handbook/package.json",
-      "sha": null,
-      "content_sha256": "db40cb38956e594d3b714e59e3a5f27caf209862e4e0970363227fbc3d0c3529",
-      "score": 116,
-      "content": "{\n  \"name\": \"@typescript/playground-handbook\",\n  \"version\": \"0.0.1\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"bootstrap\": \"echo 'NOOP'\",\n    \"build\": \"node scripts/generateJSON.mjs\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"*\"\n  }\n}\n"
-    },
-    {
-      "path": "packages/playground-examples/package.json",
-      "sha": null,
-      "content_sha256": "3ec213767e4a5c86d46588c26dea66a1b945a96ec3d7c8c6969760f0763f20f4",
-      "score": 116,
-      "content": "{\n  \"name\": \"playground-examples\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"bootstrap\": \"yarn build\",\n    \"build\": \"node scripts/generateTOC.js && node scripts/copyFiles.js\",\n    \"test\": \"echo 'NOOP'\"\n  }\n}\n"
-    },
-    {
-      "path": "packages/documentation/package.json",
-      "sha": null,
-      "content_sha256": "37485900af12cfe71be1e9bf11ccf2c41264bc175ff7079ef98b2740fdf57572",
-      "score": 116,
-      "content": "{\n  \"name\": \"documentation\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"build\": \"echo 'NOOP'\",\n    \"test\": \"echo 'NOOP'\",\n    \"lint\": \"node scripts/lintTwoslashErrors.js\",\n    \"create-handbook-nav\": \"node ./scripts/generateTypesForFilesInDocs && node ./scripts/generateDocsNavigationPerLanguage.js\",\n    \"bootstrap\": \"yarn create-handbook-nav && node ./scripts/generateAttribution.js\"\n  },\n  \"prettier\": {\n    \"semi\": true\n  }\n}\n"
-    },
-    {
-      "path": "packages/playground/package.json",
-      "sha": null,
-      "content_sha256": "01089cb4c78aa055cfa07292001ca86d876a78ba1f2b6dbb4121cd856c3ad782",
-      "score": 116,
-      "content": "{\n  \"name\": \"@typescript/playground\",\n  \"version\": \"0.1.1\",\n  \"main\": \"dist/index.js\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"types\": \"../../typescriptlang-org/static/js/playground/index.d.ts\",\n  \"files\": [\n    \"dist\"\n  ],\n  \"scripts\": {\n    \"bootstrap\": \"node scripts/getListOfPluginsFromNPM.js\",\n    \"build-fast-test\": \"esbuild src/index.ts --outdir=../typescriptlang-org/static/js/playground/2  --format=esm --target=es2020 --bundle\",\n    \"build\": \"tsc\",\n    \"test\": \"jest\"\n  },\n  \"dependencies\": {\n    \"@typescript/playground-worker\": \"0.1.0\",\n    \"@typescript/sandbox\": \"0.1.1\",\n    \"esbuild\": \"^0.13.4\"\n  },\n  \"devDependencies\": {\n    \"@types/jest\": \"^25.1.3\",\n    \"jest\": \"^29.5.0\",\n    \"monaco-editor\": \"^0.32.1\",\n    \"monaco-typescript\": \"^3.7.0\",\n    \"typescript\": \"*\"\n  }\n}\n"
     },
     {
       "path": "packages/create-typescript-playground-plugin/package.json",
@@ -184,7 +149,44 @@
       "content_sha256": "ab40cfeb83995ee30711b30622f8be27b74fed27d002aee2c10b10bcbdff9660",
       "score": 116,
       "content": "{\n  \"name\": \"community-meta\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"dependencies\": {\n    \"moment\": \"2.24.0\",\n    \"moment-timezone\": \"0.5.28\"\n  },\n  \"scripts\": {\n    \"build\": \"node scripts/generateRichMeetupData.js\",\n    \"test\": \"echo 'NOOP'\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground-examples/package.json",
+      "sha": null,
+      "content_sha256": "3ec213767e4a5c86d46588c26dea66a1b945a96ec3d7c8c6969760f0763f20f4",
+      "score": 116,
+      "content": "{\n  \"name\": \"playground-examples\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"bootstrap\": \"yarn build\",\n    \"build\": \"node scripts/generateTOC.js && node scripts/copyFiles.js\",\n    \"test\": \"echo 'NOOP'\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground-worker/package.json",
+      "sha": null,
+      "content_sha256": "9b8ff0f3a49330ee19693402b5cc5d37ab92e709424a9b2c61efd9e71868ebac",
+      "score": 116,
+      "content": "{\n  \"name\": \"@typescript/playground-worker\",\n  \"version\": \"0.1.0\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"bootstrap\": \"echo 'NOOP'\",\n    \"build\": \"esbuild index.ts --outdir=../typescriptlang-org/static/js/playground-worker  --format=esm --target=es2020 --bundle\"\n  },\n  \"dependencies\": {\n    \"esbuild\": \"^0.13.4\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground-handbook/package.json",
+      "sha": null,
+      "content_sha256": "db40cb38956e594d3b714e59e3a5f27caf209862e4e0970363227fbc3d0c3529",
+      "score": 116,
+      "content": "{\n  \"name\": \"@typescript/playground-handbook\",\n  \"version\": \"0.0.1\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"scripts\": {\n    \"bootstrap\": \"echo 'NOOP'\",\n    \"build\": \"node scripts/generateJSON.mjs\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/playground/package.json",
+      "sha": null,
+      "content_sha256": "01089cb4c78aa055cfa07292001ca86d876a78ba1f2b6dbb4121cd856c3ad782",
+      "score": 116,
+      "content": "{\n  \"name\": \"@typescript/playground\",\n  \"version\": \"0.1.1\",\n  \"main\": \"dist/index.js\",\n  \"license\": \"MIT\",\n  \"private\": true,\n  \"types\": \"../../typescriptlang-org/static/js/playground/index.d.ts\",\n  \"files\": [\n    \"dist\"\n  ],\n  \"scripts\": {\n    \"bootstrap\": \"node scripts/getListOfPluginsFromNPM.js\",\n    \"build-fast-test\": \"esbuild src/index.ts --outdir=../typescriptlang-org/static/js/playground/2  --format=esm --target=es2020 --bundle\",\n    \"build\": \"tsc\",\n    \"test\": \"jest\"\n  },\n  \"dependencies\": {\n    \"@typescript/playground-worker\": \"0.1.0\",\n    \"@typescript/sandbox\": \"0.1.1\",\n    \"esbuild\": \"^0.13.4\"\n  },\n  \"devDependencies\": {\n    \"@types/jest\": \"^25.1.3\",\n    \"jest\": \"^29.5.0\",\n    \"monaco-editor\": \"^0.32.1\",\n    \"monaco-typescript\": \"^3.7.0\",\n    \"typescript\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/documentation/package.json",
+      "sha": null,
+      "content_sha256": "37485900af12cfe71be1e9bf11ccf2c41264bc175ff7079ef98b2740fdf57572",
+      "score": 116,
+      "content": "{\n  \"name\": \"documentation\",\n  \"private\": true,\n  \"license\": \"MIT\",\n  \"version\": \"1.0.0\",\n  \"scripts\": {\n    \"build\": \"echo 'NOOP'\",\n    \"test\": \"echo 'NOOP'\",\n    \"lint\": \"node scripts/lintTwoslashErrors.js\",\n    \"create-handbook-nav\": \"node ./scripts/generateTypesForFilesInDocs && node ./scripts/generateDocsNavigationPerLanguage.js\",\n    \"bootstrap\": \"yarn create-handbook-nav && node ./scripts/generateAttribution.js\"\n  },\n  \"prettier\": {\n    \"semi\": true\n  }\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T15:25:29.522612+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:10.773272+00:00"
 }

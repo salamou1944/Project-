@@ -4,7 +4,7 @@
   "revision_sha": "8d614e1cf3af86f82243ee73a7f25ab390337ee7",
   "default_branch": "main",
   "pushed_at": "2026-09-03T20:32:50Z",
-  "repo_updated_at": "2026-10-02T15:27:09Z",
+  "repo_updated_at": "2026-10-08T14:58:23Z",
   "license": "Apache-2.0",
   "topics": [
     "genai",
@@ -78,18 +78,18 @@
       "content": "name: Generate README\n\non:\n  push:\n    paths:\n      - 'docs/**'  # Trigger when files under the docs folder change\n  workflow_dispatch:  # Also allows manual triggering from the GitHub Actions UI\n\njobs:\n  build-docs:\n    runs-on: ubuntu-latest\n\n    steps:\n    # Step 1: Checkout the repository\n    - name: Checkout repository\n      uses: actions/checkout@v2\n\n    # Step 2: Set up Python\n    - name: Set up Python\n      uses: actions/setup-python@v2\n      with:\n        python-version: '3.11'\n\n    # Step 3: Install Dependencies (Pandoc, Make, etc.)\n    - name: Install dependencies\n      run: |\n        sudo apt-get update\n        sudo apt-get install -y make wget\n        PANDOC_VERSION=3.1.8\n        wget https://github.com/jgm/pandoc/releases/download/${PANDOC_VERSION}/pandoc-${PANDOC_VERSION}-1-amd64.deb\n        sudo dpkg -i pandoc-${PANDOC_VERSION}-1-amd64.deb\n        python -m pip install --upgrade pip\n        pip install -r .github/workflows/generate-documentation_requirements.txt\n\n    # Step 4: Build Documentation\n    - name: Build documentation\n      working-directory: docs\n      run: make all\n\n    # Step 5: Upload README.md as an artifact for manual review\n    #- name: Upload README.md as artifact\n    #  uses: actions/upload-artifact@v4\n    #  with:\n    #    name: generated-readme\n    #    path: README.md  # Adjust the path if necessary\n\n    # Step 6: Display the diff for review in logs\n    - name: Show diff for README.md\n      run: |\n        echo \"Comparing differences for the updated README\"\n        git diff README.md || echo \"No differences to display\"\n    \n    # Step 7: Commit changes automatically\n    - name: Commit and push changes\n      run: |\n        git config --local user.name \"GitHub Actions\"\n        git config --local user.email \"actions@github.com\"\n        git add README.md .static\n        git diff --cached --exit-code || git commit -m \"Auto-generated: README.md and related content\"\n        git push\n      env:\n        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Use GitHub token for authentication"
     },
     {
-      "path": "compose.yaml",
-      "sha": null,
-      "content_sha256": "92f531bc6926fed882026ab21fdf031afe325dbc6617b8b1a9e0767c8a7b7e2c",
-      "score": 120,
-      "content": "# env variables needed\n# NGC_API_KEY\n\nservices:\n  nv-embedqa-e5-v5:\n    image: \"nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1\"\n    profiles: [\"Local LLM + Embedding\", \"Local LLM + Embedding + Reranking\"]\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              capabilities: [\"gpu\"]\n              count: 1\n    ipc: host\n    environment:\n      - NGC_API_KEY=${NGC_API_KEY}\n    volumes:\n      - nim-cache:/opt/nim/.cache\n    healthcheck:\n      test: [\"CMD\", \"python3\", \"-c\", \"import requests; resp = requests.get('http://localhost:8000/v1/health/ready'); resp.raise_for_status()\"]\n      interval: 30s\n      start_period: 600s\n      timeout: 20s\n      retries: 3\n    networks:\n      - default\n\n  nv-rerankqa-mistral-4b-v3:\n    image: \"nvcr.io/nim/nvidia/nv-rerankqa-mistral-4b-v3:1.0.2\"\n    profiles: [\"Local LLM + Embedding + Reranking\"]\n    runtime: \"nvidia\"\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              capabilities: [\"gpu\"]\n              count: 1\n    ipc: host\n    environment:\n      - NGC_API_KEY=${NGC_API_KEY}\n    volumes:\n      - nim-cache:/opt/nim/.cache\n    healthcheck:\n      test: [\"CMD\", \"python3\", \"-c\", \"import requests; resp = requests.get('http://localhost:8000/v1/health/ready'); resp.raise_for_status()\"]\n      interval: 30s\n      start_period: 600s\n      timeout: 20s\n      retries: 3\n    networks:\n      - default\n\n  llm-nim:\n    image: \"nvcr.io/nim/meta/llama3-8b-instruct:1\"\n    profiles: [\"Local LLM\", \"Local LLM + Embedding\", \"Local LLM + Embedding + Reranking\"]\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              capabilities: [\"gpu\"]\n              count: 1\n    ipc: host\n    environment:\n      - NGC_API_KEY=${NGC_API_KEY}\n    volumes:\n      - nim-cache:/opt/nim/.cache\n    healthcheck:\n      test: [\"CMD\", \"python\", \"-c\", \"import requests; resp = requests.get('http://localhost:8000/v1/health/ready'); resp.raise_for_status()\"]\n      interval: 30s\n      start_period: 600s\n      timeout: 20s\n      retries: 3\n    networks:\n      - default\n\n  milvus:\n    image: \"milvusdb/milvus:v2.4.6\"\n    security_opt:\n      - seccomp:unconfined\n    environment:\n      - ETCD_USE_EMBED=true\n      - ETCD_DATA_DIR=/var/lib/milvus/etcd\n      - COMMON_STORAGETYPE=local\n    volumes:\n      - milvus:/var/lib/milvus\n    healthcheck:\n      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:9091/healthz\"]\n      interval: 30s\n      start_period: 90s\n      timeout: 20s\n      retries: 3\n    command: \"milvus run standalone\"\n    networks:\n      - default\n\n  redis:\n    image: \"redis:7\"\n    volumes:\n      - redis:/data\n    healthcheck:\n      test: [\"CMD\", \"redis-cli\", \"ping\"]\n      interval: 30s\n      start_period: 30s\n      timeout: 5s\n      retries: 5\n    command: \"redis-server --save 20 1 --loglevel warning\"\n    networks:\n      - default\n\nnetworks:\n  default:\n\nvolumes:\n  milvus:\n  redis:\n  nim-cache:\n\n"
-    },
-    {
       "path": "pyproject.toml",
       "sha": null,
       "content_sha256": "1b136483042715efebc0b85cb6509bf5ed798ff463ff00ff3fe3b49d6b694bb2",
       "score": 120,
       "content": "# Pylint Configuration\n[tool.pylint.MAIN]\nload-plugins = \"pylint.extensions.bad_builtin\"\n\n[tool.pylint.'MESSAGES CONTROL']\ndisable=[\"raw-checker-failed\",\n         \"bad-inline-option\",\n        \"locally-disabled\",\n        \"file-ignored\",\n        \"suppressed-message\",\n        \"useless-suppression\",\n        \"deprecated-pragma\",\n        \"use-symbolic-message-instead\",\n        \"wrong-spelling-in-comment\",\n        \"redefined-builtin\",\n        \"unsupported-binary-operation\",\n        \"duplicate-code\",\n        \"no-member\"]\nenable=[\"c-extension-no-member\", \"broad-exception-caught\"]\n\n[tool.pylint.FORMAT]\nmax-line-length=120\nmax-module-lines=500\nmax-args=8\n\n[tool.pylint.DEPRECATED_BUILTINS]\nbad-functions=[\"print\", \"input\"]\n\n# Flake8 Configuration\n[tool.flake8]\nmax-line-length = 120\nignore = [\"E203\", \"W503\"]\nenable = [\"W504\"]\n\n# mypy Configuration\n[tool.mypy]\nstrict = false\nimplicit_optional = true\nfollow_imports = \"silent\"\nignore_missing_imports = true\nshow_column_numbers = true\ndisable_error_code = [\"no-untyped-call\", \"override\", \"misc\", \"import-untyped\"]\n\n"
+    },
+    {
+      "path": "compose.yaml",
+      "sha": null,
+      "content_sha256": "92f531bc6926fed882026ab21fdf031afe325dbc6617b8b1a9e0767c8a7b7e2c",
+      "score": 120,
+      "content": "# env variables needed\n# NGC_API_KEY\n\nservices:\n  nv-embedqa-e5-v5:\n    image: \"nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1\"\n    profiles: [\"Local LLM + Embedding\", \"Local LLM + Embedding + Reranking\"]\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              capabilities: [\"gpu\"]\n              count: 1\n    ipc: host\n    environment:\n      - NGC_API_KEY=${NGC_API_KEY}\n    volumes:\n      - nim-cache:/opt/nim/.cache\n    healthcheck:\n      test: [\"CMD\", \"python3\", \"-c\", \"import requests; resp = requests.get('http://localhost:8000/v1/health/ready'); resp.raise_for_status()\"]\n      interval: 30s\n      start_period: 600s\n      timeout: 20s\n      retries: 3\n    networks:\n      - default\n\n  nv-rerankqa-mistral-4b-v3:\n    image: \"nvcr.io/nim/nvidia/nv-rerankqa-mistral-4b-v3:1.0.2\"\n    profiles: [\"Local LLM + Embedding + Reranking\"]\n    runtime: \"nvidia\"\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              capabilities: [\"gpu\"]\n              count: 1\n    ipc: host\n    environment:\n      - NGC_API_KEY=${NGC_API_KEY}\n    volumes:\n      - nim-cache:/opt/nim/.cache\n    healthcheck:\n      test: [\"CMD\", \"python3\", \"-c\", \"import requests; resp = requests.get('http://localhost:8000/v1/health/ready'); resp.raise_for_status()\"]\n      interval: 30s\n      start_period: 600s\n      timeout: 20s\n      retries: 3\n    networks:\n      - default\n\n  llm-nim:\n    image: \"nvcr.io/nim/meta/llama3-8b-instruct:1\"\n    profiles: [\"Local LLM\", \"Local LLM + Embedding\", \"Local LLM + Embedding + Reranking\"]\n    deploy:\n      resources:\n        reservations:\n          devices:\n            - driver: nvidia\n              capabilities: [\"gpu\"]\n              count: 1\n    ipc: host\n    environment:\n      - NGC_API_KEY=${NGC_API_KEY}\n    volumes:\n      - nim-cache:/opt/nim/.cache\n    healthcheck:\n      test: [\"CMD\", \"python\", \"-c\", \"import requests; resp = requests.get('http://localhost:8000/v1/health/ready'); resp.raise_for_status()\"]\n      interval: 30s\n      start_period: 600s\n      timeout: 20s\n      retries: 3\n    networks:\n      - default\n\n  milvus:\n    image: \"milvusdb/milvus:v2.4.6\"\n    security_opt:\n      - seccomp:unconfined\n    environment:\n      - ETCD_USE_EMBED=true\n      - ETCD_DATA_DIR=/var/lib/milvus/etcd\n      - COMMON_STORAGETYPE=local\n    volumes:\n      - milvus:/var/lib/milvus\n    healthcheck:\n      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:9091/healthz\"]\n      interval: 30s\n      start_period: 90s\n      timeout: 20s\n      retries: 3\n    command: \"milvus run standalone\"\n    networks:\n      - default\n\n  redis:\n    image: \"redis:7\"\n    volumes:\n      - redis:/data\n    healthcheck:\n      test: [\"CMD\", \"redis-cli\", \"ping\"]\n      interval: 30s\n      start_period: 30s\n      timeout: 5s\n      retries: 5\n    command: \"redis-server --save 20 1 --loglevel warning\"\n    networks:\n      - default\n\nnetworks:\n  default:\n\nvolumes:\n  milvus:\n  redis:\n  nim-cache:\n\n"
     },
     {
       "path": "libs/live-labs/pyproject.toml",
@@ -176,26 +176,23 @@
       "content": "# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n# http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n.PHONY: build\nbuild: dist/live_labs-0.0.1-py3-none-any.whl dist/live_labs-0.0.1.tar.gz\ndist/live_labs-0.0.1-py3-none-any.whl dist/live_labs-0.0.1.tar.gz:\n\tpython3 -m build\n\n.venv:\n\tpython3 -m venv .venv\n\tcd .venv/bin && ./pip install -e ../..[build]\n\nclean:\n\trm -rf *.egg-info build dist\nclean-venv:\n\trm -rf .venv\nclean-all: clean clean-venv\n"
     },
     {
-      "path": "docs/.gitkeep",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 68,
-      "content": ""
-    },
-    {
       "path": "docs/0_0_quick_start.md",
       "sha": null,
       "content_sha256": "ed1dea1836fc496b5d9a8844ea29414e1f3bfc363ff18db3ce40191440832c33",
       "score": 68,
       "content": "# Quick-start\n"
+    }
+  ],
+  "fetch_errors": [
+    {
+      "path": "docs/.gitkeep",
+      "error": "empty content"
     },
     {
       "path": "docs/9_footer.md",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 68,
-      "content": ""
+      "error": "empty content"
     }
   ],
-  "generated_at": "2026-10-08T08:25:37.603902+00:00"
+  "fetch_error_count": 2,
+  "generated_at": "2026-10-11T01:14:07.308724+00:00"
 }

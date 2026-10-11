@@ -74,18 +74,25 @@
       "content": "import { describe, expect, it } from \"vitest\";\nimport { initUntypeable } from \"../untypeable\";\n\nit(\"Should not let you pass an input directly to a route\", () => {\n  const u = initUntypeable();\n\n  expect(() =>\n    u.router({\n      // @ts-expect-error\n      inputNeeded: u.input<string>(),\n    }),\n  ).toThrowError();\n});\n\nit(\"Should let you pass an output without an input\", () => {\n  const u = initUntypeable();\n\n  u.router({\n    noInputNeeded: u.output<string>(),\n  });\n});\n"
     },
     {
+      "path": "src/tests/repl.test.ts",
+      "sha": null,
+      "content_sha256": "8a0f536a55df07c8d370184eec2f0bf0e5e95ffe775cbd31416bb08b972d4f05",
+      "score": 91,
+      "content": "import { it } from \"vitest\";\nimport { initUntypeable } from \"../untypeable\";\n\nit(\"REPL\", () => {\n  const u = initUntypeable().pushArg<\"GET\" | \"POST\">();\n\n  const router = u.router({\n    something: {\n      GET: u.output<string>(),\n      POST: u.input<string>().output<string>(),\n    },\n  });\n});\n"
+    },
+    {
+      "path": "src/tests/add.test.ts",
+      "sha": null,
+      "content_sha256": "5d905fb530a1faebbb9d7b9bfe291abbe8a92954920e86a4ef72c1107e857cff",
+      "score": 91,
+      "content": "import { expect, it, vitest } from \"vitest\";\nimport { z } from \"zod\";\nimport { createSafeClient } from \"../safe-client\";\nimport { initUntypeable } from \"../untypeable\";\n\nconst u = initUntypeable();\n\nconst router = u\n  .router({\n    inputNeeded: u.input(z.string()).output(z.object({ hello: z.string() })),\n  })\n  .add({\n    inputNotNeeded: u.output(z.object({ hello: z.string() })),\n  });\n\nit('Should pick up schemas added by the \"add\" method', async () => {\n  const fn = vitest.fn();\n  const client = createSafeClient(router, fn);\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNeeded\", \"hello\");\n\n  expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\", \"hello\");\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNotNeeded\");\n});\n"
+    },
+    {
       "path": "src/tests/merge.test.ts",
       "sha": null,
       "content_sha256": "c0c1bd1b8a3495b40d5705e0cb51ed743fc16d714530ba9b5014c17f995a4869",
       "score": 91,
       "content": "import { expect, it, vitest } from \"vitest\";\nimport { z } from \"zod\";\nimport { createSafeClient } from \"../safe-client\";\nimport { initUntypeable } from \"../untypeable\";\n\nconst u = initUntypeable();\n\nconst router1 = u.router({\n  inputNeeded: u.input(z.string()).output(z.object({ hello: z.string() })),\n});\n\nconst router2 = u.router({\n  inputNotNeeded: u.output(z.object({ hello: z.string() })),\n});\n\nconst router = router2.merge(router1);\n\nit('Should pick up schemas added by the \"merge\" method', async () => {\n  const fn = vitest.fn();\n  const client = createSafeClient(router, fn);\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNeeded\", \"hello\");\n\n  expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\", \"hello\");\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNotNeeded\");\n});\n"
-    },
-    {
-      "path": "src/tests/type-only.test.ts",
-      "sha": null,
-      "content_sha256": "380c063cd0adaddfea3f8069da3f21242f0872f841c6bbf7de45a2f6ed29813f",
-      "score": 91,
-      "content": "import { describe, expect, it, vitest } from \"vitest\";\nimport { createTypeLevelClient } from \"../client\";\nimport { initUntypeable } from \"../untypeable\";\nimport { Equal, Expect } from \"./utils\";\n\nconst u = initUntypeable();\n\nconst router = u.router({\n  inputNeeded: u.input<string>().output<number>(),\n  noInputNeeded: u.output<boolean>(),\n  partialInputOnly: u.input<{ a?: string }>().output<{ a: string }>(),\n});\n\ndescribe(\"input types\", () => {\n  it(\"Should require an input of the correct type if one has been specified\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    // @ts-expect-error\n    await client(\"inputNeeded\");\n    expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\");\n\n    await client(\"inputNeeded\", \"hello\");\n    expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\", \"hello\");\n\n    // @ts-expect-error\n    await client(\"inputNeeded\", 0);\n    expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\", 0);\n  });\n\n  it(\"Should not require an input if one has not been specified\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    await client(\"noInputNeeded\");\n    expect(fn).toHaveBeenLastCalledWith(\"noInputNeeded\");\n\n    // @ts-expect-error\n    await client(\"noInputNeeded\", \"hello\");\n\n    expect(fn).toHaveBeenLastCalledWith(\"noInputNeeded\", \"hello\");\n  });\n\n  it(\"Should not require an input if all properties of the input are optional\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    await client(\"partialInputOnly\");\n    expect(fn).toHaveBeenLastCalledWith(\"partialInputOnly\");\n\n    await client(\"partialInputOnly\", {});\n    expect(fn).toHaveBeenLastCalledWith(\"partialInputOnly\", {});\n  });\n});\n\ndescribe(\"Output types\", () => {\n  it(\"Should return an output of the correct type\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    const numResult = await client(\"inputNeeded\", \"adwawd\");\n    const boolResult = await client(\"noInputNeeded\");\n\n    type tests = [\n      Expect<Equal<typeof numResult, number>>,\n      Expect<Equal<typeof boolResult, boolean>>,\n    ];\n  });\n});\n"
     },
     {
       "path": "src/tests/utils.ts",
@@ -102,25 +109,18 @@
       "content": "import { it, vitest } from \"vitest\";\nimport { createTypeLevelClient } from \"../client\";\nimport { initUntypeable } from \"../untypeable\";\n\nit(\"Should let you specify 2 args\", async () => {\n  const u = initUntypeable().args<\"GET\" | \"POST\", \"SOMETHING\" | \"ELSE\">();\n\n  const router = u.router({\n    GET: {\n      ELSE: u.output<string>(),\n    },\n  });\n\n  const client = createTypeLevelClient<typeof router>(vitest.fn());\n\n  await client(\"GET\", \"ELSE\");\n\n  // @ts-expect-error\n  await client(\"GET\", \"SOMETHING\");\n\n  // @ts-expect-error\n  await client(\"POST\", \"ELSE\");\n});\n\nit(\"Should default to only requiring one arg\", async () => {\n  const u = initUntypeable();\n\n  const router = u.router({\n    GET: u.output<string>(),\n  });\n\n  const client = createTypeLevelClient<typeof router>(vitest.fn());\n\n  await client(\"GET\");\n\n  // @ts-expect-error\n  await client(\"POST\");\n});\n"
     },
     {
+      "path": "src/tests/type-only.test.ts",
+      "sha": null,
+      "content_sha256": "380c063cd0adaddfea3f8069da3f21242f0872f841c6bbf7de45a2f6ed29813f",
+      "score": 91,
+      "content": "import { describe, expect, it, vitest } from \"vitest\";\nimport { createTypeLevelClient } from \"../client\";\nimport { initUntypeable } from \"../untypeable\";\nimport { Equal, Expect } from \"./utils\";\n\nconst u = initUntypeable();\n\nconst router = u.router({\n  inputNeeded: u.input<string>().output<number>(),\n  noInputNeeded: u.output<boolean>(),\n  partialInputOnly: u.input<{ a?: string }>().output<{ a: string }>(),\n});\n\ndescribe(\"input types\", () => {\n  it(\"Should require an input of the correct type if one has been specified\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    // @ts-expect-error\n    await client(\"inputNeeded\");\n    expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\");\n\n    await client(\"inputNeeded\", \"hello\");\n    expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\", \"hello\");\n\n    // @ts-expect-error\n    await client(\"inputNeeded\", 0);\n    expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\", 0);\n  });\n\n  it(\"Should not require an input if one has not been specified\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    await client(\"noInputNeeded\");\n    expect(fn).toHaveBeenLastCalledWith(\"noInputNeeded\");\n\n    // @ts-expect-error\n    await client(\"noInputNeeded\", \"hello\");\n\n    expect(fn).toHaveBeenLastCalledWith(\"noInputNeeded\", \"hello\");\n  });\n\n  it(\"Should not require an input if all properties of the input are optional\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    await client(\"partialInputOnly\");\n    expect(fn).toHaveBeenLastCalledWith(\"partialInputOnly\");\n\n    await client(\"partialInputOnly\", {});\n    expect(fn).toHaveBeenLastCalledWith(\"partialInputOnly\", {});\n  });\n});\n\ndescribe(\"Output types\", () => {\n  it(\"Should return an output of the correct type\", async () => {\n    const fn = vitest.fn();\n\n    const client = createTypeLevelClient<typeof router>(fn);\n\n    const numResult = await client(\"inputNeeded\", \"adwawd\");\n    const boolResult = await client(\"noInputNeeded\");\n\n    type tests = [\n      Expect<Equal<typeof numResult, number>>,\n      Expect<Equal<typeof boolResult, boolean>>,\n    ];\n  });\n});\n"
+    },
+    {
       "path": "src/tests/with-schemas.test.ts",
       "sha": null,
       "content_sha256": "5cb29a7e831594a5c9c65a4a2cc2c82829cf97cfd9ee218a596ddad5b130a3b1",
       "score": 91,
       "content": "import { expect, it, vitest } from \"vitest\";\nimport { z } from \"zod\";\nimport { createSafeClient } from \"../safe-client\";\nimport { initUntypeable } from \"../untypeable\";\n\nit(\"Should let you define inputs and outputs as schemas\", async () => {\n  const u = initUntypeable();\n  const router = u.router({\n    inputNeeded: u.input(z.string()).output(z.object({ hello: z.string() })),\n  });\n\n  const fn = vitest.fn();\n\n  const client = createSafeClient(router, fn);\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNeeded\", \"hello\");\n});\n\nit(\"Should error if you do not provide the correct input\", async () => {\n  const u = initUntypeable();\n  const router = u.router({\n    inputNeeded: u.input(z.string()).output(z.object({ hello: z.string() })),\n  });\n\n  const fn = vitest.fn();\n\n  const client = createSafeClient(router, fn);\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNeeded\", \"hello\");\n});\n\nit(\"Should error if the fetcher does not provide the correct output WITHOUT an input\", async () => {\n  const u = initUntypeable();\n  const router = u.router({\n    inputNotNeeded: u.output(z.object({ hello: z.string() })),\n  });\n\n  const fn = vitest.fn();\n\n  const client = createSafeClient(router, fn);\n\n  fn.mockResolvedValueOnce({ hello: 124 });\n\n  await expect(() => client(\"inputNotNeeded\")).rejects.toThrowError();\n});\n\nit(\"Should error if the fetcher does not provide the correct output WITH an input\", async () => {\n  const u = initUntypeable();\n  const router = u.router({\n    inputNeeded: u.input(z.string()).output(z.object({ hello: z.string() })),\n  });\n\n  const fn = vitest.fn();\n\n  const client = createSafeClient(router, fn);\n\n  fn.mockResolvedValueOnce({ hello: 124 });\n\n  await expect(() => client(\"inputNeeded\", \"124123123\")).rejects.toThrowError();\n});\n"
-    },
-    {
-      "path": "src/tests/repl.test.ts",
-      "sha": null,
-      "content_sha256": "8a0f536a55df07c8d370184eec2f0bf0e5e95ffe775cbd31416bb08b972d4f05",
-      "score": 91,
-      "content": "import { it } from \"vitest\";\nimport { initUntypeable } from \"../untypeable\";\n\nit(\"REPL\", () => {\n  const u = initUntypeable().pushArg<\"GET\" | \"POST\">();\n\n  const router = u.router({\n    something: {\n      GET: u.output<string>(),\n      POST: u.input<string>().output<string>(),\n    },\n  });\n});\n"
-    },
-    {
-      "path": "src/tests/add.test.ts",
-      "sha": null,
-      "content_sha256": "5d905fb530a1faebbb9d7b9bfe291abbe8a92954920e86a4ef72c1107e857cff",
-      "score": 91,
-      "content": "import { expect, it, vitest } from \"vitest\";\nimport { z } from \"zod\";\nimport { createSafeClient } from \"../safe-client\";\nimport { initUntypeable } from \"../untypeable\";\n\nconst u = initUntypeable();\n\nconst router = u\n  .router({\n    inputNeeded: u.input(z.string()).output(z.object({ hello: z.string() })),\n  })\n  .add({\n    inputNotNeeded: u.output(z.object({ hello: z.string() })),\n  });\n\nit('Should pick up schemas added by the \"add\" method', async () => {\n  const fn = vitest.fn();\n  const client = createSafeClient(router, fn);\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNeeded\", \"hello\");\n\n  expect(fn).toHaveBeenLastCalledWith(\"inputNeeded\", \"hello\");\n\n  fn.mockResolvedValueOnce({ hello: \"world\" });\n\n  await client(\"inputNotNeeded\");\n});\n"
     },
     {
       "path": "tsup.config.ts",
@@ -144,32 +144,11 @@
       "content": "import {\n  ArgsFromRouter,\n  LooseUntypeableHandler,\n  RoutesFromRouter,\n  UntypeableHandler,\n  UntypeableRouter,\n} from \"./types\";\n\n/**\n * Creates an API client that does not check the input or output\n * at runtime. For runtime checking, use createSafeClient.\n *\n * If you're using createTypeLevelClient, we recommend importing\n * it from 'untypeable/client' to minimize bundle size.\n *\n * @example\n *\n * const client = createTypeLevelClient<MyRouterType>((path) => {\n *   return fetch(path).then(res => res.json());\n * });\n */\nexport const createTypeLevelClient = <\n  TRouter extends UntypeableRouter<any, any>,\n  TArgs extends readonly string[] = ArgsFromRouter<TRouter>,\n  TRoutes extends Record<string, any> = RoutesFromRouter<TRouter>,\n>(\n  handler: LooseUntypeableHandler<TArgs>,\n): UntypeableHandler<TArgs, TRoutes> => {\n  return handler as any;\n};\n"
     },
     {
-      "path": "src/playground.ts",
-      "sha": null,
-      "content_sha256": "c98a79361431807b9dd5ec7c8a3899ec34c4da941f83adf9961bcfb113a7b5a4",
-      "score": 33,
-      "content": "import { initUntypeable, createTypeLevelClient } from \"untypeable\";\n\n// Initialize untypeable\nconst u = initUntypeable();\n\ntype User = {\n  id: string;\n  name: string;\n};\n\n// Create a router\n// - Add typed inputs and outputs\nconst router = u.router({\n  \"/user\": u.input<{ id: string }>().output<User>(),\n});\n\n// Create your client\n// - Pass any fetch implementation here\nconst client = createTypeLevelClient<typeof router>((path, input) => {\n  return fetch(path + `?${new URLSearchParams(input)}`).then((res) =>\n    res.json(),\n  );\n});\n\n// Type-safe data access!\n// - user is typed as User\n// - { id: string } must be passed as the input\nconst user = client(\"/user\", {\n  id: \"1\",\n});\n"
-    },
-    {
-      "path": "src/constants.ts",
-      "sha": null,
-      "content_sha256": "64595fee0952557ac6f5320643b892b407a246c7bea30d31332e578906e645a4",
-      "score": 33,
-      "content": "export const SEPARATOR = \"__\";\n"
-    },
-    {
       "path": "src/index.ts",
       "sha": null,
       "content_sha256": "9ab46770e547566f1883ab7659088e064c49209e5029870b879433a9163ce293",
       "score": 33,
       "content": "export * from \"./client\";\nexport * from \"./types\";\nexport * from \"./untypeable\";\nexport * from \"./safe-client\";\n"
-    },
-    {
-      "path": "src/safe-client.ts",
-      "sha": null,
-      "content_sha256": "1f9bea64f3472cb0f6939c366a23e34545849469dd87da4891b1f2ad088633da",
-      "score": 33,
-      "content": "import { SEPARATOR } from \"./constants\";\nimport {\n  AcceptedParser,\n  ArgsFromRouter,\n  LooseUntypeableHandler,\n  RoutesFromRouter,\n  Schemas,\n  UntypeableHandler,\n  UntypeableRouter,\n} from \"./types\";\n\nexport const createSafeClient = <\n  TRouter extends UntypeableRouter<any, any>,\n  TArgs extends ArgsFromRouter<TRouter>,\n  TRoutes extends RoutesFromRouter<TRouter>,\n>(\n  router: TRouter,\n  handler: LooseUntypeableHandler<TArgs>,\n): UntypeableHandler<TArgs, TRoutes> => {\n  return (async (...args: any[]) => {\n    let schemas: Schemas;\n\n    const argsExceptLast = args.slice(0, -1);\n\n    const matchingSchemas = router._schemaMap.get(\n      argsExceptLast.join(SEPARATOR),\n    );\n\n    const secondSchemaMatchAttempt = router._schemaMap.get(\n      args.join(SEPARATOR),\n    );\n    let shouldCheckInput: boolean;\n\n    if (matchingSchemas) {\n      schemas = matchingSchemas;\n      shouldCheckInput = true;\n    } else if (secondSchemaMatchAttempt) {\n      schemas = secondSchemaMatchAttempt;\n      shouldCheckInput = false;\n    } else {\n      throw new Error(\n        `No matching schema found for args: ${argsExceptLast.join(\", \")}`,\n      );\n    }\n\n    const inputSchema = resolveParser(schemas.input);\n    const outputSchema = resolveParser(schemas.output);\n\n    let output;\n\n    if (shouldCheckInput) {\n      const input = args[args.length - 1];\n      const parsedInput = inputSchema(input);\n\n      output = await (handler as any)(...argsExceptLast, parsedInput);\n    } else {\n      output = await (handler as any)(...args);\n    }\n\n    return outputSchema(output);\n  }) as any;\n};\n\nconst resolveParser = <T>(parser: AcceptedParser<T> | undefined) => {\n  if (typeof parser === \"function\") {\n    return parser;\n  } else if (typeof parser === \"undefined\") {\n    return (x: any) => x;\n  } else {\n    return parser.parse;\n  }\n};\n"
     },
     {
       "path": ".changeset/config.json",
@@ -179,12 +158,35 @@
       "content": "{\n  \"$schema\": \"https://unpkg.com/@changesets/config@2.3.0/schema.json\",\n  \"changelog\": \"@changesets/cli/changelog\",\n  \"commit\": false,\n  \"fixed\": [],\n  \"linked\": [],\n  \"access\": \"public\",\n  \"baseBranch\": \"main\",\n  \"updateInternalDependencies\": \"patch\",\n  \"ignore\": []\n}\n"
     },
     {
+      "path": "src/playground.ts",
+      "sha": null,
+      "content_sha256": "c98a79361431807b9dd5ec7c8a3899ec34c4da941f83adf9961bcfb113a7b5a4",
+      "score": 33,
+      "content": "import { initUntypeable, createTypeLevelClient } from \"untypeable\";\n\n// Initialize untypeable\nconst u = initUntypeable();\n\ntype User = {\n  id: string;\n  name: string;\n};\n\n// Create a router\n// - Add typed inputs and outputs\nconst router = u.router({\n  \"/user\": u.input<{ id: string }>().output<User>(),\n});\n\n// Create your client\n// - Pass any fetch implementation here\nconst client = createTypeLevelClient<typeof router>((path, input) => {\n  return fetch(path + `?${new URLSearchParams(input)}`).then((res) =>\n    res.json(),\n  );\n});\n\n// Type-safe data access!\n// - user is typed as User\n// - { id: string } must be passed as the input\nconst user = client(\"/user\", {\n  id: \"1\",\n});\n"
+    },
+    {
       "path": "src/untypeable.ts",
       "sha": null,
       "content_sha256": "0e24b484a642abd663c2a7dfeb4ae2b28160db5d65e87b392dd9b9b5fa42f1d5",
       "score": 33,
       "content": "import { SEPARATOR } from \"./constants\";\nimport {\n  UntypeableBase,\n  UntypeableInput,\n  UntypeableOutput,\n  UntypeableRouter,\n  AcceptedParser,\n  SchemaMap,\n} from \"./types\";\n\nconst isOutput = (value: {\n  __type?: string;\n}): value is UntypeableOutput<any, any> => {\n  return value.__type === \"output\";\n};\n\nconst isInput = (value: {\n  __type?: string;\n}): value is UntypeableOutput<any, any> => {\n  return value.__type === \"input\";\n};\n\nconst combineMaps = <K, V>(map1: Map<K, V>, map2: Map<K, V>) => {\n  const newMap = new Map(map1);\n\n  for (const [key, value] of map2) {\n    newMap.set(key, value);\n  }\n\n  return newMap;\n};\n\nconst initRouter = <TRoutes extends Record<string, any> = {}>(\n  routes: TRoutes,\n  schemaMap: SchemaMap = new Map(),\n): UntypeableRouter => {\n  const collectRoutes = (\n    routes: Record<string, UntypeableOutput<any, any> | Record<string, any>>,\n    path: string[] = [],\n  ) => {\n    for (const [key, value] of Object.entries(routes)) {\n      if (isOutput(value)) {\n        schemaMap.set([...path, key].join(SEPARATOR), {\n          input: value.inputSchema,\n          output: value.outputSchema,\n        });\n      } else if (isInput(value)) {\n        throw new Error(\"An input cannot be passed directly to a router.\");\n      } else {\n        collectRoutes(value, [...path, key]);\n      }\n    }\n  };\n\n  collectRoutes(routes);\n\n  return {\n    add: (newRoutes) => initRouter(newRoutes, schemaMap),\n    merge: (router) =>\n      initRouter({}, combineMaps(router._schemaMap, schemaMap)),\n    _schemaMap: schemaMap,\n  };\n};\n\nconst initInput = (\n  inputSchema: AcceptedParser<any> | undefined,\n): UntypeableInput<any> => {\n  return {\n    output: (outputSchema) => initOutput(inputSchema, outputSchema),\n    inputSchema,\n    __type: \"input\",\n  };\n};\n\nconst initOutput = (\n  inputSchema: AcceptedParser<any> | undefined,\n  outputSchema: AcceptedParser<any> | undefined,\n): UntypeableOutput<any, any> => {\n  return {\n    __type: \"output\",\n    inputSchema,\n    outputSchema,\n  };\n};\n\nexport const initUntypeable = (): UntypeableBase => {\n  return {\n    pushArg: () => initUntypeable() as any,\n    unshiftArg: () => initUntypeable() as any,\n    args: () => initUntypeable() as any,\n    input: initInput,\n    output: (outputSchema) => initOutput(undefined, outputSchema),\n    router: (routes) => initRouter(routes),\n  };\n};\n"
+    },
+    {
+      "path": "src/safe-client.ts",
+      "sha": null,
+      "content_sha256": "1f9bea64f3472cb0f6939c366a23e34545849469dd87da4891b1f2ad088633da",
+      "score": 33,
+      "content": "import { SEPARATOR } from \"./constants\";\nimport {\n  AcceptedParser,\n  ArgsFromRouter,\n  LooseUntypeableHandler,\n  RoutesFromRouter,\n  Schemas,\n  UntypeableHandler,\n  UntypeableRouter,\n} from \"./types\";\n\nexport const createSafeClient = <\n  TRouter extends UntypeableRouter<any, any>,\n  TArgs extends ArgsFromRouter<TRouter>,\n  TRoutes extends RoutesFromRouter<TRouter>,\n>(\n  router: TRouter,\n  handler: LooseUntypeableHandler<TArgs>,\n): UntypeableHandler<TArgs, TRoutes> => {\n  return (async (...args: any[]) => {\n    let schemas: Schemas;\n\n    const argsExceptLast = args.slice(0, -1);\n\n    const matchingSchemas = router._schemaMap.get(\n      argsExceptLast.join(SEPARATOR),\n    );\n\n    const secondSchemaMatchAttempt = router._schemaMap.get(\n      args.join(SEPARATOR),\n    );\n    let shouldCheckInput: boolean;\n\n    if (matchingSchemas) {\n      schemas = matchingSchemas;\n      shouldCheckInput = true;\n    } else if (secondSchemaMatchAttempt) {\n      schemas = secondSchemaMatchAttempt;\n      shouldCheckInput = false;\n    } else {\n      throw new Error(\n        `No matching schema found for args: ${argsExceptLast.join(\", \")}`,\n      );\n    }\n\n    const inputSchema = resolveParser(schemas.input);\n    const outputSchema = resolveParser(schemas.output);\n\n    let output;\n\n    if (shouldCheckInput) {\n      const input = args[args.length - 1];\n      const parsedInput = inputSchema(input);\n\n      output = await (handler as any)(...argsExceptLast, parsedInput);\n    } else {\n      output = await (handler as any)(...args);\n    }\n\n    return outputSchema(output);\n  }) as any;\n};\n\nconst resolveParser = <T>(parser: AcceptedParser<T> | undefined) => {\n  if (typeof parser === \"function\") {\n    return parser;\n  } else if (typeof parser === \"undefined\") {\n    return (x: any) => x;\n  } else {\n    return parser.parse;\n  }\n};\n"
+    },
+    {
+      "path": "src/constants.ts",
+      "sha": null,
+      "content_sha256": "64595fee0952557ac6f5320643b892b407a246c7bea30d31332e578906e645a4",
+      "score": 33,
+      "content": "export const SEPARATOR = \"__\";\n"
     }
   ],
-  "generated_at": "2026-10-08T15:25:31.149190+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:12.626796+00:00"
 }

@@ -102,11 +102,18 @@
       "content": "{\n  \"extends\": \"@react-native/typescript-config\",\n  \"compilerOptions\": {\n    \"types\": [\"jest\"]\n  },\n  \"include\": [\"**/*.ts\", \"**/*.tsx\"],\n  \"exclude\": [\"**/node_modules\", \"**/Pods\"]\n}\n"
     },
     {
-      "path": "example/.eslintrc.js",
+      "path": "example/jest.config.js",
       "sha": null,
-      "content_sha256": "6b5a39f38bf0097d86394ed81cdc52560fee480a1fe1b237bb14cf199c564a97",
+      "content_sha256": "342ee3a20712659d38591de2800e8d5eeee84c0feb693ef21dd2347fef4d9108",
       "score": 33,
-      "content": "module.exports = {\n  root: true,\n  extends: '@react-native',\n};\n"
+      "content": "module.exports = {\n  preset: '@react-native/jest-preset',\n};\n"
+    },
+    {
+      "path": "example/app.json",
+      "sha": null,
+      "content_sha256": "48f1cc1d5102700f3c18027091aad48f0caac209d8d2870aac34f6902ed31d00",
+      "score": 33,
+      "content": "{\n  \"name\": \"example\",\n  \"displayName\": \"example\"\n}\n"
     },
     {
       "path": "example/App.tsx",
@@ -116,32 +123,11 @@
       "content": "import React, { useState } from 'react';\nimport {\n  SafeAreaView,\n  ScrollView,\n  StyleSheet,\n  Text,\n  TouchableOpacity,\n  View,\n} from 'react-native';\nimport {\n  createService,\n  initiate,\n  process,\n  terminate,\n  testEmit,\n  BbpsRawEvent,\n} from 'bbps-sdk-react';\n\nconst INITIATE_PAYLOAD = {\n  action: 'initiate',\n  clientId: 'fibe',\n  agentId: 'YOUR_AGENT_ID',\n  environment: 'sandbox',\n  mobile: '9876543210',\n  deviceId: 'DEVICE_TEST_001',\n  issuingCou: 'yes_biz',\n  authToken: 'YOUR_AUTH_TOKEN',\n};\n\nconst PROCESS_PAYLOAD = {\n  action: 'BBPS_PAYMENT',\n  agentId: 'YOUR_AGENT_ID',\n  authToken: 'YOUR_AUTH_TOKEN',\n};\n\nfunction App() {\n  const [status, setStatus] = useState('Idle');\n  const [initiateRequest, setInitiateRequest] = useState('');\n  const [initiateResponse, setInitiateResponse] = useState('');\n  const [processRequest, setProcessRequest] = useState('');\n  const [processResponse, setProcessResponse] = useState('');\n  const [logs, setLogs] = useState<string[]>([]);\n\n  const addLog = (msg: string) => {\n    setLogs(prev => [...prev.slice(-9), `${new Date().toLocaleTimeString()}: ${msg}`]);\n  };\n\n  const handleEvent = (event: BbpsRawEvent) => {\n    addLog(`EVENT: ${event.event}`);\n    const json = JSON.stringify(event, null, 2);\n    const eventName = event.event?.toLowerCase() ?? '';\n\n    if (eventName.includes('initiate')) {\n      setInitiateResponse(json);\n    } else {\n      setProcessResponse(json);\n    }\n\n    setStatus(`Event: ${event.event}`);\n  };\n\n  const onCreateService = async () => {\n    try {\n      setStatus('Creating service...');\n      addLog('Calling createService...');\n      await createService('fibe', handleEvent);\n      addLog('createService success');\n      setStatus('Service created');\n    } catch (e: any) {\n      addLog(`createService ERROR: ${e.message}`);\n      setStatus(`Error: ${e.message}`);\n    }\n  };\n\n  const onInitiate = async () => {\n    try {\n      setStatus('Initiating...');\n      setInitiateRequest(JSON.stringify(INITIATE_PAYLOAD, null, 2));\n      setInitiateResponse('');\n      addLog('Calling initiate...');\n      await initiate(INITIATE_PAYLOAD);\n      addLog('initiate called (async done)');\n      setStatus('Initiate called');\n    } catch (e: any) {\n      addLog(`initiate ERROR: ${e.message}`);\n      setStatus(`Error: ${e.message}`);\n      setInitiateResponse(`Error: ${e.message}`);\n    }\n  };\n\n  const onProcess = async () => {\n    try {\n      setStatus('Processing...');\n      setProcessRequest(JSON.stringify(PROCESS_PAYLOAD, null, 2));\n      setProcessResponse('');\n      await process(PROCESS_PAYLOAD);\n      setStatus('Process called');\n    } catch (e: any) {\n      setStatus(`Error: ${e.message}`);\n      setProcessResponse(`Error: ${e.message}`);\n    }\n  };\n\n  const onTerminate = () => {\n    terminate();\n    setStatus('Terminated');\n    setInitiateRequest('');\n    setInitiateResponse('');\n    setProcessRequest('');\n    setProcessResponse('');\n    setLogs([]);\n  };\n\n  return (\n    <SafeAreaView style={styles.container}>\n      <ScrollView contentContainerStyle={styles.scroll}>\n        <Text style={styles.title}>BBPS SDK React - Test</Text>\n        <Text style={styles.status}>Status: {status}</Text>\n\n        <View style={styles.buttonRow}>\n          <TouchableOpacity style={[styles.button, styles.createBtn]} onPress={onCreateService}>\n            <Text style={styles.buttonText}>createService</Text>\n          </TouchableOpacity>\n          <TouchableOpacity style={[styles.button, styles.initiateBtn]} onPress={onInitiate}>\n            <Text style={styles.buttonText}>initiate</Text>\n          </TouchableOpacity>\n          <TouchableOpacity style={[styles.button, styles.processBtn]} onPress={onProcess}>\n            <Text style={styles.buttonText}>process</Text>\n          </TouchableOpacity>\n          <TouchableOpacity style={[styles.button, styles.terminateBtn]} onPress={onTerminate}>\n            <Text style={styles.buttonText}>terminate</Text>\n          </TouchableOpacity>\n          <TouchableOpacity style={[styles.button, {backgroundColor: '#9C27B0'}]} onPress={() => {\n            addLog('testEmit clicked');\n            testEmit().then(r => addLog(`testEmit OK: ${r}`)).catch(e => addLog(`testEmit ERR: ${e.message}`));\n          }}>\n            <Text style={styles.buttonText}>testEmit</Text>\n          </TouchableOpacity>\n        </View>\n\n        <Section\n          title=\"Initiate\"\n          request={initiateRequest}\n          response={initiateResponse}\n        />\n\n        <Section\n          title=\"Process\"\n          request={processRequest}\n          response={processResponse}\n        />\n\n        <View style={styles.section}>\n          <Text style={styles.sectionTitle}>Diagnostics</Text>\n          {logs.length === 0 ? (\n            <Text style={styles.codeText}>No events yet...</Text>\n          ) : (\n            logs.map((log, i) => (\n              <Text key={i} style={[styles.codeText, {fontSize: 11, marginBottom: 2}]}>{log}</Text>\n            ))\n          )}\n        </View>\n      </ScrollView>\n    </SafeAreaView>\n  );\n}\n\nfunction Section({\n  title,\n  request,\n  response,\n}: {\n  title: string;\n  request: string;\n  response: string;\n}) {\n  return (\n    <View style={styles.section}>\n      <Text style={styles.sectionTitle}>{title}</Text>\n      <Text style={styles.label}>Request:</Text>\n      <View style={styles.codeBox}>\n        <Text style={styles.codeText}>{request || '—'}</Text>\n      </View>\n      <Text style={styles.label}>Response:</Text>\n      <View style={styles.codeBox}>\n        <Text style={styles.codeText}>{response || '—'}</Text>\n      </View>\n    </View>\n  );\n}\n\nconst styles = StyleSheet.create({\n  container: { flex: 1, backgroundColor: '#f5f5f5' },\n  scroll: { padding: 16 },\n  title: { fontSize: 22, fontWeight: '700', marginBottom: 8, color: '#1a1a1a' },\n  status: { fontSize: 14, marginBottom: 16, color: '#555' },\n  buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },\n  button: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8, marginRight: 4, marginBottom: 4 },\n  createBtn: { backgroundColor: '#2196F3' },\n  initiateBtn: { backgroundColor: '#4CAF50' },\n  processBtn: { backgroundColor: '#FF9800' },\n  terminateBtn: { backgroundColor: '#f44336' },\n  buttonText: { color: '#fff', fontWeight: '600', fontSize: 13 },\n  section: { marginBottom: 20, backgroundColor: '#fff', borderRadius: 10, padding: 14, elevation: 1 },\n  sectionTitle: { fontSize: 17, fontWeight: '700', marginBottom: 10, color: '#333' },\n  label: { fontSize: 12, fontWeight: '600', color: '#888', marginTop: 6, marginBottom: 4, textTransform: 'uppercase' },\n  codeBox: { backgroundColor: '#263238', borderRadius: 6, padding: 10, minHeight: 50 },\n  codeText: { fontFamily: 'Courier', fontSize: 12, color: '#80CBC4' },\n});\n\nexport default App;\n"
     },
     {
-      "path": "example/babel.config.js",
-      "sha": null,
-      "content_sha256": "d76a3a8625b204efa0f42c4bdd220f484211798f88a56f2e784bc082231cc292",
-      "score": 33,
-      "content": "module.exports = {\n  presets: ['module:@react-native/babel-preset'],\n};\n"
-    },
-    {
       "path": "src/index.ts",
       "sha": null,
       "content_sha256": "7bca9af38e41c210de2577d54dca1ebc91861e7557a2ab853c1b7fb6c89f647c",
       "score": 33,
       "content": "import { NativeModules, Platform } from 'react-native';\n\nconst LINKING_ERROR =\n  `The package 'bbps-sdk-react' doesn't seem to be linked. Make sure:\\n\\n` +\n  Platform.select({ ios: \"- You have run 'pod install'\\n\", default: '' }) +\n  '- You rebuilt the app after installing the package\\n' +\n  '- You are not using Expo Go\\n';\n\nconst BbpsSdkReact = NativeModules.BbpsSdkReact\n  ? NativeModules.BbpsSdkReact\n  : new Proxy(\n      {},\n      {\n        get() {\n          throw new Error(LINKING_ERROR);\n        },\n      }\n    );\n\nexport interface BbpsRawEvent {\n  event: string;\n  payload: Record<string, unknown>;\n}\n\nlet _globalCallback: ((event: BbpsRawEvent) => void) | null = null;\nlet _isPolling = false;\n\nfunction startPolling() {\n  if (_isPolling) return;\n  _isPolling = true;\n\n  const poll = async () => {\n    while (_isPolling) {\n      try {\n        const raw: string = await BbpsSdkReact.waitForEvent();\n        console.warn('[BBPS_JS] EVENT ARRIVED (poll):', raw.substring(0, 100));\n        const parsed = JSON.parse(raw);\n        const normalized: BbpsRawEvent = {\n          event: parsed.event ?? 'UNKNOWN',\n          payload: parsed.payload ?? parsed ?? {},\n        };\n        _globalCallback?.(normalized);\n      } catch (e) {\n        console.error('[BBPS_JS] Poll error:', e);\n      }\n    }\n  };\n\n  poll();\n}\n\nexport const createService = (\n  clientId: string,\n  callback?: (event: BbpsRawEvent) => void\n): Promise<void> => {\n  if (callback) {\n    _globalCallback = callback;\n    startPolling();\n  }\n  return BbpsSdkReact.createService(clientId);\n};\n\nexport const initiate = (payload: Record<string, unknown>): Promise<void> => {\n  return BbpsSdkReact.initiate(payload);\n};\n\nexport const process = (payload: Record<string, unknown>): Promise<void> => {\n  return BbpsSdkReact.process(payload);\n};\n\nexport const onBackPressed = (): Promise<boolean> => {\n  return BbpsSdkReact.onBackPressed();\n};\n\nexport const terminate = (): void => {\n  _isPolling = false;\n  _globalCallback = null;\n  return BbpsSdkReact.terminate();\n};\n\nexport const testEmit = (): Promise<string> => {\n  return BbpsSdkReact.testEmit();\n};\n\nexport const cleanup = (): void => {\n  _isPolling = false;\n  _globalCallback = null;\n};\n"
-    },
-    {
-      "path": "example/index.js",
-      "sha": null,
-      "content_sha256": "923f6db3c2996730bcab029422c7b4fe80b3060e5321bba97b7816b783015ddd",
-      "score": 33,
-      "content": "/**\n * @format\n */\n\nimport { AppRegistry } from 'react-native';\nimport App from './App';\nimport { name as appName } from './app.json';\n\nAppRegistry.registerComponent(appName, () => App);\n"
-    },
-    {
-      "path": "scripts/resolve_ios_framework_conflicts.rb",
-      "sha": null,
-      "content_sha256": "b7d5f750bbebd530ed6d25c291957dcfce6032fe2cb1215bae8c1741b5e80a5f",
-      "score": 33,
-      "content": "def resolve_ios_framework_conflicts(installer)\n  shared_hypersdk_frameworks = %w[HyperSDK HyperCore JuspaySafeBrowser]\n\n  installer.aggregate_targets.each do |aggregate_target|\n    target_name = aggregate_target.name\n\n    %w[Debug Release].each do |config|\n      %w[input output].each do |list_type|\n        xcfilelist = File.join(\n          installer.sandbox.root.to_s,\n          \"Target Support Files/#{target_name}/#{target_name}-frameworks-#{config}-#{list_type}-files.xcfilelist\"\n        )\n        next unless File.exist?(xcfilelist)\n        lines = File.readlines(xcfilelist)\n        filtered = lines.reject { |l| shared_hypersdk_frameworks.any? { |fw| l.include?(fw) } }\n        File.write(xcfilelist, filtered.join)\n      end\n    end\n\n    frameworks_script = File.join(\n      installer.sandbox.root.to_s,\n      \"Target Support Files/#{target_name}/#{target_name}-frameworks.sh\"\n    )\n    next unless File.exist?(frameworks_script)\n    content = File.read(frameworks_script)\n    shared_hypersdk_frameworks.each do |fw|\n      content = content.gsub(/^\\s*install_framework[^\\n]*#{fw}[^\\n]*\\n/, '')\n    end\n    File.write(frameworks_script, content)\n  end\n\n  # Add Fuse.rb as a build script phase so HyperSDK assets are downloaded\n  # automatically before every build without any manual Xcode scheme setup.\n  fuse_phase_name = '[HyperSDK] Download Assets'\n  fuse_script = 'ruby \"${PODS_ROOT}/HyperSDK/Fuse.rb\"'\n\n  installer.aggregate_targets.each do |aggregate_target|\n    next if aggregate_target.user_targets.empty?\n\n    aggregate_target.user_targets.each do |user_target|\n      next if user_target.shell_script_build_phases.any? { |p| p.name == fuse_phase_name }\n\n      phase = user_target.new_shell_script_build_phase(fuse_phase_name)\n      phase.shell_script = fuse_script\n      phase.show_env_vars_in_log = '0'\n\n      # Place before the Sources compile phase so the header exists at compile time\n      sources_phase = user_target.build_phases.find do |p|\n        p.is_a?(Xcodeproj::Project::Object::PBXSourcesBuildPhase)\n      end\n      if sources_phase\n        phases = user_target.build_phases\n        phases.delete(phase)\n        phases.insert(phases.index(sources_phase), phase)\n      end\n    end\n\n    aggregate_target.user_project.save\n  end\nend\n"
     },
     {
       "path": "example/.prettierrc.js",
@@ -158,18 +144,32 @@
       "content": "const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');\nconst path = require('path');\n\nconst projectRoot = __dirname;\nconst sdkRoot = path.resolve(projectRoot, 'node_modules/bbps-sdk-react');\n\nconst defaultConfig = getDefaultConfig(projectRoot);\n\ndefaultConfig.watchFolders = [sdkRoot];\ndefaultConfig.resolver.nodeModulesPaths = [\n  path.resolve(projectRoot, 'node_modules'),\n];\n\nconst config = {};\n\nmodule.exports = mergeConfig(defaultConfig, config);\n"
     },
     {
-      "path": "example/jest.config.js",
+      "path": "example/index.js",
       "sha": null,
-      "content_sha256": "342ee3a20712659d38591de2800e8d5eeee84c0feb693ef21dd2347fef4d9108",
+      "content_sha256": "923f6db3c2996730bcab029422c7b4fe80b3060e5321bba97b7816b783015ddd",
       "score": 33,
-      "content": "module.exports = {\n  preset: '@react-native/jest-preset',\n};\n"
+      "content": "/**\n * @format\n */\n\nimport { AppRegistry } from 'react-native';\nimport App from './App';\nimport { name as appName } from './app.json';\n\nAppRegistry.registerComponent(appName, () => App);\n"
     },
     {
-      "path": "example/app.json",
+      "path": "example/.eslintrc.js",
       "sha": null,
-      "content_sha256": "48f1cc1d5102700f3c18027091aad48f0caac209d8d2870aac34f6902ed31d00",
+      "content_sha256": "6b5a39f38bf0097d86394ed81cdc52560fee480a1fe1b237bb14cf199c564a97",
       "score": 33,
-      "content": "{\n  \"name\": \"example\",\n  \"displayName\": \"example\"\n}\n"
+      "content": "module.exports = {\n  root: true,\n  extends: '@react-native',\n};\n"
+    },
+    {
+      "path": "example/babel.config.js",
+      "sha": null,
+      "content_sha256": "d76a3a8625b204efa0f42c4bdd220f484211798f88a56f2e784bc082231cc292",
+      "score": 33,
+      "content": "module.exports = {\n  presets: ['module:@react-native/babel-preset'],\n};\n"
+    },
+    {
+      "path": "scripts/resolve_ios_framework_conflicts.rb",
+      "sha": null,
+      "content_sha256": "b7d5f750bbebd530ed6d25c291957dcfce6032fe2cb1215bae8c1741b5e80a5f",
+      "score": 33,
+      "content": "def resolve_ios_framework_conflicts(installer)\n  shared_hypersdk_frameworks = %w[HyperSDK HyperCore JuspaySafeBrowser]\n\n  installer.aggregate_targets.each do |aggregate_target|\n    target_name = aggregate_target.name\n\n    %w[Debug Release].each do |config|\n      %w[input output].each do |list_type|\n        xcfilelist = File.join(\n          installer.sandbox.root.to_s,\n          \"Target Support Files/#{target_name}/#{target_name}-frameworks-#{config}-#{list_type}-files.xcfilelist\"\n        )\n        next unless File.exist?(xcfilelist)\n        lines = File.readlines(xcfilelist)\n        filtered = lines.reject { |l| shared_hypersdk_frameworks.any? { |fw| l.include?(fw) } }\n        File.write(xcfilelist, filtered.join)\n      end\n    end\n\n    frameworks_script = File.join(\n      installer.sandbox.root.to_s,\n      \"Target Support Files/#{target_name}/#{target_name}-frameworks.sh\"\n    )\n    next unless File.exist?(frameworks_script)\n    content = File.read(frameworks_script)\n    shared_hypersdk_frameworks.each do |fw|\n      content = content.gsub(/^\\s*install_framework[^\\n]*#{fw}[^\\n]*\\n/, '')\n    end\n    File.write(frameworks_script, content)\n  end\n\n  # Add Fuse.rb as a build script phase so HyperSDK assets are downloaded\n  # automatically before every build without any manual Xcode scheme setup.\n  fuse_phase_name = '[HyperSDK] Download Assets'\n  fuse_script = 'ruby \"${PODS_ROOT}/HyperSDK/Fuse.rb\"'\n\n  installer.aggregate_targets.each do |aggregate_target|\n    next if aggregate_target.user_targets.empty?\n\n    aggregate_target.user_targets.each do |user_target|\n      next if user_target.shell_script_build_phases.any? { |p| p.name == fuse_phase_name }\n\n      phase = user_target.new_shell_script_build_phase(fuse_phase_name)\n      phase.shell_script = fuse_script\n      phase.show_env_vars_in_log = '0'\n\n      # Place before the Sources compile phase so the header exists at compile time\n      sources_phase = user_target.build_phases.find do |p|\n        p.is_a?(Xcodeproj::Project::Object::PBXSourcesBuildPhase)\n      end\n      if sources_phase\n        phases = user_target.build_phases\n        phases.delete(phase)\n        phases.insert(phases.index(sources_phase), phase)\n      end\n    end\n\n    aggregate_target.user_project.save\n  end\nend\n"
     },
     {
       "path": "example/ios/BBPSConfig.json",
@@ -186,5 +186,7 @@
       "content": "{\n  \"info\" : {\n    \"version\" : 1,\n    \"author\" : \"xcode\"\n  }\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T03:25:24.846624+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:28.493136+00:00"
 }

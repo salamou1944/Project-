@@ -74,18 +74,18 @@
       "content": "# Fixer\n\nFixer wraps the XML feeds of Euro foreign exchange reference provided by the European Central Bank:\n\n```ruby\nFixer.current\nFixer.ninety_days\nFixer.historical\n```\n"
     },
     {
-      "path": "gem/spec/fixer_spec.rb",
-      "sha": null,
-      "content_sha256": "cf05681960c8cbb39485e93d80fa4dea1d8baca035a6376c20dd1c77cdc5f7a8",
-      "score": 91,
-      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\n\ndescribe Fixer do\n  before do\n    @mock = MiniTest::Mock.new\n  end\n\n  after do\n    @mock.verify\n  end\n\n  it 'returns current rates' do\n    @mock.expect(:call, nil, [:current])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.current\n    end\n  end\n\n  it 'returns ninety-day rates' do\n    @mock.expect(:call, nil, [:ninety_days])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.ninety_days\n    end\n  end\n\n  it 'returns historical rates' do\n    @mock.expect(:call, nil, [:historical])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.historical\n    end\n  end\nend\n"
-    },
-    {
       "path": "app/spec/currency_spec.rb",
       "sha": null,
       "content_sha256": "ad797033bbb8d908726c1b8a8e3cdf06756991b79820917fbb5e7e910ecbe841",
       "score": 91,
       "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'currency'\n\ndescribe Currency do\n  around do |test|\n    Currency.db.transaction do\n      test.call\n      raise Sequel::Rollback\n    end\n  end\n\n  before do\n    Currency.dataset.delete\n    @first = Currency.create(date: '2014-01-01')\n    @last = Currency.create(date: '2015-01-01')\n  end\n\n  it 'returns current date' do\n    Currency.current_date.must_equal @last.date\n  end\n\n  it 'returns current date before given date' do\n    Currency.current_date_before(@last.date - 1).must_equal @first.date\n  end\n\n  it 'returns nil if there is no current date before given date' do\n    Currency.current_date_before(@first.date - 1).must_be_nil\n  end\n\n  it 'casts to hash' do\n    @first.to_h.must_be_kind_of Hash\n  end\nend\n"
+    },
+    {
+      "path": "gem/spec/helper.rb",
+      "sha": null,
+      "content_sha256": "2ecdbec51d35c60b2698f33f7f75bc72a29f8e2f936a15a0e618b795f05e89a8",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\n$LOAD_PATH.unshift(File.expand_path('../../lib', __FILE__))\n\nrequire 'minitest/autorun'\nrequire 'vcr'\nrequire 'webmock'\n\nrequire 'fixer'\n\nVCR.configure do |c|\n  c.cassette_library_dir = 'spec/vcr_cassettes'\n  c.hook_into :webmock\nend\n"
     },
     {
       "path": "app/spec/helper.rb",
@@ -95,13 +95,6 @@
       "content": "# frozen_string_literal: true\n\nrequire './config/environment'\nrequire 'minitest/autorun'\nrequire 'minitest/around/spec'\n"
     },
     {
-      "path": "app/spec/bank_spec.rb",
-      "sha": null,
-      "content_sha256": "cd6dca3ca6bafaf3b76e68dc9a63e26ecdc83c07a9ce17663b56d14fe686e541",
-      "score": 91,
-      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'bank'\n\ndescribe Bank do\n  around do |test|\n    Currency.db.transaction do\n      test.call\n      raise Sequel::Rollback\n    end\n  end\n\n  before do\n    Currency.dataset.delete\n  end\n\n  it 'fetches current rates' do\n    Bank.fetch_current_rates!\n    Currency.count.must_be :positive?\n  end\nend\n"
-    },
-    {
       "path": "app/spec/edge_cases_spec.rb",
       "sha": null,
       "content_sha256": "646bd35d621fda5d1429e2a7204fd358f53bb09ff7f7b31a2443302b63a8453f",
@@ -109,11 +102,18 @@
       "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'rack/test'\nrequire 'api'\n\ndescribe 'the API' do\n  include Rack::Test::Methods\n\n  let(:app)  { Sinatra::Application }\n  let(:json) { Oj.load(last_response.body) }\n\n  it 'handles unfound pages' do\n    get '/foo'\n    last_response.status.must_equal 404\n    json.wont_be_empty\n  end\n\n  it 'will not process an invalid date' do\n    get '/2010-31-01'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'will not process a date before 2000' do\n    get '/1999-01-01'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'will not process an invalid base' do\n    get '/latest?base=UAH'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'will not process an invalid amount' do\n    get '/latest?amount=foo'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'handles malformed queries' do\n    get '/latest?base=USD?callback=?'\n    last_response.must_be :unprocessable?\n    json.wont_be_empty\n  end\n\n  it 'returns fresh dates' do\n    Currency.db.transaction do\n      new_date = Currency.current_date + 1\n      Currency.create(date: new_date, iso_code: 'FOO', rate: 1)\n      get '/latest'\n      json['date'].must_equal new_date.to_s\n      raise Sequel::Rollback\n    end\n  end\nend\n"
     },
     {
-      "path": "gem/spec/helper.rb",
+      "path": "gem/spec/fixer_spec.rb",
       "sha": null,
-      "content_sha256": "2ecdbec51d35c60b2698f33f7f75bc72a29f8e2f936a15a0e618b795f05e89a8",
+      "content_sha256": "cf05681960c8cbb39485e93d80fa4dea1d8baca035a6376c20dd1c77cdc5f7a8",
       "score": 91,
-      "content": "# frozen_string_literal: true\n\n$LOAD_PATH.unshift(File.expand_path('../../lib', __FILE__))\n\nrequire 'minitest/autorun'\nrequire 'vcr'\nrequire 'webmock'\n\nrequire 'fixer'\n\nVCR.configure do |c|\n  c.cassette_library_dir = 'spec/vcr_cassettes'\n  c.hook_into :webmock\nend\n"
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\n\ndescribe Fixer do\n  before do\n    @mock = MiniTest::Mock.new\n  end\n\n  after do\n    @mock.verify\n  end\n\n  it 'returns current rates' do\n    @mock.expect(:call, nil, [:current])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.current\n    end\n  end\n\n  it 'returns ninety-day rates' do\n    @mock.expect(:call, nil, [:ninety_days])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.ninety_days\n    end\n  end\n\n  it 'returns historical rates' do\n    @mock.expect(:call, nil, [:historical])\n    Fixer::Feed.stub(:new, @mock) do\n      Fixer.historical\n    end\n  end\nend\n"
+    },
+    {
+      "path": "app/spec/bank_spec.rb",
+      "sha": null,
+      "content_sha256": "cd6dca3ca6bafaf3b76e68dc9a63e26ecdc83c07a9ce17663b56d14fe686e541",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nrequire_relative 'helper'\nrequire 'bank'\n\ndescribe Bank do\n  around do |test|\n    Currency.db.transaction do\n      test.call\n      raise Sequel::Rollback\n    end\n  end\n\n  before do\n    Currency.dataset.delete\n  end\n\n  it 'fetches current rates' do\n    Bank.fetch_current_rates!\n    Currency.count.must_be :positive?\n  end\nend\n"
     },
     {
       "path": "app/spec/quote_spec.rb",
@@ -158,18 +158,18 @@
       "content": "before_install:\n  - gem update --system\n  - gem install bundler\n  - psql -c 'create database fixer_test;' -U postgres\n  - cd app\nenv:\n  - RACK_ENV=test\nrvm:\n  - 2.5.0\nsudo: false\n"
     },
     {
-      "path": "gem/.rubocop.yml",
-      "sha": null,
-      "content_sha256": "29c50426c5409d329e48bdb0b564b45fda6ad667e8ee3d762863c3ec98f9324a",
-      "score": 33,
-      "content": "AllCops:\n  TargetRubyVersion: 2.5\nMetrics/BlockLength:\n  Exclude:\n    - 'spec/**/*'\n"
-    },
-    {
       "path": "app/.rubocop.yml",
       "sha": null,
       "content_sha256": "f5cb74659934d590b103f6f41f178bccc0b8086eff2b705002e31ebf95017107",
       "score": 33,
       "content": "AllCops:\n  TargetRubyVersion: 2.5\nDocumentation:\n  Enabled: false\nMetrics/BlockLength:\n  Enabled: false\nMetrics/LineLength:\n  Enabled: false\n"
+    },
+    {
+      "path": "gem/.rubocop.yml",
+      "sha": null,
+      "content_sha256": "29c50426c5409d329e48bdb0b564b45fda6ad667e8ee3d762863c3ec98f9324a",
+      "score": 33,
+      "content": "AllCops:\n  TargetRubyVersion: 2.5\nMetrics/BlockLength:\n  Exclude:\n    - 'spec/**/*'\n"
     },
     {
       "path": "app/config/environment.rb",
@@ -186,5 +186,7 @@
       "content": "# frozen_string_literal: true\n\nworker_process_count = (ENV['WORKER_PROCESSES'] || 4).to_i\n\npreload_app true\nworker_processes worker_process_count\ntimeout 10\n\nbefore_fork do |_, _|\n  Sequel::DATABASES.each(&:disconnect)\nend\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:15.469424+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:58.250582+00:00"
 }

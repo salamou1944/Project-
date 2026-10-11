@@ -46,18 +46,18 @@
       "content": "{\n  \"typescript.tsdk\": \"node_modules/typescript/lib\",\n  \"typescript.enablePromptUseWorkspaceTsdk\": true,\n  \"github.copilot.enable\": {\n    \"*\": false,\n  },\n  \"explorer.sortOrder\": \"mixed\",\n}"
     },
     {
-      "path": "src/06-advanced-hooks/50-use-state-overloads.problem.ts",
+      "path": "src/06-advanced-hooks/45-tuple-return-type.solution.2.ts",
       "sha": null,
-      "content_sha256": "7813816cb6ec55c07de6d5e3ced64a5ba395baf949d320eabf73cacf7b68c8ed",
+      "content_sha256": "f28dc68cda51acd85eb9f6cb682506d0f3179e7acf6c4f94fbd052454f3217de",
       "score": 31,
-      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nuseState;\n// ^^^^^ CMD-click to see the implementation of useState\n\n/**\n * 1. Take a look at useState. You'll notice that it's composed of\n * two overloads.\n *\n * 2. Try to figure out what the difference is between the two overloads.\n *\n * 3. Below, there's a simple function that expects to behave like useState.\n * Try to write a set of function overloads that:\n *\n * - If it receives a string, returns a string\n * - If it receives NOTHING, returns a string | undefined\n *\n * HINT - you'll need to use the function keyword THREE times.\n */\n\nfunction maybeReturnsString(defaultString?: string) {\n  // If you pass a string, it always returns a string\n  if (defaultString) {\n    return defaultString;\n  }\n\n  // Otherwise, it MIGHT return a string or undefined\n  return Math.random() > 0.5 ? \"hello\" : undefined;\n}\n\nconst example1 = maybeReturnsString(\"hello\");\nconst example2 = maybeReturnsString();\n\ntype tests = [\n  Expect<Equal<typeof example1, string>>,\n  Expect<Equal<typeof example2, string | undefined>>,\n];\n"
+      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nexport const useId = (defaultId: string) => {\n  const [id, setId] = useState(defaultId);\n\n  return [id, setId] as const;\n};\n\nconst [id, setId] = useId(\"1\");\n\ntype tests = [\n  Expect<Equal<typeof id, string>>,\n  Expect<Equal<typeof setId, React.Dispatch<React.SetStateAction<string>>>>,\n];\n"
     },
     {
-      "path": "src/06-advanced-hooks/49-discriminated-tuples-from-custom-hooks.solution.tsx",
+      "path": "src/06-advanced-hooks/48-discriminated-unions-in-usestate.problem.tsx",
       "sha": null,
-      "content_sha256": "3df41cde1eb15b51fd1e73808b06bcdcca14c91ad666fbd3bbbac40a9f6af312",
+      "content_sha256": "0378a6611e0f059a86cd43528e2b80f9e5e9f17c132c41d131ff72b02c07b9d8",
       "score": 31,
-      "content": "import { useEffect, useState } from \"react\";\n\n/**\n * A discriminated tuple!\n *\n * The really cool thing about this is that TypeScript can infer the type\n * even after it's been destructured.\n */\nexport type Result<T> =\n  | [\"loading\", undefined?]\n  | [\"success\", T]\n  | [\"error\", Error];\n\nexport const useData = <T,>(url: string): Result<T> => {\n  const [result, setResult] = useState<Result<T>>([\"loading\"]);\n\n  useEffect(() => {\n    fetch(url)\n      .then((response) => response.json())\n      .then((data) => setResult([\"success\", data]))\n      .catch((error) => setResult([\"error\", error]));\n  }, [url]);\n\n  return result;\n};\n\nconst Component = () => {\n  const [status, value] = useData<{ title: string }>(\n    \"https://jsonplaceholder.typicode.com/todos/1\"\n  );\n\n  if (status === \"loading\") {\n    return <div>Loading...</div>;\n  }\n\n  if (status === \"error\") {\n    return <div>Error: {value.message}</div>;\n  }\n\n  return <div>{value.title}</div>;\n};\n"
+      "content": "import { appendVideoToDomAndPlay, fetchVideo } from \"fake-external-lib\";\nimport { useEffect, useState } from \"react\";\n\nexport const useLoadAsyncVideo = (src: string) => {\n  const [state, setState] = useState({\n    status: \"loading\",\n  });\n\n  useEffect(() => {\n    setState({ status: \"loading\" });\n\n    let cancelled = false;\n\n    fetchVideo(src)\n      .then((blob) => {\n        if (cancelled) {\n          return;\n        }\n\n        appendVideoToDomAndPlay(blob);\n\n        setState({ status: \"loaded\" });\n      })\n      .catch((error) => {\n        if (cancelled) {\n          return;\n        }\n        setState({ status: \"error\", error });\n      });\n\n    return () => {\n      cancelled = true;\n    };\n  }, [src]);\n\n  // @ts-expect-error\n  setState({ status: \"error\" });\n\n  // @ts-expect-error\n  setState({ status: \"loading\", error: new Error(\"error\") });\n\n  // @ts-expect-error\n  setState({ status: \"loaded\", error: new Error(\"error\") });\n\n  if (state.status === \"error\") {\n    console.error(state.error);\n  }\n};\n"
     },
     {
       "path": "src/06-advanced-hooks/50-use-state-overloads.solution.1.ts",
@@ -67,11 +67,32 @@
       "content": "import { Equal, Expect } from \"../helpers/type-utils\";\n\nfunction maybeReturnsString(defaultString: string): string;\nfunction maybeReturnsString(): string | undefined;\nfunction maybeReturnsString(defaultString?: string) {\n  // If you pass a string, it always returns a string\n  if (defaultString) {\n    return defaultString;\n  }\n\n  // Otherwise, it MIGHT return a string or undefined\n  return Math.random() > 0.5 ? \"hello\" : undefined;\n}\n\nconst example1 = maybeReturnsString(\"hello\");\nconst example2 = maybeReturnsString();\n\ntype tests = [\n  Expect<Equal<typeof example1, string>>,\n  Expect<Equal<typeof example2, string | undefined>>\n];\n"
     },
     {
-      "path": "src/06-advanced-hooks/50-use-state-overloads.solution.2.ts",
+      "path": "src/06-advanced-hooks/48-discriminated-unions-in-usestate.solution.tsx",
       "sha": null,
-      "content_sha256": "6589577834fb67c8e62ad6b242d9996f699ed0921f2ab2111f8c58869b804f92",
+      "content_sha256": "c900a35ab3fac1ac17a93f49b933999553c26dae812559132e8dc1c2ac027195",
       "score": 31,
-      "content": "import { Equal, Expect } from \"../helpers/type-utils\";\n\n/**\n * This approach also works - specifying defaultString?: string | undefined\n * in the second overload.\n */\n\nfunction maybeReturnsString(defaultString: string): string;\nfunction maybeReturnsString(\n  defaultString?: string | undefined\n): string | undefined;\nfunction maybeReturnsString(defaultString?: string) {\n  // If you pass a string, it always returns a string\n  if (defaultString) {\n    return defaultString;\n  }\n\n  // Otherwise, it MIGHT return a string or undefined\n  return Math.random() > 0.5 ? \"hello\" : undefined;\n}\n\nconst example1 = maybeReturnsString(\"hello\");\nconst example2 = maybeReturnsString(undefined);\n\ntype tests = [\n  Expect<Equal<typeof example1, string>>,\n  Expect<Equal<typeof example2, string | undefined>>\n];\n"
+      "content": "import { appendVideoToDomAndPlay, fetchVideo } from \"fake-external-lib\";\nimport { useEffect, useState } from \"react\";\n\ntype State =\n  | {\n      status: \"loading\" | \"loaded\";\n    }\n  | {\n      status: \"error\";\n      error: Error;\n    };\n\nexport const useLoadAsyncVideo = (src: string) => {\n  const [state, setState] = useState<State>({\n    status: \"loading\",\n  });\n\n  useEffect(() => {\n    setState({ status: \"loading\" });\n\n    let cancelled = false;\n\n    fetchVideo(src)\n      .then((blob) => {\n        if (cancelled) {\n          return;\n        }\n\n        appendVideoToDomAndPlay(blob);\n\n        setState({ status: \"loaded\" });\n      })\n      .catch((error) => {\n        if (cancelled) {\n          return;\n        }\n        setState({ status: \"error\", error });\n      });\n\n    return () => {\n      cancelled = true;\n    };\n  }, [src]);\n\n  // @ts-expect-error\n  setState({ status: \"error\" });\n\n  // @ts-expect-error\n  setState({ status: \"loading\", error: new Error(\"error\") });\n\n  // @ts-expect-error\n  setState({ status: \"loaded\", error: new Error(\"error\") });\n\n  if (state.status === \"error\") {\n    console.error(state.error);\n  }\n};\n"
+    },
+    {
+      "path": "src/06-advanced-hooks/52-currying-hooks.problem.ts",
+      "sha": null,
+      "content_sha256": "12d4dfb3f84e0578981da91388cfba1536bb6866cf089f4eee5671b519b86bfd",
+      "score": 31,
+      "content": "import { DependencyList, useMemo, useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nconst useCustomState = <TValue>(initial: TValue) => {\n  const [value, set] = useState<TValue>(initial);\n\n  return {\n    value,\n    set,\n    /**\n     * Here, we're returning a hook from our initial hook!\n     * This is a great way to compose behaviour.\n     *\n     * BUT - useComputed takes in a function which can return\n     * any type. We want to make sure that the type of the\n     * thing returned is inferred properly.\n     */\n    useComputed: (factory: (value: any) => any, deps?: DependencyList) => {\n      return useMemo(() => {\n        return factory(value);\n      }, [value, ...(deps || [])]);\n    },\n  };\n};\n\nconst Component = () => {\n  const arrayOfNums = useCustomState([1, 2, 3, 4, 5, 6, 7, 8]);\n\n  /**\n   * Currently, this is typed as any. How do we type it\n   * based on the return type of the function passed to\n   * useComputed?\n   */\n  const reversedAsString = arrayOfNums.useComputed((nums) =>\n    Array.from(nums).reverse().map(String),\n  );\n\n  type test = Expect<Equal<typeof reversedAsString, string[]>>;\n};\n"
+    },
+    {
+      "path": "src/fake-external-lib/index.ts",
+      "sha": null,
+      "content_sha256": "974c209f0df400f71219e26511158be728986ea9b2837a8ce36ba37d2282fc62",
+      "score": 31,
+      "content": "/**\n * A fake function to create a user\n */\nexport const createUser = (\n  user: {\n    name: string;\n    email: string;\n  },\n  opts?: {\n    throwOnError?: boolean;\n  },\n): Promise<{\n  id: string;\n  name: string;\n  email: string;\n}> => {\n  return fetch(\"/user\", {\n    method: \"POST\",\n    body: JSON.stringify(user),\n  }).then((response) => response.json());\n};\n\n/**\n * A fake auth token hook.\n */\nexport const useAuthToken = () => {\n  return \"123\";\n};\n\n/**\n * A fake video fetcher.\n */\nexport const fetchVideo = (src: string) => {\n  return fetch(src).then((response) => response.blob());\n};\n\n/**\n * A fake video appender.\n */\nexport const appendVideoToDomAndPlay = (blob: Blob) => {\n  const video = document.createElement(\"video\");\n  video.src = URL.createObjectURL(blob);\n  video.play();\n};\n\n/**\n * A fake router interface\n */\nexport interface Router {\n  push: (path: string) => void;\n}\n\n/**\n * A fake useRouter hook\n */\nexport const useRouter = () => {\n  return {\n    push: (path: string) => {\n      console.log(`Navigating to ${path}`);\n    },\n  };\n};\n"
+    },
+    {
+      "path": "src/06-advanced-hooks/51-function-overloads-in-hooks.problem.ts",
+      "sha": null,
+      "content_sha256": "424c434c4b2d4e4c3419676d17a0935179ef415070f511c41e9e0f2d3857394f",
+      "score": 31,
+      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\n/**\n * Returning to our useStateAsObject function, we now want to make it work\n * EXACTLY like useState, where if you pass NOTHING, it returns T | undefined.\n *\n * If you pass a default value, it should NOT include undefined.\n */\nexport function useStateAsObject<T>(initial: T) {\n  const [value, set] = useState(initial);\n\n  return {\n    value,\n    set,\n  };\n}\n\n/**\n * If you DO pass a default value, the result should NOT include undefined\n */\nconst notUndefined = useStateAsObject({ name: \"Matt\" });\n\ntype ExampleTests = [\n  Expect<Equal<typeof notUndefined.value, { name: string }>>,\n  Expect<\n    Equal<\n      typeof notUndefined.set,\n      React.Dispatch<React.SetStateAction<{ name: string }>>\n    >\n  >,\n];\n\n/**\n * If you don't pass a value, it should be undefined\n */\nconst hasUndefined = useStateAsObject<number>();\n\ntype NumTests = [\n  Expect<Equal<typeof hasUndefined.value, number | undefined>>,\n  Expect<\n    Equal<\n      typeof hasUndefined.set,\n      React.Dispatch<React.SetStateAction<number | undefined>>\n    >\n  >,\n];\n"
     },
     {
       "path": "src/06-advanced-hooks/47-unions-in-usestate.solution.tsx",
@@ -81,25 +102,11 @@
       "content": "import { useEffect, useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\nimport { appendVideoToDomAndPlay, fetchVideo } from \"fake-external-lib\";\n\ntype State = \"loading\" | \"loaded\" | \"error\";\n\nexport const useLoadAsyncVideo = (src: string) => {\n  const [state, setState] = useState<State>(\"loading\");\n\n  useEffect(() => {\n    setState(\"loading\");\n\n    let cancelled = false;\n\n    fetchVideo(src)\n      .then((blob) => {\n        if (cancelled) {\n          return;\n        }\n\n        appendVideoToDomAndPlay(blob);\n\n        setState(\"loaded\");\n      })\n      .catch((error) => {\n        if (cancelled) {\n          return;\n        }\n        setState(\"error\");\n      });\n\n    return () => {\n      cancelled = true;\n    };\n  }, [src]);\n\n  // @ts-expect-error\n  if (state === \"does-not-exist\") {\n  }\n\n  if (state === \"loading\") {\n    return \"loading...\";\n  }\n\n  if (state === \"loaded\") {\n    return \"loaded\";\n  }\n\n  if (state === \"error\") {\n    return \"Error!\";\n  }\n\n  // state should equal never! Because we've covered all the cases\n  type test = Expect<Equal<typeof state, never>>;\n};\n"
     },
     {
-      "path": "src/06-advanced-hooks/45-tuple-return-type.solution.2.ts",
+      "path": "src/06-advanced-hooks/50-use-state-overloads.problem.ts",
       "sha": null,
-      "content_sha256": "f28dc68cda51acd85eb9f6cb682506d0f3179e7acf6c4f94fbd052454f3217de",
+      "content_sha256": "7813816cb6ec55c07de6d5e3ced64a5ba395baf949d320eabf73cacf7b68c8ed",
       "score": 31,
-      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nexport const useId = (defaultId: string) => {\n  const [id, setId] = useState(defaultId);\n\n  return [id, setId] as const;\n};\n\nconst [id, setId] = useId(\"1\");\n\ntype tests = [\n  Expect<Equal<typeof id, string>>,\n  Expect<Equal<typeof setId, React.Dispatch<React.SetStateAction<string>>>>,\n];\n"
-    },
-    {
-      "path": "src/06-advanced-hooks/45-tuple-return-type.solution.1.ts",
-      "sha": null,
-      "content_sha256": "1bf432ef84af2cfe4d08a08b68971aafcd44b921a7fb2ec8d5c8beca54b81bc2",
-      "score": 31,
-      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nexport const useId = (\n  defaultId: string,\n): [string, React.Dispatch<React.SetStateAction<string>>] => {\n  const [id, setId] = useState(defaultId);\n\n  return [id, setId];\n};\n\nconst [id, setId] = useId(\"1\");\n\ntype tests = [\n  Expect<Equal<typeof id, string>>,\n  Expect<Equal<typeof setId, React.Dispatch<React.SetStateAction<string>>>>,\n];\n"
-    },
-    {
-      "path": "src/06-advanced-hooks/48-discriminated-unions-in-usestate.solution.tsx",
-      "sha": null,
-      "content_sha256": "c900a35ab3fac1ac17a93f49b933999553c26dae812559132e8dc1c2ac027195",
-      "score": 31,
-      "content": "import { appendVideoToDomAndPlay, fetchVideo } from \"fake-external-lib\";\nimport { useEffect, useState } from \"react\";\n\ntype State =\n  | {\n      status: \"loading\" | \"loaded\";\n    }\n  | {\n      status: \"error\";\n      error: Error;\n    };\n\nexport const useLoadAsyncVideo = (src: string) => {\n  const [state, setState] = useState<State>({\n    status: \"loading\",\n  });\n\n  useEffect(() => {\n    setState({ status: \"loading\" });\n\n    let cancelled = false;\n\n    fetchVideo(src)\n      .then((blob) => {\n        if (cancelled) {\n          return;\n        }\n\n        appendVideoToDomAndPlay(blob);\n\n        setState({ status: \"loaded\" });\n      })\n      .catch((error) => {\n        if (cancelled) {\n          return;\n        }\n        setState({ status: \"error\", error });\n      });\n\n    return () => {\n      cancelled = true;\n    };\n  }, [src]);\n\n  // @ts-expect-error\n  setState({ status: \"error\" });\n\n  // @ts-expect-error\n  setState({ status: \"loading\", error: new Error(\"error\") });\n\n  // @ts-expect-error\n  setState({ status: \"loaded\", error: new Error(\"error\") });\n\n  if (state.status === \"error\") {\n    console.error(state.error);\n  }\n};\n"
+      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nuseState;\n// ^^^^^ CMD-click to see the implementation of useState\n\n/**\n * 1. Take a look at useState. You'll notice that it's composed of\n * two overloads.\n *\n * 2. Try to figure out what the difference is between the two overloads.\n *\n * 3. Below, there's a simple function that expects to behave like useState.\n * Try to write a set of function overloads that:\n *\n * - If it receives a string, returns a string\n * - If it receives NOTHING, returns a string | undefined\n *\n * HINT - you'll need to use the function keyword THREE times.\n */\n\nfunction maybeReturnsString(defaultString?: string) {\n  // If you pass a string, it always returns a string\n  if (defaultString) {\n    return defaultString;\n  }\n\n  // Otherwise, it MIGHT return a string or undefined\n  return Math.random() > 0.5 ? \"hello\" : undefined;\n}\n\nconst example1 = maybeReturnsString(\"hello\");\nconst example2 = maybeReturnsString();\n\ntype tests = [\n  Expect<Equal<typeof example1, string>>,\n  Expect<Equal<typeof example2, string | undefined>>,\n];\n"
     },
     {
       "path": "src/06-advanced-hooks/51-function-overloads-in-hooks.solution.1.ts",
@@ -123,11 +130,18 @@
       "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\ntype UseStateReturnValue<T> = {\n  value: T;\n  set: React.Dispatch<React.SetStateAction<T>>;\n};\n\nexport function useStateAsObject<T>(): UseStateReturnValue<T | undefined>;\nexport function useStateAsObject<T>(initial: T): UseStateReturnValue<T>;\nexport function useStateAsObject<T>(initial?: T) {\n  const [value, set] = useState(initial);\n\n  return {\n    value,\n    set,\n  };\n}\n\n/**\n * If you DO pass a default value, the result should NOT include undefined\n */\nconst notUndefined = useStateAsObject({ name: \"Matt\" });\n\ntype ExampleTests = [\n  Expect<Equal<typeof notUndefined.value, { name: string }>>,\n  Expect<\n    Equal<\n      typeof notUndefined.set,\n      React.Dispatch<React.SetStateAction<{ name: string }>>\n    >\n  >,\n];\n\n/**\n * If you don't pass a value, it should be undefined\n */\nconst hasUndefined = useStateAsObject<number>();\n\ntype NumTests = [\n  Expect<Equal<typeof hasUndefined.value, number | undefined>>,\n  Expect<\n    Equal<\n      typeof hasUndefined.set,\n      React.Dispatch<React.SetStateAction<number | undefined>>\n    >\n  >,\n];\n"
     },
     {
-      "path": "src/06-advanced-hooks/51-function-overloads-in-hooks.problem.ts",
+      "path": "src/fake-external-lib/component.tsx",
       "sha": null,
-      "content_sha256": "424c434c4b2d4e4c3419676d17a0935179ef415070f511c41e9e0f2d3857394f",
+      "content_sha256": "bc16beb8d8f779beaf4c2972bcdd83205a98095c197a2718adb256ad3a0e5f07",
       "score": 31,
-      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\n/**\n * Returning to our useStateAsObject function, we now want to make it work\n * EXACTLY like useState, where if you pass NOTHING, it returns T | undefined.\n *\n * If you pass a default value, it should NOT include undefined.\n */\nexport function useStateAsObject<T>(initial: T) {\n  const [value, set] = useState(initial);\n\n  return {\n    value,\n    set,\n  };\n}\n\n/**\n * If you DO pass a default value, the result should NOT include undefined\n */\nconst notUndefined = useStateAsObject({ name: \"Matt\" });\n\ntype ExampleTests = [\n  Expect<Equal<typeof notUndefined.value, { name: string }>>,\n  Expect<\n    Equal<\n      typeof notUndefined.set,\n      React.Dispatch<React.SetStateAction<{ name: string }>>\n    >\n  >,\n];\n\n/**\n * If you don't pass a value, it should be undefined\n */\nconst hasUndefined = useStateAsObject<number>();\n\ntype NumTests = [\n  Expect<Equal<typeof hasUndefined.value, number | undefined>>,\n  Expect<\n    Equal<\n      typeof hasUndefined.set,\n      React.Dispatch<React.SetStateAction<number | undefined>>\n    >\n  >,\n];\n"
+      "content": "const MyComponent = (props: { id: string }) => {\n  return <div>Hello!</div>;\n};\n\nexport default MyComponent;\n"
+    },
+    {
+      "path": "src/06-advanced-hooks/49-discriminated-tuples-from-custom-hooks.solution.tsx",
+      "sha": null,
+      "content_sha256": "3df41cde1eb15b51fd1e73808b06bcdcca14c91ad666fbd3bbbac40a9f6af312",
+      "score": 31,
+      "content": "import { useEffect, useState } from \"react\";\n\n/**\n * A discriminated tuple!\n *\n * The really cool thing about this is that TypeScript can infer the type\n * even after it's been destructured.\n */\nexport type Result<T> =\n  | [\"loading\", undefined?]\n  | [\"success\", T]\n  | [\"error\", Error];\n\nexport const useData = <T,>(url: string): Result<T> => {\n  const [result, setResult] = useState<Result<T>>([\"loading\"]);\n\n  useEffect(() => {\n    fetch(url)\n      .then((response) => response.json())\n      .then((data) => setResult([\"success\", data]))\n      .catch((error) => setResult([\"error\", error]));\n  }, [url]);\n\n  return result;\n};\n\nconst Component = () => {\n  const [status, value] = useData<{ title: string }>(\n    \"https://jsonplaceholder.typicode.com/todos/1\"\n  );\n\n  if (status === \"loading\") {\n    return <div>Loading...</div>;\n  }\n\n  if (status === \"error\") {\n    return <div>Error: {value.message}</div>;\n  }\n\n  return <div>{value.title}</div>;\n};\n"
     },
     {
       "path": "src/06-advanced-hooks/46-required-context.solution.2.tsx",
@@ -137,39 +151,11 @@
       "content": "import React from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nconst createRequiredContext = <T,>(): [() => T, React.Provider<T | null>] => {\n  const context = React.createContext<T | null>(null);\n\n  const useContext = (): T => {\n    const contextValue = React.useContext(context);\n\n    if (contextValue === null) {\n      throw new Error(\"Context value is null\");\n    }\n\n    return contextValue;\n  };\n\n  return [useContext, context.Provider];\n};\n\nconst [useUser, UserProvider] = createRequiredContext<{\n  name: string;\n}>();\n\nconst [useTheme, ThemeProvider] = createRequiredContext<{\n  primaryColor: string;\n}>();\n\nconst Child = () => {\n  const user = useUser();\n\n  type test = Expect<\n    Equal<\n      typeof user,\n      {\n        name: string;\n      }\n    >\n  >;\n\n  const theme = useTheme();\n\n  type test2 = Expect<\n    Equal<\n      typeof theme,\n      {\n        primaryColor: string;\n      }\n    >\n  >;\n\n  return null;\n};\n\nconst Parent = () => {\n  return (\n    <>\n      <UserProvider value={{ name: \"Matt\" }}>\n        <ThemeProvider\n          value={{\n            primaryColor: \"blue\",\n          }}\n        >\n          <Child />\n        </ThemeProvider>\n      </UserProvider>\n    </>\n  );\n};\n"
     },
     {
-      "path": "src/06-advanced-hooks/46-required-context.solution.1.tsx",
+      "path": "src/06-advanced-hooks/50-use-state-overloads.solution.2.ts",
       "sha": null,
-      "content_sha256": "a0c2b36c6c55e6bb5b5e919db01d1123fa4fdb5df353564311f569e2fcccfe05",
+      "content_sha256": "6589577834fb67c8e62ad6b242d9996f699ed0921f2ab2111f8c58869b804f92",
       "score": 31,
-      "content": "import React from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nconst createRequiredContext = <T,>() => {\n  const context = React.createContext<T | null>(null);\n\n  const useContext = () => {\n    const contextValue = React.useContext(context);\n\n    if (contextValue === null) {\n      throw new Error(\"Context value is null\");\n    }\n\n    return contextValue;\n  };\n\n  return [useContext, context.Provider] as const;\n};\n\nconst [useUser, UserProvider] = createRequiredContext<{\n  name: string;\n}>();\n\nconst [useTheme, ThemeProvider] = createRequiredContext<{\n  primaryColor: string;\n}>();\n\nconst Child = () => {\n  const user = useUser();\n\n  type test = Expect<\n    Equal<\n      typeof user,\n      {\n        name: string;\n      }\n    >\n  >;\n\n  const theme = useTheme();\n\n  type test2 = Expect<\n    Equal<\n      typeof theme,\n      {\n        primaryColor: string;\n      }\n    >\n  >;\n\n  return null;\n};\n\nconst Parent = () => {\n  return (\n    <>\n      <UserProvider value={{ name: \"Matt\" }}>\n        <ThemeProvider\n          value={{\n            primaryColor: \"blue\",\n          }}\n        >\n          <Child />\n        </ThemeProvider>\n      </UserProvider>\n    </>\n  );\n};\n"
-    },
-    {
-      "path": "src/06-advanced-hooks/52-currying-hooks.problem.ts",
-      "sha": null,
-      "content_sha256": "12d4dfb3f84e0578981da91388cfba1536bb6866cf089f4eee5671b519b86bfd",
-      "score": 31,
-      "content": "import { DependencyList, useMemo, useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nconst useCustomState = <TValue>(initial: TValue) => {\n  const [value, set] = useState<TValue>(initial);\n\n  return {\n    value,\n    set,\n    /**\n     * Here, we're returning a hook from our initial hook!\n     * This is a great way to compose behaviour.\n     *\n     * BUT - useComputed takes in a function which can return\n     * any type. We want to make sure that the type of the\n     * thing returned is inferred properly.\n     */\n    useComputed: (factory: (value: any) => any, deps?: DependencyList) => {\n      return useMemo(() => {\n        return factory(value);\n      }, [value, ...(deps || [])]);\n    },\n  };\n};\n\nconst Component = () => {\n  const arrayOfNums = useCustomState([1, 2, 3, 4, 5, 6, 7, 8]);\n\n  /**\n   * Currently, this is typed as any. How do we type it\n   * based on the return type of the function passed to\n   * useComputed?\n   */\n  const reversedAsString = arrayOfNums.useComputed((nums) =>\n    Array.from(nums).reverse().map(String),\n  );\n\n  type test = Expect<Equal<typeof reversedAsString, string[]>>;\n};\n"
-    },
-    {
-      "path": "src/06-advanced-hooks/52-currying-hooks.solution.ts",
-      "sha": null,
-      "content_sha256": "d5957bb4fc57d07c2b6907415a2a3d2e0f7ea585420d755074e68ea4a188c934",
-      "score": 31,
-      "content": "import { DependencyList, useMemo, useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nconst useCustomState = <TValue>(initial: TValue) => {\n  const [value, set] = useState<TValue>(initial);\n\n  return {\n    value,\n    set,\n    /**\n     * We can use a generic _inline_ here to ensure\n     * this all still works.\n     */\n    useComputed: <TComputed>(\n      factory: (value: TValue) => TComputed,\n      deps?: DependencyList,\n    ) => {\n      return useMemo(() => {\n        return factory(value);\n      }, [value, ...(deps || [])]);\n    },\n  };\n};\n\nconst Component = () => {\n  const arrayOfNums = useCustomState([1, 2, 3, 4, 5, 6, 7, 8]);\n\n  const reversedAsString = arrayOfNums.useComputed((nums) =>\n    Array.from(nums).reverse().map(String),\n  );\n\n  type test = Expect<Equal<typeof reversedAsString, string[]>>;\n};\n"
-    },
-    {
-      "path": "src/06-advanced-hooks/48-discriminated-unions-in-usestate.problem.tsx",
-      "sha": null,
-      "content_sha256": "0378a6611e0f059a86cd43528e2b80f9e5e9f17c132c41d131ff72b02c07b9d8",
-      "score": 31,
-      "content": "import { appendVideoToDomAndPlay, fetchVideo } from \"fake-external-lib\";\nimport { useEffect, useState } from \"react\";\n\nexport const useLoadAsyncVideo = (src: string) => {\n  const [state, setState] = useState({\n    status: \"loading\",\n  });\n\n  useEffect(() => {\n    setState({ status: \"loading\" });\n\n    let cancelled = false;\n\n    fetchVideo(src)\n      .then((blob) => {\n        if (cancelled) {\n          return;\n        }\n\n        appendVideoToDomAndPlay(blob);\n\n        setState({ status: \"loaded\" });\n      })\n      .catch((error) => {\n        if (cancelled) {\n          return;\n        }\n        setState({ status: \"error\", error });\n      });\n\n    return () => {\n      cancelled = true;\n    };\n  }, [src]);\n\n  // @ts-expect-error\n  setState({ status: \"error\" });\n\n  // @ts-expect-error\n  setState({ status: \"loading\", error: new Error(\"error\") });\n\n  // @ts-expect-error\n  setState({ status: \"loaded\", error: new Error(\"error\") });\n\n  if (state.status === \"error\") {\n    console.error(state.error);\n  }\n};\n"
-    },
-    {
-      "path": "src/fake-external-lib/index.ts",
-      "sha": null,
-      "content_sha256": "974c209f0df400f71219e26511158be728986ea9b2837a8ce36ba37d2282fc62",
-      "score": 31,
-      "content": "/**\n * A fake function to create a user\n */\nexport const createUser = (\n  user: {\n    name: string;\n    email: string;\n  },\n  opts?: {\n    throwOnError?: boolean;\n  },\n): Promise<{\n  id: string;\n  name: string;\n  email: string;\n}> => {\n  return fetch(\"/user\", {\n    method: \"POST\",\n    body: JSON.stringify(user),\n  }).then((response) => response.json());\n};\n\n/**\n * A fake auth token hook.\n */\nexport const useAuthToken = () => {\n  return \"123\";\n};\n\n/**\n * A fake video fetcher.\n */\nexport const fetchVideo = (src: string) => {\n  return fetch(src).then((response) => response.blob());\n};\n\n/**\n * A fake video appender.\n */\nexport const appendVideoToDomAndPlay = (blob: Blob) => {\n  const video = document.createElement(\"video\");\n  video.src = URL.createObjectURL(blob);\n  video.play();\n};\n\n/**\n * A fake router interface\n */\nexport interface Router {\n  push: (path: string) => void;\n}\n\n/**\n * A fake useRouter hook\n */\nexport const useRouter = () => {\n  return {\n    push: (path: string) => {\n      console.log(`Navigating to ${path}`);\n    },\n  };\n};\n"
+      "content": "import { Equal, Expect } from \"../helpers/type-utils\";\n\n/**\n * This approach also works - specifying defaultString?: string | undefined\n * in the second overload.\n */\n\nfunction maybeReturnsString(defaultString: string): string;\nfunction maybeReturnsString(\n  defaultString?: string | undefined\n): string | undefined;\nfunction maybeReturnsString(defaultString?: string) {\n  // If you pass a string, it always returns a string\n  if (defaultString) {\n    return defaultString;\n  }\n\n  // Otherwise, it MIGHT return a string or undefined\n  return Math.random() > 0.5 ? \"hello\" : undefined;\n}\n\nconst example1 = maybeReturnsString(\"hello\");\nconst example2 = maybeReturnsString(undefined);\n\ntype tests = [\n  Expect<Equal<typeof example1, string>>,\n  Expect<Equal<typeof example2, string | undefined>>\n];\n"
     },
     {
       "path": "src/06-advanced-hooks/49-discriminated-tuples-from-custom-hooks.problem.tsx",
@@ -179,12 +165,28 @@
       "content": "import { useEffect, useState } from \"react\";\n\nexport type Result<T> = [\n  \"loading\" | \"success\" | \"error\",\n  T | Error | undefined,\n];\n\n/**\n * Let's look at one more example of discriminated unions. This time, we're\n * going to use them to make the tuple return type of a hook smarter.\n *\n * 1. Change the Result type so that the second element is inferred\n * from narrowing the first.\n *\n * const [status, value] = useData<{ title: string }>(\n *   \"https://jsonplaceholder.typicode.com/todos/1\",\n * );\n *\n * When status is 'loading', value should be undefined.\n * When status is 'error', value should be an Error.\n * When status is 'success', value should be T.\n */\nexport const useData = <T,>(url: string): Result<T> => {\n  const [result, setResult] = useState<Result<T>>([\"loading\", undefined]);\n\n  useEffect(() => {\n    fetch(url)\n      .then((response) => response.json())\n      .then((data) => setResult([\"success\", data]))\n      .catch((error) => setResult([\"error\", error]));\n  }, [url]);\n\n  return result;\n};\n\nconst Component = () => {\n  const [status, value] = useData<{ title: string }>(\n    \"https://jsonplaceholder.typicode.com/todos/1\",\n  );\n\n  if (status === \"loading\") {\n    return <div>Loading...</div>;\n  }\n\n  if (status === \"error\") {\n    return <div>Error: {value.message}</div>;\n  }\n\n  return <div>{value.title}</div>;\n};\n"
     },
     {
-      "path": "src/fake-external-lib/component.tsx",
+      "path": "src/06-advanced-hooks/46-required-context.solution.1.tsx",
       "sha": null,
-      "content_sha256": "bc16beb8d8f779beaf4c2972bcdd83205a98095c197a2718adb256ad3a0e5f07",
+      "content_sha256": "a0c2b36c6c55e6bb5b5e919db01d1123fa4fdb5df353564311f569e2fcccfe05",
       "score": 31,
-      "content": "const MyComponent = (props: { id: string }) => {\n  return <div>Hello!</div>;\n};\n\nexport default MyComponent;\n"
+      "content": "import React from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nconst createRequiredContext = <T,>() => {\n  const context = React.createContext<T | null>(null);\n\n  const useContext = () => {\n    const contextValue = React.useContext(context);\n\n    if (contextValue === null) {\n      throw new Error(\"Context value is null\");\n    }\n\n    return contextValue;\n  };\n\n  return [useContext, context.Provider] as const;\n};\n\nconst [useUser, UserProvider] = createRequiredContext<{\n  name: string;\n}>();\n\nconst [useTheme, ThemeProvider] = createRequiredContext<{\n  primaryColor: string;\n}>();\n\nconst Child = () => {\n  const user = useUser();\n\n  type test = Expect<\n    Equal<\n      typeof user,\n      {\n        name: string;\n      }\n    >\n  >;\n\n  const theme = useTheme();\n\n  type test2 = Expect<\n    Equal<\n      typeof theme,\n      {\n        primaryColor: string;\n      }\n    >\n  >;\n\n  return null;\n};\n\nconst Parent = () => {\n  return (\n    <>\n      <UserProvider value={{ name: \"Matt\" }}>\n        <ThemeProvider\n          value={{\n            primaryColor: \"blue\",\n          }}\n        >\n          <Child />\n        </ThemeProvider>\n      </UserProvider>\n    </>\n  );\n};\n"
+    },
+    {
+      "path": "src/06-advanced-hooks/45-tuple-return-type.solution.1.ts",
+      "sha": null,
+      "content_sha256": "1bf432ef84af2cfe4d08a08b68971aafcd44b921a7fb2ec8d5c8beca54b81bc2",
+      "score": 31,
+      "content": "import { useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nexport const useId = (\n  defaultId: string,\n): [string, React.Dispatch<React.SetStateAction<string>>] => {\n  const [id, setId] = useState(defaultId);\n\n  return [id, setId];\n};\n\nconst [id, setId] = useId(\"1\");\n\ntype tests = [\n  Expect<Equal<typeof id, string>>,\n  Expect<Equal<typeof setId, React.Dispatch<React.SetStateAction<string>>>>,\n];\n"
+    },
+    {
+      "path": "src/06-advanced-hooks/52-currying-hooks.solution.ts",
+      "sha": null,
+      "content_sha256": "d5957bb4fc57d07c2b6907415a2a3d2e0f7ea585420d755074e68ea4a188c934",
+      "score": 31,
+      "content": "import { DependencyList, useMemo, useState } from \"react\";\nimport { Equal, Expect } from \"../helpers/type-utils\";\n\nconst useCustomState = <TValue>(initial: TValue) => {\n  const [value, set] = useState<TValue>(initial);\n\n  return {\n    value,\n    set,\n    /**\n     * We can use a generic _inline_ here to ensure\n     * this all still works.\n     */\n    useComputed: <TComputed>(\n      factory: (value: TValue) => TComputed,\n      deps?: DependencyList,\n    ) => {\n      return useMemo(() => {\n        return factory(value);\n      }, [value, ...(deps || [])]);\n    },\n  };\n};\n\nconst Component = () => {\n  const arrayOfNums = useCustomState([1, 2, 3, 4, 5, 6, 7, 8]);\n\n  const reversedAsString = arrayOfNums.useComputed((nums) =>\n    Array.from(nums).reverse().map(String),\n  );\n\n  type test = Expect<Equal<typeof reversedAsString, string[]>>;\n};\n"
     }
   ],
-  "generated_at": "2026-10-08T15:25:26.254150+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:08.490687+00:00"
 }

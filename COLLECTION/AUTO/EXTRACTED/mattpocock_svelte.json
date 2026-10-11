@@ -60,18 +60,18 @@
       "content": "---\ntitle: Special tags\n---\n\n## {@html ...}\n\n```svelte\n<!--- copy: false --->\n{@html expression}\n```\n\nIn a text expression, characters like `<` and `>` are escaped; however, with HTML expressions, they're not.\n\nThe expression should be valid standalone HTML — `{@html \"<div>\"}content{@html \"</div>\"}` will _not_ work, because `</div>` is not valid HTML. It also will _not_ compile Svelte code.\n\n> Svelte does not sanitize expressions before injecting HTML. If the data comes from an untrusted source, you must sanitize it, or you are exposing your users to an XSS vulnerability.\n\n```svelte\n<div class=\"blog-post\">\n\t<h1>{post.title}</h1>\n\t{@html post.content}\n</div>\n```\n\n## {@debug ...}\n\n```svelte\n<!--- copy: false --->\n{@debug}\n```\n\n```svelte\n<!--- copy: false --->\n{@debug var1, var2, ..., varN}\n```\n\nThe `{@debug ...}` tag offers an alternative to `console.log(...)`. It logs the values of specific variables whenever they change, and pauses code execution if you have devtools open.\n\n```svelte\n<script>\n\tlet user = {\n\t\tfirstname: 'Ada',\n\t\tlastname: 'Lovelace'\n\t};\n</script>\n\n{@debug user}\n\n<h1>Hello {user.firstname}!</h1>\n```\n\n`{@debug ...}` accepts a comma-separated list of variable names (not arbitrary expressions).\n\n```svelte\n<!-- Compiles -->\n{@debug user}\n{@debug user1, user2, user3}\n\n<!-- WON'T compile -->\n{@debug user.firstname}\n{@debug myArray[0]}\n{@debug !isReady}\n{@debug typeof user === 'object'}\n```\n\nThe `{@debug}` tag without any arguments will insert a `debugger` statement that gets triggered when _any_ state changes, as opposed to the specified variables.\n\n## {@const ...}\n\n```svelte\n<!--- copy: false --->\n{@const assignment}\n```\n\nThe `{@const ...}` tag defines a local constant.\n\n```svelte\n<script>\n\texport let boxes;\n</script>\n\n{#each boxes as box}\n\t{@const area = box.width * box.height}\n\t{box.width} * {box.height} = {area}\n{/each}\n```\n\n`{@const}` is only allowed as direct child of `{#if}`, `{:else if}`, `{:else}`, `{#each}`, `{:then}`, `{:catch}`, `<Component />` or `<svelte:fragment />`.\n"
     },
     {
-      "path": "documentation/docs/04-compiler-and-api/meta.json",
-      "sha": null,
-      "content_sha256": "6d6641eaaa36f35df0d3977850ebb3dc267ac8fb7b9ba000246f054a4595de86",
-      "score": 174,
-      "content": "{\n\t\"title\": \"Compiler and API\"\n}\n"
-    },
-    {
       "path": "sites/svelte.dev/src/routes/(authed)/repl/api/[id].json/+server.js",
       "sha": null,
       "content_sha256": "c2038386e64684f3398e9a9a09cf0d596cd0c235396d621907316973ce172f88",
       "score": 174,
       "content": "import { dev } from '$app/environment';\nimport { client } from '$lib/db/client.js';\nimport * as gist from '$lib/db/gist.js';\nimport examples_data from '$lib/generated/examples-data.js';\nimport { get_example, get_examples_list } from '$lib/server/examples/index.js';\nimport { error, json } from '@sveltejs/kit';\n\nexport const prerender = 'auto';\n\nconst UUID_REGEX = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/;\n\n/** @type {Set<string>} */\nlet examples;\n\n/** @param {import('$lib/server/examples/types').ExamplesData[number]['examples'][number]['files'][number][]} files  */\nfunction munge(files) {\n\treturn files\n\t\t.map((file) => {\n\t\t\tconst dot = file.name.lastIndexOf('.');\n\t\t\tlet name = file.name.slice(0, dot);\n\t\t\tlet type = file.name.slice(dot + 1);\n\n\t\t\tif (type === 'html') type = 'svelte';\n\t\t\t// @ts-expect-error what is file.source? by @PuruVJ\n\t\t\treturn { name, type, source: file.source ?? file.content ?? '' };\n\t\t})\n\t\t.sort((a, b) => {\n\t\t\tif (a.name === 'App' && a.type === 'svelte') return -1;\n\t\t\tif (b.name === 'App' && b.type === 'svelte') return 1;\n\n\t\t\tif (a.type !== b.type) return a.type === 'svelte' ? -1 : 1;\n\n\t\t\treturn a.name < b.name ? -1 : 1;\n\t\t});\n}\n\nexport async function GET({ params }) {\n\t// Currently, these pages(that are in examples/) are prerendered. To avoid making any FS requests,\n\t// We prerender examples pages during build time. That means, when something like `/repl/hello-world.json`\n\t// is accessed, this function won't be run at all, as it will be served from the filesystem\n\n\texamples = new Set(\n\t\tget_examples_list(examples_data)\n\t\t\t.map((category) => category.examples)\n\t\t\t.flat()\n\t\t\t.map((example) => example.slug)\n\t);\n\n\tconst example = get_example(examples_data, params.id);\n\tif (example) {\n\t\treturn json({\n\t\t\tid: params.id,\n\t\t\tname: example.title,\n\t\t\towner: null,\n\t\t\trelaxed: false, // TODO is this right? EDIT: It was example.relaxed before, which no example return to my knowledge. By @PuruVJ\n\t\t\tcomponents: munge(example.files)\n\t\t});\n\t}\n\n\tif (dev && !client) {\n\t\t// in dev with no local Supabase configured, proxy to production\n\t\t// this lets us at least load saved REPLs\n\t\tconst res = await fetch(`https://svelte.dev/repl/api/${params.id}.json`);\n\n\t\t// returning the response directly results in a bizarre\n\t\t// content encoding error, so we create a new one\n\t\treturn new Response(await res.text(), {\n\t\t\tstatus: res.status,\n\t\t\theaders: {\n\t\t\t\t'content-type': 'application/json'\n\t\t\t}\n\t\t});\n\t}\n\n\tif (!UUID_REGEX.test(params.id)) {\n\t\tthrow error(404);\n\t}\n\n\tconst app = await gist.read(params.id);\n\n\tif (!app) {\n\t\tthrow error(404, 'not found');\n\t}\n\n\treturn json({\n\t\tid: params.id,\n\t\tname: app.name,\n\t\t// @ts-ignore\n\t\towner: app.userid,\n\t\trelaxed: false,\n\t\t// @ts-expect-error app.files has a `source` property\n\t\tcomponents: munge(app.files)\n\t});\n}\n\nexport async function entries() {\n\tconst { get_examples_list } = await import('$lib/server/examples/index.js');\n\n\treturn get_examples_list(examples_data)\n\t\t.map(({ examples }) => examples)\n\t\t.flatMap((val) => val.map(({ slug }) => ({ id: slug })));\n}\n"
+    },
+    {
+      "path": "documentation/docs/04-compiler-and-api/meta.json",
+      "sha": null,
+      "content_sha256": "6d6641eaaa36f35df0d3977850ebb3dc267ac8fb7b9ba000246f054a4595de86",
+      "score": 174,
+      "content": "{\n\t\"title\": \"Compiler and API\"\n}\n"
     },
     {
       "path": "packages/svelte/tests/types/actions.ts",
@@ -88,6 +88,13 @@
       "content": "{\n\t\"title\": \"API\"\n}\n"
     },
     {
+      "path": "packages/svelte/tests/runtime-legacy/samples/deconflict-contextual-action/util.js",
+      "sha": null,
+      "content_sha256": "c6fd46bccf78fbe04403b985b92a3fe827393ea25c364223511414a77ff18724",
+      "score": 165,
+      "content": "export default function (_, fn) {\n\tfn('import_action');\n}\n"
+    },
+    {
       "path": "packages/svelte/tests/runtime-legacy/samples/prop-not-action/_config.js",
       "sha": null,
       "content_sha256": "25ae5eb65e08f9e6876d5193b502d9d13f5f218ca0acdaaa5417faef2a749e45",
@@ -95,11 +102,32 @@
       "content": "import { test } from '../../test';\n\nexport default test({\n\tget props() {\n\t\treturn { currentUser: { name: 'world' } };\n\t},\n\n\thtml: `\n\t\t<h1>Hello world!</h1>\n\t`\n});\n"
     },
     {
-      "path": "packages/svelte/tests/runtime-legacy/samples/deconflict-contextual-action/util.js",
+      "path": "packages/svelte/tests/validator/samples/action-on-component/errors.json",
       "sha": null,
-      "content_sha256": "c6fd46bccf78fbe04403b985b92a3fe827393ea25c364223511414a77ff18724",
+      "content_sha256": "5912f3a650ad5a73acd3cc30fadb4b4115201b9d95838d05df758fa33bdd22c5",
       "score": 165,
-      "content": "export default function (_, fn) {\n\tfn('import_action');\n}\n"
+      "content": "[\n\t{\n\t\t\"code\": \"invalid-component-directive\",\n\t\t\"message\": \"This type of directive is not valid on components\",\n\t\t\"start\": {\n\t\t\t\"line\": 7,\n\t\t\t\"column\": 8\n\t\t},\n\t\t\"end\": {\n\t\t\t\"line\": 7,\n\t\t\t\"column\": 15\n\t\t}\n\t}\n]\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/deconflict-contextual-action/_config.js",
+      "sha": null,
+      "content_sha256": "a8cf1a4505b83d67319ca5fbcf5471be14220f105af25c4ab046f7721c422754",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\n/** @type {string[]} */\nlet result;\n\nexport default test({\n\tbefore_test() {\n\t\tresult = [];\n\t},\n\tget props() {\n\t\treturn {\n\t\t\t/** @param {string} str */\n\t\t\tcollect: (str) => result.push(str)\n\t\t};\n\t},\n\ttest({ assert }) {\n\t\tassert.deepEqual(result, ['import_action', 'each_action']);\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-receives-element-mounted/_config.js",
+      "sha": null,
+      "content_sha256": "b4d602709205752493cbb829d952762e7cf959518c897dcecba9fa66fbfd3a7c",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\n/** @type {Record<string, any>} */\nconst result = {};\n\nexport default test({\n\tget props() {\n\t\treturn { result };\n\t},\n\tasync test({ assert }) {\n\t\tassert.notEqual(result.parentElement, null);\n\t}\n});\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-object/_config.js",
+      "sha": null,
+      "content_sha256": "aa5a4e3a7645c6dbf1459ee927f413e9e7135cb98f2f7e883983625c484677ca",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\nexport default test({\n\thtml: `\n\t\t<button>action</button>\n\t`,\n\tasync test({ assert, target }) {\n\t\tconst button = /** @type {HTMLButtonElement & { foo: string }} */ (\n\t\t\ttarget.querySelector('button')\n\t\t);\n\t\tassert.equal(button.foo, 'bar1337');\n\t}\n});\n"
     },
     {
       "path": "packages/svelte/tests/runtime-legacy/samples/action-object-deep/_config.js",
@@ -116,18 +144,11 @@
       "content": "import { ok, test } from '../../test';\n\nexport default test({\n\thtml: '<button>0, 0</button>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst event = new window.MouseEvent('click', {\n\t\t\tclientX: 42,\n\t\t\tclientY: 42\n\t\t});\n\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tawait button.dispatchEvent(event);\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>42, 42</button>');\n\t}\n});\n"
     },
     {
-      "path": "packages/svelte/tests/runtime-legacy/samples/action-document/_config.js",
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-this/_config.js",
       "sha": null,
-      "content_sha256": "0ae51c912efd0c570c3420afb869b3fcaffb92f801b74959352354853f40c030",
+      "content_sha256": "990f6600b3fa1ac7a5a29dbb84685724a2bf0f6dfab302cc61bfebd9ac7b370d",
       "score": 165,
-      "content": "import { test } from '../../test';\n\nexport default test({\n\thtml: '<div></div>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst visibility = new window.Event('visibilitychange');\n\n\t\tawait window.document.dispatchEvent(visibility);\n\t\tassert.htmlEqual(\n\t\t\ttarget.innerHTML,\n\t\t\t`\n\t\t\t<div>\n\t\t\t\t<div class=\"tooltip\">Perform an Action</div>\n\t\t\t</div>\n\t\t`\n\t\t);\n\t}\n});\n"
-    },
-    {
-      "path": "packages/svelte/tests/runtime-legacy/samples/action-object/_config.js",
-      "sha": null,
-      "content_sha256": "aa5a4e3a7645c6dbf1459ee927f413e9e7135cb98f2f7e883983625c484677ca",
-      "score": 165,
-      "content": "import { test } from '../../test';\n\nexport default test({\n\thtml: `\n\t\t<button>action</button>\n\t`,\n\tasync test({ assert, target }) {\n\t\tconst button = /** @type {HTMLButtonElement & { foo: string }} */ (\n\t\t\ttarget.querySelector('button')\n\t\t);\n\t\tassert.equal(button.foo, 'bar1337');\n\t}\n});\n"
+      "content": "import { ok, test } from '../../test';\n\nexport default test({\n\tasync test({ assert, target, window }) {\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tconst click = new window.MouseEvent('click');\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>1</button>');\n\t\tawait button.dispatchEvent(click);\n\t\tassert.htmlEqual(target.innerHTML, '<button>2</button>');\n\t}\n});\n"
     },
     {
       "path": "packages/svelte/tests/runtime-legacy/samples/action-custom-event-handler-node-context/_config.js",
@@ -137,13 +158,6 @@
       "content": "import { ok, test } from '../../test';\n\nexport default test({\n\tskip_if_ssr: 'permanent', // unnecessary to test this in ssr mode\n\n\thtml: '<button>10</button>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst event = new window.MouseEvent('click');\n\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tawait button.dispatchEvent(event);\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>11</button>');\n\t}\n});\n"
     },
     {
-      "path": "packages/svelte/tests/runtime-legacy/samples/deconflict-contextual-action/_config.js",
-      "sha": null,
-      "content_sha256": "a8cf1a4505b83d67319ca5fbcf5471be14220f105af25c4ab046f7721c422754",
-      "score": 165,
-      "content": "import { test } from '../../test';\n\n/** @type {string[]} */\nlet result;\n\nexport default test({\n\tbefore_test() {\n\t\tresult = [];\n\t},\n\tget props() {\n\t\treturn {\n\t\t\t/** @param {string} str */\n\t\t\tcollect: (str) => result.push(str)\n\t\t};\n\t},\n\ttest({ assert }) {\n\t\tassert.deepEqual(result, ['import_action', 'each_action']);\n\t}\n});\n"
-    },
-    {
       "path": "packages/svelte/tests/runtime-legacy/samples/each-block-keyed-component-action/_config.js",
       "sha": null,
       "content_sha256": "576f2fc2ba09d35162c82de9a8b3998cc9ffcb327da534aea3cb579b4f228e19",
@@ -151,11 +165,18 @@
       "content": "import { test } from '../../test';\n\nexport default test({\n\ttest({ assert, component }) {\n\t\tassert.equal(component.count, 0);\n\n\t\tcomponent.arr = ['2'];\n\n\t\tassert.equal(component.count, 1);\n\n\t\tcomponent.arr = ['1', '2'];\n\n\t\tassert.equal(component.count, 2);\n\n\t\tcomponent.arr = ['2', '1'];\n\n\t\tassert.equal(component.count, 2);\n\n\t\tcomponent.arr = [];\n\n\t\tassert.equal(component.count, 0);\n\t}\n});\n"
     },
     {
-      "path": "packages/svelte/tests/runtime-legacy/samples/action-this/_config.js",
+      "path": "packages/svelte/tests/parser-legacy/samples/action/output.json",
       "sha": null,
-      "content_sha256": "990f6600b3fa1ac7a5a29dbb84685724a2bf0f6dfab302cc61bfebd9ac7b370d",
+      "content_sha256": "d3b782eebf866b4d5b73a239afef428315bad945a5bcc5242063ca9be2733738",
       "score": 165,
-      "content": "import { ok, test } from '../../test';\n\nexport default test({\n\tasync test({ assert, target, window }) {\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tconst click = new window.MouseEvent('click');\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>1</button>');\n\t\tawait button.dispatchEvent(click);\n\t\tassert.htmlEqual(target.innerHTML, '<button>2</button>');\n\t}\n});\n"
+      "content": "{\n\t\"html\": {\n\t\t\"type\": \"Fragment\",\n\t\t\"start\": 0,\n\t\t\"end\": 21,\n\t\t\"children\": [\n\t\t\t{\n\t\t\t\t\"type\": \"Element\",\n\t\t\t\t\"start\": 0,\n\t\t\t\t\"end\": 21,\n\t\t\t\t\"name\": \"input\",\n\t\t\t\t\"attributes\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"start\": 7,\n\t\t\t\t\t\t\"end\": 20,\n\t\t\t\t\t\t\"type\": \"Action\",\n\t\t\t\t\t\t\"name\": \"autofocus\",\n\t\t\t\t\t\t\"modifiers\": [],\n\t\t\t\t\t\t\"expression\": null\n\t\t\t\t\t}\n\t\t\t\t],\n\t\t\t\t\"children\": []\n\t\t\t}\n\t\t]\n\t}\n}\n"
+    },
+    {
+      "path": "packages/svelte/tests/runtime-legacy/samples/action-document/_config.js",
+      "sha": null,
+      "content_sha256": "0ae51c912efd0c570c3420afb869b3fcaffb92f801b74959352354853f40c030",
+      "score": 165,
+      "content": "import { test } from '../../test';\n\nexport default test({\n\thtml: '<div></div>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst visibility = new window.Event('visibilitychange');\n\n\t\tawait window.document.dispatchEvent(visibility);\n\t\tassert.htmlEqual(\n\t\t\ttarget.innerHTML,\n\t\t\t`\n\t\t\t<div>\n\t\t\t\t<div class=\"tooltip\">Perform an Action</div>\n\t\t\t</div>\n\t\t`\n\t\t);\n\t}\n});\n"
     },
     {
       "path": "packages/svelte/tests/runtime-legacy/samples/action-custom-event-handler-with-context/_config.js",
@@ -163,28 +184,9 @@
       "content_sha256": "75bcef5ce2940db0b2fa9a30a25db45b76e6c7b4215e896542cfafe705539e29",
       "score": 165,
       "content": "import { ok, test } from '../../test';\n\nexport default test({\n\thtml: '<button>???</button>',\n\n\tasync test({ assert, target, window }) {\n\t\tconst event = new window.MouseEvent('click', {\n\t\t\tclientX: 42,\n\t\t\tclientY: 42\n\t\t});\n\n\t\tconst button = target.querySelector('button');\n\t\tok(button);\n\n\t\tawait button.dispatchEvent(event);\n\n\t\tassert.htmlEqual(target.innerHTML, '<button>42</button>');\n\t}\n});\n"
-    },
-    {
-      "path": "packages/svelte/tests/runtime-legacy/samples/action-receives-element-mounted/_config.js",
-      "sha": null,
-      "content_sha256": "b4d602709205752493cbb829d952762e7cf959518c897dcecba9fa66fbfd3a7c",
-      "score": 165,
-      "content": "import { test } from '../../test';\n\n/** @type {Record<string, any>} */\nconst result = {};\n\nexport default test({\n\tget props() {\n\t\treturn { result };\n\t},\n\tasync test({ assert }) {\n\t\tassert.notEqual(result.parentElement, null);\n\t}\n});\n"
-    },
-    {
-      "path": "packages/svelte/tests/validator/samples/action-on-component/errors.json",
-      "sha": null,
-      "content_sha256": "5912f3a650ad5a73acd3cc30fadb4b4115201b9d95838d05df758fa33bdd22c5",
-      "score": 165,
-      "content": "[\n\t{\n\t\t\"code\": \"invalid-component-directive\",\n\t\t\"message\": \"This type of directive is not valid on components\",\n\t\t\"start\": {\n\t\t\t\"line\": 7,\n\t\t\t\"column\": 8\n\t\t},\n\t\t\"end\": {\n\t\t\t\"line\": 7,\n\t\t\t\"column\": 15\n\t\t}\n\t}\n]\n"
-    },
-    {
-      "path": "packages/svelte/tests/parser-legacy/samples/action/output.json",
-      "sha": null,
-      "content_sha256": "d3b782eebf866b4d5b73a239afef428315bad945a5bcc5242063ca9be2733738",
-      "score": 165,
-      "content": "{\n\t\"html\": {\n\t\t\"type\": \"Fragment\",\n\t\t\"start\": 0,\n\t\t\"end\": 21,\n\t\t\"children\": [\n\t\t\t{\n\t\t\t\t\"type\": \"Element\",\n\t\t\t\t\"start\": 0,\n\t\t\t\t\"end\": 21,\n\t\t\t\t\"name\": \"input\",\n\t\t\t\t\"attributes\": [\n\t\t\t\t\t{\n\t\t\t\t\t\t\"start\": 7,\n\t\t\t\t\t\t\"end\": 20,\n\t\t\t\t\t\t\"type\": \"Action\",\n\t\t\t\t\t\t\"name\": \"autofocus\",\n\t\t\t\t\t\t\"modifiers\": [],\n\t\t\t\t\t\t\"expression\": null\n\t\t\t\t\t}\n\t\t\t\t],\n\t\t\t\t\"children\": []\n\t\t\t}\n\t\t]\n\t}\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T15:25:27.651864+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:10.177886+00:00"
 }

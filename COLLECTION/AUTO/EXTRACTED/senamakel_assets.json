@@ -25,13 +25,6 @@
       "content": "name: Pull Request CI\non:\n  push:\n    branches:\n      - '*'\n      - '!master'\n  pull_request:\n    branches: [master]\n  workflow_dispatch:\njobs:\n  pull_request_ci:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Set up Go\n        uses: actions/setup-go@v2\n        with:\n          go-version: 1.18\n        id: go\n\n      - name: Check out code\n        uses: actions/checkout@v2\n\n      - name: Run check\n        run: make check\n\n      - name: Unit Test\n        run: make test\n\n      - name: Lint\n        run: make lint"
     },
     {
-      "path": ".github/workflows/s3_upload.yml",
-      "sha": null,
-      "content_sha256": "9b1ba26544faa4ada0962b3d8674afda30249bf4b3ff163178bf9cc4ac083365",
-      "score": 126,
-      "content": "name: Upload S3\non:\n  push:\n    branches:\n      - master\n\n  workflow_dispatch:\n\npermissions:\n  id-token: write\n\nenv:\n  AWS_REGION: us-east-1\n\njobs:\n  upload-s3:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v2\n\n      - name: Confiugre AWS credentials\n        uses: aws-actions/configure-aws-credentials@v1\n        with:\n          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}\n          aws-region: ${{ env.AWS_REGION }}\n\n      - name: Deploy to S3\n        if: github.repository_owner == 'trustwallet'\n        shell: bash\n        run: aws s3 sync . s3://$AWS_S3_BUCKET  --follow-symlinks --delete --exclude '*' --include 'dapps/*' --include 'blockchains/*' --size-only\n        env:\n          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}\n\n      - name: Get changed files\n        uses: jitterbit/get-changed-files@v1\n        if: github.event_name == 'push'\n        id: files\n\n      - name: Filter files to invalidate\n        run: |\n          echo \"::set-output name=paths::$(echo ${{ steps.files.outputs.added_modified }} | tr ' ' '\\n' | grep -E 'blockchains/|dapps/' | awk '{print \"/\"$1}' | tr '\\n' ' ')\"\n        if: github.event_name == 'push'\n        id: filter\n\n      - name: Invalidate CloudFront\n        if: github.repository_owner == 'trustwallet' && github.event_name == 'push' && steps.filter.outputs.paths != ''\n        uses: chetan/invalidate-cloudfront-action@v2\n        env:\n          PATHS: ${{ steps.filter.outputs.paths }}\n          DISTRIBUTION: ${{ secrets.AWS_DISTRIBUTION }}\n\n"
-    },
-    {
       "path": ".github/workflows/fix.yml",
       "sha": null,
       "content_sha256": "913c34fbe99e15928cc5831e9f640c3882d57fc4572554d6f4f65201db7757d1",
@@ -44,6 +37,13 @@
       "content_sha256": "2e60b5a08c140cee9a1f7091ac7dafdb120de728c3ca7853fb43eeb8043c0e05",
       "score": 126,
       "content": "name: Periodic External Update\non:\n  schedule:\n    # Run twice per day (at 1:00UTC/6pmPST, 13:00UTC/6amPST)\n    - cron:  '0 1,13 * * *'\n  workflow_dispatch:\njobs:\n  periodic-auto-update:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v2\n        with:\n          token: ${{ secrets.COMMIT_TOKEN }}\n          ref: ${{ github.head_ref }} \n\n      - name: Set up Go\n        uses: actions/setup-go@v2\n        with:\n          go-version: 1.18\n        id: go\n\n      - name: Run update auto\n        run: make update-auto\n\n      - name: Show update result (diff)\n        if: success()\n        run: |\n          git status\n          git diff\n\n      - name: Run check\n        run: make check\n\n      - name: Commit changes\n        if: success()\n        uses: stefanzweifel/git-auto-commit-action@v4.1.2\n        with:\n          commit_user_name: trust-wallet-merge-bot\n          commit_user_email: mergebot@trustwallet.com\n          commit_message: External Updates"
+    },
+    {
+      "path": ".github/workflows/s3_upload.yml",
+      "sha": null,
+      "content_sha256": "9b1ba26544faa4ada0962b3d8674afda30249bf4b3ff163178bf9cc4ac083365",
+      "score": 126,
+      "content": "name: Upload S3\non:\n  push:\n    branches:\n      - master\n\n  workflow_dispatch:\n\npermissions:\n  id-token: write\n\nenv:\n  AWS_REGION: us-east-1\n\njobs:\n  upload-s3:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v2\n\n      - name: Confiugre AWS credentials\n        uses: aws-actions/configure-aws-credentials@v1\n        with:\n          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}\n          aws-region: ${{ env.AWS_REGION }}\n\n      - name: Deploy to S3\n        if: github.repository_owner == 'trustwallet'\n        shell: bash\n        run: aws s3 sync . s3://$AWS_S3_BUCKET  --follow-symlinks --delete --exclude '*' --include 'dapps/*' --include 'blockchains/*' --size-only\n        env:\n          AWS_S3_BUCKET: ${{ secrets.AWS_S3_BUCKET }}\n\n      - name: Get changed files\n        uses: jitterbit/get-changed-files@v1\n        if: github.event_name == 'push'\n        id: files\n\n      - name: Filter files to invalidate\n        run: |\n          echo \"::set-output name=paths::$(echo ${{ steps.files.outputs.added_modified }} | tr ' ' '\\n' | grep -E 'blockchains/|dapps/' | awk '{print \"/\"$1}' | tr '\\n' ' ')\"\n        if: github.event_name == 'push'\n        id: filter\n\n      - name: Invalidate CloudFront\n        if: github.repository_owner == 'trustwallet' && github.event_name == 'push' && steps.filter.outputs.paths != ''\n        uses: chetan/invalidate-cloudfront-action@v2\n        env:\n          PATHS: ${{ steps.filter.outputs.paths }}\n          DISTRIBUTION: ${{ secrets.AWS_DISTRIBUTION }}\n\n"
     },
     {
       "path": ".github/workflows/fix-dryrun.yml",
@@ -102,11 +102,11 @@
       "content": " {\n        \"name\": \"Tether USD\",\n        \"symbol\": \"USDTbs\",\n        \"decimals\": 8,\n        \"status\": \"active\",\n        \"id\": \"0xacd014e8bdf395fa8497b6d585b164547a9d45269377bdf67c96c541b7fec9ed::coin::T\",\n        \"tags\": [\n            \"stablecoin\"\n        ]\n    }"
     },
     {
-      "path": "blockchains/aptos/assets/0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC/info.json",
+      "path": "blockchains/aptos/assets/0x9aa4c03344444b53f4d9b1bca229ed2ac47504e3ea6cd0683ebdc0c5ecefd693::coin::T/info.json",
       "sha": null,
-      "content_sha256": "c8932c8694de99ed4c784ad04e0de8108d20aa35b9d253a1f9fe8ac4aafa0e10",
+      "content_sha256": "e9448482d444691199b7be424cbebcb14928895df30e27f589b6abc21eea46f7",
       "score": 99,
-      "content": "{\n        \"name\": \"USD Coin (LayerZero)\",\n        \"symbol\": \"zUSDC\",\n        \"decimals\": 6,\n        \"status\": \"active\",\n        \"id\": \"0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC\",\n        \"tags\": [\n            \"stablecoin\"\n        ]\n    }"
+      "content": "{\n    \"name\": \"SWEAT\",\n    \"symbol\": \"SWEAT\",\n    \"decimals\": 8,\n    \"status\": \"active\",\n    \"id\": \"0x9aa4c03344444b53f4d9b1bca229ed2ac47504e3ea6cd0683ebdc0c5ecefd693::coin::T\"\n}"
     },
     {
       "path": "blockchains/binance/assets/ABCD-5D8/info.json",
@@ -130,13 +130,6 @@
       "content": "{\n    \"name\": \"Alaris\",\n    \"symbol\": \"ALA\",\n    \"type\": \"BEP2\",\n    \"decimals\": 8,\n    \"description\": \"-\",\n    \"website\": \"\",\n    \"explorer\": \"https://explorer.binance.org/asset/ALA-DCD\",\n    \"status\": \"active\",\n    \"id\": \"ALA-DCD\"\n}"
     },
     {
-      "path": "blockchains/aptos/assets/0x9aa4c03344444b53f4d9b1bca229ed2ac47504e3ea6cd0683ebdc0c5ecefd693::coin::T/info.json",
-      "sha": null,
-      "content_sha256": "e9448482d444691199b7be424cbebcb14928895df30e27f589b6abc21eea46f7",
-      "score": 99,
-      "content": "{\n    \"name\": \"SWEAT\",\n    \"symbol\": \"SWEAT\",\n    \"decimals\": 8,\n    \"status\": \"active\",\n    \"id\": \"0x9aa4c03344444b53f4d9b1bca229ed2ac47504e3ea6cd0683ebdc0c5ecefd693::coin::T\"\n}"
-    },
-    {
       "path": "blockchains/aptos/assets/0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::WETH/info.json",
       "sha": null,
       "content_sha256": "f1e48c887c37746fde3f85bce84bbf596d632ece2a3d3a79d8c2cf179b4d9072",
@@ -151,18 +144,25 @@
       "content": "{\n        \"name\": \"USD Coin (Wormhole Solana)\",\n        \"symbol\": \"USDCso\",\n        \"decimals\": 6,\n        \"status\": \"active\",\n        \"id\": \"0xc91d826e29a3183eb3b6f6aa3a722089fdffb8e9642b94c5fcd4c48d035c0080::coin::T\",\n        \"tags\": [\n            \"stablecoin\"\n        ]\n    }"
     },
     {
+      "path": "blockchains/aptos/assets/0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC/info.json",
+      "sha": null,
+      "content_sha256": "c8932c8694de99ed4c784ad04e0de8108d20aa35b9d253a1f9fe8ac4aafa0e10",
+      "score": 99,
+      "content": "{\n        \"name\": \"USD Coin (LayerZero)\",\n        \"symbol\": \"zUSDC\",\n        \"decimals\": 6,\n        \"status\": \"active\",\n        \"id\": \"0xf22bede237a07e121b56d91a491eb7bcdfd1f5907926a9e58338f964a01b17fa::asset::USDC\",\n        \"tags\": [\n            \"stablecoin\"\n        ]\n    }"
+    },
+    {
+      "path": "blockchains/tron/assets/TMhjbHzJCiMWqa5oqn2DF3mGw5yh9oQNf2/info.json",
+      "sha": null,
+      "content_sha256": "bb8c55c6ca5863e06967a2f94ac18b059f62321ed03c5053a0e5368163bb9c42",
+      "score": 99,
+      "content": "{\n    \"name\": \"DLNToken\",\n    \"symbol\": \"DLN\",\n    \"type\": \"TRC20\",\n    \"decimals\": 6,\n    \"description\": \"-\",\n    \"website\": \"\",\n    \"explorer\": \"https://tronscan.io/#/token20/TMhjbHzJCiMWqa5oqn2DF3mGw5yh9oQNf2\",\n    \"status\": \"abandoned\",\n    \"id\": \"TMhjbHzJCiMWqa5oqn2DF3mGw5yh9oQNf2\"\n}"
+    },
+    {
       "path": "blockchains/ethereum/assets/0x8AAA0D43cc86ed98b7aA9c8e1f87A319Cd873DC4/info.json",
       "sha": null,
       "content_sha256": "a7fef67cb20c5ee19dfd245bbb51be97cb7274995f278a406e070de9b7ac06e7",
       "score": 99,
       "content": "{\n    \"name\": \"SCB\",\n    \"symbol\": \"SCB\",\n    \"type\": \"ERC20\",\n    \"decimals\": 4,\n    \"description\": \"-\",\n    \"website\": \"\",\n    \"explorer\": \"https://etherscan.io/token/0x8AAA0D43cc86ed98b7aA9c8e1f87A319Cd873DC4\",\n    \"status\": \"abandoned\",\n    \"id\": \"0x8AAA0D43cc86ed98b7aA9c8e1f87A319Cd873DC4\"\n}"
-    },
-    {
-      "path": "blockchains/ethereum/assets/0x8d9AB766cC475AA16AEF6529Fe5D4cd2c7ccFc98/info.json",
-      "sha": null,
-      "content_sha256": "54abeb75c6ea7eca52ffc2e415e0de7dd38bf0419201ba4c9174fed6ac85cd96",
-      "score": 99,
-      "content": "{\n    \"name\": \"WAM\",\n    \"symbol\": \"WAM\",\n    \"type\": \"ERC20\",\n    \"decimals\": 4,\n    \"description\": \"-\",\n    \"website\": \"\",\n    \"explorer\": \"https://etherscan.io/token/0x8d9AB766cC475AA16AEF6529Fe5D4cd2c7ccFc98\",\n    \"status\": \"abandoned\",\n    \"id\": \"0x8d9AB766cC475AA16AEF6529Fe5D4cd2c7ccFc98\"\n}"
     },
     {
       "path": "blockchains/ethereum/assets/0x4CEdA7906a5Ed2179785Cd3A40A69ee8bc99C466/info.json",
@@ -172,19 +172,21 @@
       "content": "{\n    \"name\": \"AION\",\n    \"type\": \"ERC20\",\n    \"symbol\": \"AION\",\n    \"decimals\": 8,\n    \"website\": \"\",\n    \"description\": \"-\",\n    \"explorer\": \"https://etherscan.io/token/0x4ceda7906a5ed2179785cd3a40a69ee8bc99c466\",\n    \"status\": \"active\",\n    \"id\": \"0x4CEdA7906a5Ed2179785Cd3A40A69ee8bc99C466\"\n}"
     },
     {
+      "path": "blockchains/ethereum/assets/0x8d9AB766cC475AA16AEF6529Fe5D4cd2c7ccFc98/info.json",
+      "sha": null,
+      "content_sha256": "54abeb75c6ea7eca52ffc2e415e0de7dd38bf0419201ba4c9174fed6ac85cd96",
+      "score": 99,
+      "content": "{\n    \"name\": \"WAM\",\n    \"symbol\": \"WAM\",\n    \"type\": \"ERC20\",\n    \"decimals\": 4,\n    \"description\": \"-\",\n    \"website\": \"\",\n    \"explorer\": \"https://etherscan.io/token/0x8d9AB766cC475AA16AEF6529Fe5D4cd2c7ccFc98\",\n    \"status\": \"abandoned\",\n    \"id\": \"0x8d9AB766cC475AA16AEF6529Fe5D4cd2c7ccFc98\"\n}"
+    },
+    {
       "path": "blockchains/ethereum/assets/0xC0E942817e11aA9DD430bb13cd42bfB541Ff4253/info.json",
       "sha": null,
       "content_sha256": "29e332152db8e7099a81418a007d3df2f98b353a35a331a95033eefa10cbeb48",
       "score": 99,
       "content": "{\n    \"name\": \"999\",\n    \"symbol\": \"999\",\n    \"type\": \"ERC20\",\n    \"decimals\": 3,\n    \"description\": \"-\",\n    \"website\": \"\",\n    \"explorer\": \"https://etherscan.io/token/0xC0E942817e11aA9DD430bb13cd42bfB541Ff4253\",\n    \"status\": \"abandoned\",\n    \"id\": \"0xC0E942817e11aA9DD430bb13cd42bfB541Ff4253\"\n}"
-    },
-    {
-      "path": "blockchains/tron/assets/TMhjbHzJCiMWqa5oqn2DF3mGw5yh9oQNf2/info.json",
-      "sha": null,
-      "content_sha256": "bb8c55c6ca5863e06967a2f94ac18b059f62321ed03c5053a0e5368163bb9c42",
-      "score": 99,
-      "content": "{\n    \"name\": \"DLNToken\",\n    \"symbol\": \"DLN\",\n    \"type\": \"TRC20\",\n    \"decimals\": 6,\n    \"description\": \"-\",\n    \"website\": \"\",\n    \"explorer\": \"https://tronscan.io/#/token20/TMhjbHzJCiMWqa5oqn2DF3mGw5yh9oQNf2\",\n    \"status\": \"abandoned\",\n    \"id\": \"TMhjbHzJCiMWqa5oqn2DF3mGw5yh9oQNf2\"\n}"
     }
   ],
-  "generated_at": "2026-10-08T02:25:48.368538+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:35.799227+00:00"
 }

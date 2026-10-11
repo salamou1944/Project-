@@ -18,18 +18,18 @@
   },
   "files": [
     {
-      "path": "agent/__init__.py",
-      "sha": null,
-      "content_sha256": "9b5beb63e02bc10b791d5771322f7953aabe5d7cb495f3d8f736a0d5401a994b",
-      "score": 108,
-      "content": "from .agent import Agent\n"
-    },
-    {
       "path": "agent/agent.py",
       "sha": null,
       "content_sha256": "cc7a7e3d3bba6c892e6f06df36b230d0156e5ad67d762687da62381bcd8a2bca",
       "score": 108,
       "content": "from computers import Computer\nfrom utils import (\n    create_response,\n    show_image,\n    pp,\n    sanitize_message,\n    check_blocklisted_url,\n)\nimport json\nfrom typing import Callable\n\n\nclass Agent:\n    \"\"\"\n    A sample agent class that can be used to interact with a computer.\n\n    (See simple_cua_loop.py for a simple example without an agent.)\n    \"\"\"\n\n    def __init__(\n        self,\n        model=\"computer-use-preview\",\n        computer: Computer = None,\n        tools: list[dict] = [],\n        acknowledge_safety_check_callback: Callable = lambda: False,\n    ):\n        self.model = model\n        self.computer = computer\n        self.tools = tools\n        self.print_steps = True\n        self.debug = False\n        self.show_images = False\n        self.acknowledge_safety_check_callback = acknowledge_safety_check_callback\n\n        if computer:\n            dimensions = computer.get_dimensions()\n            self.tools += [\n                {\n                    \"type\": \"computer-preview\",\n                    \"display_width\": dimensions[0],\n                    \"display_height\": dimensions[1],\n                    \"environment\": computer.get_environment(),\n                },\n            ]\n\n    def debug_print(self, *args):\n        if self.debug:\n            pp(*args)\n\n    def handle_item(self, item):\n        \"\"\"Handle each item; may cause a computer action + screenshot.\"\"\"\n        if item[\"type\"] == \"message\":\n            if self.print_steps:\n                print(item[\"content\"][0][\"text\"])\n\n        if item[\"type\"] == \"function_call\":\n            name, args = item[\"name\"], json.loads(item[\"arguments\"])\n            if self.print_steps:\n                print(f\"{name}({args})\")\n\n            if hasattr(self.computer, name):  # if function exists on computer, call it\n                method = getattr(self.computer, name)\n                method(**args)\n            return [\n                {\n                    \"type\": \"function_call_output\",\n                    \"call_id\": item[\"call_id\"],\n                    \"output\": \"success\",  # hard-coded output for demo\n                }\n            ]\n\n        if item[\"type\"] == \"computer_call\":\n            action = item[\"action\"]\n            action_type = action[\"type\"]\n            action_args = {k: v for k, v in action.items() if k != \"type\"}\n            if self.print_steps:\n                print(f\"{action_type}({action_args})\")\n\n            method = getattr(self.computer, action_type)\n            method(**action_args)\n\n            screenshot_base64 = self.computer.screenshot()\n            if self.show_images:\n                show_image(screenshot_base64)\n\n            # if user doesn't ack all safety checks exit with error\n            pending_checks = item.get(\"pending_safety_checks\", [])\n            for check in pending_checks:\n                message = check[\"message\"]\n                if not self.acknowledge_safety_check_callback(message):\n                    raise ValueError(\n                        f\"Safety check failed: {message}. Cannot continue with unacknowledged safety checks.\"\n                    )\n\n            call_output = {\n                \"type\": \"computer_call_output\",\n                \"call_id\": item[\"call_id\"],\n                \"acknowledged_safety_checks\": pending_checks,\n                \"output\": {\n                    \"type\": \"input_image\",\n                    \"image_url\": f\"data:image/png;base64,{screenshot_base64}\",\n                },\n            }\n\n            # additional URL safety checks for browser environments\n            if self.computer.get_environment() == \"browser\":\n                current_url = self.computer.get_current_url()\n                check_blocklisted_url(current_url)\n                call_output[\"output\"][\"current_url\"] = current_url\n\n            return [call_output]\n        return []\n\n    def run_full_turn(\n        self, input_items, print_steps=True, debug=False, show_images=False\n    ):\n        self.print_steps = print_steps\n        self.debug = debug\n        self.show_images = show_images\n        new_items = []\n\n        # keep looping until we get a final response\n        while new_items[-1].get(\"role\") != \"assistant\" if new_items else True:\n            self.debug_print([sanitize_message(msg) for msg in input_items + new_items])\n\n            response = create_response(\n                model=self.model,\n                input=input_items + new_items,\n                tools=self.tools,\n                truncation=\"auto\",\n            )\n            self.debug_print(response)\n\n            if \"output\" not in response and self.debug:\n                print(response)\n                raise ValueError(\"No output from model\")\n            else:\n                new_items += response[\"output\"]\n                for item in response[\"output\"]:\n                    new_items += self.handle_item(item)\n\n        return new_items\n"
+    },
+    {
+      "path": "agent/__init__.py",
+      "sha": null,
+      "content_sha256": "9b5beb63e02bc10b791d5771322f7953aabe5d7cb495f3d8f736a0d5401a994b",
+      "score": 108,
+      "content": "from .agent import Agent\n"
     },
     {
       "path": "computers/default/browserbase.py",
@@ -53,11 +53,11 @@
       "content": "import inspect\nimport pytest\n\nfrom computers import Computer, default, contrib\n\n\ndef get_module_classes(module):\n    # Grab classes actually defined in that module and subclassing Computer.\n    return [obj for _, obj in inspect.getmembers(module, inspect.isclass)]\n\n\ndef get_required_attrs():\n    # TODO: migrate to a cleaner solution that allows type-checking (e.g. pydantic?)\n    return [\n        name\n        for name, member in inspect.getmembers(Computer)\n        if not name.startswith(\"__\")\n        and (inspect.isfunction(member) or isinstance(member, property))\n    ]\n\n\ndefault_computers = get_module_classes(default)\ncontrib_computers = get_module_classes(contrib)\nall_computers = default_computers + contrib_computers\n\n\n@pytest.mark.parametrize(\"computer_class\", all_computers, ids=lambda c: c.__name__)\ndef test_computer_implements_interface(computer_class):\n    for func in get_required_attrs():\n        assert hasattr(\n            computer_class, func\n        ), f\"{computer_class.__name__} is missing required attribute '{func}'\"\n"
     },
     {
-      "path": "tests/__init__.py",
+      "path": "Dockerfile",
       "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 93,
-      "content": ""
+      "content_sha256": "c0f308e2409ba8e95c0cd3c26c47ca7c8e7e2e12af0bde3d27d9cd9cec10fd90",
+      "score": 85,
+      "content": "FROM ubuntu:22.04\nENV DEBIAN_FRONTEND=noninteractive\n\n# 1) Install Xfce, x11vnc, Xvfb, xdotool, etc., but remove any screen lockers or power managers\nRUN apt-get update && apt-get install -y \\\n    xfce4 \\\n    xfce4-goodies \\\n    x11vnc \\\n    xvfb \\\n    xdotool \\\n    imagemagick \\\n    x11-apps \\\n    sudo \\\n    software-properties-common \\\n    imagemagick \\\n && apt-get remove -y light-locker xfce4-screensaver xfce4-power-manager || true \\\n && apt-get clean && rm -rf /var/lib/apt/lists/*\n\n# 2) Add the mozillateam PPA and install Firefox ESR\nRUN add-apt-repository ppa:mozillateam/ppa \\\n && apt-get update \\\n && apt-get install -y --no-install-recommends firefox-esr \\\n && update-alternatives --set x-www-browser /usr/bin/firefox-esr \\\n && apt-get clean && rm -rf /var/lib/apt/lists/*\n\n# 3) Create non-root user\nRUN useradd -ms /bin/bash myuser \\\n    && echo \"myuser ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers\nUSER myuser\nWORKDIR /home/myuser\n\n# 4) Set x11vnc password (\"secret\")\nRUN x11vnc -storepasswd secret /home/myuser/.vncpass\n\n# 5) Expose port 5900 and run Xvfb, x11vnc, Xfce (no login manager)\nEXPOSE 5900\nCMD [\"/bin/sh\", \"-c\", \"\\\n    Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 & \\\n    x11vnc -display :99 -forever -rfbauth /home/myuser/.vncpass -listen 0.0.0.0 -rfbport 5900 >/dev/null 2>&1 & \\\n    export DISPLAY=:99 && \\\n    startxfce4 >/dev/null 2>&1 & \\\n    sleep 2 && echo 'Container running!' && \\\n    tail -f /dev/null \\\n\"]\n\n"
     },
     {
       "path": "requirements.txt",
@@ -67,25 +67,18 @@
       "content": "annotated-types==0.7.0\nanyio==4.8.0\nbrowserbase==1.2.0\ncertifi==2025.1.31\ncharset-normalizer==3.4.1\ndistro==1.9.0\ngreenlet==3.1.1\nh11==0.14.0\nhttpcore==1.0.7\nhttpx==0.28.1\nidna==3.10\njiter==0.8.2\npillow==11.1.0\nplaywright==1.50.0\npydantic==2.10.6\npydantic_core==2.27.2\npyee==12.1.1\npython-dotenv==1.0.1\nrequests==2.32.3\nscrapybara>=2.3.6\nsniffio==1.3.1\ntyping_extensions==4.12.2\nurllib3==2.3.0\n"
     },
     {
-      "path": "Dockerfile",
-      "sha": null,
-      "content_sha256": "c0f308e2409ba8e95c0cd3c26c47ca7c8e7e2e12af0bde3d27d9cd9cec10fd90",
-      "score": 85,
-      "content": "FROM ubuntu:22.04\nENV DEBIAN_FRONTEND=noninteractive\n\n# 1) Install Xfce, x11vnc, Xvfb, xdotool, etc., but remove any screen lockers or power managers\nRUN apt-get update && apt-get install -y \\\n    xfce4 \\\n    xfce4-goodies \\\n    x11vnc \\\n    xvfb \\\n    xdotool \\\n    imagemagick \\\n    x11-apps \\\n    sudo \\\n    software-properties-common \\\n    imagemagick \\\n && apt-get remove -y light-locker xfce4-screensaver xfce4-power-manager || true \\\n && apt-get clean && rm -rf /var/lib/apt/lists/*\n\n# 2) Add the mozillateam PPA and install Firefox ESR\nRUN add-apt-repository ppa:mozillateam/ppa \\\n && apt-get update \\\n && apt-get install -y --no-install-recommends firefox-esr \\\n && update-alternatives --set x-www-browser /usr/bin/firefox-esr \\\n && apt-get clean && rm -rf /var/lib/apt/lists/*\n\n# 3) Create non-root user\nRUN useradd -ms /bin/bash myuser \\\n    && echo \"myuser ALL=(ALL) NOPASSWD:ALL\" >> /etc/sudoers\nUSER myuser\nWORKDIR /home/myuser\n\n# 4) Set x11vnc password (\"secret\")\nRUN x11vnc -storepasswd secret /home/myuser/.vncpass\n\n# 5) Expose port 5900 and run Xvfb, x11vnc, Xfce (no login manager)\nEXPOSE 5900\nCMD [\"/bin/sh\", \"-c\", \"\\\n    Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 & \\\n    x11vnc -display :99 -forever -rfbauth /home/myuser/.vncpass -listen 0.0.0.0 -rfbport 5900 >/dev/null 2>&1 & \\\n    export DISPLAY=:99 && \\\n    startxfce4 >/dev/null 2>&1 & \\\n    sleep 2 && echo 'Container running!' && \\\n    tail -f /dev/null \\\n\"]\n\n"
-    },
-    {
-      "path": "__init__.py",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 35,
-      "content": ""
-    },
-    {
       "path": "main.py",
       "sha": null,
       "content_sha256": "0b7adc7c6460a903503915c2c349f273e11715511ff644e726338fa284722797",
       "score": 35,
       "content": "from agent.agent import Agent\nfrom computers import LocalPlaywrightBrowser\n\n\ndef main(user_input=None):\n    with LocalPlaywrightBrowser() as computer:\n        agent = Agent(computer=computer)\n        items = []\n        while True:\n            user_input = input(\"> \")\n            items.append({\"role\": \"user\", \"content\": user_input})\n            output_items = agent.run_full_turn(items, debug=True, show_images=True)\n            items += output_items\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "path": "utils.py",
+      "sha": null,
+      "content_sha256": "f6d3e169f2b6c087bacb25d61db17280c6fbc8bfb7cbae0bdfca3e759bebeff2",
+      "score": 35,
+      "content": "import os\nimport requests\nfrom dotenv import load_dotenv\nimport json\nimport base64\nfrom PIL import Image\nfrom io import BytesIO\nimport io\nfrom urllib.parse import urlparse\n\nload_dotenv(override=True)\n\nBLOCKED_DOMAINS = [\n    \"maliciousbook.com\",\n    \"evilvideos.com\",\n    \"darkwebforum.com\",\n    \"shadytok.com\",\n    \"suspiciouspins.com\",\n    \"ilanbigio.com\",\n]\n\n\ndef pp(obj):\n    print(json.dumps(obj, indent=4))\n\n\ndef show_image(base_64_image):\n    image_data = base64.b64decode(base_64_image)\n    image = Image.open(BytesIO(image_data))\n    image.show()\n\n\ndef calculate_image_dimensions(base_64_image):\n    image_data = base64.b64decode(base_64_image)\n    image = Image.open(io.BytesIO(image_data))\n    return image.size\n\n\ndef sanitize_message(msg: dict) -> dict:\n    \"\"\"Return a copy of the message with image_url omitted for computer_call_output messages.\"\"\"\n    if msg.get(\"type\") == \"computer_call_output\":\n        output = msg.get(\"output\", {})\n        if isinstance(output, dict):\n            sanitized = msg.copy()\n            sanitized[\"output\"] = {**output, \"image_url\": \"[omitted]\"}\n            return sanitized\n    return msg\n\n\ndef create_response(**kwargs):\n    url = \"https://api.openai.com/v1/responses\"\n    headers = {\n        \"Authorization\": f\"Bearer {os.getenv('OPENAI_API_KEY')}\",\n        \"Content-Type\": \"application/json\"\n    }\n\n    openai_org = os.getenv(\"OPENAI_ORG\")\n    if openai_org:\n        headers[\"Openai-Organization\"] = openai_org\n\n    response = requests.post(url, headers=headers, json=kwargs)\n\n    if response.status_code != 200:\n        print(f\"Error: {response.status_code} {response.text}\")\n\n    return response.json()\n\n\ndef check_blocklisted_url(url: str) -> None:\n    \"\"\"Raise ValueError if the given URL (including subdomains) is in the blocklist.\"\"\"\n    hostname = urlparse(url).hostname or \"\"\n    if any(\n        hostname == blocked or hostname.endswith(f\".{blocked}\")\n        for blocked in BLOCKED_DOMAINS\n    ):\n        raise ValueError(f\"Blocked URL: {url}\")\n"
     },
     {
       "path": "simple_cua_loop.py",
@@ -102,32 +95,11 @@
       "content": "import argparse\nfrom agent.agent import Agent\nfrom computers.config import *\nfrom computers.default import *\nfrom computers import computers_config\n\n\ndef acknowledge_safety_check_callback(message: str) -> bool:\n    response = input(\n        f\"Safety Check Warning: {message}\\nDo you want to acknowledge and proceed? (y/n): \"\n    ).lower()\n    return response.lower().strip() == \"y\"\n\n\ndef main():\n    parser = argparse.ArgumentParser(\n        description=\"Select a computer environment from the available options.\"\n    )\n    parser.add_argument(\n        \"--computer\",\n        choices=computers_config.keys(),\n        help=\"Choose the computer environment to use.\",\n        default=\"local-playwright\",\n    )\n    parser.add_argument(\n        \"--input\",\n        type=str,\n        help=\"Initial input to use instead of asking the user.\",\n        default=None,\n    )\n    parser.add_argument(\n        \"--debug\",\n        action=\"store_true\",\n        help=\"Enable debug mode for detailed output.\",\n    )\n    parser.add_argument(\n        \"--show\",\n        action=\"store_true\",\n        help=\"Show images during the execution.\",\n    )\n    parser.add_argument(\n        \"--start-url\",\n        type=str,\n        help=\"Start the browsing session with a specific URL (only for browser environments).\",\n        default=\"https://bing.com\",\n    )\n    args = parser.parse_args()\n    ComputerClass = computers_config[args.computer]\n\n    with ComputerClass() as computer:\n        agent = Agent(\n            computer=computer,\n            acknowledge_safety_check_callback=acknowledge_safety_check_callback,\n        )\n        items = []\n\n        if args.computer in [\"browserbase\", \"local-playwright\"]:\n            if not args.start_url.startswith(\"http\"):\n                args.start_url = \"https://\" + args.start_url\n            agent.computer.goto(args.start_url)\n\n        while True:\n            try:\n                user_input = args.input or input(\"> \")\n                if user_input == \"exit\":\n                    break\n            except EOFError as e:\n                print(f\"An error occurred: {e}\")\n                break\n            items.append({\"role\": \"user\", \"content\": user_input})\n            output_items = agent.run_full_turn(\n                items,\n                print_steps=True,\n                show_images=args.show,\n                debug=args.debug,\n            )\n            items += output_items\n            args.input = None\n\n\nif __name__ == \"__main__\":\n    main()\n"
     },
     {
-      "path": "utils.py",
+      "path": "computers/__init__.py",
       "sha": null,
-      "content_sha256": "f6d3e169f2b6c087bacb25d61db17280c6fbc8bfb7cbae0bdfca3e759bebeff2",
-      "score": 35,
-      "content": "import os\nimport requests\nfrom dotenv import load_dotenv\nimport json\nimport base64\nfrom PIL import Image\nfrom io import BytesIO\nimport io\nfrom urllib.parse import urlparse\n\nload_dotenv(override=True)\n\nBLOCKED_DOMAINS = [\n    \"maliciousbook.com\",\n    \"evilvideos.com\",\n    \"darkwebforum.com\",\n    \"shadytok.com\",\n    \"suspiciouspins.com\",\n    \"ilanbigio.com\",\n]\n\n\ndef pp(obj):\n    print(json.dumps(obj, indent=4))\n\n\ndef show_image(base_64_image):\n    image_data = base64.b64decode(base_64_image)\n    image = Image.open(BytesIO(image_data))\n    image.show()\n\n\ndef calculate_image_dimensions(base_64_image):\n    image_data = base64.b64decode(base_64_image)\n    image = Image.open(io.BytesIO(image_data))\n    return image.size\n\n\ndef sanitize_message(msg: dict) -> dict:\n    \"\"\"Return a copy of the message with image_url omitted for computer_call_output messages.\"\"\"\n    if msg.get(\"type\") == \"computer_call_output\":\n        output = msg.get(\"output\", {})\n        if isinstance(output, dict):\n            sanitized = msg.copy()\n            sanitized[\"output\"] = {**output, \"image_url\": \"[omitted]\"}\n            return sanitized\n    return msg\n\n\ndef create_response(**kwargs):\n    url = \"https://api.openai.com/v1/responses\"\n    headers = {\n        \"Authorization\": f\"Bearer {os.getenv('OPENAI_API_KEY')}\",\n        \"Content-Type\": \"application/json\"\n    }\n\n    openai_org = os.getenv(\"OPENAI_ORG\")\n    if openai_org:\n        headers[\"Openai-Organization\"] = openai_org\n\n    response = requests.post(url, headers=headers, json=kwargs)\n\n    if response.status_code != 200:\n        print(f\"Error: {response.status_code} {response.text}\")\n\n    return response.json()\n\n\ndef check_blocklisted_url(url: str) -> None:\n    \"\"\"Raise ValueError if the given URL (including subdomains) is in the blocklist.\"\"\"\n    hostname = urlparse(url).hostname or \"\"\n    if any(\n        hostname == blocked or hostname.endswith(f\".{blocked}\")\n        for blocked in BLOCKED_DOMAINS\n    ):\n        raise ValueError(f\"Blocked URL: {url}\")\n"
-    },
-    {
-      "path": "examples/function_calling_example.py",
-      "sha": null,
-      "content_sha256": "cb1932d6f1b7c89159d53b135d3622e614a54f59a22d101d23ff0872b51f7b50",
+      "content_sha256": "fa67ec8384488077e85d71414056ea7083888a75eafd4f282f0088abe4637038",
       "score": 33,
-      "content": "from agent import Agent\nfrom computers import ScrapybaraBrowser\n\ntools = [\n    {\n        \"type\": \"function\",\n        \"name\": \"get_weather\",\n        \"description\": \"Determine weather in my location\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"location\": {\n                    \"type\": \"string\",\n                    \"description\": \"The city and state e.g. San Francisco, CA\",\n                },\n                \"unit\": {\"type\": \"string\", \"enum\": [\"c\", \"f\"]},\n            },\n            \"additionalProperties\": False,\n            \"required\": [\"location\", \"unit\"],\n        },\n    }\n]\n\n\ndef main():\n    with ScrapybaraBrowser() as computer:\n        agent = Agent(tools=tools, computer=computer)\n        items = []\n        while True:\n            user_input = input(\"> \")\n            items.append({\"role\": \"user\", \"content\": user_input})\n            output_items = agent.run_full_turn(items)\n            items += output_items\n\n\nif __name__ == \"__main__\":\n    main()\n"
-    },
-    {
-      "path": "examples/playwright_with_custom_functions.py",
-      "sha": null,
-      "content_sha256": "c753d8f6da1bed3880fa926db8b3c5a8e0010bd22e8a2623dd374883965bbc5d",
-      "score": 33,
-      "content": "from agent.agent import Agent\nfrom computers import LocalPlaywrightComputer\n\ntools = [\n    {\n        \"type\": \"function\",\n        \"name\": \"back\",\n        \"description\": \"Go back to the previous page.\",\n        \"parameters\": {},\n    },\n    {\n        \"type\": \"function\",\n        \"name\": \"goto\",\n        \"description\": \"Go to a specific URL.\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"url\": {\n                    \"type\": \"string\",\n                    \"description\": \"Fully qualified URL to navigate to.\",\n                },\n            },\n            \"additionalProperties\": False,\n            \"required\": [\"url\"],\n        },\n    },\n]\n\n\ndef main():\n    with LocalPlaywrightComputer() as computer:\n        agent = Agent(computer=computer, tools=tools)\n        items = [\n            {\n                \"role\": \"developer\",\n                \"content\": \"Use the additional back() and goto() functions to navigate the browser. If you see nothing, try going to bing.com.\",\n            }\n        ]\n        while True:\n            user_input = input(\"> \")\n            items.append({\"role\": \"user\", \"content\": user_input})\n            output_items = agent.run_full_turn(items, show_images=False)\n            items += output_items\n\n\nif __name__ == \"__main__\":\n    main()\n"
-    },
-    {
-      "path": "computers/config.py",
-      "sha": null,
-      "content_sha256": "b3cec77a60e5f479a5c9613a3a4a91d440a9d27fbd37430e64d4782a43fcbcd0",
-      "score": 33,
-      "content": "from .default import *\nfrom .contrib import *\n\ncomputers_config = {\n    \"local-playwright\": LocalPlaywrightBrowser,\n    \"docker\": DockerComputer,\n    \"browserbase\": BrowserbaseBrowser,\n    \"scrapybara-browser\": ScrapybaraBrowser,\n    \"scrapybara-ubuntu\": ScrapybaraUbuntu,\n}\n"
+      "content": "from . import default\nfrom . import contrib\nfrom .computer import Computer\nfrom .config import computers_config\n\n__all__ = [\n    \"default\",\n    \"contrib\",\n    \"Computer\",\n    \"computers_config\",\n]\n"
     },
     {
       "path": "computers/computer.py",
@@ -137,13 +109,6 @@
       "content": "from typing import Protocol, List, Literal, Dict\n\n\nclass Computer(Protocol):\n    \"\"\"Defines the 'shape' (methods/properties) our loop expects.\"\"\"\n\n    def get_environment(self) -> Literal[\"windows\", \"mac\", \"linux\", \"browser\"]: ...\n\n    def get_dimensions(self) -> tuple[int, int]: ...\n\n    def screenshot(self) -> str: ...\n\n    def click(self, x: int, y: int, button: str = \"left\") -> None: ...\n\n    def double_click(self, x: int, y: int) -> None: ...\n\n    def scroll(self, x: int, y: int, scroll_x: int, scroll_y: int) -> None: ...\n\n    def type(self, text: str) -> None: ...\n\n    def wait(self, ms: int = 1000) -> None: ...\n\n    def move(self, x: int, y: int) -> None: ...\n\n    def keypress(self, keys: List[str]) -> None: ...\n\n    def drag(self, path: List[Dict[str, int]]) -> None: ...\n\n    def get_current_url() -> str: ...\n"
     },
     {
-      "path": "computers/__init__.py",
-      "sha": null,
-      "content_sha256": "fa67ec8384488077e85d71414056ea7083888a75eafd4f282f0088abe4637038",
-      "score": 33,
-      "content": "from . import default\nfrom . import contrib\nfrom .computer import Computer\nfrom .config import computers_config\n\n__all__ = [\n    \"default\",\n    \"contrib\",\n    \"Computer\",\n    \"computers_config\",\n]\n"
-    },
-    {
       "path": "examples/weather_example.py",
       "sha": null,
       "content_sha256": "8bb4683d7610efaa904509697a49df86b4b090f1c68ceac0a12d80716841d6e9",
@@ -151,32 +116,25 @@
       "content": "from agent import Agent\nfrom computers import ScrapybaraBrowser\n\nwith ScrapybaraBrowser() as computer:\n    agent = Agent(computer=computer)\n    input_items = [{\"role\": \"user\", \"content\": \"what is the weather in sf\"}]\n    response_items = agent.run_full_turn(input_items, debug=True, show_images=True)\n    print(response_items[-1][\"content\"][0][\"text\"])\n"
     },
     {
-      "path": "examples/__init__.py",
+      "path": "examples/function_calling_example.py",
       "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content_sha256": "cb1932d6f1b7c89159d53b135d3622e614a54f59a22d101d23ff0872b51f7b50",
       "score": 33,
-      "content": ""
+      "content": "from agent import Agent\nfrom computers import ScrapybaraBrowser\n\ntools = [\n    {\n        \"type\": \"function\",\n        \"name\": \"get_weather\",\n        \"description\": \"Determine weather in my location\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"location\": {\n                    \"type\": \"string\",\n                    \"description\": \"The city and state e.g. San Francisco, CA\",\n                },\n                \"unit\": {\"type\": \"string\", \"enum\": [\"c\", \"f\"]},\n            },\n            \"additionalProperties\": False,\n            \"required\": [\"location\", \"unit\"],\n        },\n    }\n]\n\n\ndef main():\n    with ScrapybaraBrowser() as computer:\n        agent = Agent(tools=tools, computer=computer)\n        items = []\n        while True:\n            user_input = input(\"> \")\n            items.append({\"role\": \"user\", \"content\": user_input})\n            output_items = agent.run_full_turn(items)\n            items += output_items\n\n\nif __name__ == \"__main__\":\n    main()\n"
     },
     {
-      "path": "computers/default/__init__.py",
+      "path": "computers/config.py",
       "sha": null,
-      "content_sha256": "d20fd5cfa102862af9a6270e9a7d000f3b7342b9dc99f7ae13eb46ec9d40f0c3",
-      "score": 31,
-      "content": "from .browserbase import BrowserbaseBrowser\nfrom .local_playwright import LocalPlaywrightBrowser\nfrom .docker import DockerComputer\nfrom .scrapybara import ScrapybaraBrowser, ScrapybaraUbuntu\n"
+      "content_sha256": "b3cec77a60e5f479a5c9613a3a4a91d440a9d27fbd37430e64d4782a43fcbcd0",
+      "score": 33,
+      "content": "from .default import *\nfrom .contrib import *\n\ncomputers_config = {\n    \"local-playwright\": LocalPlaywrightBrowser,\n    \"docker\": DockerComputer,\n    \"browserbase\": BrowserbaseBrowser,\n    \"scrapybara-browser\": ScrapybaraBrowser,\n    \"scrapybara-ubuntu\": ScrapybaraUbuntu,\n}\n"
     },
     {
-      "path": "computers/contrib/__init__.py",
+      "path": "examples/playwright_with_custom_functions.py",
       "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 31,
-      "content": ""
-    },
-    {
-      "path": "computers/shared/__init__.py",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 31,
-      "content": ""
+      "content_sha256": "c753d8f6da1bed3880fa926db8b3c5a8e0010bd22e8a2623dd374883965bbc5d",
+      "score": 33,
+      "content": "from agent.agent import Agent\nfrom computers import LocalPlaywrightComputer\n\ntools = [\n    {\n        \"type\": \"function\",\n        \"name\": \"back\",\n        \"description\": \"Go back to the previous page.\",\n        \"parameters\": {},\n    },\n    {\n        \"type\": \"function\",\n        \"name\": \"goto\",\n        \"description\": \"Go to a specific URL.\",\n        \"parameters\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"url\": {\n                    \"type\": \"string\",\n                    \"description\": \"Fully qualified URL to navigate to.\",\n                },\n            },\n            \"additionalProperties\": False,\n            \"required\": [\"url\"],\n        },\n    },\n]\n\n\ndef main():\n    with LocalPlaywrightComputer() as computer:\n        agent = Agent(computer=computer, tools=tools)\n        items = [\n            {\n                \"role\": \"developer\",\n                \"content\": \"Use the additional back() and goto() functions to navigate the browser. If you see nothing, try going to bing.com.\",\n            }\n        ]\n        while True:\n            user_input = input(\"> \")\n            items.append({\"role\": \"user\", \"content\": user_input})\n            output_items = agent.run_full_turn(items, show_images=False)\n            items += output_items\n\n\nif __name__ == \"__main__\":\n    main()\n"
     },
     {
       "path": "computers/default/local_playwright.py",
@@ -184,7 +142,37 @@
       "content_sha256": "cb599acd2ee82bc9bf201c91a04af78caeb7e718250d88edf7f8ee2bb641d2d9",
       "score": 31,
       "content": "from playwright.sync_api import Browser, Page\nfrom ..shared.base_playwright import BasePlaywrightComputer\n\n\nclass LocalPlaywrightBrowser(BasePlaywrightComputer):\n    \"\"\"Launches a local Chromium instance using Playwright.\"\"\"\n\n    def __init__(self, headless: bool = False):\n        super().__init__()\n        self.headless = headless\n\n    def _get_browser_and_page(self) -> tuple[Browser, Page]:\n        width, height = self.get_dimensions()\n        launch_args = [\n            f\"--window-size={width},{height}\",\n            \"--disable-extensions\",\n            \"--disable-file-system\",\n        ]\n        browser = self._playwright.chromium.launch(\n            chromium_sandbox=True,\n            headless=self.headless,\n            args=launch_args,\n            env={\"DISPLAY\": \":0\"},\n        )\n\n        context = browser.new_context()\n\n        # Add event listeners for page creation and closure\n        context.on(\"page\", self._handle_new_page)\n\n        page = context.new_page()\n        page.set_viewport_size({\"width\": width, \"height\": height})\n        page.on(\"close\", self._handle_page_close)\n\n        page.goto(\"https://bing.com\")\n\n        return browser, page\n\n    def _handle_new_page(self, page: Page):\n        \"\"\"Handle the creation of a new page.\"\"\"\n        print(\"New page created\")\n        self._page = page\n        page.on(\"close\", self._handle_page_close)\n\n    def _handle_page_close(self, page: Page):\n        \"\"\"Handle the closure of a page.\"\"\"\n        print(\"Page closed\")\n        if self._page == page:\n            if self._browser.contexts[0].pages:\n                self._page = self._browser.contexts[0].pages[-1]\n            else:\n                print(\"Warning: All pages have been closed.\")\n                self._page = None\n"
+    },
+    {
+      "path": "computers/default/__init__.py",
+      "sha": null,
+      "content_sha256": "d20fd5cfa102862af9a6270e9a7d000f3b7342b9dc99f7ae13eb46ec9d40f0c3",
+      "score": 31,
+      "content": "from .browserbase import BrowserbaseBrowser\nfrom .local_playwright import LocalPlaywrightBrowser\nfrom .docker import DockerComputer\nfrom .scrapybara import ScrapybaraBrowser, ScrapybaraUbuntu\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:39.513821+00:00"
+  "fetch_errors": [
+    {
+      "path": "tests/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "examples/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "computers/contrib/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "computers/shared/__init__.py",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 5,
+  "generated_at": "2026-10-11T02:12:39.093008+00:00"
 }

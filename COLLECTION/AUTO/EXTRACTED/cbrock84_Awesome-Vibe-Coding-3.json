@@ -25,18 +25,18 @@
       "content": "name: Smart Build and Deploy Website\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\njobs:\n  check-changes:\n    runs-on: ubuntu-latest\n    outputs:\n      should-build: ${{ steps.check.outputs.build-needed }}\n      build-reason: ${{ steps.check.outputs.build-reason }}\n      changed-files: ${{ steps.check.outputs.changed-files }}\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n          submodules: true\n\n      - name: Check if build is needed\n        id: check\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n        run: |\n          # Monitor README.md, contents/, yaal.config.yaml, yaal submodule, and workflow changes\n          README_PATTERN=\"^README\\.md$\"\n          CONTENTS_PATTERN=\"^contents/\"\n          CONFIG_PATTERN=\"^yaal\\.config\\.yaml$\"\n          SUBMODULE_PATTERN=\"^yaal$\"\n          WORKFLOW_PATTERN=\"^\\.github/workflows/\"\n\n          # Use GitHub API to find last successful build-and-deploy commit\n          echo \"🔍 Querying last successful build-and-deploy commit...\"\n\n          # Get last successful build-and-deploy workflow run\n          RESPONSE=$(curl -s -H \"Authorization: token $GITHUB_TOKEN\" \\\n            \"https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/smart-deploy.yml/runs?status=success&per_page=1&branch=main\")\n\n          LAST_BUILD_SHA=$(echo \"$RESPONSE\" | jq -r '.workflow_runs[0].head_sha // empty')\n\n          if [ -z \"$LAST_BUILD_SHA\" ] || [ \"$LAST_BUILD_SHA\" = \"null\" ]; then\n            echo \"🚀 First build - no previous successful build found\"\n            echo \"build-reason=First build - no previous successful build found\" >> \"$GITHUB_OUTPUT\"\n            echo \"changed-files=All files (first build)\" >> \"$GITHUB_OUTPUT\"\n            BUILD_NEEDED=true\n          elif ! git cat-file -e \"${LAST_BUILD_SHA}^{commit}\" 2>/dev/null; then\n            echo \"⚠️  Last successful build commit $LAST_BUILD_SHA is not in history - rebuilding\"\n            echo \"build-reason=Last build commit not found in history\" >> \"$GITHUB_OUTPUT\"\n            echo \"changed-files=All files (unknown base)\" >> \"$GITHUB_OUTPUT\"\n            BUILD_NEEDED=true\n          else\n            echo \"📊 Last successful build: $LAST_BUILD_SHA\"\n            \n            # Get list of changed files\n            CHANGED_FILES=$(git diff --name-only \"$LAST_BUILD_SHA\" HEAD)\n            \n            if [ -z \"$CHANGED_FILES\" ]; then\n              echo \"✅ No file changes\"\n              echo \"build-reason=No file changes\" >> \"$GITHUB_OUTPUT\"\n              echo \"changed-files=None\" >> \"$GITHUB_OUTPUT\"\n              BUILD_NEEDED=false\n            else\n              echo \"📁 Detected changed files:\"\n              echo \"$CHANGED_FILES\" | while read -r file; do\n                echo \"  - $file\"\n              done\n              \n              # Check if README.md, contents/, yaal.config.yaml, yaal submodule, or workflows changed\n              README_CHANGED=false\n              CONTENTS_CHANGED=false\n              CONFIG_CHANGED=false\n              SUBMODULE_CHANGED=false\n              WORKFLOW_CHANGED=false\n              while IFS= read -r file; do\n                if echo \"$file\" | grep -qE \"$README_PATTERN\"; then\n                  README_CHANGED=true\n                fi\n                if echo \"$file\" | grep -qE \"$CONTENTS_PATTERN\"; then\n                  CONTENTS_CHANGED=true\n                fi\n                if echo \"$file\" | grep -qE \"$CONFIG_PATTERN\"; then\n                  CONFIG_CHANGED=true\n                fi\n                if echo \"$file\" | grep -qE \"$SUBMODULE_PATTERN\"; then\n                  SUBMODULE_CHANGED=true\n                fi\n                if echo \"$file\" | grep -qE \"$WORKFLOW_PATTERN\"; then\n                  WORKFLOW_CHANGED=true\n                fi\n              done <<< \"$CHANGED_FILES\"\n              \n              # Build detailed reason\n              REASON=\"Changes detected:\"\n              [ \"$README_CHANGED\" = true ] && REASON=\"$REASON README.md\"\n              [ \"$CONTENTS_CHANGED\" = true ] && REASON=\"$REASON contents\"\n              [ \"$CONFIG_CHANGED\" = true ] && REASON=\"$REASON config file\"\n              [ \"$SUBMODULE_CHANGED\" = true ] && REASON=\"$REASON yaal submodule\"\n              [ \"$WORKFLOW_CHANGED\" = true ] && REASON=\"$REASON workflows\"\n              \n              if [ \"$README_CHANGED\" = true ] || [ \"$CONTENTS_CHANGED\" = true ] || [ \"$CONFIG_CHANGED\" = true ] || [ \"$SUBMODULE_CHANGED\" = true ] || [ \"$WORKFLOW_CHANGED\" = true ]; then\n                echo \"🔍 $REASON - rebuild needed\"\n                echo \"build-reason=$REASON\" >> \"$GITHUB_OUTPUT\"\n                echo \"changed-files=$(echo \"$CHANGED_FILES\" | head -20 | sed ':a;N;$!ba;s/\\n/, /g')\" >> \"$GITHUB_OUTPUT\"\n                BUILD_NEEDED=true\n              else\n                echo \"ℹ️  No relevant changes - no rebuild needed\"\n                echo \"build-reason=No relevant changes\" >> \"$GITHUB_OUTPUT\"\n                echo \"changed-files=$(echo \"$CHANGED_FILES\" | head -10 | sed ':a;N;$!ba;s/\\n/, /g')\" >> \"$GITHUB_OUTPUT\"\n                BUILD_NEEDED=false\n              fi\n            fi\n          fi\n\n          echo \"build-needed=$BUILD_NEEDED\" >> \"$GITHUB_OUTPUT\"\n          echo \"Final decision: Build needed = $BUILD_NEEDED\"\n\n  build-and-deploy:\n    needs: check-changes\n    if: needs.check-changes.outputs.should-build == 'true'\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      pages: write\n      id-token: write\n\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v7\n        with:\n          submodules: true\n\n      - name: Setup Vite+\n        uses: voidzero-dev/setup-vp@v1\n        with:\n          node-version: '24'\n\n      - name: Install dependencies\n        working-directory: ./yaal\n        run: vp install --frozen-lockfile\n\n      - name: Generate configuration\n        working-directory: ./yaal\n        run: vp node scripts/generate-github-config.js\n\n      - name: Parse README and generate data\n        working-directory: ./yaal\n        run: vp node scripts/parse-readme.js\n\n      - name: Build website\n        working-directory: ./yaal\n        run: vp run build\n\n      - name: Build Summary\n        env:\n          BUILD_REASON: ${{ needs.check-changes.outputs.build-reason }}\n          CHANGED_FILES: ${{ needs.check-changes.outputs.changed-files }}\n        run: |\n          echo \"## 📋 Build Details\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **Build Reason**: $BUILD_REASON\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **Changed Files**: $CHANGED_FILES\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **Build Time**: $(date)\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **Node Version**: $(node --version)\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **NPM Version**: $(npm --version)\" >> \"$GITHUB_STEP_SUMMARY\"\n\n      - name: Setup Pages\n        uses: actions/configure-pages@v6\n\n      - name: Upload artifact\n        uses: actions/upload-pages-artifact@v5\n        with:\n          path: ./yaal/out\n\n      - name: Deploy to GitHub Pages\n        id: deployment\n        uses: actions/deploy-pages@v5\n\n  skip-build:\n    needs: check-changes\n    if: needs.check-changes.outputs.should-build == 'false'\n    runs-on: ubuntu-latest\n    steps:\n      - name: Skip build notification\n        env:\n          BUILD_REASON: ${{ needs.check-changes.outputs.build-reason }}\n          CHANGED_FILES: ${{ needs.check-changes.outputs.changed-files }}\n        run: |\n          echo \"## ⏭️ Skip Build\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **Skip Reason**: $BUILD_REASON\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **Changed Files**: $CHANGED_FILES\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"- **Check Time**: $(date)\" >> \"$GITHUB_STEP_SUMMARY\"\n          echo \"✅ Detected changed files do not affect website build, skipping deployment\""
     },
     {
-      "path": "contents/supporting-tools/observability/agent-fm.md",
-      "sha": null,
-      "content_sha256": "012d9a876399dee7da94a0b9593a0789b68d96bdb89f388b619c8d3142c898d6",
-      "score": 189,
-      "content": "---\nname: \"Agent FM\"\nlink: \"https://github.com/agentfm-ai/agent-fm\"\n---\n\nAgent FM is a local, open-source macOS companion for Claude Code and Codex\n"
-    },
-    {
       "path": "contents/supporting-tools/observability/agenttrace.md",
       "sha": null,
       "content_sha256": "d365a1abdf8b5e1a274e3f228b66ccfe9f6521f64cd304b3b1db7ba9153f39a2",
       "score": 189,
       "content": "---\nname: \"agenttrace\"\nlink: \"https://github.com/luoyuctl/agenttrace\"\n---\n\nagenttrace is a local TUI for inspecting AI coding-agent session logs across tools such as Claude Code, Codex, OpenCode, OpenClaw, Gemini CLI, Cursor, and Amp. It helps developers review usage, cost, latency, tool failures, anomalies, reports, diffs, and CI gates during AI-assisted development.\n"
+    },
+    {
+      "path": "contents/supporting-tools/observability/agent-fm.md",
+      "sha": null,
+      "content_sha256": "012d9a876399dee7da94a0b9593a0789b68d96bdb89f388b619c8d3142c898d6",
+      "score": 189,
+      "content": "---\nname: \"Agent FM\"\nlink: \"https://github.com/agentfm-ai/agent-fm\"\n---\n\nAgent FM is a local, open-source macOS companion for Claude Code and Codex\n"
     },
     {
       "path": ".github/workflows/test.yml",
@@ -67,27 +67,6 @@
       "content": "---\nname: \"Vibe Coding UI Specification\"\nlink: \"https://horizonx.so/resources/vibe-coding-ui-specification\"\n---\n\nA free, MIT-licensed interface contract for AI-assisted frontend work. It defines design tokens, component states, responsive behavior, WCAG 2.2 AA, reduced motion, production review gates, and a reusable YAML template so teams can keep generated React and Tailwind interfaces consistent beyond the first prompt.\n"
     },
     {
-      "path": "contents/supporting-tools/observability/viberank.md",
-      "sha": null,
-      "content_sha256": "a559797140bb659b32e5b58949388e032e151ef3c38ded02f352465b59cce80e",
-      "score": 114,
-      "content": "---\nname: \"viberank\"\nlink: \"https://viberank.app\"\ncommand: \"npx viberank-cli\"\n---\n\nviberank is a public leaderboard and open dataset for AI coding spend. It reads the\nsame local ccusage session data that other observability tools use — across Claude\nCode, Codex, Gemini CLI, Copilot, OpenCode and more — and aggregates it into a\ncomparison rather than a local dashboard, so you can see whether your usage is\nnormal rather than just what it was. Per-tool boards, verified GitHub profiles,\nREADME badges, and daily autosubmit. The aggregate spend distribution is published\nunder CC BY 4.0 through a free JSON API.\n"
-    },
-    {
-      "path": "contents/supporting-tools/observability/ax.md",
-      "sha": null,
-      "content_sha256": "3ef2329ca59d5863996a804d8e68c5d2825bb4f36bddadc10ac96e5fa210ff65",
-      "score": 114,
-      "content": "---\nname: \"ax\"\nlink: \"https://github.com/Necmttn/ax\"\n---\n\nax is a local-first telemetry and recall graph for AI coding agents. It ingests Claude Code, Codex, Cursor, OpenCode, and Pi session history into SurrealDB so developers can inspect turns, tool calls, skills, cost, dispatches, and OTLP telemetry from a CLI, dashboard, or read-only MCP server.\n"
-    },
-    {
-      "path": "contents/supporting-tools/observability/codex-quota-overlay.md",
-      "sha": null,
-      "content_sha256": "8d1965fb0ed6160568e0f7ed95f0ebf25a2d0648e5a0f4ee7b74dd33bfb10f4e",
-      "score": 114,
-      "content": "---\nname: \"Codex Quota Overlay\"\nlink: \"https://github.com/cpys/codex-quota-overlay\"\n---\n\nIndependent desktop companion displaying Codex quota, reset time, and reset credits beside the conversation title on Windows and macOS. It helps developers keep usage limits visible during AI-assisted coding sessions; it is not an official OpenAI product.\n"
-    },
-    {
       "path": "contents/supporting-tools/observability/orcareplay.md",
       "sha": null,
       "content_sha256": "3037c990dd381505148c91a3b784b086bf559d3a08d609e94abf57b318af6769",
@@ -95,11 +74,11 @@
       "content": "---\nname: \"OrcaReplay\"\nlink: \"https://github.com/Continuum-AI-Corp/OrcaReplay\"\ncommand: \"orca\"\n---\n\nOrcaReplay records a coding-agent session below the harness, at the process and socket boundary, so the model traffic, the shell commands with their exit codes, the per-turn file changes and the MCP calls all land on one timeline. The recording then replays offline with the network off, so the recorded decisions are served back rather than re-asked — or forks from a chosen checkpoint onto a different model. Works with Claude Code, Codex, opencode, Qwen Code, Cursor and others, including harnesses that read no base-URL variable at all.\n"
     },
     {
-      "path": "contents/supporting-tools/observability/vibe-coding-profiler.md",
+      "path": "contents/supporting-tools/observability/_meta.md",
       "sha": null,
-      "content_sha256": "1228d9aa3efca1e14de5efc41b3ebd2e8f9e540d8fb31e9b4ee2595f550a5beb",
+      "content_sha256": "6da063f203184dbb9d03e562c75d100f237b9de7f693da16a537a2b019ca71ca",
       "score": 114,
-      "content": "---\nname: \"Vibe Coding Profiler\"\nlink: \"https://www.vibe-coding-profiler.com/\"\n---\n\nVibe Coding Profiler analyzes git history to reveal a developer's AI-assisted engineering style and vibe coding persona. It helps vibe coders reflect on session rhythm, commit patterns, and workflow habits across repositories.\n"
+      "content": "---\ntitle: Agent Observability\n---\nInspect and understand your AI coding agent sessions — usage, cost, latency, tool calls, and behavior across agents.\n"
     },
     {
       "path": "contents/supporting-tools/observability/antiburn.md",
@@ -116,11 +95,32 @@
       "content": "---\nname: \"Claudescope\"\nlink: \"https://github.com/vladar107/claudescope\"\n---\n\nClaudescope is a local, read-only web app (launched by a single npm CLI, `claudescope start`) for browsing, reading, searching, and analyzing AI coding-agent transcripts across Claude Code, Codex, Junie, pi, opencode, and Copilot CLI. It merges sessions by working directory into one project per repo and adds DuckDB-backed full-text search, token-cost analytics, and a files-changed view, letting developers review their AI-assisted sessions across agents in one place. Cross-platform and MIT-licensed.\n"
     },
     {
-      "path": "contents/supporting-tools/observability/_meta.md",
+      "path": "contents/supporting-tools/observability/vibe-coding-profiler.md",
       "sha": null,
-      "content_sha256": "6da063f203184dbb9d03e562c75d100f237b9de7f693da16a537a2b019ca71ca",
+      "content_sha256": "1228d9aa3efca1e14de5efc41b3ebd2e8f9e540d8fb31e9b4ee2595f550a5beb",
       "score": 114,
-      "content": "---\ntitle: Agent Observability\n---\nInspect and understand your AI coding agent sessions — usage, cost, latency, tool calls, and behavior across agents.\n"
+      "content": "---\nname: \"Vibe Coding Profiler\"\nlink: \"https://www.vibe-coding-profiler.com/\"\n---\n\nVibe Coding Profiler analyzes git history to reveal a developer's AI-assisted engineering style and vibe coding persona. It helps vibe coders reflect on session rhythm, commit patterns, and workflow habits across repositories.\n"
+    },
+    {
+      "path": "contents/supporting-tools/observability/codex-quota-overlay.md",
+      "sha": null,
+      "content_sha256": "8d1965fb0ed6160568e0f7ed95f0ebf25a2d0648e5a0f4ee7b74dd33bfb10f4e",
+      "score": 114,
+      "content": "---\nname: \"Codex Quota Overlay\"\nlink: \"https://github.com/cpys/codex-quota-overlay\"\n---\n\nIndependent desktop companion displaying Codex quota, reset time, and reset credits beside the conversation title on Windows and macOS. It helps developers keep usage limits visible during AI-assisted coding sessions; it is not an official OpenAI product.\n"
+    },
+    {
+      "path": "contents/supporting-tools/observability/viberank.md",
+      "sha": null,
+      "content_sha256": "a559797140bb659b32e5b58949388e032e151ef3c38ded02f352465b59cce80e",
+      "score": 114,
+      "content": "---\nname: \"viberank\"\nlink: \"https://viberank.app\"\ncommand: \"npx viberank-cli\"\n---\n\nviberank is a public leaderboard and open dataset for AI coding spend. It reads the\nsame local ccusage session data that other observability tools use — across Claude\nCode, Codex, Gemini CLI, Copilot, OpenCode and more — and aggregates it into a\ncomparison rather than a local dashboard, so you can see whether your usage is\nnormal rather than just what it was. Per-tool boards, verified GitHub profiles,\nREADME badges, and daily autosubmit. The aggregate spend distribution is published\nunder CC BY 4.0 through a free JSON API.\n"
+    },
+    {
+      "path": "contents/supporting-tools/observability/ax.md",
+      "sha": null,
+      "content_sha256": "3ef2329ca59d5863996a804d8e68c5d2825bb4f36bddadc10ac96e5fa210ff65",
+      "score": 114,
+      "content": "---\nname: \"ax\"\nlink: \"https://github.com/Necmttn/ax\"\n---\n\nax is a local-first telemetry and recall graph for AI coding agents. It ingests Claude Code, Codex, Cursor, OpenCode, and Pi session history into SurrealDB so developers can inspect turns, tool calls, skills, cost, dispatches, and OTLP telemetry from a CLI, dashboard, or read-only MCP server.\n"
     },
     {
       "path": "README.md",
@@ -144,18 +144,11 @@
       "content": "---\nname: \"Awesome-LLM-RL\"\nlink: \"https://github.com/0xWelt/Awesome-LLM-RL\"\n---\n\nA curated list of open-source projects, tools, and learning resources about Reinforcement Learning with Large Language Models (LLMs). Features comprehensive coverage of RLHF (Reinforcement Learning from Human Feedback) frameworks, training infrastructure, evaluation tools, and research papers. Includes popular frameworks like OpenRLHF built on Ray, vLLM, ZeRO-3, and HuggingFace Transformers, as well as distributed training solutions like DeepSpeed and PyTorch FSDP for training billion-parameter models.\n"
     },
     {
-      "path": "contents/harness-extensions/mcp-servers/github-mcp-server.md",
+      "path": "contents/harness-extensions/mcp-servers/_meta.md",
       "sha": null,
-      "content_sha256": "c8d61e51e34b78f93c130316bd11bd974139d296a7f2c2ebea4d8d985080d8dd",
+      "content_sha256": "9f8727cc9313bfff44efd74ce364432da4a540fcc053a1f5ab099414b7e188dd",
       "score": 69,
-      "content": "---\nname: \"GitHub MCP Server\"\nlink: \"https://github.com/github/github-mcp-server\"\n---\n\nGitHub's official MCP server that provides comprehensive access to GitHub\n"
-    },
-    {
-      "path": "contents/harnesses/agent-sdks/_meta.md",
-      "sha": null,
-      "content_sha256": "5d183ca406ffc3231c6b0acbb9aeed8382aa87b604466ee5aa6b8dd2690636c9",
-      "score": 69,
-      "content": "---\ntitle: Agent SDKs\n---\nSoftware development kits for building your own agent harnesses and runtimes — programmatic access to coding agents and agent frameworks.\n"
+      "content": "---\ntitle: MCP Servers\n---\nModel Context Protocol (MCP) servers that extend AI capabilities with external data and tools — from hub directories to individual servers.\n"
     },
     {
       "path": "contents/harnesses/cloud-based-agents/_meta.md",
@@ -165,11 +158,11 @@
       "content": "---\ntitle: Cloud-based Agents\n---\nAI software engineers that work autonomously in the cloud.\n"
     },
     {
-      "path": "contents/harness-extensions/mcp-servers/_meta.md",
+      "path": "contents/harness-extensions/mcp-servers/github-mcp-server.md",
       "sha": null,
-      "content_sha256": "9f8727cc9313bfff44efd74ce364432da4a540fcc053a1f5ab099414b7e188dd",
+      "content_sha256": "c8d61e51e34b78f93c130316bd11bd974139d296a7f2c2ebea4d8d985080d8dd",
       "score": 69,
-      "content": "---\ntitle: MCP Servers\n---\nModel Context Protocol (MCP) servers that extend AI capabilities with external data and tools — from hub directories to individual servers.\n"
+      "content": "---\nname: \"GitHub MCP Server\"\nlink: \"https://github.com/github/github-mcp-server\"\n---\n\nGitHub's official MCP server that provides comprehensive access to GitHub\n"
     },
     {
       "path": "contents/harness-extensions/mcp-servers/arxiv-mcp-server.md",
@@ -184,7 +177,16 @@
       "content_sha256": "86ce1b804888f6c697be01373db0a8531bdd66cee41954b9475520e3f5fa59df",
       "score": 69,
       "content": "---\nname: \"Zotero MCP\"\nlink: \"https://github.com/54yyyu/zotero-mcp\"\n---\n\nA powerful MCP server that seamlessly connects your Zotero research library with\n"
+    },
+    {
+      "path": "contents/harnesses/agent-sdks/_meta.md",
+      "sha": null,
+      "content_sha256": "5d183ca406ffc3231c6b0acbb9aeed8382aa87b604466ee5aa6b8dd2690636c9",
+      "score": 69,
+      "content": "---\ntitle: Agent SDKs\n---\nSoftware development kits for building your own agent harnesses and runtimes — programmatic access to coding agents and agent frameworks.\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:10.861618+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:48.169732+00:00"
 }

@@ -67,11 +67,11 @@
       "content": "import { prisma } from \"@/lib/prismadb\";\nimport { NextResponse } from \"next/server\";\n\n// Create or update the userApiLimit for the user\nexport async function POST(request: Request) {\n  const { userId, username, email } = await request.json();\n\n  if (!userId || !username || !email) {\n    return NextResponse.json(\n      { error: \"User ID, username, and email are required\" },\n      { status: 400 }\n    );\n  }\n\n  try {\n    const existingUserApiLimit = await prisma.userApiLimit.findUnique({\n      where: { userId },\n    });\n\n    if (existingUserApiLimit) {\n      const updates: { username?: string; email?: string } = {};\n      if (existingUserApiLimit.username !== username) {\n        updates.username = username;\n      }\n      if (existingUserApiLimit.email !== email) {\n        updates.email = email;\n      }\n\n      if (Object.keys(updates).length > 0) {\n        const updatedUserApiLimit = await prisma.userApiLimit.update({\n          where: { userId },\n          data: updates,\n        });\n\n        return NextResponse.json({\n          message: \"User API limit updated successfully\",\n          userApiLimit: updatedUserApiLimit,\n        });\n      }\n\n      return NextResponse.json({\n        message: \"User API limit already exists and is up-to-date\",\n        userApiLimit: existingUserApiLimit,\n      });\n    }\n\n    // Create a new userApiLimit record\n    const newUserApiLimit = await prisma.userApiLimit.create({\n      data: {\n        userId,\n        username,\n        email,\n        count: 0,\n      },\n    });\n\n    return NextResponse.json({\n      message: \"User API limit created successfully\",\n      userApiLimit: newUserApiLimit,\n    });\n  } catch (error) {\n    console.error(\"Error during user API limit creation or update:\", error);\n    return NextResponse.json(\n      { error: \"Failed to create or update user API limit\" },\n      { status: 500 }\n    );\n  }\n}\n"
     },
     {
-      "path": "app/(apis)/api/youtube-loader/route.ts",
+      "path": "app/(apis)/api/getLimit/route.ts",
       "sha": null,
-      "content_sha256": "48fcb203e984a71c7bb8097068254777495ba6077cbb2646804061723a9481a3",
+      "content_sha256": "a857b6882df5c5db85628a00b1cf1a0aa288383c9f399464d1cac35e5c3f5070",
       "score": 102,
-      "content": "import { NextResponse } from \"next/server\";\nimport { NextRequest } from \"next/server\";\nimport { YoutubeLoader } from \"@langchain/community/document_loaders/web/youtube\";\nexport async function POST(request: NextRequest) {\n  try {\n    const { url } = await request.json();\n\n    if (!url) {\n      return NextResponse.json(\n        { error: \"Invalid YouTube URL\" },\n        { status: 400 }\n      );\n    }\n\n   // Load YouTube data using the YouTubeLoader\n    const loader = YoutubeLoader.createFromUrl(url, {\n      language: \"en\",\n      addVideoInfo: true,\n    });\n\n    const docs = await loader.load();\n\n    return NextResponse.json({ docs }, {\n      headers: {\n        \"Access-Control-Allow-Origin\": \"*\",\n      },\n    });\n  } catch (error) {\n    console.error(\"Error occurred:\", error);\n    return NextResponse.json(\n      { error: \"Failed to load YouTube data\" },\n      { status: 500 }\n    );\n  }\n}\n"
+      "content": "import { prisma } from \"@/lib/prismadb\";\nimport { NextResponse } from \"next/server\";\n\nexport async function GET(request: Request) {\n    const { searchParams } = new URL(request.url);\n    const userId = searchParams.get(\"userId\");\n    if (!userId) return NextResponse.json({ error: \"User ID is required\" }, { status: 400 });\n  \n    const userApiLimit = await prisma.userApiLimit.findUnique({\n      where: { userId },\n    });\n  \n    return NextResponse.json({ count: userApiLimit ? userApiLimit.count : 0 });\n  }\n  "
     },
     {
       "path": "app/(apis)/api/user/route.ts",
@@ -81,11 +81,11 @@
       "content": "import { prisma } from \"@/lib/prismadb\";\nimport { MAX_FREE_COUNTS } from \"@/constants\";\nimport { NextResponse } from \"next/server\";\n\n// Increment the API limit for a user\nexport async function POST(request: Request) {\n  const { userId } = await request.json();\n  if (!userId) return NextResponse.json({ error: \"User ID is required\" }, { status: 400 });\n\n  try {\n    // Check if user exists\n    const userApiLimit = await prisma.userApiLimit.findUnique({\n      where: { userId },\n    });\n\n    if (userApiLimit) {\n      // User exists, update the count\n      await prisma.userApiLimit.update({\n        where: { userId },\n        data: {\n          count: {\n            increment: 1,\n          },\n        },\n      });\n    } else {\n      // User doesn't exist, create a new user with count set to 1\n      await prisma.userApiLimit.create({\n        data: {\n          userId,\n          count: 1,\n        },\n      });\n    }\n\n    return NextResponse.json({ message: \"API limit incremented successfully\" });\n\n  } catch (error) {\n    console.error(\"Error during user API limit operation:\", error);\n    return NextResponse.json({ error: \"Failed to increment API limit\" }, { status: 500 });\n  }\n}\n\n// Check if the user has exceeded their free API limit\nexport async function GET(request: Request) {\n  const { searchParams } = new URL(request.url);\n  const userId = searchParams.get(\"userId\");\n\n  if (!userId) return NextResponse.json({ error: \"User ID is required\" }, { status: 400 });\n\n  try {\n    const userApiLimit = await prisma.userApiLimit.findUnique({\n      where: { userId },\n    });\n\n    const hasExceededLimit = userApiLimit.count >= MAX_FREE_COUNTS;\n\n    return NextResponse.json({ hasExceededLimit });\n  } catch (error) {\n    console.error(\"Error during checking API limit:\", error);\n    return NextResponse.json({ error: \"Failed to check API limit\" }, { status: 500 });\n  }\n}\n"
     },
     {
-      "path": "app/(apis)/api/getLimit/route.ts",
+      "path": "app/(apis)/api/youtube-loader/route.ts",
       "sha": null,
-      "content_sha256": "a857b6882df5c5db85628a00b1cf1a0aa288383c9f399464d1cac35e5c3f5070",
+      "content_sha256": "48fcb203e984a71c7bb8097068254777495ba6077cbb2646804061723a9481a3",
       "score": 102,
-      "content": "import { prisma } from \"@/lib/prismadb\";\nimport { NextResponse } from \"next/server\";\n\nexport async function GET(request: Request) {\n    const { searchParams } = new URL(request.url);\n    const userId = searchParams.get(\"userId\");\n    if (!userId) return NextResponse.json({ error: \"User ID is required\" }, { status: 400 });\n  \n    const userApiLimit = await prisma.userApiLimit.findUnique({\n      where: { userId },\n    });\n  \n    return NextResponse.json({ count: userApiLimit ? userApiLimit.count : 0 });\n  }\n  "
+      "content": "import { NextResponse } from \"next/server\";\nimport { NextRequest } from \"next/server\";\nimport { YoutubeLoader } from \"@langchain/community/document_loaders/web/youtube\";\nexport async function POST(request: NextRequest) {\n  try {\n    const { url } = await request.json();\n\n    if (!url) {\n      return NextResponse.json(\n        { error: \"Invalid YouTube URL\" },\n        { status: 400 }\n      );\n    }\n\n   // Load YouTube data using the YouTubeLoader\n    const loader = YoutubeLoader.createFromUrl(url, {\n      language: \"en\",\n      addVideoInfo: true,\n    });\n\n    const docs = await loader.load();\n\n    return NextResponse.json({ docs }, {\n      headers: {\n        \"Access-Control-Allow-Origin\": \"*\",\n      },\n    });\n  } catch (error) {\n    console.error(\"Error occurred:\", error);\n    return NextResponse.json(\n      { error: \"Failed to load YouTube data\" },\n      { status: 500 }\n    );\n  }\n}\n"
     },
     {
       "path": "README.md",
@@ -109,20 +109,6 @@
       "content": "import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'\n\nconst isProtectedRoute = createRouteMatcher(['/dashboard(.*)','/chat','/image','/code'])\n\nconst isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)', '/','/api(.*)'])\n\nexport default clerkMiddleware(async (auth, req) => {\n  if (isProtectedRoute(req)) await auth.protect()\n    if (!isPublicRoute(req)) {\n      await auth.protect()\n    }\n})\n\nexport const config = {\n  matcher: [\n    // Skip Next.js internals and all static files, unless found in search params\n    '/((?!_next|[^?]*\\\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',\n    // Always run for API routes\n    '/(api|trpc)(.*)',\n  ],\n}"
     },
     {
-      "path": "next.config.ts",
-      "sha": null,
-      "content_sha256": "6c2593243ee8108848daea1c1fceb702d0371388c741c939ad97520c3c10f32a",
-      "score": 35,
-      "content": "import type { NextConfig } from \"next\";\n\nconst nextConfig: NextConfig = {\n  images: {\n    remotePatterns: [\n      {\n        protocol: 'https',\n        hostname: 'kit.sociolib.com',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'images.unsplash.com',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'res.cloudinary.com',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'image.pollinations.ai',\n        port: '',\n        pathname: '/**',\n      },\n    ],\n  },\n};\n\nexport default nextConfig;\n"
-    },
-    {
-      "path": "tailwind.config.ts",
-      "sha": null,
-      "content_sha256": "e3b8c709dd5ddd487464f07c1d9fcfb6c06c25f8930406caa134407c8bfbca6b",
-      "score": 35,
-      "content": "import type { Config } from \"tailwindcss\";\nimport colors from \"tailwindcss/colors\";\n\nconst generateSafelist = (): string[] => {\n\tconst safelist: string[] = [];\n\tconst colorKeys = Object.keys(colors);\n\n\tcolorKeys.forEach((color) => {\n\t\tconst colorShades = colors[color as keyof typeof colors];\n\n\t\tif (typeof colorShades === \"object\") {\n\t\t\tfor (const shade in colorShades) {\n\t\t\t\tsafelist.push(`text-${color}-${shade}`);\n\t\t\t\tsafelist.push(`bg-${color}-${shade}/10`);\n\t\t\t}\n\t\t} else {\n\t\t\tsafelist.push(`text-${color}`);\n\t\t\tsafelist.push(`bg-${color}/10`);\n\t\t}\n\t});\n\n\treturn safelist;\n};\n\nexport default {\n\tdarkMode: [\"class\"],\n\tcontent: [\n\t\t\"./pages/**/*.{js,ts,jsx,tsx,mdx}\",\n\t\t\"./components/**/*.{js,ts,jsx,tsx,mdx}\",\n\t\t\"./app/**/*.{js,ts,jsx,tsx,mdx}\",\n\t],\n\tsafelist: generateSafelist(),\n\ttheme: {\n\t\textend: {\n\t\t\tfontSize: {\n\t\t\t\t'chat-title': ['2.5rem', '1.2'],\n\t\t\t  },\n\t\t\tcolors: {\n\t\t\t\t'chat-dark': '#0A2725',\n\t\t\t\t'chat-card': 'rgba(19, 45, 43, 0.5)',\n\t\t\t\t'chat-border': 'rgba(255, 255, 255, 0.1)',\n\t\t\t\tbackground: \"hsl(var(--background))\",\n\t\t\t\tforeground: \"hsl(var(--foreground))\",\n\t\t\t\tcard: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--card))',\n\t\t\t\t\tforeground: 'hsl(var(--card-foreground))'\n\t\t\t\t},\n\t\t\t\tpopover: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--popover))',\n\t\t\t\t\tforeground: 'hsl(var(--popover-foreground))'\n\t\t\t\t},\n\t\t\t\tprimary: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--primary))',\n\t\t\t\t\tforeground: 'hsl(var(--primary-foreground))'\n\t\t\t\t},\n\t\t\t\tsecondary: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--secondary))',\n\t\t\t\t\tforeground: 'hsl(var(--secondary-foreground))'\n\t\t\t\t},\n\t\t\t\tmuted: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--muted))',\n\t\t\t\t\tforeground: 'hsl(var(--muted-foreground))'\n\t\t\t\t},\n\t\t\t\taccent: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--accent))',\n\t\t\t\t\tforeground: 'hsl(var(--accent-foreground))'\n\t\t\t\t},\n\t\t\t\tdestructive: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--destructive))',\n\t\t\t\t\tforeground: 'hsl(var(--destructive-foreground))'\n\t\t\t\t},\n\t\t\t\tborder: 'hsl(var(--border))',\n\t\t\t\tinput: 'hsl(var(--input))',\n\t\t\t\tring: 'hsl(var(--ring))',\n\t\t\t\tchart: {\n\t\t\t\t\t'1': 'hsl(var(--chart-1))',\n\t\t\t\t\t'2': 'hsl(var(--chart-2))',\n\t\t\t\t\t'3': 'hsl(var(--chart-3))',\n\t\t\t\t\t'4': 'hsl(var(--chart-4))',\n\t\t\t\t\t'5': 'hsl(var(--chart-5))'\n\t\t\t\t}\n\t\t\t},\n\t\t\tborderRadius: {\n\t\t\t\tlg: 'var(--radius)',\n\t\t\t\tmd: 'calc(var(--radius) - 2px)',\n\t\t\t\tsm: 'calc(var(--radius) - 4px)'\n\t\t\t},\n\t\t\tkeyframes: {\n\t\t\t\tmarquee: {\n\t\t\t\t\tfrom: { transform: \"translateX(0)\" },\n\t\t\t\t\tto: { transform: \"translateX(calc(-100% - var(--gap)))\" },\n\t\t\t\t  },\n\t\t\t\t  \"marquee-vertical\": {\n\t\t\t\t\tfrom: { transform: \"translateY(0)\" },\n\t\t\t\t\tto: { transform: \"translateY(calc(-100% - var(--gap)))\" },\n\t\t\t\t  },\n\t\t\t\t'accordion-down': {\n\t\t\t\t\tfrom: {\n\t\t\t\t\t\theight: '0'\n\t\t\t\t\t},\n\t\t\t\t\tto: {\n\t\t\t\t\t\theight: 'var(--radix-accordion-content-height)'\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t\t'accordion-up': {\n\t\t\t\t\tfrom: {\n\t\t\t\t\t\theight: 'var(--radix-accordion-content-height)'\n\t\t\t\t\t},\n\t\t\t\t\tto: {\n\t\t\t\t\t\theight: '0'\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\tanimation: {\n\t\t\t\tmarquee: \"marquee var(--duration) linear infinite\",\n\t\t\t\t\"marquee-vertical\": \"marquee-vertical var(--duration) linear infinite\",\n\t\t\t\t'accordion-down': 'accordion-down 0.2s ease-out',\n\t\t\t\t'accordion-up': 'accordion-up 0.2s ease-out'\n\t\t\t}\n\t\t}\n\t},\n\t// eslint-disable-next-line @typescript-eslint/no-require-imports\n\tplugins: [require(\"tailwindcss-animate\")],\n} satisfies Config;\n"
-    },
-    {
       "path": "tsconfig.json",
       "sha": null,
       "content_sha256": "72e3f0c89148b35684bac600b14e9039ee746aa0441513aec3cf5ebe3d7f3806",
@@ -137,25 +123,18 @@
       "content": "{\n  \"$schema\": \"https://ui.shadcn.com/schema.json\",\n  \"style\": \"new-york\",\n  \"rsc\": true,\n  \"tsx\": true,\n  \"tailwind\": {\n    \"config\": \"tailwind.config.ts\",\n    \"css\": \"app/globals.css\",\n    \"baseColor\": \"neutral\",\n    \"cssVariables\": true,\n    \"prefix\": \"\"\n  },\n  \"aliases\": {\n    \"components\": \"@/components\",\n    \"utils\": \"@/lib/utils\",\n    \"ui\": \"@/components/ui\",\n    \"lib\": \"@/lib\",\n    \"hooks\": \"@/hooks\"\n  },\n  \"iconLibrary\": \"lucide\"\n}"
     },
     {
-      "path": "lib/prismadb.js",
+      "path": "next.config.ts",
       "sha": null,
-      "content_sha256": "e81a7b3de0f200c7615aee372d7cee7b72bc63106ae7b3e58986c7b44359da3a",
-      "score": 33,
-      "content": "import { PrismaClient } from '@prisma/client';\n\n\nconst globalForPrisma = global;\n\n\nexport  const  prisma =\n\n    globalForPrisma.prisma ||\n\n    new PrismaClient({\n\n    });\n\n\nif (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;"
+      "content_sha256": "6c2593243ee8108848daea1c1fceb702d0371388c741c939ad97520c3c10f32a",
+      "score": 35,
+      "content": "import type { NextConfig } from \"next\";\n\nconst nextConfig: NextConfig = {\n  images: {\n    remotePatterns: [\n      {\n        protocol: 'https',\n        hostname: 'kit.sociolib.com',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'images.unsplash.com',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'res.cloudinary.com',\n        port: '',\n        pathname: '/**',\n      },\n      {\n        protocol: 'https',\n        hostname: 'image.pollinations.ai',\n        port: '',\n        pathname: '/**',\n      },\n    ],\n  },\n};\n\nexport default nextConfig;\n"
     },
     {
-      "path": "types/speech.d.ts",
+      "path": "tailwind.config.ts",
       "sha": null,
-      "content_sha256": "bb8526dac9e013d91c3110f383df87c4cc7160631490af7e2c741734fc67c5a7",
-      "score": 33,
-      "content": "declare module 'speech-to-text'\ndeclare module 'react-say'"
-    },
-    {
-      "path": "lib/utils.ts",
-      "sha": null,
-      "content_sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d",
-      "score": 33,
-      "content": "import { clsx, type ClassValue } from \"clsx\"\nimport { twMerge } from \"tailwind-merge\"\n\nexport function cn(...inputs: ClassValue[]) {\n  return twMerge(clsx(inputs))\n}\n"
+      "content_sha256": "e3b8c709dd5ddd487464f07c1d9fcfb6c06c25f8930406caa134407c8bfbca6b",
+      "score": 35,
+      "content": "import type { Config } from \"tailwindcss\";\nimport colors from \"tailwindcss/colors\";\n\nconst generateSafelist = (): string[] => {\n\tconst safelist: string[] = [];\n\tconst colorKeys = Object.keys(colors);\n\n\tcolorKeys.forEach((color) => {\n\t\tconst colorShades = colors[color as keyof typeof colors];\n\n\t\tif (typeof colorShades === \"object\") {\n\t\t\tfor (const shade in colorShades) {\n\t\t\t\tsafelist.push(`text-${color}-${shade}`);\n\t\t\t\tsafelist.push(`bg-${color}-${shade}/10`);\n\t\t\t}\n\t\t} else {\n\t\t\tsafelist.push(`text-${color}`);\n\t\t\tsafelist.push(`bg-${color}/10`);\n\t\t}\n\t});\n\n\treturn safelist;\n};\n\nexport default {\n\tdarkMode: [\"class\"],\n\tcontent: [\n\t\t\"./pages/**/*.{js,ts,jsx,tsx,mdx}\",\n\t\t\"./components/**/*.{js,ts,jsx,tsx,mdx}\",\n\t\t\"./app/**/*.{js,ts,jsx,tsx,mdx}\",\n\t],\n\tsafelist: generateSafelist(),\n\ttheme: {\n\t\textend: {\n\t\t\tfontSize: {\n\t\t\t\t'chat-title': ['2.5rem', '1.2'],\n\t\t\t  },\n\t\t\tcolors: {\n\t\t\t\t'chat-dark': '#0A2725',\n\t\t\t\t'chat-card': 'rgba(19, 45, 43, 0.5)',\n\t\t\t\t'chat-border': 'rgba(255, 255, 255, 0.1)',\n\t\t\t\tbackground: \"hsl(var(--background))\",\n\t\t\t\tforeground: \"hsl(var(--foreground))\",\n\t\t\t\tcard: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--card))',\n\t\t\t\t\tforeground: 'hsl(var(--card-foreground))'\n\t\t\t\t},\n\t\t\t\tpopover: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--popover))',\n\t\t\t\t\tforeground: 'hsl(var(--popover-foreground))'\n\t\t\t\t},\n\t\t\t\tprimary: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--primary))',\n\t\t\t\t\tforeground: 'hsl(var(--primary-foreground))'\n\t\t\t\t},\n\t\t\t\tsecondary: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--secondary))',\n\t\t\t\t\tforeground: 'hsl(var(--secondary-foreground))'\n\t\t\t\t},\n\t\t\t\tmuted: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--muted))',\n\t\t\t\t\tforeground: 'hsl(var(--muted-foreground))'\n\t\t\t\t},\n\t\t\t\taccent: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--accent))',\n\t\t\t\t\tforeground: 'hsl(var(--accent-foreground))'\n\t\t\t\t},\n\t\t\t\tdestructive: {\n\t\t\t\t\tDEFAULT: 'hsl(var(--destructive))',\n\t\t\t\t\tforeground: 'hsl(var(--destructive-foreground))'\n\t\t\t\t},\n\t\t\t\tborder: 'hsl(var(--border))',\n\t\t\t\tinput: 'hsl(var(--input))',\n\t\t\t\tring: 'hsl(var(--ring))',\n\t\t\t\tchart: {\n\t\t\t\t\t'1': 'hsl(var(--chart-1))',\n\t\t\t\t\t'2': 'hsl(var(--chart-2))',\n\t\t\t\t\t'3': 'hsl(var(--chart-3))',\n\t\t\t\t\t'4': 'hsl(var(--chart-4))',\n\t\t\t\t\t'5': 'hsl(var(--chart-5))'\n\t\t\t\t}\n\t\t\t},\n\t\t\tborderRadius: {\n\t\t\t\tlg: 'var(--radius)',\n\t\t\t\tmd: 'calc(var(--radius) - 2px)',\n\t\t\t\tsm: 'calc(var(--radius) - 4px)'\n\t\t\t},\n\t\t\tkeyframes: {\n\t\t\t\tmarquee: {\n\t\t\t\t\tfrom: { transform: \"translateX(0)\" },\n\t\t\t\t\tto: { transform: \"translateX(calc(-100% - var(--gap)))\" },\n\t\t\t\t  },\n\t\t\t\t  \"marquee-vertical\": {\n\t\t\t\t\tfrom: { transform: \"translateY(0)\" },\n\t\t\t\t\tto: { transform: \"translateY(calc(-100% - var(--gap)))\" },\n\t\t\t\t  },\n\t\t\t\t'accordion-down': {\n\t\t\t\t\tfrom: {\n\t\t\t\t\t\theight: '0'\n\t\t\t\t\t},\n\t\t\t\t\tto: {\n\t\t\t\t\t\theight: 'var(--radix-accordion-content-height)'\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t\t'accordion-up': {\n\t\t\t\t\tfrom: {\n\t\t\t\t\t\theight: 'var(--radix-accordion-content-height)'\n\t\t\t\t\t},\n\t\t\t\t\tto: {\n\t\t\t\t\t\theight: '0'\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t},\n\t\t\tanimation: {\n\t\t\t\tmarquee: \"marquee var(--duration) linear infinite\",\n\t\t\t\t\"marquee-vertical\": \"marquee-vertical var(--duration) linear infinite\",\n\t\t\t\t'accordion-down': 'accordion-down 0.2s ease-out',\n\t\t\t\t'accordion-up': 'accordion-up 0.2s ease-out'\n\t\t\t}\n\t\t}\n\t},\n\t// eslint-disable-next-line @typescript-eslint/no-require-imports\n\tplugins: [require(\"tailwindcss-animate\")],\n} satisfies Config;\n"
     },
     {
       "path": "types/mathjax.d.ts",
@@ -172,11 +151,11 @@
       "content": "import React from \"react\";\ninterface MarkdownRendererProps {\n    content: string;\n}\n\nconst MarkdownRenderer: React.FC<MarkdownRendererProps> = () => {\n\n    return (\n       <div className=\"mathjax\">\n           \\( a^2 + b^2 = c^2 \\)\n       </div>\n    );\n};\n\nexport default MarkdownRenderer;\n"
     },
     {
-      "path": "app/provider.tsx",
+      "path": "types/speech.d.ts",
       "sha": null,
-      "content_sha256": "4a1149b1eea165943637d593f311fab1d9a2881cf914ffe3cb661f63336aa0f1",
+      "content_sha256": "bb8526dac9e013d91c3110f383df87c4cc7160631490af7e2c741734fc67c5a7",
       "score": 33,
-      "content": "import { ThemeProvider } from \"@/components/ui/ThemeProvider\";\n\nexport default function Provider({\n    children,\n  }: Readonly<{\n    children: React.ReactNode;\n  }>) {\n    return (\n        <ThemeProvider\n        attribute=\"class\"\n        defaultTheme=\"system\"\n        enableSystem\n        disableTransitionOnChange\n      >\n{children}\n</ThemeProvider>\n)}\n"
+      "content": "declare module 'speech-to-text'\ndeclare module 'react-say'"
     },
     {
       "path": "components/Spline.tsx",
@@ -184,7 +163,30 @@
       "content_sha256": "d33d0c1b417694b01bd2c06dc843cab683faea84183bad7fc63a46a0b3c4708b",
       "score": 33,
       "content": "import Spline from '@splinetool/react-spline/next';\n\nexport default function SplineComponent() {\n    return (\n            <Spline\n               className='h-dvh w-dvw'\n                scene=\"https://prod.spline.design/VaUkgcQEfWrERV-E/scene.splinecode\"\n            />\n    );\n}"
+    },
+    {
+      "path": "lib/utils.ts",
+      "sha": null,
+      "content_sha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d",
+      "score": 33,
+      "content": "import { clsx, type ClassValue } from \"clsx\"\nimport { twMerge } from \"tailwind-merge\"\n\nexport function cn(...inputs: ClassValue[]) {\n  return twMerge(clsx(inputs))\n}\n"
+    },
+    {
+      "path": "lib/prismadb.js",
+      "sha": null,
+      "content_sha256": "e81a7b3de0f200c7615aee372d7cee7b72bc63106ae7b3e58986c7b44359da3a",
+      "score": 33,
+      "content": "import { PrismaClient } from '@prisma/client';\n\n\nconst globalForPrisma = global;\n\n\nexport  const  prisma =\n\n    globalForPrisma.prisma ||\n\n    new PrismaClient({\n\n    });\n\n\nif (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;"
+    },
+    {
+      "path": "app/provider.tsx",
+      "sha": null,
+      "content_sha256": "4a1149b1eea165943637d593f311fab1d9a2881cf914ffe3cb661f63336aa0f1",
+      "score": 33,
+      "content": "import { ThemeProvider } from \"@/components/ui/ThemeProvider\";\n\nexport default function Provider({\n    children,\n  }: Readonly<{\n    children: React.ReactNode;\n  }>) {\n    return (\n        <ThemeProvider\n        attribute=\"class\"\n        defaultTheme=\"system\"\n        enableSystem\n        disableTransitionOnChange\n      >\n{children}\n</ThemeProvider>\n)}\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:41.553084+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:54.607812+00:00"
 }

@@ -39,18 +39,18 @@
       "content": "import {\n  afterEach,\n  beforeAll,\n  beforeEach,\n  vitest,\n  type MockInstance,\n} from \"vitest\";\nimport { p } from \"../app/db\";\nimport { createTmpDir } from \"~/modules/server-functions/tests/test-utils\";\nimport { rm } from \"fs/promises\";\nimport { fs } from \"~/fs\";\n\nif (!process.env.DATABASE_URL?.includes(\"localhost\")) {\n  throw new Error(\"DATABASE_URL is not targeting localhost\");\n}\n\nconst allTables = [\n  \"exerciseVideoTake\",\n  \"exercise\",\n  \"section\",\n  \"course\",\n  \"analyticsEvent\",\n  \"socialPostToSocialPostCollection\",\n  \"socialPost\",\n  \"socialPostCollection\",\n  \"contentWorkflowRunStep\",\n  \"contentWorkflowRun\",\n  \"contentWorkflowStep\",\n  \"contentWorkflow\",\n] as const;\n\nconst clearAllTables = async () => {\n  await p.$transaction(\n    allTables.map((table) => (p[table] as any).deleteMany())\n  );\n};\n\nbeforeAll(async () => {\n  await p.$connect();\n  await clearAllTables();\n});\n\nbeforeEach(async () => await clearAllTables());\n\nbeforeEach(async () => {\n  globalThis.testPaths = {\n    exercisePlaygroundPath: (await createTmpDir()).dir,\n    postsPlaygroundPath: (await createTmpDir()).dir,\n    reposDir: (await createTmpDir()).dir,\n  };\n});\n\nafterEach(async () => {\n  if (globalThis.testPaths) {\n    await Promise.all(\n      Object.values(globalThis.testPaths).map((path) =>\n        rm(path, { recursive: true })\n      )\n    );\n  }\n});\n\nlet openInVSCodeMock: MockInstance;\n\nbeforeEach(() => {\n  openInVSCodeMock = vitest.spyOn(fs, \"openInVSCode\").mockResolvedValue();\n});\n\nafterEach(() => {\n  openInVSCodeMock.mockRestore();\n});\n"
     },
     {
-      "path": "apps/written-content-manager/app/modules/server-functions/tests/get-exercise-suffix.test.ts",
-      "sha": null,
-      "content_sha256": "3a752e3e246f18c80e98d2afa7e3a99185e676b05278b3bd073f100cd1c1b7c9",
-      "score": 155,
-      "content": "import { describe, expect, it } from \"vitest\";\nimport { getExerciseSuffix } from \"../get-exercise-suffix\";\n\ndescribe(\"get-exercise-suffix\", () => {\n  it.each([\n    [\"introduction.explainer.ts\", \"explainer.ts\"],\n    [\"001-something.solution.ts\", \"solution.ts\"],\n    [\"001-something.solution.1.ts\", \"solution.1.ts\"],\n    [\"001-something.solution.4.ts\", \"solution.4.ts\"],\n    [\"001-something.problem.server.ts\", \"problem.server.ts\"],\n    [\"001-something.problem.ts\", \"problem.ts\"],\n    [\"001-problem-awesome-thing.problem.ts\", \"problem.ts\"],\n    [\"001-problem-awesome-thing.problem.server.ts\", \"problem.server.ts\"],\n    [\"001-problem-awesome-thing.ts\", undefined],\n  ])(\"%o should resolve to %o\", (input, output) => {\n    expect(getExerciseSuffix(input)).toBe(output);\n  });\n});\n"
-    },
-    {
       "path": "apps/written-content-manager/app/modules/server-functions/tests/exercises.test.ts",
       "sha": null,
       "content_sha256": "90e956a60fbac0c915adf6155d20d4b60d14010a6af08045f3fdb4df4d414374",
       "score": 155,
       "content": "import { describe, expect, it, vitest } from \"vitest\";\nimport { p } from \"../../../db\";\nimport { serverFunctions } from \"../server-functions\";\nimport { createTmpDir } from \"./test-utils\";\nimport { fs } from \"~/fs\";\n\ndescribe(\"exercises\", () => {\n  describe(\"create\", () => {\n    it(\"Should let you create an exercise\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      const sectionInDb = await serverFunctions.sections.get({\n        id: section.id,\n      });\n\n      expect(sectionInDb.exercises).toMatchObject([\n        {\n          id: exercise.id,\n          title: \"abc\",\n        },\n      ]);\n    });\n\n    it(\"Should log it in analytics\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      const analytics = await serverFunctions.analytics.allCounts();\n\n      expect(analytics.exercisesCreatedToday).toEqual(1);\n    });\n  });\n  describe(\"moveSection\", async () => {\n    it(\"Should move the exercise from one section to another\", async () => {\n      const course = await p.course.create({\n        data: {\n          title: \"abc\",\n          type: \"WORKSHOP\",\n        },\n      });\n\n      const section1 = await p.section.create({\n        data: {\n          courseId: course.id,\n          order: 0,\n          title: \"abc\",\n        },\n      });\n\n      const section2 = await p.section.create({\n        data: {\n          courseId: course.id,\n          order: 0,\n          title: \"abc\",\n        },\n      });\n\n      const exercise = await p.exercise.create({\n        data: {\n          order: 0,\n          title: \"abc\",\n          sectionId: section1.id,\n        },\n      });\n\n      await serverFunctions.exercises.moveSection({\n        exerciseId: exercise.id,\n        sectionId: section2.id,\n      });\n\n      expect(\n        await p.exercise.findFirstOrThrow({ where: { id: exercise.id } })\n      ).toMatchObject({\n        id: exercise.id,\n        sectionId: section2.id,\n      });\n    });\n  });\n\n  describe(\"get\", () => {\n    it(\"Should return the exercise\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      expect(\n        await serverFunctions.exercises.get({\n          id: exercise.id,\n        })\n      ).toMatchObject({\n        id: exercise.id,\n        title: \"abc\",\n      });\n    });\n\n    it(\"Should return any associated files\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      vitest.spyOn(fs, \"openInVSCode\").mockResolvedValue();\n\n      await serverFunctions.exercises.createExplainerFile({\n        id: exercise.id,\n      });\n\n      expect(\n        await serverFunctions.exercises\n          .get({ id: exercise.id })\n          .then((exercise) => exercise.files)\n      ).toHaveLength(1);\n    });\n  });\n\n  describe(\"createExplainerFile\", () => {\n    it(\"Should create an explainer file for the exercise\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      vitest.spyOn(fs, \"openInVSCode\").mockResolvedValue();\n\n      await serverFunctions.exercises.createExplainerFile({\n        id: exercise.id,\n      });\n\n      expect(\n        await serverFunctions.exercises\n          .get({ id: exercise.id })\n          .then((exercise) => exercise.files)\n      ).toHaveLength(1);\n    });\n\n    it(\"Should throw an error if an explainer file already exists\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      vitest.spyOn(fs, \"openInVSCode\").mockResolvedValue();\n\n      await serverFunctions.exercises.createExplainerFile({\n        id: exercise.id,\n      });\n\n      await expect(\n        serverFunctions.exercises.createExplainerFile({\n          id: exercise.id,\n        })\n      ).rejects.toThrow(\"Explainer file already exists\");\n    });\n  });\n\n  describe(\"getPrevExercise\", () => {\n    it(\"Should return the previous exercise\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise1 = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      const exercise2 = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      expect(\n        await serverFunctions.exercises.getPrevExercise({\n          id: exercise2.id,\n        })\n      ).toMatchObject({\n        id: exercise1.id,\n      });\n    });\n\n    it(\"Should get the last exercise of the previous section if no previous exercise exists\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section1 = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const section2 = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise1 = await serverFunctions.exercises.create({\n        sectionId: section1.id,\n        title: \"abc\",\n      });\n\n      const exercise2 = await serverFunctions.exercises.create({\n        sectionId: section2.id,\n        title: \"abc\",\n      });\n\n      expect(\n        await serverFunctions.exercises.getPrevExercise({\n          id: exercise2.id,\n        })\n      ).toMatchObject({\n        id: exercise1.id,\n      });\n    });\n\n    it(\"Should return null if there is no previous exercise\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      expect(\n        await serverFunctions.exercises.getPrevExercise({\n          id: exercise.id,\n        })\n      ).toBeNull();\n    });\n  });\n\n  describe(\"getNextExercise\", () => {\n    it(\"Should return the next exercise\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise1 = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      const exercise2 = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      expect(\n        await serverFunctions.exercises.getNextExercise({\n          id: exercise1.id,\n        })\n      ).toMatchObject({\n        id: exercise2.id,\n      });\n    });\n\n    it(\"Should get the first exercise of the next section if no next exercise exists\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section1 = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const section2 = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise1 = await serverFunctions.exercises.create({\n        sectionId: section1.id,\n        title: \"abc\",\n      });\n\n      const exercise2 = await serverFunctions.exercises.create({\n        sectionId: section2.id,\n        title: \"abc\",\n      });\n\n      expect(\n        await serverFunctions.exercises.getNextExercise({\n          id: exercise1.id,\n        })\n      ).toMatchObject({\n        id: exercise2.id,\n      });\n    });\n\n    it(\"Should return null if there is no next exercise\", async () => {\n      const course = await serverFunctions.courses.create({\n        title: \"abc\",\n      });\n\n      const section = await serverFunctions.sections.create({\n        courseId: course.id,\n        title: \"abc\",\n      });\n\n      const exercise = await serverFunctions.exercises.create({\n        sectionId: section.id,\n        title: \"abc\",\n      });\n\n      expect(\n        await serverFunctions.exercises.getNextExercise({\n          id: exercise.id,\n        })\n      ).toBeNull();\n    });\n  });\n});\n"
+    },
+    {
+      "path": "apps/written-content-manager/app/modules/server-functions/tests/get-exercise-suffix.test.ts",
+      "sha": null,
+      "content_sha256": "3a752e3e246f18c80e98d2afa7e3a99185e676b05278b3bd073f100cd1c1b7c9",
+      "score": 155,
+      "content": "import { describe, expect, it } from \"vitest\";\nimport { getExerciseSuffix } from \"../get-exercise-suffix\";\n\ndescribe(\"get-exercise-suffix\", () => {\n  it.each([\n    [\"introduction.explainer.ts\", \"explainer.ts\"],\n    [\"001-something.solution.ts\", \"solution.ts\"],\n    [\"001-something.solution.1.ts\", \"solution.1.ts\"],\n    [\"001-something.solution.4.ts\", \"solution.4.ts\"],\n    [\"001-something.problem.server.ts\", \"problem.server.ts\"],\n    [\"001-something.problem.ts\", \"problem.ts\"],\n    [\"001-problem-awesome-thing.problem.ts\", \"problem.ts\"],\n    [\"001-problem-awesome-thing.problem.server.ts\", \"problem.server.ts\"],\n    [\"001-problem-awesome-thing.ts\", undefined],\n  ])(\"%o should resolve to %o\", (input, output) => {\n    expect(getExerciseSuffix(input)).toBe(output);\n  });\n});\n"
     },
     {
       "path": "apps/written-content/articles/node-shipped-ts-support/readme.md",
@@ -109,53 +109,11 @@
       "content": "{\n  \"name\": \"example-package\",\n  \"version\": \"0.0.2\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  }\n}\n"
     },
     {
-      "path": "apps/written-content-manager/docker-compose.yml",
-      "sha": null,
-      "content_sha256": "40d542f3be05ae1d3c836c138642b5d4010624d1fbe5bf60f94e1964f8e0110a",
-      "score": 116,
-      "content": "version: \"3.9\"\n\nservices:\n  db:\n    image: postgres\n    restart: always\n    shm_size: 128mb\n    environment:\n      POSTGRES_HOST_AUTH_METHOD: trust\n    ports:\n      - \"5432:5432\"\n"
-    },
-    {
       "path": "apps/twoslash-to-simple-markdown/package.json",
       "sha": null,
       "content_sha256": "888604cf5a359928e34c6e90f06c81edbb205dca040f57a90594933712573562",
       "score": 116,
       "content": "{\n  \"name\": \"@total-typescript/twoslash-to-simple-markdown\",\n  \"version\": \"0.2.0\",\n  \"bin\": {\n    \"twoslash-to-simple-markdown\": \"./dist/bin.js\"\n  },\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"setup\": \"(pnpm unlink | true) && pnpm link --global\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"dependencies\": {\n    \"fast-glob\": \"^3.3.2\",\n    \"@total-typescript/shared\": \"workspace:*\",\n    \"@total-typescript/twoslash-shared\": \"workspace:*\",\n    \"commander\": \"^12.0.0\"\n  }\n}\n"
-    },
-    {
-      "path": "apps/_example-app/package.json",
-      "sha": null,
-      "content_sha256": "827c60c059ff1ba7b2b4013c1b0c1d35e566370c14beba4c170428816c9a141e",
-      "score": 116,
-      "content": "{\n  \"name\": \"example-app\",\n  \"version\": \"0.0.2\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"scripts\": {\n    \"dev\": \"node --enable-source-maps --watch ./dist/index.js\",\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"dependencies\": {\n    \"example-package\": \"workspace:*\"\n  }\n}\n"
-    },
-    {
-      "path": "apps/remotion-subtitle-renderer/package.json",
-      "sha": null,
-      "content_sha256": "6e9e33247e49a402b7690ded04e521d86ce42251d65f10f3e49bb8a9379f848a",
-      "score": 116,
-      "content": "{\n  \"name\": \"remotion-subtitle-renderer\",\n  \"version\": \"1.0.0\",\n  \"description\": \"My Remotion video\",\n  \"repository\": {},\n  \"license\": \"UNLICENSED\",\n  \"private\": true,\n  \"dependencies\": {\n    \"@remotion/cli\": \"4.0.347\",\n    \"@remotion/media-parser\": \"^4.0.347\",\n    \"@remotion/tailwind-v4\": \"4.0.347\",\n    \"react\": \"19.0.0\",\n    \"react-dom\": \"19.0.0\",\n    \"remotion\": \"4.0.347\",\n    \"tailwindcss\": \"4.0.0\",\n    \"zod\": \"^3.25.46\"\n  },\n  \"devDependencies\": {\n    \"@remotion/eslint-config-flat\": \"4.0.347\",\n    \"@types/react\": \"19.1.8\",\n    \"@types/web\": \"0.0.166\",\n    \"eslint\": \"9.19.0\",\n    \"prettier\": \"3.3.3\",\n    \"typescript\": \"5.8.2\"\n  },\n  \"scripts\": {\n    \"dev\": \"remotion studio\",\n    \"upgrade\": \"remotion upgrade\"\n  },\n  \"sideEffects\": [\n    \"*.css\"\n  ]\n}\n"
-    },
-    {
-      "path": "packages/shared/package.json",
-      "sha": null,
-      "content_sha256": "5d0173f5ba01c457a94713e8ee291d47ad751c17eb772d049db7a36ab61dd8ce",
-      "score": 116,
-      "content": "{\n  \"name\": \"@total-typescript/shared\",\n  \"version\": \"0.0.2\",\n  \"type\": \"module\",\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"dependencies\": {\n    \"zod\": \"^3.23.8\",\n    \"effect\": \"^3.16.8\",\n    \"@effect/platform\": \"^0.85.2\"\n  }\n}\n"
-    },
-    {
-      "path": "apps/twoslash-lint/package.json",
-      "sha": null,
-      "content_sha256": "b3a5c45bd191adcba5315e612bb83837c17c7d790f3778f479b3e7e0c1e892e8",
-      "score": 116,
-      "content": "{\n  \"name\": \"@total-typescript/twoslash-lint\",\n  \"version\": \"0.2.0\",\n  \"bin\": {\n    \"twoslash-lint\": \"./dist/bin.js\"\n  },\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"setup\": \"(pnpm unlink | true) && pnpm link --global\",\n    \"test\": \"vitest run\"\n  },\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"dependencies\": {\n    \"chokidar\": \"^3.6.0\",\n    \"fast-glob\": \"^3.3.2\",\n    \"@total-typescript/shared\": \"workspace:*\",\n    \"@total-typescript/twoslash-shared\": \"workspace:*\",\n    \"commander\": \"^12.0.0\"\n  }\n}\n"
-    },
-    {
-      "path": "apps/internal-cli/package.json",
-      "sha": null,
-      "content_sha256": "1cce01732ed9a7e3a94610a30e419f19c6a14190c8c7a755343db4219f0871d1",
-      "score": 116,
-      "content": "{\n  \"name\": \"@total-typescript/internal-cli\",\n  \"private\": true,\n  \"version\": \"0.0.1\",\n  \"bin\": {\n    \"tt\": \"./dist/bin.js\"\n  },\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"setup\": \"pnpm link --global\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"devDependencies\": {\n    \"@total-typescript/ts-reset\": \"^0.5.1\",\n    \"@types/node\": \"^22.0.0\",\n    \"@types/prompts\": \"^2.4.9\"\n  },\n  \"dependencies\": {\n    \"@effect/opentelemetry\": \"^0.40.0\",\n    \"@effect/platform\": \"^0.85.2\",\n    \"@effect/platform-node\": \"^0.86.4\",\n    \"@opentelemetry/exporter-trace-otlp-http\": \"^0.54.2\",\n    \"@opentelemetry/resources\": \"^1.28.0\",\n    \"@opentelemetry/sdk-metrics\": \"^1.28.0\",\n    \"@opentelemetry/sdk-trace-base\": \"^1.28.0\",\n    \"@opentelemetry/sdk-trace-node\": \"^1.28.0\",\n    \"@opentelemetry/sdk-trace-web\": \"^1.28.0\",\n    \"@opentelemetry/semantic-conventions\": \"^1.28.0\",\n    \"@total-typescript/ffmpeg\": \"workspace:*\",\n    \"@total-typescript/shared\": \"workspace:*\",\n    \"commander\": \"^12.0.0\",\n    \"dotenv\": \"^16.4.5\",\n    \"effect\": \"^3.16.8\",\n    \"fast-glob\": \"^3.3.2\",\n    \"prompts\": \"^2.4.2\"\n  }\n}\n"
     },
     {
       "path": "packages/twoslash-shared/package.json",
@@ -165,11 +123,39 @@
       "content": "{\n  \"name\": \"@total-typescript/twoslash-shared\",\n  \"version\": \"0.2.0\",\n  \"type\": \"module\",\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\"\n  },\n  \"dependencies\": {\n    \"@shikijs/rehype\": \"^1.6.3\",\n    \"@shikijs/twoslash\": \"^1.6.3\",\n    \"shiki\": \"^1.6.3\",\n    \"twoslash-cdn\": \"^0.2.7\",\n    \"unstorage\": \"^1.10.2\",\n    \"zod\": \"^3.23.8\"\n  }\n}\n"
     },
     {
+      "path": "packages/shared/package.json",
+      "sha": null,
+      "content_sha256": "5d0173f5ba01c457a94713e8ee291d47ad751c17eb772d049db7a36ab61dd8ce",
+      "score": 116,
+      "content": "{\n  \"name\": \"@total-typescript/shared\",\n  \"version\": \"0.0.2\",\n  \"type\": \"module\",\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"dependencies\": {\n    \"zod\": \"^3.23.8\",\n    \"effect\": \"^3.16.8\",\n    \"@effect/platform\": \"^0.85.2\"\n  }\n}\n"
+    },
+    {
       "path": "apps/twoslash-preview-server/package.json",
       "sha": null,
       "content_sha256": "51c16e787123c0bf45ec56f7b75daa0f095fbdb9ac1e930e3087aaa5f0406348",
       "score": 116,
       "content": "{\n  \"name\": \"@total-typescript/twoslash-preview-server\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"dev\": \"node --enable-source-maps --watch dist/bin.js\",\n    \"start\": \"node --enable-source-maps dist/bin.js\"\n  },\n  \"dependencies\": {\n    \"@total-typescript/shared\": \"workspace:*\",\n    \"@types/ws\": \"^8.5.4\",\n    \"chokidar\": \"^3.5.3\",\n    \"ws\": \"^8.13.0\",\n    \"@total-typescript/twoslash-shared\": \"workspace:*\",\n    \"zod\": \"^3.23.8\",\n    \"puppeteer\": \"^23.0.0\",\n    \"fastq\": \"^1.17.1\",\n    \"fastify\": \"^5.0.0\"\n  },\n  \"devDependencies\": {\n    \"@types/react\": \"^18.3.3\"\n  }\n}\n"
+    },
+    {
+      "path": "apps/twoslash-lint/package.json",
+      "sha": null,
+      "content_sha256": "b3a5c45bd191adcba5315e612bb83837c17c7d790f3778f479b3e7e0c1e892e8",
+      "score": 116,
+      "content": "{\n  \"name\": \"@total-typescript/twoslash-lint\",\n  \"version\": \"0.2.0\",\n  \"bin\": {\n    \"twoslash-lint\": \"./dist/bin.js\"\n  },\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"setup\": \"(pnpm unlink | true) && pnpm link --global\",\n    \"test\": \"vitest run\"\n  },\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"dependencies\": {\n    \"chokidar\": \"^3.6.0\",\n    \"fast-glob\": \"^3.3.2\",\n    \"@total-typescript/shared\": \"workspace:*\",\n    \"@total-typescript/twoslash-shared\": \"workspace:*\",\n    \"commander\": \"^12.0.0\"\n  }\n}\n"
+    },
+    {
+      "path": "apps/written-content-manager/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "40d542f3be05ae1d3c836c138642b5d4010624d1fbe5bf60f94e1964f8e0110a",
+      "score": 116,
+      "content": "version: \"3.9\"\n\nservices:\n  db:\n    image: postgres\n    restart: always\n    shm_size: 128mb\n    environment:\n      POSTGRES_HOST_AUTH_METHOD: trust\n    ports:\n      - \"5432:5432\"\n"
+    },
+    {
+      "path": "apps/_example-app/package.json",
+      "sha": null,
+      "content_sha256": "827c60c059ff1ba7b2b4013c1b0c1d35e566370c14beba4c170428816c9a141e",
+      "score": 116,
+      "content": "{\n  \"name\": \"example-app\",\n  \"version\": \"0.0.2\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"files\": [\n    \"./dist/*\"\n  ],\n  \"scripts\": {\n    \"dev\": \"node --enable-source-maps --watch ./dist/index.js\",\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"dependencies\": {\n    \"example-package\": \"workspace:*\"\n  }\n}\n"
     },
     {
       "path": "packages/ffmpeg/package.json",
@@ -179,12 +165,28 @@
       "content": "{\n  \"name\": \"@total-typescript/ffmpeg\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"test\": \"vitest run\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"dependencies\": {\n    \"@ai-sdk/anthropic\": \"^1.1.15\",\n    \"@ai-sdk/openai\": \"^1.3.22\",\n    \"@effect/platform\": \"^0.85.2\",\n    \"@effect/platform-node\": \"^0.86.4\",\n    \"@total-typescript/shared\": \"workspace:*\",\n    \"ai\": \"4.3.16\",\n    \"effect\": \"^3.16.8\",\n    \"front-matter\": \"^4.0.2\",\n    \"obs-websocket-js\": \"^5.0.6\",\n    \"openai\": \"^5.0.1\",\n    \"p-limit\": \"^6.2.0\",\n    \"prompts\": \"^2.4.2\",\n    \"zod\": \"^3.25.67\"\n  },\n  \"devDependencies\": {\n    \"@total-typescript/shoehorn\": \"^0.1.2\",\n    \"@types/prompts\": \"^2.4.9\"\n  }\n}\n"
     },
     {
+      "path": "apps/remotion-subtitle-renderer/package.json",
+      "sha": null,
+      "content_sha256": "6e9e33247e49a402b7690ded04e521d86ce42251d65f10f3e49bb8a9379f848a",
+      "score": 116,
+      "content": "{\n  \"name\": \"remotion-subtitle-renderer\",\n  \"version\": \"1.0.0\",\n  \"description\": \"My Remotion video\",\n  \"repository\": {},\n  \"license\": \"UNLICENSED\",\n  \"private\": true,\n  \"dependencies\": {\n    \"@remotion/cli\": \"4.0.347\",\n    \"@remotion/media-parser\": \"^4.0.347\",\n    \"@remotion/tailwind-v4\": \"4.0.347\",\n    \"react\": \"19.0.0\",\n    \"react-dom\": \"19.0.0\",\n    \"remotion\": \"4.0.347\",\n    \"tailwindcss\": \"4.0.0\",\n    \"zod\": \"^3.25.46\"\n  },\n  \"devDependencies\": {\n    \"@remotion/eslint-config-flat\": \"4.0.347\",\n    \"@types/react\": \"19.1.8\",\n    \"@types/web\": \"0.0.166\",\n    \"eslint\": \"9.19.0\",\n    \"prettier\": \"3.3.3\",\n    \"typescript\": \"5.8.2\"\n  },\n  \"scripts\": {\n    \"dev\": \"remotion studio\",\n    \"upgrade\": \"remotion upgrade\"\n  },\n  \"sideEffects\": [\n    \"*.css\"\n  ]\n}\n"
+    },
+    {
       "path": "apps/written-content/package.json",
       "sha": null,
       "content_sha256": "56d6b374101058520a4ec318a0cf77b8b7e0abc354f777eaa500ef5bf9caecc3",
       "score": 116,
       "content": "{\n  \"name\": \"written-content\",\n  \"private\": true,\n  \"prettier\": {\n    \"printWidth\": 60\n  },\n  \"type\": \"module\",\n  \"scripts\": {\n    \"new\": \"node ./new-noteworthy-topic.js\",\n    \"scratch\": \"SCRATCH=true node ./new-noteworthy-topic.js\",\n    \"create-emails\": \"twoslash-to-email \\\"emails/**/*.md\\\"\",\n    \"test\": \"vitest run\"\n  },\n  \"devDependencies\": {\n    \"@total-typescript/helpers\": \"^0.0.1\",\n    \"@types/node\": \"^22.13.16\",\n    \"@types/react\": \"^18.2.11\",\n    \"react\": \"^18.2.0\",\n    \"string-ts\": \"^2.0.0\",\n    \"ts-toolbelt\": \"^9.6.0\",\n    \"vite\": \"^5.0.10\",\n    \"vitest\": \"^2.0.3\",\n    \"zod\": \"^3.23.8\",\n    \"@tanstack/react-query\": \"^5.51.23\"\n  },\n  \"dependencies\": {\n    \"neverthrow\": \"^8.1.0\",\n    \"@sinclair/typebox\": \"^0.33.0\",\n    \"ajv\": \"^8.17.1\",\n    \"arktype\": \"2.0.0-beta.5\",\n    \"joi\": \"^17.13.3\",\n    \"valibot\": \"^0.37.0\"\n  }\n}\n"
+    },
+    {
+      "path": "apps/internal-cli/package.json",
+      "sha": null,
+      "content_sha256": "1cce01732ed9a7e3a94610a30e419f19c6a14190c8c7a755343db4219f0871d1",
+      "score": 116,
+      "content": "{\n  \"name\": \"@total-typescript/internal-cli\",\n  \"private\": true,\n  \"version\": \"0.0.1\",\n  \"bin\": {\n    \"tt\": \"./dist/bin.js\"\n  },\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"setup\": \"pnpm link --global\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.js\"\n  },\n  \"devDependencies\": {\n    \"@total-typescript/ts-reset\": \"^0.5.1\",\n    \"@types/node\": \"^22.0.0\",\n    \"@types/prompts\": \"^2.4.9\"\n  },\n  \"dependencies\": {\n    \"@effect/opentelemetry\": \"^0.40.0\",\n    \"@effect/platform\": \"^0.85.2\",\n    \"@effect/platform-node\": \"^0.86.4\",\n    \"@opentelemetry/exporter-trace-otlp-http\": \"^0.54.2\",\n    \"@opentelemetry/resources\": \"^1.28.0\",\n    \"@opentelemetry/sdk-metrics\": \"^1.28.0\",\n    \"@opentelemetry/sdk-trace-base\": \"^1.28.0\",\n    \"@opentelemetry/sdk-trace-node\": \"^1.28.0\",\n    \"@opentelemetry/sdk-trace-web\": \"^1.28.0\",\n    \"@opentelemetry/semantic-conventions\": \"^1.28.0\",\n    \"@total-typescript/ffmpeg\": \"workspace:*\",\n    \"@total-typescript/shared\": \"workspace:*\",\n    \"commander\": \"^12.0.0\",\n    \"dotenv\": \"^16.4.5\",\n    \"effect\": \"^3.16.8\",\n    \"fast-glob\": \"^3.3.2\",\n    \"prompts\": \"^2.4.2\"\n  }\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T15:25:28.094434+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:10.261235+00:00"
 }

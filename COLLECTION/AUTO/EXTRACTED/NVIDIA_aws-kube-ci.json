@@ -32,13 +32,6 @@
       "content": "#!/bin/sh\nset -xe\nsource ../aws-kube-ci/hostname\n\nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"containerd --version\"  \nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"kubectl version --client\"\nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"kubectl cluster-info\"\nssh -i ../aws-kube-ci/key -o StrictHostKeyChecking=no ${instance_hostname} \\\n  \"kubectl get nodes -o json | jq '.items[].status.nodeInfo.containerRuntimeVersion'\"  \n"
     },
     {
-      "path": "config/install_crio.sh",
-      "sha": null,
-      "content_sha256": "1e8a7203fc92179b454aca516f282ba07b644715b6229ea763fab411299f9484",
-      "score": 115,
-      "content": "#! /usr/bin/env bash\nset -xe\n\nsource ${CONFIG_DIR}/common.sh\n\n: ${CRIO_VERSION:=v1.6}\n\n# Add Cri-o repo\necho \"deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list\necho \"deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$RUNTIME_VERSION/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$VERSION.list\ncurl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$RUNTIME_VERSION/$OS/Release.key | apt-key add -\ncurl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | apt-key add -\n\n# Install CRI-O\napt update\napt install cri-o cri-o-runc\n\n# Start and enable Service\nsystemctl daemon-reload\nsystemctl restart crio\nsystemctl enable crio\n"
-    },
-    {
       "path": "config/install_docker.sh",
       "sha": null,
       "content_sha256": "745481b5144dc775dbd5f5a0aa93b8b7f66c4d4728fa5442d0ce5515ada9ee34",
@@ -51,6 +44,13 @@
       "content_sha256": "c74547d42294bef2ee7a16d9630c1ea635662e4dad35439d996bf748620a220e",
       "score": 115,
       "content": "#! /usr/bin/env bash\nset -xe\n\nCONFIG_DIR=\"$( cd \"$( dirname \"${BASH_SOURCE[0]}\" )\" && pwd )\"\n\nsource ${CONFIG_DIR}/common.sh\n\nexec ${CONFIG_DIR}/install_${CONTAINER_RUNTIME}.sh \n"
+    },
+    {
+      "path": "config/install_crio.sh",
+      "sha": null,
+      "content_sha256": "1e8a7203fc92179b454aca516f282ba07b644715b6229ea763fab411299f9484",
+      "score": 115,
+      "content": "#! /usr/bin/env bash\nset -xe\n\nsource ${CONFIG_DIR}/common.sh\n\n: ${CRIO_VERSION:=v1.6}\n\n# Add Cri-o repo\necho \"deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list\necho \"deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/$RUNTIME_VERSION/$OS/ /\" > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:$VERSION.list\ncurl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:$RUNTIME_VERSION/$OS/Release.key | apt-key add -\ncurl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/$OS/Release.key | apt-key add -\n\n# Install CRI-O\napt update\napt install cri-o cri-o-runc\n\n# Start and enable Service\nsystemctl daemon-reload\nsystemctl restart crio\nsystemctl enable crio\n"
     },
     {
       "path": "config/install_containerd.sh",
@@ -95,11 +95,11 @@
       "content": "instance_type = \"p2.xlarge\"\nproject_name = \"aws-kube-ci-tests\"\n"
     },
     {
-      "path": "cleanup/run.sh",
+      "path": "config/common.sh",
       "sha": null,
-      "content_sha256": "f81f22e658d63a27128191384a818533be73e3a53d53db85907a8c5ad3db4717",
+      "content_sha256": "45e6dabe87a024ab5edb772343edf716067dff41778763674dfc3e88c2d1c11a",
       "score": 33,
-      "content": "#! /bin/bash\n\ninstances() {\n\taws ec2 describe-instances --filters \"Name=tag:product,Values=cloud-native\" \\\n\t\t\t\t\t     \"Name=tag:environment,Values=cicd\" \\\n\t\t--query \"Reservations[].Instances[?LaunchTime<='$(date --date='-2 hours' '+%Y-%m-%dT%H:%M')'].InstanceId\" \\\n\t\t--output text\n}\n\ninstances=\"$(instances)\"\necho \"Found the following instances to cleanup: $instances\"\n\nfor instance in $instances; do\n\t# Note we don't filter out terminated instances, so the above command can fail\n\techo \"Deleting instance: $instance\"\n\taws ec2 terminate-instances --instance-ids \"$instance\" || true\ndone\n"
+      "content": "#!/bin/bash\n\nset -xe\n\nwith_retry() {\n\tlocal max_attempts=\"$1\"\n\tlocal delay=\"$2\"\n\tlocal count=0\n\tlocal rc\n\tshift 2\n\n\twhile true; do\n\t\tset +e\n\t\t\"$@\"\n\t\trc=\"$?\"\n\t\tset -e\n\n\t\tcount=\"$((count+1))\"\n\n\t\tif [[ \"${rc}\" -eq 0 ]]; then\n\t\t\treturn 0\n\t\tfi\n\n\t\tif [[ \"${max_attempts}\" -le 0 ]] || [[ \"${count}\" -lt \"${max_attempts}\" ]]; then\n\t\t\tsleep \"${delay}\"\n\t\telse\n\t\t\tbreak\n\t\tfi\n\tdone\n\n\treturn 1\n}\n\n# Detect architecture\narchitecture=$(uname -m)\nif [[ $architecture == \"x86_64\" || $architecture == \"amd64\" ]]; then\n    ARCH=\"amd64\"\nelif [[ $architecture == \"aarch64\" || $architecture == \"arm64\" ]]; then\n    ARCH=\"arm64\"\nelse\n    echo \"Unknown architecture: $architecture\"\n    exit 1\nfi\n\n# Check if the operating system is Ubuntu\nif [ -f \"/etc/os-release\" ]; then\n    source \"/etc/os-release\"\n\n    # Format the OS version string\n    os_version=\"${NAME}_${VERSION_ID}\"\n    # if NAME is Ubuntu, then prefix with x\n    if [ \"${NAME}\" == \"Ubuntu\" ]; then\n        os_version=\"x${os_version}\"\n    fi\n\n    # Set the environment variable\n    OS=\"$os_version\"\nelse\n    # Set a default value if we can't read /etc/os-release\n\techo \"Unknown OS: can't read /etc/os-release\"\n    exit 1\nfi\n"
     },
     {
       "path": "config/daemon.json",
@@ -109,12 +109,14 @@
       "content": "{\n    \"default-runtime\": \"nvidia\",\n    \"runtimes\": {\n        \"nvidia\": {\n            \"path\": \"/usr/bin/nvidia-container-runtime\",\n            \"runtimeArgs\": []\n        }\n    }\n}\n"
     },
     {
-      "path": "config/common.sh",
+      "path": "cleanup/run.sh",
       "sha": null,
-      "content_sha256": "45e6dabe87a024ab5edb772343edf716067dff41778763674dfc3e88c2d1c11a",
+      "content_sha256": "f81f22e658d63a27128191384a818533be73e3a53d53db85907a8c5ad3db4717",
       "score": 33,
-      "content": "#!/bin/bash\n\nset -xe\n\nwith_retry() {\n\tlocal max_attempts=\"$1\"\n\tlocal delay=\"$2\"\n\tlocal count=0\n\tlocal rc\n\tshift 2\n\n\twhile true; do\n\t\tset +e\n\t\t\"$@\"\n\t\trc=\"$?\"\n\t\tset -e\n\n\t\tcount=\"$((count+1))\"\n\n\t\tif [[ \"${rc}\" -eq 0 ]]; then\n\t\t\treturn 0\n\t\tfi\n\n\t\tif [[ \"${max_attempts}\" -le 0 ]] || [[ \"${count}\" -lt \"${max_attempts}\" ]]; then\n\t\t\tsleep \"${delay}\"\n\t\telse\n\t\t\tbreak\n\t\tfi\n\tdone\n\n\treturn 1\n}\n\n# Detect architecture\narchitecture=$(uname -m)\nif [[ $architecture == \"x86_64\" || $architecture == \"amd64\" ]]; then\n    ARCH=\"amd64\"\nelif [[ $architecture == \"aarch64\" || $architecture == \"arm64\" ]]; then\n    ARCH=\"arm64\"\nelse\n    echo \"Unknown architecture: $architecture\"\n    exit 1\nfi\n\n# Check if the operating system is Ubuntu\nif [ -f \"/etc/os-release\" ]; then\n    source \"/etc/os-release\"\n\n    # Format the OS version string\n    os_version=\"${NAME}_${VERSION_ID}\"\n    # if NAME is Ubuntu, then prefix with x\n    if [ \"${NAME}\" == \"Ubuntu\" ]; then\n        os_version=\"x${os_version}\"\n    fi\n\n    # Set the environment variable\n    OS=\"$os_version\"\nelse\n    # Set a default value if we can't read /etc/os-release\n\techo \"Unknown OS: can't read /etc/os-release\"\n    exit 1\nfi\n"
+      "content": "#! /bin/bash\n\ninstances() {\n\taws ec2 describe-instances --filters \"Name=tag:product,Values=cloud-native\" \\\n\t\t\t\t\t     \"Name=tag:environment,Values=cicd\" \\\n\t\t--query \"Reservations[].Instances[?LaunchTime<='$(date --date='-2 hours' '+%Y-%m-%dT%H:%M')'].InstanceId\" \\\n\t\t--output text\n}\n\ninstances=\"$(instances)\"\necho \"Found the following instances to cleanup: $instances\"\n\nfor instance in $instances; do\n\t# Note we don't filter out terminated instances, so the above command can fail\n\techo \"Deleting instance: $instance\"\n\taws ec2 terminate-instances --instance-ids \"$instance\" || true\ndone\n"
     }
   ],
-  "generated_at": "2026-10-08T02:26:17.243747+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:14:07.024953+00:00"
 }

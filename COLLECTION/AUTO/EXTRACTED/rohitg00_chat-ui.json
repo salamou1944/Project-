@@ -46,11 +46,11 @@
       "content": "import { vi, afterAll } from \"vitest\";\nimport dotenv from \"dotenv\";\nimport { resolve } from \"path\";\nimport fs from \"fs\";\nimport { MongoMemoryServer } from \"mongodb-memory-server\";\n\nlet mongoServer: MongoMemoryServer;\n// Load the .env file\nconst envPath = resolve(__dirname, \"../../.env\");\ndotenv.config({ path: envPath });\n\n// Read the .env file content\nconst envContent = fs.readFileSync(envPath, \"utf-8\");\n\n// Parse the .env content\nconst envVars = dotenv.parse(envContent);\n\n// Separate public and private variables\nconst publicEnv = {};\nconst privateEnv = {};\n\nfor (const [key, value] of Object.entries(envVars)) {\n\tif (key.startsWith(\"PUBLIC_\")) {\n\t\tpublicEnv[key] = value;\n\t} else {\n\t\tprivateEnv[key] = value;\n\t}\n}\n\nvi.mock(\"$env/dynamic/public\", () => ({\n\tenv: publicEnv,\n}));\n\nvi.mock(\"$env/dynamic/private\", async () => {\n\tmongoServer = await MongoMemoryServer.create();\n\n\treturn {\n\t\tenv: {\n\t\t\t...privateEnv,\n\t\t\tMONGODB_URL: mongoServer.getUri(),\n\t\t},\n\t};\n});\n\nafterAll(async () => {\n\tif (mongoServer) {\n\t\tawait mongoServer.stop();\n\t}\n});\n"
     },
     {
-      "path": "scripts/setups/vitest-setup-client.ts",
+      "path": ".github/workflows/trufflehog.yml",
       "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 173,
-      "content": ""
+      "content_sha256": "096049a31976628878f13a1dab97fd5bbc36b711bfebf2d6d1cb32f0d98177ad",
+      "score": 126,
+      "content": "on:\n  push:\n\nname: Secret Leaks\n\njobs:\n  trufflehog:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n      - name: Secret Scanning\n        uses: trufflesecurity/trufflehog@main\n        with:\n          extra_args: --results=verified,unknown\n"
     },
     {
       "path": ".github/workflows/upload-pr-documentation.yml",
@@ -60,11 +60,11 @@
       "content": "name: Upload PR Documentation\n\non:\n  workflow_run:\n    workflows: [\"Build PR Documentation\"]\n    types:\n      - completed\n\njobs:\n  build:\n    uses: huggingface/doc-builder/.github/workflows/upload_pr_documentation.yml@main\n    with:\n      package_name: chat-ui\n    secrets:\n      hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}\n      comment_bot_token: ${{ secrets.COMMENT_BOT_TOKEN }}\n"
     },
     {
-      "path": ".github/workflows/trufflehog.yml",
+      "path": ".github/workflows/build-pr-docs.yml",
       "sha": null,
-      "content_sha256": "096049a31976628878f13a1dab97fd5bbc36b711bfebf2d6d1cb32f0d98177ad",
+      "content_sha256": "7389d3d96c1bebd01b11540419ee53899a5da971fe98bc335eb6da1e8310cc91",
       "score": 126,
-      "content": "on:\n  push:\n\nname: Secret Leaks\n\njobs:\n  trufflehog:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n      - name: Secret Scanning\n        uses: trufflesecurity/trufflehog@main\n        with:\n          extra_args: --results=verified,unknown\n"
+      "content": "name: Build PR Documentation\n\non:\n  pull_request:\n    paths:\n      - \"docs/source/**\"\n      - \".github/workflows/build-pr-docs.yml\"\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}\n  cancel-in-progress: true\n\njobs:\n  build:\n    uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@main\n    with:\n      commit_sha: ${{ github.event.pull_request.head.sha }}\n      pr_number: ${{ github.event.number }}\n      package: chat-ui\n      additional_args: --not_python_module\n"
     },
     {
       "path": ".github/workflows/build-docs.yml",
@@ -72,13 +72,6 @@
       "content_sha256": "5dd0df0ace56bc4b9048ff819851a6506506fa40b20660f89caa4047c94d955d",
       "score": 126,
       "content": "name: Build documentation\n\non:\n  push:\n    branches:\n      - main\n      - v*-release\n\njobs:\n  build:\n    uses: huggingface/doc-builder/.github/workflows/build_main_documentation.yml@main\n    with:\n      commit_sha: ${{ github.sha }}\n      package: chat-ui\n      additional_args: --not_python_module\n    secrets:\n      token: ${{ secrets.HUGGINGFACE_PUSH }}\n      hf_token: ${{ secrets.HF_DOC_BUILD_PUSH }}\n"
-    },
-    {
-      "path": ".github/workflows/build-pr-docs.yml",
-      "sha": null,
-      "content_sha256": "7389d3d96c1bebd01b11540419ee53899a5da971fe98bc335eb6da1e8310cc91",
-      "score": 126,
-      "content": "name: Build PR Documentation\n\non:\n  pull_request:\n    paths:\n      - \"docs/source/**\"\n      - \".github/workflows/build-pr-docs.yml\"\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}\n  cancel-in-progress: true\n\njobs:\n  build:\n    uses: huggingface/doc-builder/.github/workflows/build_pr_documentation.yml@main\n    with:\n      commit_sha: ${{ github.event.pull_request.head.sha }}\n      pr_number: ${{ github.event.number }}\n      package: chat-ui\n      additional_args: --not_python_module\n"
     },
     {
       "path": ".github/workflows/build-image.yml",
@@ -109,18 +102,18 @@
       "content": "{\n\t\"name\": \"@reflink/reflink\",\n\t\"version\": \"0.0.0\",\n\t\"main\": \"index.js\"\n}\n"
     },
     {
-      "path": "src/lib/actions/snapScrollToBottom.ts",
-      "sha": null,
-      "content_sha256": "500e1a80be84616a68285e2dc57c375c472b0b1c543a388b93f217f7c73078ef",
-      "score": 111,
-      "content": "import { navigating } from \"$app/state\";\nimport { tick } from \"svelte\";\n\nconst detachedOffset = 10;\n\nconst waitForAnimationFrame = () =>\n\ttypeof requestAnimationFrame === \"function\"\n\t\t? new Promise<void>((resolve) => {\n\t\t\t\trequestAnimationFrame(() => resolve());\n\t\t\t})\n\t\t: Promise.resolve();\n\n/**\n * @param node element to snap scroll to bottom\n * @param dependency pass in a dependency to update scroll on changes.\n */\nexport const snapScrollToBottom = (node: HTMLElement, dependency: unknown) => {\n\tlet prevScrollValue = node.scrollTop;\n\tlet isDetached = false;\n\tlet resizeObserver: ResizeObserver | undefined;\n\n\tconst scrollToBottom = () => {\n\t\tnode.scrollTo({ top: node.scrollHeight });\n\t};\n\n\tconst distanceFromBottom = () => node.scrollHeight - node.scrollTop - node.clientHeight;\n\n\tasync function updateScroll(_options: { force?: boolean } = {}) {\n\t\tconst options = { force: false, ..._options };\n\t\tconst { force } = options;\n\n\t\tif (!force && isDetached && !navigating.to) return;\n\n\t\t// wait for the next tick to ensure that the DOM is updated\n\t\tawait tick();\n\t\tscrollToBottom();\n\n\t\t// ensure we settle after late layout shifts (e.g. markdown/image renders)\n\t\tif (typeof requestAnimationFrame === \"function\") {\n\t\t\tawait waitForAnimationFrame();\n\t\t\tscrollToBottom();\n\t\t\tawait waitForAnimationFrame();\n\t\t\tscrollToBottom();\n\t\t}\n\t}\n\n\tconst handleScroll = () => {\n\t\t// if user scrolled up, we detach\n\t\tif (node.scrollTop < prevScrollValue) {\n\t\t\tisDetached = true;\n\t\t}\n\n\t\tconst atBottom = distanceFromBottom() <= detachedOffset;\n\t\tif (atBottom) {\n\t\t\tconst wasDetached = isDetached;\n\t\t\tisDetached = false;\n\t\t\tif (wasDetached) {\n\t\t\t\tvoid updateScroll({ force: true });\n\t\t\t}\n\t\t}\n\n\t\tprevScrollValue = node.scrollTop;\n\t};\n\n\tnode.addEventListener(\"scroll\", handleScroll);\n\n\tif (typeof ResizeObserver !== \"undefined\") {\n\t\tconst target = node.firstElementChild ?? node;\n\t\tresizeObserver = new ResizeObserver(() => {\n\t\t\tif (isDetached && !navigating.to) return;\n\t\t\tscrollToBottom();\n\t\t});\n\t\tresizeObserver.observe(target);\n\t}\n\n\tif (dependency) {\n\t\tvoid updateScroll({ force: true });\n\t}\n\n\treturn {\n\t\tupdate: updateScroll,\n\t\tdestroy: () => {\n\t\t\tnode.removeEventListener(\"scroll\", handleScroll);\n\t\t\tresizeObserver?.disconnect();\n\t\t},\n\t};\n};\n"
-    },
-    {
       "path": "src/lib/actions/clickOutside.ts",
       "sha": null,
       "content_sha256": "c7107860e3645250679216963ac67e0118257cae125ee000898eb5c2eb563bf5",
       "score": 111,
       "content": "export function clickOutside(element: HTMLElement, callbackFunction: () => void) {\n\tfunction onClick(event: MouseEvent) {\n\t\tif (!element.contains(event.target as Node)) {\n\t\t\tcallbackFunction();\n\t\t}\n\t}\n\n\tdocument.body.addEventListener(\"click\", onClick);\n\n\treturn {\n\t\tupdate(newCallbackFunction: () => void) {\n\t\t\tcallbackFunction = newCallbackFunction;\n\t\t},\n\t\tdestroy() {\n\t\t\tdocument.body.removeEventListener(\"click\", onClick);\n\t\t},\n\t};\n}\n"
+    },
+    {
+      "path": "src/lib/actions/snapScrollToBottom.ts",
+      "sha": null,
+      "content_sha256": "500e1a80be84616a68285e2dc57c375c472b0b1c543a388b93f217f7c73078ef",
+      "score": 111,
+      "content": "import { navigating } from \"$app/state\";\nimport { tick } from \"svelte\";\n\nconst detachedOffset = 10;\n\nconst waitForAnimationFrame = () =>\n\ttypeof requestAnimationFrame === \"function\"\n\t\t? new Promise<void>((resolve) => {\n\t\t\t\trequestAnimationFrame(() => resolve());\n\t\t\t})\n\t\t: Promise.resolve();\n\n/**\n * @param node element to snap scroll to bottom\n * @param dependency pass in a dependency to update scroll on changes.\n */\nexport const snapScrollToBottom = (node: HTMLElement, dependency: unknown) => {\n\tlet prevScrollValue = node.scrollTop;\n\tlet isDetached = false;\n\tlet resizeObserver: ResizeObserver | undefined;\n\n\tconst scrollToBottom = () => {\n\t\tnode.scrollTo({ top: node.scrollHeight });\n\t};\n\n\tconst distanceFromBottom = () => node.scrollHeight - node.scrollTop - node.clientHeight;\n\n\tasync function updateScroll(_options: { force?: boolean } = {}) {\n\t\tconst options = { force: false, ..._options };\n\t\tconst { force } = options;\n\n\t\tif (!force && isDetached && !navigating.to) return;\n\n\t\t// wait for the next tick to ensure that the DOM is updated\n\t\tawait tick();\n\t\tscrollToBottom();\n\n\t\t// ensure we settle after late layout shifts (e.g. markdown/image renders)\n\t\tif (typeof requestAnimationFrame === \"function\") {\n\t\t\tawait waitForAnimationFrame();\n\t\t\tscrollToBottom();\n\t\t\tawait waitForAnimationFrame();\n\t\t\tscrollToBottom();\n\t\t}\n\t}\n\n\tconst handleScroll = () => {\n\t\t// if user scrolled up, we detach\n\t\tif (node.scrollTop < prevScrollValue) {\n\t\t\tisDetached = true;\n\t\t}\n\n\t\tconst atBottom = distanceFromBottom() <= detachedOffset;\n\t\tif (atBottom) {\n\t\t\tconst wasDetached = isDetached;\n\t\t\tisDetached = false;\n\t\t\tif (wasDetached) {\n\t\t\t\tvoid updateScroll({ force: true });\n\t\t\t}\n\t\t}\n\n\t\tprevScrollValue = node.scrollTop;\n\t};\n\n\tnode.addEventListener(\"scroll\", handleScroll);\n\n\tif (typeof ResizeObserver !== \"undefined\") {\n\t\tconst target = node.firstElementChild ?? node;\n\t\tresizeObserver = new ResizeObserver(() => {\n\t\t\tif (isDetached && !navigating.to) return;\n\t\t\tscrollToBottom();\n\t\t});\n\t\tresizeObserver.observe(target);\n\t}\n\n\tif (dependency) {\n\t\tvoid updateScroll({ force: true });\n\t}\n\n\treturn {\n\t\tupdate: updateScroll,\n\t\tdestroy: () => {\n\t\t\tnode.removeEventListener(\"scroll\", handleScroll);\n\t\t\tresizeObserver?.disconnect();\n\t\t},\n\t};\n};\n"
     },
     {
       "path": "src/lib/server/auth.ts",
@@ -135,6 +128,20 @@
       "content_sha256": "f51dafe9f1d16e7b271941ea12da6df3d3579a804f41966d37cad725920b966b",
       "score": 106,
       "content": "import type { App } from \"$api\";\nimport { base } from \"$app/paths\";\nimport { treaty, type Treaty } from \"@elysiajs/eden\";\nimport { browser } from \"$app/environment\";\nimport superjson from \"superjson\";\nimport ObjectId from \"bson-objectid\";\n\nsuperjson.registerCustom<ObjectId, string>(\n\t{\n\t\tisApplicable: (value): value is ObjectId => {\n\t\t\tif (typeof value !== \"string\" && ObjectId.isValid(value)) {\n\t\t\t\tconst str = value.toString();\n\t\t\t\treturn /^[0-9a-fA-F]{24}$/.test(str);\n\t\t\t}\n\t\t\treturn false;\n\t\t},\n\t\tserialize: (value) => value.toString(),\n\t\tdeserialize: (value) => new ObjectId(value),\n\t},\n\t\"ObjectId\"\n);\n\nexport function useAPIClient({\n\tfetch,\n\torigin,\n}: {\n\tfetch?: Treaty.Config[\"fetcher\"];\n\torigin?: string;\n} = {}) {\n\t// On the server, use the current request origin when available to avoid\n\t// incorrect port guessing and ensure cookies are forwarded properly.\n\t// Fall back to a sane default in dev if origin is missing.\n\tconst url = browser\n\t\t? `${window.location.origin}${base}/api/v2`\n\t\t: `${origin ?? `http://localhost:5173`}${base}/api/v2`;\n\n\tconst app = treaty<App>(url, { fetcher: fetch });\n\treturn app;\n}\n\nexport function handleResponse<T extends Record<number, unknown>>(\n\tresponse: Treaty.TreatyResponse<T>\n): T[200] {\n\tif (response.error) {\n\t\tthrow new Error(JSON.stringify(response.error));\n\t}\n\n\treturn superjson.parse(\n\t\ttypeof response.data === \"string\" ? response.data : JSON.stringify(response.data)\n\t) as T[200];\n}\n"
+    },
+    {
+      "path": "src/lib/types/Model.ts",
+      "sha": null,
+      "content_sha256": "a2c92edc3f31ab5720a430e15d443097dfe0acab823c9a7e36c9d18dbfbec78e",
+      "score": 104,
+      "content": "import type { BackendModel } from \"$lib/server/models\";\n\nexport type Model = Pick<\n\tBackendModel,\n\t| \"id\"\n\t| \"name\"\n\t| \"displayName\"\n\t| \"isRouter\"\n\t| \"websiteUrl\"\n\t| \"datasetName\"\n\t| \"promptExamples\"\n\t| \"parameters\"\n\t| \"description\"\n\t| \"logoUrl\"\n\t| \"modelUrl\"\n\t| \"datasetUrl\"\n\t| \"preprompt\"\n\t| \"multimodal\"\n\t| \"multimodalAcceptedMimetypes\"\n\t| \"unlisted\"\n\t| \"hasInferenceAPI\"\n\t| \"providers\"\n>;\n"
+    },
+    {
+      "path": "src/lib/utils/models.ts",
+      "sha": null,
+      "content_sha256": "e868227b1a6fc421991e5d05b53f805f5eafcd12804c75086862d7e7328298d8",
+      "score": 104,
+      "content": "import type { Model } from \"$lib/types/Model\";\n\nexport const findCurrentModel = (\n\tmodels: Model[],\n\t_oldModels: { id: string; transferTo?: string }[] = [],\n\tid?: string\n): Model => {\n\tif (id) {\n\t\tconst direct = models.find((m) => m.id === id);\n\t\tif (direct) return direct;\n\t}\n\n\treturn models[0];\n};\n"
     },
     {
       "path": "src/lib/utils/searchTokens.ts",
@@ -158,20 +165,6 @@
       "content": "import { config } from \"$lib/server/config\";\n\nexport function getApiToken(locals: App.Locals | undefined) {\n\tif (config.USE_USER_TOKEN === \"true\") {\n\t\tif (!locals?.token) {\n\t\t\tthrow new Error(\"User token not found\");\n\t\t}\n\t\treturn locals.token;\n\t}\n\treturn config.OPENAI_API_KEY || config.HF_TOKEN;\n}\n"
     },
     {
-      "path": "src/lib/types/Model.ts",
-      "sha": null,
-      "content_sha256": "a2c92edc3f31ab5720a430e15d443097dfe0acab823c9a7e36c9d18dbfbec78e",
-      "score": 104,
-      "content": "import type { BackendModel } from \"$lib/server/models\";\n\nexport type Model = Pick<\n\tBackendModel,\n\t| \"id\"\n\t| \"name\"\n\t| \"displayName\"\n\t| \"isRouter\"\n\t| \"websiteUrl\"\n\t| \"datasetName\"\n\t| \"promptExamples\"\n\t| \"parameters\"\n\t| \"description\"\n\t| \"logoUrl\"\n\t| \"modelUrl\"\n\t| \"datasetUrl\"\n\t| \"preprompt\"\n\t| \"multimodal\"\n\t| \"multimodalAcceptedMimetypes\"\n\t| \"unlisted\"\n\t| \"hasInferenceAPI\"\n\t| \"providers\"\n>;\n"
-    },
-    {
-      "path": "src/lib/utils/models.ts",
-      "sha": null,
-      "content_sha256": "e868227b1a6fc421991e5d05b53f805f5eafcd12804c75086862d7e7328298d8",
-      "score": 104,
-      "content": "import type { Model } from \"$lib/types/Model\";\n\nexport const findCurrentModel = (\n\tmodels: Model[],\n\t_oldModels: { id: string; transferTo?: string }[] = [],\n\tid?: string\n): Model => {\n\tif (id) {\n\t\tconst direct = models.find((m) => m.id === id);\n\t\tif (direct) return direct;\n\t}\n\n\treturn models[0];\n};\n"
-    },
-    {
       "path": "chart/templates/deployment.yaml",
       "sha": null,
       "content_sha256": "4971e716df7aa424a7cdf680a323c59d540399c82fc848388d7b731575e7ff92",
@@ -186,5 +179,12 @@
       "content": "export async function GET({ locals }) {\n\tif (locals.user) {\n\t\tconst res = {\n\t\t\tid: locals.user._id,\n\t\t\tusername: locals.user.username,\n\t\t\tname: locals.user.name,\n\t\t\temail: locals.user.email,\n\t\t\tavatarUrl: locals.user.avatarUrl,\n\t\t\thfUserId: locals.user.hfUserId,\n\t\t};\n\n\t\treturn Response.json(res);\n\t}\n\treturn Response.json({ message: \"Must be signed in\" }, { status: 401 });\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T02:26:00.838201+00:00"
+  "fetch_errors": [
+    {
+      "path": "scripts/setups/vitest-setup-client.ts",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 1,
+  "generated_at": "2026-10-11T01:13:37.620978+00:00"
 }

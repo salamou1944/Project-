@@ -32,18 +32,18 @@
       "content": "import { readFileSync } from 'node:fs';\nimport { resolve } from 'node:path';\nimport { Marked, Renderer } from 'marked';\n\n// process.cwd() is the site/ directory when running astro build/dev\nconst README_PATH = resolve(process.cwd(), '..', 'README.md');\n\nfunction githubSlug(text: string): string {\n  return text\n    .toLowerCase()\n    .replace(/[^\\w\\s-]/gu, '')  // strip emoji and non-word chars\n    .trim()\n    .replace(/\\s+/g, '-')\n    .replace(/-+/g, '-')\n    .replace(/^-|-$/g, '');\n}\n\nfunction preprocessMarkdown(md: string): string {\n  // Strip awesome-lint pragma comments\n  md = md.replace(/<!--lint\\s+(disable|enable|ignore)[^>]*-->\\n?/g, '');\n\n  // Strip <div align=\"center\"> wrappers — marked does not parse markdown inside HTML blocks,\n  // so the H1 heading and badges would render as raw text. Removing the wrapper lets marked\n  // process the content normally; centering is handled via CSS on the first h1.\n  md = md.replace(/<div[^>]*align=\"center\"[^>]*>\\n?/gi, '');\n  md = md.replace(/<\\/div>\\n?/gi, '');\n\n  // Strip the top-level H1 — the hero section already provides the page's semantic H1.\n  // Keeping both would result in two <h1> elements, which hurts SEO.\n  md = md.replace(/^#\\s+.+\\n?/m, '');\n\n  return md;\n}\n\nfunction renderMarkdown(md: string): string {\n  // Use a fresh Marked instance per render to avoid stacking global renderer mutations.\n  const slugCount = new Map<string, number>();\n  const renderer = new Renderer();\n\n  renderer.heading = function ({ text, depth }: { text: string; depth: number }): string {\n    const raw = text.replace(/<[^>]*>/g, '').trim();\n    let slug = githubSlug(raw);\n    const count = slugCount.get(slug) ?? 0;\n    slugCount.set(slug, count + 1);\n    if (count > 0) slug += `-${count}`;\n    return `<h${depth} id=\"${slug}\">${text}</h${depth}>\\n`;\n  };\n\n  const instance = new Marked({ renderer });\n  let html = instance.parse(md, { async: false }) as string;\n\n  // Wrap tables for responsive horizontal scroll\n  html = html.replace(/<table>/g, '<div class=\"table-wrapper\"><table>');\n  html = html.replace(/<\\/table>/g, '</table></div>');\n\n  // Rewrite relative .md links to GitHub\n  html = html.replace(\n    /href=\"((?!https?:\\/\\/|#)[^\"]+\\.md)\"/g,\n    'href=\"https://github.com/samber/awesome-ai-native/blob/main/$1\"'\n  );\n\n  return html;\n}\n\nexport function getReadmeHtml(): string {\n  let md = readFileSync(README_PATH, 'utf-8');\n  md = preprocessMarkdown(md);\n  return renderMarkdown(md);\n}\n\nexport interface Section {\n  slug: string;\n  title: string;\n  html: string;\n}\n\n// Sections that are meta/administrative and should not get their own pages.\nconst SKIP_SLUGS = new Set([\n  'contents',\n  'contributing',\n  'contributors',\n  'show-your-support',\n]);\n\nexport function getAllSections(): Section[] {\n  let md = readFileSync(README_PATH, 'utf-8');\n  md = preprocessMarkdown(md);\n\n  // Split on H2 boundary — each chunk starts with \"## Heading\\n\"\n  const chunks = md.split(/(?=^## )/m).filter(c => c.trim());\n\n  return chunks\n    .map((chunk): Section | null => {\n      const match = chunk.match(/^## (.+)\\n/);\n      if (!match) return null;\n      const rawTitle = match[1].replace(/<[^>]*>/g, '').trim();\n      const slug = githubSlug(rawTitle);\n      if (SKIP_SLUGS.has(slug)) return null;\n      return { slug, title: rawTitle, html: renderMarkdown(chunk) };\n    })\n    .filter((s): s is Section => s !== null);\n}\n"
     },
     {
-      "path": ".github/workflows/dependabot-automerge.yaml",
-      "sha": null,
-      "content_sha256": "3e580cc016a5c2af8abfcbcfff407799ae7c7fbe5afa9cf320ce52dba2468840",
-      "score": 126,
-      "content": "name: Dependabot automerge\n\non:\n  pull_request:\n    types: [opened, synchronize]\n\njobs:\n  automerge:\n    runs-on: ubuntu-latest\n    if: github.actor == 'dependabot[bot]'\n    permissions:\n      contents: write\n      pull-requests: write\n    steps:\n      - name: Fetch Dependabot metadata\n        id: metadata\n        uses: dependabot/fetch-metadata@v3\n\n      - name: Enable auto-merge for github-actions updates\n        if: steps.metadata.outputs.package-ecosystem == 'github_actions'\n        run: gh pr merge --auto --squash \"$PR_URL\"\n        env:\n          PR_URL: ${{ github.event.pull_request.html_url }}\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
-    },
-    {
       "path": ".github/workflows/lint.yaml",
       "sha": null,
       "content_sha256": "ee2ef4a6917104d9b94d9355c54c0394bbfe2ebe4038c9795ef0503596147ca7",
       "score": 126,
       "content": "name: lint\non:\n  pull_request:\n  push:\n    branches:\n      - main\n\njobs:\n    awesome-lint:\n      strategy:\n        fail-fast: false\n        matrix:\n          files:\n            - \"README.md\"\n      runs-on: ubuntu-latest\n      steps:\n        - name: \"checkout repo\"\n          uses: actions/checkout@v7\n          with:\n            fetch-depth: 0\n        - name: \"setup node\"\n          uses: actions/setup-node@v7\n        - name: \"linting: ${{ matrix.files }}\"\n          run: npx -y awesome-lint ${{ matrix.files }}\n    awesome-bot:\n      strategy:\n        fail-fast: false\n        matrix:\n          files:\n            - \"README.md\"\n      runs-on: ubuntu-latest\n      steps:\n        - name: \"checkout repo\"\n          uses: actions/checkout@v7\n          with:\n            fetch-depth: 0\n        - name: \"setup ruby\"\n          uses: ruby/setup-ruby@v1\n          with:\n            ruby-version: \"3.3\"\n            bundler-cache: true\n        - name: \"install awesome-bot\"\n          run: gem install awesome_bot\n        - name: \"linting: ${{ matrix.files }}\"\n          run: awesome_bot --allow-redirect --white-list https://github.com/samber/awesome-ai-native,https://www.linkedin.com,https://x.com,https://twitter.com,https://discord.gg,https://discord.com,https://medium.com,https://www.reddit.com,https://reddit.com,https://arxiv.org,https://chatgpt.com,https://claude.ai,https://www.meta.ai,https://openai.com,https://zread.ai,https://www.perplexity.ai,https://www.openevidence.com,https://www.midjourney.com,https://www.no-priors.com,https://www.deeplearning.ai,https://devin.ai,https://lovable.dev,https://www.physicalintelligence.company ${{ matrix.files }}\n"
+    },
+    {
+      "path": ".github/workflows/dependabot-automerge.yaml",
+      "sha": null,
+      "content_sha256": "3e580cc016a5c2af8abfcbcfff407799ae7c7fbe5afa9cf320ce52dba2468840",
+      "score": 126,
+      "content": "name: Dependabot automerge\n\non:\n  pull_request:\n    types: [opened, synchronize]\n\njobs:\n  automerge:\n    runs-on: ubuntu-latest\n    if: github.actor == 'dependabot[bot]'\n    permissions:\n      contents: write\n      pull-requests: write\n    steps:\n      - name: Fetch Dependabot metadata\n        id: metadata\n        uses: dependabot/fetch-metadata@v3\n\n      - name: Enable auto-merge for github-actions updates\n        if: steps.metadata.outputs.package-ecosystem == 'github_actions'\n        run: gh pr merge --auto --squash \"$PR_URL\"\n        env:\n          PR_URL: ${{ github.event.pull_request.html_url }}\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
     },
     {
       "path": "site/package.json",
@@ -67,18 +67,18 @@
       "content": "# Awesome AI-Native\n\n> A curated list of AI-native products and resources — where an LLM is the product, not a feature. 250+ tools across 40+ categories, for builders and practitioners.\n\n## What is this?\n\nAwesome AI-Native is an open-source reference list maintained by Samuel Berthe. It tracks products where a large language model is the core of the experience, not an \"AI-powered\" feature bolted onto a legacy tool. Entries are dropped once a product shuts down or pivots away from AI.\n\nAI-native means the product would not exist without the model: the LLM is the interface, the engine, and the value. This list covers the full ecosystem — from consumer chat apps and coding agents to the models, compute, and developer tooling underneath them.\n\n## Coverage\n\n- **Chat & agents** — ChatGPT, Claude, Gemini, Grok, Meta AI, general-purpose agents, self-hosted personal AI agents, computer-use models\n- **Vibe-coding and vibe-engineering** — coding agents, code understanding and docs, app builders\n- **Knowledge work** — AI search and research, knowledge management, meetings and voice\n- **Industry applications** — customer support, sales and CRM, legal, healthcare, education\n- **Creative & media** — design, image generation, video generation, audio and music\n- **Models & robotics** — open-weight models, small language models, robotics and embodied AI, OCR\n- **Compute & infrastructure** — AI chips and hardware, local inference, developer infrastructure, sandboxes\n- **Developer tooling** — frameworks and SDKs, MCP and integrations, vector databases and retrieval, agent memory, evaluation and observability\n- **Learning & community** — newsletters and blogs, podcasts, people to follow, courses, foundational papers, events, communities\n\n## Links\n\n- Source: https://github.com/samber/awesome-ai-native\n- Website: https://samber.github.io/awesome-ai-native/\n- GitHub: https://github.com/samber\n"
     },
     {
-      "path": "site/tsconfig.json",
-      "sha": null,
-      "content_sha256": "974b0a3b37e52f3649d9df63e72e374794e9e797c8ae61eca4812f844406f7ef",
-      "score": 33,
-      "content": "{\n  \"extends\": \"astro/tsconfigs/strict\"\n}\n"
-    },
-    {
       "path": ".github/dependabot.yml",
       "sha": null,
       "content_sha256": "8ce5d7131f87124c3018badd45dc70b1f8628f09b0428d5d2802aa68ca2a9838",
       "score": 33,
       "content": "version: 2\nupdates:\n  - package-ecosystem: \"github-actions\"\n    directory: \"/\"\n    schedule:\n      interval: \"monthly\"\n\n  - package-ecosystem: \"npm\"\n    directory: \"/site\"\n    schedule:\n      interval: \"monthly\"\n"
+    },
+    {
+      "path": "site/tsconfig.json",
+      "sha": null,
+      "content_sha256": "974b0a3b37e52f3649d9df63e72e374794e9e797c8ae61eca4812f844406f7ef",
+      "score": 33,
+      "content": "{\n  \"extends\": \"astro/tsconfigs/strict\"\n}\n"
     },
     {
       "path": ".github/ISSUE_TEMPLATE/suggestion.yml",
@@ -95,5 +95,7 @@
       "content": "import type { APIRoute } from 'astro';\nimport { getAllSections } from '../lib/readme';\n\nconst SITE_URL = 'https://samber.github.io/awesome-ai-native/';\nconst TODAY = new Date().toISOString().slice(0, 10);\n\nexport const GET: APIRoute = () => {\n  const sections = getAllSections();\n\n  const urls = [\n    `  <url>\n    <loc>${SITE_URL}</loc>\n    <lastmod>${TODAY}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>`,\n    ...sections.map(\n      ({ slug }) => `  <url>\n    <loc>${SITE_URL}${slug}/</loc>\n    <lastmod>${TODAY}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`\n    ),\n  ];\n\n  return new Response(\n    `<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n${urls.join('\\n')}\n</urlset>`,\n    { headers: { 'Content-Type': 'application/xml' } }\n  );\n};\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:09.468835+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:47.927080+00:00"
 }

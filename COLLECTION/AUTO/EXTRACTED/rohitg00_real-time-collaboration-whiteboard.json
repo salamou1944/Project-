@@ -39,46 +39,11 @@
       "content": "#!/bin/bash\n\n# Add Prometheus repository\nhelm repo add prometheus-community https://prometheus-community.github.io/helm-charts\nhelm repo update\n\n# Create monitoring namespace\nkubectl create namespace monitoring\n\n# Install Prometheus Operator\nhelm install prometheus prometheus-community/kube-prometheus-stack \\\n  --namespace monitoring \\\n  --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false\n\n# Wait for CRDs to be ready\nkubectl wait --for condition=established --timeout=60s crd/servicemonitors.monitoring.coreos.com\n\necho \"Prometheus Operator installed successfully\" "
     },
     {
-      "path": "kubernetes/database.yaml",
-      "sha": null,
-      "content_sha256": "9ba4ff4a00da3014cf5b5a2ac62ac77446673ba0095dc086c0ed3b48361afe2d",
-      "score": 165,
-      "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: postgres-config\n  namespace: whiteboard-app\ndata:\n  POSTGRES_DB: spacedeck\n  POSTGRES_USER: spacedeck\n  POSTGRES_PASSWORD: secret\n\n---\napiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: postgres\n  namespace: whiteboard-app\nspec:\n  serviceName: postgres\n  replicas: 1\n  selector:\n    matchLabels:\n      app: postgres\n  template:\n    metadata:\n      labels:\n        app: postgres\n    spec:\n      containers:\n      - name: postgres\n        image: postgres:13\n        envFrom:\n        - configMapRef:\n            name: postgres-config\n        ports:\n        - containerPort: 5432\n        volumeMounts:\n        - name: postgres-storage\n          mountPath: /var/lib/postgresql/data\n  volumeClaimTemplates:\n  - metadata:\n      name: postgres-storage\n    spec:\n      accessModes: [ \"ReadWriteOnce\" ]\n      resources:\n        requests:\n          storage: 10Gi\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: postgres-service\n  namespace: whiteboard-app\nspec:\n  selector:\n    app: postgres\n  ports:\n  - port: 5432\n    targetPort: 5432 "
-    },
-    {
-      "path": "kubernetes/storage.yaml",
-      "sha": null,
-      "content_sha256": "f24cff7cd950b3231177ed8da0f329f913c72cdd814cea10421dd9e90beb1ee9",
-      "score": 165,
-      "content": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: whiteboard-storage\nspec:\n  accessModes:\n    - ReadWriteMany\n  resources:\n    requests:\n      storage: 10Gi "
-    },
-    {
       "path": "kubernetes/redis-cluster-config.yaml",
       "sha": null,
       "content_sha256": "0635a96097f2b9bc35b5a7bdef959a5cde56149e43aea41646cded4f324c7bab",
       "score": 165,
       "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: redis-cluster-config\n  namespace: whiteboard-app\ndata:\n  redis.conf: |\n    cluster-enabled yes\n    cluster-config-file nodes.conf\n    cluster-node-timeout 5000\n    appendonly yes\n    protected-mode no\n    requirepass secret\n    masterauth secret "
-    },
-    {
-      "path": "kubernetes/redis.yaml",
-      "sha": null,
-      "content_sha256": "673fc4f54b5bc7f38e7086bca5c2130a751d870d2dacd2829dcbf9ef8e098688",
-      "score": 165,
-      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: redis\n  namespace: whiteboard-app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: redis\n  template:\n    metadata:\n      labels:\n        app: redis\n    spec:\n      containers:\n      - name: redis\n        image: redis:6.2-alpine\n        args: [\"redis-server\", \"--requirepass\", \"secret\"]\n        ports:\n        - containerPort: 6379\n        readinessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 5\n          periodSeconds: 10\n        livenessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 15\n          periodSeconds: 20\n        resources:\n          requests:\n            cpu: \"100m\"\n            memory: \"128Mi\"\n          limits:\n            cpu: \"200m\"\n            memory: \"256Mi\"\n        volumeMounts:\n        - name: redis-data\n          mountPath: /data\n      volumes:\n      - name: redis-data\n        persistentVolumeClaim:\n          claimName: redis-data\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: redis\n  namespace: whiteboard-app\nspec:\n  selector:\n    app: redis\n  ports:\n  - port: 6379\n    targetPort: 6379\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: redis-data\n  namespace: whiteboard-app\nspec:\n  accessModes:\n    - ReadWriteOnce\n  resources:\n    requests:\n      storage: 1Gi "
-    },
-    {
-      "path": "kubernetes/postgres.yaml",
-      "sha": null,
-      "content_sha256": "5ab3ec601bfd064524af2c425ea9e037c324b1ae083d12e6787bc38c7957f4b2",
-      "score": 165,
-      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: postgres\n  namespace: whiteboard-app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: postgres\n  template:\n    metadata:\n      labels:\n        app: postgres\n    spec:\n      containers:\n      - name: postgres\n        image: postgres:13-alpine\n        env:\n        - name: POSTGRES_DB\n          value: spacedeck\n        - name: POSTGRES_USER\n          value: spacedeck\n        - name: POSTGRES_PASSWORD\n          value: secret\n        - name: PGDATA\n          value: /var/lib/postgresql/data/pgdata\n        ports:\n        - containerPort: 5432\n        readinessProbe:\n          exec:\n            command: [\"psql\", \"-U\", \"spacedeck\", \"-d\", \"spacedeck\", \"-c\", \"SELECT 1\"]\n          initialDelaySeconds: 15\n          periodSeconds: 5\n        volumeMounts:\n        - name: postgres-data\n          mountPath: /var/lib/postgresql/data\n      volumes:\n      - name: postgres-data\n        persistentVolumeClaim:\n          claimName: postgres-data\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: postgres\n  namespace: whiteboard-app\nspec:\n  selector:\n    app: postgres\n  ports:\n  - port: 5432\n    targetPort: 5432\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: postgres-data\n  namespace: whiteboard-app\nspec:\n  accessModes:\n    - ReadWriteOnce\n  resources:\n    requests:\n      storage: 1Gi "
-    },
-    {
-      "path": "kubernetes/whiteboard-storage.yaml",
-      "sha": null,
-      "content_sha256": "1f10043d29459dfdcee6940093bcc11600964f20ba3a28577b35b22e44e931d5",
-      "score": 165,
-      "content": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: whiteboard-storage\n  namespace: whiteboard-app\nspec:\n  accessModes:\n    - ReadWriteMany\n  resources:\n    requests:\n      storage: 10Gi "
     },
     {
       "path": "kubernetes/storage-class.yaml",
@@ -88,6 +53,41 @@
       "content": "apiVersion: storage.k8s.io/v1\nkind: StorageClass\nmetadata:\n  name: standard\n  annotations:\n    storageclass.kubernetes.io/is-default-class: \"true\"\nprovisioner: k8s.io/minikube-hostpath\nvolumeBindingMode: Immediate "
     },
     {
+      "path": "kubernetes/redis-cluster.yaml",
+      "sha": null,
+      "content_sha256": "06f0e2d02fc7438032f2bb9c7f6d2d4e269a822c16767d18d615d7dc3c15bbb6",
+      "score": 165,
+      "content": "apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: redis-cluster\n  namespace: whiteboard-app\nspec:\n  serviceName: redis-cluster\n  replicas: 6\n  selector:\n    matchLabels:\n      app: redis-cluster\n  template:\n    metadata:\n      labels:\n        app: redis-cluster\n    spec:\n      containers:\n      - name: redis\n        image: redis:6.2-alpine\n        command: [\"redis-server\"]\n        args: [\"/conf/redis.conf\"]\n        ports:\n        - containerPort: 6379\n          name: client\n        - containerPort: 16379\n          name: gossip\n        readinessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 15\n          periodSeconds: 5\n        livenessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 20\n          periodSeconds: 10\n        resources:\n          requests:\n            cpu: \"100m\"\n            memory: \"128Mi\"\n          limits:\n            cpu: \"200m\"\n            memory: \"256Mi\"\n        volumeMounts:\n        - name: conf\n          mountPath: /conf\n        - name: data\n          mountPath: /data\n      volumes:\n      - name: conf\n        configMap:\n          name: redis-cluster-config\n  volumeClaimTemplates:\n  - metadata:\n      name: data\n    spec:\n      accessModes: [ \"ReadWriteOnce\" ]\n      resources:\n        requests:\n          storage: 1Gi\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: redis-cluster-config\n  namespace: whiteboard-app\ndata:\n  redis.conf: |\n    port 6379\n    cluster-enabled yes\n    cluster-config-file nodes.conf\n    cluster-node-timeout 5000\n    appendonly yes\n    protected-mode no\n    requirepass secret\n    masterauth secret"
+    },
+    {
+      "path": "kubernetes/storage.yaml",
+      "sha": null,
+      "content_sha256": "f24cff7cd950b3231177ed8da0f329f913c72cdd814cea10421dd9e90beb1ee9",
+      "score": 165,
+      "content": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: whiteboard-storage\nspec:\n  accessModes:\n    - ReadWriteMany\n  resources:\n    requests:\n      storage: 10Gi "
+    },
+    {
+      "path": "kubernetes/redis.yaml",
+      "sha": null,
+      "content_sha256": "673fc4f54b5bc7f38e7086bca5c2130a751d870d2dacd2829dcbf9ef8e098688",
+      "score": 165,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: redis\n  namespace: whiteboard-app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: redis\n  template:\n    metadata:\n      labels:\n        app: redis\n    spec:\n      containers:\n      - name: redis\n        image: redis:6.2-alpine\n        args: [\"redis-server\", \"--requirepass\", \"secret\"]\n        ports:\n        - containerPort: 6379\n        readinessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 5\n          periodSeconds: 10\n        livenessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 15\n          periodSeconds: 20\n        resources:\n          requests:\n            cpu: \"100m\"\n            memory: \"128Mi\"\n          limits:\n            cpu: \"200m\"\n            memory: \"256Mi\"\n        volumeMounts:\n        - name: redis-data\n          mountPath: /data\n      volumes:\n      - name: redis-data\n        persistentVolumeClaim:\n          claimName: redis-data\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: redis\n  namespace: whiteboard-app\nspec:\n  selector:\n    app: redis\n  ports:\n  - port: 6379\n    targetPort: 6379\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: redis-data\n  namespace: whiteboard-app\nspec:\n  accessModes:\n    - ReadWriteOnce\n  resources:\n    requests:\n      storage: 1Gi "
+    },
+    {
+      "path": "kubernetes/database.yaml",
+      "sha": null,
+      "content_sha256": "9ba4ff4a00da3014cf5b5a2ac62ac77446673ba0095dc086c0ed3b48361afe2d",
+      "score": 165,
+      "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: postgres-config\n  namespace: whiteboard-app\ndata:\n  POSTGRES_DB: spacedeck\n  POSTGRES_USER: spacedeck\n  POSTGRES_PASSWORD: secret\n\n---\napiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: postgres\n  namespace: whiteboard-app\nspec:\n  serviceName: postgres\n  replicas: 1\n  selector:\n    matchLabels:\n      app: postgres\n  template:\n    metadata:\n      labels:\n        app: postgres\n    spec:\n      containers:\n      - name: postgres\n        image: postgres:13\n        envFrom:\n        - configMapRef:\n            name: postgres-config\n        ports:\n        - containerPort: 5432\n        volumeMounts:\n        - name: postgres-storage\n          mountPath: /var/lib/postgresql/data\n  volumeClaimTemplates:\n  - metadata:\n      name: postgres-storage\n    spec:\n      accessModes: [ \"ReadWriteOnce\" ]\n      resources:\n        requests:\n          storage: 10Gi\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: postgres-service\n  namespace: whiteboard-app\nspec:\n  selector:\n    app: postgres\n  ports:\n  - port: 5432\n    targetPort: 5432 "
+    },
+    {
+      "path": "kubernetes/postgres.yaml",
+      "sha": null,
+      "content_sha256": "5ab3ec601bfd064524af2c425ea9e037c324b1ae083d12e6787bc38c7957f4b2",
+      "score": 165,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: postgres\n  namespace: whiteboard-app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: postgres\n  template:\n    metadata:\n      labels:\n        app: postgres\n    spec:\n      containers:\n      - name: postgres\n        image: postgres:13-alpine\n        env:\n        - name: POSTGRES_DB\n          value: spacedeck\n        - name: POSTGRES_USER\n          value: spacedeck\n        - name: POSTGRES_PASSWORD\n          value: secret\n        - name: PGDATA\n          value: /var/lib/postgresql/data/pgdata\n        ports:\n        - containerPort: 5432\n        readinessProbe:\n          exec:\n            command: [\"psql\", \"-U\", \"spacedeck\", \"-d\", \"spacedeck\", \"-c\", \"SELECT 1\"]\n          initialDelaySeconds: 15\n          periodSeconds: 5\n        volumeMounts:\n        - name: postgres-data\n          mountPath: /var/lib/postgresql/data\n      volumes:\n      - name: postgres-data\n        persistentVolumeClaim:\n          claimName: postgres-data\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: postgres\n  namespace: whiteboard-app\nspec:\n  selector:\n    app: postgres\n  ports:\n  - port: 5432\n    targetPort: 5432\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: postgres-data\n  namespace: whiteboard-app\nspec:\n  accessModes:\n    - ReadWriteOnce\n  resources:\n    requests:\n      storage: 1Gi "
+    },
+    {
       "path": "kubernetes/monitoring.yaml",
       "sha": null,
       "content_sha256": "b4e093826e7e36ff9727ddb49e158802c39e016bf91aad72a1950d1ea57d6a2d",
@@ -95,11 +95,11 @@
       "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: prometheus\n  namespace: whiteboard-app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: prometheus\n  template:\n    metadata:\n      labels:\n        app: prometheus\n    spec:\n      containers:\n      - name: prometheus\n        image: prom/prometheus:v2.30.3\n        args:\n          - \"--config.file=/etc/prometheus/prometheus.yml\"\n        ports:\n        - containerPort: 9090\n        volumeMounts:\n        - name: prometheus-config\n          mountPath: /etc/prometheus/\n      volumes:\n      - name: prometheus-config\n        configMap:\n          name: prometheus-config\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: grafana\n  namespace: whiteboard-app\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: grafana\n  template:\n    metadata:\n      labels:\n        app: grafana\n    spec:\n      containers:\n      - name: grafana\n        image: grafana/grafana:8.2.0\n        ports:\n        - containerPort: 3000\n        env:\n        - name: GF_SECURITY_ADMIN_PASSWORD\n          value: \"admin\"\n        volumeMounts:\n        - name: grafana-storage\n          mountPath: /var/lib/grafana\n      volumes:\n      - name: grafana-storage\n        persistentVolumeClaim:\n          claimName: grafana-storage\n---\napiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: grafana-storage\n  namespace: whiteboard-app\nspec:\n  accessModes:\n    - ReadWriteOnce\n  resources:\n    requests:\n      storage: 10Gi\n---\napiVersion: monitoring.coreos.com/v1\nkind: ServiceMonitor\nmetadata:\n  name: whiteboard-monitor\n  namespace: whiteboard-app\nspec:\n  selector:\n    matchLabels:\n      app: whiteboard\n  endpoints:\n  - port: metrics\n\n---\napiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata:\n  name: whiteboard-scaler\n  namespace: whiteboard-app\nspec:\n  scaleTargetRef:\n    apiVersion: apps/v1\n    kind: Deployment\n    name: whiteboard-app\n  minReplicas: 1\n  maxReplicas: 10\n  metrics:\n  - type: Resource\n    resource:\n      name: cpu\n      target:\n        type: Utilization\n        averageUtilization: 70 "
     },
     {
-      "path": "kubernetes/redis-cluster.yaml",
+      "path": "kubernetes/whiteboard-storage.yaml",
       "sha": null,
-      "content_sha256": "06f0e2d02fc7438032f2bb9c7f6d2d4e269a822c16767d18d615d7dc3c15bbb6",
+      "content_sha256": "1f10043d29459dfdcee6940093bcc11600964f20ba3a28577b35b22e44e931d5",
       "score": 165,
-      "content": "apiVersion: apps/v1\nkind: StatefulSet\nmetadata:\n  name: redis-cluster\n  namespace: whiteboard-app\nspec:\n  serviceName: redis-cluster\n  replicas: 6\n  selector:\n    matchLabels:\n      app: redis-cluster\n  template:\n    metadata:\n      labels:\n        app: redis-cluster\n    spec:\n      containers:\n      - name: redis\n        image: redis:6.2-alpine\n        command: [\"redis-server\"]\n        args: [\"/conf/redis.conf\"]\n        ports:\n        - containerPort: 6379\n          name: client\n        - containerPort: 16379\n          name: gossip\n        readinessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 15\n          periodSeconds: 5\n        livenessProbe:\n          tcpSocket:\n            port: 6379\n          initialDelaySeconds: 20\n          periodSeconds: 10\n        resources:\n          requests:\n            cpu: \"100m\"\n            memory: \"128Mi\"\n          limits:\n            cpu: \"200m\"\n            memory: \"256Mi\"\n        volumeMounts:\n        - name: conf\n          mountPath: /conf\n        - name: data\n          mountPath: /data\n      volumes:\n      - name: conf\n        configMap:\n          name: redis-cluster-config\n  volumeClaimTemplates:\n  - metadata:\n      name: data\n    spec:\n      accessModes: [ \"ReadWriteOnce\" ]\n      resources:\n        requests:\n          storage: 1Gi\n---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: redis-cluster-config\n  namespace: whiteboard-app\ndata:\n  redis.conf: |\n    port 6379\n    cluster-enabled yes\n    cluster-config-file nodes.conf\n    cluster-node-timeout 5000\n    appendonly yes\n    protected-mode no\n    requirepass secret\n    masterauth secret"
+      "content": "apiVersion: v1\nkind: PersistentVolumeClaim\nmetadata:\n  name: whiteboard-storage\n  namespace: whiteboard-app\nspec:\n  accessModes:\n    - ReadWriteMany\n  resources:\n    requests:\n      storage: 10Gi "
     },
     {
       "path": "scripts/test-redis.sh",
@@ -158,20 +158,6 @@
       "content": "variables:\n  CONTAINER_IMAGE: git.universe.io:4567/$CI_PROJECT_PATH\n  DOCKER_HOST: tcp://docker:2376\nstages:\n  - build\n  - deploy_dev\n  - deploy\nbuild:\n  stage: build\n  image: docker:stable\n  services:\n    - docker:19.03.12-dind\n  variables:\n    DOCKER_TLS_CERTDIR: \"/certs\"\n  script:\n    - docker image build -t $CONTAINER_IMAGE:$CI_BUILD_REF -t $CONTAINER_IMAGE:latest .\n    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN git.universe.io:4567\n    - docker image push $CONTAINER_IMAGE:latest\n    - docker image push $CONTAINER_IMAGE:$CI_BUILD_REF\n  only:\n    - mnt\n    - custom/freiwerkb\ndeploy_dev:\n  stage: deploy\n  image: alpine\n  script:\n    - apk add --update curl\n    - curl -XPOST $WWW_WEBHOOK\n  only:\n    - mnt\n    - custom/freiwerkb\ndeploy:\n  when: manual\n  stage: deploy\n  image: alpine\n  script:\n    - apk add --update curl\n    - |\n      curl -XPOST -K - <<URL \n        $WWW_WEBHOOKS \n      URL\n  only:\n    - master\n    - custom/freiwerkb\n"
     },
     {
-      "path": "models/migrations/02-users-add-api-token.js",
-      "sha": null,
-      "content_sha256": "7eeb584e4f3dc636b300c9a214f2d7807ad5213d68d519093a2a58f429ec2f70",
-      "score": 106,
-      "content": "'use strict';\n\nmodule.exports = {\n  up: function(migration, DataTypes) {\n    return Promise.all([\n      migration.changeColumn('users', 'api_token',\n        {\n          type: DataTypes.STRING\n        }\n      )\n    ])\n  },\n\n  down: function(migration, DataTypes) {\n    return Promise.all([\n      migration.changeColumn('users', 'api_token',\n        {\n          type: Sequelize.STRING\n        }\n      )\n    ])\n  }\n}\n"
-    },
-    {
-      "path": "routes/api/webgrabber.js",
-      "sha": null,
-      "content_sha256": "606f4fdc0bfc65412a168e82b4256f9d44fbc1c4724723142af7f0de1e6751fe",
-      "score": 106,
-      "content": "\"use strict\";\n\nconst puppeteer = require('puppeteer');\n\nvar config = require('config');\nrequire('../../models/db');\nvar fs = require('fs');\nvar md5 = require('md5');\n\nvar express = require('express');\nvar router = express.Router();\n\nfunction website_to_png(url,on_success,on_error) {\n  var hash = md5(url);\n  var export_path = \"/tmp/webgrabber-\"+hash+\".png\";\n\n  var timeout = 2000;\n\n  console.log(\"[webgrabber] url: \"+url);\n  console.log(\"[webgrabber] export_path: \"+export_path);\n\n  fs.stat(export_path, function(err, stat) {\n    if (!err) {\n      // file exists\n      console.log(\"[webgrabber] serving cached snapshot of url: \"+url);\n      on_success(export_path);\n    } else {\n      (async () => {\n        let browser;\n        let page;\n        try {\n          browser = await puppeteer.launch(\n            {\n              headless: true,\n              args: ['--disable-dev-shm-usage', '--no-sandbox']\n            }\n          );\n          page = await browser.newPage();\n  \n          page.setDefaultTimeout(timeout);\n          await page.setJavaScriptEnabled(false);\n          await page.goto(url, {waitUntil: 'networkidle2'});\n          await page.emulateMedia('screen');\n          await page.screenshot({path: export_path, printBackground: true});\n  \n          await browser.close();\n          on_success(export_path);\n        } catch (error) {\n          console.error(error);\n          console.log(\"[webgrabber] puppeteer abnormal exit for url \"+url);\n          on_error();\n        }\n      \n      })();\n    }\n  });\n}\n\nrouter.get('/:id', function (req, res) {\n  var uri = new Buffer(req.params.id, \"base64\")+\"\";\n  var on_success_called = false;\n\n  website_to_png(uri, (image_path) => {\n    on_success_called = true;\n    res.sendFile(image_path);\n  }, () => {\n    if (!on_success_called) {\n      res.status(500).send(\"[webgrabber] Error fetching website.\");\n    }\n  });\n});\n\nmodule.exports = router;\n"
-    },
-    {
       "path": "models/migrations/01-spaces-delete-cascade.js",
       "sha": null,
       "content_sha256": "5bfbe6feb339c53101f0fedf9fa5b3d94bab1c0ed48baf2ecd73090309fe36d3",
@@ -184,7 +170,23 @@
       "content_sha256": "a305c5ea9e023fa3988abdbf15bc38c2cccf28ebaaa1e24fbcdfb62fb9962058",
       "score": 106,
       "content": "\"use strict\";\n\nvar config = require('config');\n\nvar async = require('async');\nvar url = require(\"url\");\nvar path = require(\"path\");\nvar crypto = require('crypto');\nvar glob = require('glob');\n\nvar express = require('express');\nvar router = express.Router();\n\nconst db = require('../../models/db');\nconst Sequelize = require('sequelize');\nconst Op = Sequelize.Op;\nconst { v4: uuidv4 } = require('uuid');\n\nrouter.get('/:membership_id/accept', function(req, res, next) {\n  if (req.user) {\n    db.Membership.findOne({where:{\n      _id: req.params.membership_id,\n      code: req.query.code\n    }, include: ['space']}).then((mem) => {\n      if (mem) {\n        if (!mem.user) {\n          mem.state = \"active\";\n          mem.user_id = req.user._id;\n          \n          mem.save().then(function() {\n            res.status(200).json(mem);\n          });\n        } else {\n          res.status(200).json(mem);\n        }\n      } else {\n        res.status(404).json({\"error\": \"not found\"});\n      }\n    });\n  } else {\n    res.sendStatus(403);\n  }\n});\n\nmodule.exports = router;\n"
+    },
+    {
+      "path": "routes/api/webgrabber.js",
+      "sha": null,
+      "content_sha256": "606f4fdc0bfc65412a168e82b4256f9d44fbc1c4724723142af7f0de1e6751fe",
+      "score": 106,
+      "content": "\"use strict\";\n\nconst puppeteer = require('puppeteer');\n\nvar config = require('config');\nrequire('../../models/db');\nvar fs = require('fs');\nvar md5 = require('md5');\n\nvar express = require('express');\nvar router = express.Router();\n\nfunction website_to_png(url,on_success,on_error) {\n  var hash = md5(url);\n  var export_path = \"/tmp/webgrabber-\"+hash+\".png\";\n\n  var timeout = 2000;\n\n  console.log(\"[webgrabber] url: \"+url);\n  console.log(\"[webgrabber] export_path: \"+export_path);\n\n  fs.stat(export_path, function(err, stat) {\n    if (!err) {\n      // file exists\n      console.log(\"[webgrabber] serving cached snapshot of url: \"+url);\n      on_success(export_path);\n    } else {\n      (async () => {\n        let browser;\n        let page;\n        try {\n          browser = await puppeteer.launch(\n            {\n              headless: true,\n              args: ['--disable-dev-shm-usage', '--no-sandbox']\n            }\n          );\n          page = await browser.newPage();\n  \n          page.setDefaultTimeout(timeout);\n          await page.setJavaScriptEnabled(false);\n          await page.goto(url, {waitUntil: 'networkidle2'});\n          await page.emulateMedia('screen');\n          await page.screenshot({path: export_path, printBackground: true});\n  \n          await browser.close();\n          on_success(export_path);\n        } catch (error) {\n          console.error(error);\n          console.log(\"[webgrabber] puppeteer abnormal exit for url \"+url);\n          on_error();\n        }\n      \n      })();\n    }\n  });\n}\n\nrouter.get('/:id', function (req, res) {\n  var uri = new Buffer(req.params.id, \"base64\")+\"\";\n  var on_success_called = false;\n\n  website_to_png(uri, (image_path) => {\n    on_success_called = true;\n    res.sendFile(image_path);\n  }, () => {\n    if (!on_success_called) {\n      res.status(500).send(\"[webgrabber] Error fetching website.\");\n    }\n  });\n});\n\nmodule.exports = router;\n"
+    },
+    {
+      "path": "models/migrations/02-users-add-api-token.js",
+      "sha": null,
+      "content_sha256": "7eeb584e4f3dc636b300c9a214f2d7807ad5213d68d519093a2a58f429ec2f70",
+      "score": 106,
+      "content": "'use strict';\n\nmodule.exports = {\n  up: function(migration, DataTypes) {\n    return Promise.all([\n      migration.changeColumn('users', 'api_token',\n        {\n          type: DataTypes.STRING\n        }\n      )\n    ])\n  },\n\n  down: function(migration, DataTypes) {\n    return Promise.all([\n      migration.changeColumn('users', 'api_token',\n        {\n          type: Sequelize.STRING\n        }\n      )\n    ])\n  }\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T02:26:11.810375+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:43.855046+00:00"
 }

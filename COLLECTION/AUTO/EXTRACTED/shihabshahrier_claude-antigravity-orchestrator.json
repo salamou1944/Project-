@@ -68,6 +68,20 @@
       "content": "{\n  \"name\": \"antigravity-delegate\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Offload token-heavy grunt work (search, download, scan, validate) to the Antigravity CLI (agy) so Claude stays the orchestrator.\",\n  \"author\": \"shihabshahrier\",\n  \"license\": \"MIT\"\n}\n"
     },
     {
+      "path": ".claude-plugin/marketplace.json",
+      "sha": null,
+      "content_sha256": "9a8c0db9172fdc1ec0256382fea224c48fbeac6f4a68d02eb4d0ac1bc63ec341",
+      "score": 33,
+      "content": "{\n  \"name\": \"antigravity-delegate-marketplace\",\n  \"owner\": \"shihabshahrier\",\n  \"plugins\": [\n    {\n      \"name\": \"antigravity-delegate\",\n      \"source\": \"./\",\n      \"description\": \"Claude orchestrates; the Antigravity CLI (agy) does the token-heavy grunt work.\"\n    }\n  ]\n}\n"
+    },
+    {
+      "path": ".codex/config.toml",
+      "sha": null,
+      "content_sha256": "ab93227408596487e99ed33cf18ed225685f2f8cc1d7f88b87126233d5a9b619",
+      "score": 33,
+      "content": "# Codex display config for the antigravity-delegate skill.\n[skill]\nname = \"antigravity-delegate\"\ndisplay_name = \"Antigravity Delegate\"\ndescription = \"Offload token-heavy grunt work to the Antigravity CLI (agy); Claude stays orchestrator.\"\nallow_implicit_invocation = true\n"
+    },
+    {
       "path": ".codex/hooks.json",
       "sha": null,
       "content_sha256": "527e053b72e46170cb29e433b17d7144482f5185c1f0ea81feb4689fb166e801",
@@ -82,20 +96,6 @@
       "content": "github: [shihabshahrier]\n"
     },
     {
-      "path": ".codex/config.toml",
-      "sha": null,
-      "content_sha256": "ab93227408596487e99ed33cf18ed225685f2f8cc1d7f88b87126233d5a9b619",
-      "score": 33,
-      "content": "# Codex display config for the antigravity-delegate skill.\n[skill]\nname = \"antigravity-delegate\"\ndisplay_name = \"Antigravity Delegate\"\ndescription = \"Offload token-heavy grunt work to the Antigravity CLI (agy); Claude stays orchestrator.\"\nallow_implicit_invocation = true\n"
-    },
-    {
-      "path": ".claude-plugin/marketplace.json",
-      "sha": null,
-      "content_sha256": "9a8c0db9172fdc1ec0256382fea224c48fbeac6f4a68d02eb4d0ac1bc63ec341",
-      "score": 33,
-      "content": "{\n  \"name\": \"antigravity-delegate-marketplace\",\n  \"owner\": \"shihabshahrier\",\n  \"plugins\": [\n    {\n      \"name\": \"antigravity-delegate\",\n      \"source\": \"./\",\n      \"description\": \"Claude orchestrates; the Antigravity CLI (agy) does the token-heavy grunt work.\"\n    }\n  ]\n}\n"
-    },
-    {
       "path": "skills/antigravity-delegate/scripts/agy-run.sh",
       "sha": null,
       "content_sha256": "9dddc566aae5046c27daa5cbefd01083e0d4ab7e6ff27273a5927a70ce0533c0",
@@ -103,5 +103,7 @@
       "content": "#!/usr/bin/env bash\n# agy-run.sh — delegate one closed task to the Antigravity CLI (agy) in headless mode.\n# Claude (orchestrator) calls this; only agy's plain-text answer comes back on stdout.\n#\n# Usage:\n#   agy-run.sh \"<task prompt>\" [--mode search|read|write] [--model \"<display name>\"] \\\n#              [--dir DIR] [--out FILE] [--timeout 5m]\n#\n# Modes:\n#   search (default) : read-only intent; no tool auto-approval\n#   read             : read-only intent; no tool auto-approval\n#   write            : pass --dangerously-skip-permissions (downloads/builds/validators\n#                      in a scoped --dir). Only for expected, reversible actions.\n#\n# agy prints plain text to stdout (no JSON), so the answer needs no extraction.\n# Default model \"Gemini 3.5 Flash (Low)\" — cheap/fast grunt work. List: `agy models`.\nset -euo pipefail\n\nPROMPT=\"${1:-}\"\n[ -n \"$PROMPT\" ] || { echo \"error: missing task prompt\" >&2; exit 2; }\nshift || true\n\nMODE=\"search\"\nMODEL=\"Gemini 3.5 Flash (Low)\"\nDIR=\"\"\nOUT=\"\"\nTIMEOUT=\"5m\"\n\nwhile [ $# -gt 0 ]; do\n  case \"$1\" in\n    --mode)    MODE=\"${2:-}\"; shift 2 ;;\n    --model)   MODEL=\"${2:-}\"; shift 2 ;;\n    --dir)     DIR=\"${2:-}\"; shift 2 ;;\n    --out)     OUT=\"${2:-}\"; shift 2 ;;\n    --timeout) TIMEOUT=\"${2:-}\"; shift 2 ;;\n    *) echo \"error: unknown arg '$1'\" >&2; exit 2 ;;\n  esac\ndone\n\ncase \"$MODE\" in\n  search|read|write) : ;;\n  *) echo \"error: --mode must be search|read|write\" >&2; exit 2 ;;\nesac\n\n# Resolve the Antigravity CLI binary. Note: the IDE ships an `agy` launcher that opens the\n# editor, so a bare `agy` can be shadowed. Prefer an explicit AGY_BIN, then `agy-cli`\n# (recommended name when the IDE is also installed), then plain `agy`.\nAGY=\"\"\nfor cand in \"${AGY_BIN:-}\" agy-cli agy \"$HOME/.local/bin/agy-cli\" \"$HOME/.local/bin/agy\"; do\n  [ -n \"$cand\" ] || continue\n  if command -v \"$cand\" >/dev/null 2>&1 || [ -x \"$cand\" ]; then AGY=\"$cand\"; break; fi\ndone\n[ -n \"$AGY\" ] || {\n  echo \"error: Antigravity CLI not found (looked for agy-cli, agy). Install: curl -fsSL https://antigravity.google/cli/install.sh | bash\" >&2\n  echo \"  If the IDE shadows 'agy', rename the CLI to agy-cli or set AGY_BIN=/path/to/agy.\" >&2\n  exit 1\n}\n\n# If --out, instruct agy to write the bulk there and keep the response a one-line summary.\n# Writing a file is a tool action, so --out implies write intent: auto-approve tools and,\n# unless --dir was given, scope the workspace to the output file's directory.\nFULL_PROMPT=\"$PROMPT\"\nif [ -n \"$OUT\" ]; then\n  FULL_PROMPT=\"$PROMPT\n\nWrite the full output to the file: $OUT . In your reply, output ONLY a one-line summary (what you wrote + size).\"\n  MODE=\"write\"\n  [ -n \"$DIR\" ] || DIR=\"$(dirname -- \"$OUT\")\"\nfi\n\nARGS=( -p \"$FULL_PROMPT\" --model \"$MODEL\" --print-timeout \"$TIMEOUT\" )\n[ -n \"$DIR\" ] && ARGS+=( --add-dir \"$DIR\" )\n[ \"$MODE\" = \"write\" ] && ARGS+=( --dangerously-skip-permissions )\n\nset +e\nANSWER=\"$(\"$AGY\" \"${ARGS[@]}\")\"\nCODE=$?\nset -e\n\nif [ \"$CODE\" -ne 0 ]; then\n  echo \"agy exited $CODE for mode=$MODE model=$MODEL\" >&2\n  exit \"$CODE\"\nfi\n\nif [ -z \"${ANSWER//[[:space:]]/}\" ]; then\n  echo \"error: empty response from agy (model may have refused or hit a tool-permission wall; try --mode write for tasks needing tools)\" >&2\n  exit 1\nfi\n\nprintf '%s\\n' \"$ANSWER\"\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:52.350684+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:51.729792+00:00"
 }

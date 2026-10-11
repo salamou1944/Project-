@@ -39,18 +39,18 @@
       "content": "version: '3.8'\n\nservices:\n  web:\n    build: .\n    container_name: cerbose-react\n    ports:\n      - '5173:5173'\n    develop:\n      watch:\n        - action: sync\n          path: .\n          target: /app\n        - action: rebuild\n          path: ./package.json"
     },
     {
-      "path": "cerbos/policies/common_roles.yaml",
-      "sha": null,
-      "content_sha256": "d52d1155bb8c3476838bec27670d39426c49f1226da44c99a1bc7b3b192b4608",
-      "score": 103,
-      "content": "apiVersion: api.cerbos.dev/v1\ndescription: |-\n  Common dynamic roles used within the Courses Demo app\nderivedRoles:\n  name: common_roles\n  definitions:\n    # If the principal belongs to group `USER` in a request, and the `resource`s\n    # `autherId` attribute matches `principal`s `id` then the `principal` is considered\n    # as `AUTHOR` within Cerbos for the policy evaluation\n    - name: AUTHOR\n      parentRoles: [\"USER\"]\n      condition:\n        match:\n          expr: request.resource.attr.authorId == request.principal.id\n"
-    },
-    {
       "path": "cerbos/policies/course.yaml",
       "sha": null,
       "content_sha256": "f249e908afe4fb0da253ffc9b05e98865c28a358b0dcd4d0676d2e609a820d63",
       "score": 103,
       "content": "---\napiVersion: api.cerbos.dev/v1\nresourcePolicy:\n  version: 'default'\n  # Importing `common_roles` in so they can be used in the resource policy.\n  importDerivedRoles:\n    - common_roles\n\n  # This resource file is reviewed for when checking permissions when a resource is of `kind` \"expense:object\"\n  resource: 'course'\n\n  rules:\n    - actions: [\"create\"]\n      effect: EFFECT_ALLOW\n      roles:\n        - USER\n\n    # A `principal` that owns the resource can update it.\n    - actions: [\"view\", \"update\"]\n      effect: EFFECT_ALLOW\n      derivedRoles:\n        - AUTHOR\n\n    # If the `principal`s role is `user` they can view the course if its published\n    - actions: [\"view\"]\n      effect: EFFECT_ALLOW\n      roles:\n        - USER\n      condition:\n        match:\n          expr: request.resource.attr.status == \"PUBLISHED\"\n\n    # If the `principal`s role is `admin` then all the actions are allowed.\n    - actions: [\"view\", \"create\", \"update\", \"delete\"]\n      effect: EFFECT_ALLOW\n      roles:\n        - ADMIN"
+    },
+    {
+      "path": "cerbos/policies/common_roles.yaml",
+      "sha": null,
+      "content_sha256": "d52d1155bb8c3476838bec27670d39426c49f1226da44c99a1bc7b3b192b4608",
+      "score": 103,
+      "content": "apiVersion: api.cerbos.dev/v1\ndescription: |-\n  Common dynamic roles used within the Courses Demo app\nderivedRoles:\n  name: common_roles\n  definitions:\n    # If the principal belongs to group `USER` in a request, and the `resource`s\n    # `autherId` attribute matches `principal`s `id` then the `principal` is considered\n    # as `AUTHOR` within Cerbos for the policy evaluation\n    - name: AUTHOR\n      parentRoles: [\"USER\"]\n      condition:\n        match:\n          expr: request.resource.attr.authorId == request.principal.id\n"
     },
     {
       "path": "README.md",
@@ -67,13 +67,6 @@
       "content": "export const setAccessToken = token => {\n  localStorage.setItem('accessToken', token);\n};\n\nexport const getAccessToken = () => {\n  return localStorage.getItem('accessToken');\n};\n\nexport const removeAccessToken = () => {\n  localStorage.removeItem('accessToken');\n};\n"
     },
     {
-      "path": "cerbos/Dockerfile",
-      "sha": null,
-      "content_sha256": "dcf12033cb380c91b0910a214f9cad3623d950790c1ad45d71130553f2125165",
-      "score": 83,
-      "content": "# Use the Cerbos base image\nFROM ghcr.io/cerbos/cerbos:latest\n\n# Copy the policy files into the container\nCOPY policies /policies\n\n# Expose the necessary ports for Cerbos PDP\nEXPOSE 3592 3593\n\n# Command to start the Cerbos PDP server\nCMD [\"server\"]"
-    },
-    {
       "path": "react-app/Dockerfile",
       "sha": null,
       "content_sha256": "331f2768fdb49648ad78f4bd031f004772245e6924a40360cc035220fded640e",
@@ -81,11 +74,11 @@
       "content": "FROM node:20-alpine3.18\n\nWORKDIR /app\n\nCOPY lib ./lib\n\nCOPY package.json ./\n\nRUN npm install\n\nCOPY . .\n\nEXPOSE 8080 \n\nCMD [\"npm\", \"run\", \"dev\"]\n"
     },
     {
-      "path": "cerbos/fly.toml",
+      "path": "cerbos/Dockerfile",
       "sha": null,
-      "content_sha256": "988c53c0567a1f97c8d6c31cac27d405c7c0805927d5fce43148763bb5cd76b1",
-      "score": 33,
-      "content": "# fly.toml app configuration file generated for cerbos-pdp on 2024-05-03T11:15:47+05:30\n#\n# See https://fly.io/docs/reference/configuration/ for information about how to use this file.\n#\n\napp = 'cerbos-pdp'\nprimary_region = 'lhr'\n\n[build]\n\n[http_service]\n  internal_port = 3592\n  force_https = true\n  auto_stop_machines = true\n  auto_start_machines = true\n  min_machines_running = 0\n  processes = ['app']\n\n[[services]]\n  protocol = ''\n  internal_port = 3592\n\n  [[services.ports]]\n    port = 3592\n    handlers = ['tls', 'http']\n\n  [[services.http_checks]]\n    interval = '5s'\n    timeout = '2s'\n    grace_period = '5s'\n    method = 'get'\n    path = '/_cerbos/health'\n    protocol = 'http'\n\n[[services]]\n  protocol = ''\n  internal_port = 3593\n\n  [[services.ports]]\n    port = 3593\n    handlers = ['tls']\n\n    [services.ports.tls_options]\n      alpn = ['h2']\n\n[[vm]]\n  size = 'shared-cpu-1x'\n\n[[metrics]]\n  port = 3592\n  path = '/_cerbos/metrics'\n"
+      "content_sha256": "dcf12033cb380c91b0910a214f9cad3623d950790c1ad45d71130553f2125165",
+      "score": 83,
+      "content": "# Use the Cerbos base image\nFROM ghcr.io/cerbos/cerbos:latest\n\n# Copy the policy files into the container\nCOPY policies /policies\n\n# Expose the necessary ports for Cerbos PDP\nEXPOSE 3592 3593\n\n# Command to start the Cerbos PDP server\nCMD [\"server\"]"
     },
     {
       "path": "react-app/vite.config.js",
@@ -93,6 +86,13 @@
       "content_sha256": "58eb9b631b39a72558418cf4a4751be994fe4bbe429dd5f0131731f1cc981743",
       "score": 33,
       "content": "import {defineConfig} from 'vite';\nimport react from '@vitejs/plugin-react';\n\n// https://vitejs.dev/config/\nexport default defineConfig({\n  plugins: [react()],\n});\n"
+    },
+    {
+      "path": "react-app/.prettierrc.json",
+      "sha": null,
+      "content_sha256": "3f5a93b9aa721799869ff5578ee5e3c4130e062f9ef96840243e4960ff117849",
+      "score": 33,
+      "content": "{\n  \"tabWidth\": 2,\n  \"singleQuote\": true,\n  \"printWidth\": 80,\n  \"bracketSpacing\": false,\n  \"arrowParens\": \"avoid\"\n}\n"
     },
     {
       "path": "react-app/fly.toml",
@@ -109,18 +109,11 @@
       "content": "const users = [\n  {\n    id: '1',\n    name: 'Admin',\n    email: 'admin@cerbos.dev',\n    password: 'cerbos',\n    accessToken: '6f1338f5-5601-41bb-8e17-4e68e225bfb7',\n    roles: ['ADMIN'],\n  },\n  {\n    id: '2',\n    name: 'Rohit',\n    email: 'rohit@cerbos.dev',\n    password: 'cerbos',\n    accessToken: '6adddf41-13b1-42cb-a9cd-fd3bd7dafaec',\n    roles: ['USER'],\n  },\n  {\n    id: '3',\n    name: 'Alex',\n    email: 'alex@cerbos.dev',\n    password: 'cerbos',\n    accessToken: '4f5c9ffd-e297-420f-937c-904080fa6507',\n    roles: ['USER'],\n  },\n  // {\n  // \tid: '4',\n  // \tname: 'User',\n  // \temail: 'user@cerbos.dev',\n  // \tpassword: 'cerbos',\n  // \taccessToken: '25c39f3b-25dc-49a0-b08f-b2f0bfee19a5',\n  // \troles: [' '],\n  // },\n];\n\nconst courses = [\n  {\n    id: '1',\n    title: 'Linux Foundations',\n    price: 49,\n    status: 'PUBLISHED',\n    authorId: '2',\n    author: 'Rohit',\n  },\n  {\n    id: '2',\n    title: 'Docker 101',\n    price: 79,\n    status: 'UNPUBLISHED',\n    authorId: '2',\n    author: 'Rohit',\n  },\n  {\n    id: '3',\n    title: 'JS Foundations',\n    price: 29,\n    status: 'PUBLISHED',\n    authorId: '3',\n    author: 'Alex',\n  },\n  {\n    id: '4',\n    title: 'React 16',\n    price: 49,\n    status: 'DEPRECATED',\n    authorId: '3',\n    author: 'Alex',\n  },\n];\n\nconsole.log(`Start seeding ...`);\n\nsetTimeout(() => {\n  localStorage.setItem('Users', JSON.stringify(users));\n  localStorage.setItem('Courses', JSON.stringify(courses));\n  console.log(`Seeding finished...!!`);\n\n  console.log('Users[] :', JSON.parse(localStorage.getItem('Users')));\n  console.log('Courses[] :', JSON.parse(localStorage.getItem('Courses')));\n}, 1000);\n"
     },
     {
-      "path": "react-app/.prettierrc.json",
+      "path": "cerbos/fly.toml",
       "sha": null,
-      "content_sha256": "3f5a93b9aa721799869ff5578ee5e3c4130e062f9ef96840243e4960ff117849",
+      "content_sha256": "988c53c0567a1f97c8d6c31cac27d405c7c0805927d5fce43148763bb5cd76b1",
       "score": 33,
-      "content": "{\n  \"tabWidth\": 2,\n  \"singleQuote\": true,\n  \"printWidth\": 80,\n  \"bracketSpacing\": false,\n  \"arrowParens\": \"avoid\"\n}\n"
-    },
-    {
-      "path": "react-app/src/App.jsx",
-      "sha": null,
-      "content_sha256": "aee002011c6822df034d0b51e7aa8893f7af69657e8f37b3a35553979a60547c",
-      "score": 31,
-      "content": "import {HTTP as Cerbos} from '@cerbos/http';\nimport {CerbosProvider} from '@cerbos/react';\n\nimport {Route, Routes} from 'react-router-dom';\nimport {HomePage, CoursesPage} from './Pages';\n\nconst URL = 'https://cerbos-pdp.fly.dev:3592';\nconsole.log('Hitting Cerbos PDP at', URL);\n\nconst client = new Cerbos(URL);\n\nconst App = () => {\n  return (\n    <Routes>\n      <Route path=\"/\" element={<HomePage />} />\n      <Route path=\"/courses/*\" element={<ProtectedCoursesPage />} />\n    </Routes>\n  );\n};\n\nexport default App;\n\nimport userService from './services/userService';\nimport {getAccessToken} from './services/tokenStorage';\n\nconst ProtectedCoursesPage = () => {\n  const currentUser = userService.getUserId(getAccessToken());\n\n  return (\n    <CerbosProvider\n      client={client}\n      principal={{\n        id: currentUser?.id,\n        roles: currentUser?.roles,\n      }}\n    >\n      <Routes>\n        <Route path=\"/\" element={<CoursesPage />} />\n      </Routes>\n    </CerbosProvider>\n  );\n};\n"
+      "content": "# fly.toml app configuration file generated for cerbos-pdp on 2024-05-03T11:15:47+05:30\n#\n# See https://fly.io/docs/reference/configuration/ for information about how to use this file.\n#\n\napp = 'cerbos-pdp'\nprimary_region = 'lhr'\n\n[build]\n\n[http_service]\n  internal_port = 3592\n  force_https = true\n  auto_stop_machines = true\n  auto_start_machines = true\n  min_machines_running = 0\n  processes = ['app']\n\n[[services]]\n  protocol = ''\n  internal_port = 3592\n\n  [[services.ports]]\n    port = 3592\n    handlers = ['tls', 'http']\n\n  [[services.http_checks]]\n    interval = '5s'\n    timeout = '2s'\n    grace_period = '5s'\n    method = 'get'\n    path = '/_cerbos/health'\n    protocol = 'http'\n\n[[services]]\n  protocol = ''\n  internal_port = 3593\n\n  [[services.ports]]\n    port = 3593\n    handlers = ['tls']\n\n    [services.ports.tls_options]\n      alpn = ['h2']\n\n[[vm]]\n  size = 'shared-cpu-1x'\n\n[[metrics]]\n  port = 3592\n  path = '/_cerbos/metrics'\n"
     },
     {
       "path": "react-app/src/main.jsx",
@@ -130,11 +123,32 @@
       "content": "import React from 'react';\nimport ReactDOM from 'react-dom/client';\nimport {BrowserRouter} from 'react-router-dom';\n\nimport App from './App.jsx';\nimport './index.css';\n\nReactDOM.createRoot(document.getElementById('root')).render(\n\t<React.StrictMode>\n\t\t<BrowserRouter>\n\t\t\t<App />\n\t\t</BrowserRouter>\n\t</React.StrictMode>\n);\n"
     },
     {
+      "path": "react-app/src/App.jsx",
+      "sha": null,
+      "content_sha256": "aee002011c6822df034d0b51e7aa8893f7af69657e8f37b3a35553979a60547c",
+      "score": 31,
+      "content": "import {HTTP as Cerbos} from '@cerbos/http';\nimport {CerbosProvider} from '@cerbos/react';\n\nimport {Route, Routes} from 'react-router-dom';\nimport {HomePage, CoursesPage} from './Pages';\n\nconst URL = 'https://cerbos-pdp.fly.dev:3592';\nconsole.log('Hitting Cerbos PDP at', URL);\n\nconst client = new Cerbos(URL);\n\nconst App = () => {\n  return (\n    <Routes>\n      <Route path=\"/\" element={<HomePage />} />\n      <Route path=\"/courses/*\" element={<ProtectedCoursesPage />} />\n    </Routes>\n  );\n};\n\nexport default App;\n\nimport userService from './services/userService';\nimport {getAccessToken} from './services/tokenStorage';\n\nconst ProtectedCoursesPage = () => {\n  const currentUser = userService.getUserId(getAccessToken());\n\n  return (\n    <CerbosProvider\n      client={client}\n      principal={{\n        id: currentUser?.id,\n        roles: currentUser?.roles,\n      }}\n    >\n      <Routes>\n        <Route path=\"/\" element={<CoursesPage />} />\n      </Routes>\n    </CerbosProvider>\n  );\n};\n"
+    },
+    {
+      "path": "react-app/src/Pages/index.js",
+      "sha": null,
+      "content_sha256": "fc41d1793664068ae079dc059e59cf84f700e184ed97da9bd28e84040165feae",
+      "score": 29,
+      "content": "import CoursesPage from './CoursesPage';\nimport HomePage from './HomePage';\n\nexport {HomePage, CoursesPage};\n"
+    },
+    {
       "path": "react-app/src/Pages/CoursesPage.jsx",
       "sha": null,
       "content_sha256": "b7e146515d785f948eae324444dfeb320c56b37ba6f56f5020c91d824f7f056b",
       "score": 29,
       "content": "import {useEffect} from 'react';\nimport {useNavigate} from 'react-router-dom';\n\nimport {getAccessToken, removeAccessToken} from '../services/tokenStorage';\nimport useCourses from '../hooks/useCourses';\n\nconst CoursesPage = () => {\n\tconst navigate = useNavigate();\n\n\tuseEffect(() => {\n\t\tif (!getAccessToken()) navigate('/');\n\t}, [navigate]);\n\n\tconst logOut = () => {\n\t\tremoveAccessToken();\n\t\tnavigate('/');\n\t};\n\n\tconst {courses, isLoading} = useCourses();\n\n\tif (isLoading) {\n\t\treturn <>Loading...</>;\n\t}\n\n\treturn (\n\t\t<>\n\t\t\t<button onClick={logOut} className=\"logout\">\n\t\t\t\tLog Out\n\t\t\t</button>\n\t\t\t{courses.map((course, index) => {\n\t\t\t\treturn (\n\t\t\t\t\t<div key={index} className=\"course\">\n\t\t\t\t\t\t<span>{course.title}</span>\n\t\t\t\t\t\t<span>${course.price}</span>\n\t\t\t\t\t\t<span>{course.status}</span>\n\t\t\t\t\t\t<span>{course.author}</span>\n\t\t\t\t\t\t<label htmlFor=\"update\">\n\t\t\t\t\t\t\tUpdate\n\t\t\t\t\t\t\t<input\n\t\t\t\t\t\t\t\ttype=\"checkbox\"\n\t\t\t\t\t\t\t\tname=\"update\"\n\t\t\t\t\t\t\t\tid=\"update\"\n\t\t\t\t\t\t\t\tdefaultChecked={course.canUpdate}\n\t\t\t\t\t\t\t/>\n\t\t\t\t\t\t</label>\n\t\t\t\t\t\t<label htmlFor=\"delete\">\n\t\t\t\t\t\t\tDelete\n\t\t\t\t\t\t\t<input\n\t\t\t\t\t\t\t\ttype=\"checkbox\"\n\t\t\t\t\t\t\t\tname=\"delete\"\n\t\t\t\t\t\t\t\tid=\"delete\"\n\t\t\t\t\t\t\t\tdefaultChecked={course.canDelete}\n\t\t\t\t\t\t\t/>\n\t\t\t\t\t\t</label>\n\t\t\t\t\t</div>\n\t\t\t\t);\n\t\t\t})}\n\t\t</>\n\t);\n};\n\nexport default CoursesPage;\n"
+    },
+    {
+      "path": "react-app/src/services/userService.js",
+      "sha": null,
+      "content_sha256": "d8fc78a9900b5d96b87cdb38035f40a1d410e806578de6e1577c7e3f39b52677",
+      "score": 29,
+      "content": "import {v4 as uuidv4} from 'uuid';\n\nconst userService = {\n  getAllUsers: () => {\n    const localValue = localStorage.getItem('Users');\n    return localValue ? JSON.parse(localValue) : [];\n  },\n\n  getUser: property => {\n    const localValue = localStorage.getItem('Users');\n    const users = localValue ? JSON.parse(localValue) : [];\n\n    return users.find(user => user.email === property || user.id == property);\n  },\n\n  getUserId: token => {\n    const localValue = localStorage.getItem('Users');\n    const users = localValue ? JSON.parse(localValue) : [];\n\n    return users.find(user => user.accessToken === token);\n  },\n\n  createUser: user => {\n    const localValue = localStorage.getItem('Users');\n    const users = localValue ? JSON.parse(localValue) : [];\n\n    const userId = users.length + 1;\n    users.push({id: `${userId}`, ...user});\n\n    localStorage.setItem('Users', JSON.stringify(users));\n  },\n\n  updateUser: user => {\n    const localValue = localStorage.getItem('Users');\n    const users = JSON.parse(localValue);\n\n    const updatedUser = users.map(u =>\n      u.id === user.id ? {...u, ...user} : u,\n    );\n\n    localStorage.setItem('Users', JSON.stringify(updatedUser));\n  },\n\n  logIn: formData => {\n    return new Promise((resolve, reject) => {\n      const {email, password} = formData;\n\n      setTimeout(async () => {\n        const user = userService.getUser(email);\n        if (!user) {\n          reject('Email doesn’t exist.');\n          return;\n        }\n\n        if (password !== user.password) {\n          reject('Enter Right Password');\n          return;\n        }\n\n        const accessToken = uuidv4();\n\n        const updatedUser = {...user, accessToken};\n        userService.updateUser(updatedUser);\n\n        resolve({success: true, access_token: accessToken});\n      }, 500);\n    });\n  },\n\n  signUp: formData => {\n    return new Promise((resolve, reject) => {\n      const {name, email, password, roles} = formData;\n\n      setTimeout(() => {\n        const user = userService.getUser(email);\n        if (user) {\n          reject('User Already Exists');\n          return;\n        }\n\n        const accessToken = uuidv4();\n\n        userService.createUser({name, email, password, accessToken, roles});\n\n        resolve({success: true, access_token: accessToken});\n      }, 500);\n    });\n  },\n};\n\nexport default userService;\n"
     },
     {
       "path": "react-app/src/hooks/useCourses.js",
@@ -156,21 +170,9 @@
       "content_sha256": "3c1ae4a5a7703329e8f796194c2133d07876974aad5d70f331906ff0915411e4",
       "score": 29,
       "content": "import {useState} from 'react';\nimport {useForm} from 'react-hook-form';\nimport {useNavigate} from 'react-router-dom';\nimport userService from '../services/userService';\nimport {setAccessToken} from '../services/tokenStorage';\n\nconst HomePage = () => {\n\tconst [authForm, setAuthForm] = useState(null); // uses the useState hook to manage the state of the authentication form (authForm), and the useForm hook to manage the form data.\n\tconst {register, handleSubmit, reset} = useForm();\n\n\tconst navigate = useNavigate();\n\n\tconst onSubmitHandler = async formData => {\n\t\ttry {\n\t\t\tlet response;\n\t\t\tif (authForm === 'login')\n\t\t\t\tresponse = await userService.logIn(formData);\n\n\t\t\tif (authForm === 'signup')\n\t\t\t\tresponse = await userService.signUp(formData);\n\n\t\t\tif (response.success) {\n\t\t\t\tsetAccessToken(response.access_token);\n\t\t\t\tnavigate('/courses');\n\t\t\t\treset();\n\t\t\t}\n\t\t} catch (error) {\n\t\t\talert(error);\n\t\t}\n\t};\n\n\treturn (\n\t\t<>\n\t\t\t<h1>Cerbos React Demo</h1>\n\n\t\t\t<div className='buttons'>\n\t\t\t\t<span onClick={() => setAuthForm('login')}>Sign In </span>|\n\t\t\t\t<span onClick={() => setAuthForm('signup')}> Sign Up</span>\n\t\t\t</div>\n\n\t\t\t{authForm === 'login' && (\n\t\t\t\t<form onSubmit={handleSubmit(onSubmitHandler)} className=\"form\">\n\t\t\t\t\t<input type=\"email\" placeholder=\"email\" {...register('email')} />\n\t\t\t\t\t<input\n\t\t\t\t\t\ttype=\"password\"\n\t\t\t\t\t\tplaceholder=\"password\"\n\t\t\t\t\t\t{...register('password')}\n\t\t\t\t\t/>\n\t\t\t\t\t<button type=\"submit\">Login</button>\n\t\t\t\t</form>\n\t\t\t)}\n\n\t\t\t{authForm === 'signup' && (\n\t\t\t\t<form onSubmit={handleSubmit(onSubmitHandler)} className=\"form\">\n\t\t\t\t\t<input type=\"text\" placeholder=\"name\" {...register('name')} />\n\t\t\t\t\t<input type=\"email\" placeholder=\"email\" {...register('email')} />\n\t\t\t\t\t<input\n\t\t\t\t\t\ttype=\"password\"\n\t\t\t\t\t\tplaceholder=\"password\"\n\t\t\t\t\t\t{...register('password')}\n\t\t\t\t\t/>\n\t\t\t\t\t<button type=\"submit\">Signup</button>\n\t\t\t\t</form>\n\t\t\t)}\n\t\t</>\n\t);\n};\n\nexport default HomePage;\n"
-    },
-    {
-      "path": "react-app/src/Pages/index.js",
-      "sha": null,
-      "content_sha256": "fc41d1793664068ae079dc059e59cf84f700e184ed97da9bd28e84040165feae",
-      "score": 29,
-      "content": "import CoursesPage from './CoursesPage';\nimport HomePage from './HomePage';\n\nexport {HomePage, CoursesPage};\n"
-    },
-    {
-      "path": "react-app/src/services/userService.js",
-      "sha": null,
-      "content_sha256": "d8fc78a9900b5d96b87cdb38035f40a1d410e806578de6e1577c7e3f39b52677",
-      "score": 29,
-      "content": "import {v4 as uuidv4} from 'uuid';\n\nconst userService = {\n  getAllUsers: () => {\n    const localValue = localStorage.getItem('Users');\n    return localValue ? JSON.parse(localValue) : [];\n  },\n\n  getUser: property => {\n    const localValue = localStorage.getItem('Users');\n    const users = localValue ? JSON.parse(localValue) : [];\n\n    return users.find(user => user.email === property || user.id == property);\n  },\n\n  getUserId: token => {\n    const localValue = localStorage.getItem('Users');\n    const users = localValue ? JSON.parse(localValue) : [];\n\n    return users.find(user => user.accessToken === token);\n  },\n\n  createUser: user => {\n    const localValue = localStorage.getItem('Users');\n    const users = localValue ? JSON.parse(localValue) : [];\n\n    const userId = users.length + 1;\n    users.push({id: `${userId}`, ...user});\n\n    localStorage.setItem('Users', JSON.stringify(users));\n  },\n\n  updateUser: user => {\n    const localValue = localStorage.getItem('Users');\n    const users = JSON.parse(localValue);\n\n    const updatedUser = users.map(u =>\n      u.id === user.id ? {...u, ...user} : u,\n    );\n\n    localStorage.setItem('Users', JSON.stringify(updatedUser));\n  },\n\n  logIn: formData => {\n    return new Promise((resolve, reject) => {\n      const {email, password} = formData;\n\n      setTimeout(async () => {\n        const user = userService.getUser(email);\n        if (!user) {\n          reject('Email doesn’t exist.');\n          return;\n        }\n\n        if (password !== user.password) {\n          reject('Enter Right Password');\n          return;\n        }\n\n        const accessToken = uuidv4();\n\n        const updatedUser = {...user, accessToken};\n        userService.updateUser(updatedUser);\n\n        resolve({success: true, access_token: accessToken});\n      }, 500);\n    });\n  },\n\n  signUp: formData => {\n    return new Promise((resolve, reject) => {\n      const {name, email, password, roles} = formData;\n\n      setTimeout(() => {\n        const user = userService.getUser(email);\n        if (user) {\n          reject('User Already Exists');\n          return;\n        }\n\n        const accessToken = uuidv4();\n\n        userService.createUser({name, email, password, accessToken, roles});\n\n        resolve({success: true, access_token: accessToken});\n      }, 500);\n    });\n  },\n};\n\nexport default userService;\n"
     }
   ],
-  "generated_at": "2026-10-08T02:26:11.122741+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:43.569279+00:00"
 }

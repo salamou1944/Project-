@@ -74,20 +74,6 @@
       "content": "# Guide\n\nConfiguration and development for the Manifest Hermes plugin. The\n[README](../README.md) covers install and setup.\n\n## What the plugin does\n\nNothing but start the [Manifest Python SDK](https://github.com/mnfst/manifest-python)\n(`mnfst`) in each Hermes process. Healing, tracking, credential masking and the\nallowlist live in the SDK; its\n[guide](https://github.com/mnfst/manifest-python/blob/main/docs/guide.md)\ncovers how each one works.\n\n- **Install.** Hermes reads the plugin's dependencies from `[project].dependencies`\n  in `pyproject.toml` when you install or enable it, and installs them again after\n  `hermes update` rebuilds its virtual environment. Dependabot raises the\n  `mnfst` version there with each SDK release.\n- **Start.** Hermes calls `register()` in every Hermes process: the interactive\n  session, the gateway and its workers. It has loaded `~/.hermes/.env` by then,\n  so a key set with `hermes config set MNFST_KEY` is in the environment.\n  `register()` calls `mnfst.manifest()` once, which patches the HTTP clients of\n  that process.\n- **Fail open.** Without `MNFST_KEY`, with `mnfst` missing, or when the SDK fails\n  to start, the plugin logs a warning and Hermes runs as if it were not installed.\n\nThe plugin registers no Hermes hook.\n\n## Why not `mnfst run hermes`\n\n`mnfst run` starts the SDK through a `sitecustomize` on `PYTHONPATH`. In Hermes:\n\n- the gateway runs as a service, so its launch command would have to be edited;\n- `sitecustomize` checks `MNFST_KEY` before Hermes loads `~/.hermes/.env`;\n- `hermes update` can rebuild the virtual environment and drop a hand-installed\n  `mnfst`;\n- `PYTHONPATH` and `MNFST_KEY` pass down to every Python script the agent runs,\n  which would then report to Manifest too.\n\n## Configuration\n\nAll read by the SDK, once, when the plugin starts it. The environment cannot\nchange without a restart.\n\n| Variable | What it does |\n| --- | --- |\n| `MNFST_KEY` | Your Manifest project key. Required; without it the plugin starts nothing. |\n| `MNFST_URL` | Point at another Manifest endpoint. Optional. |\n| `MNFST_ALLOWLIST` | Only these calls reach Manifest. Optional ([entries](../README.md#choosing-which-calls-reach-manifest)). |\n| `MNFST_DENYLIST` | These calls never reach Manifest; wins over the allowlist. Optional. |\n\n## MCP servers\n\nHermes' MCP client sends its requests through httpx2, which the SDK patches, so\nevery call to an MCP server reached over HTTP is tracked, under the server's\nhost. A server that runs as a local process (stdio) makes no HTTP call and is not\nseen.\n\nAn MCP server answers HTTP 200 even when it rejects a tool call: the error\ntravels in the JSON-RPC body. The SDK tracks the call as a 200 and only sends\n4xx responses to heal, so a rejected tool call is not healed.\n\nBefore connecting to a server, Hermes checks it with requests that are expected\nto fail, such as a `HEAD` answered with 405 and a `GET` answered with 400. Those\nare 4xx responses, so the SDK sends them to heal like any other; Manifest\nanswers that it has no patch.\n\nHermes checks a tool call's arguments against the tool's schema before sending\nit. A call that fails that check, such as a string where the schema asks for an\ninteger, never reaches the server, so no request is made and Manifest sees\nnothing.\n\n## Development\n\n```sh\npython -m pip install -e \".[dev]\"\npython -m pytest -q\n```\n\nCI runs the same commands on Python 3.10, 3.13 and 3.14, plus an import check\nand a `plugin.yaml` validation.\n"
     },
     {
-      "path": ".release-please-manifest.json",
-      "sha": null,
-      "content_sha256": "05e7e60547ff3fd8c487ef8a142c6a12a07e67edbe82bf5f3f6126bcfab95e8e",
-      "score": 35,
-      "content": "{\n  \".\": \"0.5.1\"\n}\n"
-    },
-    {
-      "path": "__init__.py",
-      "sha": null,
-      "content_sha256": "90d6e4e6d73b267e4ae3745f0fc1ec6ec4e503ef3325c7facd90a6d642b02fbb",
-      "score": 35,
-      "content": "\"\"\"manifest: the Manifest Python SDK, started inside Hermes. Hermes Agent plugin.\n\nThe plugin only installs and starts `mnfst` (manifest-python). Hermes installs\nthe dependency with the plugin and again after every `hermes update`, and calls\n`register()` in every Hermes process (CLI, gateway, workers) after it has loaded\nits own configuration, so `MNFST_KEY` set with `hermes config set` is in the\nenvironment by then.\n\nFrom there the SDK does everything: it instruments the HTTP clients of the\nprocess, including the one Hermes' MCP client uses, heals the failures Manifest\nhas a patch for and tracks every other call as metadata. It reads MNFST_KEY,\nMNFST_URL, MNFST_ALLOWLIST and MNFST_DENYLIST from the environment itself.\n\"\"\"\nfrom __future__ import annotations\n\nimport logging\nimport os\n\nlogger = logging.getLogger(__name__)\n\n\ndef register(ctx) -> None:\n    if not os.environ.get(\"MNFST_KEY\", \"\").strip():\n        logger.warning(\"manifest plugin: MNFST_KEY is not set; nothing started\")\n        return\n    try:\n        from mnfst import manifest\n    except ImportError:\n        logger.warning(\"manifest plugin: the mnfst package is not installed; \"\n                       \"run `hermes plugins enable manifest` to install it\")\n        return\n    try:\n        manifest()\n    except Exception as exc:  # the SDK must never keep Hermes from starting\n        logger.warning(\"manifest plugin: mnfst failed to start: %s\", exc)\n        return\n    logger.info(\"manifest plugin: mnfst started\")\n"
-    },
-    {
       "path": "plugin.yaml",
       "sha": null,
       "content_sha256": "60560fc0d3f185ae40492d55e0b86f59935592522fddbc9b7bb36048ca35b797",
@@ -102,6 +88,20 @@
       "content": "{\n  \"$schema\": \"https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json\",\n  \"release-type\": \"simple\",\n  \"include-v-in-tag\": true,\n  \"include-component-in-tag\": false,\n  \"pull-request-title-pattern\": \"chore: release ${version}\",\n  \"bump-minor-pre-major\": true,\n  \"last-release-sha\": \"858e64dde1e4f5b2a05f7849652d17ab772fbb64\",\n  \"packages\": {\n    \".\": {\n      \"package-name\": \"manifest-hermes\",\n      \"extra-files\": [\n        {\n          \"type\": \"yaml\",\n          \"path\": \"plugin.yaml\",\n          \"jsonpath\": \"$.version\"\n        },\n        {\n          \"type\": \"toml\",\n          \"path\": \"pyproject.toml\",\n          \"jsonpath\": \"$.project.version\"\n        }\n      ]\n    }\n  }\n}\n"
     },
     {
+      "path": "__init__.py",
+      "sha": null,
+      "content_sha256": "90d6e4e6d73b267e4ae3745f0fc1ec6ec4e503ef3325c7facd90a6d642b02fbb",
+      "score": 35,
+      "content": "\"\"\"manifest: the Manifest Python SDK, started inside Hermes. Hermes Agent plugin.\n\nThe plugin only installs and starts `mnfst` (manifest-python). Hermes installs\nthe dependency with the plugin and again after every `hermes update`, and calls\n`register()` in every Hermes process (CLI, gateway, workers) after it has loaded\nits own configuration, so `MNFST_KEY` set with `hermes config set` is in the\nenvironment by then.\n\nFrom there the SDK does everything: it instruments the HTTP clients of the\nprocess, including the one Hermes' MCP client uses, heals the failures Manifest\nhas a patch for and tracks every other call as metadata. It reads MNFST_KEY,\nMNFST_URL, MNFST_ALLOWLIST and MNFST_DENYLIST from the environment itself.\n\"\"\"\nfrom __future__ import annotations\n\nimport logging\nimport os\n\nlogger = logging.getLogger(__name__)\n\n\ndef register(ctx) -> None:\n    if not os.environ.get(\"MNFST_KEY\", \"\").strip():\n        logger.warning(\"manifest plugin: MNFST_KEY is not set; nothing started\")\n        return\n    try:\n        from mnfst import manifest\n    except ImportError:\n        logger.warning(\"manifest plugin: the mnfst package is not installed; \"\n                       \"run `hermes plugins enable manifest` to install it\")\n        return\n    try:\n        manifest()\n    except Exception as exc:  # the SDK must never keep Hermes from starting\n        logger.warning(\"manifest plugin: mnfst failed to start: %s\", exc)\n        return\n    logger.info(\"manifest plugin: mnfst started\")\n"
+    },
+    {
+      "path": ".release-please-manifest.json",
+      "sha": null,
+      "content_sha256": "05e7e60547ff3fd8c487ef8a142c6a12a07e67edbe82bf5f3f6126bcfab95e8e",
+      "score": 35,
+      "content": "{\n  \".\": \"0.5.1\"\n}\n"
+    },
+    {
       "path": ".github/dependabot.yml",
       "sha": null,
       "content_sha256": "97ca55e2da764df004fb0ac8bffc583cc2d8294d2344856f4e06f73170d747bb",
@@ -109,5 +109,7 @@
       "content": "# Keep the plugin on the latest Manifest Python SDK. mnfst is declared once, in\n# pyproject.toml, which is what Hermes installs from. The fix(deps) prefix makes\n# release-please ship each bump as a patch release.\nversion: 2\nupdates:\n  - package-ecosystem: pip\n    directory: \"/\"\n    schedule:\n      interval: daily\n    allow:\n      - dependency-name: mnfst\n    # Raise the lower bound, so a release of the plugin always installs the SDK it was tested with.\n    versioning-strategy: increase\n    commit-message:\n      prefix: \"fix(deps)\"\n    labels:\n      - dependencies\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:18.251345+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:13.293950+00:00"
 }

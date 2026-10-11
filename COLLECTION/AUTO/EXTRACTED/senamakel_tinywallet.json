@@ -39,18 +39,18 @@
       "content": "# Example: Retry policy\n\n- **Status:** Example\n- **Owner:** Maintainers\n- **Plan:** [`../plans/example-retry-policy.md`](../plans/example-retry-policy.md)\n\n> This demonstrates the expected specification format. Replace or remove it\n> when generating a real project from this template.\n\n## Problem\n\nCallers need a typed way to limit retries without duplicating attempt counting\nand validation. The crate currently has no retry behavior.\n\n## Goals\n\n- Expose an immutable retry policy with a non-zero maximum attempt count.\n- Let callers determine whether another attempt is permitted.\n- Reject zero attempts through the crate-wide error type.\n\n## Non-goals\n\n- Sleeping, backoff, jitter, or executing operations.\n- Deciding which application-specific errors are retryable.\n- Persisting retry state.\n\n## Proposed behavior\n\nThe public surface is deliberately small:\n\n```rust\nuse rust_template::{RetryPolicy, Result};\n\nfn policy() -> Result<RetryPolicy> {\n    let policy = RetryPolicy::new(3)?;\n    assert!(policy.allows_attempt(1));\n    assert!(!policy.allows_attempt(4));\n    Ok(policy)\n}\n```\n\n`RetryPolicy::new(0)` returns a dedicated `Error::ZeroMaxAttempts` variant.\nAttempt numbers are one-based: attempt `1` is the initial call, not the first\nretry.\n\n## Invariants and constraints\n\n- `max_attempts` is always greater than zero after construction.\n- `allows_attempt(n)` is true exactly when `1 <= n <= max_attempts`.\n- The type is cheap to copy and does not perform I/O or observe time.\n- New public items have rustdoc and are re-exported from `src/lib.rs`.\n\n## Acceptance criteria\n\n- Construction succeeds for `1` and `u32::MAX` and fails for `0`.\n- Boundary checks cover attempts `0`, `1`, `max_attempts`, and\n  `max_attempts + 1` when representable.\n- Integration tests prove the policy and its error are available to consumers.\n- Formatting, Clippy, build, tests, rustdoc, and cargo-deny pass.\n\n## Open questions\n\nNone for this example.\n"
     },
     {
-      "path": "tests/public_api.rs",
-      "sha": null,
-      "content_sha256": "4cbc0180e438e8ec94d9ebecc41d1a0ac29f4ea58a93f3e8b975b56f15feba19",
-      "score": 168,
-      "content": "//! Integration tests for the public crate surface.\n//!\n//! These tests link against the crate as a downstream consumer would: they can\n//! only use what `src/lib.rs` re-exports. Treat them as the regression suite\n//! for the crate's public contract — if a change breaks a test here, it is a\n//! breaking change for users.\n\n#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]\n\nuse rust_template::{Error, greet};\n\n#[test]\nfn greeting_is_available_to_consumers() {\n    assert_eq!(greet(\"Rust\").unwrap(), \"Hello, Rust!\");\n}\n\n#[test]\nfn errors_are_available_to_consumers() {\n    assert_eq!(greet(\"\").unwrap_err(), Error::EmptyName);\n}\n"
-    },
-    {
       "path": "docs/README.md",
       "sha": null,
       "content_sha256": "736e4e7cfd7034867f8eafd481ccfe5aba9e85dc44f12efb002df8510f3b5c34",
       "score": 168,
       "content": "# Documentation\n\nThis directory holds documentation that does not belong in rustdoc: the shape\nof the system, the reasoning behind it, and the constraints a reader needs\nbefore touching the code. API reference lives in doc comments next to the code,\nwhere it cannot drift.\n\n## Layout\n\n```text\ndocs/\n├── README.md      # this index\n├── specs/         # behavior and architecture specifications\n├── plans/         # implementation plans derived from approved specs\n└── adr/           # architecture decision records, numbered and immutable\n```\n\n- **[`specs/`](specs/README.md)** — one file per feature, module, or subsystem,\n  describing its behavior, public surface, invariants, and acceptance criteria.\n- **[`plans/`](plans/README.md)** — implementation-ordered, test-first steps for\n  delivering an approved specification. Plans name exact files and verification\n  commands, and are updated as the work progresses.\n- **`adr/`** — a dated record per significant decision. Use\n  [`adr/0001-record-architecture-decisions.md`](adr/0001-record-architecture-decisions.md)\n  as the template. An accepted ADR is not edited; it is superseded by a later\n  one.\n\nComplex modules also carry a module-level `README.md` inside `src/<module>/`\ncovering their design, public surface, and important constraints.\n\n## Conventions\n\n- Keep every Markdown file at 500 lines or fewer. When a topic outgrows that,\n  split it into focused files and link them from the nearest `README.md`.\n- Update documentation in the same commit as the behavior it describes.\n- Prefer a concrete example over an abstract description.\n- Link between documents rather than duplicating content; one fact lives in one\n  place.\n- Write a specification before a plan: the spec defines the outcome and\n  constraints, while the plan defines the implementation sequence.\n"
+    },
+    {
+      "path": "tests/public_api.rs",
+      "sha": null,
+      "content_sha256": "4cbc0180e438e8ec94d9ebecc41d1a0ac29f4ea58a93f3e8b975b56f15feba19",
+      "score": 168,
+      "content": "//! Integration tests for the public crate surface.\n//!\n//! These tests link against the crate as a downstream consumer would: they can\n//! only use what `src/lib.rs` re-exports. Treat them as the regression suite\n//! for the crate's public contract — if a change breaks a test here, it is a\n//! breaking change for users.\n\n#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]\n\nuse rust_template::{Error, greet};\n\n#[test]\nfn greeting_is_available_to_consumers() {\n    assert_eq!(greet(\"Rust\").unwrap(), \"Hello, Rust!\");\n}\n\n#[test]\nfn errors_are_available_to_consumers() {\n    assert_eq!(greet(\"\").unwrap_err(), Error::EmptyName);\n}\n"
     },
     {
       "path": "docs/plans/README.md",
@@ -137,6 +137,13 @@
       "content": "# cargo-deny configuration — run locally with `cargo deny check all`.\n# CI runs the same check in the \"Supply chain\" job of .github/workflows/ci.yml.\n\n[graph]\nall-features = true\n\n[advisories]\n# Fail on any crate with a security advisory or an unmaintained warning.\n# Add an entry here only with a comment explaining the exposure and the plan.\nignore = []\n\n[licenses]\n# Licenses accepted for this crate and its dependencies. Keep GPL-3.0-only for\n# the template crate itself; the remaining entries cover compatible dependency\n# licenses commonly encountered by Rust projects.\nallow = [\n    \"Apache-2.0\",\n    \"Apache-2.0 WITH LLVM-exception\",\n    \"BSD-2-Clause\",\n    \"BSD-3-Clause\",\n    \"GPL-3.0-only\",\n    \"ISC\",\n    \"MIT\",\n    \"MPL-2.0\",\n    \"Unicode-3.0\",\n    \"Zlib\",\n]\nconfidence-threshold = 0.9\n\n[bans]\n# Duplicate versions bloat build times; review them rather than ignoring them.\nmultiple-versions = \"warn\"\nwildcards = \"deny\"\n# Crates that must never enter the dependency graph.\ndeny = []\n\n[sources]\nunknown-registry = \"deny\"\nunknown-git = \"deny\"\nallow-registry = [\"https://github.com/rust-lang/crates.io-index\"]\n"
     },
     {
+      "path": ".claude/settings.json",
+      "sha": null,
+      "content_sha256": "12c4068a0ddd98c4aa5ae54b07fbb5621d8bb397a082e1ad0fe87efb756393d3",
+      "score": 33,
+      "content": "{\n  \"$schema\": \"https://json.schemastore.org/claude-code-settings.json\",\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(cargo fmt:*)\",\n      \"Bash(cargo clippy:*)\",\n      \"Bash(cargo build:*)\",\n      \"Bash(cargo check:*)\",\n      \"Bash(cargo test:*)\",\n      \"Bash(cargo doc:*)\",\n      \"Bash(cargo run --example:*)\",\n      \"Bash(cargo tree:*)\",\n      \"Bash(cargo metadata:*)\",\n      \"Bash(cargo deny check:*)\",\n      \"Bash(git status:*)\",\n      \"Bash(git diff:*)\",\n      \"Bash(git log:*)\",\n      \"Bash(git show:*)\",\n      \"Bash(git branch:*)\",\n      \"Bash(gh pr view:*)\",\n      \"Bash(gh pr diff:*)\",\n      \"Bash(gh pr checks:*)\",\n      \"Bash(gh run view:*)\"\n    ],\n    \"deny\": [\n      \"Read(./.env)\",\n      \"Read(./.env.local)\",\n      \"Bash(cargo publish:*)\",\n      \"Bash(git push --force:*)\"\n    ]\n  }\n}\n"
+    },
+    {
       "path": "examples/basic.rs",
       "sha": null,
       "content_sha256": "b0fab7745353c6914fd45ffe8ac26923255afc9011e1e942501378e4263f0836",
@@ -151,18 +158,18 @@
       "content": "version: 2\nupdates:\n  - package-ecosystem: cargo\n    directory: /\n    schedule:\n      interval: weekly\n    open-pull-requests-limit: 5\n    commit-message:\n      prefix: \"deps\"\n    groups:\n      # One pull request per week for routine compatible updates; anything\n      # breaking still arrives as its own reviewable PR.\n      cargo-minor-and-patch:\n        update-types:\n          - minor\n          - patch\n  - package-ecosystem: github-actions\n    directory: /\n    schedule:\n      interval: weekly\n    open-pull-requests-limit: 5\n    commit-message:\n      prefix: \"ci\"\n    groups:\n      github-actions:\n        patterns:\n          - \"*\"\n"
     },
     {
-      "path": ".claude/settings.json",
-      "sha": null,
-      "content_sha256": "12c4068a0ddd98c4aa5ae54b07fbb5621d8bb397a082e1ad0fe87efb756393d3",
-      "score": 33,
-      "content": "{\n  \"$schema\": \"https://json.schemastore.org/claude-code-settings.json\",\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(cargo fmt:*)\",\n      \"Bash(cargo clippy:*)\",\n      \"Bash(cargo build:*)\",\n      \"Bash(cargo check:*)\",\n      \"Bash(cargo test:*)\",\n      \"Bash(cargo doc:*)\",\n      \"Bash(cargo run --example:*)\",\n      \"Bash(cargo tree:*)\",\n      \"Bash(cargo metadata:*)\",\n      \"Bash(cargo deny check:*)\",\n      \"Bash(git status:*)\",\n      \"Bash(git diff:*)\",\n      \"Bash(git log:*)\",\n      \"Bash(git show:*)\",\n      \"Bash(git branch:*)\",\n      \"Bash(gh pr view:*)\",\n      \"Bash(gh pr diff:*)\",\n      \"Bash(gh pr checks:*)\",\n      \"Bash(gh run view:*)\"\n    ],\n    \"deny\": [\n      \"Read(./.env)\",\n      \"Read(./.env.local)\",\n      \"Bash(cargo publish:*)\",\n      \"Bash(git push --force:*)\"\n    ]\n  }\n}\n"
-    },
-    {
       "path": "src/lib.rs",
       "sha": null,
       "content_sha256": "9bce561ff45553e150a1be59257bb9b34ab7ed924ecae7a4b2236a3f97b3eead",
       "score": 33,
       "content": "//! A production-ready starting point for a Rust library.\n//!\n//! This crate is a template. It ships the layout, lint configuration, error\n//! handling, testing, and documentation conventions described in `AGENTS.md`,\n//! plus one small feature module ([`greet`]) that demonstrates them end to end.\n//!\n//! # Layout\n//!\n//! - `src/error/` holds the crate-wide [`Error`] enum and the [`Result`] alias\n//!   returned by every fallible public function.\n//! - Each feature area lives in its own module directory with a `mod.rs`\n//!   module root, an optional `types.rs`, and a `test.rs` holding its unit\n//!   tests.\n//! - Every public item is re-exported from here, so downstream users have a\n//!   single predictable surface.\n//!\n//! # Example\n//!\n//! ```\n//! use rust_template::{greet, Error};\n//!\n//! assert_eq!(greet(\"Ferris\")?, \"Hello, Ferris!\");\n//! assert_eq!(greet(\"   \").unwrap_err(), Error::EmptyName);\n//! # Ok::<(), rust_template::Error>(())\n//! ```\n//!\n//! Replace the `greeting` module with the first real feature area, keep the\n//! conventions, and update this documentation to describe the new crate.\n\nmod error;\nmod greeting;\n\npub use error::{Error, Result};\npub use greeting::greet;\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "sha": null,
+      "content_sha256": "50632525f1a3372e225a527910310bf1cfdde0ee99f535ca51d451cd941507d9",
+      "score": 31,
+      "content": "blank_issues_enabled: true\ncontact_links:\n  - name: Security reports\n    url: https://github.com/tinyhumansai/rust-template/security/policy\n    about: Please do not report vulnerabilities through public issues.\n"
     },
     {
       "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
@@ -177,16 +184,9 @@
       "content_sha256": "a1d4c7012bced398b281d84bb91c99a4d154f85b7906c0e67174d8da98af5e55",
       "score": 31,
       "content": "name: Bug Report\ndescription: Report behavior that is broken, surprising, or undocumented.\ntitle: \"Bug: \"\nlabels: [\"bug\"]\nbody:\n  - type: input\n    id: version\n    attributes:\n      label: Version or commit\n      placeholder: \"0.1.0 or commit SHA\"\n    validations:\n      required: true\n  - type: input\n    id: rust\n    attributes:\n      label: Rust toolchain\n      placeholder: \"rustc --version\"\n    validations:\n      required: true\n  - type: textarea\n    id: reproduce\n    attributes:\n      label: Reproduction\n      description: Include minimal code, commands, or a repository link.\n    validations:\n      required: true\n  - type: textarea\n    id: expected\n    attributes:\n      label: Expected behavior\n    validations:\n      required: true\n  - type: textarea\n    id: actual\n    attributes:\n      label: Actual behavior\n    validations:\n      required: true\n  - type: textarea\n    id: context\n    attributes:\n      label: Additional context\n"
-    },
-    {
-      "path": ".github/ISSUE_TEMPLATE/config.yml",
-      "sha": null,
-      "content_sha256": "50632525f1a3372e225a527910310bf1cfdde0ee99f535ca51d451cd941507d9",
-      "score": 31,
-      "content": "blank_issues_enabled: true\ncontact_links:\n  - name: Security reports\n    url: https://github.com/tinyhumansai/rust-template/security/policy\n    about: Please do not report vulnerabilities through public issues.\n"
     }
   ],
   "fetch_errors": [],
   "fetch_error_count": 0,
-  "generated_at": "2026-10-10T05:55:38.263856+00:00"
+  "generated_at": "2026-10-11T01:13:34.531550+00:00"
 }

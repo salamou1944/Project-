@@ -52,18 +52,11 @@
       "content": "version: '3'\n\nservices:\n  redis:\n    image: redis\n    ports:\n      - \"6379:6379\"\n  web:\n    # builds the image based on ./Dockerfile\n    build: .\n    # command that will start the app\n    command: yarn start-dev\n    # mounts paths between the host and the container\n    volumes:\n      # mounts the root directory to the working directory in the container\n      - .:/app\n      # if you don't add node_modules, 'yarn' or 'npm i' won't work correctly\n      - /app/node_modules\n    ports:\n      - 1337:1337\n    depends_on:\n      - redis\n    env_file:\n      - ./client/.env.client\n      - ./server/.env.server"
     },
     {
-      "path": "server/services/auth0.js",
+      "path": "server/middlewares/checkAuthToken.js",
       "sha": null,
-      "content_sha256": "cf6e91f840c68a34755720901faa62c3ad2b9c8e1f516c0861b8bd5e7bedadc1",
+      "content_sha256": "40a34280024a569d15c345ee65774fae2fee9cd5be31c48e6277699adab6b59c",
       "score": 111,
-      "content": "const request = require('request-promise');\nconst keys = require('../config/keys');\n\nconst AUTH0_API_URL = `https://${keys.AUTH0_DOMAIN}/api/v2`;\n\nexports.generateAccessToken = async () => {\n  const response = await request({\n    url: `https://${keys.AUTH0_DOMAIN}/oauth/token`,\n    method: 'POST',\n    json: true,\n    body: {\n      grant_type: 'client_credentials',\n      client_id: keys.AUTH0_MANAGEMENT_API_CLIENT_ID,\n      client_secret: keys.AUTH0_MANAGEMENT_API_CLIENT_SECRET,\n      audience: keys.AUTH0_MANAGEMENT_API_AUDIENCE,\n    },\n    headers: { 'content-type': 'application/json' },\n  });\n  return response.access_token;\n};\n\nexports.getUserByApiToken = async (auth0Token, apiToken) => {\n  const response = await request({\n    url: `${AUTH0_API_URL}/users?q=_exists_:app_metadata.api_tokens.${apiToken}`,\n    method: 'GET',\n    json: true,\n    headers: {\n      authorization: `Bearer ${auth0Token}`,\n      'content-type': 'application/json',\n    },\n  });\n  return response && response.length > 0 ? response[0] : undefined;\n};\n\nexports.getUserById = async (auth0Token, userId) => {\n  const response = await request({\n    url: `${AUTH0_API_URL}/users/${userId}`,\n    method: 'GET',\n    json: true,\n    headers: {\n      authorization: `Bearer ${auth0Token}`,\n      'content-type': 'application/json',\n    },\n  });\n  return response;\n};\n\nexports.updateUserAppMetadata = async (auth0Token, userId, appMetadata) => {\n  const response = await request({\n    url: `${AUTH0_API_URL}/users/${userId}`,\n    method: 'PATCH',\n    json: true,\n    headers: {\n      authorization: `Bearer ${auth0Token}`,\n      'content-type': 'application/json',\n    },\n    body: {\n      app_metadata: appMetadata,\n    },\n  });\n  return response;\n};\n"
-    },
-    {
-      "path": "server/middlewares/fetchUserFromAuth0.js",
-      "sha": null,
-      "content_sha256": "a3c109b411d162fef3ab5e8e2e1470b402936aab1f48f3bc220ea26f57315298",
-      "score": 111,
-      "content": "const auth0Service = require('../services/auth0');\n\nmodule.exports = async (ctx, next) => {\n  const { auth0Token } = ctx.app;\n  const userId = ctx.state.user.sub;\n  const user = await auth0Service.getUserById(auth0Token, userId);\n  if (!user) {\n    ctx.throw(404, 'User not found.');\n  }\n  ctx.state.auth0User = user;\n  return next();\n};\n"
+      "content": "const jwt = require('koa-jwt');\nconst { koaJwtSecret } = require('jwks-rsa');\nconst keys = require('../config/keys');\n\nmodule.exports = async (ctx, next) => {\n  const jwtMiddleware = await jwt({\n    secret: koaJwtSecret({\n      cache: true,\n      rateLimit: true,\n      jwksRequestsPerMinute: 5,\n      jwksUri: keys.AUTH0_JWKS_URI,\n    }),\n    audience: keys.AUTH0_AUDIENCE,\n    issuer: keys.AUTH0_ISSUER,\n    algorithms: ['RS256'],\n  });\n  return await jwtMiddleware(ctx, next);\n};\n"
     },
     {
       "path": "server/middlewares/auth0TokenGenerator.js",
@@ -73,11 +66,11 @@
       "content": "const commonUtils = require('../utils/common');\nconst auth0Service = require('../services/auth0');\n\nmodule.exports = async (ctx, next) => {\n  if (ctx.app.auth0Token && !commonUtils.isJwtTokenExpired(ctx.app.auth0Token)) {\n    return await next();\n  }\n  console.info('Generating a new Auth0 token');\n  const auth0Token = await auth0Service.generateAccessToken();\n  console.info('New Auth0 token generated successfully');\n  ctx.app.auth0Token = auth0Token;\n  return next();\n};\n"
     },
     {
-      "path": "server/middlewares/checkAuthToken.js",
+      "path": "server/services/auth0.js",
       "sha": null,
-      "content_sha256": "40a34280024a569d15c345ee65774fae2fee9cd5be31c48e6277699adab6b59c",
+      "content_sha256": "cf6e91f840c68a34755720901faa62c3ad2b9c8e1f516c0861b8bd5e7bedadc1",
       "score": 111,
-      "content": "const jwt = require('koa-jwt');\nconst { koaJwtSecret } = require('jwks-rsa');\nconst keys = require('../config/keys');\n\nmodule.exports = async (ctx, next) => {\n  const jwtMiddleware = await jwt({\n    secret: koaJwtSecret({\n      cache: true,\n      rateLimit: true,\n      jwksRequestsPerMinute: 5,\n      jwksUri: keys.AUTH0_JWKS_URI,\n    }),\n    audience: keys.AUTH0_AUDIENCE,\n    issuer: keys.AUTH0_ISSUER,\n    algorithms: ['RS256'],\n  });\n  return await jwtMiddleware(ctx, next);\n};\n"
+      "content": "const request = require('request-promise');\nconst keys = require('../config/keys');\n\nconst AUTH0_API_URL = `https://${keys.AUTH0_DOMAIN}/api/v2`;\n\nexports.generateAccessToken = async () => {\n  const response = await request({\n    url: `https://${keys.AUTH0_DOMAIN}/oauth/token`,\n    method: 'POST',\n    json: true,\n    body: {\n      grant_type: 'client_credentials',\n      client_id: keys.AUTH0_MANAGEMENT_API_CLIENT_ID,\n      client_secret: keys.AUTH0_MANAGEMENT_API_CLIENT_SECRET,\n      audience: keys.AUTH0_MANAGEMENT_API_AUDIENCE,\n    },\n    headers: { 'content-type': 'application/json' },\n  });\n  return response.access_token;\n};\n\nexports.getUserByApiToken = async (auth0Token, apiToken) => {\n  const response = await request({\n    url: `${AUTH0_API_URL}/users?q=_exists_:app_metadata.api_tokens.${apiToken}`,\n    method: 'GET',\n    json: true,\n    headers: {\n      authorization: `Bearer ${auth0Token}`,\n      'content-type': 'application/json',\n    },\n  });\n  return response && response.length > 0 ? response[0] : undefined;\n};\n\nexports.getUserById = async (auth0Token, userId) => {\n  const response = await request({\n    url: `${AUTH0_API_URL}/users/${userId}`,\n    method: 'GET',\n    json: true,\n    headers: {\n      authorization: `Bearer ${auth0Token}`,\n      'content-type': 'application/json',\n    },\n  });\n  return response;\n};\n\nexports.updateUserAppMetadata = async (auth0Token, userId, appMetadata) => {\n  const response = await request({\n    url: `${AUTH0_API_URL}/users/${userId}`,\n    method: 'PATCH',\n    json: true,\n    headers: {\n      authorization: `Bearer ${auth0Token}`,\n      'content-type': 'application/json',\n    },\n    body: {\n      app_metadata: appMetadata,\n    },\n  });\n  return response;\n};\n"
     },
     {
       "path": "client/services/auth.js",
@@ -85,6 +78,13 @@
       "content_sha256": "98c8569dfad773363d6ba872c0948617f83f081003b65e09b473c896a931ece3",
       "score": 111,
       "content": "/* @flow */\nimport Auth0 from 'auth0-js';\nimport Cookie from 'js-cookie';\nimport keys from '../config/keys';\n\nconst ACCESS_TOKEN_COOKIE_NAME = 'numvalidateAccessToken';\n\nlet auth0WebAuth;\n\nconst initialize = () => {\n  auth0WebAuth = new Auth0.WebAuth({\n    domain: keys.AUTH0_DOMAIN,\n    clientID: keys.AUTH0_CLIENT_ID,\n    redirectUri: `${window.location.origin}/dashboard`,\n    audience: keys.AUTH0_AUDIENCE,\n    responseType: 'token id_token',\n    scope: 'openid',\n  });\n};\n\nconst setAuthCookie = (accessToken: string, tokenExpiresIn: number) => {\n  if (!process.browser) {\n    return;\n  }\n  const cookieExpiry = new Date(new Date().getTime() + tokenExpiresIn * 1000);\n  Cookie.set(ACCESS_TOKEN_COOKIE_NAME, accessToken, { expires: cookieExpiry });\n};\n\nconst removeAuthCookie = () => {\n  if (!process.browser) {\n    return;\n  }\n  Cookie.remove(ACCESS_TOKEN_COOKIE_NAME);\n};\n\nconst authorize = () => {\n  auth0WebAuth.authorize();\n};\n\nconst logout = () => {\n  if (!process.browser) {\n    return;\n  }\n  removeAuthCookie();\n  window.localStorage.setItem('loggedOutAt', Date.now());\n};\n\nconst getAccessToken = (req?: any): ?string => {\n  if (process.browser) {\n    return Cookie.getJSON(ACCESS_TOKEN_COOKIE_NAME);\n  } else {\n    if (!req || !req.headers || !req.headers.cookie) {\n      return undefined;\n    }\n    const accessTokenCookie = req.headers.cookie\n      .split(';')\n      .find(cookie => cookie.trim().startsWith(`${ACCESS_TOKEN_COOKIE_NAME}=`));\n    if (!accessTokenCookie) {\n      return undefined;\n    }\n    return accessTokenCookie.split('=')[1];\n  }\n};\n\nconst isAuthenticated = (req?: any): boolean => {\n  return getAccessToken(req) !== undefined;\n};\n\nconst parseHash = async (): Promise<?string> => {\n  return new Promise((resolve, reject) => {\n    auth0WebAuth.parseHash(window.location.hash, (err, authResult) => {\n      if (authResult && authResult.accessToken && authResult.expiresIn) {\n        setAuthCookie(authResult.accessToken, authResult.expiresIn);\n        return resolve(authResult.accessToken);\n      } else if (err) {\n        return reject(err);\n      } else {\n        if (isAuthenticated()) {\n          return resolve();\n        } else {\n          return reject(`authResult: ${authResult}`);\n        }\n      }\n    });\n  });\n};\n\nexport default {\n  authorize,\n  parseHash,\n  logout,\n  getAccessToken,\n  isAuthenticated,\n  initialize,\n};\n"
+    },
+    {
+      "path": "server/middlewares/fetchUserFromAuth0.js",
+      "sha": null,
+      "content_sha256": "a3c109b411d162fef3ab5e8e2e1470b402936aab1f48f3bc220ea26f57315298",
+      "score": 111,
+      "content": "const auth0Service = require('../services/auth0');\n\nmodule.exports = async (ctx, next) => {\n  const { auth0Token } = ctx.app;\n  const userId = ctx.state.user.sub;\n  const user = await auth0Service.getUserById(auth0Token, userId);\n  if (!user) {\n    ctx.throw(404, 'User not found.');\n  }\n  ctx.state.auth0User = user;\n  return next();\n};\n"
     },
     {
       "path": "server/routes/api.js",
@@ -136,11 +136,25 @@
       "content": "FROM node:8-alpine\n\nRUN mkdir /app\n# Set the working directory to /app\nWORKDIR /app\nCOPY package.json /app\nRUN npm i -g yarn\nRUN yarn\nEXPOSE 1667\n"
     },
     {
+      "path": "client/postcss.config.js",
+      "sha": null,
+      "content_sha256": "ac26b193d00f4910a9d5b38444b146fc6928483f320043dc34fea25f5135fef6",
+      "score": 33,
+      "content": "module.exports = {\n  plugins: [\n    require('postcss-easy-import')({ prefix: '_' }),\n    require('postcss-custom-properties')(),\n    require('autoprefixer')(),\n    require('cssnano')(),\n  ],\n};\n"
+    },
+    {
       "path": "client/types.js",
       "sha": null,
       "content_sha256": "2cf7ceb3515adb657dbaf21abd96814c9d17ea66712e08b411c6a1895345c6c8",
       "score": 33,
       "content": "/* @flow */\nexport type ApiToken = {\n  value: string,\n  name: ?string,\n  createdAt: number,\n  updatedAt: number,\n};\n\nexport type Subscription = {\n  planId: string,\n  createdAt: string,\n  updatedAt: string,\n};\n\nexport type CreditCard = {\n  addressZip: string,\n  brand: string,\n  country: string,\n  expMonth: number,\n  expYear: number,\n  last4: string,\n  createdAt: number,\n  updatedAt: number,\n};\n\nexport type User = {\n  id: string,\n  email: string,\n  initialized: boolean,\n  apiTokens: ApiToken[],\n  subscription: Subscription,\n  creditCard?: CreditCard,\n};\n"
+    },
+    {
+      "path": "client/next.config.js",
+      "sha": null,
+      "content_sha256": "d654165f845bbf85923ef74820237eecbae09f98c0d9c5fb201cbd90de763a05",
+      "score": 33,
+      "content": "module.exports = {\n  webpack: (config, { dev }) => {\n    config.module.rules.push(\n      {\n        test: /\\.css$/,\n        loader: 'emit-file-loader',\n        options: {\n          name: 'dist/[path][name].[ext]',\n        },\n      },\n      {\n        test: /\\.css$/,\n        use: ['babel-loader', 'raw-loader', 'postcss-loader'],\n      }\n    );\n    return config;\n  },\n};\n"
     },
     {
       "path": "server/index.js",
@@ -157,32 +171,18 @@
       "content": "const Koa = require('koa');\nconst bodyMiddleware = require('koa-body');\nconst helmetMiddleware = require('koa-helmet');\nconst koaBouncer = require('koa-bouncer');\nconst koaRouter = require('koa-router')();\nconst koaConnect = require('koa-connect');\nconst sendfile = require('koa-sendfile');\nconst compression = require('compression');\nconst next = require('next');\nconst getIpAddressMiddleware = require('./middlewares/getIpAddress');\nconst loggerMiddleware = require('./middlewares/requestLogger');\nconst checkAuthTokenMiddleware = require('./middlewares/checkAuthToken');\nconst checkMaxRequestsMiddleware = require('./middlewares/checkMaxRequests');\nconst checkStripeCustomerMiddleware = require('./middlewares/checkStripeCustomer');\nconst fetchUserFromAuth0Middleware = require('./middlewares/fetchUserFromAuth0');\nconst auth0TokenGeneratorMiddleware = require('./middlewares/auth0TokenGenerator');\nconst errorHandlerMiddleware = require('./middlewares/errorHandler');\nconst allowCrossDomainMiddleware = require('./middlewares/allowCrossDomain');\nconst checkApiTokenMiddleware = require('./middlewares/checkApiToken');\nconst rateLimiterMiddleware = require('./middlewares/rateLimiter');\nconst userRoutes = require('./routes/user');\nconst apiRoutes = require('./routes/api');\nconst keys = require('./config/keys');\n\nconst app = new Koa();\nconst nextApp = next({ dev: keys.IS_ENV_DEVELOPMENT, dir: './client' });\n\napp.poweredBy = false;\n\nif (!keys.IS_ENV_TEST) {\n  app.use(loggerMiddleware);\n}\napp.use(koaConnect(compression()));\napp.use(helmetMiddleware());\napp.use(allowCrossDomainMiddleware);\napp.use(getIpAddressMiddleware);\napp.use(errorHandlerMiddleware);\napp.use(bodyMiddleware());\napp.use(koaBouncer.middleware());\napp.use(auth0TokenGeneratorMiddleware);\n\nconst handle = nextApp.getRequestHandler();\n\nnextApp.prepare().then(() => {\n  koaRouter\n    .get(\n      '/api/validate',\n      checkApiTokenMiddleware,\n      checkMaxRequestsMiddleware,\n      rateLimiterMiddleware,\n      apiRoutes.validate\n    )\n    .get('/api/countries', checkApiTokenMiddleware, rateLimiterMiddleware, apiRoutes.getCountries)\n    .get('/user', checkAuthTokenMiddleware, fetchUserFromAuth0Middleware, userRoutes.getUser)\n    .post(\n      '/user/customer',\n      checkAuthTokenMiddleware,\n      fetchUserFromAuth0Middleware,\n      userRoutes.createUserCustomer\n    )\n    .post(\n      '/user/token',\n      checkAuthTokenMiddleware,\n      fetchUserFromAuth0Middleware,\n      userRoutes.createUserApiToken\n    )\n    .delete(\n      '/user/token/:tokenValue',\n      checkAuthTokenMiddleware,\n      fetchUserFromAuth0Middleware,\n      userRoutes.deleteUserApiToken\n    )\n    .patch(\n      '/user/subscription',\n      checkAuthTokenMiddleware,\n      fetchUserFromAuth0Middleware,\n      checkStripeCustomerMiddleware,\n      userRoutes.updateUserSubscription\n    )\n    .patch(\n      '/user/source',\n      checkAuthTokenMiddleware,\n      fetchUserFromAuth0Middleware,\n      checkStripeCustomerMiddleware,\n      userRoutes.updateUserSource\n    )\n    .get('/robots.txt', async (ctx, next) => {\n      if (keys.EXECUTION_ENV === 'production') {\n        await sendfile(ctx, './client/static/robots-production.txt');\n      } else {\n        await sendfile(ctx, './client/static/robots-development.txt');\n      }\n    })\n    .get('/dashboard', async (ctx, next) => {\n      ctx.res.statusCode = 200;\n      await nextApp.render(ctx.req, ctx.res, '/Dashboard', ctx.query);\n      ctx.respond = false;\n    })\n    .get('/', async (ctx, next) => {\n      ctx.res.statusCode = 200;\n      nextApp.render(ctx.req, ctx.res, '/Home', ctx.query);\n      ctx.respond = false;\n    })\n    .get('*', async (ctx, next) => {\n      ctx.res.statusCode = 200;\n      await handle(ctx.req, ctx.res);\n      ctx.respond = false;\n    });\n\n  app.use(koaRouter.routes());\n\n  app.use(koaRouter.allowedMethods());\n});\nmodule.exports = app;\n"
     },
     {
-      "path": "client/postcss.config.js",
-      "sha": null,
-      "content_sha256": "ac26b193d00f4910a9d5b38444b146fc6928483f320043dc34fea25f5135fef6",
-      "score": 33,
-      "content": "module.exports = {\n  plugins: [\n    require('postcss-easy-import')({ prefix: '_' }),\n    require('postcss-custom-properties')(),\n    require('autoprefixer')(),\n    require('cssnano')(),\n  ],\n};\n"
-    },
-    {
-      "path": "client/next.config.js",
-      "sha": null,
-      "content_sha256": "d654165f845bbf85923ef74820237eecbae09f98c0d9c5fb201cbd90de763a05",
-      "score": 33,
-      "content": "module.exports = {\n  webpack: (config, { dev }) => {\n    config.module.rules.push(\n      {\n        test: /\\.css$/,\n        loader: 'emit-file-loader',\n        options: {\n          name: 'dist/[path][name].[ext]',\n        },\n      },\n      {\n        test: /\\.css$/,\n        use: ['babel-loader', 'raw-loader', 'postcss-loader'],\n      }\n    );\n    return config;\n  },\n};\n"
-    },
-    {
-      "path": "server/middlewares/allowCrossDomain.js",
-      "sha": null,
-      "content_sha256": "eabe2817a68ce1813ca2a0b4b99b898ba6169eb9be5d792aaa937679b18885e3",
-      "score": 31,
-      "content": "module.exports = async (ctx, next) => {\n  ctx.set('Access-Control-Allow-Origin', '*');\n  ctx.set('Access-Control-Allow-Methods', 'GET,PUT,POST,PATCH,DELETE,OPTIONS');\n  ctx.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-App-Api-Token');\n  if (ctx.method === 'OPTIONS') {\n    ctx.status = 200;\n    return;\n  }\n  return next();\n};\n"
-    },
-    {
       "path": "server/middlewares/getIpAddress.js",
       "sha": null,
       "content_sha256": "db01aa01ba65af9d3c29906b3fadd7ebaf956ebdeaea1146ec3dca3bd304c3f4",
       "score": 31,
       "content": "const _ = require('lodash');\n\nmodule.exports = async (ctx, next) => {\n  let ipAddress;\n  const headerForwardedTo = ctx.req.headers['x-forwarded-for'];\n  if (headerForwardedTo) {\n    ipAddress = _.last(headerForwardedTo.split(','));\n  } else {\n    ipAddress = ctx.ip;\n  }\n  ctx.state.ipAddress = ipAddress;\n  return next();\n};\n"
+    },
+    {
+      "path": "server/middlewares/checkStripeCustomer.js",
+      "sha": null,
+      "content_sha256": "91e4f56118a35d0ceed3a95e04cb41c68cef960f13dadcd906e3e72a0d9d0fb8",
+      "score": 31,
+      "content": "module.exports = async (ctx, next) => {\n  if (!ctx.state.auth0User.app_metadata.stripe_customer.id) {\n    ctx.throw(400, 'User not activated yet.');\n  }\n  return next();\n};\n"
     },
     {
       "path": "client/static/manifest.json",
@@ -192,12 +192,14 @@
       "content": "{\n  \"short_name\": \"NumValidate\",\n  \"name\": \"NumValidate\",\n  \"icons\": [\n    {\n      \"src\": \"favicons/favicon.ico\",\n      \"sizes\": \"192x192\",\n      \"type\": \"image/png\"\n    }\n  ],\n  \"start_url\": \"./index.html\",\n  \"display\": \"standalone\",\n  \"theme_color\": \"#fff\",\n  \"background_color\": \"#21272f\"\n}"
     },
     {
-      "path": "server/middlewares/checkStripeCustomer.js",
+      "path": "server/middlewares/allowCrossDomain.js",
       "sha": null,
-      "content_sha256": "91e4f56118a35d0ceed3a95e04cb41c68cef960f13dadcd906e3e72a0d9d0fb8",
+      "content_sha256": "eabe2817a68ce1813ca2a0b4b99b898ba6169eb9be5d792aaa937679b18885e3",
       "score": 31,
-      "content": "module.exports = async (ctx, next) => {\n  if (!ctx.state.auth0User.app_metadata.stripe_customer.id) {\n    ctx.throw(400, 'User not activated yet.');\n  }\n  return next();\n};\n"
+      "content": "module.exports = async (ctx, next) => {\n  ctx.set('Access-Control-Allow-Origin', '*');\n  ctx.set('Access-Control-Allow-Methods', 'GET,PUT,POST,PATCH,DELETE,OPTIONS');\n  ctx.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-App-Api-Token');\n  if (ctx.method === 'OPTIONS') {\n    ctx.status = 200;\n    return;\n  }\n  return next();\n};\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:16.610283+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:57.315824+00:00"
 }

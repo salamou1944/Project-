@@ -32,18 +32,18 @@
       "content": "import psycopg2\nfrom config import DB_HOST\n\n\nclass Database:\n    def __init__(self):\n        self.db = psycopg2.connect(\n            host=DB_HOST,\n            database=\"telegram\",\n            user=\"postgres\",\n            password=\"mysecretpassword\")\n\n    def get_user(self, user_id):\n        cursor = self.db.cursor()\n        sql = f\"SELECT * FROM users WHERE chat_id = '{user_id}'\"\n        cursor.execute(sql)\n        result = cursor.fetchone()\n        cursor.close()\n        return result\n\n    def get_active_redirections_of_source(self, source):\n        cursor = self.db.cursor()\n        sql = f\"SELECT * FROM redirections WHERE source = '{source}' AND active = TRUE\"\n        cursor.execute(sql)\n        result = cursor.fetchall()\n        cursor.close()\n        return result\n\n    def get_redirection(self, redirection_id):\n        \"\"\"\"\n        Get redirection of given redirection id\n        \"\"\"\n        cursor = self.db.cursor()\n        sql = f\"SELECT * FROM redirections WHERE id = '{redirection_id}' AND active = 1\"\n        cursor.execute(sql)\n        result = cursor.fetchall()\n        cursor.close()\n        return result\n\n    def get_all_redirections(self):\n        cursor = self.db.cursor()\n        sql = \"SELECT * FROM redirections;\"\n        cursor.execute(sql)\n        result = cursor.fetchall()\n        cursor.close()\n        return result\n\n    def get_filter(self, filter_id):\n        cursor = self.db.cursor()\n        sql = f\"SELECT * FROM filters WHERE id = {filter_id}\"\n        cursor.execute(sql)\n        result = cursor.fetchone()\n        cursor.close()\n        return result\n\n    def get_transformations_of_redirection(self, redirection_id):\n        cursor = self.db.cursor()\n        sql = f\"SELECT * FROM transformations WHERE redirection_id = {redirection_id} ORDER BY rank\"\n        cursor.execute(sql)\n        result = cursor.fetchall()\n        cursor.close()\n        return result\n"
     },
     {
-      "path": "agent/Dockerfile",
-      "sha": null,
-      "content_sha256": "219f672a0aab54de7d72777f89e96aae6b171aa9a534aa4c52460dbeb2a05484",
-      "score": 158,
-      "content": "FROM python:3.8-rc-buster\n\nRUN apt-get clean && \\\n  rm -rf /var/lib/apt/lists/* && \\\n  apt-get clean && \\\n  apt-get update\n\nRUN apt-get install python-dev default-libmysqlclient-dev -y\n\nWORKDIR /telegram-python-agent\n\nCOPY requirements.txt .\n\nRUN pip install -r requirements.txt\n\nCOPY . .\n\nCMD [\"python\", \"server.py\"]"
-    },
-    {
       "path": "agent/requirements.txt",
       "sha": null,
       "content_sha256": "28e22687e8eb41cff768eee23e4c890ad4b440a8834f3a83d8e6ce455b155dcc",
       "score": 158,
       "content": "Quart==0.13.0\nTelethon==1.16.2\npsycopg2==2.8.5"
+    },
+    {
+      "path": "agent/Dockerfile",
+      "sha": null,
+      "content_sha256": "219f672a0aab54de7d72777f89e96aae6b171aa9a534aa4c52460dbeb2a05484",
+      "score": 158,
+      "content": "FROM python:3.8-rc-buster\n\nRUN apt-get clean && \\\n  rm -rf /var/lib/apt/lists/* && \\\n  apt-get clean && \\\n  apt-get update\n\nRUN apt-get install python-dev default-libmysqlclient-dev -y\n\nWORKDIR /telegram-python-agent\n\nCOPY requirements.txt .\n\nRUN pip install -r requirements.txt\n\nCOPY . .\n\nCMD [\"python\", \"server.py\"]"
     },
     {
       "path": "docker-compose.yml",
@@ -88,18 +88,11 @@
       "content": "from db.database import Database\n\n# Connect to database\ndatabase = Database()\n\n\nclass MessageTransformation:\n\n    @staticmethod\n    def get_transformed_msg(message_event, redirection_id):\n        transformations = database.get_transformations_of_redirection(\n            redirection_id)\n\n        # Apply Transformation\n        msg_entities = message_event.message.entities\n        msg_txt = message_event.message.message\n\n        for transformation in transformations:\n            old_phrase = transformation[2]\n            new_phrase = transformation[3]\n            msg_txt = msg_txt.replace(old_phrase, new_phrase)\n\n        return msg_txt\n\n\nif __name__ == \"__main__\":\n    msg = 'hi there. I love violin'\n    resp = MessageTransformation.get_transformed_msg(msg, 41)\n    print(resp)\n"
     },
     {
-      "path": "agent/db/__init__.py",
+      "path": "agent/config/__init__.py",
       "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content_sha256": "c300a983945b83f80ea886f7acceeeb289bbfe644f72ddcfa52e5ad1f6dde62e",
       "score": 106,
-      "content": ""
-    },
-    {
-      "path": "agent/utils/__init__.py",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 106,
-      "content": ""
+      "content": "import os\n\nAPI_PORT = os.environ['API_PORT']\n\n# Telegram configs\napi_id = os.environ['TG_API_ID']\napi_hash = os.environ['TG_HASH_ID']\n\n# Database configs\nDB_HOST = os.environ.get('DB_HOST') or 'localhost'\nDB_SESSION_DBNAME = \"telethonsession\"\n\n# Telethon Session settings\nTELETHON_SESSION_ID = 'synapticSupport'\nsession_name_forwarder = 'synapticSupportForwarder'"
     },
     {
       "path": "agent/utils/filter.py",
@@ -107,13 +100,6 @@
       "content_sha256": "0959df5671db3b812dcee2985dabeda343bc166f90287d10da6b8320338a9391",
       "score": 106,
       "content": "import logging\nfrom db.database import Database\n\nlogger = logging.getLogger('Filter')\ndatabase = Database()\n\n\nclass MessageFilter:\n\n    @staticmethod\n    def get_filter(filter_id):\n        filter = database.get_filter(filter_id)\n        if filter is None:\n            return False\n\n        filter_dict = {\n            'id': filter[0],\n            'audio': filter[1],\n            'video': filter[2],\n            'photo': filter[3],\n            'sticker': filter[4],\n            'document': filter[5],\n            'hashtag': filter[6],\n            'link': filter[7],\n            'contain': filter[8],\n            'notcontain': filter[9]\n        }\n        return filter_dict\n\n    @staticmethod\n    def get_active_filters(filter_dict):\n        \"\"\"\n        Takes in a filter dictionary\n        Returns a list of active filter names\n        Example: ('photo', 'audio')\n        \"\"\"\n        if not isinstance(filter_dict, dict):\n            raise ValueError('Provide a dictionary')\n\n        active_filter_list = []\n        for key, value in filter_dict.items():\n            if value != 0 and value is not None:\n                if key != 'id':\n                    active_filter_list.append(key)\n\n        return active_filter_list\n\n    @staticmethod\n    def get_message_type(event):\n\n        # Photos Messages\n        if hasattr(event.media, 'photo'):\n            return 'photo'\n\n        # Look for links and hashtags in event.entities\n        if event.entities is not None:\n            for entity in event.entities:\n                entity_name = type(entity).__name__\n\n                if entity_name == 'MessageEntityHashtag':\n                    return 'hashtag'\n\n                if entity_name == 'MessageEntityUrl':\n                    return 'link'\n\n        # Text Messages\n        if event.media == None:\n            return 'text'\n\n        # Documents (audio, video, sticker, files)\n        mime_type = event.media.document.mime_type\n        if 'audio' in mime_type:\n            return 'audio'\n        if 'video' in mime_type:\n            return 'video'\n        if 'image/webp' in mime_type:\n            return 'sticker'\n\n        # Anything else is a file\n        return 'document'\n\n    @staticmethod\n    def filter_msg(filter_id, message_event):\n        \"\"\"\n        Function that decides if a message should be forwarded or not\n        Returns Boolean\n        \"\"\"\n\n        # Get Filter dictionary from database\n        filter_dict = MessageFilter.get_filter(filter_id)\n        if filter_dict == False:\n            logger.info('No filters for id : {}'.format(filter_id))\n            return False\n\n        # Get Active Filter list\n        filter_list = MessageFilter.get_active_filters(filter_dict)\n\n        # Get Message Types\n        msg_type = MessageFilter.get_message_type(message_event)\n        msg_text = message_event.message.text.lower()\n\n        if msg_type in filter_list:\n            logger.info(f'Filter caught :: {msg_type}')\n            return True\n\n        if 'contain' not in filter_list and 'notcontain' not in filter_list:\n            logger.info('All filters passed.')\n            return False\n\n        # Assume message does not contain the required word\n        contains_required_word = False\n        if 'contain' in filter_list:\n            # Look for text messages only\n            if message_event.media is not None:\n                return False\n            keywords = filter_dict['contain'].split('<stop_word>')\n            for keyword in keywords:\n                if keyword in msg_text:\n                    contains_required_word = True\n                    break\n\n        # Assume message does contain the blacklist word\n        contains_blacklist_word = False\n        if 'notcontain' in filter_list:\n            # Look for text messages only\n            if message_event.media is not None:\n                return False\n            keywords = filter_dict['notcontain'].split('<stop_word>')\n            for keyword in keywords:\n                if keyword in msg_text:\n                    contains_blacklist_word = True\n                    break\n\n        logger.info('Contains word :: {} && Contains Blacklist :: {}'.format(\n            contains_required_word, contains_blacklist_word))\n        return (not contains_required_word) or contains_blacklist_word\n"
-    },
-    {
-      "path": "agent/config/__init__.py",
-      "sha": null,
-      "content_sha256": "c300a983945b83f80ea886f7acceeeb289bbfe644f72ddcfa52e5ad1f6dde62e",
-      "score": 106,
-      "content": "import os\n\nAPI_PORT = os.environ['API_PORT']\n\n# Telegram configs\napi_id = os.environ['TG_API_ID']\napi_hash = os.environ['TG_HASH_ID']\n\n# Database configs\nDB_HOST = os.environ.get('DB_HOST') or 'localhost'\nDB_SESSION_DBNAME = \"telethonsession\"\n\n# Telethon Session settings\nTELETHON_SESSION_ID = 'synapticSupport'\nsession_name_forwarder = 'synapticSupportForwarder'"
     },
     {
       "path": "bot/services/agent.js",
@@ -158,13 +144,6 @@
       "content": "FROM node:lts-jessie\n\nRUN apt-get update\n\nRUN apt-get install -y netcat\n\nWORKDIR /usr/src/telegram-forwarder/bot\n\nCOPY package*.json ./\n\nRUN npm install\n\nCOPY . .\n\nCMD [\"node\", \"bot.js\"]"
     },
     {
-      "path": "agent/session/.keep",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 71,
-      "content": ""
-    },
-    {
       "path": "init.sql",
       "sha": null,
       "content_sha256": "e8abc17629e74e1dd775b45f46b37a4a7ca52d52c5f7fbd053cd6eb3904e3b64",
@@ -172,19 +151,34 @@
       "content": "-- Use this file to run sql queries on database intialization"
     },
     {
-      "path": ".github/stale.yml",
-      "sha": null,
-      "content_sha256": "6f02e3547ad6b70c12ec1b359331107874b84cd9896b139fe46198a298a8fbcf",
-      "score": 33,
-      "content": "# Configuration for probot-stale - https://github.com/probot/stale\n\n# Number of days of inactivity before an Issue or Pull Request becomes stale\ndaysUntilStale: 30\n\n# Number of days of inactivity before an Issue or Pull Request with the stale label is closed.\n# Set to false to disable. If disabled, issues still need to be closed manually, but will remain marked as stale.\ndaysUntilClose: 7"
-    },
-    {
       "path": "bot/wait-for.sh",
       "sha": null,
       "content_sha256": "2dabff6d51e8ab9d92efd85f2a27831e991f11aa902f39326860a3887868da68",
       "score": 33,
       "content": "#!/bin/sh\n\n# The MIT License (MIT)\n#\n# Copyright (c) 2017 Eficode Oy\n#\n# Permission is hereby granted, free of charge, to any person obtaining a copy\n# of this software and associated documentation files (the \"Software\"), to deal\n# in the Software without restriction, including without limitation the rights\n# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell\n# copies of the Software, and to permit persons to whom the Software is\n# furnished to do so, subject to the following conditions:\n#\n# The above copyright notice and this permission notice shall be included in all\n# copies or substantial portions of the Software.\n#\n# THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n# SOFTWARE.\n\nset -- \"$@\" -- \"$TIMEOUT\" \"$QUIET\" \"$HOST\" \"$PORT\" \"$result\"\nTIMEOUT=15\nQUIET=0\n\nechoerr() {\n  if [ \"$QUIET\" -ne 1 ]; then printf \"%s\\n\" \"$*\" 1>&2; fi\n}\n\nusage() {\n  exitcode=\"$1\"\n  cat << USAGE >&2\nUsage:\n  $cmdname host:port [-t timeout] [-- command args]\n  -q | --quiet                        Do not output any status messages\n  -t TIMEOUT | --timeout=timeout      Timeout in seconds, zero for no timeout\n  -- COMMAND ARGS                     Execute command with args after the test finishes\nUSAGE\n  exit \"$exitcode\"\n}\n\nwait_for() {\n if ! command -v nc >/dev/null; then\n    echoerr 'nc command is missing!'\n    exit 1\n  fi\n\n  while :; do\n    nc -z \"$HOST\" \"$PORT\" > /dev/null 2>&1\n    \n    result=$?\n    if [ $result -eq 0 ] ; then\n      if [ $# -gt 6 ] ; then\n        for result in $(seq $(($# - 6))); do\n          result=$1\n          shift\n          set -- \"$@\" \"$result\"\n        done\n\n        TIMEOUT=$2 QUIET=$3 HOST=$4 PORT=$5 result=$6\n        shift 6\n        exec \"$@\"\n      fi\n      exit 0\n    fi\n\n    if [ \"$TIMEOUT\" -le 0 ]; then\n      break\n    fi\n    TIMEOUT=$((TIMEOUT - 1))\n\n    sleep 1\n  done\n  echo \"Operation timed out\" >&2\n  exit 1\n}\n\nwhile :; do\n  case \"$1\" in\n    *:* )\n    HOST=$(printf \"%s\\n\" \"$1\"| cut -d : -f 1)\n    PORT=$(printf \"%s\\n\" \"$1\"| cut -d : -f 2)\n    shift 1\n    ;;\n    -q | --quiet)\n    QUIET=1\n    shift 1\n    ;;\n    -q-*)\n    QUIET=0\n    echoerr \"Unknown option: $1\"\n    usage 1\n    ;;\n    -q*)\n    QUIET=1\n    result=$1\n    shift 1\n    set -- -\"${result#-q}\" \"$@\"\n    ;;\n    -t | --timeout)\n    TIMEOUT=\"$2\"\n    shift 2\n    ;;\n    -t*)\n    TIMEOUT=\"${1#-t}\"\n    shift 1\n    ;;\n    --timeout=*)\n    TIMEOUT=\"${1#*=}\"\n    shift 1\n    ;;\n    --)\n    shift\n    break\n    ;;\n    --help)\n    usage 0\n    ;;\n    -*)\n    QUIET=0\n    echoerr \"Unknown option: $1\"\n    usage 1\n    ;;\n    *)\n    QUIET=0\n    echoerr \"Unknown argument: $1\"\n    usage 1\n    ;;\n  esac\ndone\n\nif ! [ \"$TIMEOUT\" -ge 0 ] 2>/dev/null; then\n  echoerr \"Error: invalid timeout '$TIMEOUT'\"\n  usage 3\nfi\n\nif [ \"$HOST\" = \"\" -o \"$PORT\" = \"\" ]; then\n  echoerr \"Error: you need to provide a host and port to test.\"\n  usage 2\nfi\n\nwait_for \"$@\""
+    },
+    {
+      "path": ".github/stale.yml",
+      "sha": null,
+      "content_sha256": "6f02e3547ad6b70c12ec1b359331107874b84cd9896b139fe46198a298a8fbcf",
+      "score": 33,
+      "content": "# Configuration for probot-stale - https://github.com/probot/stale\n\n# Number of days of inactivity before an Issue or Pull Request becomes stale\ndaysUntilStale: 30\n\n# Number of days of inactivity before an Issue or Pull Request with the stale label is closed.\n# Set to false to disable. If disabled, issues still need to be closed manually, but will remain marked as stale.\ndaysUntilClose: 7"
     }
   ],
-  "generated_at": "2026-10-08T02:25:00.279493+00:00"
+  "fetch_errors": [
+    {
+      "path": "agent/db/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "agent/utils/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "agent/session/.keep",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 3,
+  "generated_at": "2026-10-11T01:12:47.253631+00:00"
 }

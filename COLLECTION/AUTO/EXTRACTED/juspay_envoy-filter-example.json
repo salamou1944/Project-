@@ -18,18 +18,18 @@
   },
   "files": [
     {
-      "path": ".circleci/config.yml",
-      "sha": null,
-      "content_sha256": "6e4d65e28f008097b0c69aad4403fd695f81894221a03cebefe4c36318fbf689",
-      "score": 105,
-      "content": "references:\n  envoy-build-image: &envoy-build-image\n    envoyproxy/envoy-build:latest\n\nversion: 2\njobs:\n  build:\n    docker:\n      - image: *envoy-build-image\n    resource_class: xlarge\n    steps:\n      - checkout\n      - run: git submodule update --init\n      - run: ./ci/do_ci.sh build\n  test:\n    docker:\n      - image: *envoy-build-image\n    resource_class: xlarge\n    steps:\n      - checkout\n      - run: git submodule update --init\n      - run: ./ci/do_ci.sh test\n\nworkflows:\n  version: 2\n  all:\n    jobs:\n      - build\n      - test\n\n"
-    },
-    {
       "path": "ci/do_ci.sh",
       "sha": null,
       "content_sha256": "16e47b1b5f9331426e5dd82106bbae57ce35e65ee85b67ec24f0c117d748641a",
       "score": 105,
       "content": "#!/bin/bash -e\n\nexport PATH=/usr/lib/llvm-7/bin:$PATH\nexport CC=clang\nexport CXX=clang++\nexport ASAN_SYMBOLIZER_PATH=/usr/lib/llvm-7/bin/llvm-symbolizer\necho \"$CC/$CXX toolchain configured\"\n\nif [[ -f \"${HOME:-/root}/.gitconfig\" ]]; then\n    mv \"${HOME:-/root}/.gitconfig\" \"${HOME:-/root}/.gitconfig_save\"\nfi\n\nfunction do_build () {\n    bazel build --verbose_failures=true //:envoy\n}\n\nfunction do_test() {\n    bazel test --test_output=all --test_env=ENVOY_IP_TEST_VERSIONS=v4only \\\n      //:echo2_integration_test\n}\n\ncase \"$1\" in\n  build)\n    do_build\n  ;;\n  test)\n    do_test\n  ;;\n  *)\n    echo \"must be one of [build,test]\"\n    exit 1\n  ;;\nesac\n"
+    },
+    {
+      "path": ".circleci/config.yml",
+      "sha": null,
+      "content_sha256": "6e4d65e28f008097b0c69aad4403fd695f81894221a03cebefe4c36318fbf689",
+      "score": 105,
+      "content": "references:\n  envoy-build-image: &envoy-build-image\n    envoyproxy/envoy-build:latest\n\nversion: 2\njobs:\n  build:\n    docker:\n      - image: *envoy-build-image\n    resource_class: xlarge\n    steps:\n      - checkout\n      - run: git submodule update --init\n      - run: ./ci/do_ci.sh build\n  test:\n    docker:\n      - image: *envoy-build-image\n    resource_class: xlarge\n    steps:\n      - checkout\n      - run: git submodule update --init\n      - run: ./ci/do_ci.sh test\n\nworkflows:\n  version: 2\n  all:\n    jobs:\n      - build\n      - test\n\n"
     },
     {
       "path": "README.md",
@@ -67,19 +67,21 @@
       "content": "#include \"test/integration/http_integration.h\"\n\nnamespace Envoy {\nclass HttpFilterSampleIntegrationTest : public HttpIntegrationTest,\n                                        public testing::TestWithParam<Network::Address::IpVersion> {\npublic:\n  HttpFilterSampleIntegrationTest()\n      : HttpIntegrationTest(Http::CodecClient::Type::HTTP1, GetParam(), realTime()) {}\n  /**\n   * Initializer for an individual integration test.\n   */\n  void SetUp() override { initialize(); }\n\n  void initialize() override {\n    config_helper_.addFilter(\"{ name: sample, config: { key: via, val: sample-filter } }\");\n    HttpIntegrationTest::initialize();\n  }\n};\n\nINSTANTIATE_TEST_CASE_P(IpVersions, HttpFilterSampleIntegrationTest,\n                        testing::ValuesIn(TestEnvironment::getIpVersionsForTest()));\n\nTEST_P(HttpFilterSampleIntegrationTest, Test1) {\n  Http::TestHeaderMapImpl headers{{\":method\", \"GET\"}, {\":path\", \"/\"}, {\":authority\", \"host\"}};\n\n  IntegrationCodecClientPtr codec_client;\n  FakeHttpConnectionPtr fake_upstream_connection;\n  FakeStreamPtr request_stream;\n\n  codec_client = makeHttpConnection(lookupPort(\"http\"));\n  auto response = codec_client->makeHeaderOnlyRequest(headers);\n  ASSERT_TRUE(fake_upstreams_[0]->waitForHttpConnection(*dispatcher_, fake_upstream_connection,\n                                                        std::chrono::milliseconds(5)));\n  ASSERT_TRUE(fake_upstream_connection->waitForNewStream(*dispatcher_, request_stream));\n  ASSERT_TRUE(request_stream->waitForEndStream(*dispatcher_));\n  response->waitForEndStream();\n\n  EXPECT_STREQ(\"sample-filter\",\n               request_stream->headers().get(Http::LowerCaseString(\"via\"))->value().c_str());\n\n  codec_client->close();\n}\n} // namespace Envoy\n"
     },
     {
-      "path": "echo2_server.json",
-      "sha": null,
-      "content_sha256": "ebea02ab876b5950bf4958d7255d6e001d0ceaa266e78cf3dbb1a9224c62ffaa",
-      "score": 35,
-      "content": "{\n  \"listeners\": [\n  {\n    \"address\": \"tcp://{{ ip_loopback_address }}:0\",\n    \"use_original_dst\": true,\n    \"filters\": [\n      { \"name\": \"ratelimit\",\n        \"config\": {\n          \"domain\": \"foo\",\n          \"descriptors\": [[{\"key\": \"foo\", \"value\": \"bar\"}]],\n          \"stat_prefix\": \"name\"\n        }\n      },\n      { \"name\": \"echo2\", \"config\": {} }\n    ]\n  }],\n\n  \"admin\": { \"access_log_path\": \"/dev/null\",\n\t     \"profile_path\": \"{{ test_tmpdir }}/envoy.prof\",\n\t     \"address\": \"tcp://{{ ip_loopback_address }}:0\" },\n\n  \"cluster_manager\": {\n      \"clusters\": []\n  }\n}\n"
-    },
-    {
       "path": "echo2_server.yaml",
       "sha": null,
       "content_sha256": "4f7145a06eb3dadb93a2d99c266c05552eb6601ae507851c36a7e954267f4afc",
       "score": 35,
       "content": "admin:\n  access_log_path: /dev/null\n  address:\n    socket_address:\n      address: 127.0.0.1\n      port_value: 0\nstatic_resources:\n  clusters:\n    name: cluster_0\n    load_assignment:\n      cluster_name: cluster_0\n      endpoints:\n        - lb_endpoints:\n            - endpoint:\n                address:\n                  socket_address:\n                    address: 127.0.0.1\n                    port_value: 0\n  listeners:\n    name: listener_0\n    address:\n      socket_address:\n        address: 127.0.0.1\n        port_value: 0\n    filter_chains:\n    - filters:\n      - name: echo2\n        config:\n"
+    },
+    {
+      "path": "echo2_server.json",
+      "sha": null,
+      "content_sha256": "ebea02ab876b5950bf4958d7255d6e001d0ceaa266e78cf3dbb1a9224c62ffaa",
+      "score": 35,
+      "content": "{\n  \"listeners\": [\n  {\n    \"address\": \"tcp://{{ ip_loopback_address }}:0\",\n    \"use_original_dst\": true,\n    \"filters\": [\n      { \"name\": \"ratelimit\",\n        \"config\": {\n          \"domain\": \"foo\",\n          \"descriptors\": [[{\"key\": \"foo\", \"value\": \"bar\"}]],\n          \"stat_prefix\": \"name\"\n        }\n      },\n      { \"name\": \"echo2\", \"config\": {} }\n    ]\n  }],\n\n  \"admin\": { \"access_log_path\": \"/dev/null\",\n\t     \"profile_path\": \"{{ test_tmpdir }}/envoy.prof\",\n\t     \"address\": \"tcp://{{ ip_loopback_address }}:0\" },\n\n  \"cluster_manager\": {\n      \"clusters\": []\n  }\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T03:25:09.245240+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:18.819144+00:00"
 }

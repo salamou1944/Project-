@@ -53,11 +53,11 @@
       "content": "import CustomSignUp from \"@/components/auth/SignUp\";\n\nexport default function Page() {\n  return <CustomSignUp />;\n}"
     },
     {
-      "path": "app/api/tts/route.ts",
+      "path": "app/api/code/route.ts",
       "sha": null,
-      "content_sha256": "dd2cca1ba553630a2efc02eea624205d4f6ba6a99fc05cac7fe5ad92d9432df3",
+      "content_sha256": "7936907420f2811d68537d830cd6cd85049463ebf017f617f5495d282dfdbd02",
       "score": 104,
-      "content": "import { NextRequest, NextResponse } from 'next/server';\nimport { EdgeTTS } from 'node-edge-tts';\nimport { readFile, unlink } from 'fs/promises';\nimport path from 'path';\nimport { randomUUID } from 'crypto';\n\nasync function withTimeout(promise: any, ms: number | undefined) {\n  return Promise.race([\n    promise,\n    new Promise((_, reject) => setTimeout(() => reject(new Error('TTS request timed out')), ms)),\n  ]);\n}\n\nexport async function POST(req: NextRequest) {\n  const { text } = await req.json();\n\n  const id = randomUUID();\n  const audioFileName = `${id}.mp3`;\n  const audioPath = path.join('/tmp', audioFileName);\n\n  const tts = new EdgeTTS({\n    voice: 'en-GB-RyanNeural',\n    lang: 'en-GB',\n    pitch: '+0Hz',\n    rate: '+35%',\n    volume: '+0%',\n  });\n\n  try {\n    await tts.ttsPromise(text, audioPath);\n\n    const audioBuffer = await readFile(audioPath);\n\n    await unlink(audioPath);\n\n    return new NextResponse(audioBuffer, {\n      headers: {\n        'Content-Type': 'audio/mpeg',\n        'Content-Length': audioBuffer.length.toString(),\n        'Accept-Ranges': 'bytes',\n        'Cache-Control': 'no-cache',\n      },\n    });\n  } catch (error) {\n    console.error('TTS Error:', error);\n    return NextResponse.json({ error: 'Failed to generate speech' }, { status: 500 });\n  }\n}"
+      "content": "import { systemInstructions, tools } from '@/constants';\nimport { getFineTunedPrompt } from '@/constants/codePromptNew';\nimport { codeTools } from '@/constants/codeTools';\nimport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\nimport { streamText, createDataStreamResponse } from 'ai';\n\nexport const maxDuration = 30;\n\nconst provider = createOpenAICompatible({\n  name: 'azure',\n  apiKey: process.env.OPENAPI_API_KEY,\n  baseURL: process.env.OPENAI_API_BASE_URL || \"\",\n});\n\nexport async function POST(req: Request) {\n  try {\n    const { messages } = await req.json();\n\n    return createDataStreamResponse({\n      execute: (dataStream) => {\n        dataStream.writeData('initialized call');\n\n        const result = streamText({\n          model : provider('openai-large'),\n          system: getFineTunedPrompt(),\n          messages,\n          toolCallStreaming: true,\n          maxSteps: 5,          \n        });\n\n        result.mergeIntoDataStream(dataStream);        \n      },\n      onError: (error) => {\n        return error instanceof Error ? error.message : String(error);\n      },\n    });\n  } catch (error) {\n    console.error('POST handler error:', error);\n\n    return new Response(\n      JSON.stringify({ error: 'An error occurred while processing the request.' }),\n      { status: 500, headers: { 'Content-Type': 'application/json' } }\n    );\n  }\n}\n\n\n\n// import { CodePrompt } from '@/constants';\n// import { createOpenAICompatible } from '@ai-sdk/openai-compatible';\n// import { generateObject } from 'ai';\n// import { google } from '@ai-sdk/google';\n// import { z } from 'zod';\n\n// export const maxDuration = 30;\n\n// const schema = z.object({\n//   title: z.string(),\n//   brief: z.string(),\n//   files: z.array(z.record(z.string(), z.string())),\n// });\n\n// const provider = createOpenAICompatible({\n//   name: 'azure',\n//   apiKey: process.env.OPENAPI_API_KEY,\n//   baseURL: process.env.OPENAI_API_BASE_URL || \"\",\n// });\n\n// export async function POST(req: Request) {\n//   try {\n//     const { messages } = await req.json();\n\n//     const { object } = await generateObject({\n//       model: provider(\"openai-fast\"),\n//       mode: 'json',\n//       system: CodePrompt,\n//       messages,\n//       schema,\n//     });\n\n//     console.log('Generated object:', object);\n//     return Response.json(object);\n//   } catch (error) {\n//     console.error('POST handler error:', error);\n\n//     return new Response(\n//       JSON.stringify({ error: 'An error occurred while processing the request.' }),\n//       { status: 500, headers: { 'Content-Type': 'application/json' } }\n//     );\n//   }\n// }\n"
     },
     {
       "path": "app/api/tts2/route.ts",
@@ -74,18 +74,18 @@
       "content": "import { systemInstructions, tools } from '@/constants';\nimport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\nimport { streamText, createDataStreamResponse } from 'ai';\nimport { google } from '@ai-sdk/google';\n\nexport const maxDuration = 30;\n\nconst provider = createOpenAICompatible({\n  name: 'azure',\n  apiKey: process.env.OPENAPI_API_KEY,\n  baseURL: process.env.OPENAI_API_BASE_URL || \"\",\n});\n\nexport async function POST(req: Request) {\n  try {\n    const { messages } = await req.json();\n\n    const messagesHavePDF = messages.some(\n      (message: { experimental_attachments: any[] }) =>\n        message.experimental_attachments?.some(\n          (a: { contentType: string }) => a.contentType === 'application/pdf'\n        )\n    );\n\n    const model = messagesHavePDF\n      ? google('gemini-2.5-flash-preview-04-17')\n      : provider('openai-large');\n\n    return createDataStreamResponse({\n      execute: (dataStream) => {\n        dataStream.writeData('initialized call');\n\n        const result = streamText({\n          model,\n          system: systemInstructions,\n          messages,\n          tools,\n          toolCallStreaming: true,\n          maxSteps: 5,          \n        });\n\n        result.mergeIntoDataStream(dataStream);\n      },\n      onError: (error) => {\n        return error instanceof Error ? error.message : String(error);\n      },\n    });\n  } catch (error) {\n    console.error('POST handler error:', error);\n\n    return new Response(\n      JSON.stringify({ error: 'An error occurred while processing the request.' }),\n      { status: 500, headers: { 'Content-Type': 'application/json' } }\n    );\n  }\n}\n"
     },
     {
+      "path": "app/api/tts/route.ts",
+      "sha": null,
+      "content_sha256": "dd2cca1ba553630a2efc02eea624205d4f6ba6a99fc05cac7fe5ad92d9432df3",
+      "score": 104,
+      "content": "import { NextRequest, NextResponse } from 'next/server';\nimport { EdgeTTS } from 'node-edge-tts';\nimport { readFile, unlink } from 'fs/promises';\nimport path from 'path';\nimport { randomUUID } from 'crypto';\n\nasync function withTimeout(promise: any, ms: number | undefined) {\n  return Promise.race([\n    promise,\n    new Promise((_, reject) => setTimeout(() => reject(new Error('TTS request timed out')), ms)),\n  ]);\n}\n\nexport async function POST(req: NextRequest) {\n  const { text } = await req.json();\n\n  const id = randomUUID();\n  const audioFileName = `${id}.mp3`;\n  const audioPath = path.join('/tmp', audioFileName);\n\n  const tts = new EdgeTTS({\n    voice: 'en-GB-RyanNeural',\n    lang: 'en-GB',\n    pitch: '+0Hz',\n    rate: '+35%',\n    volume: '+0%',\n  });\n\n  try {\n    await tts.ttsPromise(text, audioPath);\n\n    const audioBuffer = await readFile(audioPath);\n\n    await unlink(audioPath);\n\n    return new NextResponse(audioBuffer, {\n      headers: {\n        'Content-Type': 'audio/mpeg',\n        'Content-Length': audioBuffer.length.toString(),\n        'Accept-Ranges': 'bytes',\n        'Cache-Control': 'no-cache',\n      },\n    });\n  } catch (error) {\n    console.error('TTS Error:', error);\n    return NextResponse.json({ error: 'Failed to generate speech' }, { status: 500 });\n  }\n}"
+    },
+    {
       "path": "app/api/code2/route.ts",
       "sha": null,
       "content_sha256": "62b7732270c16b0cd91ded7de6defca8d91085ed86802b770155b42794c5f23f",
       "score": 104,
       "content": "import { streamObject } from 'ai';\nimport { CodePrompt, codeSchema, systemPrompt } from './schema';\nimport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\nimport { getFineTunedPrompt } from '@/constants/codePromptNew';\n\nconst openai = createOpenAICompatible({\n  name: 'azure',\n  apiKey: process.env.OPENAPI_API_KEY,\n  baseURL: process.env.OPENAI_API_BASE_URL || \"\",\n});\n\nexport const maxDuration = 30;\n\nexport async function POST(req: Request) {\n  const context = await req.json();\n\n  const result = streamObject({\n    model: openai('openai'),\n    system: getFineTunedPrompt(), \n    schema: codeSchema,\n    prompt: context,\n  });\n\n  return result.toTextStreamResponse();\n}"
-    },
-    {
-      "path": "app/api/code/route.ts",
-      "sha": null,
-      "content_sha256": "7936907420f2811d68537d830cd6cd85049463ebf017f617f5495d282dfdbd02",
-      "score": 104,
-      "content": "import { systemInstructions, tools } from '@/constants';\nimport { getFineTunedPrompt } from '@/constants/codePromptNew';\nimport { codeTools } from '@/constants/codeTools';\nimport { createOpenAICompatible } from '@ai-sdk/openai-compatible';\nimport { streamText, createDataStreamResponse } from 'ai';\n\nexport const maxDuration = 30;\n\nconst provider = createOpenAICompatible({\n  name: 'azure',\n  apiKey: process.env.OPENAPI_API_KEY,\n  baseURL: process.env.OPENAI_API_BASE_URL || \"\",\n});\n\nexport async function POST(req: Request) {\n  try {\n    const { messages } = await req.json();\n\n    return createDataStreamResponse({\n      execute: (dataStream) => {\n        dataStream.writeData('initialized call');\n\n        const result = streamText({\n          model : provider('openai-large'),\n          system: getFineTunedPrompt(),\n          messages,\n          toolCallStreaming: true,\n          maxSteps: 5,          \n        });\n\n        result.mergeIntoDataStream(dataStream);        \n      },\n      onError: (error) => {\n        return error instanceof Error ? error.message : String(error);\n      },\n    });\n  } catch (error) {\n    console.error('POST handler error:', error);\n\n    return new Response(\n      JSON.stringify({ error: 'An error occurred while processing the request.' }),\n      { status: 500, headers: { 'Content-Type': 'application/json' } }\n    );\n  }\n}\n\n\n\n// import { CodePrompt } from '@/constants';\n// import { createOpenAICompatible } from '@ai-sdk/openai-compatible';\n// import { generateObject } from 'ai';\n// import { google } from '@ai-sdk/google';\n// import { z } from 'zod';\n\n// export const maxDuration = 30;\n\n// const schema = z.object({\n//   title: z.string(),\n//   brief: z.string(),\n//   files: z.array(z.record(z.string(), z.string())),\n// });\n\n// const provider = createOpenAICompatible({\n//   name: 'azure',\n//   apiKey: process.env.OPENAPI_API_KEY,\n//   baseURL: process.env.OPENAI_API_BASE_URL || \"\",\n// });\n\n// export async function POST(req: Request) {\n//   try {\n//     const { messages } = await req.json();\n\n//     const { object } = await generateObject({\n//       model: provider(\"openai-fast\"),\n//       mode: 'json',\n//       system: CodePrompt,\n//       messages,\n//       schema,\n//     });\n\n//     console.log('Generated object:', object);\n//     return Response.json(object);\n//   } catch (error) {\n//     console.error('POST handler error:', error);\n\n//     return new Response(\n//       JSON.stringify({ error: 'An error occurred while processing the request.' }),\n//       { status: 500, headers: { 'Content-Type': 'application/json' } }\n//     );\n//   }\n// }\n"
     },
     {
       "path": "README.md",
@@ -109,11 +109,32 @@
       "content": "<svg fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 1155 1000\"><path d=\"m577.3 0 577.4 1000H0z\" fill=\"#fff\"/></svg>"
     },
     {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "ed2bc19510589ae5c0940b5e4504c6c0413ba285ae35a3d4ad9db5f5d3a8eb51",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2017\",\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"allowJs\": true,\n    \"skipLibCheck\": true,\n    \"strict\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"preserve\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ],\n    \"paths\": {\n      \"@/*\": [\"./*\"]\n    }\n  },\n  \"include\": [\"next-env.d.ts\", \"**/*.ts\", \"**/*.tsx\", \".next/types/**/*.ts\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
+    },
+    {
+      "path": "components.json",
+      "sha": null,
+      "content_sha256": "14fa3cd5351177123b96afcb9b74fb38df977cc8bbf1defccfefaa4b69af3002",
+      "score": 35,
+      "content": "{\n  \"$schema\": \"https://ui.shadcn.com/schema.json\",\n  \"style\": \"new-york\",\n  \"rsc\": true,\n  \"tsx\": true,\n  \"tailwind\": {\n    \"config\": \"\",\n    \"css\": \"app/globals.css\",\n    \"baseColor\": \"neutral\",\n    \"cssVariables\": true,\n    \"prefix\": \"\"\n  },\n  \"aliases\": {\n    \"components\": \"@/components\",\n    \"utils\": \"@/lib/utils\",\n    \"ui\": \"@/components/ui\",\n    \"lib\": \"@/lib\",\n    \"hooks\": \"@/hooks\"\n  },\n  \"iconLibrary\": \"lucide\"\n}"
+    },
+    {
       "path": "middleware.ts",
       "sha": null,
       "content_sha256": "6f006cb085fb549129b9dc1335609e3c65f9a9e8030f5f023c8ef30d7fd49c2b",
       "score": 35,
       "content": "import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';\n\nconst isPublicRoute = createRouteMatcher(['/', '/sign-in(.*)', '/sign-up(.*)'])\n\nexport default clerkMiddleware(async (auth, req) => {\n  if (!isPublicRoute(req)) {\n    await auth.protect()\n  }\n})\n\nexport const config = {\n  matcher: [\n    '/((?!_next|[^?]*\\\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)',\n    '/(api|trpc)(.*)',\n  ],\n};"
+    },
+    {
+      "path": "tailwind.config.ts",
+      "sha": null,
+      "content_sha256": "beec0415015631ab4558da725fd89177a0b9081199ca3a9ef614fb83dd4c3eb2",
+      "score": 35,
+      "content": "import type { Config } from 'tailwindcss'\n\n\nexport default {\n  darkMode: ['class', 'html'],\n  content: ['./src/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],\n  safelist: ['dark'],\n  theme: {\n    container: {\n      center: true,\n      padding: '2rem',\n      screens: {\n        '2xl': '1400px',\n      },\n    },\n    extend: {\n      borderColor: {\n        border: 'hsl(var(--border))',\n      },\n      borderRadius: {\n        lg: `var(--radius)`,\n        md: `calc(var(--radius) - 2px)`,\n        sm: 'calc(var(--radius) - 4px)',\n      },\n      keyframes: {\n        'accordion-down': {\n          from: { height: '0' },\n          to: { height: 'var(--radix-accordion-content-height)' },\n        },\n        'accordion-up': {\n          from: { height: 'var(--radix-accordion-content-height)' },\n          to: { height: '0' },\n        },\n        fadeIn: {\n          '0%': { opacity: '0' },\n          '100%': { opacity: '1' },\n        },\n      },\n      animation: {\n        'accordion-down': 'accordion-down 0.2s ease-out',\n        'accordion-up': 'accordion-up 0.2s ease-out',\n        'fade-in': 'fadeIn 0.5s ease-in-out',\n      },\n      colors: {\n        border: 'hsl(var(--border))',\n        input: 'hsl(var(--input))',\n        ring: 'hsl(var(--ring))',\n        background: 'hsl(var(--background))',\n        foreground: 'hsl(var(--foreground))',\n        primary: {\n          DEFAULT: 'hsl(var(--primary))',\n          foreground: 'hsl(var(--primary-foreground))',\n        },\n        secondary: {\n          DEFAULT: 'hsl(var(--secondary))',\n          foreground: 'hsl(var(--secondary-foreground))',\n        },\n        destructive: {\n          DEFAULT: 'hsl(var(--destructive))',\n          foreground: 'hsl(var(--destructive-foreground))',\n        },\n        muted: {\n          DEFAULT: 'hsl(var(--muted))',\n          foreground: 'hsl(var(--muted-foreground))',\n        },\n        accent: {\n          DEFAULT: 'hsl(var(--accent))',\n          foreground: 'hsl(var(--accent-foreground))',\n        },\n        popover: {\n          DEFAULT: 'hsl(var(--popover))',\n          foreground: 'hsl(var(--popover-foreground))',\n        },\n        card: {\n          DEFAULT: 'hsl(var(--card))',\n          foreground: 'hsl(var(--card-foreground))',\n        },\n        'chat-user': '#f0f9ff',\n        'chat-bot': '#6366f1',\n        'chat-bot-light': '#818cf8',\n      },\n    },\n  },\n  plugins: [require('tailwindcss-animate')],\n} as Config"
     },
     {
       "path": "next.config.ts",
@@ -130,39 +151,11 @@
       "content": "#!/bin/bash\n\n# Navigate to script's directory to ensure relative paths work\ncd \"$(dirname \"$0\")\"\n\n# Output file\noutput_file=\"components-export.txt\"\n\n# Ensure output file is cleared\n> \"$output_file\"\n\n# Check if directory exists\ncomponent_dir=\"./components/ui\"\nif [ ! -d \"$component_dir\" ]; then\n  echo \"❌ Directory $component_dir does not exist.\"\n  exit 1\nfi\n\n# Check if any .tsx files exist\nshopt -s nullglob\ntsx_files=(\"$component_dir\"/*.tsx)\n\nif [ ${#tsx_files[@]} -eq 0 ]; then\n  echo \"❌ No .tsx files found in $component_dir.\"\n  exit 1\nfi\n\n# Loop through files\nfor filepath in \"${tsx_files[@]}\"; do\n  filename=$(basename \"$filepath\" .tsx)\n  jsname=\"${filename}.js\"\n\n  echo \"'/components/ui/$jsname': {\" >> \"$output_file\"\n  echo \"    file: {\" >> \"$output_file\"\n  echo -n \"      contents: \\`\" >> \"$output_file\"\n  sed 's/`/\\\\`/g' \"$filepath\" >> \"$output_file\"\n  echo \"\\`\" >> \"$output_file\"\n  echo \"}},\" >> \"$output_file\"\ndone\n\necho \"✅ Exported to $output_file\"\n"
     },
     {
-      "path": "tailwind.config.ts",
-      "sha": null,
-      "content_sha256": "beec0415015631ab4558da725fd89177a0b9081199ca3a9ef614fb83dd4c3eb2",
-      "score": 35,
-      "content": "import type { Config } from 'tailwindcss'\n\n\nexport default {\n  darkMode: ['class', 'html'],\n  content: ['./src/**/*.{ts,tsx}', './components/**/*.{ts,tsx}'],\n  safelist: ['dark'],\n  theme: {\n    container: {\n      center: true,\n      padding: '2rem',\n      screens: {\n        '2xl': '1400px',\n      },\n    },\n    extend: {\n      borderColor: {\n        border: 'hsl(var(--border))',\n      },\n      borderRadius: {\n        lg: `var(--radius)`,\n        md: `calc(var(--radius) - 2px)`,\n        sm: 'calc(var(--radius) - 4px)',\n      },\n      keyframes: {\n        'accordion-down': {\n          from: { height: '0' },\n          to: { height: 'var(--radix-accordion-content-height)' },\n        },\n        'accordion-up': {\n          from: { height: 'var(--radix-accordion-content-height)' },\n          to: { height: '0' },\n        },\n        fadeIn: {\n          '0%': { opacity: '0' },\n          '100%': { opacity: '1' },\n        },\n      },\n      animation: {\n        'accordion-down': 'accordion-down 0.2s ease-out',\n        'accordion-up': 'accordion-up 0.2s ease-out',\n        'fade-in': 'fadeIn 0.5s ease-in-out',\n      },\n      colors: {\n        border: 'hsl(var(--border))',\n        input: 'hsl(var(--input))',\n        ring: 'hsl(var(--ring))',\n        background: 'hsl(var(--background))',\n        foreground: 'hsl(var(--foreground))',\n        primary: {\n          DEFAULT: 'hsl(var(--primary))',\n          foreground: 'hsl(var(--primary-foreground))',\n        },\n        secondary: {\n          DEFAULT: 'hsl(var(--secondary))',\n          foreground: 'hsl(var(--secondary-foreground))',\n        },\n        destructive: {\n          DEFAULT: 'hsl(var(--destructive))',\n          foreground: 'hsl(var(--destructive-foreground))',\n        },\n        muted: {\n          DEFAULT: 'hsl(var(--muted))',\n          foreground: 'hsl(var(--muted-foreground))',\n        },\n        accent: {\n          DEFAULT: 'hsl(var(--accent))',\n          foreground: 'hsl(var(--accent-foreground))',\n        },\n        popover: {\n          DEFAULT: 'hsl(var(--popover))',\n          foreground: 'hsl(var(--popover-foreground))',\n        },\n        card: {\n          DEFAULT: 'hsl(var(--card))',\n          foreground: 'hsl(var(--card-foreground))',\n        },\n        'chat-user': '#f0f9ff',\n        'chat-bot': '#6366f1',\n        'chat-bot-light': '#818cf8',\n      },\n    },\n  },\n  plugins: [require('tailwindcss-animate')],\n} as Config"
-    },
-    {
-      "path": "tsconfig.json",
-      "sha": null,
-      "content_sha256": "ed2bc19510589ae5c0940b5e4504c6c0413ba285ae35a3d4ad9db5f5d3a8eb51",
-      "score": 35,
-      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2017\",\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"allowJs\": true,\n    \"skipLibCheck\": true,\n    \"strict\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"preserve\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ],\n    \"paths\": {\n      \"@/*\": [\"./*\"]\n    }\n  },\n  \"include\": [\"next-env.d.ts\", \"**/*.ts\", \"**/*.tsx\", \".next/types/**/*.ts\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
-    },
-    {
       "path": "modules.d.ts",
       "sha": null,
       "content_sha256": "3ec3a40f6f38af54b8e2cb2042f249f2ced5aae5d08b7ee4b4d76d6a273220b1",
       "score": 35,
       "content": "declare module 'remark-sub-super'"
-    },
-    {
-      "path": "components.json",
-      "sha": null,
-      "content_sha256": "14fa3cd5351177123b96afcb9b74fb38df977cc8bbf1defccfefaa4b69af3002",
-      "score": 35,
-      "content": "{\n  \"$schema\": \"https://ui.shadcn.com/schema.json\",\n  \"style\": \"new-york\",\n  \"rsc\": true,\n  \"tsx\": true,\n  \"tailwind\": {\n    \"config\": \"\",\n    \"css\": \"app/globals.css\",\n    \"baseColor\": \"neutral\",\n    \"cssVariables\": true,\n    \"prefix\": \"\"\n  },\n  \"aliases\": {\n    \"components\": \"@/components\",\n    \"utils\": \"@/lib/utils\",\n    \"ui\": \"@/components/ui\",\n    \"lib\": \"@/lib\",\n    \"hooks\": \"@/hooks\"\n  },\n  \"iconLibrary\": \"lucide\"\n}"
-    },
-    {
-      "path": "hooks/use-mobile.ts",
-      "sha": null,
-      "content_sha256": "ad0936f84f1df79d3697bfbff9c18f8ad58431c1cbaf2359c6a853b0fcc9f28b",
-      "score": 33,
-      "content": "import * as React from \"react\"\n\nconst MOBILE_BREAKPOINT = 768\n\nexport function useIsMobile() {\n  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)\n\n  React.useEffect(() => {\n    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)\n    const onChange = () => {\n      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)\n    }\n    mql.addEventListener(\"change\", onChange)\n    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)\n    return () => mql.removeEventListener(\"change\", onChange)\n  }, [])\n\n  return !!isMobile\n}\n"
     },
     {
       "path": "lib/utils.ts",
@@ -179,6 +172,13 @@
       "content": "import { createBrowserClient } from \"@supabase/ssr\";\n\nexport const createClient = () =>\n  createBrowserClient(\n    process.env.NEXT_PUBLIC_SUPABASE_URL!,\n    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,\n  );\n\nexport const supabase = createClient();"
     },
     {
+      "path": "hooks/use-mobile.ts",
+      "sha": null,
+      "content_sha256": "ad0936f84f1df79d3697bfbff9c18f8ad58431c1cbaf2359c6a853b0fcc9f28b",
+      "score": 33,
+      "content": "import * as React from \"react\"\n\nconst MOBILE_BREAKPOINT = 768\n\nexport function useIsMobile() {\n  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)\n\n  React.useEffect(() => {\n    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)\n    const onChange = () => {\n      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)\n    }\n    mql.addEventListener(\"change\", onChange)\n    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)\n    return () => mql.removeEventListener(\"change\", onChange)\n  }, [])\n\n  return !!isMobile\n}\n"
+    },
+    {
       "path": "lib/OpenCameraAndCapturePhoto.ts",
       "sha": null,
       "content_sha256": "73b48a229eec51707d684bcbcbcd4e9f6d8b7b46be018cbb08d303db0046755a",
@@ -186,5 +186,7 @@
       "content": "let resolveCapture: ((img: string | null) => void) | null = null;\n\nexport function openCameraAndCapturePhoto(): Promise<string | null> {\n  const event = new CustomEvent('open-camera-capture');\n  window.dispatchEvent(event);\n\n  return new Promise((resolve) => {\n    resolveCapture = resolve;\n  });\n}\n\nexport function completeCapture(image: string | null) {\n  if (resolveCapture) {\n    resolveCapture(image);\n    resolveCapture = null;\n  }\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T02:25:40.470111+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:12:54.261300+00:00"
 }

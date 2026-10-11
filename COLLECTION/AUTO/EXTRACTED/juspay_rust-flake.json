@@ -3,7 +3,7 @@
   "repo": "juspay/rust-flake",
   "revision_sha": "ae133ab42d622ac17d4847480422574f51f61e9a",
   "default_branch": "main",
-  "pushed_at": "2026-10-04T01:16:02Z",
+  "pushed_at": "2026-10-11T00:45:13Z",
   "repo_updated_at": "2026-08-31T20:17:58Z",
   "license": "MIT",
   "topics": [],
@@ -23,13 +23,6 @@
       "content_sha256": "342c0d606ef32ae77283f9b86e8cc55e5c42dd8de360a2561f09b01878693779",
       "score": 198,
       "content": "# CI, ported from vira.hs (Vira <https://vira.nixos.asia/>).\n#\n# Same coverage as before: the four flakes devoured (srid/devour-flake — what\n# Vira itself uses to build a flake), with the same input overrides, built for\n# x86_64-linux and aarch64-darwin (via the matrix). The Vira \"signoff\" check\n# is replaced by this workflow's own check runs across the matrix (one\n# `devour-flake (os, subflake)` per combination), and the build cache by\n# `cache-nix-action` (store cache persisted across runs).\nname: ci\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\njobs:\n  devour-flake:\n    name: \"devour-flake (${{ matrix.os }}, ${{ matrix.flake.name }})\"\n    strategy:\n      fail-fast: false\n      matrix:\n        os:\n          # build.systems in the old vira.hs\n          - ubuntu-latest # x86_64-linux\n          - macos-latest  # aarch64-darwin\n        flake:\n          # build.flakes (with overrideInputs) in the old vira.hs. nix input\n          # path suffix is relative to the repo root ($PWD); the subflake path\n          # is relative to the root too.\n          - name: crate-parser\n            path: nix/crate-parser/test\n            input: crate-parser\n            inputPath: /nix/crate-parser\n          - name: dev\n            path: dev\n            input: rust-flake\n            inputPath: \"\"\n          - name: single-crate\n            path: examples/single-crate\n            input: rust-flake\n            inputPath: \"\"\n          - name: multi-crate\n            path: examples/multi-crate\n            input: rust-flake\n            inputPath: \"\"\n    runs-on: ${{ matrix.os }}\n    permissions:\n      contents: read\n      actions: write # cache-nix-action's purge: true requires it\n    steps:\n      - uses: actions/checkout@v4\n      - uses: nixbuild/nix-quick-install-action@v34\n      - uses: nix-community/cache-nix-action@v6\n        with:\n          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/flake.lock') }}\n          restore-prefixes-first-match: nix-${{ runner.os }}-\n          gc-max-store-size-linux: 5G\n          gc-max-store-size-macos: 5G\n          purge: true\n          purge-prefixes: nix-${{ runner.os }}-\n          purge-last-accessed: 604800\n          purge-primary-key: never\n\n      # Devour the subflake exactly how Vira builds it (see\n      # packages/devour-flake/src/DevourFlake.hs in juspay/vira): builds every\n      # package, check, devShell, app, ... of the flake for the current system.\n      - name: \"devour ${{ matrix.flake.name }}\"\n        run: >\n          nix build github:srid/devour-flake#default -L --print-out-paths\n          --no-write-lock-file --no-link\n          --override-input flake \"path:$PWD/${{ matrix.flake.path }}\"\n          --override-input \"flake/${{ matrix.flake.input }}\" \"path:$PWD${{ matrix.flake.inputPath }}\"\n"
-    },
-    {
-      "path": "nix/crate-parser/test/crates/crate-a/Cargo.toml",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 170,
-      "content": ""
     },
     {
       "path": ".github/workflows/update-flake-lock.yaml",
@@ -53,13 +46,6 @@
       "content": "[package]\nname = \"single-crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\ndescription = \"A simple Hello World example for rust-flake\"\n\n[dependencies]\nclap = { version = \"4.0\", features = [\"derive\"] }\n"
     },
     {
-      "path": "examples/multi-crate/crates/crate-c/Cargo.toml",
-      "sha": null,
-      "content_sha256": "b981cd4318ac052be1d5536e651ca96023f3910389f8b14012b3674869769da9",
-      "score": 112,
-      "content": "[package]\nname = \"crate-c\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n"
-    },
-    {
       "path": "examples/multi-crate/crates/crate-a/Cargo.toml",
       "sha": null,
       "content_sha256": "404b95002d44e8034007b471440a7eeeedcde4903c40172760e775a94fc8330d",
@@ -72,6 +58,13 @@
       "content_sha256": "2e64210a1a128c382fdfa7a695c219f944663c3b40385e22991b4b1bced72455",
       "score": 112,
       "content": "[package]\nname = \"crate-b\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\ncrate-c = { path = \"../crate-c\" }\n"
+    },
+    {
+      "path": "examples/multi-crate/crates/crate-c/Cargo.toml",
+      "sha": null,
+      "content_sha256": "b981cd4318ac052be1d5536e651ca96023f3910389f8b14012b3674869769da9",
+      "score": 112,
+      "content": "[package]\nname = \"crate-c\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\n"
     },
     {
       "path": "README.md",
@@ -130,11 +123,11 @@
       "content": "fn main() {\n    println!(\"{}\", crate_a::a_hello());\n}\n"
     },
     {
-      "path": "examples/multi-crate/crates/crate-a/src/lib.rs",
+      "path": "examples/multi-crate/crates/crate-c/src/lib.rs",
       "sha": null,
-      "content_sha256": "1e8e03d7a7292ab871b34fa6a4ec6bc3f7744303d4a7d90f53ed1d5d6a94ef97",
+      "content_sha256": "f548b7bf5d95dcac195745a9f243cac709b9d7a141f8df6fded61220f22d8e06",
       "score": 25,
-      "content": "pub fn a_hello() -> String {\n    format!(\"A says: {}\", crate_b::b_hello())\n}\n"
+      "content": "pub fn c_hello() -> String {\n    // To avoid infinite recursion, just return a message (do not call crate_a::a_hello())\n    \"Hello from C!\".to_string()\n}\n"
     },
     {
       "path": "examples/multi-crate/crates/crate-b/src/lib.rs",
@@ -144,12 +137,19 @@
       "content": "pub fn b_hello() -> String {\n    format!(\"B says: {}\", crate_c::c_hello())\n}\n"
     },
     {
-      "path": "examples/multi-crate/crates/crate-c/src/lib.rs",
+      "path": "examples/multi-crate/crates/crate-a/src/lib.rs",
       "sha": null,
-      "content_sha256": "f548b7bf5d95dcac195745a9f243cac709b9d7a141f8df6fded61220f22d8e06",
+      "content_sha256": "1e8e03d7a7292ab871b34fa6a4ec6bc3f7744303d4a7d90f53ed1d5d6a94ef97",
       "score": 25,
-      "content": "pub fn c_hello() -> String {\n    // To avoid infinite recursion, just return a message (do not call crate_a::a_hello())\n    \"Hello from C!\".to_string()\n}\n"
+      "content": "pub fn a_hello() -> String {\n    format!(\"A says: {}\", crate_b::b_hello())\n}\n"
     }
   ],
-  "generated_at": "2026-10-08T03:25:16.275708+00:00"
+  "fetch_errors": [
+    {
+      "path": "nix/crate-parser/test/crates/crate-a/Cargo.toml",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 1,
+  "generated_at": "2026-10-11T01:13:22.869923+00:00"
 }

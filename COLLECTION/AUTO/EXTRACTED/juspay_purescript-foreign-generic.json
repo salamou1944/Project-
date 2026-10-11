@@ -46,13 +46,6 @@
       "content": "module Test.Main where\n\nimport Prelude\n\nimport Control.Monad.Except (runExcept)\nimport Data.Bifunctor (bimap)\nimport Data.Either (Either(..))\nimport Data.Generic.Rep (class Generic)\nimport Data.Maybe (Maybe(..), isNothing)\nimport Data.String (toLower, toUpper)\nimport Data.Tuple (Tuple(..))\nimport Effect (Effect)\nimport Effect.Console (log)\nimport Foreign (isNull, unsafeToForeign)\nimport Foreign.Generic (class Decode, class Encode, class GenericDecode, class GenericEncode, Options, decode, encode, defaultOptions, decodeJSON, encodeJSON, genericDecodeJSON, genericEncodeJSON)\nimport Foreign.Generic.EnumEncoding (class GenericDecodeEnum, class GenericEncodeEnum, GenericEnumOptions, genericDecodeEnum, genericEncodeEnum)\nimport Foreign.Index (readProp)\nimport Foreign.Internal.Stringify (unsafeStringify)\nimport Foreign.JSON (parseJSON)\nimport Foreign.Object as Object\nimport Test.Assert (assert, assert')\nimport Test.Types (Fruit(..), IntList(..), RecordTest(..), Tree(..), TupleArray(..), UndefinedTest(..))\n\nbuildTree :: forall a. (a -> TupleArray a a) -> Int -> a -> Tree a\nbuildTree _ 0 a = Leaf a\nbuildTree f n a = Branch $ buildTree (bimap f f) (n - 1) (f a)\n\n-- A balanced binary tree of depth N\nmakeTree :: Int -> Tree Int\nmakeTree n = buildTree (\\i -> TupleArray (Tuple (2 * i) (2 * i + 1))) n 0\n\nthrow :: String -> Effect Unit\nthrow = flip assert' false\n\ntestRoundTrip\n  :: ∀ a\n   . Eq a\n  => Decode a\n  => Encode a\n  => a\n  -> Effect Unit\ntestRoundTrip x = do\n  let json = encodeJSON x\n  log json\n  case runExcept (decodeJSON json) of\n    Right y -> assert (x == y)\n    Left err -> throw (show err)\n\ntestGenericRoundTrip\n  :: ∀ a r\n   . Eq a\n  => Generic a r\n  => GenericDecode r\n  => GenericEncode r\n  => Options\n  -> a\n  -> Effect Unit\ntestGenericRoundTrip opts x = do\n  let json = genericEncodeJSON opts x\n  log json\n  case runExcept (genericDecodeJSON opts json) of\n    Right y -> assert (x == y)\n    Left err -> throw (show err)\n\ntestOption\n  :: ∀ a rep\n   . Eq a\n  => Generic a rep\n  => GenericEncodeEnum rep\n  => GenericDecodeEnum rep\n  => GenericEnumOptions\n  -> String\n  -> a\n  -> Effect Unit\ntestOption options string value = do\n  let json = unsafeStringify $ genericEncodeEnum options value\n  log json\n  case runExcept $ Tuple <$> decode' json <*> decode' string of\n    Right (Tuple x y) -> assert (value == y && value == x)\n    Left err -> throw (show err)\n  where\n    decode' = genericDecodeEnum options <=< parseJSON\n\ntestUnaryConstructorLiteral :: Effect Unit\ntestUnaryConstructorLiteral = do\n    testOption (makeCasingOptions toUpper) \"\\\"FRIKANDEL\\\"\" Frikandel\n    testOption (makeCasingOptions toLower) \"\\\"frikandel\\\"\" Frikandel\n  where\n    makeCasingOptions f =\n      { constructorTagTransform: f\n      }\n\n-- Test that `Nothing` record fields, when encoded to JSON, are present and\n-- encoded as `null`\ntestNothingToNull :: Effect Unit\ntestNothingToNull =\n  let\n    json = encode (UndefinedTest {a: Nothing})\n  in do\n    log (encodeJSON json)\n    case runExcept (pure json >>= readProp \"contents\" >>= readProp \"a\") of\n      Right val ->\n        when (not (isNull val))\n          (throw (\"property 'a' was not null; got: \" <> encodeJSON val))\n      Left err ->\n        throw (show err)\n\n-- Test that `Maybe` fields which are not present in the JSON are decoded to\n-- `Nothing`\ntestNothingFromMissing :: Effect Unit\ntestNothingFromMissing =\n  let\n    json = unsafeToForeign\n            { tag: \"UndefinedTest\"\n            , contents: 0\n            }\n  in\n    case runExcept (decode json) of\n      Right (UndefinedTest x) ->\n        when (not (isNothing x.a))\n          (throw (\"Expected Nothing, got: \" <> show x.a))\n      Left err ->\n        throw (show err)\n\nmain :: Effect Unit\nmain = do\n  testRoundTrip (RecordTest { foo: 1, bar: \"test\", baz: 'a' })\n  testRoundTrip (Cons 1 (Cons 2 (Cons 3 Nil)))\n  testRoundTrip (UndefinedTest {a: Just \"test\"})\n  testRoundTrip (UndefinedTest {a: Nothing})\n  testRoundTrip [Just \"test\"]\n  testRoundTrip [Nothing :: Maybe String]\n  testRoundTrip (Apple)\n  testRoundTrip (makeTree 0)\n  testRoundTrip (makeTree 5)\n  testRoundTrip (Object.fromFoldable [Tuple \"one\" 1, Tuple \"two\" 2])\n  testUnaryConstructorLiteral\n  let opts = defaultOptions { fieldTransform = toUpper }\n  testGenericRoundTrip opts (RecordTest { foo: 1, bar: \"test\", baz: 'a' })\n  testNothingToNull\n  testNothingFromMissing\n"
     },
     {
-      "path": "bower.json",
-      "sha": null,
-      "content_sha256": "eba04f69519464a87897325b4ba581b7c1aeda277b277fa25e6949e1956926e6",
-      "score": 35,
-      "content": "{\n  \"name\": \"purescript-foreign-generic\",\n  \"moduleType\": [\n    \"node\"\n  ],\n  \"ignore\": [\n    \"**/.*\",\n    \"node_modules\",\n    \"bower_components\",\n    \".spago\",\n    \"output\"\n  ],\n  \"license\": \"MIT\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git://github.com/paf31/purescript-foreign-generic.git\"\n  },\n  \"dependencies\": {\n    \"purescript-effect\": \"^4.0.0\",\n    \"purescript-foreign\": \"^7.0.0\",\n    \"purescript-foreign-object\": \"v4.1.0\",\n    \"purescript-exceptions\": \"^6.0.0\",\n    \"purescript-record\": \"^4.0.0\",\n    \"purescript-identity\": \"^6.0.0\"\n  },\n  \"devDependencies\": {\n    \"purescript-assert\": \"^6.0.0\",\n    \"purescript-psci-support\": \"^6.0.0\"\n  }\n}\n"
-    },
-    {
       "path": ".travis.yml",
       "sha": null,
       "content_sha256": "db7ad45afaa29326a3e5e123da04db37a4d2f5763640c76267f5d31bc3acfcb8",
@@ -60,11 +53,11 @@
       "content": "language: node_js\ndist: trusty\nsudo: required\nnode_js: stable\ninstall:\n  - npm install -g bower\n  - npm install\nscript:\n  - bower install --production\n  - npm run -s build\n  - bower install\n  - npm run -s test\n"
     },
     {
-      "path": "src/Foreign/NullOrUndefined.js",
+      "path": "bower.json",
       "sha": null,
-      "content_sha256": "b09777903e4103877eb9741b6b9cb21ab6ef5ac972e857c1170a09293803183c",
-      "score": 31,
-      "content": "export const nullImpl = null;\n\nexport const undefinedImpl = undefined;\n"
+      "content_sha256": "eba04f69519464a87897325b4ba581b7c1aeda277b277fa25e6949e1956926e6",
+      "score": 35,
+      "content": "{\n  \"name\": \"purescript-foreign-generic\",\n  \"moduleType\": [\n    \"node\"\n  ],\n  \"ignore\": [\n    \"**/.*\",\n    \"node_modules\",\n    \"bower_components\",\n    \".spago\",\n    \"output\"\n  ],\n  \"license\": \"MIT\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git://github.com/paf31/purescript-foreign-generic.git\"\n  },\n  \"dependencies\": {\n    \"purescript-effect\": \"^4.0.0\",\n    \"purescript-foreign\": \"^7.0.0\",\n    \"purescript-foreign-object\": \"v4.1.0\",\n    \"purescript-exceptions\": \"^6.0.0\",\n    \"purescript-record\": \"^4.0.0\",\n    \"purescript-identity\": \"^6.0.0\"\n  },\n  \"devDependencies\": {\n    \"purescript-assert\": \"^6.0.0\",\n    \"purescript-psci-support\": \"^6.0.0\"\n  }\n}\n"
     },
     {
       "path": "src/Foreign/JSON.js",
@@ -74,6 +67,13 @@
       "content": "\"use strict\";\n\nexport const parseJSONImpl = function (str) {\n  return JSON.parse(str);\n};\n"
     },
     {
+      "path": "src/Foreign/NullOrUndefined.js",
+      "sha": null,
+      "content_sha256": "b09777903e4103877eb9741b6b9cb21ab6ef5ac972e857c1170a09293803183c",
+      "score": 31,
+      "content": "export const nullImpl = null;\n\nexport const undefinedImpl = undefined;\n"
+    },
+    {
       "path": "src/Foreign/Internal/Stringify.js",
       "sha": null,
       "content_sha256": "1deb66be7f7db57dc219bec35b51b5218469bc4eaccc2c8edf4935490145f258",
@@ -81,5 +81,7 @@
       "content": "export const unsafeStringify = function (x) {\n  return JSON.stringify(x);\n};\n"
     }
   ],
-  "generated_at": "2026-10-08T03:25:11.827811+00:00"
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-11T01:13:20.367346+00:00"
 }

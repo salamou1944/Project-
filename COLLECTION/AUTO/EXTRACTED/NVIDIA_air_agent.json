@@ -60,11 +60,11 @@
       "content": "#! /bin/bash\n# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\npython3 -m coverage run -m pytest\ncoverage report -m\ncoverage html\n"
     },
     {
-      "path": "tests/__init__.py",
+      "path": "tests/util.py",
       "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content_sha256": "74d05a2df1e766593f1893a8a24e7ec3bded9411866ebbb3d158f5b39af17055",
       "score": 93,
-      "content": ""
+      "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"\nTest utils\n\"\"\"\n\nimport configparser\n\nCONFIG_FILE = 'tests/agent.ini'\n\n\ndef load_config():\n    \"\"\"\n    Helper function to load the test config file.\n\n    Returns:\n    dict - A dictionary of all loaded config values\n    \"\"\"\n    config = configparser.ConfigParser()\n    config.read(CONFIG_FILE)\n    return config['AGENT']\n"
     },
     {
       "path": "tests/test_config.py",
@@ -72,13 +72,6 @@
       "content_sha256": "bfdbc9e60af88a9185c244fd445ddd016e3de60492444ff789fd8b5242f24c46",
       "score": 93,
       "content": "# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\"\"\"\nUnit tests for Config module\n\"\"\"\n# pylint: disable=unused-argument,missing-class-docstring,missing-function-docstring,protected-access\n# pylint: disable=arguments-differ,no-self-use,too-many-public-methods,too-many-arguments\n\nimport tempfile\nfrom unittest import TestCase\nfrom unittest.mock import MagicMock, patch\n\nimport config\n\n\nclass TestConfig(TestCase):\n    def setUp(self):\n        self.key = 'TEST_KEY'\n        self.value = 'testing'\n        with tempfile.NamedTemporaryFile() as cfg_file:\n            cfg_file.write(b'[AGENT]\\n')\n            cfg_file.write(f'{self.key}={self.value}\\n'.encode('utf-8'))\n            cfg_file.seek(0)\n            self.config = config.Config(cfg_file.name)\n        self.log_format = '%(asctime)s %(levelname)s %(message)s'\n\n    def test_getitem(self):\n        self.assertEqual(self.config[self.key], self.value)\n\n    def test_getitem_env_override(self):\n        value = 'foo'\n        with patch('config.os.getenv', return_value=value) as mock_env:\n            self.assertEqual(self.config[self.key], value)\n        mock_env.assert_called_once_with(f'AIR_AGENT_{self.key}', self.value)\n\n    @patch('config.logging')\n    def test_init_logger(self, mock_logging):\n        level = 'CRITICAL'\n        log_file = '/tmp/agent.log'\n        self.config['LOG_LEVEL'] = level\n        self.config['LOG_FILE'] = log_file\n        mock_handler = MagicMock()\n        mock_logging.root.handlers = [mock_handler]\n\n        self.config._init_logger()\n        mock_logging.root.removeHandler(mock_handler)\n        mock_logging.basicConfig.assert_called_once_with(\n            filename=log_file, level=level, format=self.log_format\n        )\n\n    @patch('config.logging')\n    def test_init_logger_default(self, mock_logging):\n        self.config._init_logger()\n        mock_logging.basicConfig.assert_called_once_with(\n            filename='/var/log/air-agent.log', level='INFO', format=self.log_format\n        )\n"
-    },
-    {
-      "path": "tests/util.py",
-      "sha": null,
-      "content_sha256": "74d05a2df1e766593f1893a8a24e7ec3bded9411866ebbb3d158f5b39af17055",
-      "score": 93,
-      "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"\nTest utils\n\"\"\"\n\nimport configparser\n\nCONFIG_FILE = 'tests/agent.ini'\n\n\ndef load_config():\n    \"\"\"\n    Helper function to load the test config file.\n\n    Returns:\n    dict - A dictionary of all loaded config values\n    \"\"\"\n    config = configparser.ConfigParser()\n    config.read(CONFIG_FILE)\n    return config['AGENT']\n"
     },
     {
       "path": "air-agent.service",
@@ -95,6 +88,13 @@
       "content": "[Unit]\nDescription=NVIDIA Air Agent Service\nAfter=network.target\n\n[Service]\nType=simple\nUser=root\nGroup=root\nWorkingDirectory=/usr/local/lib/air-agent\nExecStart={1} vrf exec {2} /usr/bin/python3 /usr/local/lib/air-agent/agent.py\nStandardOutput=journal\nStandardError=journal\nRestart=on-failure\nRestartSec=3\n\n[Install]\nWantedBy=multi-user.target"
     },
     {
+      "path": "version.py",
+      "sha": null,
+      "content_sha256": "c6852eaf86c92c08fa1a9af3dd8b3d051cf56a07cd31d222b4669153d90409c5",
+      "score": 35,
+      "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\nAGENT_VERSION = '4.0.1'\n"
+    },
+    {
       "path": ".ruff.toml",
       "sha": null,
       "content_sha256": "f9f901693e25baf8a215c30e9cd896fb70b405f5efa47707a7fd01a087644b98",
@@ -109,25 +109,18 @@
       "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"\nPlatform detection functions\n\"\"\"\n\nimport logging\nimport subprocess\nimport traceback\n\n\ndef detect():\n    \"\"\"\n    Detect the current platform\n    \"\"\"\n    os = None\n    release = None\n    try:\n        os = subprocess.run(['lsb_release', '-i'], check=True, stdout=subprocess.PIPE)\n        os = os.stdout.decode().split('\\t')[1].rstrip()\n        try:\n            release = subprocess.run(['lsb_release', '-r'], check=True, stdout=subprocess.PIPE)\n            release = release.stdout.decode().split('\\t')[1].rstrip()\n        except:\n            logging.debug(traceback.format_exc())\n            logging.warning('Platform detection failed to determine Release')\n    except:\n        logging.debug(traceback.format_exc())\n        logging.warning('Platform detection failed to determine OS')\n    logging.debug(f'Detected OS: {os} and Release: {release}')\n    return os, release\n"
     },
     {
+      "path": ".pre-commit-config.yaml",
+      "sha": null,
+      "content_sha256": "a163ab7102400d46a4b95081032789d2dbb450522b5ffd7e7497ffe8e811776d",
+      "score": 35,
+      "content": "repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    # Ruff version.\n    rev: v0.2.1\n    hooks:\n      # Run the linter, and fix issues that are safely-fixable.\n      - id: ruff\n        args: [ --fix ]\n      # Run the formatter.\n      - id: ruff-format\n"
+    },
+    {
       "path": "prepare_build.sh",
       "sha": null,
       "content_sha256": "b725fe3d43b85d88044b4b8a81d11474e1cdc2969cec36cb3ef0e85c57f876a6",
       "score": 35,
       "content": "#!/usr/bin/env bash\n\nCURRENT_VERSION=`poetry version -s`\necho $CURRENT_VERSION\nif [ \"$VERSION\" = \"major\" ]; then\n  poetry version major\nelif [ \"$VERSION\" = \"minor\" ]; then\n  poetry version minor\nelif [ \"$VERSION\" = \"patch\" ]; then\n  poetry version patch\nelse\n  echo Version must be either major, minor or patch\n  exit 1\nfi\n"
-    },
-    {
-      "path": "__init__.py",
-      "sha": null,
-      "content_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-      "score": 35,
-      "content": ""
-    },
-    {
-      "path": "executors.py",
-      "sha": null,
-      "content_sha256": "f172a015b9bcdf55898025e0cf45e03c765e6ba7df4f4bd64f5644f92cbbbeed",
-      "score": 35,
-      "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"\nExecutor functions for post-clone instructions\n\"\"\"\n\nimport json\nimport logging\nimport subprocess\nimport traceback\n\n\ndef shell(instructions):\n    \"\"\"\n    Executor for shell commands\n\n    Arguments:\n    instructions (list) - A list of '\\n' delimited commands to execute in the system's default shell\n\n    Returns:\n    bool - True if all commands executed successfully\n    \"\"\"\n    for line in instructions.split('\\n'):\n        logging.info(f'EXEC shell :: {line}')\n        try:\n            subprocess.run(line, shell=True, check=True)\n        except:\n            logging.error(f'Command `{line}` failed')\n            logging.debug(traceback.format_exc())\n            return False\n    return True\n\n\ndef file(instructions):\n    \"\"\"\n    Executor for file transfers\n\n    Arguments:\n    instructions (dict) - A dictionary in the form of {'filename': 'contents', 'post_cmd': ['cmd']}\n\n    Returns:\n    bool - True if all files were copied and all post_cmds were executed successfully\n    \"\"\"\n    success = True\n    post_cmd = []\n    try:\n        json_data = json.loads(instructions)\n    except json.decoder.JSONDecodeError as err:\n        logging.error(f'Failed to decode instructions as JSON: {err}')\n        return False\n\n    if 'post_cmd' in json_data.keys():\n        post_cmd = json_data.pop('post_cmd')\n        if not isinstance(post_cmd, list):\n            post_cmd = [post_cmd]\n    for filename, content in json_data.items():\n        logging.info(f'EXEC file :: writing {filename}')\n        logging.debug(content)\n        try:\n            with open(filename, 'w') as outfile:\n                outfile.write(content)\n        except:\n            logging.debug(traceback.format_exc())\n            logging.error(f'Failed to write {filename}')\n            success = False\n    for cmd in post_cmd:\n        logging.info(f'EXEC file :: {cmd}')\n        try:\n            subprocess.run(cmd, shell=True, check=True)\n        except:\n            logging.debug(traceback.format_exc())\n            logging.error(f'post_cmd `{cmd}` failed')\n            success = False\n    return success\n\n\ndef init(data):\n    \"\"\"\n    Executor for init instructions\n\n    Arguments:\n    data (dict) - A dictionary containing the init instruction data\n\n    Returns:\n    bool - True if all init instructions were executed successfully\n    \"\"\"\n    success = True\n    try:\n        json_data = json.loads(data)\n    except json.decoder.JSONDecodeError as err:\n        logging.error(f'Failed to decode init data as JSON: {err}')\n        return False\n\n    if 'hostname' in json_data.keys():\n        logging.info(f'EXEC init :: setting hostname to {json_data[\"hostname\"]}')\n        success = shell(f'hostnamectl set-hostname {json_data[\"hostname\"]}')\n\n    return success\n\n\nEXECUTOR_MAP = {'file': file, 'shell': shell, 'init': init}\n"
     },
     {
       "path": "config.py",
@@ -137,19 +130,23 @@
       "content": "# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\"\"\" Config module \"\"\"\nimport configparser\nimport logging\nimport os\n\n\nclass Config(configparser.SectionProxy):  # pylint: disable=too-many-ancestors\n    \"\"\"Wraps a ConfigParser dict-like to allow overriding the agent config via environment variables\"\"\"\n\n    def __init__(self, filename):\n        parser = configparser.ConfigParser()\n        parser.read(filename)\n        super().__init__(parser, 'AGENT')\n        self._init_logger()\n\n    def __getitem__(self, key):\n        env_prefix = 'AIR_AGENT_'\n        return os.getenv(env_prefix + key, super().__getitem__(key))\n\n    def _init_logger(self):\n        if self.get('LOG_LEVEL', '').upper() in ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG'):\n            log_level = self['LOG_LEVEL'].upper()\n        else:\n            log_level = 'INFO'\n        log_file = self.get('LOG_FILE', '/var/log/air-agent.log')\n\n        for handler in logging.root.handlers:\n            # Remove any existing handlers that may have been setup in case we're increasing verbosity\n            # Once we require python >= 3.8 we can just use force=True on logging.basicConfig\n            logging.root.removeHandler(handler)\n        logging.basicConfig(\n            filename=log_file, level=log_level, format='%(asctime)s %(levelname)s %(message)s'\n        )\n"
     },
     {
-      "path": ".pre-commit-config.yaml",
+      "path": "executors.py",
       "sha": null,
-      "content_sha256": "a163ab7102400d46a4b95081032789d2dbb450522b5ffd7e7497ffe8e811776d",
+      "content_sha256": "f172a015b9bcdf55898025e0cf45e03c765e6ba7df4f4bd64f5644f92cbbbeed",
       "score": 35,
-      "content": "repos:\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    # Ruff version.\n    rev: v0.2.1\n    hooks:\n      # Run the linter, and fix issues that are safely-fixable.\n      - id: ruff\n        args: [ --fix ]\n      # Run the formatter.\n      - id: ruff-format\n"
-    },
-    {
-      "path": "version.py",
-      "sha": null,
-      "content_sha256": "c6852eaf86c92c08fa1a9af3dd8b3d051cf56a07cd31d222b4669153d90409c5",
-      "score": 35,
-      "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\nAGENT_VERSION = '4.0.1'\n"
+      "content": "# SPDX-FileCopyrightText: Copyright (c) 2022-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.\n# SPDX-License-Identifier: Apache-2.0\n\n\"\"\"\nExecutor functions for post-clone instructions\n\"\"\"\n\nimport json\nimport logging\nimport subprocess\nimport traceback\n\n\ndef shell(instructions):\n    \"\"\"\n    Executor for shell commands\n\n    Arguments:\n    instructions (list) - A list of '\\n' delimited commands to execute in the system's default shell\n\n    Returns:\n    bool - True if all commands executed successfully\n    \"\"\"\n    for line in instructions.split('\\n'):\n        logging.info(f'EXEC shell :: {line}')\n        try:\n            subprocess.run(line, shell=True, check=True)\n        except:\n            logging.error(f'Command `{line}` failed')\n            logging.debug(traceback.format_exc())\n            return False\n    return True\n\n\ndef file(instructions):\n    \"\"\"\n    Executor for file transfers\n\n    Arguments:\n    instructions (dict) - A dictionary in the form of {'filename': 'contents', 'post_cmd': ['cmd']}\n\n    Returns:\n    bool - True if all files were copied and all post_cmds were executed successfully\n    \"\"\"\n    success = True\n    post_cmd = []\n    try:\n        json_data = json.loads(instructions)\n    except json.decoder.JSONDecodeError as err:\n        logging.error(f'Failed to decode instructions as JSON: {err}')\n        return False\n\n    if 'post_cmd' in json_data.keys():\n        post_cmd = json_data.pop('post_cmd')\n        if not isinstance(post_cmd, list):\n            post_cmd = [post_cmd]\n    for filename, content in json_data.items():\n        logging.info(f'EXEC file :: writing {filename}')\n        logging.debug(content)\n        try:\n            with open(filename, 'w') as outfile:\n                outfile.write(content)\n        except:\n            logging.debug(traceback.format_exc())\n            logging.error(f'Failed to write {filename}')\n            success = False\n    for cmd in post_cmd:\n        logging.info(f'EXEC file :: {cmd}')\n        try:\n            subprocess.run(cmd, shell=True, check=True)\n        except:\n            logging.debug(traceback.format_exc())\n            logging.error(f'post_cmd `{cmd}` failed')\n            success = False\n    return success\n\n\ndef init(data):\n    \"\"\"\n    Executor for init instructions\n\n    Arguments:\n    data (dict) - A dictionary containing the init instruction data\n\n    Returns:\n    bool - True if all init instructions were executed successfully\n    \"\"\"\n    success = True\n    try:\n        json_data = json.loads(data)\n    except json.decoder.JSONDecodeError as err:\n        logging.error(f'Failed to decode init data as JSON: {err}')\n        return False\n\n    if 'hostname' in json_data.keys():\n        logging.info(f'EXEC init :: setting hostname to {json_data[\"hostname\"]}')\n        success = shell(f'hostnamectl set-hostname {json_data[\"hostname\"]}')\n\n    return success\n\n\nEXECUTOR_MAP = {'file': file, 'shell': shell, 'init': init}\n"
     }
   ],
-  "generated_at": "2026-10-08T02:26:15.949673+00:00"
+  "fetch_errors": [
+    {
+      "path": "tests/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "__init__.py",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 2,
+  "generated_at": "2026-10-11T01:14:06.476184+00:00"
 }
