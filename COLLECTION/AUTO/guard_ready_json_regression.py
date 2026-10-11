@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Fail closed if regenerated READY data loses evidence that cannot be recovered."""
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -71,6 +72,11 @@ def evidence_recoverable(item):
     digest = item.get("content_sha256")
     if not all(isinstance(v, str) and v for v in (source, revision, file_path, digest)):
         return False
+    # Empty repository files carry no payload to lose. Their SHA-256 is the
+    # well-known digest of zero bytes; don't misclassify their disappearance
+    # from a regenerated capability index as unrecoverable content loss.
+    if digest == hashlib.sha256(b"").hexdigest():
+        return True
     artifact = artifact_for(source, revision)
     if not artifact:
         return False
