@@ -31,11 +31,48 @@ BUCKETS = {
     "docs": ("docs/","documentation","guide","example","sample"),
 }
 
+def _http_error_message(exc):
+    """Read a GitHub error body once and return a short, non-secret diagnostic."""
+    try:
+        body = exc.read().decode("utf-8", "replace")
+    except Exception:
+        body = ""
+    try:
+        parsed = json.loads(body)
+        message = parsed.get("message", body) if isinstance(parsed, dict) else body
+    except (ValueError, TypeError):
+        message = body
+    message = re.sub(r"(?i)bearer\\s+[A-Za-z0-9._~+/=-]{12,}", "Bearer <REDACTED>", str(message))
+    return message.strip().replace("\\n", " ")[:300]
+
+
+def _retryable_http_error(exc, message):
+    """Retry only transient server/rate-limit responses, not ordinary permission 403s."""
+    if exc.code == 429 or exc.code in {500, 502, 503, 504}:
+        return True
+    if exc.code != 403:
+        return False
+    remaining = exc.headers.get("X-RateLimit-Remaining", "")
+    text = message.lower()
+    return remaining == "0" or any(
+        marker in text for marker in ("rate limit", "secondary rate limit", "abuse detection")
+    )
+
+
+def _http_error_summary(exc, path, message):
+    request_id = exc.headers.get("X-GitHub-Request-Id", "unknown")
+    remaining = exc.headers.get("X-RateLimit-Remaining", "unknown")
+    reset = exc.headers.get("X-RateLimit-Reset", "unknown")
+    return (f"github_api_http_{exc.code}:{path}:message={message or 'no_message'}:"
+            f"request_id={request_id}:rate_remaining={remaining}:rate_reset={reset}")
+
+
 def api(path):
     if path in CACHE:
         return CACHE[path]
     last = None
-    for attempt in range(RETRIES):
+    attempts = max(1, RETRIES)
+    for attempt in range(attempts):
         headers = {"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28","User-Agent":"collection-deep-extractor"}
         if TOKEN:
             headers["Authorization"] = f"Bearer {TOKEN}"
@@ -46,21 +83,33 @@ def api(path):
             CACHE[path] = data
             return data
         except urllib.error.HTTPError as exc:
-            last = exc
-            if exc.code not in {403, 429, 500, 502, 503, 504}:
-                raise
+            message = _http_error_message(exc)
+            summary = _http_error_summary(exc, path, message)
+            if not _retryable_http_error(exc, message):
+                raise RuntimeError(summary) from exc
+            last = RuntimeError(summary)
+            if attempt + 1 >= attempts:
+                break
             retry_after = exc.headers.get("Retry-After")
             reset = exc.headers.get("X-RateLimit-Reset")
+            remaining = exc.headers.get("X-RateLimit-Remaining")
             if retry_after:
-                delay = min(60.0, float(retry_after))
-            elif reset and str(reset).isdigit():
+                try:
+                    delay = min(60.0, max(0.0, float(retry_after)))
+                except ValueError:
+                    delay = min(30.0, 1.5 ** attempt)
+            elif remaining == "0" and reset and str(reset).isdigit():
                 delay = min(60.0, max(1.0, int(reset) - int(time.time()) + 1))
             else:
                 delay = min(30.0, 1.5 ** attempt)
             time.sleep(delay)
         except (urllib.error.URLError, TimeoutError) as exc:
             last = exc
+            if attempt + 1 >= attempts:
+                break
             time.sleep(min(20.0, 1.5 ** attempt))
+    if isinstance(last, RuntimeError):
+        raise RuntimeError(f"github_api_retry_exhausted:{path}:{last}") from last
     raise last
 
 def paged(path):
