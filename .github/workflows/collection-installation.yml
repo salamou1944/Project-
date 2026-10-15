@@ -2,11 +2,6 @@ name: collection-installation
 
 on:
   workflow_dispatch:
-  # Run the fail-closed installer only after the deep extractor finishes successfully.
-  workflow_run:
-    workflows: ["collection-deep-extraction"]
-    types: [completed]
-    branches: [main]
 
 concurrency:
   group: collection-writer
@@ -14,7 +9,6 @@ concurrency:
 
 jobs:
   install:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     permissions:
@@ -22,21 +16,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Confirm automatic handoff came from a successful extraction
-        if: ${{ github.event_name == 'workflow_run' }}
-        env:
-          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          UPSTREAM_WORKFLOW: ${{ github.event.workflow_run.name }}
-        run: |
-          set -euo pipefail
-          test "$UPSTREAM_CONCLUSION" = "success"
-          test "$UPSTREAM_WORKFLOW" = "collection-deep-extraction"
-
       - name: Install collected OSS sources at high throughput
         run: |
           set -euo pipefail
           python3 -m py_compile COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/promote_router_if_proven.py
-          python3 COLLECTION/AUTO/install_assets.py --workers 4 --max-mb 250
+          python3 COLLECTION/AUTO/install_assets.py --workers 2 --max-mb 50 --max-auto-candidates 2
 
       - name: Push installed candidates into verification gate
         run: |
