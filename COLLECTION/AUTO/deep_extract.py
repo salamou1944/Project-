@@ -95,11 +95,11 @@ def api(path):
             remaining = exc.headers.get("X-RateLimit-Remaining")
             if retry_after:
                 try:
-                    delay = min(60.0, max(0.0, float(retry_after)))
+                    delay = max(0.0, float(retry_after))
                 except ValueError:
                     delay = min(30.0, 1.5 ** attempt)
             elif remaining == "0" and reset and str(reset).isdigit():
-                delay = min(60.0, max(1.0, int(reset) - int(time.time()) + 1))
+                delay = max(1.0, int(reset) - int(time.time()) + 1)
             else:
                 delay = min(30.0, 1.5 ** attempt)
             time.sleep(delay)
