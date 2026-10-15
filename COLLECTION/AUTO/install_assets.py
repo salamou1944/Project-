@@ -36,6 +36,8 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5):
     items = value_queue.get("items") if isinstance(value_queue, dict) else None
     if not isinstance(rows, list) or not isinstance(items, list):
         raise ValueError("manifest.sources and value_queue.items must be lists")
+    if max_candidates == 0:
+        return []
     by_source = {
         row.get("canonical_source"): row
         for row in rows
