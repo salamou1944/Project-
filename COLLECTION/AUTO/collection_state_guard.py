@@ -12,6 +12,10 @@ REQUIRED = [
 ]
 MANIFEST = ROOT / "COLLECTION/AUTO/EXTRACTED/MANIFEST.json"
 
+# Safety floor from the verified 2026-10-15 canonical manifest (2,919 source rows).
+# Lowering this requires a reviewed archival/migration plan and a preserved baseline.
+MIN_EXPECTED_SOURCE_ROWS = 2500
+
 def load_nonempty(path):
     if not path.exists():
         raise SystemExit(f"missing generated state: {path}")
@@ -27,6 +31,19 @@ def main():
     sources = manifest.get("sources", [])
     if not isinstance(sources, list):
         raise SystemExit("manifest sources must be a list")
+    declared_count = manifest.get("repo_count")
+    if not isinstance(declared_count, int) or isinstance(declared_count, bool):
+        raise SystemExit("manifest repo_count must be an integer")
+    if declared_count != len(sources):
+        raise SystemExit(
+            f"manifest repo_count ({declared_count}) disagrees with source rows ({len(sources)}); "
+            "refusing to publish derived state"
+        )
+    if len(sources) < MIN_EXPECTED_SOURCE_ROWS:
+        raise SystemExit(
+            f"manifest source rows unexpectedly shrank to {len(sources)} "
+            f"(safety floor: {MIN_EXPECTED_SOURCE_ROWS}); require reviewed recovery/migration"
+        )
     extracted_records = [
         item for item in sources
         if isinstance(item, dict) and item.get("state") == "extracted"
