@@ -40,7 +40,9 @@ jobs:
         run: |
           set -euo pipefail
           # Regression gate: keep READY.json readable and validate serialization before regeneration.
-          python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/test_ready_json_compaction.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/promote_router_if_proven.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/guard_ready_json_regression.py
+          python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/test_ready_json_compaction.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/promote_router_if_proven.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/test_install_assets_selection.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/validate_installation_outcome.py COLLECTION/AUTO/test_installation_outcome.py COLLECTION/AUTO/guard_ready_json_regression.py
+          python3 COLLECTION/AUTO/test_install_assets_selection.py
+          python3 COLLECTION/AUTO/test_installation_outcome.py
           python3 COLLECTION/AUTO/test_extraction_cache_policy.py
           python3 COLLECTION/AUTO/test_ready_json_compaction.py
           python3 COLLECTION/AUTO/intelligent_extract.py
@@ -68,7 +70,27 @@ jobs:
           python3 COLLECTION/AUTO/validate_callable_registry.py
           python3 COLLECTION/AUTO/invoke_capability.py --list
 
-      - name: Commit extracted evidence and manifest
+      # Install a bounded shortlist from the freshly generated value queue.
+      # Only exact-SHA, explicitly licensed, non-quarantined sources are eligible.
+      # Installation is not callable/runtime proof; verify_installed_assets keeps that gate separate.
+      - name: Install prioritized collected assets
+        run: |
+          set -euo pipefail
+          python3 COLLECTION/AUTO/install_assets.py --workers 2 --max-mb 50 --max-auto-candidates 2
+
+      - name: Record post-install verification queue
+        continue-on-error: true
+        run: python3 COLLECTION/AUTO/verify_installed_assets.py
+
+      - name: Revalidate Collection state after installation
+        run: |
+          set -euo pipefail
+          python3 COLLECTION/AUTO/collection_state_guard.py
+          python3 COLLECTION/AUTO/test_collection_policy.py
+          python3 COLLECTION/AUTO/validate_readiness.py
+          python3 COLLECTION/AUTO/validate_callable_registry.py
+
+      - name: Commit extracted evidence, installed assets, and verification queue
         env:
           GH_TOKEN: ${{ github.token }}
           COLLECTION_WORKERS: "32"
@@ -83,8 +105,8 @@ jobs:
           git config user.name "collection-bot"
           git config user.email "collection-bot@users.noreply.github.com"
           git diff --check
-          git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION
-          git diff --cached --quiet || git commit -m "chore(collection): refresh prioritized source extraction"
+          git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION COLLECTION/INSTALLED
+          git diff --cached --quiet || git commit -m "chore(collection): refresh evidence and install prioritized assets"
           for attempt in 1 2 3 4 5; do
             git fetch origin main
             if git rebase origin/main; then
@@ -95,7 +117,9 @@ jobs:
               git rebase --abort || true
               git reset --hard origin/main
               echo "Concurrent generated-state update detected; rebuilding from latest main" >&2
-              python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/guard_ready_json_regression.py
+              python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/test_install_assets_selection.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/validate_installation_outcome.py COLLECTION/AUTO/test_installation_outcome.py COLLECTION/AUTO/guard_ready_json_regression.py
+              python3 COLLECTION/AUTO/test_install_assets_selection.py
+              python3 COLLECTION/AUTO/test_installation_outcome.py
               python3 COLLECTION/AUTO/test_extraction_cache_policy.py
               python3 COLLECTION/AUTO/intelligent_extract.py
               python3 COLLECTION/AUTO/repair_extraction_manifest.py
@@ -109,14 +133,24 @@ jobs:
               python3 COLLECTION/AUTO/validate_readiness.py
               python3 COLLECTION/AUTO/validate_callable_registry.py
               python3 COLLECTION/AUTO/invoke_capability.py --list
+              python3 COLLECTION/AUTO/install_assets.py --workers 2 --max-mb 50 --max-auto-candidates 2
+              python3 COLLECTION/AUTO/verify_installed_assets.py || echo "Post-install integrity failure recorded; final outcome gate will fail after evidence commit" >&2
+              python3 COLLECTION/AUTO/collection_state_guard.py
+              python3 COLLECTION/AUTO/test_collection_policy.py
+              python3 COLLECTION/AUTO/validate_readiness.py
+              python3 COLLECTION/AUTO/validate_callable_registry.py
               git diff --check
-              git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION
-              git diff --cached --quiet || git commit -m "chore(collection): rebuild generated state on latest main"
+              git add COLLECTION/AUTO/EXTRACTED COLLECTION/MASTER COLLECTION/VERIFICATION COLLECTION/INSTALLED
+              git diff --cached --quiet || git commit -m "chore(collection): rebuild state and install prioritized assets"
             fi
             sleep $((attempt * 3))
           done
           echo "Push failed after 5 attempts" >&2
           exit 1
+
+      # Run after the report/queue have been pushed so failures remain auditable.
+      - name: Require successful persisted install evidence
+        run: python3 COLLECTION/AUTO/validate_installation_outcome.py
 
 # Manual verification trigger: run the current Collection harvester and policy checks.
 # Trigger verification 2026-10-08T05:00Z

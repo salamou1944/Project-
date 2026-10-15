@@ -22,7 +22,68 @@ ALLOWED = {"MIT","Apache-2.0","BSD-2-Clause","BSD-3-Clause","ISC","MPL-2.0","Unl
 DEFAULT_WORKERS = int(os.getenv("COLLECTION_INSTALL_WORKERS", "8"))
 MAX_MB = int(os.getenv("COLLECTION_INSTALL_MAX_MB", "250"))
 
-def source_records():
+def select_collected_candidates(manifest, value_queue, max_candidates=5):
+    """Select a small, evidence-prioritized set from the current Collection manifest.
+
+    A source is eligible only when it is present in the non-quarantined value
+    queue, has a usable extracted artifact, is pinned to a full commit SHA, and
+    declares an explicitly allowed license. This is a bounded install shortlist,
+    not a blanket install of every discovered repository.
+    """
+    if not isinstance(max_candidates, int) or isinstance(max_candidates, bool) or not 0 <= max_candidates <= 20:
+        raise ValueError("max_candidates must be between 0 and 20")
+    rows = manifest.get("sources") if isinstance(manifest, dict) else None
+    items = value_queue.get("items") if isinstance(value_queue, dict) else None
+    if not isinstance(rows, list) or not isinstance(items, list):
+        raise ValueError("manifest.sources and value_queue.items must be lists")
+    if max_candidates == 0:
+        return []
+    by_source = {
+        row.get("canonical_source"): row
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("canonical_source"), str)
+    }
+    selected, seen = [], set()
+    for queued in items:
+        if not isinstance(queued, dict) or queued.get("promotion_action") == "QUARANTINE":
+            continue
+        sources = queued.get("sources", [])
+        if not isinstance(sources, list):
+            continue
+        for source in sources:
+            row = by_source.get(source)
+            if not isinstance(row, dict):
+                continue
+            repo = source.removeprefix("github:")
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+                continue
+            revision = row.get("revision_sha")
+            if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", revision):
+                continue
+            if row.get("state") != "extracted" or row.get("license") not in ALLOWED:
+                continue
+            try:
+                if int(row.get("files_extracted", 0) or 0) <= 0:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            if repo in seen:
+                continue
+            selected.append({
+                "source_record": "COLLECTION/MASTER/VALUE-OPERATOR-QUEUE.json",
+                "repo": repo,
+                "url": "https://github.com/" + repo,
+                "revision": revision,
+                "license": row["license"],
+                "selected_capabilities": [queued.get("capability_key")] if queued.get("capability_key") else [],
+            })
+            seen.add(repo)
+            if len(selected) >= max_candidates:
+                return selected
+    return selected
+
+
+def source_records(max_auto_candidates=5):
     out = []
     manifest = ROOT / "COLLECTION" / "AUTO" / "DEEP-EXTRACTED" / "MANIFEST.json"
     if manifest.exists():
@@ -47,6 +108,16 @@ def source_records():
                     "revision": rev,
                     "license": lic,
                 })
+    canonical_manifest = ROOT / "COLLECTION" / "AUTO" / "EXTRACTED" / "MANIFEST.json"
+    value_queue_path = ROOT / "COLLECTION" / "MASTER" / "VALUE-OPERATOR-QUEUE.json"
+    if canonical_manifest.exists() and value_queue_path.exists() and max_auto_candidates:
+        try:
+            canonical_data = json.loads(canonical_manifest.read_text(encoding="utf-8"))
+            value_data = json.loads(value_queue_path.read_text(encoding="utf-8"))
+            out.extend(select_collected_candidates(canonical_data, value_data, max_auto_candidates))
+        except (OSError, ValueError) as exc:
+            raise SystemExit(f"invalid Collection shortlist input; refusing automatic install selection: {exc}")
+
     for p in sorted(SOURCES.glob("*.md")):
         text = p.read_text(encoding="utf-8", errors="ignore")
         m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
@@ -150,9 +221,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     ap.add_argument("--max-mb", type=int, default=MAX_MB)
+    ap.add_argument("--max-auto-candidates", type=int, default=5,
+                    help="maximum prioritized candidates selected from the current Collection value queue (0-20)")
     ns = ap.parse_args()
+    if ns.workers < 1 or ns.max_mb < 1 or not 0 <= ns.max_auto_candidates <= 20:
+        ap.error("workers and max-mb must be positive; max-auto-candidates must be between 0 and 20")
     globals()["MAX_MB"] = ns.max_mb
-    items = source_records()
+    items = source_records(ns.max_auto_candidates)
     # Source+revision is the installation identity; preserve distinct records but install once.
     unique = {}
     for x in items:
