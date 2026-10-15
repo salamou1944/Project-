@@ -42,8 +42,8 @@ def _http_error_message(exc):
         message = parsed.get("message", body) if isinstance(parsed, dict) else body
     except (ValueError, TypeError):
         message = body
-    message = re.sub(r"(?i)bearer\\s+[A-Za-z0-9._~+/=-]{12,}", "Bearer <REDACTED>", str(message))
-    return message.strip().replace("\\n", " ")[:300]
+    message = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]{12,}", "Bearer <REDACTED>", str(message))
+    return message.strip().replace("\n", " ")[:300]
 
 
 def _retryable_http_error(exc, message):
