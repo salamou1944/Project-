@@ -2,6 +2,11 @@ name: collection-installation
 
 on:
   workflow_dispatch:
+  # Run the fail-closed installer only after the deep extractor finishes successfully.
+  workflow_run:
+    workflows: ["collection-deep-extraction"]
+    types: [completed]
+    branches: [main]
 
 concurrency:
   group: collection-writer
@@ -9,17 +14,29 @@ concurrency:
 
 jobs:
   install:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
 
+      - name: Confirm automatic handoff came from a successful extraction
+        if: ${{ github.event_name == 'workflow_run' }}
+        env:
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          UPSTREAM_WORKFLOW: ${{ github.event.workflow_run.name }}
+        run: |
+          set -euo pipefail
+          test "$UPSTREAM_CONCLUSION" = "success"
+          test "$UPSTREAM_WORKFLOW" = "collection-deep-extraction"
+
       - name: Install collected OSS sources at high throughput
         run: |
           set -euo pipefail
           python3 -m py_compile COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/promote_router_if_proven.py
-          python3 COLLECTION/AUTO/install_assets.py --workers 16 --max-mb 500
+          python3 COLLECTION/AUTO/install_assets.py --workers 4 --max-mb 250
 
       - name: Push installed candidates into verification gate
         run: |
@@ -51,22 +68,31 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p COLLECTION/VERIFICATION
-          cat > COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json <<'EOF'
-          {
-            "schema_version": "collection-hyperswitch-router-smoke/v1",
-            "repo": "juspay/hyperswitch",
-            "revision": "1d71d94d2e2e1c72f3ede13abebc24132997685f",
-            "installed_path": "COLLECTION/INSTALLED/juspay__hyperswitch",
-            "capability": "router_deterministic_unit_execution",
-            "entrypoint": "cargo test -p router --lib test_profile_id_unavailable_initialization",
-            "external_payment_network": false,
-            "secrets_required": false,
-            "execution_status": "PROVEN_CALLABLE",
-            "workflow_run": "${{ github.run_id }}",
-            "workflow_attempt": "${{ github.run_attempt }}",
-            "scope": "single deterministic router unit test; no DB/Redis dependency"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          marker_path = Path("COLLECTION/INSTALLED/juspay__hyperswitch/.collection-install.json")
+          marker = json.loads(marker_path.read_text(encoding="utf-8"))
+          if marker.get("repo") != "juspay/hyperswitch" or not marker.get("revision") or marker.get("status") != "INSTALLED":
+              raise SystemExit("router smoke evidence blocked: installed marker does not prove the expected source and revision")
+          payload = {
+              "schema_version": "collection-hyperswitch-router-smoke/v1",
+              "repo": "juspay/hyperswitch",
+              "revision": marker["revision"],
+              "installed_path": "COLLECTION/INSTALLED/juspay__hyperswitch",
+              "capability": "router_deterministic_unit_execution",
+              "entrypoint": "cargo test -p router --lib test_profile_id_unavailable_initialization",
+              "external_payment_network": False,
+              "secrets_required": False,
+              "execution_status": "PROVEN_CALLABLE",
+              "workflow_run": os.environ["GITHUB_RUN_ID"],
+              "workflow_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "scope": "single deterministic router unit test; no DB/Redis dependency"
           }
-          EOF
+          Path("COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json").write_text(
+              json.dumps(payload, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
 
       - name: Promote Router only from verified evidence
         if: ${{ success() && hashFiles('COLLECTION/VERIFICATION/HYPERSWITCH-ROUTER-SMOKE-EVIDENCE.json') != '' }}
