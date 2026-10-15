@@ -1,0 +1,43 @@
+name: collection-manifest-integrity-test
+
+on:
+  pull_request:
+    paths:
+      - "COLLECTION/AUTO/EXTRACTED/MANIFEST.json"
+      - "COLLECTION/AUTO/collection_state_guard.py"
+      - "COLLECTION/AUTO/test_collection_policy.py"
+      - "COLLECTION/AUTO/process_collection.py"
+      - "COLLECTION/MASTER/**"
+      - "COLLECTION/VERIFICATION/**"
+      - ".github/workflows/collection-manifest-integrity-test.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collection-manifest-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manifest-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Collection integrity checks
+        run: |
+          python -m py_compile \
+            COLLECTION/AUTO/collection_state_guard.py \
+            COLLECTION/AUTO/test_collection_policy.py \
+            COLLECTION/AUTO/process_collection.py
+      - name: Verify manifest inventory and generated-state invariants
+        working-directory: COLLECTION/AUTO
+        run: |
+          python collection_state_guard.py
+          python test_collection_policy.py
