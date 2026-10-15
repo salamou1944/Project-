@@ -22,7 +22,35 @@ ALLOWED = {"MIT","Apache-2.0","BSD-2-Clause","BSD-3-Clause","ISC","MPL-2.0","Unl
 DEFAULT_WORKERS = int(os.getenv("COLLECTION_INSTALL_WORKERS", "8"))
 MAX_MB = int(os.getenv("COLLECTION_INSTALL_MAX_MB", "250"))
 
-def select_collected_candidates(manifest, value_queue, max_candidates=5):
+QUARANTINE = ROOT / "COLLECTION" / "SECURITY" / "SOURCE-QUARANTINE.json"
+
+
+def load_quarantined_revisions():
+    """Load exact compromised source revisions; missing/invalid policy blocks installation."""
+    if not QUARANTINE.is_file():
+        raise SystemExit(f"missing source quarantine registry; refusing installation: {QUARANTINE}")
+    try:
+        doc = json.loads(QUARANTINE.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"invalid source quarantine registry; refusing installation: {exc}")
+    entries = doc.get("entries") if isinstance(doc, dict) else None
+    if doc.get("schema_version") != "collection-source-quarantine/v1" or not isinstance(entries, list):
+        raise SystemExit("source quarantine registry schema is invalid; refusing installation")
+    blocked = set()
+    for item in entries:
+        if not isinstance(item, dict):
+            raise SystemExit("source quarantine entry must be an object; refusing installation")
+        repo = item.get("repo")
+        revision = item.get("revision_sha")
+        if (not isinstance(repo, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo)
+                or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", revision)
+                or not item.get("reason")):
+            raise SystemExit("source quarantine entry is incomplete or invalid; refusing installation")
+        blocked.add((repo, revision.lower()))
+    return blocked
+
+
+def select_collected_candidates(manifest, value_queue, max_candidates=5, quarantined_revisions=None):
     """Select a small, evidence-prioritized set from the current Collection manifest.
 
     A source is eligible only when it is present in the non-quarantined value
@@ -43,6 +71,7 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5):
         for row in rows
         if isinstance(row, dict) and isinstance(row.get("canonical_source"), str)
     }
+    blocked_revisions = {(repo, revision.lower()) for repo, revision in (quarantined_revisions or set())}
     selected, seen = [], set()
     for queued in items:
         if not isinstance(queued, dict) or queued.get("promotion_action") == "QUARANTINE":
@@ -61,6 +90,11 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5):
             if not isinstance(revision, str) or not re.fullmatch(r"[0-9a-fA-F]{40}", revision):
                 continue
             if row.get("state") != "extracted" or row.get("license") not in ALLOWED:
+                continue
+            # Old snapshots preserved after a failed refresh must never be installed.
+            if row.get("mode") not in {"cached", "refreshed"}:
+                continue
+            if (repo, revision.lower()) in blocked_revisions:
                 continue
             try:
                 if int(row.get("files_extracted", 0) or 0) <= 0:
@@ -85,6 +119,7 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5):
 
 def source_records(max_auto_candidates=5):
     out = []
+    quarantined_revisions = load_quarantined_revisions()
     manifest = ROOT / "COLLECTION" / "AUTO" / "DEEP-EXTRACTED" / "MANIFEST.json"
     if manifest.exists():
         try:
@@ -100,7 +135,7 @@ def source_records(max_auto_candidates=5):
             repo = x.get("repo")
             rev = x.get("revision_sha")
             lic = x.get("license")
-            if repo and rev and lic in ALLOWED:
+            if repo and rev and lic in ALLOWED and (repo, str(rev).lower()) not in quarantined_revisions:
                 out.append({
                     "source_record": "DEEP-EXTRACTED/MANIFEST.json",
                     "repo": repo,
@@ -114,7 +149,7 @@ def source_records(max_auto_candidates=5):
         try:
             canonical_data = json.loads(canonical_manifest.read_text(encoding="utf-8"))
             value_data = json.loads(value_queue_path.read_text(encoding="utf-8"))
-            out.extend(select_collected_candidates(canonical_data, value_data, max_auto_candidates))
+            out.extend(select_collected_candidates(canonical_data, value_data, max_auto_candidates, quarantined_revisions))
         except (OSError, ValueError) as exc:
             raise SystemExit(f"invalid Collection shortlist input; refusing automatic install selection: {exc}")
 
@@ -141,6 +176,8 @@ def source_records(max_auto_candidates=5):
             parts = url.split("github.com/", 1)[-1].strip("/").split("/")
             owner_repo = "/".join(parts[:2]) if len(parts) >= 2 else ""
         if not owner_repo or owner_repo.count("/") != 1:
+            continue
+        if (owner_repo, rev.group(1).lower()) in quarantined_revisions:
             continue
         out.append({
             "source_record": p.name,
