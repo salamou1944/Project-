@@ -2,17 +2,20 @@
 """Regression tests for evidence-prioritized, license-gated Collection installs."""
 import unittest
 
-from install_assets import ALLOWED, select_collected_candidates
+from install_assets import ALLOWED, load_quarantined_revisions, select_collected_candidates
 
 
-def source(repo, *, state="extracted", license_name="MIT", files=1, revision=None):
-    return {
+def source(repo, *, state="extracted", license_name="MIT", files=1, revision=None, mode="refreshed"):
+    record = {
         "canonical_source": f"github:{repo}",
         "state": state,
         "license": license_name,
         "files_extracted": files,
         "revision_sha": revision or ("a" * 40),
     }
+    if mode is not None:
+        record["mode"] = mode
+    return record
 
 
 def queue_item(key, sources, action="API_FACTORY_REVIEW"):
@@ -72,6 +75,36 @@ class InstallSelectionTests(unittest.TestCase):
         selected = select_collected_candidates(manifest, queue, max_candidates=2)
         self.assertEqual([item["repo"] for item in selected], ["owner/one", "owner/two"])
         self.assertEqual(select_collected_candidates(manifest, queue, max_candidates=0), [])
+
+    def test_preserved_after_refresh_failure_is_never_installed(self):
+        manifest = {"sources": [
+            source("owner/stale", mode="preserved_after_refresh_failure"),
+            source("owner/fresh", mode="refreshed"),
+        ]}
+        queue = {"items": [
+            queue_item("capability", ["github:owner/stale", "github:owner/fresh"]),
+        ]}
+        selected = select_collected_candidates(manifest, queue)
+        self.assertEqual([item["repo"] for item in selected], ["owner/fresh"])
+
+    def test_known_compromised_revision_is_quarantined(self):
+        quarantine = load_quarantined_revisions()
+        bad_revision = "62705cdb645d36b5050d0f28b9b5b0ca175bc80f"
+        manifest = {"sources": [
+            source("mnfst/docs", license_name="MIT", revision=bad_revision, mode="cached"),
+            source("owner/fresh", license_name="MIT", mode="refreshed"),
+        ]}
+        queue = {"items": [
+            queue_item("security-sensitive", ["github:mnfst/docs", "github:owner/fresh"]),
+        ]}
+        selected = select_collected_candidates(manifest, queue, quarantined_revisions=quarantine)
+        self.assertEqual([item["repo"] for item in selected], ["owner/fresh"])
+        self.assertEqual(len(quarantine), 5)
+
+    def test_missing_refresh_mode_fails_closed(self):
+        manifest = {"sources": [source("owner/unknown-mode", mode=None)]}
+        queue = {"items": [queue_item("capability", ["github:owner/unknown-mode"])]}
+        self.assertEqual(select_collected_candidates(manifest, queue), [])
 
     def test_invalid_candidate_limit_and_schema_fail_closed(self):
         with self.assertRaises(ValueError):
