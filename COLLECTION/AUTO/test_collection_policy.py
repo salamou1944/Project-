@@ -8,6 +8,8 @@ PROMOTION = ROOT / "COLLECTION/MASTER/PROMOTION-QUEUE.json"
 RESTRICTED = ROOT / "COLLECTION/VERIFICATION/RESTRICTED-QUEUE.json"
 READINESS = ROOT / "COLLECTION/MASTER/READINESS-QUEUE.json"
 DECLARATIONS = ROOT / "COLLECTION/MASTER/READINESS-DECLARATIONS.json"
+MANIFEST = ROOT / "COLLECTION/AUTO/EXTRACTED/MANIFEST.json"
+MIN_EXPECTED_SOURCE_ROWS = 2500
 GATE = ROOT / "COLLECTION/MASTER/PROMOTION-GATE.md"
 READINESS_GATE = ROOT / "COLLECTION/MASTER/READINESS-GATE.md"
 REVIEW = {"REVIEW_NEW_OR_UPGRADE", "REVIEW_MERGE_OR_UPGRADE"}
@@ -35,6 +37,13 @@ def test_sticky_quarantine():
     assert is_quarantined("evaluation-reliability-test-runtime", review, set(), real_locks), "known quarantine lock must survive refresh"
 
 def main():
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    sources = manifest.get("sources")
+    assert isinstance(sources, list), "manifest sources must be a list"
+    assert manifest.get("repo_count") == len(sources), "manifest repo_count must match source rows"
+    assert len(sources) >= MIN_EXPECTED_SOURCE_ROWS, (
+        f"manifest unexpectedly shrank to {len(sources)} rows; require reviewed recovery/migration"
+    )
     test_sticky_quarantine()
     promotion = json.loads(PROMOTION.read_text())
     restricted = json.loads(RESTRICTED.read_text())
