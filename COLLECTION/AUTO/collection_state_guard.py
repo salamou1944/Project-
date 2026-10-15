@@ -26,19 +26,34 @@ def load_nonempty(path):
     except Exception as exc:
         raise SystemExit(f"invalid JSON state {path}: {exc}")
 
+def validate_manifest_source_count(manifest):
+    """Validate rows against discovered repos/gists plus preserved missing rows."""
+    sources = manifest.get("sources", [])
+    if not isinstance(sources, list):
+        raise SystemExit("manifest sources must be a list")
+    counts = {}
+    for key in ("repo_count", "gist_count", "preserved_sources_after_refresh_failure"):
+        value = manifest.get(key, 0) if key != "repo_count" else manifest.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise SystemExit(f"manifest {key} must be a non-negative integer")
+        counts[key] = value
+    expected = counts["repo_count"] + counts["gist_count"] + counts["preserved_sources_after_refresh_failure"]
+    if expected != len(sources):
+        raise SystemExit(
+            f"manifest source rows ({len(sources)}) disagree with discovered inventory "
+            f"(repos={counts['repo_count']}, gists={counts['gist_count']}, "
+            f"preserved_missing={counts['preserved_sources_after_refresh_failure']}, expected={expected}); "
+            "refusing to publish derived state"
+        )
+    return expected
+
+
 def main():
     manifest = load_nonempty(MANIFEST)
     sources = manifest.get("sources", [])
     if not isinstance(sources, list):
         raise SystemExit("manifest sources must be a list")
-    declared_count = manifest.get("repo_count")
-    if not isinstance(declared_count, int) or isinstance(declared_count, bool):
-        raise SystemExit("manifest repo_count must be an integer")
-    if declared_count != len(sources):
-        raise SystemExit(
-            f"manifest repo_count ({declared_count}) disagrees with source rows ({len(sources)}); "
-            "refusing to publish derived state"
-        )
+    validate_manifest_source_count(manifest)
     if len(sources) < MIN_EXPECTED_SOURCE_ROWS:
         raise SystemExit(
             f"manifest source rows unexpectedly shrank to {len(sources)} "
