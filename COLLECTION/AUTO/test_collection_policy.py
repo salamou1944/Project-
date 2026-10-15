@@ -40,7 +40,11 @@ def main():
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     sources = manifest.get("sources")
     assert isinstance(sources, list), "manifest sources must be a list"
-    assert manifest.get("repo_count") == len(sources), "manifest repo_count must match source rows"
+    expected_rows = manifest.get("repo_count", 0) + manifest.get("gist_count", 0) + manifest.get("preserved_sources_after_refresh_failure", 0)
+    assert expected_rows == len(sources), (
+        "manifest inventory counts must equal discovered repositories + gists + "
+        "validated prior artifacts preserved when a source disappeared from discovery"
+    )
     assert len(sources) >= MIN_EXPECTED_SOURCE_ROWS, (
         f"manifest unexpectedly shrank to {len(sources)} rows; require reviewed recovery/migration"
     )
