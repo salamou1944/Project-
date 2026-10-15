@@ -37,15 +37,17 @@ def validate_outcome(report: dict, queue: dict) -> dict:
         for item in items
         if isinstance(item, dict) and item.get("verification_state") == "READY_FOR_VERIFICATION"
     }
-    if expected != actual:
-        raise ValueError(
-            f"verification queue mismatch: successful={len(expected)}, ready_for_verification={len(actual)}"
-        )
+    # Report an explicit integrity failure before comparing the queue's size.
+    # Otherwise an INSTALLATION_INTEGRITY_FAILED row is obscured as a generic count mismatch.
     if any(
         not isinstance(item, dict) or item.get("verification_state") != "READY_FOR_VERIFICATION"
         for item in items
     ):
         raise ValueError("installation integrity failures remain in the verification queue")
+    if expected != actual:
+        raise ValueError(
+            f"verification queue mismatch: successful={len(expected)}, ready_for_verification={len(actual)}"
+        )
 
     return {
         "status": "PASS",
