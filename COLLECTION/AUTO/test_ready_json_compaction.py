@@ -6,8 +6,46 @@ from pathlib import Path
 
 from process_collection import atomic_json_write
 
+# Manifest inventory regression: retained prior sources are additional to the
+# currently discovered repository/gist counts and must not be mistaken for drift.
+from collection_state_guard import validate_manifest_source_count
+
+
+def test_manifest_inventory_counts():
+    valid = {
+        "repo_count": 2981,
+        "gist_count": 0,
+        "preserved_sources_after_refresh_failure": 2,
+        "sources": [{}] * 2983,
+    }
+    assert validate_manifest_source_count(valid) == 2983
+
+    with_gists = {
+        "repo_count": 10,
+        "gist_count": 3,
+        "preserved_sources_after_refresh_failure": 2,
+        "sources": [{}] * 15,
+    }
+    assert validate_manifest_source_count(with_gists) == 15
+
+    inconsistent = {
+        "repo_count": 10,
+        "gist_count": 0,
+        "preserved_sources_after_refresh_failure": 2,
+        "sources": [{}] * 11,
+    }
+    try:
+        validate_manifest_source_count(inconsistent)
+    except SystemExit as exc:
+        assert "disagree with discovered inventory" in str(exc)
+    else:
+        raise AssertionError("inconsistent manifest must fail closed")
+
+
+
 
 def main() -> None:
+    test_manifest_inventory_counts()
     payload = {
         "generated_at": "2026-10-10T00:00:00+00:00",
         "decisions": [
