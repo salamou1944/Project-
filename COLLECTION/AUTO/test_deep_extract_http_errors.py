@@ -51,12 +51,12 @@ def run():
         sleep_mock.assert_called_once()
 
     deep.CACHE.clear()
-    rate_429 = http_error(429, "Too Many Requests", {"Retry-After": "0"})
+    rate_429 = http_error(429, "Too Many Requests", {"Retry-After": "120"})
     with mock.patch.object(urllib.request, "urlopen", side_effect=[rate_429, response({"ok": "retry"})]) as open_mock, \
          mock.patch.object(deep.time, "sleep") as sleep_mock:
         assert deep.api("/429-test") == {"ok": "retry"}
         assert open_mock.call_count == 2, open_mock.call_count
-        sleep_mock.assert_called_once_with(0.0)
+        sleep_mock.assert_called_once_with(120.0)
 
     deep.CACHE.clear()
     missing = http_error(404, "Not Found")
