@@ -78,9 +78,14 @@ def run():
         assert open_mock.call_count == 2, open_mock.call_count
         sleep_mock.assert_called_once()
 
+    with mock.patch.object(urllib.request, "urlopen", return_value=io.BytesIO(b"pinned")) as open_mock:
+        assert deep.raw_file("owner/repo", "abc123revision", "README.md") == b"pinned"
+        request = open_mock.call_args.args[0]
+        assert request.full_url.endswith("/owner/repo/abc123revision/README.md"), request.full_url
+
     print(json.dumps({"status": "PASS", "cases": [
-        "403 permission no retry", "403 rate limit retries", "429 retries",
-        "404 no retry", "transient network retry"
+        "403 permission no retry", "403 rate limit retries", "429 honors Retry-After",
+        "404 no retry", "transient network retry", "raw file reads pinned to immutable revision"
     ]}))
 
 
