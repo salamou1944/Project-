@@ -166,17 +166,19 @@ def bucket(path, body=""):
     k = max(vals, key=vals.get)
     return k if vals[k] else "other"
 
-def raw_file(repo, branch, path):
-    url = f"https://raw.githubusercontent.com/{repo}/{urllib.parse.quote(branch, safe='')}/{urllib.parse.quote(path, safe='/')}"
+def raw_file(repo, revision, path):
+    """Fetch content pinned to the exact commit used to enumerate the tree."""
+    url = f"https://raw.githubusercontent.com/{repo}/{urllib.parse.quote(revision, safe='')}/{urllib.parse.quote(path, safe='/')}"
     req = urllib.request.Request(url, headers={"User-Agent":"collection-deep-extractor"})
     with urllib.request.urlopen(req, timeout=45) as r:
         return r.read(MAX_FILE + 1)
 
-def content_file(repo, branch, path):
+def content_file(repo, revision, path):
+    """Use the same immutable revision for raw and Contents API fallback reads."""
     try:
-        return raw_file(repo, branch, path)
+        return raw_file(repo, revision, path)
     except Exception:
-        d = api(f"/repos/{repo}/contents/{urllib.parse.quote(path, safe='')}?ref={urllib.parse.quote(branch, safe='')}")
+        d = api(f"/repos/{repo}/contents/{urllib.parse.quote(path, safe='')}?ref={urllib.parse.quote(revision, safe='')}")
         return base64.b64decode(d.get("content", ""))
 
 def extract(repo):
@@ -199,7 +201,7 @@ def extract(repo):
             selected.append(e); seen.add(e["path"])
 
     def one(e):
-        raw = content_file(repo, branch, e["path"])
+        raw = content_file(repo, rev, e["path"])
         raw = raw[:MAX_FILE]
         text = redact(raw.decode("utf-8", "replace"))
         return {"path":e["path"],"sha":e.get("sha"),"bucket":bucket(e["path"], text),
