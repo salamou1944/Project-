@@ -34,7 +34,7 @@ def load_quarantined_revisions():
     except (OSError, ValueError) as exc:
         raise SystemExit(f"invalid source quarantine registry; refusing installation: {exc}")
     entries = doc.get("entries") if isinstance(doc, dict) else None
-    if doc.get("schema_version") != "collection-source-quarantine/v1" or not isinstance(entries, list):
+    if not isinstance(doc, dict) or doc.get("schema_version") != "collection-source-quarantine/v1" or not isinstance(entries, list):
         raise SystemExit("source quarantine registry schema is invalid; refusing installation")
     blocked = set()
     for item in entries:
@@ -48,6 +48,18 @@ def load_quarantined_revisions():
             raise SystemExit("source quarantine entry is incomplete or invalid; refusing installation")
         blocked.add((repo, revision.lower()))
     return blocked
+
+
+def is_quarantined_revision(repo, revision, quarantined_revisions):
+    """Match exact revisions and abbreviated Git SHAs without allowing prefix bypass."""
+    if not isinstance(repo, str) or not isinstance(revision, str):
+        return False
+    candidate = revision.lower()
+    return any(
+        blocked_repo == repo
+        and (blocked_revision.startswith(candidate) or candidate.startswith(blocked_revision))
+        for blocked_repo, blocked_revision in quarantined_revisions
+    )
 
 
 def select_collected_candidates(manifest, value_queue, max_candidates=5, quarantined_revisions=None):
@@ -94,7 +106,7 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5, quarant
             # Old snapshots preserved after a failed refresh must never be installed.
             if row.get("mode") not in {"cached", "refreshed"}:
                 continue
-            if (repo, revision.lower()) in blocked_revisions:
+            if is_quarantined_revision(repo, revision, blocked_revisions):
                 continue
             try:
                 if int(row.get("files_extracted", 0) or 0) <= 0:
@@ -135,7 +147,7 @@ def source_records(max_auto_candidates=5):
             repo = x.get("repo")
             rev = x.get("revision_sha")
             lic = x.get("license")
-            if repo and rev and lic in ALLOWED and (repo, str(rev).lower()) not in quarantined_revisions:
+            if repo and rev and lic in ALLOWED and not is_quarantined_revision(repo, str(rev), quarantined_revisions):
                 out.append({
                     "source_record": "DEEP-EXTRACTED/MANIFEST.json",
                     "repo": repo,
@@ -177,7 +189,7 @@ def source_records(max_auto_candidates=5):
             owner_repo = "/".join(parts[:2]) if len(parts) >= 2 else ""
         if not owner_repo or owner_repo.count("/") != 1:
             continue
-        if (owner_repo, rev.group(1).lower()) in quarantined_revisions:
+        if is_quarantined_revision(owner_repo, rev.group(1), quarantined_revisions):
             continue
         out.append({
             "source_record": p.name,
