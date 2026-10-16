@@ -1,7 +1,7 @@
 # COLLECTION — Research Index
 
 Status: INCREMENTAL_COLLECTION
-Updated: 2026-10-07
+Updated: 2026-10-16
 
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
@@ -277,3 +277,9 @@ No completion claim is made. Collection remains active.
 - Discovery indexes retained as leads: osintshifu/awesome-osint-repos and djbpm/osint-toolkit.
 - Priority leverage: bounded Tor/onion collection, IOC extraction/normalization, entity/relationship correlation, evidence hashing/provenance, STIX/MISP/TAXII interoperability, monitoring/alerts/digests.
 - Promotion status: candidate only; semantic dedupe and isolated runtime verification required before canonical Skill promotion.
+
+
+## Internal runtime verification — API Factory — 2026-10-16
+- Evidence record: `COLLECTION/VERIFICATION/API_FACTORY_VERCEL_SMOKE_2026-10-16.md`.
+- Vercel health and readiness endpoints passed a rerun of the live-smoke workflow against the stable alias after a deployment adapter/storage fix.
+- Scope is deliberately limited: health/readiness is verified; persistent registry storage, authenticated business routes, generated API execution and automatic Git deployment remain open gates.
