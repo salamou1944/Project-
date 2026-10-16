@@ -24,12 +24,16 @@ DEFAULT_PATHS = (
 
 
 def audit(path: Path) -> dict:
+    try:
+        display_path = path.resolve().relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        display_path = path.name
     raw = path.read_bytes()
     try:
         payload = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         return {
-            "path": path.relative_to(ROOT).as_posix(),
+            "path": display_path,
             "bytes": len(raw),
             "sha256": hashlib.sha256(raw).hexdigest(),
             "status": "INVALID_JSON",
