@@ -283,3 +283,10 @@ No completion claim is made. Collection remains active.
 - Evidence record: `COLLECTION/VERIFICATION/API_FACTORY_VERCEL_SMOKE_2026-10-16.md`.
 - Vercel health and readiness endpoints passed a rerun of the live-smoke workflow against the stable alias after a deployment adapter/storage fix.
 - Scope is deliberately limited: health/readiness is verified; persistent registry storage, authenticated business routes, generated API execution and automatic Git deployment remain open gates.
+
+
+## Account-wide expansion update — mnfst — 2026-10-16
+- Enumerated 25 public repositories for the `mnfst` owner; page 2 of the owner-scoped repository search returned no additional repositories.
+- Account record: `COLLECTION/ACCOUNTS/MNFST_ACCOUNT_WIDE_2026-10-16.md`.
+- Highest-value non-duplicative candidates for API Factory: model parameter validation (`modelparams.dev`), model lifecycle/deprecation data (`modeldeprecations.dev`), and narrow request repair (`autofix`). No code has been imported; each still requires a controlled benchmark and privacy/terms review.
+- `mcp-server-generator` is explicitly marked WIP/non-verified by its README; do not use it in production. The account-wide collection remains active and incomplete.
