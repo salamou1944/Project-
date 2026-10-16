@@ -30,3 +30,11 @@ For each refresh, diff:
 - endpoint reachability and error rates
 - OpenAI SDK compatibility
 - self-hosted replacements and subscription-elimination value
+
+
+## 2026-10-16 refresh
+
+- Upstream was re-inspected on 2026-10-16. The repository revision captured in the current extraction is `cf97c32fec1b2e96e9936746e2731a81bd5ea33f`; the repository metadata reports an update at `2026-10-16T02:34:29Z`.
+- Current upstream `data.json` reports `lastUpdated: 2026-10-05`. The repository's recent update timestamp must not be mistaken for a fresh quota audit.
+- Current README still labels the list as permanent-free-tier inference APIs and describes OpenAI SDK compatibility as the default, with exceptions. This is source-owner documentation, not independent provider verification.
+- Status remains `DISCOVERY_CAPTURED`; provider quota, terms, region eligibility, endpoint reliability and commercial-use constraints remain unverified unless independently checked against each provider's official source.
