@@ -290,3 +290,10 @@ No completion claim is made. Collection remains active.
 - Account record: `COLLECTION/ACCOUNTS/MNFST_ACCOUNT_WIDE_2026-10-16.md`.
 - Highest-value non-duplicative candidates for API Factory: model parameter validation (`modelparams.dev`), model lifecycle/deprecation data (`modeldeprecations.dev`), and narrow request repair (`autofix`). No code has been imported; each still requires a controlled benchmark and privacy/terms review.
 - `mcp-server-generator` is explicitly marked WIP/non-verified by its README; do not use it in production. The account-wide collection remains active and incomplete.
+
+
+## Account-wide expansion update — diegosouzapw — 2026-10-16
+- Re-enumerated 71 public repositories under `diegosouzapw`; page 2 returned no additional results. The account-completion register already records the owner as enumerated; this capture adds the current repository list and relevance triage without replacing historical records.
+- Account record: `COLLECTION/ACCOUNTS/DIEGOSOUZAPW_ACCOUNT_WIDE_2026-10-16.md`.
+- API Factory priorities: keep OmniRoute as provider-intelligence reference only; evaluate OpenSandbox for isolated generated-code execution; compare selected `awesome-omni-skills` against the existing agent-skills repository before reuse.
+- Reject `openclaw-billing-proxy` as an integration candidate because it manipulates billing identifiers/OAuth tokens; treat `ag-local-bridge` as high-risk pending security/terms review. Empty repos remain unverified.
