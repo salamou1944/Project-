@@ -74,3 +74,11 @@ Before modifying Salamou-31/API Factory:
 - Provider registry: https://github.com/diegosouzapw/OmniRoute/blob/release/v3.8.52/src/shared/constants/providers.ts
 
 This record is an evidence-backed extraction/reference artifact, not a claim that every listed provider is currently available to the user or safe for production routing.
+
+
+## 2026-10-16 upstream README refresh
+
+- Current README on the captured `release/v3.8.52` source advertises 372 providers, 150+ free-tier providers, 485 free-tier entries across 35 recurring pool keys, and an estimated ~1.62B monthly tokens from third-party free tiers.
+- Treat all aggregate figures as upstream-maintainer estimates, not guaranteed capacity or an OmniRoute-granted allowance. The free-tier policy still requires provider-official revalidation, quota-pool deduplication, explicit regional/KYC/payment gates, and a hard-stop check before zero-cost routing.
+- Account-wide expansion on 2026-10-16 enumerated 71 repositories under `diegosouzapw`; see `COLLECTION/ACCOUNTS/DIEGOSOUZAPW_ACCOUNT_WIDE_2026-10-16.md`.
+- New high-value non-duplicative lead: `OpenSandbox` as a potential isolated generated-code runtime; it is not a hosted deployment replacement and needs a sandbox escape/recovery benchmark before adoption.
