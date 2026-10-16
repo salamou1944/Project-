@@ -42,7 +42,22 @@ def main():
         manifest = load_json(manifest_path)
         if not isinstance(manifest.get("sources"), list):
             raise RuntimeError("manifest.sources is not a list")
-        return f"accounts={manifest.get('account_count',0)} repos={manifest.get('repo_count',0)} sources={len(manifest['sources'])}"
+        repo_count = int(manifest.get("repo_count", 0) or 0)
+        gist_count = int(manifest.get("gist_count", 0) or 0)
+        preserved_count = int(manifest.get("preserved_sources_after_refresh_failure", 0) or 0)
+        expected_rows = repo_count + gist_count + preserved_count
+        actual_rows = len(manifest["sources"])
+        if expected_rows != actual_rows:
+            raise RuntimeError(
+                "manifest inventory mismatch: "
+                f"repo_count={repo_count} + gist_count={gist_count} + "
+                f"preserved_sources_after_refresh_failure={preserved_count} "
+                f"equals {expected_rows}, but sources has {actual_rows} rows"
+            )
+        return (
+            f"accounts={manifest.get('account_count',0)} repos={repo_count} "
+            f"gists={gist_count} preserved={preserved_count} sources={actual_rows}"
+        )
     gate("1_manifest", manifest_gate)
 
     def artifact_gate():
