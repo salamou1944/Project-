@@ -1,7 +1,7 @@
 name: collection-continuous
 
-# All automatic harvest triggers are disabled pending verified recovery.
-# Run manually only after reviewing READY.json integrity.
+# Collection harvest is opt-in: manual dispatch or explicit marker push only.
+# SAFE_INCREMENTAL runs with cached unchanged sources; FORCE_REFRESH explicitly refetches them.
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +13,7 @@ on:
   push:
     paths:
       - ".github/COLLECTION_FORCE_REFRESH_ONCE"
+      - ".github/COLLECTION_SAFE_INCREMENTAL_ONCE"
 
 concurrency:
   group: collection-writer
@@ -36,7 +37,7 @@ jobs:
           COLLECTION_MAX_FILES: "24"
           COLLECTION_MAX_FILE_BYTES: "60000"
           COLLECTION_MAX_SOURCE_BYTES: "1000000"
-          COLLECTION_FORCE_REFRESH: ${{ (github.event_name == 'push' || inputs.force_refresh) && '1' || '0' }}
+          COLLECTION_FORCE_REFRESH: ${{ (inputs.force_refresh || contains(github.event.head_commit.modified, '.github/COLLECTION_FORCE_REFRESH_ONCE') || contains(github.event.head_commit.added, '.github/COLLECTION_FORCE_REFRESH_ONCE')) && '1' || '0' }}
         run: |
           set -euo pipefail
           # Regression gate: keep READY.json readable and validate serialization before regeneration.
@@ -99,7 +100,7 @@ jobs:
           COLLECTION_MAX_FILES: "24"
           COLLECTION_MAX_FILE_BYTES: "60000"
           COLLECTION_MAX_SOURCE_BYTES: "1000000"
-          COLLECTION_FORCE_REFRESH: ${{ (github.event_name == 'push' || inputs.force_refresh) && '1' || '0' }}
+          COLLECTION_FORCE_REFRESH: ${{ (inputs.force_refresh || contains(github.event.head_commit.modified, '.github/COLLECTION_FORCE_REFRESH_ONCE') || contains(github.event.head_commit.added, '.github/COLLECTION_FORCE_REFRESH_ONCE')) && '1' || '0' }}
         run: |
           set -euo pipefail
           git config user.name "collection-bot"
