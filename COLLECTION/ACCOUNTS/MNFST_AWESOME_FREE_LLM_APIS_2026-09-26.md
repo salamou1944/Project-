@@ -38,3 +38,10 @@ For each refresh, diff:
 - Current upstream `data.json` reports `lastUpdated: 2026-10-05`. The repository's recent update timestamp must not be mistaken for a fresh quota audit.
 - Current README still labels the list as permanent-free-tier inference APIs and describes OpenAI SDK compatibility as the default, with exceptions. This is source-owner documentation, not independent provider verification.
 - Status remains `DISCOVERY_CAPTURED`; provider quota, terms, region eligibility, endpoint reliability and commercial-use constraints remain unverified unless independently checked against each provider's official source.
+
+
+## 2026-10-16 extraction comparison
+
+- Current upstream revision captured: `cf97c32fec1b2e96e9936746e2731a81bd5ea33f` (repository metadata updated `2026-10-16T02:34:29Z`). Previous extraction revision: `b25c0395fe1e7628ecc99bf119a40365801c6fb4`.
+- The two extraction records each contain 15 tracked files; the current extraction has zero fetch errors and no tracked file-content differences from the prior snapshot. The repository update timestamp alone does not mean provider data changed.
+- Upstream `data.json` now reports `lastUpdated: 2026-10-05`; quotas and terms remain discovery-only until provider-official revalidation.
