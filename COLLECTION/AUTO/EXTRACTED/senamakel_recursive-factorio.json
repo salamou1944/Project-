@@ -1,0 +1,192 @@
+{
+  "canonical_source": "github:senamakel/recursive-factorio",
+  "repo": "senamakel/recursive-factorio",
+  "revision_sha": "dc26716e0c1d3079e8e883c3d4a2cd4c17101fa5",
+  "default_branch": "main",
+  "pushed_at": "2026-10-11T19:08:34Z",
+  "repo_updated_at": "2026-10-11T19:08:38Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 60000,
+    "max_source_bytes": 1000000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "brain/action_library/research/README.md",
+      "sha": null,
+      "content_sha256": "caba0e7233ce818c49f51371a243373023350a007738d75a5344f8e645affe4b",
+      "score": 251,
+      "content": "# Research actions\n\n`first_research.py` plans the full early bootstrap through real production\ntriggers, power and red-science consumption. Exported by `brain.actions`.\n"
+    },
+    {
+      "path": "brain/research_rules/bootstrap.py",
+      "sha": null,
+      "content_sha256": "03b41afaac38d798d6debaf3b68a8e5763b0bcaa642a82df765fea9f81b853f5",
+      "score": 188,
+      "content": "\"\"\"Wiki-enriched early unlocks, red-science production and first lab research.\"\"\"\nfrom brain.logic import decision, get_player, inventory_count, nearby_enemies, entity_item_count\nfrom brain.research_rules.recipes import ensure_item\nfrom brain.research_rules.smelting import ensure_plates, transfer, refuel\nfrom brain.research_rules.power import build_power, find_role\n\n\ndef first_research(state, experience=None, player_name='Teeny'):\n    \"\"\"Plan through real production triggers and ten red packs to Automation research.\"\"\"\n    if not state.get('coverage',{}).get('complete'):\n        return decision('observe','Incomplete observation; do not act.')\n    player=get_player(state,player_name)\n    if not player:\n        return decision('wait_for_player','Selected assistant is unavailable.')\n    if player.get('health',0)<75 or nearby_enemies(state,player):\n        return decision('danger','Stop for low health or nearby enemies.')\n    tech=state.get('technologies',{})\n    if tech.get('automation',{}).get('researched'):\n        return decision('complete','Automation researched; red science has powered the lab.')\n    for name,item,total,key in [('steam-power','iron-plate',50,'iron_produced'),\n                                ('electronics','copper-plate',10,'copper_produced')]:\n        if not tech.get(name,{}).get('researched'):\n            total=tech.get(name,{}).get('trigger',{}).get('count',total)\n            missing=max(1,total-state.get(key,0))\n            return ensure_plates(state,player,item,inventory_count(player,item)+missing,experience)\n    construction=build_power(state,player,experience)\n    if construction:\n        return construction\n    boiler=find_role(state,'boiler')\n    fueling=refuel(state,player,boiler,experience)\n    if fueling:return fueling\n    lab=find_role(state,'lab')\n    if lab.get('energy',0)<=0:\n        return decision('check_power','Wait for real steam generation and lab electricity.',{'kind':'wait','duration':2})\n    if state.get('current_research') not in (None,'automation'):\n        return decision('research_busy','Preserve the other active research.')\n    if not state.get('current_research'):\n        return decision('start_research','Start Automation using real lab consumption.',{'kind':'research','technology':'automation'})\n    # Count already-produced packs so consumed science is not crafted again.\n    cost=tech.get('automation',{}).get('count',10)\n    ingredients=tech.get('automation',{}).get('ingredients',[{'name':'automation-science-pack','amount':1}])\n    if any(i['name']!='automation-science-pack' for i in ingredients):\n        return decision('blocked','Automation has unsupported science requirements in this mod configuration.')\n    cost*=next((i.get('amount',1) for i in ingredients if i['name']=='automation-science-pack'),1)\n    remaining=max(0,cost-state.get('red_produced',0))\n    if remaining:\n        needed=ensure_item(state,player,'automation-science-pack',remaining,experience)\n        if needed:\n            return needed\n    packs=inventory_count(player,'automation-science-pack')\n    if packs:\n        return decision('load_science','Supply the powered lab with red science.',transfer(player,lab,'lab_input','automation-science-pack',packs))\n    return decision('researching','Observe actual Automation progress.',{'kind':'wait','duration':8})\n"
+    },
+    {
+      "path": "brain/action_library/research/first_research.py",
+      "sha": null,
+      "content_sha256": "73b86088fe1468307f99ce98684051b883af7b2bf9b9b84c0332c60d23f8f02c",
+      "score": 186,
+      "content": "\"\"\"Plan the complete steam/electronics/red-science/Automation bootstrap.\"\"\"\n\n\ndef first_research(state, experience=None, player_name='Teeny'):\n    \"\"\"Return the next inventory-backed action toward powered red-science research.\"\"\"\n    from brain.research_rules.bootstrap import first_research as plan\n    return plan(state,experience,player_name)\n"
+    },
+    {
+      "path": "brain/action_library/research/__init__.py",
+      "sha": null,
+      "content_sha256": "0ba237e60ccafb583d3bf0c30c0964693021a0cbf8444c2766143e6f1f754e5a",
+      "score": 186,
+      "content": "\"\"\"High-level research progression actions.\"\"\"\n"
+    },
+    {
+      "path": "brain/action_library/manufacturing/make_red_science.py",
+      "sha": null,
+      "content_sha256": "06e76f2d1642704e0dfd40b6fcd09451fe34276638693df8731733e464120f8b",
+      "score": 183,
+      "content": "\"\"\"Resolve ingredients and plan native red-science crafting.\"\"\"\n\n\ndef make_red_science(state, player, count=10, experience=None):\n    \"\"\"Resolve ingredients and plan native red-science crafting.\"\"\"\n    from brain.research_rules.recipes import ensure_item\n    return ensure_item(state,player,'automation-science-pack',count,experience)\n"
+    },
+    {
+      "path": "brain/research_rules/recipes.py",
+      "sha": null,
+      "content_sha256": "15d4fdc044f7fdbc923517cb9de5e58feef672d8c27be8a9e9ddf4c83bc30477",
+      "score": 178,
+      "content": "\"\"\"Resolve crafting prerequisites using observed live recipes rather than fixed costs.\"\"\"\nimport math\nfrom brain.logic import decision, inventory_count\n\n\ndef ensure_item(state, player, item, count, experience=None, trail=()):\n    \"\"\"Plan the first missing dependency; return None once count items are held.\n\n    Smelt metals and gather raw resources, recursively resolve enabled item recipes,\n    and wait for native crafting. Cycles, locked recipes and fluid ingredients are\n    explicit blocked decisions. Products with multiple outputs are counted correctly.\n    \"\"\"\n    held = inventory_count(player,item)\n    if held >= count:\n        return None\n    if player.get('crafting_queue'):\n        return decision('crafting','Wait for the native crafting batch.',{'kind':'wait','duration':2})\n    if item in ('iron-plate','copper-plate'):\n        from brain.research_rules.smelting import ensure_plates\n        return ensure_plates(state,player,item,count,experience)\n    if item in ('iron-ore','copper-ore','coal','stone'):\n        from brain.logic import mining_decision\n        return mining_decision(state,player,item,experience,count-held)\n    if item == 'wood':\n        from brain.action_library.gathering.mine_wood import mine_wood\n        return mine_wood(state,player,count-held)\n    if item in trail:\n        return decision('blocked','Cyclic recipe dependency: '+item)\n    recipe = state.get('recipes',{}).get(item)\n    if not recipe or not recipe.get('enabled'):\n        return decision('blocked','Recipe is not unlocked: '+item)\n    output = sum(p.get('amount',0) for p in recipe['products'] if p['name']==item)\n    if output <= 0:\n        return decision('blocked','Recipe has no measured output: '+item)\n    crafts = math.ceil((count-held)/output)\n    for ingredient in recipe['ingredients']:\n        if ingredient.get('type','item') != 'item':\n            return decision('blocked','Handcrafting fluid recipes is unsupported: '+item)\n        plan = ensure_item(state,player,ingredient['name'],ingredient['amount']*crafts,\n                           experience,(*trail,item))\n        if plan:\n            return plan\n    return decision('craft_'+item,'Handcraft the required batch of '+item,\n                    {'kind':'craft','player':player['name'],'recipe':item,'count':crafts})\n"
+    },
+    {
+      "path": "brain/action_library/README.md",
+      "sha": null,
+      "content_sha256": "cde48add1e61433cb4152edf6ba172ee99ed3a19f31f1c576548d42a691d02ba",
+      "score": 178,
+      "content": "# Action library\n\nEach public action lives in its own file. Import actions from `brain.actions`.\nPlanners return decisions and bounded primitive instructions; `brain/execution.py`\nexecutes them. Planning has no game side effects. Gathering actions carry batch\ncounts so the executor can estimate native mining duration.\n\nVerify with `.venv/bin/python -m unittest scripts.test_actions scripts.test_brain`.\n"
+    },
+    {
+      "path": "brain/action_library/manufacturing/README.md",
+      "sha": null,
+      "content_sha256": "01226d855a3687b975960c6e89ce83408433b16ba80e261f4581bea2ab5f21ec",
+      "score": 176,
+      "content": "# Manufacturing actions\n\nPlan inventory-costed crafting, construction and the iron production chain. Each action is a separate Python module, exported by root\n`brain/actions.py`. These functions return plans; they do not call RCON.\n"
+    },
+    {
+      "path": "brain/action_library/movement/README.md",
+      "sha": null,
+      "content_sha256": "14c5c29573d8e1e8ff3df5e6ddacfa16bfee20c757269c2a69abc37ff9cbcc3d",
+      "score": 176,
+      "content": "# Movement actions\n\nPlan movement to a position without executing game commands. Each action is a separate Python module, exported by root\n`brain/actions.py`. These functions return plans; they do not call RCON.\n"
+    },
+    {
+      "path": "brain/action_library/inventory/README.md",
+      "sha": null,
+      "content_sha256": "a400af0f56d6ebe4b710284e15dba852e83e07ef40172c592dab2782f1bf619a",
+      "score": 176,
+      "content": "# Inventory actions\n\nPlan transfers between the assistant inventory and a furnace. Each action is a separate Python module, exported by root\n`brain/actions.py`. These functions return plans; they do not call RCON.\n"
+    },
+    {
+      "path": "brain/action_library/gathering/README.md",
+      "sha": null,
+      "content_sha256": "acdfd854afe624871c02be2dfa32a5080f32c373a56d57ad0946fc08f2082a8d",
+      "score": 176,
+      "content": "# Gathering actions\n\nChoose a resource and gather a requested batch. Each action is a separate Python module, exported by root\n`brain/actions.py`. These functions return plans; they do not call RCON.\n"
+    },
+    {
+      "path": "brain/action_library/power/README.md",
+      "sha": null,
+      "content_sha256": "e36ab95a4a38540bc675f94f165c49b5be8df4ff067acb3acae36d75f930a667",
+      "score": 176,
+      "content": "# Power actions\n\n`build_steam_power.py` plans the next inventory-backed component in the pump,\npipes, boiler, engine, pole and lab chain. It delegates pure planning to\n`brain.research_rules.power`; execution checks live placement.\n"
+    },
+    {
+      "path": "scripts/test_actions.py",
+      "sha": null,
+      "content_sha256": "1616ed470607e8476b828dcc1aa3d2580e5526c74b0f26225feaf70049ddd42e",
+      "score": 175,
+      "content": "\"\"\"Public high-level actions preserve batch requirements and inventory costs.\"\"\"\nimport unittest\nfrom brain import actions\nfrom scripts.test_brain import state\n\n\nclass ActionLibraryTest(unittest.TestCase):\n    def test_gathering_actions_request_specific_resource_batches(self):\n        s=state(); player=s['players'][0]\n        for action,resource,count in ((actions.mine_coal,'coal',4),\n                                      (actions.mine_iron_ore,'iron-ore',16),\n                                      (actions.mine_stone,'stone',5)):\n            plan=action(s,player)['action']\n            self.assertEqual(plan['resource'],resource)\n            self.assertEqual(plan['count'],count)\n\n    def test_build_furnace_gathers_only_missing_stone(self):\n        s=state({'stone':3})\n        plan=actions.build_furnace(s,s['players'][0])\n        self.assertEqual(plan['action']['resource'],'stone')\n        self.assertEqual(plan['action']['count'],2)\n\n    def test_full_production_action_respects_inventory_goal(self):\n        self.assertEqual(actions.make_iron_plates(state({'iron-plate':100}),player_name='alice')['phase'],'complete')\n        self.assertNotEqual(actions.make_iron_plates(state({'iron-plate':99}),player_name='alice')['phase'],'complete')\n\n    def test_transfer_to_far_furnace_plans_movement_first(self):\n        s=state(); furnace={'unit_number':1,'position':{'x':30,'y':0}}\n        self.assertEqual(actions.load_iron_ore(s['players'][0],furnace,16)['action']['kind'],'move')\n"
+    },
+    {
+      "path": "scripts/test_brain_actions.py",
+      "sha": null,
+      "content_sha256": "5c82417923a13d215c4c3ba2bb6af8d3181b4663d39774eb3323d0442e1aa304",
+      "score": 175,
+      "content": "\"\"\"Python navigation planning stays bounded and does not overshoot axis changes.\"\"\"\nimport unittest\nfrom brain.execution import walking_instruction\n\n\nclass WalkingPlanTest(unittest.TestCase):\n    def test_confident_clear_leg_runs_longer_than_two_seconds(self):\n        plan=walking_instruction({'x':0,'y':0},{'x':100,'y':0},2,9,confident=True)\n        self.assertEqual(plan['duration'],8)\n\n    def test_mining_duration_estimates_only_the_requested_batch(self):\n        from brain.execution import mining_duration\n        self.assertAlmostEqual(mining_duration(3,1,.5,0,100,1,True),6.05)\n        self.assertEqual(mining_duration(16,1,.5,0,100,1,False),2)\n\n    def test_long_moves_choose_cardinal_direction_and_bounded_duration(self):\n        plan=walking_instruction({'x':0,'y':0},{'x':100,'y':10},2,9)\n        self.assertEqual(plan, {'direction':'east','duration':2})\n\n    def test_diagonal_leg_stops_when_shorter_axis_is_aligned(self):\n        plan=walking_instruction({'x':0,'y':0},{'x':-6,'y':4},1,9)\n        self.assertEqual(plan['direction'],'southwest')\n        self.assertAlmostEqual(plan['duration'],4*2**0.5/9)\n\n    def test_already_in_reach_does_not_start_walking(self):\n        self.assertEqual(walking_instruction({'x':0,'y':0},{'x':1,'y':0},2,9)['duration'],0)\n\n    def test_paused_game_cannot_produce_a_timed_movement(self):\n        with self.assertRaises(ValueError):\n            walking_instruction({'x':0,'y':0},{'x':10,'y':0},2,0)\n"
+    },
+    {
+      "path": "scripts/test_factorio_setup.py",
+      "sha": null,
+      "content_sha256": "1ab26377953fd09e14e3581e939dafe548981354889f316deccad4a8d2c74e41",
+      "score": 175,
+      "content": "\"\"\"Setup generates checkout-relative paths and protects connection credentials.\"\"\"\nimport json\nfrom pathlib import Path\nimport tempfile\nimport unittest\nfrom unittest.mock import patch\nfrom scripts import factorio\nfrom scripts.world_settings import easy_map_settings, RESOURCES\n\nclass SetupTest(unittest.TestCase):\n    def test_easy_world_disables_enemies_and_has_large_rich_resources(self):\n        settings=easy_map_settings()\n        self.assertTrue(settings['no_enemies_mode'])\n        self.assertTrue(settings['peaceful_mode'])\n        self.assertEqual(settings['autoplace_controls']['enemy-base']['size'],0)\n        for name in RESOURCES:\n            self.assertEqual(settings['autoplace_controls'][name]['size'],6)\n            self.assertEqual(settings['autoplace_controls'][name]['richness'],6)\n    def test_setup_uses_current_checkout_and_keeps_password_on_repeat(self):\n        with tempfile.TemporaryDirectory() as tmp:\n            root = Path(tmp).resolve()\n            (root / \"mod\").mkdir()\n            binary = root / 'factorio'; binary.touch()\n            read = root / 'data'; (read / 'base').mkdir(parents=True)\n            with patch.object(factorio,'ROOT',root), patch.object(factorio,'DATA',root/'server/data'), patch.object(factorio.subprocess,'check_output',return_value='Version: 2.1.21'):\n                factorio.setup(binary,read)\n                config = root/'server/data/connection.json'\n                pw = json.loads(config.read_text())['password']\n                mod_list=root/'server/data/mods/mod-list.json'\n                mods=json.loads(mod_list.read_text())\n                mods['mods'].append({'name':'space-age','enabled':True})\n                mod_list.write_text(json.dumps(mods))\n                factorio.setup(binary,read)\n                self.assertIn({'name':'space-age','enabled':True},json.loads(mod_list.read_text())['mods'])\n                self.assertEqual(json.loads(config.read_text())['password'],pw)\n                self.assertEqual(config.stat().st_mode & 0o777,0o600)\n                ini = (root/'server/data/config.ini').read_text()\n                self.assertIn(f'write-data={root}/server/data',ini)\n                self.assertNotIn('OpenHuman/projects',ini)\n\nif __name__ == '__main__':\n    unittest.main()\n"
+    },
+    {
+      "path": "brain/research_rules/README.md",
+      "sha": null,
+      "content_sha256": "4563202eac5f5a8b49a705312297bca74ac122a2590732f7c07f7965e467cbb7",
+      "score": 171,
+      "content": "# Research rules\n\n`bootstrap.py` orders production triggers, power, lab, red packs and Automation.\n`recipes.py` resolves live enabled recipes with correct output quantities.\n`smelting.py` plans copper/iron batches and close transfers. `power.py` rotates\nand validates a connected shoreline footprint, storing it privately with map\nseed/surface identity. All decisions are Python; Lua only applies game API calls.\n\nWiki provenance is in `brain/knowledge/red_science.json`; live data overrides\nassumptions. Verify with `scripts.test_research` and `scripts.test_brain_live`.\n"
+    },
+    {
+      "path": "scripts/test_mcp_config.py",
+      "sha": null,
+      "content_sha256": "642fd0d6bdab95174b0161711c1a1768c65700fc08379fc7c4412825ad80615a",
+      "score": 168,
+      "content": "\"\"\"Shared manifest integration must preserve the live server launch environment.\"\"\"\nimport asyncio\nimport json\nfrom pathlib import Path\nimport subprocess\nimport tempfile\nimport unittest\nfrom unittest.mock import patch\nfrom scripts.mcp_config import load_servers\nfrom scripts import smoke_mcp\n\n\nclass ManifestTest(unittest.TestCase):\n    def test_smoke_launches_control_with_manifest_environment(self):\n        with patch.object(smoke_mcp, 'stdio_client', side_effect=RuntimeError('captured')) as launch:\n            with self.assertRaisesRegex(RuntimeError, 'captured'):\n                asyncio.run(smoke_mcp.smoke(False))\n        expected = load_servers(smoke_mcp.ROOT)['factorio-control']\n        params = launch.call_args.args[0]\n        self.assertEqual(params.command, expected['command'])\n        self.assertEqual(params.args, expected['args'])\n        self.assertEqual(params.env, expected['env'])\n\n\nclass WorktreeVenvTest(unittest.TestCase):\n    def test_worktree_without_venv_uses_the_primary_checkouts_interpreter(self):\n        with tempfile.TemporaryDirectory() as tmp:\n            primary = Path(tmp) / 'primary'\n            primary.mkdir()\n            subprocess.run(['git', 'init', '-q', str(primary)], check=True)\n            (primary / 'mcp.json').write_text(json.dumps({'mcpServers': {'factorio-control': {\n                'command': './.venv/bin/python', 'args': ['./scripts/mcp_entrypoint.py']}}}))\n            subprocess.run(['git', '-C', str(primary), 'add', 'mcp.json'], check=True)\n            subprocess.run(['git', '-C', str(primary), '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'x'],\n                           check=True)\n            interpreter = primary / '.venv/bin/python'\n            interpreter.parent.mkdir(parents=True)\n            interpreter.write_text('')\n            worktree = Path(tmp) / 'wt'\n            subprocess.run(['git', '-C', str(primary), 'worktree', 'add', '-q', str(worktree)], check=True)\n            command = load_servers(worktree)['factorio-control']['command']\n        self.assertEqual(Path(command).resolve(), interpreter.resolve())\n"
+    },
+    {
+      "path": "scripts/test_tree_search.py",
+      "sha": null,
+      "content_sha256": "444a26e326eeb72d238aafe4e910ea63ef148f0d88354e7818a7d23402a7c2c8",
+      "score": 168,
+      "content": "\"\"\"Bounded tree queries must choose nearby harvestable trees, not a truncated far chunk.\"\"\"\nimport unittest\nfrom unittest.mock import patch\n\n\nclass TreeSearchTest(unittest.TestCase):\n    def test_dense_forest_is_requeried_to_find_a_nearby_tree(self):\n        from brain.observation import tree_targets\n        def query(actor,filters,fields,limit=512):\n            near={'name':'tree-01','position':{'x':8,'y':0},'minable':True,'wood_yield':4}\n            far={'name':'tree-01','position':{'x':100,'y':0},'minable':True,'wood_yield':4}\n            return {'truncated':filters['radius']>16,'entities':[far] if filters['radius']>16 else [near]}\n        with patch('brain.observation.read_entities',side_effect=query):\n            trees=tree_targets(14,{'x':0,'y':0})\n        self.assertEqual(trees[0]['position'],{'x':8,'y':0})\n"
+    },
+    {
+      "path": "scripts/test_research.py",
+      "sha": null,
+      "content_sha256": "1595d64c60327a3437bf396981e25478852605a672c4ea995a9bbb13aadcbed9",
+      "score": 168,
+      "content": "\"\"\"Recipe dependencies, trigger gates, research progress and machine interactions.\"\"\"\nimport unittest\nfrom brain.research_rules.recipes import ensure_item\nfrom brain.research_rules.bootstrap import first_research\nfrom brain.research_rules.smelting import transfer\nfrom scripts.test_brain import state\nfrom brain.research_rules.power import steam_layout\n\n\nclass ResearchRulesTest(unittest.TestCase):\n    def test_two_product_recipe_does_not_double_material_requirements(self):\n        s=state({'copper-plate':1})\n        s['recipes']={'copper-cable':{'enabled':True,'ingredients':[{'name':'copper-plate','amount':1}],\n                                    'products':[{'name':'copper-cable','amount':2}]}}\n        plan=ensure_item(s,s['players'][0],'copper-cable',2)\n        self.assertEqual(plan['action'],{'kind':'craft','player':'alice','recipe':'copper-cable','count':1})\n\n    def test_locked_recipes_are_not_bypassed(self):\n        s=state(); s['recipes']={'lab':{'enabled':False}}\n        self.assertEqual(ensure_item(s,s['players'][0],'lab',1)['phase'],'blocked')\n\n    def test_trigger_research_requires_real_production_before_power_build(self):\n        s=state({'iron-plate':100})\n        s['technologies']={'steam-power':{'researched':False}}\n        s['iron_produced']=0\n        self.assertNotEqual(first_research(s,player_name='alice')['phase'],'plan_power')\n\n    def test_automation_completion_is_observed_not_fabricated(self):\n        s=state(); s['technologies']={'automation':{'researched':True}}\n        self.assertEqual(first_research(s,player_name='alice')['phase'],'complete')\n\n    def test_machine_transfer_requires_close_approach(self):\n        s=state(); e={'name':'stone-furnace','unit_number':1,'position':{'x':8,'y':0}}\n        self.assertEqual(transfer(s['players'][0],e,'fuel','coal',8)['kind'],'move')\n\n    def test_existing_wood_fuel_is_preserved_and_research_can_start(self):\n        s=state({'coal':8});parts=steam_layout({'x':0,'y':0},'north')\n        s['power_layout']={'entities':parts}\n        s['entities']=[{**p,'surface':'nauvis','force':'player','unit_number':i,\n                        'energy':1000 if p['role']=='lab' else 0,\n                        'inventories':{'fuel':{'wood':9}} if p['role']=='boiler' else {}}\n                       for i,p in enumerate(parts,1)]\n        s['technologies']={name:{'researched':True} for name in ('steam-power','electronics','automation-science-pack')}\n        self.assertEqual(first_research(s,player_name='alice')['phase'],'start_research')\n"
+    },
+    {
+      "path": "scripts/test_mcp_tools.py",
+      "sha": null,
+      "content_sha256": "2b403d1c3370a589dcf5feb7e54c36665b6c09497f8beb8b94ef6ffacbfe299c",
+      "score": 168,
+      "content": "\"\"\"Offline checks for Lua encoding, structured failures and bounded queries.\"\"\"\nimport json\nimport unittest\nfrom unittest.mock import patch\nfrom mcp_server import server\n\nclass ToolsTest(unittest.TestCase):\n    def test_rpc_strings_cannot_escape_lua_literal(self):\n        value = 'quote\" slash\\\\ newline\\n雪'\n        with patch.object(server, 'run', return_value='{\"ok\":true}') as run:\n            server.bridge('print_all', value)\n        command = run.call_args.args[0]\n        self.assertIn('helpers.json_to_table', command)\n        self.assertNotIn('\\n', command)\n        import re\n        literal = command.split('helpers.json_to_table(\\\"', 1)[1].split('\\\")', 1)[0]\n        decoded = bytes(int(n) for n in re.findall(r'\\\\([0-9]{3})', literal)).decode('utf-8')\n        self.assertEqual(json.loads(decoded), [value])\n\n    def test_lua_errors_are_tool_failures(self):\n        with patch.object(server, 'run', return_value='{\"error\":\"unknown entity\"}'):\n            with self.assertRaisesRegex(ValueError, 'unknown entity'):\n                server.bridge('place_entity')\n\n    def test_non_json_response_is_not_reported_as_success(self):\n        with patch.object(server, 'run', return_value='Error: missing control-bridge'):\n            with self.assertRaisesRegex(ValueError, 'control-bridge'):\n                server.bridge('status')\n\n    def test_entity_query_bounds_before_rcon(self):\n        with patch.object(server, 'run') as run:\n            with self.assertRaises(ValueError):\n                server.inspect_area(0, 0, radius=10000)\n            run.assert_not_called()\n\nif __name__ == '__main__':\n    unittest.main()\n"
+    },
+    {
+      "path": "knowledge/wiki/Logistic_science_pack_research.md",
+      "sha": null,
+      "content_sha256": "e456075bb0a39702d150628be758a62020ca44b2235f338fb900ba228e00e19e",
+      "score": 143,
+      "content": "<!-- wiki-cache title=\"Logistic science pack (research)\" url=\"https://wiki.factorio.com/Logistic_science_pack_(research)\" revid=\"182381\" -->\n# Logistic science pack (research)\n\nSource: https://wiki.factorio.com/Logistic_science_pack_(research) (revision 182381)\n\n## Infobox\n- Required technologies: Automation science pack\n- Category: Technology\n- Prototype type: technology\n- Internal (prototype) name: logistic-science-pack\n- Effects (unlocks): Logistic science pack\n- Allows (unlocks follow-up techs): Advanced material processing, Automation 2, 2, Circuit network, Electric energy distribution 1, 1, Engine, Landfill, Logistics 2, 2, Military 2, 2, Physical projectile damage, 2, Solar energy, Toolbelt, Weapon shooting speed, 2\n- Research cost per unit: 5 s; 1 × Automation science pack\n- Research units (count): 75\n\n**Logistic science pack** unlocks the ability to craft logistic science packs which are used for nearly all research.\n"
+    },
+    {
+      "path": "knowledge/wiki/Automation_science_pack_research.md",
+      "sha": null,
+      "content_sha256": "7cd7f9ac4fcf027f53096b21d978c0ab1a4ac5002fd25e2cce15ada28e23ea6d",
+      "score": 143,
+      "content": "<!-- wiki-cache title=\"Automation science pack (research)\" url=\"https://wiki.factorio.com/Automation_science_pack_(research)\" revid=\"209133\" -->\n# Automation science pack (research)\n\nSource: https://wiki.factorio.com/Automation_science_pack_(research) (revision 209133)\n\n## Infobox\n- Research trigger (unlocked by doing this, no science packs): craft-item: Lab × 1\n- Category: Technology\n- Prototype type: technology\n- Internal (prototype) name: automation-science-pack\n- Required technologies: Electronics, Steam power\n- Allows (unlocks follow-up techs): Automation, Electric mining drill, Fast inserter, Gun turret, Lamp, Logistic science pack, Logistics, Military, Radar, Repair pack, Steel processing, Stone wall\n- Effects (unlocks): Automation science pack\n- Extra1: Allows research of basic automation methods.\n\nThe **automation science pack** research allows the player to craft the automation science packs.\n\nThis technology is unlocked by manually crafting a lab.\n\n## History\nVersion 2.0.7:\n- Introduced.\n"
+    },
+    {
+      "path": "scripts/check_readme_toml.py",
+      "sha": null,
+      "content_sha256": "03efda113701658e4359dfa84edd1f7c2e166258a303f6b5c6693f15086e6144",
+      "score": 133,
+      "content": "\"\"\"Validate README TOML and all generated MCP client configs without printing secrets.\"\"\"\nimport json\nfrom pathlib import Path\nimport re\nimport subprocess\nimport sys\ntry:\n    import tomllib\nexcept ImportError:\n    import tomli as tomllib\n\nroot = Path(__file__).resolve().parents[1]\nreadme = (root/'README.md').read_text()\nblock = re.search(r'```toml\\n(.*?)```',readme,re.S).group(1)\nexample = tomllib.loads(block)['mcp_client']['servers'][0]\nassert example['name']=='factorio-control'\nassert example['args'][0].endswith('/scripts/mcp_entrypoint.py')\nfor format_name in ('openhuman','codex','json'):\n    raw = subprocess.check_output([sys.executable,str(root/'scripts/factorio.py'),'mcp-config','--format',format_name],text=True)\n    if format_name=='json':\n        servers=json.loads(raw)['mcpServers']\n    elif format_name=='codex':\n        servers=tomllib.loads(raw)['mcp_servers']\n    else:\n        servers={s['name']:s for s in tomllib.loads(raw)['mcp_client']['servers']}\n    assert set(servers)==set(json.loads((root/'mcp.json').read_text())['mcpServers'])\n    srv=servers['factorio-control']\n    if format_name=='openhuman':\n        assert Path(srv['working_dir'])==root\n    wiki=servers['factorio-wiki']\n    assert wiki['command']=='npx'\n    assert wiki['env']['CONFIG']==str(root/'mediawiki.json')\n    assert wiki['env']['MCP_TRANSPORT']=='stdio'\n    assert Path(srv['command']).is_file(), 'venv Python missing'\n    assert srv['args']==[str(root/'scripts/mcp_entrypoint.py')]\n    assert Path(srv['args'][0]).is_file()\n    assert 'password' not in raw.lower()\nprint('README TOML and generated OpenHuman/Codex/JSON MCP configs: PASS')\n"
+    },
+    {
+      "path": "docker/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "d3f319cda69d0e457aeffeab91db7be02b7e37b5ee6fc65f1c8b874ec8830b25",
+      "score": 118,
+      "content": "services:\n  factorio-mcp:\n    build:\n      context: ..\n      dockerfile: docker/Dockerfile\n    environment:\n      FACTORIO_HOST: ${FACTORIO_HOST:-host.docker.internal}\n      FACTORIO_PORT: ${FACTORIO_PORT:-27015}\n      FACTORIO_RCON_PASSWORD: ${FACTORIO_RCON_PASSWORD:?set in .env}\n    stdin_open: true\n    tty: true\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-16T02:35:46.800451+00:00"
+}
