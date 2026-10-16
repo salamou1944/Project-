@@ -41,7 +41,7 @@ def audit(path: Path) -> dict:
         }
 
     result = {
-        "path": path.relative_to(ROOT).as_posix(),
+        "path": display_path,
         "bytes": len(raw),
         "sha256": hashlib.sha256(raw).hexdigest(),
         "status": "PASS",
