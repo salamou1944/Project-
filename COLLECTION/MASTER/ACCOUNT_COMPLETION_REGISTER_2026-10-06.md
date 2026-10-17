@@ -148,3 +148,10 @@ This register is deliberately conservative: it will not claim the final total un
 - State: OWNER ENUMERATED; runtime/SDK READMEs and licenses reviewed; DEEP SWEEP OPEN.
 - Capture: `COLLECTION/ACCOUNTS/OLLAMA_ACCOUNT_WIDE_2026-10-17.md`.
 - Local Ollama is a candidate only when a reachable operator-controlled machine exists; no such host was verified. Cloud model access remains a separate cost/terms gate.
+
+
+## NVIDIA/OpenShell source refresh — 2026-10-17
+
+- Refreshed `COLLECTION/ACCOUNTS/NVIDIA_OPENSHELL_2026-10-04.md` against current README revision `e0aaa43641b41a8e7cd4a2f8ffcb345a356e754b` and Apache-2.0 LICENSE.
+- OpenShell remains a local/hosted sandbox runtime requiring operator-controlled virtualization/container infrastructure, not a free hosting provider. No reachable gateway was verified.
+- NVIDIA owner account remains OPEN / LARGE ACCOUNT; the 700+ repository frontier was not exhausted in this pass.
