@@ -5,8 +5,8 @@ Source repository: https://github.com/salamou1944/Salamou-31
 Branch: `feat/api-factory-railway-deployable-2026-10-16`
 Current runtime source commit deployed: `95ede6c3074f7fcfd23c38866e793c1b11be0f36`; latest branch head after documentation boundary update: `7651b5b8413c89c1057c8e85c835ed9a0977cc41`
 Vercel project: `salamou31-api-factory`
-Production deployment: `dpl_HT4sEx8j8mGksiAgmJmfp4ZPLAFY` — verified `READY`.
-Stable alias `https://salamou31-api-factory.vercel.app` now resolves to `dpl_HT4sEx8j8mGksiAgmJmfp4ZPLAFY`.
+Production deployment: `dpl_H5FNaB8dCv938h8Arxtm7ZzYVd3Q` — verified `READY`.
+Stable alias `https://salamou31-api-factory.vercel.app` now resolves to `dpl_H5FNaB8dCv938h8Arxtm7ZzYVd3Q`.
 
 ## Implemented
 
@@ -21,8 +21,8 @@ Stable alias `https://salamou31-api-factory.vercel.app` now resolves to `dpl_HT4
 ## Evidence and current limits
 
 - Existing API Factory tests had previously passed the compiler/generated-runtime/auth/idempotency/provider-fail-closed checks.
-- A subsequent CI run failed because `test-server.mjs` contained literal escaped newlines. The test was corrected and its storage assertions were aligned with the response shape. API Factory Test run `38988519315` passed, including `npm test`, on code commit `c3856a52d13005e754c254b71ddd100dbd8bd817`. A newer run `38988593101` is rechecking the free-provider policy documentation change and was still in progress at this refresh.
-- Vercel health/readiness had passed earlier. Live smoke run `38988593000` passed after the stable alias was assigned to the READY deployment.
+- A subsequent CI run failed because `test-server.mjs` contained literal escaped newlines. The test was corrected and its storage assertions were aligned with the response shape. API Factory Test run `38988519315` passed, including `npm test`, on code commit `c3856a52d13005e754c254b71ddd100dbd8bd817`. A newer run `38988683853` is rechecking the artifact-storage inspection fix and was still in progress at this refresh.
+- Vercel health/readiness had passed earlier. Live smoke run `38988683841` passed after the stable alias was assigned to the latest READY deployment.
 - Durable storage is implemented in code but not active: no dedicated Supabase project has been created, and no storage credentials have been added. The only discovered Supabase project belongs to EASY and is intentionally excluded.
 - No paid service was created or upgraded. Railway remains unavailable due expired trial.
 - The Vercel project is not yet proven Git-linked; deployment remains a manually initiated source-file deployment.
