@@ -311,3 +311,11 @@ No completion claim is made. Collection remains active.
 - Highest-value memory candidate: `doobidoo/mcp-memory-service` (Apache-2.0; REST + MCP + OAuth, self-hosted) for ASTRA/AI Operating Memory comparison. `doobidoo/shodh-cloudflare` is an MIT Worker/D1/Vectorize option requiring existing Cloudflare access and official quota revalidation.
 - `mcp-memory-service-rs` is not approved for commercial adoption: its README states PolyForm Noncommercial unless separately licensed.
 - Downstream owner `varun29ankuS` added for recursive account-level enumeration; account remains deep-sweep open.
+
+
+## Account-wide expansion — varun29ankuS — 2026-10-17
+- Enumerated 27 public repositories (page 2 empty) from the downstream owner exposed by SHODH sources.
+- Capture: `COLLECTION/ACCOUNTS/VARUN29ANKUS_ACCOUNT_WIDE_2026-10-17.md`.
+- Highest-value candidate: `shodh-memory` (Apache-2.0, local-first persistent memory, MCP/HTTP); benchmark against ASTRA using synthetic data and verify security/backup/restore before adoption.
+- `shodhRAG` is a distinct local RAG desktop app; `shodh-redb` is an embedded Rust DB and is not a direct Node.js storage replacement.
+- Account remains deep-sweep open; no source code or service was deployed.
