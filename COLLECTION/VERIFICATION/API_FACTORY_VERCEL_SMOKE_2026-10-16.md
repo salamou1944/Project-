@@ -39,3 +39,14 @@ Vercel reports the deployment as `READY`, with the stable alias assigned and no 
 3. Establish a supported Git-linked deployment path or keep an explicit, repeatable manual deploy procedure.
 4. Run the API Factory test suite against the current source commit; prior green test results predate these two deployment fixes.
 
+## Follow-up correction — 2026-10-17
+
+Source branch received an unmerged follow-up on 2026-10-17:
+
+- Commit `e91bca60f50f8a200286247072e3c89f4e6d346d`: `/ready` now returns HTTP 503 with `DURABLE_STORAGE_REQUIRED` unless both registry and artifact stores report durable storage.
+- Commit `97da17b5a39082826411e0803195359e8c3c3082`: integration test now asserts readiness fails closed when using local ephemeral storage.
+- Commit `b0be17e29f35583b6f9c8b831fad36b52853459e`: README documents the required server-side storage configuration.
+
+This is a source-level change only. It has **not** been deployed to the stable Vercel alias in this follow-up, and the current-source test suite has not yet been confirmed green. The older `GET /ready` success above is historical evidence for the earlier deployed revision, not proof that durable persistence exists. Render account inventory returned no existing web services, Postgres instances, or Key Value instances to reuse. No new resources were created, and the existing EASY database remains out of scope.
+
+Next gate: configure an approved dedicated durable store, run the full current-source test suite, then deploy the exact reviewed commit and repeat authenticated build/register/export/inspect tests before calling the API Factory production-ready.
