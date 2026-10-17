@@ -43,7 +43,7 @@ Therefore:
 | cporter202 | 41 | ENUMERATED / 2026-10-17 search; prior register/profile counts 34/24 |
 | trycua | 45 | ENUMERATED |
 | xihongshichaojidan8 | 5 | ENUMERATED |
-| senamakel | 89 | ENUMERATED / prior profile discrepancy recorded |
+| senamakel | 94 | ENUMERATED / 2026-10-17 search; prior profile/search counts 71/89 |
 | miqdadbadjuber | 10 | ENUMERATED / 2026-10-17 search reconciled; prior profile said 11 |
 | Cbrock84 | 57 | ENUMERATED; capture-write history must not be mistaken for completion |
 | shobhitagnihotri69 | 76 | ENUMERATED |
@@ -177,3 +177,13 @@ This register is deliberately conservative: it will not claim the final total un
 | mufeedvh | 43 | previous count 42 | Current baseline confirmed; discrepancy resolved |
 
 Each owner search page 2 returned zero. Account-level records now include the current repository lists; enumeration still does not equal deep-sweep completion.
+
+
+## Owner count reconciliation — senamakel and Cbrock84 — 2026-10-17
+
+| Owner | Current search | Historical count(s) | Record |
+|---|---:|---|---|
+| senamakel | 94 | profile 71; prior owner search 89 | `COLLECTION/ACCOUNTS/SENAMAKEL_2026-10-04.md` refreshed with current inventory |
+| Cbrock84 | 72 | prior register 57 | `COLLECTION/ACCOUNTS/CBROCK84_ACCOUNT_WIDE_2026-10-17.md` created |
+
+Page 2 returned zero for both owner-scoped searches. Enumeration does not mean deep-sweep completion.
