@@ -10,7 +10,7 @@ Central collection of repositories, documentation, tools, and reusable implement
 - Current source branch: `salamou1944/Salamou-31` / `feat/api-factory-railway-deployable-2026-10-16` (PR #45 remains unmerged).
 - Runtime smoke history and latest correction: [API Factory Vercel smoke evidence](VERIFICATION/API_FACTORY_VERCEL_SMOKE_2026-10-16.md).
 - Important: health success does not prove persistent registry/artifacts. Source now requires durable registry + artifact storage for `/ready` to return HTTP 200; ephemeral Vercel `/tmp` must return HTTP 503.
-- Deterministic API Factory test suite passed in run #413. The stricter live-smoke workflow failed run #44 for the correct reason: the stable Vercel alias still returns HTTP 200 while `degraded: true` and both persistence checks are false. This is a deployment/storage blocker, not a test assertion to weaken. Vercel environment names confirm only `/tmp` registry/artifact paths and no durable Supabase adapter variables.
+- Deterministic API Factory test suite passed in runs #413 and #414. The stricter live-smoke workflow failed run #44 for the correct reason: the stable Vercel alias still returns HTTP 200 while `degraded: true` and both persistence checks are false. This is a deployment/storage blocker, not a test assertion to weaken. Vercel environment names confirm only `/tmp` registry/artifact paths and no durable Supabase adapter variables.
 - Blocker: no reusable Render service/database/Key Value instance was found. Do not reuse EASY Supabase; no new resource or paid plan was created.
 
 ## Permanent agentic AI discovery sources
