@@ -338,3 +338,9 @@ No completion claim is made. Collection remains active.
 - Owner-scoped search enumerated 4 repositories (page 2 empty); README/LICENSE triage completed for runtime and SDKs.
 - Capture: `COLLECTION/ACCOUNTS/OLLAMA_ACCOUNT_WIDE_2026-10-17.md`.
 - Local Ollama is a no-per-request-cost inference candidate only if a reachable machine exists; no reachable Ollama host was verified. Cloud models are a separate access/billing class and are not presumed free.
+
+
+## Free-provider eligibility hardening — 2026-10-17
+- API Factory zero-cost routing now fails closed unless a provider-owned HTTPS source is explicitly attested, the hard-stop is true, access/status enums are valid, and the source audit is within 30 days. Community catalogue URLs cannot be the official source.
+- Google Gemini live probe now requires an explicit `GOOGLE_AI_STUDIO_BILLING_TIER=free` preflight before any request; this does not replace checking the actual key/project billing state.
+- Evidence and official Google billing/pricing URLs recorded in `COLLECTION/VERIFICATION/API_FACTORY_PERSISTENCE_EXPORT_2026-10-17.md`.
