@@ -110,3 +110,10 @@ Committed processor evidence from run 37795393191:
 - Agent Skills commits: [b29ea3c2356f9257db58e78ee6e6a7b49690605](https://github.com/salamou1944/agent-skills/commit/b29ea3c2356f9257db58e78ee6e6a7b49690605), [8a39b65f7e9aa929793ccf65ce6745ed0ac094ea](https://github.com/salamou1944/agent-skills/commit/8a39b65f7e9aa929793ccf65ce6745ed0ac094ea).
 - Failed persistence attempt: [run 37827674519](https://github.com/salamou1944/Project-/actions/runs/37827674519); do not count it as a committed harvest.
 - The file-delta shards plus the linked compare range are the complete change ledger for this digest window.
+
+## Public Gist page spot-check — 2026-10-17
+
+- `aw-junaid`: https://gist.github.com/aw-junaid displays 76 public gists, matching the existing capture. The visible newest items are cybersecurity/testing guides; they are reference material, not deployment resources.
+- `mufeedvh`: https://gist.github.com/mufeedvh displays 8 public gists; added the source-backed count and visible entry names to `COLLECTION/ACCOUNTS/MUFEEDVH_ACCOUNT_WIDE_2026-10-17.md`.
+- `cporter202`: https://gist.github.com/cporter202 was inaccessible through the current public-page fetch; do not infer zero gists. Existing 21-owner gist-enumeration failure count is retained because these spot-checks do not establish that either owner was part of that exact failure set.
+- GitHub connector has no dedicated Gist enumeration action available in the current tool set. Source-backed page checks are partial, not an exhaustive retry of all 21 blocked owners.
