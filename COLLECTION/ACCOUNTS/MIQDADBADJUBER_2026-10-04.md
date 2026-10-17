@@ -47,3 +47,22 @@ Captured: 2026-10-04
 - Anti-Slop: https://github.com/miqdadbadjuber/anti-slop
 - Portfolio: https://github.com/miqdadbadjuber/portfolio
 - Additional project references were taken from the author's public portfolio and remain discovery evidence until independently inspected.
+
+
+## Owner-scoped repository count reconciliation — 2026-10-17
+
+- Fresh owner-scoped GitHub search returned **10 public repositories** on page 1; page 2 returned 0.
+- Current complete inventory for this search snapshot:
+
+1. https://github.com/miqdadbadjuber/anti-slop
+2. https://github.com/miqdadbadjuber/miqdadbadjuber
+3. https://github.com/miqdadbadjuber/Workflow-CI
+4. https://github.com/miqdadbadjuber/fraud_detection_clustering
+5. https://github.com/miqdadbadjuber/leads-crm-app-demo
+6. https://github.com/miqdadbadjuber/image-classification-tensorflow
+7. https://github.com/miqdadbadjuber/portfolio
+8. https://github.com/miqdadbadjuber/sentiment-analysis-gojek
+9. https://github.com/miqdadbadjuber/fraud-detection-classification
+10. https://github.com/miqdadbadjuber/Eksperimen_SML_Miqdad
+
+- This is a dated current snapshot. Do not erase earlier profile counts or captures; where counts differ, retain the discrepancy as historical metadata and use this owner-scoped search as the current enumeration baseline.
