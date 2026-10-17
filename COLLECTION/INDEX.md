@@ -362,3 +362,10 @@ No completion claim is made. Collection remains active.
 - Strict zero-cost provider policy test passed in API Factory Test run `38989110726`; the latest live smoke run `38989207054` passed health, readiness/degraded state, capabilities/export metadata, and unauthenticated export rejection.
 - Latest deployment `dpl_4vmQMfn4hr5SahXSJxf1ruh8pbYs` is `READY` and owns the stable alias.
 - A newer API Factory test run `38989207081` is rechecking the dynamic test-date change; do not treat it as finished until status completes.
+
+
+## Account-wide expansion — unslothai — 2026-10-17
+- Enumerated 13 public repositories (page 2 empty); triaged the local inference/training runtime and related model/SDK sources.
+- Capture: `COLLECTION/ACCOUNTS/UNSLOTHAI_ACCOUNT_WIDE_2026-10-17.md`.
+- `unsloth` is Apache-2.0 and supports local OpenAI-compatible API serving, but it is not hosted compute. `unsloth-zoo` and `notebooks` are LGPL-3.0; review redistribution obligations. Local hardware is not confirmed reachable.
+- Deduplicate the `unslothai/llama.cpp` and `unslothai/gpt-oss` forks against `ggml-org/llama.cpp` and `openai/gpt-oss` upstreams.
