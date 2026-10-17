@@ -121,3 +121,11 @@ This register is deliberately conservative: it will not claim the final total un
 - Capture: `COLLECTION/ACCOUNTS/DOOBIDOO_ACCOUNT_WIDE_2026-10-17.md`.
 - Downstream owner exposed: `varun29ankuS` via `doobidoo/shodh-cloudflare` → `varun29ankuS/shodh-memory`; add to next owner sweep.
 - Commercial-license gate: do not use `doobidoo/mcp-memory-service-rs` in a revenue product without a separate commercial license (README says PolyForm Noncommercial).
+
+
+## Owner enumeration refresh — varun29ankuS — 2026-10-17
+
+- Current owner-scoped search returned 27 public repositories on page 1 and zero on page 2.
+- State: OWNER ENUMERATED; memory/RAG/database sources triaged; DEEP SWEEP OPEN.
+- Capture: `COLLECTION/ACCOUNTS/VARUN29ANKUS_ACCOUNT_WIDE_2026-10-17.md`.
+- High-value candidate: `shodh-memory` (Apache-2.0; local-first persistent memory with MCP/HTTP), triggered by the `doobidoo/shodh-cloudflare` source link.
