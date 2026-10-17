@@ -319,3 +319,9 @@ No completion claim is made. Collection remains active.
 - Highest-value candidate: `shodh-memory` (Apache-2.0, local-first persistent memory, MCP/HTTP); benchmark against ASTRA using synthetic data and verify security/backup/restore before adoption.
 - `shodhRAG` is a distinct local RAG desktop app; `shodh-redb` is an embedded Rust DB and is not a direct Node.js storage replacement.
 - Account remains deep-sweep open; no source code or service was deployed.
+
+
+## API Factory evidence refresh — 2026-10-17
+- API Factory Test run `38988302697` passed the full npm test suite on code commit `52600d2563172bd6400e87bc2a8d335b9075c24b` after fixing malformed escaped newlines in the test harness.
+- Vercel deployment `dpl_GYsFPaaL2PjQiARhnakjRDfYjkeS` is `READY`; stable alias now points to it. Live smoke run `38988360990` passed health and the readiness/degraded-state contract.
+- Latest documentation-only commit test run `38988360987` was still running at index refresh. Durable Supabase registry/artifact storage remains unconfigured; current runtime reports degraded state rather than pretending persistence exists.
