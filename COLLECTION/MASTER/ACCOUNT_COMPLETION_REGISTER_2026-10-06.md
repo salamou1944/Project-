@@ -112,3 +112,12 @@ This register is deliberately conservative: it will not claim the final total un
 - New downstream collection targets exposed: Mozilla/Readability, mitmproxy, Webrecorder/WACZ ecosystem, Internet Archive, pywb, Cloudflare, Pydantic, browser-use, Browserbase, Kernel, Anchor Browser, Browserless, ZenRows, gildas-lormeau, yt-dlp, gallery-dl, Puppeteer, Playwright.
 - These downstream owners remain OPEN targets and must be swept recursively before they can be considered complete.
 - ArchiveBox itself is closed for the current collection cycle; it may be reopened only if new public repositories or materially new source graph nodes appear.
+
+
+## Owner enumeration refresh — doobidoo — 2026-10-17
+
+- Current owner-scoped search returned 53 public repositories on page 1 and zero on page 2.
+- State: OWNER ENUMERATED; priority memory/MCP sources triaged; DEEP SWEEP OPEN.
+- Capture: `COLLECTION/ACCOUNTS/DOOBIDOO_ACCOUNT_WIDE_2026-10-17.md`.
+- Downstream owner exposed: `varun29ankuS` via `doobidoo/shodh-cloudflare` → `varun29ankuS/shodh-memory`; add to next owner sweep.
+- Commercial-license gate: do not use `doobidoo/mcp-memory-service-rs` in a revenue product without a separate commercial license (README says PolyForm Noncommercial).
