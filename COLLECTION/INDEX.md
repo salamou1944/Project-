@@ -356,3 +356,9 @@ No completion claim is made. Collection remains active.
 - Refreshed the existing `NVIDIA/OpenShell` capture against README revision `e0aaa43641b41a8e7cd4a2f8ffcb345a356e754b` and its Apache-2.0 license.
 - OpenShell is a potential isolated generated-code runtime, not a hosting service. It requires a reachable Linux/macOS/WSL2 plus Docker/Podman/virtualization environment; no such gateway was verified or deployed here.
 - Capture: `COLLECTION/ACCOUNTS/NVIDIA_OPENSHELL_2026-10-04.md` (refreshed 2026-10-17).
+
+
+## API Factory provider-policy verification refresh — 2026-10-17
+- Strict zero-cost provider policy test passed in API Factory Test run `38989110726`; the latest live smoke run `38989207054` passed health, readiness/degraded state, capabilities/export metadata, and unauthenticated export rejection.
+- Latest deployment `dpl_4vmQMfn4hr5SahXSJxf1ruh8pbYs` is `READY` and owns the stable alias.
+- A newer API Factory test run `38989207081` is rechecking the dynamic test-date change; do not treat it as finished until status completes.
