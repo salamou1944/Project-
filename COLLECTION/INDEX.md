@@ -6,6 +6,12 @@ Updated: 2026-10-17
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
 
+## API Factory deployment and persistence gate
+- Current source branch: `salamou1944/Salamou-31` / `feat/api-factory-railway-deployable-2026-10-16` (PR #45 remains unmerged).
+- Runtime smoke history and latest correction: [API Factory Vercel smoke evidence](VERIFICATION/API_FACTORY_VERCEL_SMOKE_2026-10-16.md).
+- Important: health success does not prove persistent registry/artifacts. Source now requires durable registry + artifact storage for `/ready` to return HTTP 200; ephemeral Vercel `/tmp` must return HTTP 503.
+- Blocker: no reusable Render service/database/Key Value instance was found. Do not reuse EASY Supabase; no new resource or paid plan was created.
+
 ## Permanent agentic AI discovery sources
 - Agent Zero — https://github.com/agent0ai/agent-zero
 - cporter202/openclaw-api-list — https://github.com/cporter202/openclaw-api-list
