@@ -369,3 +369,9 @@ No completion claim is made. Collection remains active.
 - Capture: `COLLECTION/ACCOUNTS/UNSLOTHAI_ACCOUNT_WIDE_2026-10-17.md`.
 - `unsloth` is Apache-2.0 and supports local OpenAI-compatible API serving, but it is not hosted compute. `unsloth-zoo` and `notebooks` are LGPL-3.0; review redistribution obligations. Local hardware is not confirmed reachable.
 - Deduplicate the `unslothai/llama.cpp` and `unslothai/gpt-oss` forks against `ggml-org/llama.cpp` and `openai/gpt-oss` upstreams.
+
+
+## Owner count reconciliation — 2026-10-17
+- Rechecked `debpalash` (35), `Wassimyounes01` (47), `cporter202` (41), `miqdadbadjuber` (10), and `mufeedvh` (43); page 2 was empty for all five searches.
+- Updated existing account records with current repository inventories and added `COLLECTION/ACCOUNTS/MUFEEDVH_ACCOUNT_WIDE_2026-10-17.md`.
+- The cporter202 baseline is now 41 (older sources said 34/24); mufeedvh is 43 (older source said 42). Historical discrepancies are retained rather than overwritten.
