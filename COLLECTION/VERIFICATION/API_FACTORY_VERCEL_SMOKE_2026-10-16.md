@@ -56,3 +56,9 @@ Additional verification and guardrail update:
 - GitHub Actions API Factory Test run `38995050385` (run #413) completed **successfully** after the readiness gate, integration-test assertion, and README changes were committed. The run included the deterministic `npm test` step and it passed.
 - Workflow commit `eb7ed406f0da6831d0893208cb0b0264a117ba4b` changes live-smoke semantics: HTTP 200 is accepted only with durable registry and artifact storage; HTTP 503 is accepted only for the explicit `DURABLE_STORAGE_REQUIRED` fail-closed contract. The prior smoke workflow accepted a degraded HTTP 200 and could therefore overstate readiness.
 - The updated live-smoke workflow has not yet been confirmed by a new completed run. The older smoke run #42 is not evidence that the new gate is deployed or that persistence is durable.
+
+Live alias comparison — 2026-10-17:
+
+- Vercel environment inventory (names only; secret values were not retrieved) shows `FACTORY_API_KEY`, `FACTORY_OUTPUT_DIR=/tmp/api-factory-generated`, `FACTORY_REGISTRY_FILE=/tmp/api-factory-registry.json`, and `NODE_ENV`. No `FACTORY_REGISTRY_URL`, `FACTORY_REGISTRY_SERVICE_ROLE_KEY`, or dedicated durable storage configuration is present.
+- Live smoke run #44 (`38995133899`) correctly **failed** at the updated readiness step: stable alias returned HTTP 200 with `ready: true`, `degraded: true`, and both persistence checks false. The updated contract rejects this misleading state. Health still returned the expected HTTP 200 response.
+- This failure is a real deployment blocker, not a unit-test failure. Do not change the smoke test to accept the old degraded-200 response. Deploy the fail-closed source only after the deployment plan accounts for the expected 503 until durable storage is configured.
