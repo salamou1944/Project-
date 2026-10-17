@@ -35,3 +35,11 @@ Stable alias `https://salamou31-api-factory.vercel.app` now resolves to `dpl_H5F
 3. Confirm latest CI green, new Vercel deployment READY, stable alias target, `/health`, `/ready`, and authenticated `/v1/factory/export/:name` behavior.
 4. Implement and test a real deployment adapter only after credentials and provider contract are available; do not fake a deploy by returning a plan.
 5. Keep PR #45 open until review; no merge was performed.
+
+## Free-provider policy hardening — 2026-10-17
+
+- API Factory zero-cost eligibility now requires `officialSourceVerified=true`, an HTTPS provider-owned source, supported access/status enums, `hardStop=true`, and a source audit date no older than 30 days. It rejects known community discovery domains as the authoritative source.
+- The COLLECTION-derived fixture entries for Gemini, Pollinations and Ollama are explicitly marked `official_source_verified=false` because their current source URLs point to OmniRoute, a community catalogue rather than the provider's own terms.
+- The Google Gemini real-probe now refuses to send a provider request unless `GOOGLE_AI_STUDIO_BILLING_TIER=free` is explicitly set, in addition to requiring `GEMINI_TOKEN`. This is a safety gate, not independent proof of the account's billing tier.
+- Official Google documentation distinguishes the free tier from paid tiers requiring linked billing; verify the actual project/key billing status before running a live request: https://ai.google.dev/gemini-api/docs/billing and https://ai.google.dev/gemini-api/docs/pricing.
+- New direct regression tests cover community-source rejection, missing official-source attestation, invalid access classes, one-time promotions, stale source dates, and malformed dates. Latest API Factory CI run `38989023976` was in progress at this update.
