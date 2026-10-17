@@ -137,3 +137,11 @@ This register is deliberately conservative: it will not claim the final total un
 - State: OWNER ENUMERATED; `awesome-freellm-apis` README and MIT license reviewed; DEEP SWEEP OPEN.
 - Capture: `COLLECTION/ACCOUNTS/OPEN_FREE_LLM_API_ACCOUNT_WIDE_2026-10-17.md`.
 - Added as a second free-provider discovery feed. Its 508+ headline counts directory entries, not distinct provider guarantees; official provider validation remains mandatory.
+
+
+## Owner enumeration refresh — ollama — 2026-10-17
+
+- Current owner-scoped search returned 4 public repositories on page 1 and zero on page 2.
+- State: OWNER ENUMERATED; runtime/SDK READMEs and licenses reviewed; DEEP SWEEP OPEN.
+- Capture: `COLLECTION/ACCOUNTS/OLLAMA_ACCOUNT_WIDE_2026-10-17.md`.
+- Local Ollama is a candidate only when a reachable operator-controlled machine exists; no such host was verified. Cloud model access remains a separate cost/terms gate.
