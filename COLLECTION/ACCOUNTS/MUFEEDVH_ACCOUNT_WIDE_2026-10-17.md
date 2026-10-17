@@ -60,3 +60,10 @@ Historical note: the 2026-09-25 deduplication audit records 43 current repositor
 - Remaining projects cover security research, PDF extraction, static sites, programming utilities and language tooling; inspect each source separately before treating the account as deep-swept.
 
 No code was imported, no service was deployed, and no secrets were accessed in this count reconciliation.
+
+
+## Public Gist page check — 2026-10-17
+
+- Source page: https://gist.github.com/mufeedvh
+- GitHub's public page displays **8 gists**. The visible entries include `min_mnm_ski_gist.py`, `claude-fixed.diff`, `claude-3.0-opus-writes-code2prompt.md`, and older workshop/security/blogging snippets.
+- These gists are not a new API hosting or free-provider source. Keep them indexed for provenance only; do not assume a gist is licensed for commercial reuse without inspecting its content/license.
