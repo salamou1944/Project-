@@ -67,7 +67,6 @@ Therefore:
 | varun29ankuS | 27 | ENUMERATED / deep sweep open |
 | ollama | 4 | ENUMERATED / deep sweep open |
 | unslothai | 13 | ENUMERATED / deep sweep open |
-| mufeedvh | 43 | ENUMERATED / 2026-10-17 rechecked |
 
 ## Newly exposed owners from the source graph
 
