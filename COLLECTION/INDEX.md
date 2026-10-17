@@ -332,3 +332,9 @@ No completion claim is made. Collection remains active.
 - Capture: `COLLECTION/ACCOUNTS/OPEN_FREE_LLM_API_ACCOUNT_WIDE_2026-10-17.md`.
 - Its directory reports 508+ model/API entries across 30 providers and distinguishes permanent free tiers from renewable credits. Treat counts as maintainer-provided directory entries, not distinct providers or guaranteed capacity.
 - Added as a second free-provider discovery source alongside `mnfst/awesome-free-llm-apis`; dedupe by canonical provider/model/base URL and require official terms before routing.
+
+
+## Account-wide expansion — ollama — 2026-10-17
+- Owner-scoped search enumerated 4 repositories (page 2 empty); README/LICENSE triage completed for runtime and SDKs.
+- Capture: `COLLECTION/ACCOUNTS/OLLAMA_ACCOUNT_WIDE_2026-10-17.md`.
+- Local Ollama is a no-per-request-cost inference candidate only if a reachable machine exists; no reachable Ollama host was verified. Cloud models are a separate access/billing class and are not presumed free.
