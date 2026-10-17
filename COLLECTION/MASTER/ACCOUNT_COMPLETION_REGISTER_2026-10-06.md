@@ -187,3 +187,11 @@ Each owner search page 2 returned zero. Account-level records now include the cu
 | Cbrock84 | 72 | prior register 57 | `COLLECTION/ACCOUNTS/CBROCK84_ACCOUNT_WIDE_2026-10-17.md` created |
 
 Page 2 returned zero for both owner-scoped searches. Enumeration does not mean deep-sweep completion.
+
+
+## Gist spot-check — 2026-10-17
+
+- `aw-junaid`: public page shows 76 gists, matching prior capture: https://gist.github.com/aw-junaid.
+- `mufeedvh`: public page shows 8 gists: https://gist.github.com/mufeedvh; recorded in the 2026-10-17 account capture.
+- `cporter202`: public page fetch was inaccessible; no zero-count inference made.
+- The existing 21 gist-enumeration failures remain open because this spot-check does not map these owners to the exact blocked set. The GitHub connector exposes no dedicated Gist action in the current tool list.
