@@ -1,7 +1,7 @@
 # COLLECTION — Research Index
 
 Status: INCREMENTAL_COLLECTION
-Updated: 2026-10-16
+Updated: 2026-10-17
 
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
@@ -344,3 +344,9 @@ No completion claim is made. Collection remains active.
 - API Factory zero-cost routing now fails closed unless a provider-owned HTTPS source is explicitly attested, the hard-stop is true, access/status enums are valid, and the source audit is within 30 days. Community catalogue URLs cannot be the official source.
 - Google Gemini live probe now requires an explicit `GOOGLE_AI_STUDIO_BILLING_TIER=free` preflight before any request; this does not replace checking the actual key/project billing state.
 - Evidence and official Google billing/pricing URLs recorded in `COLLECTION/VERIFICATION/API_FACTORY_PERSISTENCE_EXPORT_2026-10-17.md`.
+
+
+## Account frontier refresh — 2026-10-17
+- Added account-level captures for `doobidoo` (53 repositories), `varun29ankuS` (27), `open-free-llm-api` (1), and `ollama` (4); `mnfst` and `diegosouzapw` were also refreshed.
+- The owner frontier is now at least 138, not closed; enumeration does not equal deep-sweep completion.
+- Updated master register: `COLLECTION/MASTER/ACCOUNT_COMPLETION_REGISTER_2026-10-06.md`.
