@@ -66,6 +66,7 @@ Therefore:
 | doobidoo | 53 | ENUMERATED / deep sweep open |
 | varun29ankuS | 27 | ENUMERATED / deep sweep open |
 | ollama | 4 | ENUMERATED / deep sweep open |
+| unslothai | 13 | ENUMERATED / deep sweep open |
 
 ## Newly exposed owners from the source graph
 
@@ -155,3 +156,11 @@ This register is deliberately conservative: it will not claim the final total un
 - Refreshed `COLLECTION/ACCOUNTS/NVIDIA_OPENSHELL_2026-10-04.md` against current README revision `e0aaa43641b41a8e7cd4a2f8ffcb345a356e754b` and Apache-2.0 LICENSE.
 - OpenShell remains a local/hosted sandbox runtime requiring operator-controlled virtualization/container infrastructure, not a free hosting provider. No reachable gateway was verified.
 - NVIDIA owner account remains OPEN / LARGE ACCOUNT; the 700+ repository frontier was not exhausted in this pass.
+
+
+## Owner enumeration refresh — unslothai — 2026-10-17
+
+- Owner-scoped search returned 13 public repositories on page 1 and zero on page 2.
+- State: OWNER ENUMERATED; local inference/training sources triaged; DEEP SWEEP OPEN.
+- Capture: `COLLECTION/ACCOUNTS/UNSLOTHAI_ACCOUNT_WIDE_2026-10-17.md`.
+- No model was downloaded and no training/inference host was deployed. Free notebook runtime is ephemeral, not production hosting.
