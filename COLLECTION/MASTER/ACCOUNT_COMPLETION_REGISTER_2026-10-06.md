@@ -1,5 +1,5 @@
 # COLLECTION — Account Completion Register
-Updated: 2026-10-06
+Updated: 2026-10-17
 
 ## Operating rule
 
@@ -14,11 +14,11 @@ No valuable material is discarded merely because it is not immediately useful.
 
 The previous register claiming 16 accounts was incomplete and is superseded.
 
-A repository/source graph sweep of `salamou1944/Project-` found **at least 136 distinct GitHub owners/organizations** in the first 100 matching source records. This is a **frontier count, not a final global account total**; additional source records can expose more owners.
+A repository/source graph sweep of `salamou1944/Project-` found **at least 138 distinct GitHub owners/organizations** in the first 100 matching source records. This is a **frontier count, not a final global account total**; additional source records can expose more owners.
 
 Therefore:
 - **Final account total: NOT CLOSED YET**
-- **Minimum currently identified owner frontier: 136**
+- **Minimum currently identified owner frontier: at least 138**
 - The 136 includes accounts already captured plus newly discovered owners from COLLECTION source indexes.
 - Repeated repositories/daily captures do not create duplicate accounts.
 - A repository-level capture does not count as a completed account sweep.
@@ -63,12 +63,15 @@ Therefore:
 | nmap | 7 | ENUMERATED |
 | Mem0ai | 12 | ENUMERATED |
 | diegosouzapw | 71 | ENUMERATED |
+| doobidoo | 53 | ENUMERATED / deep sweep open |
+| varun29ankuS | 27 | ENUMERATED / deep sweep open |
+| ollama | 4 | ENUMERATED / deep sweep open |
 
 ## Newly exposed owners from the source graph
 
 The following owners were exposed by repository/source records and are now **account-level collection targets**, even when only one repository was originally supplied or cited:
 
-ArchiveBox, BerriAI, DIYgod, DietrichGebert, Dokploy, FreshRSS, GlitchTip, HelixDB, Infisical, KDE, KazKozDev, MariaDB, PostHog, Preloop, Reality-Shifting-Tech, RocketChat, SigNoz, SolvoHQ, Somi-Project, achref-soua, activepieces, actualbudget, agent0ai, airbytehq, alexbevi, apache, awesome-ai-tools, awesome-selfhosted, bitwarden, borgbackup, browser-use, browserable, bytedance, caprover, caramaschiHG, cloudflare, comfyanonymous, deuxfleurs-org, discourse, dlt-hub, docker-mailserver, docling-project, documenso, docusealco, dokku, duckdb, element-hq, faucetdb, firefly-iii, flawiddsouza, formbricks, frappe, gepa-ai, gitleaks, gitroomhq, harry0703, hecatehq, hoarder-app, huggingface, imranraufbm, inovector, kaushikb11, kopia, mail-in-a-box, mailcow, matomo-org, mattpocock, maybe-finance, meilisearch, meltano, microsoft, milvus-io, mountain-loop, mudler, n8n-io, nanobrowser, obra, ocrmypdf, off-grid-ai, ohmyform, ollama, open-saas-directory, openai, openbao, openclaw, openensemble, opensearch-project, pablostanley, plausible, postalserver, postgres, postmill-ai, pydantic, relayroom, restic, rezmoss, ruvnet, seaweedfs, sgl-project, sqlite, stanfordnlp, steel-dev, superloglabs, temporalio, thekaveh, twentyhq, typesense, umami-software, unslothai, usebruno, usewrit, weaviate, windmill-labs, zulip.
+ArchiveBox, BerriAI, DIYgod, DietrichGebert, Dokploy, FreshRSS, GlitchTip, HelixDB, Infisical, KDE, KazKozDev, MariaDB, PostHog, Preloop, Reality-Shifting-Tech, RocketChat, SigNoz, SolvoHQ, Somi-Project, achref-soua, activepieces, actualbudget, agent0ai, airbytehq, alexbevi, apache, awesome-ai-tools, awesome-selfhosted, bitwarden, borgbackup, browser-use, browserable, bytedance, caprover, caramaschiHG, cloudflare, comfyanonymous, deuxfleurs-org, discourse, dlt-hub, docker-mailserver, docling-project, documenso, docusealco, dokku, duckdb, doobidoo, element-hq, faucetdb, firefly-iii, flawiddsouza, formbricks, frappe, gepa-ai, gitleaks, gitroomhq, harry0703, hecatehq, hoarder-app, huggingface, imranraufbm, inovector, kaushikb11, kopia, mail-in-a-box, mailcow, matomo-org, mattpocock, maybe-finance, meilisearch, meltano, microsoft, milvus-io, mountain-loop, mudler, n8n-io, nanobrowser, obra, ocrmypdf, off-grid-ai, ohmyform, ollama, open-saas-directory, openai, openbao, openclaw, openensemble, opensearch-project, pablostanley, plausible, postalserver, postgres, postmill-ai, pydantic, relayroom, restic, rezmoss, ruvnet, seaweedfs, sgl-project, sqlite, stanfordnlp, steel-dev, superloglabs, temporalio, thekaveh, twentyhq, typesense, umami-software, unslothai, usebruno, usewrit, varun29ankuS, weaviate, windmill-labs, zulip.
 
 ## Important normalization rules
 
