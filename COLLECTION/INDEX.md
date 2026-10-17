@@ -325,3 +325,10 @@ No completion claim is made. Collection remains active.
 - API Factory Test run `38988302697` passed the full npm test suite on code commit `52600d2563172bd6400e87bc2a8d335b9075c24b` after fixing malformed escaped newlines in the test harness.
 - Vercel deployment `dpl_GYsFPaaL2PjQiARhnakjRDfYjkeS` is `READY`; stable alias now points to it. Live smoke run `38988360990` passed health and the readiness/degraded-state contract.
 - Latest documentation-only commit test run `38988360987` was still running at index refresh. Durable Supabase registry/artifact storage remains unconfigured; current runtime reports degraded state rather than pretending persistence exists.
+
+
+## Account-wide expansion — open-free-llm-api — 2026-10-17
+- Owner search returned one public repository; README and MIT license reviewed.
+- Capture: `COLLECTION/ACCOUNTS/OPEN_FREE_LLM_API_ACCOUNT_WIDE_2026-10-17.md`.
+- Its directory reports 508+ model/API entries across 30 providers and distinguishes permanent free tiers from renewable credits. Treat counts as maintainer-provided directory entries, not distinct providers or guaranteed capacity.
+- Added as a second free-provider discovery source alongside `mnfst/awesome-free-llm-apis`; dedupe by canonical provider/model/base URL and require official terms before routing.
