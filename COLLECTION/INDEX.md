@@ -380,3 +380,8 @@ No completion claim is made. Collection remains active.
 ## Owner count refresh — senamakel and Cbrock84 — 2026-10-17
 - `senamakel`: current owner-scoped search 94 (historical profile 71, previous search 89); account record refreshed with current inventory.
 - `Cbrock84`: current owner-scoped search 72 (prior register 57); new account-wide inventory record created. Deep sweep remains open.
+
+
+## Gist coverage spot-check — 2026-10-17
+- Confirmed `aw-junaid` 76 public gists and `mufeedvh` 8 public gists via their public Gist pages; `cporter202` page fetch remained inaccessible.
+- The historical 21-owner Gist enumeration failure count remains open; this spot-check does not falsely mark those failures resolved. Details are in `COLLECTION/MASTER/DAILY-DIGEST-2026-10-09.md` and the account completion register.
