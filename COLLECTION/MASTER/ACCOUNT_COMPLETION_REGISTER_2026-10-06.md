@@ -129,3 +129,11 @@ This register is deliberately conservative: it will not claim the final total un
 - State: OWNER ENUMERATED; memory/RAG/database sources triaged; DEEP SWEEP OPEN.
 - Capture: `COLLECTION/ACCOUNTS/VARUN29ANKUS_ACCOUNT_WIDE_2026-10-17.md`.
 - High-value candidate: `shodh-memory` (Apache-2.0; local-first persistent memory with MCP/HTTP), triggered by the `doobidoo/shodh-cloudflare` source link.
+
+
+## Owner enumeration refresh — open-free-llm-api — 2026-10-17
+
+- Current owner-scoped search returned one public repository and zero results on page 2.
+- State: OWNER ENUMERATED; `awesome-freellm-apis` README and MIT license reviewed; DEEP SWEEP OPEN.
+- Capture: `COLLECTION/ACCOUNTS/OPEN_FREE_LLM_API_ACCOUNT_WIDE_2026-10-17.md`.
+- Added as a second free-provider discovery feed. Its 508+ headline counts directory entries, not distinct provider guarantees; official provider validation remains mandatory.
