@@ -50,3 +50,9 @@ Source branch received an unmerged follow-up on 2026-10-17:
 This is a source-level change only. It has **not** been deployed to the stable Vercel alias in this follow-up, and the current-source test suite has not yet been confirmed green. The older `GET /ready` success above is historical evidence for the earlier deployed revision, not proof that durable persistence exists. Render account inventory returned no existing web services, Postgres instances, or Key Value instances to reuse. No new resources were created, and the existing EASY database remains out of scope.
 
 Next gate: configure an approved dedicated durable store, run the full current-source test suite, then deploy the exact reviewed commit and repeat authenticated build/register/export/inspect tests before calling the API Factory production-ready.
+
+Additional verification and guardrail update:
+
+- GitHub Actions API Factory Test run `38995050385` (run #413) completed **successfully** after the readiness gate, integration-test assertion, and README changes were committed. The run included the deterministic `npm test` step and it passed.
+- Workflow commit `eb7ed406f0da6831d0893208cb0b0264a117ba4b` changes live-smoke semantics: HTTP 200 is accepted only with durable registry and artifact storage; HTTP 503 is accepted only for the explicit `DURABLE_STORAGE_REQUIRED` fail-closed contract. The prior smoke workflow accepted a degraded HTTP 200 and could therefore overstate readiness.
+- The updated live-smoke workflow has not yet been confirmed by a new completed run. The older smoke run #42 is not evidence that the new gate is deployed or that persistence is durable.
