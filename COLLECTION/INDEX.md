@@ -297,3 +297,9 @@ No completion claim is made. Collection remains active.
 - Account record: `COLLECTION/ACCOUNTS/DIEGOSOUZAPW_ACCOUNT_WIDE_2026-10-16.md`.
 - API Factory priorities: keep OmniRoute as provider-intelligence reference only; evaluate OpenSandbox for isolated generated-code execution; compare selected `awesome-omni-skills` against the existing agent-skills repository before reuse.
 - Reject `openclaw-billing-proxy` as an integration candidate because it manipulates billing identifiers/OAuth tokens; treat `ag-local-bridge` as high-risk pending security/terms review. Empty repos remain unverified.
+
+
+## API Factory persistence/export hardening — 2026-10-17
+- Added a Supabase REST registry adapter and private Supabase Storage artifact adapter, with a dedicated migration and fail-closed tests. Durable mode remains inactive until a separate Salamou-31 Supabase project is approved/configured; do not reuse EASY's project.
+- Added authenticated `GET /v1/factory/export/:name` to return a generated API bundle and explicit degraded storage checks in `/ready`.
+- Evidence record: `COLLECTION/VERIFICATION/API_FACTORY_PERSISTENCE_EXPORT_2026-10-17.md`. Latest CI and deployment alias must be rechecked before marking this gate complete.
