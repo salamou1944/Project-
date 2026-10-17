@@ -30,21 +30,21 @@ Therefore:
 | Panniantong | 38 | ENUMERATED |
 | OpenCut-app | 4 | ENUMERATED |
 | Pablostanley | 37 | ENUMERATED |
-| debpalash | 35 | ENUMERATED / prior capture said 37; reconcile |
+| debpalash | 35 | ENUMERATED / 2026-10-17 search reconciled; prior capture said 37 |
 | h-guo18 | 20 | ENUMERATED |
 | ARPAHLS | 19 | ENUMERATED |
 | zeenie-ai | 6 | ENUMERATED |
 | rohitg00 | 320 | ENUMERATED |
-| Wassimyounes01 | 47 | ENUMERATED / reconcile prior profile count |
+| Wassimyounes01 | 47 | ENUMERATED / 2026-10-17 search confirms; prior profile reported 21 |
 | charlie947 | 20 | ENUMERATED |
 | dyad-sh | 8 | ACCOUNT CAPTURED |
 | Hikhakk | 6 | OWNER ENUMERATED; primary capture exists |
 | sherlock-project | 5 | ENUMERATED |
-| cporter202 | 34 | ENUMERATED / prior capture said 24; reconcile |
+| cporter202 | 41 | ENUMERATED / 2026-10-17 search; prior register/profile counts 34/24 |
 | trycua | 45 | ENUMERATED |
 | xihongshichaojidan8 | 5 | ENUMERATED |
 | senamakel | 89 | ENUMERATED / prior profile discrepancy recorded |
-| miqdadbadjuber | 10 | ENUMERATED / prior capture said 11; reconcile |
+| miqdadbadjuber | 10 | ENUMERATED / 2026-10-17 search reconciled; prior profile said 11 |
 | Cbrock84 | 57 | ENUMERATED; capture-write history must not be mistaken for completion |
 | shobhitagnihotri69 | 76 | ENUMERATED |
 | proffesor-for-testing | 25 | ENUMERATED |
@@ -58,7 +58,7 @@ Therefore:
 | open-free-llm-api | 1 | ENUMERATED |
 | amardeeplakshkar | 66 | ENUMERATED |
 | aw-junaid | 33 repos + 76 public gists previously captured | ENUMERATED / gists included |
-| mufeedvh | 43 current search result; prior capture said 42 | RECONCILE |
+| mufeedvh | 43 | ENUMERATED / 2026-10-17 search confirms; prior count 42 reconciled |
 | mnfst | 25 | ENUMERATED |
 | nmap | 7 | ENUMERATED |
 | Mem0ai | 12 | ENUMERATED |
@@ -67,6 +67,7 @@ Therefore:
 | varun29ankuS | 27 | ENUMERATED / deep sweep open |
 | ollama | 4 | ENUMERATED / deep sweep open |
 | unslothai | 13 | ENUMERATED / deep sweep open |
+| mufeedvh | 43 | ENUMERATED / 2026-10-17 rechecked |
 
 ## Newly exposed owners from the source graph
 
@@ -164,3 +165,16 @@ This register is deliberately conservative: it will not claim the final total un
 - State: OWNER ENUMERATED; local inference/training sources triaged; DEEP SWEEP OPEN.
 - Capture: `COLLECTION/ACCOUNTS/UNSLOTHAI_ACCOUNT_WIDE_2026-10-17.md`.
 - No model was downloaded and no training/inference host was deployed. Free notebook runtime is ephemeral, not production hosting.
+
+
+## Owner count reconciliation batch — 2026-10-17
+
+| Owner | Current search | Prior discrepancy | Status |
+|---|---:|---|---|
+| debpalash | 35 | prior account capture claimed 37 | Current baseline recorded; historical count preserved |
+| Wassimyounes01 | 47 | profile showed 21 | Current baseline confirmed; historical profile count preserved |
+| cporter202 | 41 | prior register said 34; account capture profile said 24 | Current baseline updated; prior counts preserved |
+| miqdadbadjuber | 10 | profile showed 11 | Current baseline recorded; historical count preserved |
+| mufeedvh | 43 | previous count 42 | Current baseline confirmed; discrepancy resolved |
+
+Each owner search page 2 returned zero. Account-level records now include the current repository lists; enumeration still does not equal deep-sweep completion.
