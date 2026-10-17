@@ -350,3 +350,9 @@ No completion claim is made. Collection remains active.
 - Added account-level captures for `doobidoo` (53 repositories), `varun29ankuS` (27), `open-free-llm-api` (1), and `ollama` (4); `mnfst` and `diegosouzapw` were also refreshed.
 - The owner frontier is now at least 138, not closed; enumeration does not equal deep-sweep completion.
 - Updated master register: `COLLECTION/MASTER/ACCOUNT_COMPLETION_REGISTER_2026-10-06.md`.
+
+
+## OpenShell source refresh — 2026-10-17
+- Refreshed the existing `NVIDIA/OpenShell` capture against README revision `e0aaa43641b41a8e7cd4a2f8ffcb345a356e754b` and its Apache-2.0 license.
+- OpenShell is a potential isolated generated-code runtime, not a hosting service. It requires a reachable Linux/macOS/WSL2 plus Docker/Podman/virtualization environment; no such gateway was verified or deployed here.
+- Capture: `COLLECTION/ACCOUNTS/NVIDIA_OPENSHELL_2026-10-04.md` (refreshed 2026-10-17).
