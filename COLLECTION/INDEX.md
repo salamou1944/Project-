@@ -303,3 +303,11 @@ No completion claim is made. Collection remains active.
 - Added a Supabase REST registry adapter and private Supabase Storage artifact adapter, with a dedicated migration and fail-closed tests. Durable mode remains inactive until a separate Salamou-31 Supabase project is approved/configured; do not reuse EASY's project.
 - Added authenticated `GET /v1/factory/export/:name` to return a generated API bundle and explicit degraded storage checks in `/ready`.
 - Evidence record: `COLLECTION/VERIFICATION/API_FACTORY_PERSISTENCE_EXPORT_2026-10-17.md`. Latest CI and deployment alias must be rechecked before marking this gate complete.
+
+
+## Account-wide expansion — doobidoo — 2026-10-17
+- Owner-scoped search enumerated 53 public repositories (page 2 empty); priority README/manifest/license triage completed for memory/MCP sources.
+- Capture: `COLLECTION/ACCOUNTS/DOOBIDOO_ACCOUNT_WIDE_2026-10-17.md`.
+- Highest-value memory candidate: `doobidoo/mcp-memory-service` (Apache-2.0; REST + MCP + OAuth, self-hosted) for ASTRA/AI Operating Memory comparison. `doobidoo/shodh-cloudflare` is an MIT Worker/D1/Vectorize option requiring existing Cloudflare access and official quota revalidation.
+- `mcp-memory-service-rs` is not approved for commercial adoption: its README states PolyForm Noncommercial unless separately licensed.
+- Downstream owner `varun29ankuS` added for recursive account-level enumeration; account remains deep-sweep open.
