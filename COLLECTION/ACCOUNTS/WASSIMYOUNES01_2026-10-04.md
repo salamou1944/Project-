@@ -140,3 +140,59 @@ The Genesis family is unusually repetitive by design. Do not copy all components
 
 ### Safety / provenance boundary
 qwen38-uncensored is treated as local-model infrastructure, not as a blanket recommendation to remove safety controls. Public-facing use retains application-level safety, authorization and abuse controls.
+
+
+## Owner-scoped repository count reconciliation — 2026-10-17
+
+- Fresh owner-scoped GitHub search returned **47 public repositories** on page 1; page 2 returned 0.
+- Current complete inventory for this search snapshot:
+
+1. https://github.com/Wassimyounes01/qwen38-uncensored
+2. https://github.com/Wassimyounes01/cortex
+3. https://github.com/Wassimyounes01/event-driven-autonomous-loop
+4. https://github.com/Wassimyounes01/ai-video-studio-kit
+5. https://github.com/Wassimyounes01/apify-replacement
+6. https://github.com/Wassimyounes01/agent-os
+7. https://github.com/Wassimyounes01/sentience-loop
+8. https://github.com/Wassimyounes01/telegram-command-bridge
+9. https://github.com/Wassimyounes01/flywheel
+10. https://github.com/Wassimyounes01/genesis-task-context
+11. https://github.com/Wassimyounes01/genesis-repo-atlas
+12. https://github.com/Wassimyounes01/dual-uncensored
+13. https://github.com/Wassimyounes01/genesis-prompt-kit
+14. https://github.com/Wassimyounes01/genesis-evidence-collector
+15. https://github.com/Wassimyounes01/genesis-change-impact
+16. https://github.com/Wassimyounes01/genesis-verified-reuse
+17. https://github.com/Wassimyounes01/genesis-regression-memory
+18. https://github.com/Wassimyounes01/genesis-batch-drafts
+19. https://github.com/Wassimyounes01/genesis-constraint-compiler
+20. https://github.com/Wassimyounes01/genesis-context-graph
+21. https://github.com/Wassimyounes01/genesis-worker-router
+22. https://github.com/Wassimyounes01/genesis-charter-lab
+23. https://github.com/Wassimyounes01/genesis-night-research
+24. https://github.com/Wassimyounes01/whatsapp-command-channel
+25. https://github.com/Wassimyounes01/genesis-task-adaptation
+26. https://github.com/Wassimyounes01/cursor-uncensored
+27. https://github.com/Wassimyounes01/genesis-task-ledger
+28. https://github.com/Wassimyounes01/genesis-source-packets
+29. https://github.com/Wassimyounes01/genesis-suite
+30. https://github.com/Wassimyounes01/genesis-routing-metrics
+31. https://github.com/Wassimyounes01/genesis-paired-experiments
+32. https://github.com/Wassimyounes01/genesis-release-integrity
+33. https://github.com/Wassimyounes01/genesis-review-gate
+34. https://github.com/Wassimyounes01/prompt-engineer
+35. https://github.com/Wassimyounes01/genesis-plan-graph
+36. https://github.com/Wassimyounes01/output-speed
+37. https://github.com/Wassimyounes01/context-budget
+38. https://github.com/Wassimyounes01/agent-pipeline
+39. https://github.com/Wassimyounes01/memory
+40. https://github.com/Wassimyounes01/fusion
+41. https://github.com/Wassimyounes01/bugbot
+42. https://github.com/Wassimyounes01/autonomous-loop
+43. https://github.com/Wassimyounes01/llm-split
+44. https://github.com/Wassimyounes01/myriad
+45. https://github.com/Wassimyounes01/megacycle
+46. https://github.com/Wassimyounes01/agent-patterns-cookbook
+47. https://github.com/Wassimyounes01/agent-workbench
+
+- This is a dated current snapshot. Do not erase earlier profile counts or captures; where counts differ, retain the discrepancy as historical metadata and use this owner-scoped search as the current enumeration baseline.
