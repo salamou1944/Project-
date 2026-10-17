@@ -375,3 +375,8 @@ No completion claim is made. Collection remains active.
 - Rechecked `debpalash` (35), `Wassimyounes01` (47), `cporter202` (41), `miqdadbadjuber` (10), and `mufeedvh` (43); page 2 was empty for all five searches.
 - Updated existing account records with current repository inventories and added `COLLECTION/ACCOUNTS/MUFEEDVH_ACCOUNT_WIDE_2026-10-17.md`.
 - The cporter202 baseline is now 41 (older sources said 34/24); mufeedvh is 43 (older source said 42). Historical discrepancies are retained rather than overwritten.
+
+
+## Owner count refresh — senamakel and Cbrock84 — 2026-10-17
+- `senamakel`: current owner-scoped search 94 (historical profile 71, previous search 89); account record refreshed with current inventory.
+- `Cbrock84`: current owner-scoped search 72 (prior register 57); new account-wide inventory record created. Deep sweep remains open.
