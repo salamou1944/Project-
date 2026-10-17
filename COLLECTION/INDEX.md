@@ -7,6 +7,8 @@ Updated: 2026-10-17
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
 
 ## API Factory deployment and persistence gate
+- Latest operator recheck: [API Factory operator recheck — 2026-10-17](VERIFICATION/API_FACTORY_OPERATOR_RECHECK_2026-10-17.md). Confirms current smoke run #44 correctly rejects degraded HTTP 200, the latest listed Vercel deployment source differs from the PR head, and Vercel scope access is blocked by 403; no EASY resources or paid services were touched.
+
 - Current source branch: `salamou1944/Salamou-31` / `feat/api-factory-railway-deployable-2026-10-16` (PR #45 remains unmerged).
 - Runtime smoke history and latest correction: [API Factory Vercel smoke evidence](VERIFICATION/API_FACTORY_VERCEL_SMOKE_2026-10-16.md).
 - Important: health success does not prove persistent registry/artifacts. Source now requires durable registry + artifact storage for `/ready` to return HTTP 200; ephemeral Vercel `/tmp` must return HTTP 503.
