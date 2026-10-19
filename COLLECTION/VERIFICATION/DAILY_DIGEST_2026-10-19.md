@@ -132,3 +132,9 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - The older unbounded run `39180853004` was cancelled before commit at 00:38:02Z.
 - The bounded metadata-complete run `39181614341` started at 00:38:04Z on commit `76f9944042481a0a8d1e4cb332a46326e078f288`. It will preserve all discovered repo metadata and process source packets in bounded priority batches.
 - Parser/bounded-code test workflow `39181614379` completed success. Full account extraction and JSON audit remain in progress; no repo counts or audit hashes are claimed yet.
+
+
+## Connected revenue app inventory — Upwork and Apollo
+- Preserved [UPWORK_REVENUE_READINESS_2026-10-19.md](UPWORK_REVENUE_READINESS_2026-10-19.md). Upwork profile is private and incomplete, with no portfolio, no history, no proposals, no contracts, no invitations and zero Connects. The best currently inspected AI-automation listing requires 14 Connects and has zero client hires; no proposal was attempted.
+- One previously saved CRM/WhatsApp automation job lists $15–$38/hour, but its live status could not be confirmed; no repeated lookup.
+- Apollo has 80 lead credits and 5,000 AI credits remaining with zero used; direct-dial balance is inconsistent across endpoints and web-search-record usage is anomalous. No Apollo search/enrichment action was run and no credits were spent.
