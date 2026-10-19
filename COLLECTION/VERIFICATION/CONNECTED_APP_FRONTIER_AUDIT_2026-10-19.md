@@ -157,3 +157,58 @@ The following addresses were observed in failed delivery threads and should not 
 - Automatic installation now requires `promotion_action=INSTALL_APPROVED`, `install_approval=APPROVED`, `integration_gate=PASS`, and `security_gate=PASS`. The installer no longer auto-selects deep-extraction manifest rows or legacy source notes.
 - With no approved queue candidates, the install outcome is explicitly `NO_APPROVED_CANDIDATES`; this is a safe no-op, not installation success.
 - Existing Hyperswitch source remains preserved and not runtime-promoted: [legacy install boundary](LEGACY_INSTALLED_ASSETS_2026-10-19.md).
+
+
+## Connected deployment, workspace, and owned-repository frontier — read-only sweep (2026-10-19)
+
+### GitHub account and owned repositories
+- The GitHub app exposes one installed account: `salamou1944`. The authenticated account lists **10 repositories**; page offset 10 is empty. This is a separate owned-repository frontier from the 199 external owners in the Collection sweep.
+- Repositories inspected at root: `Salamou-31`, `agent-skills`, `Easy-`, `AI_operating_memory`, `Astra-`, `Astra`, `Files-`, `Project-`, `Pastel-`, and private `local-bridge.`.
+- High-value preserved roles:
+  - `agent-skills`: canonical Skills plus EASY runtime and MONY/Revenue Engine; current README is present.
+  - `Salamou-31`: API Factory and its local-provider/zero-cost policy; root also contains two PDF artifacts (one named `*_pdf_temp`). Preserve them, but review whether they belong in a code repository before any deletion/move.
+  - `AI_operating_memory`: canonical state/evidence rules and MONY state; keep as the canonical memory layer, not a duplicate business repository.
+  - `Astra`: research-only quant lab with README evidence claiming 49/49 local regression and real-data inputs, but candidate gates are FAIL and live-money execution is disabled. Treat the readme claims as repository-recorded evidence, not independently rerun proof in this audit.
+  - `Astra-`: separate executable bot boundary with live trading OFF by default, approval gates and no withdrawal capability; do not merge into the research repo.
+  - `Easy-`: project boundary, API registry/lab, app, services and tests; keep separate from runtime evidence in Railway.
+  - `Files-`: minimal root README and a `collection/` directory; inspect the subtree before judging it empty.
+  - `Pastel-`: static QR concierge with a documented truth policy; public Pages deployment and real-phone QR migration remain explicitly gated.
+  - `local-bridge.`: private Windows self-hosted runner control point. README limits initial workflow to read-only diagnostics; no runner dispatch was attempted.
+  - `Project-`: collection and monetization control plane; current repository size reported by GitHub is about 317,504 KB, so JSON/audit and packet growth must be bounded.
+- Own-repo extraction is not automatically included in the 199-owner external sweep. Continue treating these ten repositories as a separate first-party source frontier.
+
+### Railway — deployment truth
+- Workspace `salamou1944's Projects` contains two projects: `EASY Runtime Production` and `EASY Developer Platform`.
+- Read-only production status shows **all five listed services have FAILED latest deployments**, with no pending staged work: `easy-runtime`, `easy-runtime-current`, `salamou31-api-factory`, `easy-platform-runtime-v3`, and `soat-production-runtime`. Some older deployments are removed/skipped; this is not current runtime proof.
+- API Factory Railway source is `salamou1944/Salamou-31`, branch `feat/api-factory-railway-deployable-2026-10-16`, root `AI-API-HUB/api-factory`; its current Railway config lists no service variables. The latest failure is `BUILD_IMAGE`: Railpack failed to prepare the build, with no diagnostic attached. Fix the build/source configuration before redeploying; do not add secrets or weaken fail-closed auth.
+- EASY runtime has a variable-name list including both `EASY_OPENAI_API_KEY` and misspelled `ESAY_OPENAI_API_KEY`; values were not read. Treat this as configuration drift to review, not permission to print or expose secrets.
+- Railway service status and deployment IDs were checked read-only; no deploy/redeploy, environment mutation or secret access occurred.
+
+### Supabase
+- One project `easy-platform-db` is `ACTIVE_HEALTHY` in `eu-west-1`, Postgres 17.6.1.166. Its API URL is `https://rdcodzowehzmwdxhztxe.supabase.co`.
+- This is the existing EASY database. Do not reuse it for API Factory/MONY storage; durable separate storage and cross-invocation persistence remain open.
+
+### Vercel
+- One team-scoped project was found: `salamou31-api-factory`. Project metadata says `live: false`, but the latest production-target deployment is `READY` at [salamou31-api-factory.vercel.app](https://salamou31-api-factory.vercel.app/).
+- That READY deployment was built from feature branch `feat/api-factory-railway-deployable-2026-10-16`, commit `35b462ff3137605f00c98383a8598b49610cd963`, not current main. Several newer staging/preview deployments have ERROR state. This is a deployable artifact candidate, not proof of current production API health or correct environment variables.
+- No environment variable values were requested or printed.
+
+### Other connected platforms
+- **GitLab:** one private project `salamou1944-group/Salamou1944-project` is visible, but its metadata says `empty_repo: true`; repository-tree lookups return 404. No code asset to extract yet.
+- **Replit:** three editable apps were listed, all auto-generated titles and last updated between 2026-09-11 and 2026-10-02. Search by `EASY` and `API Factory` returned no matching apps; these names cannot currently be tied to the known prototypes.
+- **Notion:** recent pages and the combined search for Collection/API Factory/EASY/MONY returned no results. No Notion source was added.
+- **Canva:** connected design search returned no designs.
+- **Wix:** no sites returned.
+- **Render:** workspace list returned `Salamou's workspace`; service listing requires a workspace ID selected by the user under this connector's safety contract. No workspace was selected and no service list was read.
+- **HubSpot:** previous read-only audit shows two sample contacts, one HubSpot company seed record and zero deals; not a real evidenced customer pipeline.
+- **AgentMail:** previous recheck found only delivery failures/bounces or older sent/bounced threads; no fresh outbound message was sent. Suppressed bounced recipients remain suppressed.
+- **Apollo:** 80 lead credits and 5,000 AI credits reported unused; direct-dial counters disagree, so do not treat that discrepancy as usable credit. No enrichment/search spend.
+- **Upwork:** zero Connects, private/incomplete profile, no proposal/contracts/invitations; no paid application attempted.
+
+### Prioritized fixes from this sweep
+1. Identify and repair the single invalid JSON path in `CURRENT_MAIN_JSON_AUDIT.json`; keep the report and do not suppress the parse failure.
+2. Stop using Railway deployment status as a proxy for successful runtime; rebuild the API Factory image/source setup, then run an authenticated health/smoke against the intended branch and evidence store.
+3. Reconcile Vercel's READY production-target artifact on a feature branch with project `live: false` and failed newer previews; validate route behavior before claiming production.
+4. Review the misspelled EASY environment-variable name without exposing any value.
+5. Keep the 10 first-party GitHub repos as a separate extraction lane from the 199 external owners; inspect the useful `Files-/collection`, `AI_operating_memory`, `Astra` and `Astra-` evidence files before promotion.
+6. Keep MONY paid-boundary blocked and do not spend Upwork Connects or Apollo credits until there is a validated zero-cost path to a real paid outcome.
