@@ -13,6 +13,8 @@ import datetime, hashlib, json, os, re, time, urllib.error, urllib.parse, urllib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from source_content_safety import is_sensitive_path, sanitize_source_content
+
 TOKEN = os.getenv("GH_TOKEN", "")
 API = "https://api.github.com"
 RAW = "https://raw.githubusercontent.com"
@@ -437,7 +439,7 @@ def score(path):
         (("readme",),100),(("/docs/","docs/"),70),((".github/workflows/",),95),
         (("dockerfile","compose","pyproject.toml","package.json","go.mod","cargo.toml","requirements.txt","makefile"),85),
         (("install","setup","bootstrap","action"),82),
-        (("auth","security","secret","credential","permission","rbac"),80),
+        (("auth","security","permission","rbac"),80),
         (("api","sdk","mcp","agent","browser","crawl","search","llm","model"),75),
         (("deploy","railway","vercel","terraform","kubernetes","helm","ansible","ci","cd"),72),
         (("test","spec","fixture","mock"),60),
@@ -462,11 +464,16 @@ def raw_fetch(repo, path, revision):
         if len(raw) > MAX_BYTES_PER_FILE:
             raw = raw[:MAX_BYTES_PER_FILE]
         text = raw.decode("utf-8", "replace")
-        return {
+        safe_text, redaction_reasons = sanitize_source_content(path, text)
+        result = {
             "path": path, "sha": None,
             "content_sha256": hashlib.sha256(raw).hexdigest(),
-            "score": score(path), "content": text
+            "score": score(path), "content": safe_text
         }
+        if redaction_reasons:
+            result["redaction_applied"] = True
+            result["redaction_reasons"] = redaction_reasons
+        return result
     except Exception as ex:
         return {"path": path, "sha": None, "score": score(path), "error": str(ex)}
 
@@ -496,10 +503,15 @@ def extract_repo(item):
     branch_data = api(f"/repos/{repo}/branches/{urllib.parse.quote(branch, safe='')}")
     revision = branch_data.get("commit", {}).get("sha")
     tree = api(f"/repos/{repo}/git/trees/{revision}?recursive=1")
+    sensitive_candidates = [
+        e for e in tree.get("tree", [])
+        if e.get("type") == "blob" and is_sensitive_path(e.get("path", ""))
+    ]
     candidates = [
         e for e in tree.get("tree", [])
         if e.get("type") == "blob"
         and e.get("size", 0) <= MAX_BYTES_PER_FILE
+        and not is_sensitive_path(e.get("path", ""))
         and score(e.get("path", "")) > 0
     ]
     candidates.sort(key=lambda e: (score(e["path"]), -e.get("size", 0)), reverse=True)
@@ -541,6 +553,12 @@ def extract_repo(item):
             "raw_fetch": True, "incremental": True
         },
         "files": bounded,
+        "sensitive_files_skipped_count": len(sensitive_candidates),
+        "sensitive_files_skipped": [
+            {"path": e.get("path"), "sha": e.get("sha"), "size": e.get("size", 0), "reason": "sensitive_path"}
+            for e in sensitive_candidates[:200]
+        ],
+        "sensitive_files_skipped_truncated": max(0, len(sensitive_candidates) - 200),
         "fetch_errors": fetch_errors,
         "fetch_error_count": len(fetch_errors),
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -557,14 +575,19 @@ def extract_gist(gid, owner):
         if len(files) >= MAX_FILES:
             break
         raw = item.get("content", "")[:MAX_BYTES_PER_FILE]
-        size = len(raw.encode())
+        safe_text, redaction_reasons = sanitize_source_content(name, raw)
+        size = len(safe_text.encode())
         if total + size > MAX_BYTES_PER_SOURCE:
             continue
-        files.append({
+        record = {
             "path": name, "sha": item.get("raw_url", ""),
             "content_sha256": hashlib.sha256(raw.encode()).hexdigest(),
-            "score": score(name), "content": raw
-        })
+            "score": score(name), "content": safe_text
+        }
+        if redaction_reasons:
+            record["redaction_applied"] = True
+            record["redaction_reasons"] = redaction_reasons
+        files.append(record)
         total += size
     return {
         "canonical_source": f"github-gist:{gid}", "gist_id": gid, "owner": owner,
