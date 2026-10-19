@@ -1,0 +1,213 @@
+{
+  "canonical_source": "github:Infisical/infisical",
+  "repo": "Infisical/infisical",
+  "revision_sha": "47246becc445869ba73077baa0a53a683e3508ce",
+  "default_branch": "main",
+  "pushed_at": "2026-10-18T23:52:09Z",
+  "repo_updated_at": "2026-10-19T01:10:39Z",
+  "license": "NOASSERTION",
+  "topics": [
+    "acme",
+    "agents",
+    "ai-agents",
+    "certificate-management",
+    "devsecops",
+    "environment-variables",
+    "kubernetes",
+    "open-source",
+    "pam",
+    "pki",
+    "postgres",
+    "private-ca",
+    "privileged-access-management",
+    "secret-management",
+    "secret-manager",
+    "secrets",
+    "secrets-management",
+    "security",
+    "security-tools",
+    "vault"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/run-helm-chart-tests-infisical-standalone-postgres.yml",
+      "sha": null,
+      "content_sha256": "187c8903444c35a15db0bb4938d822f2d7ce3a779d868f96b40da7f737e72d68",
+      "score": 318,
+      "content": "name: Run Helm Chart Tests for Infisical Standalone Postgres\non:\n  pull_request:\n    paths:\n      - \"helm-charts/infisical-standalone-postgres/**\"\n      - \".github/workflows/run-helm-chart-tests-infisical-standalone-postgres.yml\"\n\njobs:\n  test-helm:\n    name: Test Helm Chart\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4 Nov 14, 2025\n        with:\n          fetch-depth: 0\n\n      - name: Set up Helm\n        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814 # v4.2.0\n        with:\n          version: v3.17.0\n\n      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0\n        with:\n          python-version: \"3.x\"\n          check-latest: true\n\n      - name: Add Helm repositories\n        run: |\n          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx\n          helm repo add bitnami https://charts.bitnami.com/bitnami\n          helm repo update\n\n      - name: Set up chart-testing\n        uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b # v2.7.0\n        with:\n          yamale_version: \"6.0.0\"\n\n      - name: Run chart-testing (lint)\n        run: ct lint --config ct.yaml --charts helm-charts/infisical-standalone-postgres\n\n      - name: Create kind cluster\n        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0\n\n      - name: Create namespace\n        run: kubectl create namespace infisical-standalone-postgres\n\n      - name: Create Infisical secrets\n        run: |\n          kubectl create secret generic infisical-secrets \\\n            --namespace infisical-standalone-postgres \\\n            --from-literal=AUTH_SECRET=6c1fe4e407b8911c104518103505b218 \\\n            --from-literal=ENCRYPTION_KEY=6c1fe4e407b8911c104518103505b218 \\\n            --from-literal=SITE_URL=http://localhost:8080\n\n      - name: Create bootstrap secret\n        run: |\n          kubectl create secret generic infisical-bootstrap-credentials \\\n            --namespace infisical-standalone-postgres \\\n            --from-literal=INFISICAL_ADMIN_EMAIL=admin@example.com \\\n            --from-literal=INFISICAL_ADMIN_PASSWORD=admin-password\n\n      - name: Run chart-testing (install)\n        run: |\n          ct install \\\n            --config ct.yaml \\\n            --charts helm-charts/infisical-standalone-postgres \\\n            --helm-extra-args=\"--timeout=300s\" \\\n            --helm-extra-set-args=\"--set ingress.nginx.enabled=false --set infisical.replicaCount=1 --set infisical.image.tag=v0.151.0 --set infisical.autoBootstrap.enabled=true --set-string infisical.extraEnv[0].name=TELEMETRY_ENABLED --set-string infisical.extraEnv[0].value=false\" \\\n            --namespace infisical-standalone-postgres\n"
+    },
+    {
+      "path": "backend/src/db/migrations/20250517002223_secret-share-to-specific-emails.ts",
+      "sha": null,
+      "content_sha256": "f809cd0085e765afa86e69fb0fc495de163b15270d9d3691442745335ce78f4e",
+      "score": 299,
+      "content": "import { Knex } from \"knex\";\n\nimport { TableName } from \"../schemas\";\n\nexport async function up(knex: Knex): Promise<void> {\n  if (await knex.schema.hasTable(TableName.SecretSharing)) {\n    const hasEncryptedSalt = await knex.schema.hasColumn(TableName.SecretSharing, \"encryptedSalt\");\n    const hasAuthorizedEmails = await knex.schema.hasColumn(TableName.SecretSharing, \"authorizedEmails\");\n\n    if (!hasEncryptedSalt || !hasAuthorizedEmails) {\n      await knex.schema.alterTable(TableName.SecretSharing, (t) => {\n        // These two columns are only needed when secrets are shared with a specific list of emails\n\n        if (!hasEncryptedSalt) {\n          t.binary(\"encryptedSalt\").nullable();\n        }\n\n        if (!hasAuthorizedEmails) {\n          t.json(\"authorizedEmails\").nullable();\n        }\n      });\n    }\n  }\n}\n\nexport async function down(knex: Knex): Promise<void> {\n  if (await knex.schema.hasTable(TableName.SecretSharing)) {\n    const hasEncryptedSalt = await knex.schema.hasColumn(TableName.SecretSharing, \"encryptedSalt\");\n    const hasAuthorizedEmails = await knex.schema.hasColumn(TableName.SecretSharing, \"authorizedEmails\");\n\n    if (hasEncryptedSalt || hasAuthorizedEmails) {\n      await knex.schema.alterTable(TableName.SecretSharing, (t) => {\n        if (hasEncryptedSalt) {\n          t.dropColumn(\"encryptedSalt\");\n        }\n\n        if (hasAuthorizedEmails) {\n          t.dropColumn(\"authorizedEmails\");\n        }\n      });\n    }\n  }\n}\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/certificate-authorities/internal/install-cert-adcs.mdx",
+      "sha": null,
+      "content_sha256": "8f595da2bc43726b1c05758af9a7eccfff9155e59d08e946020fc7910297d485",
+      "score": 297,
+      "content": "---\ntitle: \"Install ADCS certificate\"\nopenapi: \"POST /api/v1/cert-manager/ca/internal/{caId}/install-certificate-adcs\"\n---"
+    },
+    {
+      "path": "docs/api-reference/endpoints/certificate-authorities/internal/install-cert-venafi.mdx",
+      "sha": null,
+      "content_sha256": "ff2f96c7ebbb178465a88a78255937de0c51bce0e164ac12ff5982b4d611fb35",
+      "score": 297,
+      "content": "---\ntitle: \"Install Venafi certificate\"\nopenapi: \"POST /api/v1/cert-manager/ca/internal/{caId}/install-certificate-venafi\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/oci-auth/retrieve.mdx",
+      "sha": null,
+      "content_sha256": "99d750d340709e95b4f1dff179f7d25977dd70bbfef9232ed2d43b5a444d762b",
+      "score": 289,
+      "content": "---\ntitle: \"Retrieve\"\nopenapi: \"GET /api/v1/auth/oci-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/oci-auth/attach.mdx",
+      "sha": null,
+      "content_sha256": "4b287bc2bae1d913c7bcfbad8a7b7f7089dc3ee971b580565fbf4ed792803c5a",
+      "score": 289,
+      "content": "---\ntitle: \"Attach\"\nopenapi: \"POST /api/v1/auth/oci-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/kubernetes-auth/retrieve.mdx",
+      "sha": null,
+      "content_sha256": "9c2a855559ea772d76a702df50a9f7dd6520de8076058f47030d7578b8ab8a2f",
+      "score": 289,
+      "content": "---\ntitle: \"Retrieve\"\nopenapi: \"GET /api/v1/auth/kubernetes-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/oci-auth/update.mdx",
+      "sha": null,
+      "content_sha256": "25cac3b4c8980abf34594ceab60b6343849ad83c6ae8438e6d30bce25ea2d312",
+      "score": 289,
+      "content": "---\ntitle: \"Update\"\nopenapi: \"PATCH /api/v1/auth/oci-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/oci-auth/login.mdx",
+      "sha": null,
+      "content_sha256": "36913181b8a87a5755a332aba07c444cdb80be47eac61d0942822b4c009245f7",
+      "score": 289,
+      "content": "---\ntitle: \"Login\"\nopenapi: \"POST /api/v1/auth/oci-auth/login\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/kubernetes-auth/login.mdx",
+      "sha": null,
+      "content_sha256": "867d41747c9bebb3df95bf5a69f22e9ba9ce1673978ec84aa6651fb4642c728e",
+      "score": 289,
+      "content": "---\ntitle: \"Login\"\nopenapi: \"POST /api/v1/auth/kubernetes-auth/login\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/oci-auth/revoke.mdx",
+      "sha": null,
+      "content_sha256": "961dd4c6a4be2139a6d41cc73b9d4cb71aa2a966a986b3860134104683b9d8f6",
+      "score": 289,
+      "content": "---\ntitle: \"Revoke\"\nopenapi: \"DELETE /api/v1/auth/oci-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/kubernetes-auth/attach.mdx",
+      "sha": null,
+      "content_sha256": "45c85e5bd818bbd987def997dbcf3e855843aa6fe7de8bc34aa0c7776e1fbce3",
+      "score": 289,
+      "content": "---\ntitle: \"Attach\"\nopenapi: \"POST /api/v1/auth/kubernetes-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/kubernetes-auth/update.mdx",
+      "sha": null,
+      "content_sha256": "6a1dc3cb95abeda96e6160a856fcadecc61fe224634f9c652c56598b0638e2d3",
+      "score": 289,
+      "content": "---\ntitle: \"Update\"\nopenapi: \"PATCH /api/v1/auth/kubernetes-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/kubernetes-auth/revoke.mdx",
+      "sha": null,
+      "content_sha256": "4e2e710cdfdfda61f72bfd4b7c2fd7051ef84b72e0403779dcdbda41bec111fb",
+      "score": 289,
+      "content": "---\ntitle: \"Revoke\"\nopenapi: \"DELETE /api/v1/auth/kubernetes-auth/identities/{identityId}\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/vercel/create.mdx",
+      "sha": null,
+      "content_sha256": "9ba18a917aae6e12cbfbb979b2d403f93a75230f36b3535c9ec2dba58154dce0",
+      "score": 287,
+      "content": "---\ntitle: \"Create\"\nopenapi: \"POST /api/v1/secret-syncs/vercel\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/railway/list.mdx",
+      "sha": null,
+      "content_sha256": "ac5891036e95599f90f325861d39d4b311651b61e7c5515e95f9953d672a5390",
+      "score": 287,
+      "content": "---\ntitle: \"List\"\nopenapi: \"GET /api/v1/secret-syncs/railway\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/railway/create.mdx",
+      "sha": null,
+      "content_sha256": "fdca4c99c697f8f0184a970c66a5814165b5271a344ff3f21e751eed73373eb3",
+      "score": 287,
+      "content": "---\ntitle: \"Create\"\nopenapi: \"POST /api/v1/secret-syncs/railway\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/vercel/list.mdx",
+      "sha": null,
+      "content_sha256": "d1db389225f715e68f4208020cdd18638459149dd9c463e81779143418caca52",
+      "score": 287,
+      "content": "---\ntitle: \"List\"\nopenapi: \"GET /api/v1/secret-syncs/vercel\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/oci-vault/create.mdx",
+      "sha": null,
+      "content_sha256": "3e50c785a15858c96af639a2f452ab48f16a99c5aa79883e124cbd3da9d4de15",
+      "score": 287,
+      "content": "---\ntitle: \"Create\"\nopenapi: \"POST /api/v1/secret-syncs/oci-vault\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/circleci/create.mdx",
+      "sha": null,
+      "content_sha256": "c48d14d1285dbc674e2bb3150d1212b82b937853868063bf229b4f7e6da127b3",
+      "score": 287,
+      "content": "---\ntitle: \"Create\"\nopenapi: \"POST /api/v1/secret-syncs/circleci\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/teamcity/list.mdx",
+      "sha": null,
+      "content_sha256": "d2eadf355bd053bf65e471ab1a6edf680c2ed0650b5d74978c49d2299df7380b",
+      "score": 287,
+      "content": "---\ntitle: \"List\"\nopenapi: \"GET /api/v1/secret-syncs/teamcity\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/teamcity/create.mdx",
+      "sha": null,
+      "content_sha256": "c0ad99e5e4a89f1df6bb81fa4d3c2c8e8bef970d4c2260ae87453764f171c7d7",
+      "score": 287,
+      "content": "---\ntitle: \"Create\"\nopenapi: \"POST /api/v1/secret-syncs/teamcity\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/oci-vault/list.mdx",
+      "sha": null,
+      "content_sha256": "8605c81f33657f94dcb61df1172d5602a9b8f7dc4a132e7ad3b4ae2d327b8bc1",
+      "score": 287,
+      "content": "---\ntitle: \"List\"\nopenapi: \"GET /api/v1/secret-syncs/oci-vault\"\n---\n"
+    },
+    {
+      "path": "docs/api-reference/endpoints/secret-syncs/circleci/list.mdx",
+      "sha": null,
+      "content_sha256": "899569c9bb5855dba2be791a5cd1f1e68353d08bef40642199ec538c1e687f60",
+      "score": 287,
+      "content": "---\ntitle: \"List\"\nopenapi: \"GET /api/v1/secret-syncs/circleci\"\n---\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-19T01:44:45.286179+00:00"
+}
