@@ -302,3 +302,10 @@ The currently visible API Pilot and EASY inbox threads are delivery failures. Su
 | `easy@agentmail.to` | `hello@agencemerlin.com` | 2026-09-12 | Delivery failure; suppress pending re-verification |
 
 No new outbound messages were sent during the 2026-10-19 sweep. Re-approach only after finding a verified alternative contact path and confirming the opportunity is still open.
+
+
+## MNFST provider catalog freshness — 2026-10-19
+
+The latest provider/model data refresh visible in the repository history is `41197cb7d053680daf808d6618142045e961caaa` (2026-10-05); the follow-up data sync merge is `b25c0395fe1e7628ecc99bf119a40365801c6fb4` on the same day. The only newer commits are the malicious workflow addition on 2026-10-10 and its removal on 2026-10-11. The current workflow directory contains only `generate-readme.yml`, triggered by `data.json` changes; no current nightly provider-sync workflow was found. Thus no provider/model updates after 2026-10-05 were evidenced in the latest 10 commits.
+
+The Oct 5 refresh itself removed several NVIDIA NIM models after HTTP 410, updated Gemini, Cloudflare Workers AI, Groq, Kilo, LLM7, OpenRouter and OVHcloud entries, and left a “Needs a human” queue. Some new Kilo rows were explicitly unprobed due to no key. Do not treat the catalogue's claimed refresh cadence as current verification; use official provider sources and controlled endpoint evidence before routing.
