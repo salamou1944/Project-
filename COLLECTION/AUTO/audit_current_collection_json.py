@@ -51,7 +51,8 @@ def main():
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"status": "PASS" if not errors else "FAIL", "json_file_count": len(rows),
-                      "parse_failure_count": len(errors), "total_bytes": report["total_bytes"],
+                      "parse_failure_count": len(errors), "parse_failure_paths": errors,
+                      "total_bytes": report["total_bytes"],
                       "report": OUTPUT.relative_to(ROOT).as_posix()}, sort_keys=True))
     if errors:
         raise SystemExit(1)
