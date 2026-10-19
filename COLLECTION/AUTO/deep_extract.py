@@ -129,15 +129,17 @@ def redact(s):
     return re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{16,}", r"\1<REDACTED>", s)
 
 def owners():
-    out = set()
-    for p in ACCOUNTS.glob("*.md"):
+    # GitHub logins are case-insensitive. Canonicalize keys so mixed-case links
+    # across old account captures do not trigger duplicate owner-wide sweeps.
+    out = {}
+    for p in sorted(ACCOUNTS.glob("*.md")):
         t = p.read_text(encoding="utf-8", errors="ignore")
-        for m in re.finditer(r"https?://github\.com/([A-Za-z0-9_.-]+)(?:[\s/]|$)", t):
+        for m in re.finditer(r"https?://github\\.com/([A-Za-z0-9_.-]+)(?:[\\s/]|$)", t):
             o = m.group(1)
-            if o.lower() not in RESERVED and o.lower() != "salamou1944":
-                out.add(o)
-    return sorted(out, key=str.lower)
-
+            key = o.lower()
+            if key not in RESERVED and key != "salamou1944":
+                out.setdefault(key, o)
+    return sorted(out.values(), key=str.lower)
 def repos(owner):
     paths = (
         f"/users/{urllib.parse.quote(owner, safe='')}/repos?type=all",
