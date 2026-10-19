@@ -85,6 +85,7 @@ The current visible threads in API Pilot and EASY consist of delivery failures/b
 
 - One connected store: `My Store`, domain `2eih8n-pc.myshopify.com`, currency DZD, country Algeria, timezone CET.
 - **Plan: trial — you'll need to upgrade before you can start selling and unlock full features**
+- Read-only store checks returned **0 active products and 0 orders**. No product was created or imported and no store setting was changed.
 - Treat it as an existing commerce asset on trial, not as a live revenue channel until the account is eligible and a real checkout/payment path is verified.
 
 ### Wix / Canva / Notion / Figma
