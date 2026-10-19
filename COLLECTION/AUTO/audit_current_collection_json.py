@@ -135,6 +135,7 @@ def main():
         "schema_version": "collection-current-json-audit/v1",
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "scope": "all COLLECTION/**/*.json files in the workflow checkout plus newly generated extraction files; excludes this report to avoid self-reference",
+        "format_policy": "Strict JSON is required except standard devcontainer.json files, which may use JSONC comments/trailing commas. SHA-256 always covers the unchanged raw source bytes.",
         "json_file_count": len(rows),
         "parse_failure_count": len(errors),
         "parse_failure_paths": errors,
