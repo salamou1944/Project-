@@ -138,3 +138,7 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - Preserved [UPWORK_REVENUE_READINESS_2026-10-19.md](UPWORK_REVENUE_READINESS_2026-10-19.md). Upwork profile is private and incomplete, with no portfolio, no history, no proposals, no contracts, no invitations and zero Connects. The best currently inspected AI-automation listing requires 14 Connects and has zero client hires; no proposal was attempted.
 - One previously saved CRM/WhatsApp automation job lists $15–$38/hour, but its live status could not be confirmed; no repeated lookup.
 - Apollo has 80 lead credits and 5,000 AI credits remaining with zero used; direct-dial balance is inconsistent across endpoints and web-search-record usage is anomalous. No Apollo search/enrichment action was run and no credits were spent.
+
+
+## Repository storage baseline — before bounded extraction commit
+- GitHub repository metadata reports `Project-` at 317,118 KB (~310 MiB) before the bounded inventory/packet commit. The 200-repository batch and 300 KB/repo source cap were chosen to avoid an uncontrolled source dump. Recheck the repository size after run `39181614341` commits; this baseline is not the post-run size.
