@@ -256,7 +256,7 @@ The following addresses were observed in failed delivery threads and should not 
 - The Termalin account's web cabinet may contain saved servers, but they are not reachable here until the Termalin connector is installed/enrolled on the target host. Keep this as an explicit external execution blocker; do not claim local-server work was performed.
 
 
-## Third bounded Collection batch — 2026-10-19
+## Second bounded new-source batch — 2026-10-19
 - [Run 39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) passed, adding 98 source records from 100 selected repositories, preserving 2 blocked sources. Total source records: 3,181.
 - Current-main JSON/JSONC audit: 11,171 files, zero parse failures, 668,043,719 raw bytes; generated-state commit `60502ad15f35d970a267a8d0c3c23fc15bd18301`.
 - Capability groups 27,056; promotion-review items 18,774; restricted items 8,282. No unapproved asset installed.
