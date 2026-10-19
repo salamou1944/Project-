@@ -486,3 +486,11 @@ No completion claim is made. Collection remains active.
 ## Owner parser regression test — passed
 - Run [39181282587](https://github.com/salamou1944/Project-/actions/runs/39181282587) completed success after wiring `test_deep_extract_owner_parser.py` into `collection-install-selection-test`.
 - The test covers raw owner URLs, Markdown link closers, repository paths, trailing punctuation, mixed-case duplicates, and excluded `salamou1944`/reserved paths. This validates the parser fix, not the full account extraction run.
+
+
+## Bounded, metadata-complete deep extraction — 2026-10-19
+- Reworked `COLLECTION/AUTO/deep_extract.py` so the full owner sweep preserves metadata for every discovered repository in `REPO-INVENTORY.json` and queues all deferred/blocked/archived repositories in `DEFERRED-REPOSITORY-QUEUE.json`.
+- To avoid an unbounded source dump and GitHub Actions/API exhaustion, each run deep-extracts at most 200 high-priority repositories, no more than two per owner, with 24 files/repo, 50 KB/file and 300 KB source bytes/repo. All other active repo identities remain preserved and deferred, not discarded.
+- File-byte budgets now keep deterministic relevance order instead of whichever parallel fetch finishes first.
+- Commit: `Project-@76f9944042481a0a8d1e4cb332a46326e078f288`.
+- New bounded run [39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341) is queued; older run `39180853004` is using the pre-budget strategy and is superseded.
