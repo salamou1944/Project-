@@ -534,3 +534,9 @@ No completion claim is made. Collection remains active.
 
 ## Legacy Hyperswitch storage note
 - `juspay/hyperswitch@1d71d94d2e2e1c72f3ede13abebc24132997685f` is preserved as vendored source only; its marker reports 393 MB. GitHub API reports the containing repository at 317,118 KB before the new batch; these metrics are not directly comparable. Do not delete without an explicit backup/retention decision.
+
+
+## Connected-app sweep — 2026-10-19
+- Updated [CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md](VERIFICATION/CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md) with read-only inventory across GitHub, Railway, Supabase, Vercel, GitLab, Replit, Notion, Canva, Wix, Render, HubSpot, AgentMail, Apollo and Upwork.
+- GitHub exposes 10 first-party repositories, separate from the 199 external owner targets. Railway latest status reports five services with failed latest deployments; API Factory Railway source uses a feature branch and no service variables. Vercel has a READY production-target deployment but from the same feature branch while project metadata says `live:false`. Supabase EASY database is healthy but must not be reused for other projects.
+- Other connected app findings and safe boundaries are recorded in the audit file. No secrets were read, no deployment or environment mutation was made, and no paid credits were spent.
