@@ -128,3 +128,7 @@ The monitored source `mnfst/awesome-free-llm-apis` had a historical malicious wo
 - Canva design search for `EASY` and `API Factory`: 0 matching designs returned.
 - AgentMail account list: 0 signed-in app accounts. This is separate from the three AgentMail inboxes, which exist and were inspected above.
 - The enabled `Revenue + leverage sweep` automation was requested for an immediate run (automation ID `6ab730fda9948191a73f262cdb30fa92`). The request was accepted; execution is asynchronous, so no completed sweep result is claimed here.
+
+
+## Recipient-level bounce handling
+The following addresses were observed in failed delivery threads and should not be retried without independent re-verification: `contact@deevdigital.com`, `contact@goldway-dz.com`, `support@ecomproassociates.com`, `hello@gmsolutions.com`, `hallo@gtpmedia.nl`, `info@channelboosters.io`, `sales@flexshopltd.com`, `contact@scaleverse.media`, `michael@nuworld.agency`, `hello@teroinlabs.com`, and `hello@agencemerlin.com`. These are bounces, not leads; no outbound messages were sent in this sweep.
