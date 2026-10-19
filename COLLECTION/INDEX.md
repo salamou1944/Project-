@@ -545,3 +545,10 @@ No completion claim is made. Collection remains active.
 ## First-party asset triage — 2026-10-19
 - Preserved first-party source manifests and state boundaries in [connected-app audit](VERIFICATION/CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md): `Files-/collection/mufeedvh` inventory of 43 repos (content/history/Gists incomplete); `Astra-/collection/aw-junaid` inventory of 33 repos (content verification required); separate `Astra/collection` lanes; EASY API discovery bank and 10 pilot hypotheses; existing revenue service pack; canonical operating memory; ASTRA research gates failing/live OFF.
 - No duplicate Skill was created and no source assets were promoted/installed. Continue per-repo license/security checks and semantic dedupe before promotion.
+
+
+## Extraction audit resolution — 2026-10-19
+- JSONC compatibility fix preserved the third-party devcontainer source unchanged; the current-main audit passed at [run 39185928703](https://github.com/salamou1944/Project-/actions/runs/39185928703): 10,877 files, zero parse failures, 595,154,410 bytes.
+- Regression suite [39185928757](https://github.com/salamou1944/Project-/actions/runs/39185928757) passed.
+- Corrected counts: 200 selected, 199 successful source packets, 1 blocked; 31,343 repo identities, 8,800 archived metadata-only, 22,344 deferred/blocked, 7,220 dedupe-ready records.
+- The safe-incremental Collection harvest is the next execution step. Do not treat audit success as canonical promotion or production readiness.
