@@ -321,3 +321,6 @@ Apollo balance was inspected only: 80 lead credits and 5,000 AI credits show zer
 ## HubSpot pipeline verification — 2026-10-19
 
 Read-only HubSpot CRM search returned 0 deals, 2 sample contacts and 1 company record. The records are [Brian Halligan (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894044249312?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), [Maria Johnson (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894054999231?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), and [HubSpot / hubspot.com](https://app.hubspot.com/contacts/149568666/record/0-2/453775516896?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search). No writes were performed. Do not count these as prospects, customers or revenue; current HubSpot pipeline is empty on the evidence reviewed.
+
+
+Post-automation inbox recheck (2026-10-19): API Pilot 6 threads, latest 2026-09-27; EASY 5 threads, latest 2026-09-22; PASTEL E2E 0 threads. No new sends or replies were evidenced. Keep the 11 bounced recipients suppressed.
