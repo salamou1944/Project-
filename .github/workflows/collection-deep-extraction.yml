@@ -2,6 +2,15 @@ name: collection-deep-extraction
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "COLLECTION/ACCOUNTS/**/*.md"
+      - "COLLECTION/ACCOUNTS/RECURSIVE_ACCOUNT_FRONTIER_LAYER_A_2026-10-18.json"
+      - "COLLECTION/AUTO/deep_extract.py"
+      - "COLLECTION/AUTO/validate_deep_extraction.py"
+      - "COLLECTION/AUTO/audit_current_collection_json.py"
+      - ".github/workflows/collection-deep-extraction.yml"
   # Refresh the deep source set weekly; installation follows only a successful run.
   schedule:
     - cron: "20 3 * * 0"
@@ -23,16 +32,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python3 -m py_compile COLLECTION/AUTO/deep_extract.py COLLECTION/AUTO/validate_deep_extraction.py
+          python3 -m py_compile COLLECTION/AUTO/deep_extract.py COLLECTION/AUTO/validate_deep_extraction.py COLLECTION/AUTO/audit_current_collection_json.py
           python3 COLLECTION/AUTO/deep_extract.py
           python3 COLLECTION/AUTO/validate_deep_extraction.py
-      - name: Commit extraction packets
+          python3 COLLECTION/AUTO/audit_current_collection_json.py
+      - name: Commit extraction packets and current JSON audit
         run: |
           set -euo pipefail
           git config user.name "collection-bot"
           git config user.email "collection-bot@users.noreply.github.com"
-          git add COLLECTION/AUTO/DEEP-EXTRACTED
-          git diff --cached --quiet || git commit -m "chore(collection): refresh deep extraction packets"
+          git add COLLECTION/AUTO/DEEP-EXTRACTED COLLECTION/VERIFICATION/CURRENT_MAIN_JSON_AUDIT.json
+          git diff --cached --quiet || git commit -m "chore(collection): refresh deep extraction and JSON audit"
           for attempt in 1 2 3; do
             git fetch origin main
             if git rebase origin/main; then
