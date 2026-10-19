@@ -84,3 +84,11 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - Connected-app audit report commit: `Project-@f2fc1a3519629d1ad00ab5050679b91243e150dc`.
 - Run `39180002514` was still pending at last poll; no extraction count or JSON audit output is yet claimed.
 - SOAT run `39179590053` has passed the dedicated real AI completion through the local Ollama provider, but the overall workflow remains in progress while the official SOAT smoke and downstream evidence gates execute.
+
+
+## Critical supply-chain finding — free LLM API catalogue — 2026-10-19
+- Inspected the latest `mnfst/awesome-free-llm-apis` commit history and current `.github/workflows/` directory.
+- Found historical commit `48fcbe86582e16b7b746fee52e5512a891a8db76` adding a malicious “Security Audit” workflow: it searched the current repository and Git history for credential patterns and POSTed findings to hard-coded external HTTP endpoint `193.32.204.199:8080`.
+- The workflow was removed in commit `cf97c32fec1b2e96e9936746e2731a81bd5ea33f`. Current workflow listing contains only `generate-readme.yml`. No Security Audit run appeared in the latest 30 visible Actions runs, so execution is not evidenced but cannot be ruled out.
+- Preserved this as a supply-chain warning in `COLLECTION/ACCOUNTS/MNFST_ACCOUNT_WIDE_2026-10-16.md` and the canonical monetization ledger. The catalogue remains a discovery source only; never run its workflows/scripts or pass secrets to it. No secrets were searched for or transmitted.
+- Commit review links: https://github.com/mnfst/awesome-free-llm-apis/commit/48fcbe86582e16b7b746fee52e5512a891a8db76 and https://github.com/mnfst/awesome-free-llm-apis/commit/cf97c32fec1b2e96e9936746e2731a81bd5ea33f.
