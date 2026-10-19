@@ -1,0 +1,97 @@
+{
+  "canonical_source": "github:open-free-llm-api/free-llm-models-python",
+  "repo": "open-free-llm-api/free-llm-models-python",
+  "revision_sha": "9b246c350a9acff352ad070e9b848b4a89ff93cf",
+  "default_branch": "main",
+  "pushed_at": "2026-10-18T14:17:46Z",
+  "repo_updated_at": "2026-10-18T14:17:49Z",
+  "license": null,
+  "topics": [
+    "ai-models",
+    "claude",
+    "cli-tool",
+    "free-llm-api",
+    "freellm",
+    "gpt",
+    "llm",
+    "openai",
+    "python"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "da6c7474147ef4f2753499b2c6843d9dad276ae2609ee7e6543c05de80629320",
+      "score": 120,
+      "content": "[build-system]\nrequires = [\"setuptools>=61\", \"wheel\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[project]\nname = \"free-llm-models\"\nversion = \"1.0.2\"\ndescription = \"A curated list of free LLM APIs and models. Query 500+ free models from 30+ providers.\"\nreadme = \"README.md\"\nauthors = [{name = \"MyToolster\"}]\nlicense = {text = \"MIT\"}\nkeywords = [\"llm\", \"free\", \"ai\", \"models\", \"api\", \"openai\", \"claude\", \"gpt\"]\nrequires-python = \">=3.8\"\nclassifiers = [\n    \"Programming Language :: Python :: 3\",\n    \"License :: OSI Approved :: MIT License\",\n    \"Topic :: Scientific/Engineering :: Artificial Intelligence\",\n]\n\n[project.scripts]\nfree-llm-models = \"free_llm_models.cli:main\"\n\n[project.urls]\n\"Homepage\" = \"https://freellm.net\"\n\"Repository\" = \"https://github.com/open-free-llm-api/free-llm-models-python\"\n\"Bug Reports\" = \"https://github.com/open-free-llm-api/free-llm-models-python/issues\"\n\n[tool.setuptools.packages.find]\nwhere = [\".\"]\ninclude = [\"free_llm_models*\"]\n\n[tool.setuptools.package-data]\nfree_llm_models = [\"../data/models.json\"]\n"
+    },
+    {
+      "path": "free_llm_models/cli.py",
+      "sha": null,
+      "content_sha256": "4a5747418aabfbd6b5ece8bca3ad75f49629b61bc63d9692bad598ecf9ffc1f2",
+      "score": 108,
+      "content": "\"\"\"free-llm-models CLI.\"\"\"\nimport argparse\nimport json\nimport sys\n\nfrom . import all as all_models, search, get, providers, by_provider, random as random_model, meta\n\n\ndef _print_table(models):\n    if not models:\n        print('No models found.')\n        return\n    print(f\"{'Model':<35} {'Provider':<20} {'Tools':<6} {'JSON'}\")\n    print('-' * 70)\n    for m in models:\n        tools = 'yes' if m['supportsTools'] else '-'\n        js = 'yes' if m['supportsJson'] else '-'\n        print(f\"{m['name']:<35} {m['provider']:<20} {tools:<6} {js}\")\n\n\ndef cmd_list(args):\n    models = all_models()\n    if args.provider:\n        models = by_provider(args.provider)\n    models = models[:args.limit]\n    if args.json:\n        print(json.dumps(models, indent=2))\n    else:\n        _print_table(models)\n        if len(models) == args.limit:\n            print(f'\\nShowing {args.limit}. Use --limit to see more.')\n\n\ndef cmd_search(args):\n    models = search(args.keyword)[:20]\n    if args.json:\n        print(json.dumps(models, indent=2))\n    else:\n        _print_table(models)\n\n\ndef cmd_info(args):\n    m = get(args.name)\n    if not m:\n        print('Model not found. Try: search <keyword>')\n        return\n    if args.json:\n        print(json.dumps(m, indent=2))\n        return\n    print(f\"\"\"\nModel:    {m['name']}\nProvider: {m['provider']}\nTools:    {'yes' if m['supportsTools'] else 'no'}\nJSON:     {'yes' if m['supportsJson'] else 'no'}\nReleased: {m['released'] or 'unknown'}\n\nTry it free: https://freellm.net\n\"\"\")\n\n\ndef cmd_providers(args):\n    provs = providers()\n    if args.json:\n        print(json.dumps(provs, indent=2))\n        return\n    print(f\"{'Provider':<25} {'Models'}\")\n    print('-' * 35)\n    for p in provs:\n        print(f\"{p['name']:<25} {p['count']}\")\n\n\ndef cmd_compare(args):\n    ma, mb = get(args.model_a), get(args.model_b)\n    if not ma or not mb:\n        print('One or both models not found.')\n        return\n    if args.json:\n        print(json.dumps([ma, mb], indent=2))\n        return\n    fields = [('Provider', 'provider'), ('Tools', 'supportsTools'),\n              ('JSON mode', 'supportsJson'), ('Released', 'released')]\n    print(f\"{'Field':<10} {ma['name']:<30} {mb['name']}\")\n    print('-' * 70)\n    for label, key in fields:\n        va, vb = ma[key], mb[key]\n        if isinstance(va, bool):\n            va, vb = 'yes' if va else 'no', 'yes' if vb else 'no'\n        print(f\"{label:<10} {str(va or '-'):<30} {vb or '-'}\")\n\n\ndef cmd_random(args):\n    m = random_model()\n    if args.json:\n        print(json.dumps(m, indent=2))\n        return\n    print(f\"\\nTry this free model: {m['name']} (provider: {m['provider']})\")\n    print(\"More: https://freellm.net\\n\")\n\n\ndef main():\n    parser = argparse.ArgumentParser(\n        prog='free-llm-models',\n        description='Query 500+ free LLM APIs. Data from https://freellm.net',\n    )\n    parser.add_argument('--json', action='store_true', help='Output as JSON')\n    sub = parser.add_subparsers(dest='cmd')\n\n    p = sub.add_parser('list', help='List free models')\n    p.add_argument('--provider', help='Filter by provider')\n    p.add_argument('--limit', type=int, default=20)\n    p.set_defaults(func=cmd_list)\n\n    p = sub.add_parser('search', help='Search models')\n    p.add_argument('keyword')\n    p.set_defaults(func=cmd_search)\n\n    p = sub.add_parser('info', help='Model details')\n    p.add_argument('name')\n    p.set_defaults(func=cmd_info)\n\n    p = sub.add_parser('providers', help='List providers')\n    p.set_defaults(func=cmd_providers)\n\n    p = sub.add_parser('compare', help='Compare two models')\n    p.add_argument('model_a')\n    p.add_argument('model_b')\n    p.set_defaults(func=cmd_compare)\n\n    p = sub.add_parser('random', help='Random model pick')\n    p.set_defaults(func=cmd_random)\n\n    args = parser.parse_args()\n    if not args.cmd:\n        parser.print_help()\n        sys.exit(0)\n    args.func(args)\n\n\nif __name__ == '__main__':\n    main()\n"
+    },
+    {
+      "path": "free_llm_models/__init__.py",
+      "sha": null,
+      "content_sha256": "53cb6076bdc356357667e6cdda9291e02d6b64b1a034319d9427238f3e1807f0",
+      "score": 108,
+      "content": "\"\"\"free-llm-models: query 500+ free LLM APIs from Python.\"\"\"\nimport json\nimport os\nimport random as _random\n\n_DATA_PATH = os.path.join(os.path.dirname(__file__), '..', 'data', 'models.json')\n\nwith open(_DATA_PATH) as f:\n    _data = json.load(f)\n\nMODELS = _data['models']\n\n\ndef all():\n    \"\"\"Return all models.\"\"\"\n    return MODELS\n\n\ndef search(keyword):\n    \"\"\"Search models by name, id, or provider.\"\"\"\n    kw = keyword.lower()\n    return [m for m in MODELS\n            if kw in m['name'].lower()\n            or kw in m['id'].lower()\n            or kw in m['provider'].lower()]\n\n\ndef get(id_or_name):\n    \"\"\"Get a single model by id or name.\"\"\"\n    kw = id_or_name.lower()\n    for m in MODELS:\n        if m['id'].lower() == kw or m['name'].lower() == kw:\n            return m\n    return None\n\n\ndef providers():\n    \"\"\"Return list of providers with model counts, sorted desc.\"\"\"\n    counts = {}\n    for m in MODELS:\n        counts[m['provider']] = counts.get(m['provider'], 0) + 1\n    return sorted(\n        [{'name': k, 'count': v} for k, v in counts.items()],\n        key=lambda x: -x['count']\n    )\n\n\ndef by_provider(provider):\n    \"\"\"Filter models by provider name.\"\"\"\n    kw = provider.lower()\n    return [m for m in MODELS if m['provider'].lower() == kw]\n\n\ndef random():\n    \"\"\"Return a random model.\"\"\"\n    return _random.choice(MODELS)\n\n\ndef meta():\n    \"\"\"Return dataset metadata.\"\"\"\n    return {\n        'updated': _data['updated'],\n        'source': _data['source'],\n        'count': _data['count'],\n    }\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "870073abb703de7eebe9016c4747d47279daf4d8d1b1a7a37170405a94b97369",
+      "score": 100,
+      "content": "[![FreeLLM.net](https://github.com/open-free-llm-api/free-llm-models-python/raw/main/og-image.jpg)](https://freellm.net)\n\n# free-llm-models\n\n[![PyPI version](https://img.shields.io/pypi/v/free-llm-models.svg)](https://pypi.org/project/free-llm-models/)\n[![PyPI downloads](https://img.shields.io/pypi/dm/free-llm-models.svg)](https://pypi.org/project/free-llm-models/)\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)\n[![GitHub stars](https://img.shields.io/github/stars/open-free-llm-api/free-llm-models-python.svg)](https://github.com/open-free-llm-api/free-llm-models-python/stargazers)\n\nA curated, machine-readable directory of **537+ free LLM APIs and models** from 30+ providers. Query it from your terminal or import it into your Python projects.\n\nData is synced daily from [FreeLLM](https://freellm.net) — the free LLM API directory with live playground. Browse the full interactive catalog at [freellm.net](https://freellm.net).\n\n> **JavaScript user?** There's an npm twin: [`free-llm-models` on npm](https://www.npmjs.com/package/free-llm-models) · [GitHub](https://github.com/open-free-llm-api/free-llm-models)\n\n## Installation\n\n```bash\npip install free-llm-models\n```\n\n## CLI Usage\n\n```bash\n# List free models (default 20, use --limit for more)\nfree-llm-models list --limit 10\n\n# Filter by provider\nfree-llm-models list --provider opencode\n\n# Search by keyword\nfree-llm-models search claude\n\n# Show model details\nfree-llm-models info kimi-k2-7-code\n\n# List all providers with model counts\nfree-llm-models providers\n\n# Compare two models side by side\nfree-llm-models compare kimi-k2-7-code claude-fable-5\n\n# Get a random recommendation\nfree-llm-models random\n\n# Machine-readable JSON output (great for scripts)\nfree-llm-models search gpt --json\n```\n\n## Python API\n\n```python\nimport free_llm_models as flm\n\n# Search models\nresults = flm.search('claude')\n\n# Get a specific model\nmodel = flm.get('kimi-k2-7-code')\nprint(model['provider'])  # 'opencode'\n\n# List providers\nproviders = flm.providers()\n\n# Filter by provider\nmodels = flm.by_provider('opencode')\n\n# Get dataset metadata\nmeta = flm.meta()  # {'updated', 'source', 'count'}\n```\n\n## Data\n\n| Field | Description |\n|-------|-------------|\n| `id` | Unique model identifier |\n| `name` | Human-readable model name |\n| `provider` | Provider name (e.g. `opencode`, `google-gemini`) |\n| `supportsTools` | Whether the model supports function calling |\n| `supportsJson` | Whether the model supports JSON mode |\n| `released` | Release date (ISO 8601) |\n\n- **537 models** across 30+ providers\n- Updated: 2026-10-18\n- Full interactive directory with playground: [https://freellm.net](https://freellm.net)\n\n## Relationship with awesome-freellm-apis\n\nThis package is the machine-readable companion to [awesome-freellm-apis](https://github.com/open-free-llm-api/awesome-freellm-apis) (the curated awesome list, 4.4k+ stars).\n\n| | awesome-freellm-apis | free-llm-models |\n|---|---|---|\n| Format | Human-readable awesome list | JSON data + CLI + API |\n| Use case | Browse & compare in browser | Query from terminal / code |\n| Data source | Same freellm.net dataset | Same freellm.net dataset |\n\nBoth are maintained by the [open-free-llm-api](https://github.com/open-free-llm-api) organization and synced from [freellm.net](https://freellm.net).\n\n## Contributing\n\nContributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.\n\n## Changelog\n\nSee [CHANGELOG.md](CHANGELOG.md) for release history.\n\n## License\n\nMIT © [MyToolster](https://freellm.net)\n"
+    },
+    {
+      "path": "free_llm_models.egg-info/SOURCES.txt",
+      "sha": null,
+      "content_sha256": "9fe402e59ceb4d3845d78542918e200cf8ef7519f385ab2653254ca903056608",
+      "score": 73,
+      "content": "MANIFEST.in\nREADME.md\nog-image.jpg\npyproject.toml\ndata/models.json\nfree_llm_models/__init__.py\nfree_llm_models/cli.py\nfree_llm_models.egg-info/PKG-INFO\nfree_llm_models.egg-info/SOURCES.txt\nfree_llm_models.egg-info/dependency_links.txt\nfree_llm_models.egg-info/entry_points.txt\nfree_llm_models.egg-info/top_level.txt\nfree_llm_models/../data/models.json"
+    },
+    {
+      "path": "free_llm_models.egg-info/top_level.txt",
+      "sha": null,
+      "content_sha256": "cdd0f27a10232ad0742eb6d2388cf5b79de769c6ec15ff3405c0f7441888cc7c",
+      "score": 73,
+      "content": "free_llm_models\n"
+    },
+    {
+      "path": "free_llm_models.egg-info/dependency_links.txt",
+      "sha": null,
+      "content_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "score": 73,
+      "content": "\n"
+    },
+    {
+      "path": "free_llm_models.egg-info/entry_points.txt",
+      "sha": null,
+      "content_sha256": "efa177f01b1802566582ec1c32e52aefc3472606ab2a733c88d967c98ed93cd0",
+      "score": 73,
+      "content": "[console_scripts]\nfree-llm-models = free_llm_models.cli:main\n"
+    },
+    {
+      "path": "free_llm_models.egg-info/PKG-INFO",
+      "sha": null,
+      "content_sha256": "fa831e03fbb809d8fd49219d6f2c66a98b1c0b6821bf52cb91be56ae68452840",
+      "score": 73,
+      "content": "Metadata-Version: 2.4\nName: free-llm-models\nVersion: 1.0.2\nSummary: A curated list of free LLM APIs and models. Query 500+ free models from 30+ providers.\nAuthor: MyToolster\nLicense: MIT\nProject-URL: Homepage, https://freellm.net\nProject-URL: Repository, https://github.com/open-free-llm-api/free-llm-models-python\nProject-URL: Bug Reports, https://github.com/open-free-llm-api/free-llm-models-python/issues\nKeywords: llm,free,ai,models,api,openai,claude,gpt\nClassifier: Programming Language :: Python :: 3\nClassifier: License :: OSI Approved :: MIT License\nClassifier: Topic :: Scientific/Engineering :: Artificial Intelligence\nRequires-Python: >=3.8\nDescription-Content-Type: text/markdown\n\n[![FreeLLM.net](https://github.com/open-free-llm-api/free-llm-models-python/raw/main/og-image.jpg)](https://freellm.net)\n\n# free-llm-models\n\n[![PyPI version](https://img.shields.io/pypi/v/free-llm-models.svg)](https://pypi.org/project/free-llm-models/)\n[![PyPI downloads](https://img.shields.io/pypi/dm/free-llm-models.svg)](https://pypi.org/project/free-llm-models/)\n[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)\n[![GitHub stars](https://img.shields.io/github/stars/open-free-llm-api/free-llm-models-python.svg)](https://github.com/open-free-llm-api/free-llm-models-python/stargazers)\n\nA curated, machine-readable directory of **537+ free LLM APIs and models** from 30+ providers. Query it from your terminal or import it into your Python projects.\n\nData is synced daily from [FreeLLM](https://freellm.net) — the free LLM API directory with live playground. Browse the full interactive catalog at [freellm.net](https://freellm.net).\n\n> **JavaScript user?** There's an npm twin: [`free-llm-models` on npm](https://www.npmjs.com/package/free-llm-models) · [GitHub](https://github.com/open-free-llm-api/free-llm-models)\n\n## Installation\n\n```bash\npip install free-llm-models\n```\n\n## CLI Usage\n\n```bash\n# List free models (default 20, use --limit for more)\nfree-llm-models list --limit 10\n\n# Filter by provider\nfree-llm-models list --provider opencode\n\n# Search by keyword\nfree-llm-models search claude\n\n# Show model details\nfree-llm-models info kimi-k2-7-code\n\n# List all providers with model counts\nfree-llm-models providers\n\n# Compare two models side by side\nfree-llm-models compare kimi-k2-7-code claude-fable-5\n\n# Get a random recommendation\nfree-llm-models random\n\n# Machine-readable JSON output (great for scripts)\nfree-llm-models search gpt --json\n```\n\n## Python API\n\n```python\nimport free_llm_models as flm\n\n# Search models\nresults = flm.search('claude')\n\n# Get a specific model\nmodel = flm.get('kimi-k2-7-code')\nprint(model['provider'])  # 'opencode'\n\n# List providers\nproviders = flm.providers()\n\n# Filter by provider\nmodels = flm.by_provider('opencode')\n\n# Get dataset metadata\nmeta = flm.meta()  # {'updated', 'source', 'count'}\n```\n\n## Data\n\n| Field | Description |\n|-------|-------------|\n| `id` | Unique model identifier |\n| `name` | Human-readable model name |\n| `provider` | Provider name (e.g. `opencode`, `google-gemini`) |\n| `supportsTools` | Whether the model supports function calling |\n| `supportsJson` | Whether the model supports JSON mode |\n| `released` | Release date (ISO 8601) |\n\n- **537 models** across 30+ providers\n- Updated: 2026-10-18\n- Full interactive directory with playground: [https://freellm.net](https://freellm.net)\n\n## Relationship with awesome-freellm-apis\n\nThis package is the machine-readable companion to [awesome-freellm-apis](https://github.com/open-free-llm-api/awesome-freellm-apis) (the curated awesome list, 4.4k+ stars).\n\n| | awesome-freellm-apis | free-llm-models |\n|---|---|---|\n| Format | Human-readable awesome list | JSON data + CLI + API |\n| Use case | Browse & compare in browser | Query from terminal / code |\n| Data source | Same freellm.net dataset | Same freellm.net dataset |\n\nBoth are maintained by the [open-free-llm-api](https://github.com/open-free-llm-api) organization and synced from [freellm.net](https://freellm.net).\n\n## Contributing\n\nContributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.\n\n## Changelog\n\nSee [CHANGELOG.md](CHANGELOG.md) for release history.\n\n## License\n\nMIT © [MyToolster](https://freellm.net)\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-19T01:46:50.892093+00:00"
+}

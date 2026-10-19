@@ -1,0 +1,192 @@
+{
+  "canonical_source": "github:Infisical/ai-skills",
+  "repo": "Infisical/ai-skills",
+  "revision_sha": "d7e7fa443893d7ba10895f926407da27751ea096",
+  "default_branch": "main",
+  "pushed_at": "2026-10-16T21:18:00Z",
+  "repo_updated_at": "2026-10-18T06:48:51Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "skills/infisical-kubernetes-operator/references/install-and-auth.md",
+      "sha": null,
+      "content_sha256": "2bc8044eadf65cd512565d861c8aa863a66b6483739294439b623ef64cd91019",
+      "score": 228,
+      "content": "# Installing the Operator and Configuring Auth\n\n## Supported versions\n\n**Kubernetes minor releases** officially supported (the latest operator is tested against each):\n\n1.33, 1.32, 1.31, 1.30, 1.29\n\n**Distributions** tested successfully:\n\n- Amazon EKS\n- Google GKE\n- Microsoft AKS\n- Oracle OKE\n- Red Hat OpenShift\n\nOther versions and distributions may work but are not officially supported.\n\n## Installation\n\nThe operator is installed with Helm from the Cloudsmith chart repository. The chart is\n`secrets-operator`.\n\n```bash\nhelm repo add infisical-helm-charts 'https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/'\nhelm repo update\n```\n\nNote this is the **same Helm repo** used to self-host Infisical itself, but a different chart.\n`secrets-operator` installs the operator; the standalone chart installs the platform. Do not confuse\nthem.\n\n### Cluster-wide (default)\n\nThe operator watches and manages CRDs across all namespaces. Quickest way to start.\n\n```bash\nhelm install --generate-name infisical-helm-charts/secrets-operator\n```\n\n### Namespace-scoped\n\nRestricts the operator's permissions to specific namespaces. Use for multi-tenant clusters or where\nstrict resource isolation is required.\n\nSingle namespace:\n\n```bash\nhelm install operator-namespaced infisical-helm-charts/secrets-operator \\\n  --namespace single-namespace \\\n  --set scopedNamespaces=single-namespace \\\n  --set scopedRBAC=true\n```\n\nEquivalent `values.yaml`:\n\n```yaml\nscopedNamespaces: single-namespace\nscopedRBAC: true\ninstallCRDs: true\n```\n\n### Multiple namespace-scoped installs\n\n**CRDs are cluster-wide resources, so only the first install may create them.** Every subsequent\ninstall must set `installCRDs: false` or they conflict.\n\n```bash\nhelm install operator-1 infisical-helm-charts/secrets-operator \\\n  --namespace ns1 \\\n  --set scopedNamespaces=ns1 \\\n  --set scopedRBAC=true \\\n  --set installCRDs=true    # first install creates the CRDs (default is true)\n\nhelm install operator-namespace2 infisical-helm-charts/secrets-operator \\\n  --namespace ns2 \\\n  --set scopedNamespaces=ns2 \\\n  --set scopedRBAC=true \\\n  --set installCRDs=false   # subsequent installs must NOT reinstall CRDs\n```\n\nThis is the most common namespace-scoped mistake. Symptom: the second `helm install` fails on\nalready-existing CRDs, or upgrades fight over CRD ownership.\n\n## v1beta1 auth architecture\n\nv1beta1 splits configuration into three resources. Create them in this order.\n\n### 1. InfisicalConnection — where Infisical is\n\n```yaml\napiVersion: secrets.infisical.com/v1beta1\nkind: InfisicalConnection\nmetadata:\n  name: my-infisical-connection\n  namespace: default\nspec:\n  address: https://app.infisical.com\n```\n\nSet `address` to your own domain for self-hosted instances. One connection can be referenced by many\n`InfisicalAuth` resources.\n\n### 2. InfisicalAuth — how to authenticate\n\n```yaml\napiVersion: secrets.infisical.com/v1beta1\nkind: InfisicalAuth\nmetadata:\n  name: my-infisical-auth\n  namespace: default\nspec:\n  infisicalConnectionRef:\n    name: my-infisical-connection\n    namespace: default\n  method: kubernetes\n  kubernetes:\n    identityIdRef:\n      name: kubernetes-credentials\n      namespace: default\n      key: identityId\n    serviceAccountRef:\n      name: infisical-service-account\n      namespace: default\n```\n\nNote the pattern: identifiers come from **`*Ref` fields pointing at Kubernetes Secrets**, not inline\nvalues. `identityIdRef` names a Secret plus the `key` within it. Keep credentials out of manifests.\n\n### 3. Then a sync resource\n\n`InfisicalStaticSecret` references the `InfisicalAuth` via `infisicalAuthRef`. See\n`references/syncing-secrets.md`.\n\n## The 7 auth methods\n\n`spec.method` on `InfisicalAuth`:\n\n| `method` | Platform | Static credentials in cluster? |\n|----------|----------|-------------------------------|\n| `kubernetes` | Any Kubernetes cluster | **No** — uses the pod service account token |\n| `aws-iam` | EKS / AWS | No — uses the IAM role |\n| `azure` | AKS / Azure | No — uses managed identity |\n| `gcp-id-token` | GKE / GCP | No — uses the GCP identity token |\n| `gcp-iam` | GCP | A service account key |\n| `ldap` | LDAP/AD environments | Bind credentials |\n| `universal` | Anywhere | Client ID + Client Secret |\n\n**Prefer `kubernetes`.** It is the platform-native, zero-static-credential option and works on every\ndistribution. There is no reason to use `universal` in a cluster where Kubernetes Auth can be\nconfigured.\n\nRough ordering when advising:\n\n1. `kubernetes` — always the first choice in-cluster\n2. `aws-iam` / `azure` / `gcp-id-token` — if the workload's cloud identity is already the trust anchor\n3. `universal` — last resort\n\n### Kubernetes Auth prerequisites\n\nKubernetes Auth requires a token reviewer configured on the machine identity in Infisical, plus a\nservice account in the cluster whose token the operator presents. Setting up the identity side is\ncovered in `infisical-setup` under Kubernetes Auth.\n\nThe `serviceAccountRef` in `InfisicalAuth` names the service account whose token is used — it must\nmatch what the machine identity's Kubernetes Auth config permits (allowed namespaces and service\naccount names), or authentication is rejected.\n\n### Universal Auth\n\n```yaml\napiVersion: v1\nkind: Secret\nmetadata:\n  name: infisical-universal-auth\n  namespace: default\nstringData:\n  clientId: \"<machine-identity-client-id>\"\n  clientSecret: \"<machine-identity-client-secret>\"\n```\n\nThen reference that Secret from the `InfisicalAuth` resource rather than inlining the values.\n\nNever write a client secret directly into an `InfisicalAuth` manifest — manifests end up in git.\n\n## v1alpha1 auth\n\nIn v1alpha1 there are no separate connection and auth resources; authentication is configured inline\non the `InfisicalSecret` resource itself, along with the instance address. That coupling is why\nv1beta1 exists — a connection and auth config had to be repeated on every synced secret.\n\nWhen migrating, factor the repeated address and auth out into one `InfisicalConnection` and one\n`InfisicalAuth`, then point each `InfisicalStaticSecret` at the auth.\n\n## Verifying\n\nAfter installing and applying the CRDs:\n\n1. Check the operator pod is running in its namespace\n2. Check the CRD's status for authentication errors — the operator reports failures on the resource\n3. Confirm the target Secret exists and holds the expected keys\n\nIf the target Secret never appears, the failure is almost always authentication or a source path that\nresolves to nothing. Read the CRD's status conditions before anything else.\n"
+    },
+    {
+      "path": "plugins/infisical-kubernetes-operator/skills/infisical-kubernetes-operator/references/install-and-auth.md",
+      "sha": null,
+      "content_sha256": "2bc8044eadf65cd512565d861c8aa863a66b6483739294439b623ef64cd91019",
+      "score": 224,
+      "content": "# Installing the Operator and Configuring Auth\n\n## Supported versions\n\n**Kubernetes minor releases** officially supported (the latest operator is tested against each):\n\n1.33, 1.32, 1.31, 1.30, 1.29\n\n**Distributions** tested successfully:\n\n- Amazon EKS\n- Google GKE\n- Microsoft AKS\n- Oracle OKE\n- Red Hat OpenShift\n\nOther versions and distributions may work but are not officially supported.\n\n## Installation\n\nThe operator is installed with Helm from the Cloudsmith chart repository. The chart is\n`secrets-operator`.\n\n```bash\nhelm repo add infisical-helm-charts 'https://dl.cloudsmith.io/public/infisical/helm-charts/helm/charts/'\nhelm repo update\n```\n\nNote this is the **same Helm repo** used to self-host Infisical itself, but a different chart.\n`secrets-operator` installs the operator; the standalone chart installs the platform. Do not confuse\nthem.\n\n### Cluster-wide (default)\n\nThe operator watches and manages CRDs across all namespaces. Quickest way to start.\n\n```bash\nhelm install --generate-name infisical-helm-charts/secrets-operator\n```\n\n### Namespace-scoped\n\nRestricts the operator's permissions to specific namespaces. Use for multi-tenant clusters or where\nstrict resource isolation is required.\n\nSingle namespace:\n\n```bash\nhelm install operator-namespaced infisical-helm-charts/secrets-operator \\\n  --namespace single-namespace \\\n  --set scopedNamespaces=single-namespace \\\n  --set scopedRBAC=true\n```\n\nEquivalent `values.yaml`:\n\n```yaml\nscopedNamespaces: single-namespace\nscopedRBAC: true\ninstallCRDs: true\n```\n\n### Multiple namespace-scoped installs\n\n**CRDs are cluster-wide resources, so only the first install may create them.** Every subsequent\ninstall must set `installCRDs: false` or they conflict.\n\n```bash\nhelm install operator-1 infisical-helm-charts/secrets-operator \\\n  --namespace ns1 \\\n  --set scopedNamespaces=ns1 \\\n  --set scopedRBAC=true \\\n  --set installCRDs=true    # first install creates the CRDs (default is true)\n\nhelm install operator-namespace2 infisical-helm-charts/secrets-operator \\\n  --namespace ns2 \\\n  --set scopedNamespaces=ns2 \\\n  --set scopedRBAC=true \\\n  --set installCRDs=false   # subsequent installs must NOT reinstall CRDs\n```\n\nThis is the most common namespace-scoped mistake. Symptom: the second `helm install` fails on\nalready-existing CRDs, or upgrades fight over CRD ownership.\n\n## v1beta1 auth architecture\n\nv1beta1 splits configuration into three resources. Create them in this order.\n\n### 1. InfisicalConnection — where Infisical is\n\n```yaml\napiVersion: secrets.infisical.com/v1beta1\nkind: InfisicalConnection\nmetadata:\n  name: my-infisical-connection\n  namespace: default\nspec:\n  address: https://app.infisical.com\n```\n\nSet `address` to your own domain for self-hosted instances. One connection can be referenced by many\n`InfisicalAuth` resources.\n\n### 2. InfisicalAuth — how to authenticate\n\n```yaml\napiVersion: secrets.infisical.com/v1beta1\nkind: InfisicalAuth\nmetadata:\n  name: my-infisical-auth\n  namespace: default\nspec:\n  infisicalConnectionRef:\n    name: my-infisical-connection\n    namespace: default\n  method: kubernetes\n  kubernetes:\n    identityIdRef:\n      name: kubernetes-credentials\n      namespace: default\n      key: identityId\n    serviceAccountRef:\n      name: infisical-service-account\n      namespace: default\n```\n\nNote the pattern: identifiers come from **`*Ref` fields pointing at Kubernetes Secrets**, not inline\nvalues. `identityIdRef` names a Secret plus the `key` within it. Keep credentials out of manifests.\n\n### 3. Then a sync resource\n\n`InfisicalStaticSecret` references the `InfisicalAuth` via `infisicalAuthRef`. See\n`references/syncing-secrets.md`.\n\n## The 7 auth methods\n\n`spec.method` on `InfisicalAuth`:\n\n| `method` | Platform | Static credentials in cluster? |\n|----------|----------|-------------------------------|\n| `kubernetes` | Any Kubernetes cluster | **No** — uses the pod service account token |\n| `aws-iam` | EKS / AWS | No — uses the IAM role |\n| `azure` | AKS / Azure | No — uses managed identity |\n| `gcp-id-token` | GKE / GCP | No — uses the GCP identity token |\n| `gcp-iam` | GCP | A service account key |\n| `ldap` | LDAP/AD environments | Bind credentials |\n| `universal` | Anywhere | Client ID + Client Secret |\n\n**Prefer `kubernetes`.** It is the platform-native, zero-static-credential option and works on every\ndistribution. There is no reason to use `universal` in a cluster where Kubernetes Auth can be\nconfigured.\n\nRough ordering when advising:\n\n1. `kubernetes` — always the first choice in-cluster\n2. `aws-iam` / `azure` / `gcp-id-token` — if the workload's cloud identity is already the trust anchor\n3. `universal` — last resort\n\n### Kubernetes Auth prerequisites\n\nKubernetes Auth requires a token reviewer configured on the machine identity in Infisical, plus a\nservice account in the cluster whose token the operator presents. Setting up the identity side is\ncovered in `infisical-setup` under Kubernetes Auth.\n\nThe `serviceAccountRef` in `InfisicalAuth` names the service account whose token is used — it must\nmatch what the machine identity's Kubernetes Auth config permits (allowed namespaces and service\naccount names), or authentication is rejected.\n\n### Universal Auth\n\n```yaml\napiVersion: v1\nkind: Secret\nmetadata:\n  name: infisical-universal-auth\n  namespace: default\nstringData:\n  clientId: \"<machine-identity-client-id>\"\n  clientSecret: \"<machine-identity-client-secret>\"\n```\n\nThen reference that Secret from the `InfisicalAuth` resource rather than inlining the values.\n\nNever write a client secret directly into an `InfisicalAuth` manifest — manifests end up in git.\n\n## v1alpha1 auth\n\nIn v1alpha1 there are no separate connection and auth resources; authentication is configured inline\non the `InfisicalSecret` resource itself, along with the instance address. That coupling is why\nv1beta1 exists — a connection and auth config had to be repeated on every synced secret.\n\nWhen migrating, factor the repeated address and auth out into one `InfisicalConnection` and one\n`InfisicalAuth`, then point each `InfisicalStaticSecret` at the auth.\n\n## Verifying\n\nAfter installing and applying the CRDs:\n\n1. Check the operator pod is running in its namespace\n2. Check the CRD's status for authentication errors — the operator reports failures on the resource\n3. Confirm the target Secret exists and holds the expected keys\n\nIf the target Secret never appears, the failure is almost always authentication or a source path that\nresolves to nothing. Read the CRD's status conditions before anything else.\n"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/k8s-auth/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "5f135dab2e0c8df07b2e26fd64bf439a08e219071ff60d1749ca21145012e934",
+      "score": 189,
+      "content": "{\n  \"eval_id\": 2,\n  \"eval_name\": \"k8s-auth\",\n  \"prompt\": \"We're running a Kubernetes cluster on GKE and want to sync secrets from Infisical to our pods using the operator. How do I set up the auth and get the operator working?\",\n  \"assertions\": [\n    {\"id\": \"recommends-k8s-auth\", \"text\": \"Recommends Kubernetes Auth as the preferred method for GKE (platform-native, zero-secret)\", \"type\": \"content_check\"},\n    {\"id\": \"correct-crd-name\", \"text\": \"Uses correct CRD name 'InfisicalSecret' for syncing secrets\", \"type\": \"keyword_check\"},\n    {\"id\": \"helm-install\", \"text\": \"Shows Helm-based operator installation\", \"type\": \"content_check\"},\n    {\"id\": \"no-deprecated-auth\", \"text\": \"Does not recommend deprecated API Keys or Service Tokens as auth methods\", \"type\": \"content_check\"},\n    {\"id\": \"service-account-setup\", \"text\": \"Covers Kubernetes service account setup for K8s Auth\", \"type\": \"content_check\"},\n    {\"id\": \"machine-identity\", \"text\": \"References creating a machine identity in Infisical\", \"type\": \"content_check\"}\n  ]\n}\n"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/docker-secrets/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "17d98b84f77a86189a1240ee98d07e3b9e54ba83cc894d72716ad3239da20d8e",
+      "score": 189,
+      "content": "{\n  \"eval_id\": 1,\n  \"eval_name\": \"docker-secrets\",\n  \"prompt\": \"I need to inject secrets from Infisical into my Docker containers at runtime. I'm deploying to AWS ECS. What's the best way to do this without baking secrets into the image?\",\n  \"assertions\": [\n    {\"id\": \"recommends-aws-auth\", \"text\": \"Recommends AWS Auth as the preferred method for ECS (platform-native, zero-secret)\", \"type\": \"content_check\"},\n    {\"id\": \"correct-cli-install\", \"text\": \"Uses correct CLI install URL (artifacts-cli.infisical.com, not dl.infisical.com)\", \"type\": \"keyword_check\"},\n    {\"id\": \"uses-infisical-run\", \"text\": \"Shows 'infisical run' pattern for injecting secrets at container startup\", \"type\": \"keyword_check\"},\n    {\"id\": \"no-service-tokens\", \"text\": \"Does not recommend deprecated Service Tokens for authentication\", \"type\": \"content_check\"},\n    {\"id\": \"no-baked-secrets\", \"text\": \"Explicitly warns against baking secrets into Docker images\", \"type\": \"content_check\"},\n    {\"id\": \"machine-identity-auth\", \"text\": \"Uses machine identity authentication (not API keys or service tokens)\", \"type\": \"content_check\"}\n  ]\n}\n"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/k8s-auth/with_skill/timing.json",
+      "sha": null,
+      "content_sha256": "be8c9b0df4a175df09996505798809649f9ba5e9437aa0218598162552217494",
+      "score": 187,
+      "content": "{\"total_tokens\": 40696, \"duration_ms\": 144245, \"total_duration_seconds\": 144.2}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/k8s-auth/without_skill/grading.json",
+      "sha": null,
+      "content_sha256": "7344580051b4920a171fd00ceac4f7776f0f80f6fd9d938b44d77255416dd5b0",
+      "score": 187,
+      "content": "{\n  \"expectations\": [\n    {\n      \"text\": \"Recommends Kubernetes Auth as the preferred method for GKE (platform-native, zero-secret)\",\n      \"passed\": true,\n      \"evidence\": \"Found 'Kubernetes Auth': True\"\n    },\n    {\n      \"text\": \"Uses correct CRD name 'InfisicalSecret' for syncing secrets\",\n      \"passed\": true,\n      \"evidence\": \"Found 'InfisicalSecret': True\"\n    },\n    {\n      \"text\": \"Shows Helm-based operator installation\",\n      \"passed\": true,\n      \"evidence\": \"Found Helm commands: True\"\n    },\n    {\n      \"text\": \"Does not recommend deprecated API Keys or Service Tokens as auth methods\",\n      \"passed\": false,\n      \"evidence\": \"Service tokens: True, API keys: True\"\n    },\n    {\n      \"text\": \"Covers Kubernetes service account setup for K8s Auth\",\n      \"passed\": true,\n      \"evidence\": \"Found service account reference: True\"\n    },\n    {\n      \"text\": \"References creating a machine identity in Infisical\",\n      \"passed\": false,\n      \"evidence\": \"Found 'machine identity': False\"\n    }\n  ]\n}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/k8s-auth/without_skill/timing.json",
+      "sha": null,
+      "content_sha256": "a4f8a9b6824977c4dfed8b498a79b1899ee31d56f060ddf34d4fb807f5c8fac4",
+      "score": 187,
+      "content": "{\"total_tokens\": 34462, \"duration_ms\": 140420, \"total_duration_seconds\": 140.4}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/docker-secrets/with_skill/grading.json",
+      "sha": null,
+      "content_sha256": "68a14961354bd09ce6d5e9e30c4b88483df6d67179e1eab771db26680a3d157a",
+      "score": 187,
+      "content": "{\n  \"expectations\": [\n    {\n      \"text\": \"Recommends AWS Auth as the preferred method for ECS (platform-native, zero-secret)\",\n      \"passed\": true,\n      \"evidence\": \"Found 'AWS Auth': True\"\n    },\n    {\n      \"text\": \"Uses correct CLI install URL (artifacts-cli.infisical.com, not dl.infisical.com)\",\n      \"passed\": true,\n      \"evidence\": \"Correct URL: True, Wrong URL: False\"\n    },\n    {\n      \"text\": \"Shows 'infisical run' pattern for injecting secrets at container startup\",\n      \"passed\": true,\n      \"evidence\": \"Found 'infisical run': True\"\n    },\n    {\n      \"text\": \"Does not recommend deprecated Service Tokens for authentication\",\n      \"passed\": false,\n      \"evidence\": \"Service token reference: True\"\n    },\n    {\n      \"text\": \"Explicitly warns against baking secrets into Docker images\",\n      \"passed\": true,\n      \"evidence\": \"Warning present: True\"\n    },\n    {\n      \"text\": \"Uses machine identity authentication (not API keys or service tokens)\",\n      \"passed\": true,\n      \"evidence\": \"Machine identity: True, Universal Auth: True\"\n    }\n  ]\n}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/k8s-auth/with_skill/grading.json",
+      "sha": null,
+      "content_sha256": "80ce9738f2c042d748097dee19ecaa2c62e34e91fb6f36a0007f7a2064232da8",
+      "score": 187,
+      "content": "{\n  \"expectations\": [\n    {\n      \"text\": \"Recommends Kubernetes Auth as the preferred method for GKE (platform-native, zero-secret)\",\n      \"passed\": true,\n      \"evidence\": \"Found 'Kubernetes Auth': True\"\n    },\n    {\n      \"text\": \"Uses correct CRD name 'InfisicalSecret' for syncing secrets\",\n      \"passed\": true,\n      \"evidence\": \"Found 'InfisicalSecret': True\"\n    },\n    {\n      \"text\": \"Shows Helm-based operator installation\",\n      \"passed\": true,\n      \"evidence\": \"Found Helm commands: True\"\n    },\n    {\n      \"text\": \"Does not recommend deprecated API Keys or Service Tokens as auth methods\",\n      \"passed\": true,\n      \"evidence\": \"Service tokens: False, API keys: False\"\n    },\n    {\n      \"text\": \"Covers Kubernetes service account setup for K8s Auth\",\n      \"passed\": true,\n      \"evidence\": \"Found service account reference: True\"\n    },\n    {\n      \"text\": \"References creating a machine identity in Infisical\",\n      \"passed\": true,\n      \"evidence\": \"Found 'machine identity': True\"\n    }\n  ]\n}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/docker-secrets/without_skill/timing.json",
+      "sha": null,
+      "content_sha256": "4ad9d28424e639e7864e97bd2894df62a6f4cd49c4db49e460a280599a8670a0",
+      "score": 187,
+      "content": "{\"total_tokens\": 33460, \"duration_ms\": 141201, \"total_duration_seconds\": 141.2}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/docker-secrets/with_skill/timing.json",
+      "sha": null,
+      "content_sha256": "d0a6222a53a3981810c3ea70ad3a917a7c7b5c89273926f5389152e66dd63c9f",
+      "score": 187,
+      "content": "{\"total_tokens\": 38236, \"duration_ms\": 143790, \"total_duration_seconds\": 143.8}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/docker-secrets/without_skill/grading.json",
+      "sha": null,
+      "content_sha256": "e4e242da2d03de4fa3074ec3968e8b49041fb617afe91ced5d6d4cf9780193cc",
+      "score": 187,
+      "content": "{\n  \"expectations\": [\n    {\n      \"text\": \"Recommends AWS Auth as the preferred method for ECS (platform-native, zero-secret)\",\n      \"passed\": false,\n      \"evidence\": \"Found 'AWS Auth': False\"\n    },\n    {\n      \"text\": \"Uses correct CLI install URL (artifacts-cli.infisical.com, not dl.infisical.com)\",\n      \"passed\": false,\n      \"evidence\": \"Correct URL: False, Wrong URL: False\"\n    },\n    {\n      \"text\": \"Shows 'infisical run' pattern for injecting secrets at container startup\",\n      \"passed\": false,\n      \"evidence\": \"Found 'infisical run': False\"\n    },\n    {\n      \"text\": \"Does not recommend deprecated Service Tokens for authentication\",\n      \"passed\": false,\n      \"evidence\": \"Service token reference: True\"\n    },\n    {\n      \"text\": \"Explicitly warns against baking secrets into Docker images\",\n      \"passed\": true,\n      \"evidence\": \"Warning present: True\"\n    },\n    {\n      \"text\": \"Uses machine identity authentication (not API keys or service tokens)\",\n      \"passed\": false,\n      \"evidence\": \"Machine identity: False, Universal Auth: False\"\n    }\n  ]\n}"
+    },
+    {
+      "path": "evals/accuracy-audit-2026-08/eval-4-agent-ssh-dynamic-secret-template/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "95951e6466666e046741c5333bd9da1858081e0abd57c51bbdc29c798e942e52",
+      "score": 184,
+      "content": "{\n  \"eval_id\": 4,\n  \"eval_name\": \"agent-ssh-dynamic-secret-template\",\n  \"skill\": \"infisical-agent\",\n  \"skill_files\": [\n    \"SKILL.md\",\n    \"references/agent-config.md\",\n    \"references/template-functions.md\"\n  ],\n  \"prompt\": \"I have an SSH dynamic secret configured in Infisical named 'prod-ssh' in project 'my-project', env 'prod'. Write the Infisical Agent template that renders the signed SSH certificate and private key to disk, plus the agent config. I need to log in as the 'deploy' principal.\",\n  \"assertions\": [\n    \"Passes principals as the 6th argument to dynamicSecret\",\n    \"Renders PRIVATE_KEY and SIGNED_KEY fields\",\n    \"Uses YAML agent config with the infisical: root key\",\n    \"Uses destination-path for template output\"\n  ],\n  \"arms\": [\n    \"baseline\",\n    \"old_skill\",\n    \"new_skill\"\n  ],\n  \"model\": \"sonnet\",\n  \"tools\": \"disabled\",\n  \"grading\": \"deterministic regex; negative assertions ignore counter-example lines\"\n}"
+    },
+    {
+      "path": "evals/skills-vs-mcp/eval-2-api-auth-list/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "0610d76631a9b17424d54885187c96ea1d9baa38e406d7705f476e7b7b8c7531",
+      "score": 184,
+      "content": "{\n  \"eval_name\": \"api-auth-and-list-secrets\",\n  \"prompt\": \"Write curl commands to authenticate with Infisical's REST API using a machine identity and then list all secrets in my project's dev environment.\",\n  \"assertions\": [\n    {\"id\": \"correct-auth-endpoint\", \"text\": \"Uses POST to `/api/v1/auth/universal-auth/login` with clientId and clientSecret in body\", \"weight\": 2},\n    {\"id\": \"bearer-token\", \"text\": \"Uses the returned accessToken as `Authorization: Bearer <token>` header\", \"weight\": 1},\n    {\"id\": \"correct-secrets-endpoint\", \"text\": \"Uses GET `/api/v4/secrets` (not v1, v2, or v3)\", \"weight\": 2},\n    {\"id\": \"required-params\", \"text\": \"Includes projectId and environment query parameters\", \"weight\": 1},\n    {\"id\": \"no-service-tokens\", \"text\": \"Does not use service tokens or deprecated auth methods\", \"weight\": 1},\n    {\"id\": \"content-type\", \"text\": \"Includes Content-Type: application/json header on POST requests\", \"weight\": 1}\n  ]\n}\n"
+    },
+    {
+      "path": "evals/accuracy-audit-2026-08/eval-1-ruby-sdk-fetch-secret/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "829f802206c7bde9ec7b16fe11a18fb3d8f4d88f078a4c8380544b51c6f26886",
+      "score": 184,
+      "content": "{\n  \"eval_id\": 1,\n  \"eval_name\": \"ruby-sdk-fetch-secret\",\n  \"skill\": \"infisical-setup\",\n  \"skill_files\": [\n    \"SKILL.md\",\n    \"references/sdks.md\"\n  ],\n  \"prompt\": \"Show me how to fetch a secret named API_KEY from the prod environment of my Infisical project using the official Ruby SDK. Include installation, client setup, authentication with a machine identity, and reading the value.\",\n  \"assertions\": [\n    \"Requires the correct path: require \\\"infisical\\\" (not 'infisical-sdk')\",\n    \"Instantiates Infisical::Client (not InfisicalSDK::InfisicalClient)\",\n    \"Calls universal_auth_login (not universal_auth)\",\n    \"Passes the secret name positionally to secrets.get\",\n    \"Installs the infisical-sdk gem\"\n  ],\n  \"arms\": [\n    \"baseline\",\n    \"old_skill\",\n    \"new_skill\"\n  ],\n  \"model\": \"sonnet\",\n  \"tools\": \"disabled\",\n  \"grading\": \"deterministic regex; negative assertions ignore counter-example lines\"\n}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/python-sdk/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "73be19b1a9df942edc041e42c3932ca697366fdc8b26bdc9f7d92189c7c2a638",
+      "score": 184,
+      "content": "{\n  \"eval_id\": 0,\n  \"eval_name\": \"python-sdk\",\n  \"prompt\": \"I'm running a Python Flask app and I want to pull secrets from Infisical using the Python SDK with Universal Auth. Can you show me how to set it up end to end — install the package, authenticate, and fetch secrets from my project?\",\n  \"assertions\": [\n    {\"id\": \"correct-package-name\", \"text\": \"Recommends installing 'infisicalsdk' (not 'infisical-python' or 'infisical')\", \"type\": \"keyword_check\"},\n    {\"id\": \"correct-import\", \"text\": \"Uses 'from infisical_sdk' import (not 'from infisical_client' or 'from infisical')\", \"type\": \"keyword_check\"},\n    {\"id\": \"correct-class-name\", \"text\": \"Uses 'InfisicalSDKClient' class name (not 'InfisicalClient')\", \"type\": \"keyword_check\"},\n    {\"id\": \"uses-machine-identity\", \"text\": \"References machine identity for Universal Auth (not service tokens or API keys)\", \"type\": \"content_check\"},\n    {\"id\": \"no-deprecated-patterns\", \"text\": \"Does not recommend deprecated Service Tokens (st.* prefix) or API Keys\", \"type\": \"content_check\"},\n    {\"id\": \"working-auth-flow\", \"text\": \"Shows client ID + client secret auth flow for Universal Auth\", \"type\": \"content_check\"}\n  ]\n}\n"
+    },
+    {
+      "path": "evals/accuracy-audit-2026-08/eval-2-api-list-all-secrets/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "e245c7fc8b62400084455a0f2fdc0b05ac6c0e0c937e03ffbcc83003427d7790",
+      "score": 184,
+      "content": "{\n  \"eval_id\": 2,\n  \"eval_name\": \"api-list-all-secrets\",\n  \"skill\": \"infisical-api\",\n  \"skill_files\": [\n    \"SKILL.md\",\n    \"references/secrets-endpoints.md\",\n    \"references/pagination-and-rate-limits.md\"\n  ],\n  \"prompt\": \"I need to retrieve every secret in an Infisical project environment, including secrets in subfolders, using the REST API directly with curl. Show me the exact request and explain how to handle paging through large result sets.\",\n  \"assertions\": [\n    \"Does not invent offset/limit pagination on /api/v4/secrets\",\n    \"States that the list-secrets endpoint is not paginated\",\n    \"Uses recursive=true to include subfolders\",\n    \"Uses the v4 endpoint\",\n    \"Does not claim the response has a `total` pagination field\"\n  ],\n  \"arms\": [\n    \"baseline\",\n    \"old_skill\",\n    \"new_skill\"\n  ],\n  \"model\": \"sonnet\",\n  \"tools\": \"disabled\",\n  \"grading\": \"deterministic regex; negative assertions ignore counter-example lines\"\n}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/python-sdk/with_skill/timing.json",
+      "sha": null,
+      "content_sha256": "d477b385cb6e2e202b1bb21908fdb97d8552e50612110d94c0b863d15a42942a",
+      "score": 182,
+      "content": "{\"total_tokens\": 41066, \"duration_ms\": 149961, \"total_duration_seconds\": 150.0}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/python-sdk/without_skill/timing.json",
+      "sha": null,
+      "content_sha256": "4db86ebf628af82e972612f092a578b927929bad40ca3e57a547811c062b4bea",
+      "score": 182,
+      "content": "{\"total_tokens\": 34450, \"duration_ms\": 143296, \"total_duration_seconds\": 143.3}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/python-sdk/with_skill/grading.json",
+      "sha": null,
+      "content_sha256": "b433f63fd58a4cc015f94100b95d19b750d2d64a8fd8603f507b2582eb38d4e7",
+      "score": 182,
+      "content": "{\n  \"expectations\": [\n    {\n      \"text\": \"Recommends installing 'infisicalsdk' (not 'infisical-python' or 'infisical')\",\n      \"passed\": true,\n      \"evidence\": \"Found 'infisicalsdk': True, Found 'infisical-python': False\"\n    },\n    {\n      \"text\": \"Uses 'from infisical_sdk' import (not 'from infisical_client' or 'from infisical')\",\n      \"passed\": false,\n      \"evidence\": \"Found 'infisical_sdk': True, Found wrong import: True\"\n    },\n    {\n      \"text\": \"Uses 'InfisicalSDKClient' class name (not 'InfisicalClient')\",\n      \"passed\": true,\n      \"evidence\": \"Found 'InfisicalSDKClient': True\"\n    },\n    {\n      \"text\": \"References machine identity for Universal Auth (not service tokens or API keys)\",\n      \"passed\": true,\n      \"evidence\": \"Found 'machine identity': True\"\n    },\n    {\n      \"text\": \"Does not recommend deprecated Service Tokens (st.* prefix) or API Keys\",\n      \"passed\": true,\n      \"evidence\": \"Service token mention: False, st.* prefix: False\"\n    },\n    {\n      \"text\": \"Shows client ID + client secret auth flow for Universal Auth\",\n      \"passed\": true,\n      \"evidence\": \"Client ID: True, Client Secret: True\"\n    }\n  ]\n}"
+    },
+    {
+      "path": "evals/infisical-setup-v2/iteration-1/python-sdk/without_skill/grading.json",
+      "sha": null,
+      "content_sha256": "ecb2966060a5d41469f5c437baaa8158b036be1e6508c7c884ec78b8660e5901",
+      "score": 182,
+      "content": "{\n  \"expectations\": [\n    {\n      \"text\": \"Recommends installing 'infisicalsdk' (not 'infisical-python' or 'infisical')\",\n      \"passed\": false,\n      \"evidence\": \"Found 'infisicalsdk': False, Found 'infisical-python': False\"\n    },\n    {\n      \"text\": \"Uses 'from infisical_sdk' import (not 'from infisical_client' or 'from infisical')\",\n      \"passed\": false,\n      \"evidence\": \"Found 'infisical_sdk': False, Found wrong import: True\"\n    },\n    {\n      \"text\": \"Uses 'InfisicalSDKClient' class name (not 'InfisicalClient')\",\n      \"passed\": false,\n      \"evidence\": \"Found 'InfisicalSDKClient': False\"\n    },\n    {\n      \"text\": \"References machine identity for Universal Auth (not service tokens or API keys)\",\n      \"passed\": false,\n      \"evidence\": \"Found 'machine identity': False\"\n    },\n    {\n      \"text\": \"Does not recommend deprecated Service Tokens (st.* prefix) or API Keys\",\n      \"passed\": true,\n      \"evidence\": \"Service token mention: False, st.* prefix: False\"\n    },\n    {\n      \"text\": \"Shows client ID + client secret auth flow for Universal Auth\",\n      \"passed\": true,\n      \"evidence\": \"Client ID: True, Client Secret: True\"\n    }\n  ]\n}"
+    },
+    {
+      "path": "evals/accuracy-audit-2026-08/eval-3-secret-sync-github-env-and-vercel/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "0569d0aa69bac05ae4525d1824255954125cadeffb862d3749774d47bd153a32",
+      "score": 181,
+      "content": "{\n  \"eval_id\": 3,\n  \"eval_name\": \"secret-sync-github-env-and-vercel\",\n  \"skill\": \"infisical-secret-syncs\",\n  \"skill_files\": [\n    \"SKILL.md\",\n    \"references/sync-overview.md\",\n    \"references/github-vercel-cloudflare.md\"\n  ],\n  \"prompt\": \"Via the Infisical API, I want to create two secret syncs: one pushing to a GitHub repository *environment*'s secrets, and one pushing to a Vercel project. Give me the exact destination and options field values for each, including the initial sync behavior enum values.\",\n  \"assertions\": [\n    \"Uses repository-environment as the GitHub environment scope value\",\n    \"Uses the correct initial sync behavior enum values (source/destination, not provider-named)\",\n    \"Notes GitHub cannot import (overwrite-destination only)\",\n    \"Includes teamId for the Vercel sync\",\n    \"Does not use the long-form GitHub visibility values\"\n  ],\n  \"arms\": [\n    \"baseline\",\n    \"old_skill\",\n    \"new_skill\"\n  ],\n  \"model\": \"sonnet\",\n  \"tools\": \"disabled\",\n  \"grading\": \"deterministic regex; negative assertions ignore counter-example lines\"\n}"
+    },
+    {
+      "path": "evals/accuracy-audit-2026-08/eval-0-terraform-provider-auth-and-ephemeral/eval_metadata.json",
+      "sha": null,
+      "content_sha256": "4a650efe6ced49cfb5530c01b00940415f163bcedc27cf29de1d17e649d7a5df",
+      "score": 181,
+      "content": "{\n  \"eval_id\": 0,\n  \"eval_name\": \"terraform-provider-auth-and-ephemeral\",\n  \"skill\": \"infisical-terraform\",\n  \"skill_files\": [\n    \"SKILL.md\",\n    \"references/provider-setup.md\",\n    \"references/resources-and-data-sources.md\"\n  ],\n  \"prompt\": \"Using the Infisical Terraform provider, write a complete configuration that authenticates with a machine identity via Universal Auth and fetches a secret called DATABASE_PASSWORD from the prod environment so that the value never lands in Terraform state. Show the full HCL.\",\n  \"assertions\": [\n    \"Nests credentials inside an auth block (auth = { universal = { client_id, client_secret } })\",\n    \"Uses `name` as the ephemeral secret's key attribute, not `secret_key`\",\n    \"Uses an ephemeral resource (not a data source) so the value stays out of state\",\n    \"Declares the provider source as infisical/infisical\"\n  ],\n  \"arms\": [\n    \"baseline\",\n    \"old_skill\",\n    \"new_skill\"\n  ],\n  \"model\": \"sonnet\",\n  \"tools\": \"disabled\",\n  \"grading\": \"deterministic regex; negative assertions ignore counter-example lines\"\n}"
+    },
+    {
+      "path": "evals/skills-vs-mcp/eval-2-api-auth-list/baseline/run-1/timing.json",
+      "sha": null,
+      "content_sha256": "d7474f65668e2705654205714921456e2427f4ca538914cc786b8862ab9147aa",
+      "score": 180,
+      "content": "{\"total_tokens\":42885,\"duration_ms\":15227}\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-19T01:46:55.700519+00:00"
+}

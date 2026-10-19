@@ -1,0 +1,203 @@
+{
+  "canonical_source": "github:mem7ai/mem7",
+  "repo": "mem7ai/mem7",
+  "revision_sha": "389b6802d570190b3130c61267e99fe2019d8e2e",
+  "default_branch": "main",
+  "pushed_at": "2026-03-26T15:56:10Z",
+  "repo_updated_at": "2026-09-27T07:01:50Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "agents",
+    "ai",
+    "ai-agents",
+    "chatbots",
+    "llm",
+    "memory",
+    "memory-management",
+    "openclaw",
+    "openclaw-plugin",
+    "rag"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "fbc3f4f8efedf2de3c9b8f8a8dbfbfe955589977cccedeb7c6345ff195f95cc9",
+      "score": 198,
+      "content": "name: CI\n\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n\njobs:\n  fmt:\n    name: Rustfmt\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions-rust-lang/setup-rust-toolchain@v1\n        with:\n          components: rustfmt\n      - uses: actions-rust-lang/rustfmt@v1\n\n  clippy:\n    name: Clippy\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions-rust-lang/setup-rust-toolchain@v1\n        with:\n          components: clippy\n      - run: cargo clippy --workspace --all-targets\n\n  test:\n    name: Rust Test (${{ matrix.os }})\n    runs-on: ${{ matrix.os }}\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions-rust-lang/setup-rust-toolchain@v1\n      - run: cargo test --workspace\n\n  python-build:\n    name: Python build (${{ matrix.os }})\n    runs-on: ${{ matrix.os }}\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions-rust-lang/setup-rust-toolchain@v1\n      - uses: actions/setup-python@v6\n        with:\n          python-version: \"3.12\"\n      - name: Install maturin\n        run: pip install maturin\n      - name: Build wheel\n        run: maturin build --release --out dist\n      - name: Install package and test deps\n        run: |\n          pip install dist/*.whl pytest pytest-asyncio\n      - name: Smoke test\n        run: |\n          cd /tmp && python -c \"from mem7 import Memory; print('import OK')\"\n      - name: Run Python tests\n        run: |\n          cd /tmp && pytest \"$GITHUB_WORKSPACE/tests/python/test_memory.py\"\n\n  python-style:\n    name: Python style\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions/setup-python@v6\n        with:\n          python-version: \"3.12\"\n      - name: Install ruff\n        run: pip install ruff\n      - name: Check formatting\n        run: ruff format --check mem7 tests/python\n      - name: Lint\n        run: ruff check mem7 tests/python\n\n  node-build:\n    name: Node.js build (${{ matrix.os }})\n    runs-on: ${{ matrix.os }}\n    defaults:\n      run:\n        working-directory: src/bindings/mem7-node\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions-rust-lang/setup-rust-toolchain@v1\n      - uses: actions/setup-node@v6\n        with:\n          node-version: \"22\"\n      - run: npm install\n      - name: Build native module\n        run: npx napi build -p mem7-node --platform --release\n      - name: Smoke test\n        run: node -e \"const m = require('./index.js'); console.log('MemoryEngine:', typeof m.MemoryEngine)\"\n\n  openclaw-plugin-build:\n    name: OpenClaw plugin build\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: packages/openclaw-mem7\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions/setup-node@v6\n        with:\n          node-version: \"22\"\n      - run: npm install --ignore-scripts\n      - name: Prettier check\n        run: npm run fmt:check\n      - name: ESLint\n        run: npm run lint\n      - name: TypeScript compile\n        run: npx -p typescript tsc --noEmit\n      - name: Build dist\n        run: npm run build\n"
+    },
+    {
+      "path": "src/mem7-llm/Cargo.toml",
+      "sha": null,
+      "content_sha256": "afbe582d57f67769634f4849497b05e92046eda69b48e1fc4a96348b69672828",
+      "score": 191,
+      "content": "[package]\nname = \"mem7-llm\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"LLM client abstraction for the mem7 memory engine\"\n\n[dependencies]\nmem7-error.workspace = true\nmem7-config.workspace = true\nmem7-core.workspace = true\nasync-trait.workspace = true\nreqwest.workspace = true\nserde.workspace = true\nserde_json.workspace = true\ntokio.workspace = true\ntracing.workspace = true\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "21ac9cf9e8ad50265eeabac313c26ed59d48e38f9b6d524fdb621a3c17b213f9",
+      "score": 126,
+      "content": "name: Release\n\non:\n  push:\n    tags: [\"v*\"]\n\npermissions:\n  contents: read\n\njobs:\n  # ── Build Python wheels for all platforms ──────────────────────────\n  build-wheels:\n    name: Build wheels (${{ matrix.target }})\n    runs-on: ${{ matrix.os }}\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - os: ubuntu-latest\n            target: x86_64-unknown-linux-gnu\n            sdist: true\n          - os: ubuntu-latest\n            target: aarch64-unknown-linux-gnu\n            manylinux: \"2_24\"\n          - os: macos-latest\n            target: x86_64-apple-darwin\n          - os: macos-latest\n            target: aarch64-apple-darwin\n          - os: windows-latest\n            target: x86_64-pc-windows-msvc\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions/setup-python@v6\n        with:\n          python-version: \"3.12\"\n      - name: Build wheels\n        uses: PyO3/maturin-action@v1\n        with:\n          target: ${{ matrix.target }}\n          args: --release --out dist ${{ matrix.sdist && '--sdist' || '' }}\n          manylinux: ${{ matrix.manylinux || 'auto' }}\n      - uses: actions/upload-artifact@v7\n        with:\n          name: wheels-${{ matrix.target }}\n          path: dist\n\n  # ── Build Node.js native addons for all platforms ──────────────────\n  build-node:\n    name: Build node (${{ matrix.target }})\n    runs-on: ${{ matrix.os }}\n    defaults:\n      run:\n        working-directory: src/bindings/mem7-node\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - os: ubuntu-latest\n            target: x86_64-unknown-linux-gnu\n          - os: ubuntu-latest\n            target: aarch64-unknown-linux-gnu\n          - os: macos-latest\n            target: x86_64-apple-darwin\n          - os: macos-latest\n            target: aarch64-apple-darwin\n          - os: windows-latest\n            target: x86_64-pc-windows-msvc\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions/setup-node@v6\n        with:\n          node-version: \"22\"\n      - uses: actions-rust-lang/setup-rust-toolchain@v1\n        with:\n          target: ${{ matrix.target }}\n          cache: false\n      - run: npm install\n      - name: Build native module\n        run: npx napi build -p mem7-node --platform --release --target ${{ matrix.target }} ${{ contains(matrix.target, 'linux') && '--use-napi-cross' || '' }}\n        env:\n          CFLAGS_aarch64_unknown_linux_gnu: \"-D__ARM_ARCH=8\"\n      - uses: actions/upload-artifact@v7\n        with:\n          name: node-${{ matrix.target }}\n          path: src/bindings/mem7-node/mem7.*.node\n          if-no-files-found: error\n\n  # ── Publish Python package to PyPI ─────────────────────────────────\n  publish-pypi:\n    name: Publish to PyPI\n    needs: [build-wheels]\n    runs-on: ubuntu-latest\n    environment:\n      name: pypi\n      url: https://pypi.org/project/mem7/\n    permissions:\n      id-token: write\n    steps:\n      - uses: actions/download-artifact@v8\n        with:\n          pattern: wheels-*\n          merge-multiple: true\n          path: dist\n      - name: Publish to PyPI\n        uses: pypa/gh-action-pypi-publish@release/v1\n        with:\n          verbose: true\n          skip-existing: true\n\n  # ── Publish Node.js package to npm ─────────────────────────────────\n  publish-npm:\n    name: Publish to npm\n    needs: [build-node]\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: src/bindings/mem7-node\n    permissions:\n      contents: read\n      id-token: write\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions/setup-node@v6\n        with:\n          node-version: \"22\"\n          registry-url: https://registry.npmjs.org\n      - run: npm install\n      - name: Download all native artifacts\n        uses: actions/download-artifact@v8\n        with:\n          pattern: node-*\n          merge-multiple: true\n          path: src/bindings/mem7-node/artifacts\n      - name: Prepare and publish\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}\n        run: |\n          npx napi create-npm-dirs\n          npx napi artifacts\n          for dir in npm/*/; do\n            if [ -d \"$dir\" ]; then\n              npm publish \"$dir\" --access public || true\n            fi\n          done\n          npm publish --access public --ignore-scripts\n\n  # ── Publish OpenClaw plugin to npm ───────────────────────────────\n  publish-openclaw-plugin:\n    name: Publish OpenClaw plugin to npm\n    needs: [publish-npm]\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: packages/openclaw-mem7\n    permissions:\n      contents: read\n      id-token: write\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions/setup-node@v6\n        with:\n          node-version: \"22\"\n          registry-url: https://registry.npmjs.org\n      - run: npm install --ignore-scripts\n      - name: Build\n        run: npm run build\n      - name: Publish to npm\n        env:\n          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}\n        run: npm publish --access public || echo \"⚠ openclaw-mem7 skipped (already published or error)\"\n\n  # ── Publish Rust crates to crates.io ───────────────────────────────\n  publish-crates:\n    name: Publish to crates.io\n    needs: [publish-pypi]\n    runs-on: ubuntu-latest\n    env:\n      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}\n    steps:\n      - uses: actions/checkout@v6\n      - uses: actions-rust-lang/setup-rust-toolchain@v1\n        with:\n          cache: false\n      - name: Publish crates (dependency order)\n        run: |\n          set -e\n          publish() {\n            echo \"Publishing $1...\"\n            cargo publish -p \"$1\" --allow-dirty || echo \"⚠ $1 skipped (already published or error)\"\n            sleep 15\n          }\n          publish mem7-error\n          publish mem7-datetime\n          publish mem7-config\n          publish mem7-core\n          publish mem7-llm\n          publish mem7-embedding\n          publish mem7-vector\n          publish mem7-history\n          publish mem7-dedup\n          publish mem7-reranker\n          publish mem7-graph\n          publish mem7-telemetry\n          publish mem7-store\n          publish mem7\n"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "eac662ab474ea89803b0602e67abe8faffb7dfa78cd8b1f20779c20ba1157f64",
+      "score": 120,
+      "content": "[build-system]\nbuild-backend = \"maturin\"\nrequires = [\"maturin>=1.5,<2\"]\n\n[project]\nname = \"mem7\"\nversion = \"0.3.3\"\ndescription = \"High-performance AI memory engine with Rust core\"\nreadme = \"README.md\"\nlicense = {file = \"LICENSE\"}\nrequires-python = \">=3.10\"\ndependencies = [\n    \"pydantic>=2.0\",\n]\n\n[project.urls]\nHomepage = \"https://github.com/mem7ai/mem7\"\nRepository = \"https://github.com/mem7ai/mem7\"\n\n[project.optional-dependencies]\ndev = [\n    \"pytest>=8.0\",\n    \"pytest-asyncio>=0.24\",\n    \"ruff\",\n]\n\n[tool.maturin]\nmanifest-path = \"src/bindings/mem7-python/Cargo.toml\"\npython-source = \".\"\nmodule-name = \"mem7._mem7\"\nfeatures = []\n\n[tool.ruff]\ntarget-version = \"py310\"\nline-length = 100\n\n[tool.ruff.lint]\nselect = [\"E4\", \"E7\", \"E9\", \"F\"]\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "948524cfb07fbcde7542f98004b874e814fcde1fde4eed9cf7c5ab94ef098940",
+      "score": 120,
+      "content": "[workspace]\nresolver = \"3\"\nmembers = [\n    \"src/common/error\",\n    \"src/common/config\",\n    \"src/common/datetime\",\n    \"src/mem7-core\",\n    \"src/mem7-llm\",\n    \"src/mem7-embedding\",\n    \"src/mem7-vector\",\n    \"src/mem7-history\",\n    \"src/mem7-dedup\",\n    \"src/mem7-reranker\",\n    \"src/mem7-graph\",\n    \"src/mem7-telemetry\",\n    \"src/mem7-store\",\n    \"src/mem7\",\n    \"src/bindings/mem7-python\",\n    \"src/bindings/mem7-node\",\n]\n\n[workspace.package]\nversion = \"0.3.3\"\nedition = \"2024\"\nlicense = \"Apache-2.0\"\nrust-version = \"1.85\"\nrepository = \"https://github.com/mem7ai/mem7\"\nhomepage = \"https://github.com/mem7ai/mem7\"\ndescription = \"LLM-powered long-term memory engine — Rust core with multi-language bindings\"\n\n[workspace.dependencies]\n# Internal crates\nmem7-error = { path = \"src/common/error\", version = \"0.3.3\" }\nmem7-config = { path = \"src/common/config\", version = \"0.3.3\" }\nmem7-datetime = { path = \"src/common/datetime\", version = \"0.3.3\" }\nmem7-core = { path = \"src/mem7-core\", version = \"0.3.3\" }\nmem7-llm = { path = \"src/mem7-llm\", version = \"0.3.3\" }\nmem7-embedding = { path = \"src/mem7-embedding\", version = \"0.3.3\" }\nmem7-vector = { path = \"src/mem7-vector\", version = \"0.3.3\" }\nmem7-history = { path = \"src/mem7-history\", version = \"0.3.3\" }\nmem7-dedup = { path = \"src/mem7-dedup\", version = \"0.3.3\" }\nmem7-reranker = { path = \"src/mem7-reranker\", version = \"0.3.3\" }\nmem7-graph = { path = \"src/mem7-graph\", version = \"0.3.3\" }\nmem7-telemetry = { path = \"src/mem7-telemetry\", version = \"0.3.3\" }\nmem7-store = { path = \"src/mem7-store\", version = \"0.3.3\" }\nmem7 = { path = \"src/mem7\", version = \"0.3.3\" }\n\n# Async runtime\ntokio = { version = \"1\", features = [\"full\"] }\nasync-trait = \"0.1\"\n\n# HTTP\nreqwest = { version = \"0.12\", default-features = false, features = [\"json\", \"rustls-tls\"] }\n\n# Serialization\nserde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\n\n# ID generation\nuuid = { version = \"1\", features = [\"v7\", \"serde\"] }\n\n# Database\ntokio-rusqlite = \"0.7\"\nrusqlite = { version = \"0.37\", features = [\"bundled\"] }\n\n# Error handling\nthiserror = \"2\"\n\n# Logging\ntracing = \"0.1\"\n\n# Graph database\nneo4rs = \"0.8\"\n\n# Python bindings\npyo3 = { version = \"0.28.2\", features = [\"extension-module\", \"abi3-py310\"] }\n"
+    },
+    {
+      "path": "src/mem7-vector/Cargo.toml",
+      "sha": null,
+      "content_sha256": "41e95592e2fa2d710082a9c571337d4753b266568a5d48aaf8b2e3a1065ff7ba",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-vector\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Vector index implementations for the mem7 memory engine\"\n\n[dependencies]\nmem7-error.workspace = true\nmem7-config.workspace = true\nmem7-core.workspace = true\nasync-trait.workspace = true\nreqwest.workspace = true\nserde.workspace = true\nserde_json.workspace = true\ntokio.workspace = true\ntracing.workspace = true\nuuid.workspace = true\n"
+    },
+    {
+      "path": "src/mem7-embedding/Cargo.toml",
+      "sha": null,
+      "content_sha256": "af23fb712251856a89be68c3b2ed3ad94551c3b85a366ab9cf71f062f9ed6633",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-embedding\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Embedding client abstraction for the mem7 memory engine\"\n\n[features]\ndefault = []\nfastembed = [\"dep:fastembed\"]\n\n[dependencies]\nmem7-error.workspace = true\nmem7-config.workspace = true\nmem7-core.workspace = true\nasync-trait.workspace = true\nreqwest.workspace = true\nserde.workspace = true\nserde_json.workspace = true\ntokio.workspace = true\ntracing.workspace = true\nfastembed = { version = \"5.12\", optional = true }\n"
+    },
+    {
+      "path": "src/mem7-core/Cargo.toml",
+      "sha": null,
+      "content_sha256": "e3f4bb9c9a949be45b98415c9993ac605e439fb93049fb07625068462edeea52",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-core\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Core types and ID generation for the mem7 memory engine\"\n\n[dependencies]\nmem7-error.workspace = true\nmem7-config.workspace = true\nserde.workspace = true\nserde_json.workspace = true\nuuid.workspace = true\nmd5 = \"0.8.0\"\n"
+    },
+    {
+      "path": "src/mem7-telemetry/Cargo.toml",
+      "sha": null,
+      "content_sha256": "7a00702efa60b37584070d5c50e96fd8f9865a78a3fde4c0286f25b3eb0c8fa2",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-telemetry\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Optional OpenTelemetry integration for mem7\"\n\n[dependencies]\nmem7-config.workspace = true\nmem7-error.workspace = true\ntracing.workspace = true\ntracing-subscriber = { version = \"0.3\", features = [\"env-filter\", \"fmt\"] }\ntracing-opentelemetry = \"0.32\"\nopentelemetry = \"0.31\"\nopentelemetry_sdk = { version = \"0.31\", features = [\"rt-tokio\"] }\nopentelemetry-otlp = { version = \"0.31\", features = [\"grpc-tonic\"] }\n"
+    },
+    {
+      "path": "src/mem7-dedup/Cargo.toml",
+      "sha": null,
+      "content_sha256": "acdcffb8f2d279825b686cde20419593b32fa4b044110437e85062645f17c546",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-dedup\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Memory deduplication logic for the mem7 memory engine\"\n\n[dependencies]\nmem7-error.workspace = true\nmem7-core.workspace = true\nserde.workspace = true\nserde_json.workspace = true\ntracing.workspace = true\nuuid.workspace = true\n"
+    },
+    {
+      "path": "src/mem7-history/Cargo.toml",
+      "sha": null,
+      "content_sha256": "dce474f9ae59ab0c2c8c455186e39e4e18481f54e0b51d71537010833d8b4a42",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-history\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"SQLite-backed audit history for the mem7 memory engine\"\n\n[dependencies]\nmem7-error.workspace = true\nmem7-core.workspace = true\nmem7-datetime.workspace = true\nasync-trait.workspace = true\ntokio-rusqlite.workspace = true\nrusqlite.workspace = true\nuuid.workspace = true\ntracing.workspace = true\n\n[dev-dependencies]\ntokio.workspace = true\n"
+    },
+    {
+      "path": "src/mem7-reranker/Cargo.toml",
+      "sha": null,
+      "content_sha256": "698099777ce0402b2c5a921b599a3151b48c38d677f2331d78979a17c7d940bb",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-reranker\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrust-version.workspace = true\nrepository.workspace = true\nhomepage.workspace = true\ndescription = \"Reranker trait and providers for mem7\"\n\n[dependencies]\nmem7-error = { workspace = true }\nmem7-config = { workspace = true }\nmem7-llm = { workspace = true }\n\nasync-trait = { workspace = true }\nreqwest = { workspace = true }\nserde = { workspace = true }\nserde_json = { workspace = true }\ntracing = { workspace = true }\nuuid = { workspace = true }\n"
+    },
+    {
+      "path": "src/mem7/Cargo.toml",
+      "sha": null,
+      "content_sha256": "6705be1a6244e761e995aac99533409233a48cd2eb7e4dbb42d3f4173df22b79",
+      "score": 116,
+      "content": "[package]\nname = \"mem7\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"LLM-powered long-term memory engine — Rust core with Python bindings\"\n\n[features]\ndefault = []\nkuzu = [\"mem7-graph/kuzu\"]\notel = [\"dep:mem7-telemetry\"]\nfastembed = [\"mem7-embedding/fastembed\"]\n\n[dependencies]\nmem7-error.workspace = true\nmem7-config.workspace = true\nmem7-core.workspace = true\nmem7-llm.workspace = true\nmem7-embedding.workspace = true\nmem7-vector.workspace = true\nmem7-history.workspace = true\nmem7-dedup.workspace = true\nmem7-reranker.workspace = true\nmem7-graph.workspace = true\nmem7-telemetry = { workspace = true, optional = true }\nmem7-store.workspace = true\ntokio.workspace = true\n"
+    },
+    {
+      "path": "packages/openclaw-mem7/package.json",
+      "sha": null,
+      "content_sha256": "5da9b70879e66b44ac63be1ad6e64e222e607ce30574eb3adc5f8ebbf4dea40b",
+      "score": 116,
+      "content": "{\n  \"name\": \"@mem7ai/openclaw-mem7\",\n  \"version\": \"0.1.3\",\n  \"description\": \"OpenClaw memory plugin powered by mem7 — LLM fact extraction, graph relations, dedup, and Ebbinghaus forgetting curve.\",\n  \"license\": \"Apache-2.0\",\n  \"main\": \"dist/index.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"files\": [\n    \"dist\",\n    \"openclaw.plugin.json\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"dev\": \"tsc --watch\",\n    \"fmt:check\": \"prettier --check \\\"src/**/*.ts\\\"\",\n    \"lint\": \"eslint \\\"src/**/*.ts\\\"\"\n  },\n  \"openclaw\": {\n    \"type\": \"memory\",\n    \"name\": \"mem7\",\n    \"displayName\": \"Memory (mem7)\",\n    \"minGatewayVersion\": \"0.8.0\"\n  },\n  \"devDependencies\": {\n    \"@eslint/js\": \"^9.0.0\",\n    \"@types/node\": \"^22.0.0\",\n    \"eslint\": \"^9.0.0\",\n    \"globals\": \"^16.0.0\",\n    \"prettier\": \"^3.0.0\",\n    \"typescript\": \"^5.8.0\",\n    \"typescript-eslint\": \"^8.0.0\"\n  },\n  \"dependencies\": {\n    \"@mem7ai/mem7\": \"^0.3.3\",\n    \"@sinclair/typebox\": \"^0.34.0\"\n  },\n  \"peerDependencies\": {\n    \"openclaw\": \">=2026.2.0\"\n  },\n  \"peerDependenciesMeta\": {\n    \"openclaw\": {\n      \"optional\": true\n    }\n  },\n  \"engines\": {\n    \"node\": \">=22\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/mem7ai/mem7\",\n    \"directory\": \"packages/openclaw-mem7\"\n  },\n  \"keywords\": [\n    \"openclaw\",\n    \"memory\",\n    \"plugin\",\n    \"mem7\",\n    \"llm\",\n    \"forgetting-curve\",\n    \"graph-memory\"\n  ]\n}\n"
+    },
+    {
+      "path": "src/mem7-store/Cargo.toml",
+      "sha": null,
+      "content_sha256": "9d8642eb4d416cb02aaa445ad81c49c83b9ae76995665d47aecc42b19e794f42",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-store\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"The core memory engine orchestrator for mem7\"\n\n[dependencies]\nmem7-error.workspace = true\nmem7-config.workspace = true\nmem7-core.workspace = true\nmem7-datetime.workspace = true\nmem7-llm.workspace = true\nmem7-embedding.workspace = true\nmem7-vector.workspace = true\nmem7-history.workspace = true\nmem7-dedup.workspace = true\nmem7-reranker.workspace = true\nmem7-graph.workspace = true\nasync-trait.workspace = true\nserde.workspace = true\nserde_json.workspace = true\ntokio.workspace = true\ntracing.workspace = true\nuuid.workspace = true\n"
+    },
+    {
+      "path": "src/mem7-graph/Cargo.toml",
+      "sha": null,
+      "content_sha256": "790db6f32e798f44b8a333d4f9f452dd5b1305579dd1343b77526ab6fcbfe785",
+      "score": 116,
+      "content": "[package]\nname = \"mem7-graph\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrust-version.workspace = true\nrepository.workspace = true\nhomepage.workspace = true\ndescription = \"Graph store trait and providers for mem7\"\n\n[features]\ndefault = []\nkuzu = [\"dep:kuzu\"]\n\n[dependencies]\nmem7-error = { workspace = true }\nmem7-config = { workspace = true }\nmem7-core = { workspace = true }\nmem7-llm = { workspace = true }\nmem7-vector = { workspace = true }\n\nasync-trait = { workspace = true }\nkuzu = { version = \"0.11\", optional = true }\nneo4rs = { workspace = true }\nserde = { workspace = true }\nserde_json = { workspace = true }\ntracing = { workspace = true }\ntokio = { workspace = true }\n"
+    },
+    {
+      "path": "src/common/datetime/Cargo.toml",
+      "sha": null,
+      "content_sha256": "ede13229fc2fbb33911e53758cbc0a816fc7f83686cd2e81979041a0a8848a8a",
+      "score": 114,
+      "content": "[package]\nname = \"mem7-datetime\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Zero-dependency date/time utilities for the mem7 memory engine\"\n\n[dependencies]\n"
+    },
+    {
+      "path": "src/common/config/Cargo.toml",
+      "sha": null,
+      "content_sha256": "301d185527a1214a1a2c02c0d165f0d43a87e86b2daf40c67da4257fd6d122f0",
+      "score": 114,
+      "content": "[package]\nname = \"mem7-config\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Configuration types for the mem7 memory engine\"\n\n[dependencies]\nserde.workspace = true\n\n[dev-dependencies]\nserde_json.workspace = true\n"
+    },
+    {
+      "path": "src/bindings/mem7-python/Cargo.toml",
+      "sha": null,
+      "content_sha256": "b83a22aee71504fe4ba92c58fe771b5be1083c48122e7064043e464237531098",
+      "score": 114,
+      "content": "[package]\nname = \"mem7-python\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Python bindings for the mem7 memory engine\"\npublish = false\n\n[lib]\ncrate-type = [\"cdylib\"]\nname = \"_mem7\"\n\n[dependencies]\nmem7-store.workspace = true\nmem7-core.workspace = true\nmem7-config.workspace = true\nmem7-error.workspace = true\nmem7-telemetry.workspace = true\nserde_json.workspace = true\ntokio.workspace = true\nuuid.workspace = true\npyo3.workspace = true\npyo3-async-runtimes = { version = \"0.28\", features = [\"tokio-runtime\"] }\n"
+    },
+    {
+      "path": "src/common/error/Cargo.toml",
+      "sha": null,
+      "content_sha256": "b2d125033e16b0da68083ed8eaf781f0efae949ee05f843207d8ab251a2f6c55",
+      "score": 114,
+      "content": "[package]\nname = \"mem7-error\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Error types for the mem7 memory engine\"\n\n[dependencies]\nthiserror.workspace = true\nreqwest.workspace = true\nserde_json.workspace = true\ntokio-rusqlite.workspace = true\nrusqlite.workspace = true\n"
+    },
+    {
+      "path": "src/bindings/mem7-node/Cargo.toml",
+      "sha": null,
+      "content_sha256": "c9d3c7a79e21cae704cf6306acb8d0b4e33583935bbda623dc6aae1144479c38",
+      "score": 114,
+      "content": "[package]\nname = \"mem7-node\"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\nrepository.workspace = true\ndescription = \"Node.js bindings for the mem7 memory engine\"\npublish = false\n\n[lib]\ncrate-type = [\"cdylib\"]\n\n[dependencies]\nnapi = { version = \"3\", default-features = false, features = [\"napi8\", \"async\", \"tokio_rt\", \"serde-json\"] }\nnapi-derive = \"3\"\nmem7-store.workspace = true\nmem7-core.workspace = true\nmem7-config.workspace = true\nmem7-error.workspace = true\nmem7-telemetry.workspace = true\nserde_json.workspace = true\nuuid.workspace = true\n\n[build-dependencies]\nnapi-build = \"2\"\n"
+    },
+    {
+      "path": "src/bindings/mem7-node/package.json",
+      "sha": null,
+      "content_sha256": "78b1dde45040929ad1b39144bd09b73edb93b9fd61729ec0e188a0e3716ed52a",
+      "score": 114,
+      "content": "{\n  \"name\": \"@mem7ai/mem7\",\n  \"version\": \"0.3.3\",\n  \"description\": \"LLM-powered long-term memory engine — Rust core with Node.js bindings\",\n  \"main\": \"index.js\",\n  \"types\": \"index.d.ts\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/mem7ai/mem7.git\"\n  },\n  \"homepage\": \"https://github.com/mem7ai/mem7\",\n  \"license\": \"Apache-2.0\",\n  \"keywords\": [\"memory\", \"llm\", \"ai\", \"rust\", \"napi\", \"embedding\", \"vector\"],\n  \"napi\": {\n    \"binaryName\": \"mem7\",\n    \"targets\": [\n      \"x86_64-apple-darwin\",\n      \"aarch64-apple-darwin\",\n      \"x86_64-unknown-linux-gnu\",\n      \"aarch64-unknown-linux-gnu\",\n      \"x86_64-pc-windows-msvc\"\n    ]\n  },\n  \"files\": [\n    \"index.js\",\n    \"index.d.ts\"\n  ],\n  \"scripts\": {\n    \"build\": \"napi build -p mem7-node --platform --release\",\n    \"build:debug\": \"napi build -p mem7-node --platform\",\n    \"prepublishOnly\": \"napi prepublish -t npm\",\n    \"artifacts\": \"napi artifacts\",\n    \"version\": \"napi version\"\n  },\n  \"devDependencies\": {\n    \"@napi-rs/cli\": \"^3.5.1\"\n  },\n  \"optionalDependencies\": {\n    \"@mem7ai/mem7-darwin-x64\": \"0.3.3\",\n    \"@mem7ai/mem7-darwin-arm64\": \"0.3.3\",\n    \"@mem7ai/mem7-linux-x64-gnu\": \"0.3.3\",\n    \"@mem7ai/mem7-linux-arm64-gnu\": \"0.3.3\",\n    \"@mem7ai/mem7-win32-x64-msvc\": \"0.3.3\"\n  }\n}\n"
+    },
+    {
+      "path": "src/mem7-graph/src/extraction.rs",
+      "sha": null,
+      "content_sha256": "ed7d504cbece4700fe741298e66b7cd18fe5c9f3b7efe9abf81cd6e0cc711e3a",
+      "score": 111,
+      "content": "use mem7_error::{Mem7Error, Result};\nuse mem7_llm::{LlmClient, LlmMessage, ResponseFormat};\nuse serde::Deserialize;\nuse tracing::debug;\n\nuse crate::prompts::{\n    DELETE_RELATIONS_PROMPT, ENTITY_EXTRACTION_PROMPT, RELATION_EXTRACTION_PROMPT,\n};\nuse crate::types::{Entity, GraphSearchResult, Relation};\n\n#[derive(Debug, Deserialize)]\nstruct EntityExtractionOutput {\n    #[serde(default)]\n    entities: Vec<RawEntity>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct RawEntity {\n    entity: String,\n    entity_type: String,\n}\n\n#[derive(Debug, Deserialize)]\nstruct RelationExtractionOutput {\n    #[serde(default)]\n    relations: Vec<RawRelation>,\n}\n\n#[derive(Debug, Deserialize)]\nstruct RawRelation {\n    source: String,\n    relationship: String,\n    destination: String,\n}\n\n/// Extract entities from a conversation using the LLM.\npub async fn extract_entities(\n    llm: &dyn LlmClient,\n    conversation: &str,\n    custom_prompt: Option<&str>,\n) -> Result<Vec<Entity>> {\n    let prompt = custom_prompt.unwrap_or(ENTITY_EXTRACTION_PROMPT);\n\n    let messages = vec![LlmMessage::system(prompt), LlmMessage::user(conversation)];\n\n    let response = llm\n        .chat_completion(&messages, Some(&ResponseFormat::json()))\n        .await?;\n\n    debug!(raw = %response.content, \"entity extraction response\");\n\n    let output: EntityExtractionOutput = parse_json_response(&response.content)?;\n\n    Ok(output\n        .entities\n        .into_iter()\n        .map(|e| Entity {\n            name: e.entity,\n            entity_type: e.entity_type,\n            embedding: None,\n            created_at: None,\n            mentions: 0,\n        })\n        .collect())\n}\n\n/// Extract relations between entities from a conversation using the LLM.\npub async fn extract_relations(\n    llm: &dyn LlmClient,\n    conversation: &str,\n    entities: &[Entity],\n    custom_prompt: Option<&str>,\n) -> Result<Vec<Relation>> {\n    if entities.is_empty() {\n        return Ok(Vec::new());\n    }\n\n    let prompt = custom_prompt.unwrap_or(RELATION_EXTRACTION_PROMPT);\n\n    let entity_names: Vec<&str> = entities.iter().map(|e| e.name.as_str()).collect();\n    let user_input = format!(\n        \"Entities: {}\\nText: {}\",\n        entity_names.join(\", \"),\n        conversation\n    );\n\n    let messages = vec![LlmMessage::system(prompt), LlmMessage::user(user_input)];\n\n    let response = llm\n        .chat_completion(&messages, Some(&ResponseFormat::json()))\n        .await?;\n\n    debug!(raw = %response.content, \"relation extraction response\");\n\n    let output: RelationExtractionOutput = parse_json_response(&response.content)?;\n\n    Ok(output\n        .relations\n        .into_iter()\n        .map(|r| Relation {\n            source: r.source,\n            relationship: r.relationship,\n            destination: r.destination,\n            created_at: None,\n            mentions: 0,\n            valid: true,\n        })\n        .collect())\n}\n\n#[derive(Debug, Deserialize)]\nstruct DeletionOutput {\n    #[serde(default)]\n    deletions: Vec<RawRelation>,\n}\n\n/// Ask the LLM which existing relations should be invalidated given new data.\n/// Returns triples `(source, relationship, destination)` to soft-delete.\npub async fn extract_deletions(\n    llm: &dyn LlmClient,\n    existing: &[GraphSearchResult],\n    new_data: &str,\n) -> Result<Vec<(String, String, String)>> {\n    if existing.is_empty() {\n        return Ok(Vec::new());\n    }\n\n    let existing_str = existing\n        .iter()\n        .map(|r| format!(\"{} -- {} -- {}\", r.source, r.relationship, r.destination))\n        .collect::<Vec<_>>()\n        .join(\"\\n\");\n\n    let user_msg =\n        format!(\"Here are the existing memories:\\n{existing_str}\\n\\nNew Information:\\n{new_data}\");\n\n    let messages = vec![\n        LlmMessage::system(DELETE_RELATIONS_PROMPT),\n        LlmMessage::user(user_msg),\n    ];\n\n    let response = llm\n        .chat_completion(&messages, Some(&ResponseFormat::json()))\n        .await?;\n\n    debug!(raw = %response.content, \"deletion extraction response\");\n\n    let output: DeletionOutput = parse_json_response(&response.content)?;\n\n    Ok(output\n        .deletions\n        .into_iter()\n        .map(|d| (d.source, d.relationship, d.destination))\n        .collect())\n}\n\nfn parse_json_response<T: serde::de::DeserializeOwned>(raw: &str) -> Result<T> {\n    mem7_core::parse_json_response(raw).map_err(Mem7Error::Graph)\n}\n\n#[cfg(test)]\nmod tests {\n    use super::*;\n\n    #[test]\n    fn parse_entity_response() {\n        let raw = r#\"{\"entities\": [{\"entity\": \"Alice\", \"entity_type\": \"Person\"}, {\"entity\": \"tennis\", \"entity_type\": \"Activity\"}]}\"#;\n        let output: EntityExtractionOutput = parse_json_response(raw).unwrap();\n        assert_eq!(output.entities.len(), 2);\n        assert_eq!(output.entities[0].entity, \"Alice\");\n        assert_eq!(output.entities[1].entity_type, \"Activity\");\n    }\n\n    #[test]\n    fn parse_entity_response_with_code_fence() {\n        let raw =\n            \"```json\\n{\\\"entities\\\": [{\\\"entity\\\": \\\"Bob\\\", \\\"entity_type\\\": \\\"Person\\\"}]}\\n```\";\n        let output: EntityExtractionOutput = parse_json_response(raw).unwrap();\n        assert_eq!(output.entities.len(), 1);\n        assert_eq!(output.entities[0].entity, \"Bob\");\n    }\n\n    #[test]\n    fn parse_empty_entities() {\n        let raw = r#\"{\"entities\": []}\"#;\n        let output: EntityExtractionOutput = parse_json_response(raw).unwrap();\n        assert!(output.entities.is_empty());\n    }\n\n    #[test]\n    fn parse_relation_response() {\n        let raw = r#\"{\"relations\": [{\"source\": \"USER\", \"relationship\": \"works_at\", \"destination\": \"Google\"}]}\"#;\n        let output: RelationExtractionOutput = parse_json_response(raw).unwrap();\n        assert_eq!(output.relations.len(), 1);\n        assert_eq!(output.relations[0].source, \"USER\");\n        assert_eq!(output.relations[0].relationship, \"works_at\");\n        assert_eq!(output.relations[0].destination, \"Google\");\n    }\n\n    #[test]\n    fn parse_empty_relations() {\n        let raw = r#\"{\"relations\": []}\"#;\n        let output: RelationExtractionOutput = parse_json_response(raw).unwrap();\n        assert!(output.relations.is_empty());\n    }\n}\n"
+    },
+    {
+      "path": "src/bindings/mem7-node/npm/darwin-x64/package.json",
+      "sha": null,
+      "content_sha256": "259145fae6ed6be0acca2d56dd6669d9c1cf5c768ec830145709e48db4fd8343",
+      "score": 110,
+      "content": "{\n  \"name\": \"@mem7ai/mem7-darwin-x64\",\n  \"version\": \"0.3.3\",\n  \"os\": [\"darwin\"],\n  \"cpu\": [\"x64\"],\n  \"main\": \"mem7.darwin-x64.node\",\n  \"files\": [\"mem7.darwin-x64.node\"],\n  \"description\": \"mem7 native binding for macOS x64\",\n  \"license\": \"Apache-2.0\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/mem7ai/mem7.git\"\n  }\n}\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-19T01:46:58.026611+00:00"
+}
