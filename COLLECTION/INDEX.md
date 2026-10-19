@@ -463,3 +463,9 @@ No completion claim is made. Collection remains active.
 - Current Railway inventory shows service `salamou31-api-factory` sourced from branch `feat/api-factory-railway-deployable-2026-10-16`, root `AI-API-HUB/api-factory`, Dockerfile build, health path `/health`, and domain `salamou31-api-factory-production.up.railway.app`. However its direct service variable-name list is empty and its five latest listed deployment records are removed. The existence of a domain/configuration is not evidence of a live deployment.
 - Durable registry/storage adapters and migration exist in code, but the only visible Supabase project is EASY's `easy-platform-db`; it remains intentionally excluded. A separate Salamou-31 database/storage project, variables, migration, and cross-invocation persistence test are still required.
 - Latest API Factory evidence is the successful CI-pinned local SOAT/Ollama run [39179590053](https://github.com/salamou1944/Salamou-31/actions/runs/39179590053), documented in [API_FACTORY_SOAT_LOCAL_RUNTIME_2026-10-19.md](VERIFICATION/API_FACTORY_SOAT_LOCAL_RUNTIME_2026-10-19.md). It does not close production deployment/storage gates.
+
+
+## MNFST provider catalog freshness — 2026-10-19
+- Latest visible provider/model data refresh: `41197cb7d053680daf808d6618142045e961caaa` (2026-10-05), with data-sync merge `b25c0395fe1e7628ecc99bf119a40365801c6fb4`. No newer provider/model refresh appeared in the latest 10 commits.
+- Newer history consists of the credential-exfiltration workflow addition/removal (Oct 10–11). Current workflows show only a README generator triggered by `data.json` changes; no current nightly provider-sync workflow was found. Treat the advertised refresh cadence as unverified.
+- The Oct 5 refresh includes both live/deprecation findings and explicitly unprobed or human-review entries; preserve those evidence classes. No provider has been promoted to production or marked zero-cost from this source alone.
