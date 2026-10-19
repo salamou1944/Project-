@@ -8,7 +8,7 @@ This digest records changes executed in this continuation and the new frontier s
 - Re-read `salamou1944/Salamou-31` `AI-API-HUB/api-factory/provider.mjs`, `AI-API-HUB/api-factory/provider-policy-test.mjs`, `AI-API-HUB/free-provider-policy-fixture.json`, `AI-API-HUB/test-free-provider-policy.mjs`, `AI-API-HUB/FREE-PROVIDER-POLICY.md`, and `.github/workflows/soat-runtime-integration.yml`.
 - Re-read `salamou1944/agent-skills` `skills/browser-runtime-verification/SKILL.md`.
 - Existing recursive Layer A snapshot remains at `COLLECTION/ACCOUNTS/RECURSIVE_ACCOUNT_FRONTIER_LAYER_A_2026-10-18.json`, commit `ff4af71f9e5fab97c059321835aaf3d696c8ed34`: 220 repository identity records across eight owner-scoped searches. This is metadata preservation, not full source extraction.
-- Additional downstream owner searches from the previous digest remain partially unpersisted: jackwener (47), stickerdaniel (75), daytonaio (12), e2b-dev (85), ChromeDevTools (19), agentclientprotocol (15), and first-page-only 100-row results for jina-ai, nicobailon, kurtmckee, xpzouying, and vercel-labs. The 100-row searches require pagination; do not mark these accounts exhausted.
+- A new Markdown owner-scanner companion was committed at `Project-@f6393d2de1f95695ab0b09e381f64cdc211a1a18` (`COLLECTION/ACCOUNTS/RECURSIVE_FRONTIER_LAYER_A_B_2026-10-19.md`). It connects the eight Layer A owners and eleven observed Layer B owners to the existing Markdown-driven extraction scanner, while explicitly preserving incompleteness. Repository rows for Layer B are still not committed. Additional downstream owner searches remain partially unpersisted: jackwener (47), stickerdaniel (75), daytonaio (12), e2b-dev (85), ChromeDevTools (19), agentclientprotocol (15), and first-page-only 100-row results for jina-ai, nicobailon, kurtmckee, xpzouying, and vercel-labs. The 100-row searches require pagination; do not mark these accounts exhausted.
 
 ## Valuable assets preserved
 - Existing Layer A metadata snapshot retained without deleting or replacing earlier snapshots.
@@ -35,6 +35,9 @@ This digest records changes executed in this continuation and the new frontier s
 - Inspected failure cause: the CI-only local Ollama policy fixture omitted required `officialSourceVerified` and hard-coded `sourceLastResearched: "2026-10-05"`. The fixture was corrected to explicitly supply the verification field and a current synthetic local-only fixture date. This does not attest any hosted provider's free quota or billing terms.
 - Workflow fix commit: `Salamou-31@bada4b0feede31853b4afd246deb0b514a5e1ed0`. A fresh run must pass before claiming runtime success.
 - Collection index correction commit: `Project-@9d51d58aed9c079dd1ac55c03de4c0c10d9234cb`.
+- Owner-scanner companion commit: `Project-@f6393d2de1f95695ab0b09e381f64cdc211a1a18`.
+- Index follow-up linking the owner-scanner companion: `Project-@8e2df699cc59053532ab672985adb9eb18e11b92`.
+- Fresh SOAT workflow run `39179590053` for commit `bada4b0feede31853b4afd246deb0b514a5e1ed0` was observed in progress during this digest; no conclusion yet.
 - No production deployment was performed or proven.
 
 ## Ready-to-use assets/projects
