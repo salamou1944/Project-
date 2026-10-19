@@ -195,3 +195,12 @@ Page 2 returned zero for both owner-scoped searches. Enumeration does not mean d
 - `mufeedvh`: public page shows 8 gists: https://gist.github.com/mufeedvh; recorded in the 2026-10-17 account capture.
 - `cporter202`: public page fetch was inaccessible; no zero-count inference made.
 - The existing 21 gist-enumeration failures remain open because this spot-check does not map these owners to the exact blocked set. The GitHub connector exposes no dedicated Gist action in the current tool list.
+
+
+## 2026-10-19 frontier materialization update
+
+- Parsed the 40 accounts in the owner-enumeration table and the 116 newly exposed owner names in this register.
+- After case-insensitive deduplication, 151 distinct owner targets were materialized as GitHub URLs in `COLLECTION/ACCOUNTS/RECURSIVE_FRONTIER_LAYER_A_B_2026-10-19.md` (commit `0d5c7a50ddfc503de0ac39ba12b42683ebe82f14`). The eight Layer A and eleven observed Layer B targets remain preserved there as well.
+- Updated `COLLECTION/AUTO/deep_extract.py` to deduplicate owner logins case-insensitively, preventing mixed-case account links from causing duplicate sweeps. Commit: `4a5011bd27c8ce3558e298b99f2669b07d875b51`.
+- The frontier is now wired into the Markdown-driven extraction graph. This proves owner-target materialization only; it does not prove the 151 accounts are fully enumerated or deeply swept.
+- Current full-frontier deep-extraction run: [39180598182](https://github.com/salamou1944/Project-/actions/runs/39180598182), pending at the last observation. An earlier partial-frontier run remains in progress; use the new full-frontier run's final manifest and audit report as the completion evidence.
