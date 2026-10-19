@@ -512,3 +512,7 @@ No completion claim is made. Collection remains active.
 - Read-only findings: [UPWORK_REVENUE_READINESS_2026-10-19.md](VERIFICATION/UPWORK_REVENUE_READINESS_2026-10-19.md).
 - Upwork has zero Connects, no proposals/contracts/invitations, a private low-quality profile, no portfolio, and zero completed jobs/reviews. The inspected active AI-automation job requires 14 Connects and the client has no hiring history. No application or purchase was made.
 - Apollo shows 80 lead credits and 5,000 AI credits remaining with zero used; direct-dial counters are inconsistent, so do not treat them as spendable capacity. No enrichment/search was run.
+
+
+## Storage baseline for bounded extraction
+- `Project-` repository size before the new bounded batch: 317,118 KB (~310 MiB) per GitHub repository metadata. Recheck after run `39181614341`; no post-run size is claimed yet.
