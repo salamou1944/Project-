@@ -141,3 +141,8 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - PR body records a historical Vercel deployment `dpl_4vmQMfn4hr5SahXSJxf1ruh8pbYs` as READY at merge time. Current connected Vercel context returns no teams, so current alias/management access is not re-proven.
 - Railway API Factory service config is wired to the feature branch and has a domain/health path, but direct service variable names are empty and its latest five deployment records are removed. This is not a live-production proof.
 - The only visible Supabase project is EASY's healthy database; do not reuse it for API Factory. Separate durable storage, service secrets, migration and cross-invocation persistence remain blockers. Successful CI-pinned SOAT/Ollama proof is recorded separately and does not close production gates.
+
+
+## MNFST provider-data freshness recheck — 2026-10-19
+- Latest visible provider/model refresh was 2026-10-05; later commits only added and then removed the malicious security-audit workflow. Current workflow directory has a README generator triggered by `data.json` changes, not an observed nightly provider-sync workflow.
+- The Oct 5 refresh contains useful updates (including retired NVIDIA NIM rows and changes to Gemini, Cloudflare, Groq, Kilo, LLM7, OpenRouter and OVHcloud) but also unprobed entries and an explicit human-review queue. No post-Oct-5 provider/model refresh is evidenced in the latest 10 commits.
