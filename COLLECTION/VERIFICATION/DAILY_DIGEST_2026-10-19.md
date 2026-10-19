@@ -205,3 +205,11 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - Reused existing EASY API registry and B2B opportunity/service-pack assets instead of inventing duplicate catalogs/offers. No customer conversion is evidenced in the old opportunity log.
 - ASTRA research evidence records real Kraken data and passing local regressions but fails its research gates; live execution remains off. Keep its research and bot repos separate.
 - Latest observed own-repo CI: SOAT and Railway-token access smokes pass in Salamou-31; Easy supervisor pass; Astra paper/handover pass but research gate fail; local-bridge read-only workflows pass; agent-skills browser Skill has no post-change CI run.
+
+
+## Extraction audit resolution — 2026-10-19
+- The only audit failure was `COLLECTION/INSTALLED/juspay__hyperswitch/.devcontainer/devcontainer.json`: standard JSONC with comments/trailing comma. Preserved the source unchanged; the auditor now permits JSONC only for standard `devcontainer.json` files and hashes original bytes.
+- Audit run [39185928703](https://github.com/salamou1944/Project-/actions/runs/39185928703) passed: 10,877 files, 0 parse failures, 595,154,410 bytes. Report: [CURRENT_MAIN_JSON_AUDIT.json](CURRENT_MAIN_JSON_AUDIT.json).
+- Regression suite [39185928757](https://github.com/salamou1944/Project-/actions/runs/39185928757) passed, including JSONC parsing, owner parsing, bounded batch, approval/security gates, and large-JSON audit tests.
+- Manifest accounting is corrected: 200 selected, 199 successful source packets, 1 blocked source; 31,343 discovered repository identities, 8,800 archived metadata-only, 22,344 deferred/blocked, 7,220 dedupe-ready records. The blocked repository is `awesome-ai-tools/awesome-ai-tools` because `main` does not exist.
+- Next: run the existing safe-incremental Collection workflow from its existing marker, then inspect the output and re-audit if generated JSON changes. Passing this audit does not mean canonical promotion or production readiness.
