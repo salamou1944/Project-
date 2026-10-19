@@ -384,6 +384,7 @@ def main():
     selected_set = set(selected_names)
     failures = []
     blocked_repos = set()
+    successful_this_run = set()
     with ThreadPoolExecutor(max_workers=WORKERS) as ex:
         jobs = {ex.submit(extract, repo, repo_metadata[repo]): repo for repo in selected_names}
         for fut in as_completed(jobs):
@@ -399,6 +400,7 @@ def main():
                     "source_pushed_at": packet_doc.get("source_pushed_at"),
                     "priority_score": priority_scores.get(repo, 0),
                 }
+                successful_this_run.add(repo)
             except Exception as exc:
                 blocked_repos.add(repo)
                 failures.append({"repo": repo, "state": "BLOCKED_EXTERNAL_ACCESS", "error": str(exc)})
@@ -463,14 +465,16 @@ def main():
     })
 
     packets = []
+    valid_packet_repos = set()
     for repo, row in sorted(rows.items()):
         packet_path = OUT / (repo.replace("/", "__") + ".json")
         if not packet_path.is_file():
             continue
         try:
             packet_doc = json.loads(packet_path.read_text(encoding="utf-8"))
-            if packet_doc.get("repo") != repo or not packet_doc.get("revision_sha"):
+            if packet_doc.get("repo") != repo or not packet_doc.get("revision_sha") or packet_doc.get("revision_sha") != row.get("revision_sha"):
                 continue
+            valid_packet_repos.add(repo)
             packets.extend(packet(packet_doc, file_row) for file_row in packet_doc.get("files", []))
         except (OSError, ValueError):
             continue
@@ -478,8 +482,10 @@ def main():
     manifest = {
         "schema_version": "collection-deep-extraction/v1",
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "owners": owner_list, "repo_count": len(rows), "inventory_repo_count": len(inventory_rows),
-        "deep_extracted_this_run": len(selected_names), "deferred_repo_count": len(deferred_rows),
+        "owners": owner_list, "repo_count": len(valid_packet_repos), "manifest_repo_row_count": len(rows),
+        "inventory_repo_count": len(inventory_rows), "packet_repo_count": len(valid_packet_repos),
+        "selected_for_deep_extraction": len(selected_names), "deep_extracted_this_run": len(successful_this_run),
+        "blocked_selected_count": len(blocked_repos), "deferred_repo_count": len(deferred_rows),
         "archived_repo_count": sum(1 for row in inventory_rows if row["deep_extraction_state"] == "ARCHIVED_METADATA_ONLY"),
         "deep_extraction_budget": {
             "max_repos_per_run": MAX_DEEP_REPOS, "max_repos_per_owner": MAX_DEEP_REPOS_PER_OWNER,
@@ -504,7 +510,9 @@ def main():
         "selected_for_deep_extraction": len(selected_names),
         "deferred_repos": len(deferred_rows),
         "archived_repos": manifest["archived_repo_count"],
-        "retained_or_extracted_repos": len(rows), "refresh_failures": len(failures),
+        "retained_packet_repos": len(valid_packet_repos), "manifest_repo_rows": len(rows),
+        "successful_extractions_this_run": len(successful_this_run), "blocked_selected_repos": len(blocked_repos),
+        "refresh_failures": len(failures),
         "packets": len(packets), "asset_types": manifest["asset_type_counts"],
     }, sort_keys=True))
 
