@@ -116,3 +116,7 @@ The current visible threads in API Pilot and EASY consist of delivery failures/b
 
 - Collection extraction workflow: [run 39180002514](https://github.com/salamou1944/Project-/actions/runs/39180002514), started by the updated owner-frontier commit `857010f226ccd7efdde94a22297d19ed32237053`; it was `pending` at the last observation.
 - API Factory SOAT integration: [run 39179590053](https://github.com/salamou1944/Salamou-31/actions/runs/39179590053); real AI completion through the intended local Ollama provider passed its dedicated step, while the official SOAT smoke and downstream evidence persistence steps remained in progress/pending. No overall workflow success is claimed yet.
+
+
+## Additional high-priority supply-chain finding
+The monitored source `mnfst/awesome-free-llm-apis` had a historical malicious workflow in commit `48fcbe86582e16b7b746fee52e5512a891a8db76`: it searched repository/history for credential patterns and POSTed findings to `193.32.204.199:8080`. It was removed in `cf97c32fec1b2e96e9936746e2731a81bd5ea33f`. No “Security Audit” run appeared in the latest 30 visible Actions runs, but execution remains unverified. Treat the catalogue as untrusted discovery input; do not run its scripts/workflows or pass it secrets. No secrets were searched for or transmitted.
