@@ -133,3 +133,12 @@ Scope: all repository names enumerated; README-level review performed for OmniRo
 2. Run a controlled sandbox benchmark for OpenSandbox against the current API Factory generated-code boundary; no code imported yet.
 3. Compare selected Omni skills against the existing agent-skills repository and preserve MIT/CC BY provenance.
 4. Continue the remaining account graph. The 71-repository owner enumeration is complete for this search snapshot; full source-content verification is not.
+
+
+## 2026-10-19 fresh OmniRoute check
+
+The current `release/v3.8.52` README differs from the 2026-10-16 capture: it now reports 375 providers, 468 free-tier entries and 34 recurring pool keys (versus the prior 372 / 485 / 35). The current `FREE_TIERS.md` metadata says last updated 2026-10-18 but still describes full research from 2026-06-17 and a partial re-audit from 2026-09-02, with selected checks on 2026-10-08. Treat the headline as a current README claim with stale/inconsistent evidence timestamps, not as a verified current free quota.
+
+The latest visible commit is `40523566e611838978835adbb6b84cda99602504` on `release/v3.8.52`; package version `3.8.52`; MIT license. Repository size is 1,762,299 KB, so read targeted source files rather than cloning the whole repository. `.env.example` requires unique `JWT_SECRET` and `API_KEY_SECRET`; its sample `INITIAL_PASSWORD=CHANGEME` is public and must be replaced. SQLite persistence requires a persistent data volume. Browser/web-cookie/OAuth paths remain a separate terms/security review.
+
+Decision remains provider-intelligence-only: no installation, no runtime import, no secrets sent, no provider marked zero-cost from the aggregate headline.
