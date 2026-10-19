@@ -172,3 +172,9 @@ This digest separates **preserved source material**, **successful CI evidence**,
 ## Install safety test evidence — run passed
 - Install-selection and outcome-gate tests completed success in [run 39182669136](https://github.com/salamou1944/Project-/actions/runs/39182669136).
 - The tests enforce explicit `INSTALL_APPROVED`, `install_approval=APPROVED`, `integration_gate=PASS`, and `security_gate=PASS`; review/shelf/unverified candidates remain unselected. The no-approved-candidate state is an explicit safe no-op, not an install pass.
+
+
+## Legacy source footprint — Hyperswitch
+- Verified marker `COLLECTION/INSTALLED/juspay__hyperswitch/.collection-install.json` pins `juspay/hyperswitch@1d71d94d2e2e1c72f3ede13abebc24132997685f`, Apache-2.0, `vendored_source`, marker-reported size 393 MB.
+- GitHub repository metadata reports `Project-` at 317,118 KB before the new bounded batch. These are different measures (marker-reported source directory vs GitHub repository size) and should not be treated as directly comparable.
+- Keep the existing directory preserved, not runtime-promoted; do not silently delete it. See [legacy asset boundary](LEGACY_INSTALLED_ASSETS_2026-10-19.md).
