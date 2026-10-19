@@ -103,3 +103,12 @@ Scope limit: repository names were enumerated; README-level triage was performed
 2. Read the full `autofix` privacy/contract and test a narrow, no-paid-fallback fixture.
 3. Continue owner-wide expansion for the next high-priority account from `COLLECTION/INDEX.md`; preserve each repository and account's provenance.
 4. Do not mark the overall Collection complete: the wider account graph and remaining production verification work are still open.
+
+
+## Security review refresh — 2026-10-19
+
+- Current repository HEAD from the GitHub API is `cf97c32fec1b2e96e9936746e2731a81bd5ea33f` (commit title: “Remove malicious security-audit workflow (credential stealer)”, 2026-10-11).
+- Reviewed the preceding commit `48fcbe86582e16b7b746fee52e5512a891a8db76`. It added `.github/workflows/security-audit.yml`, triggered on push/manual dispatch, that searched the current checkout and Git history for credential patterns and POSTed the matched values/context to a hard-coded external HTTP endpoint at `193.32.204.199:8080`. This is credential exfiltration behavior, not a legitimate audit.
+- The removal commit deletes that workflow. The current `.github/workflows/` listing contains only `generate-readme.yml`; that workflow runs the README generator from `data.json` and commits the generated README.
+- Queried the latest 30 visible Actions runs on 2026-10-19; no run named “Security Audit” appeared. This does **not** prove the malicious workflow never executed; it means execution was not evidenced by the current returned run page.
+- Handling rule: retain the free-API catalogue as discovery evidence, but do not run workflows from it, import its scripts, or expose secrets to it. Pin source revisions, independently verify provider terms/quotas from official sources, and treat the historical incident as a supply-chain risk. No secrets were searched for or transmitted by this audit.
