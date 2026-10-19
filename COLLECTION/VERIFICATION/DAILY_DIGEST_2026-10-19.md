@@ -72,3 +72,15 @@ This digest records changes executed in this continuation and the new frontier s
 Preserved/discovered: yes, including the committed frontier snapshot and updated canonical Skill.
 Source-level fix committed: yes, for the local-only SOAT smoke fixture.
 Runtime-proven/production-ready: no new proof in this continuation. Wait for the fresh SOAT workflow result; do not relax the zero-cost gate or treat the fixture as production provider attestation.
+
+
+## Additional connected-app and repository sweep — 2026-10-19
+- Read-only inventory confirmed the GitHub connector exposes exactly 10 repositories under `salamou1944` and no organization memberships: `Salamou-31`, `agent-skills`, `Easy-`, `AI_operating_memory`, `Astra-`, `Astra`, `Files-`, `Project-`, `Pastel-`, and `local-bridge.`. Root entry points were inspected for all ten; detailed account/application findings are preserved in [CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md](../VERIFICATION/CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md).
+- Additional useful project-state evidence: ASTRA's research gate remains failed for profitability/alpha and live execution remains OFF; EASY's own boundary explicitly forbids production claims before provider, persistence, auth, integrity and deployed E2E proof; local-bridge requires a real Windows runner registration.
+- Read-only connected-app checks: Railway has two projects; API Factory service currently has no direct service variable names and its latest five listed deployment records are removed. Supabase shows only the EASY database, which must not be reused for API Factory. Termalin reports zero reachable hosts; Vercel reports no teams; GitLab's sole owned project is empty.
+- Commerce/design/workspace checks: Shopify store is on trial; Wix lists no sites; Canva search returned no matching designs; Notion is connected but the relevant project search returned no results; Figma account is View-seat with Code Layers disabled.
+- AgentMail checked `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`: current visible API Pilot/EASY threads are delivery failures/bounces; PASTEL test inbox has no threads. No reply, acceptance, payment, or revenue proof. No outbound messages were sent and no paid prospecting credits were spent.
+- Workflow wiring fixes committed: `Project-@91881560d9a6abf7ac1a3df57a524beeb192e05a` (frontier-triggered deep extraction), `Project-@ecffc50fe490de89b63e3dfba87efe72f52ea6af` (JSON diff audit trigger/fallback SHA), `Project-@b36a1fc3aee466c9b4a7e9a83eb25cc4b94b0226` (current Collection JSON audit script), and `Project-@857010f226ccd7efdde94a22297d19ed32237053` (frontier commit that started run `39180002514`).
+- Connected-app audit report commit: `Project-@f2fc1a3519629d1ad00ab5050679b91243e150dc`.
+- Run `39180002514` was still pending at last poll; no extraction count or JSON audit output is yet claimed.
+- SOAT run `39179590053` has passed the dedicated real AI completion through the local Ollama provider, but the overall workflow remains in progress while the official SOAT smoke and downstream evidence gates execute.
