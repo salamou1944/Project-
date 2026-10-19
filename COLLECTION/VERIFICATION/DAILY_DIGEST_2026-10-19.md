@@ -167,3 +167,8 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - `COLLECTION/INSTALLED/` currently contains only `juspay__hyperswitch`. No Browser Harness, agent-browser, OpenSandbox, or other new browser/sandbox asset is installed.
 - Hyperswitch remains source-only and not runtime-promoted; its legacy installation boundary is recorded in [LEGACY_INSTALLED_ASSETS_2026-10-19.md](LEGACY_INSTALLED_ASSETS_2026-10-19.md).
 - Automatic installation is now fail-closed unless the value queue carries explicit install approval plus both integration and security gates PASS.
+
+
+## Install safety test evidence — run passed
+- Install-selection and outcome-gate tests completed success in [run 39182669136](https://github.com/salamou1944/Project-/actions/runs/39182669136).
+- The tests enforce explicit `INSTALL_APPROVED`, `install_approval=APPROVED`, `integration_gate=PASS`, and `security_gate=PASS`; review/shelf/unverified candidates remain unselected. The no-approved-candidate state is an explicit safe no-op, not an install pass.
