@@ -281,3 +281,24 @@ Evidence policy remains unchanged: confirmed customer = 0 on evidence reviewed h
 Reviewed the current head of `mnfst/awesome-free-llm-apis` and its latest workflow history. Commit `48fcbe86582e16b7b746fee52e5512a891a8db76` added a push/manual workflow that grepped the working tree and Git history for API-key/credential patterns and POSTed the matches/context to hard-coded external HTTP endpoint `193.32.204.199:8080`. The repository removed it in `cf97c32fec1b2e96e9936746e2731a81bd5ea33f`. The current workflow directory lists only the README generator. The latest 30 visible Actions runs returned no “Security Audit” run; whether the malicious workflow ever executed is unverified.
 
 **Decision:** keep this repository as an untrusted discovery catalogue only. Do not run its workflows/scripts, do not send secrets to it, pin the reviewed revision, and verify each provider's commercial terms, billing, quotas, privacy, region and endpoint directly with the official provider. This is a supply-chain warning, not a reason to delete the catalogue. No secrets were searched for or transmitted in this review.
+
+
+### AgentMail bounce suppression register — 2026-10-19
+
+The currently visible API Pilot and EASY inbox threads are delivery failures. Suppress the following recipients from repeat outreach until the address is independently re-verified and the opportunity is still active. A bounce is not a lead or a reply.
+
+| Inbox | Recipient | Evidence date | Handling |
+|---|---|---|---|
+| `api-pilot@agentmail.to` | `contact@deevdigital.com` | 2026-09-27 | Hard-bounce; suppress pending re-verification |
+| `api-pilot@agentmail.to` | `contact@goldway-dz.com` | 2026-09-27 | Hard-bounce; suppress pending re-verification |
+| `api-pilot@agentmail.to` | `support@ecomproassociates.com` | 2026-09-22 | Delivery failure; suppress pending re-verification |
+| `api-pilot@agentmail.to` | `hello@gmsolutions.com` | 2026-09-21 | Address not found; suppress pending re-verification |
+| `api-pilot@agentmail.to` | `hallo@gtpmedia.nl` | 2026-09-21 | Address not found; suppress pending re-verification |
+| `api-pilot@agentmail.to` | `info@channelboosters.io` | 2026-09-21 | Delivery failure; suppress pending re-verification |
+| `easy@agentmail.to` | `sales@flexshopltd.com` | 2026-09-22 | Delivery failure; suppress pending re-verification |
+| `easy@agentmail.to` | `contact@scaleverse.media` | 2026-09-21 | Delivery failure; suppress pending re-verification |
+| `easy@agentmail.to` | `michael@nuworld.agency` | 2026-09-14 | Delivery failure; suppress pending re-verification |
+| `easy@agentmail.to` | `hello@teroinlabs.com` | 2026-09-12 | Delivery failure; suppress pending re-verification |
+| `easy@agentmail.to` | `hello@agencemerlin.com` | 2026-09-12 | Delivery failure; suppress pending re-verification |
+
+No new outbound messages were sent during the 2026-10-19 sweep. Re-approach only after finding a verified alternative contact path and confirming the opportunity is still open.
