@@ -45,7 +45,7 @@ def main() -> None:
             "evidence_count": item.get("evidence_count", 0),
             "source_count": item.get("source_count", 0),
             "sources": item.get("sources", []),
-            "promotion_action": item.get("action"),
+            "promotion_action": item.get("promotion_action", item.get("action")),
             "integration_gate": item.get("integration_gate", "UNVERIFIED"),
             "security_gate": item.get("security_gate", "UNVERIFIED"),
             "install_approval": item.get("install_approval", "NOT_APPROVED"),
