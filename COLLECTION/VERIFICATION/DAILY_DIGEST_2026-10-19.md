@@ -198,3 +198,10 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - New priority finding: the API Factory Railway service points at feature branch `feat/api-factory-railway-deployable-2026-10-16`, has no configured service variables, and latest deployment failed at image build. Vercel's production-target READY artifact also comes from that feature branch while project metadata says `live:false`; neither is sufficient to claim production runtime readiness.
 - The EASY Supabase database is healthy, but remains EASY-owned and must not be reused as API Factory/MONY durable storage. The EASY Railway variable-name list contains a misspelling (`ESAY_OPENAI_API_KEY`) alongside the correct-looking name; values were not read.
 - No secrets were read, no deploy/redeploy or external mutation occurred, and no paid credits were spent.
+
+
+## First-party source triage — 2026-10-19
+- Inspected the owned GitHub repository roots and key source manifests. The `mufeedvh` collection preserves 43 repo identities but lacks complete content/history/Gist snapshots; `aw-junaid` preserves 33 repo identities and cross-repo Nmap scope but still requires source/destination content verification.
+- Reused existing EASY API registry and B2B opportunity/service-pack assets instead of inventing duplicate catalogs/offers. No customer conversion is evidenced in the old opportunity log.
+- ASTRA research evidence records real Kraken data and passing local regressions but fails its research gates; live execution remains off. Keep its research and bot repos separate.
+- Latest observed own-repo CI: SOAT and Railway-token access smokes pass in Salamou-31; Easy supervisor pass; Astra paper/handover pass but research gate fail; local-bridge read-only workflows pass; agent-skills browser Skill has no post-change CI run.
