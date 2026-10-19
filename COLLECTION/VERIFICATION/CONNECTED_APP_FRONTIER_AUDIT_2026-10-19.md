@@ -212,3 +212,26 @@ The following addresses were observed in failed delivery threads and should not 
 4. Review the misspelled EASY environment-variable name without exposing any value.
 5. Keep the 10 first-party GitHub repos as a separate extraction lane from the 199 external owners; inspect the useful `Files-/collection`, `AI_operating_memory`, `Astra` and `Astra-` evidence files before promotion.
 6. Keep MONY paid-boundary blocked and do not spend Upwork Connects or Apollo credits until there is a validated zero-cost path to a real paid outcome.
+
+
+## First-party asset triage — repositories opened beyond root (2026-10-19)
+
+- `Files-/collection/mufeedvh/COLLECTION_MANIFEST.md` (SHA `8dafd2f3186f1b5b88204fde2245dadf3943a99a`) records 43 public repositories from `mufeedvh`; it explicitly says repository inventory is verified but file-content snapshots, full Git history/refs, and public Gists are incomplete/not included. Do not label this collection complete. Preserve `code2prompt`, `pdfrip`, `okjson`, `gofindapis`, and other small assets until a per-repo license/security/usefulness pass is done.
+- `Astra-/collection/aw-junaid/COLLECTION_MANIFEST.md` (SHA `959afbe63f1f461466d8d10b9a6e062b3f14ec72`) records 33 repositories and public Gists with cross-repository Nmap scope; it explicitly requires source/destination refs, trees and content verification before completion. Existing destination content should remain preserved; do not merge this security-research collection into the trading-bot runtime.
+- `Astra/collection` has separate `aw-junaid` and `nmap` trees; `Astra-/collection/aw-junaid` and `Files-/collection/mufeedvh` are distinct collection lanes. Their provenance should remain separate pending a content-level dedupe pass.
+- `Easy-/api-registry/SOURCES.md` (SHA `55dc75dedbdf4ac3840326b6e7aeaeb75a7d3018`) records discovery catalogs for public APIs, model/vision/video, OCR, search and ecommerce. This is a candidate directory, not proof of free commercial access or production readiness. Preserve licensing, pricing, auth, rate-limit and data-retention gates.
+- `Easy-/api-lab/PAID-OPPORTUNITY-MATRIX.md` (SHA `1c0127015666b54dc58e9b260b441f7fbafe6bef`) contains 10 B2B pilot concepts and KPI/pricing hypotheses. `CLIENT-HUNTING-STATUS.md` (SHA `3fa328312470c16662c44ddca0dfcebd68989aee`) explicitly records no verified paid conversion and some bounces; these are sales hypotheses/history, not customer or revenue evidence.
+- `Project-/OPPORTUNITY-ENGINE.md` (SHA `2eadd334d0852f5bee4992ce4bd35b11083de6af`) and `REPUTATION-FIRST-SERVICE-PACK.md` (SHA `8f562c0054e57a06f00183435bd94b89ad4f3b86`) already define a zero-upfront-spend service path: lead-intake reliability, CRM/API sync, and AI intake with human review. Reuse this instead of creating a new offer taxonomy; re-verify old prospects and listings before outreach.
+- `AI_operating_memory/CAPABILITY-MAP.md` (SHA `228f995dec6c91afc7bf8dbe401ee6f418997a2a`) points to existing canonical Skills in `agent-skills`. Its state policy says `PROJECT-STATE-MONY-CANONICAL.json` is the single machine-readable MONY state source; don't create competing state copies.
+- `Astra/VERIFICATION.md` (SHA `a3d118aeb9293241c1efe48c1104e17ce5c8a303`) records 49/49 regression, real Kraken data and four assets, but the cross-asset/research gates fail, profitability remains unverified, and live execution is OFF. `Astra-/OPERATIONAL_READINESS.md` (SHA `9e7b20db69f01ec03c0ab8725d63af733b0ded1c`) keeps explicit human approval, reconciliation and kill-switch gates. Keep both research and bot boundaries separate.
+- `Files-` has a minimal README, but its collection subtree is not empty. `Easy-` contains a provider-neutral knowledge bank, API registry, API lab, and explicit project boundary. These are valuable source inventories; no assets were installed or promoted during this read-only triage.
+
+### First-party CI state observed
+- `Salamou-31`: local SOAT runtime smoke and Railway-token access smoke succeeded on 2026-10-19; these are CI/runtime integration evidence, not production revenue or durable-storage proof.
+- `Easy-`: latest Elite supervisor succeeded on 2026-10-18; recent ARMY-14 runs were cancelled. No new external creative-provider success was established here.
+- `Astra`: prospective paper validation and handover workflows succeeded on 2026-10-18; research gates remain failed and live trading stays off.
+- `Astra-`: last ASTRA BOT CI success observed on 2026-10-01; no newer run in the recent page.
+- `Pastel-`: last Pages deployment success observed on 2026-10-09; QR migration remains gated on real-phone validation.
+- `local-bridge.`: read-only diagnostics/listing workflows succeeded on 2026-10-13; no runner dispatch was triggered.
+- `agent-skills`: latest runs visible in the first page are from 2026-10-09; the browser Skill update on 2026-10-19 has no observed post-change CI run.
+- `Files-`: no GitHub Actions runs found.
