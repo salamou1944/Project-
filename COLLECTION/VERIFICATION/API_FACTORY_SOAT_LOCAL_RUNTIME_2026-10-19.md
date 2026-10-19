@@ -61,4 +61,4 @@ The artifact contains `soat-verification-record.json`, `soat-execution-record.js
 
 - Workflow run: https://github.com/salamou1944/Salamou-31/actions/runs/39179590053
 - Workflow source commit: https://github.com/salamou1944/Salamou-31/commit/bada4b0feede31853b4afd246deb0b514a5e1ed0
-- Pinned SOAT source: https://github.com/trycua/soat/commit/600721c1fa30de27c14f6da5e5917049a5339036
+- Pinned SOAT source: https://github.com/ttoss/soat/commit/600721c1fa30de27c14f6da5e5917049a5339036
