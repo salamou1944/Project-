@@ -20,10 +20,15 @@ ROOT = Path("COLLECTION/AUTO/EXTRACTED")
 
 MAX_FILES = int(os.getenv("COLLECTION_MAX_FILES", "24"))
 MAX_BYTES_PER_FILE = int(os.getenv("COLLECTION_MAX_FILE_BYTES", "60000"))
-MAX_BYTES_PER_SOURCE = int(os.getenv("COLLECTION_MAX_SOURCE_BYTES", "1000000"))
-MAX_WORKERS = int(os.getenv("COLLECTION_WORKERS", "32"))
-API_WORKERS = int(os.getenv("COLLECTION_API_WORKERS", "16"))
-RAW_WORKERS = int(os.getenv("COLLECTION_RAW_WORKERS", "32"))
+MAX_BYTES_PER_SOURCE = int(os.getenv("COLLECTION_MAX_SOURCE_BYTES", "300000"))
+MAX_WORKERS = int(os.getenv("COLLECTION_WORKERS", "8"))
+API_WORKERS = int(os.getenv("COLLECTION_API_WORKERS", "8"))
+RAW_WORKERS = int(os.getenv("COLLECTION_RAW_WORKERS", "12"))
+MAX_REPOS_PER_RUN = int(os.getenv("COLLECTION_MAX_REPOS_PER_RUN", "100"))
+MAX_REPOS_PER_OWNER = int(os.getenv("COLLECTION_MAX_REPOS_PER_OWNER", "1"))
+MAX_GISTS_PER_RUN = int(os.getenv("COLLECTION_MAX_GISTS_PER_RUN", "25"))
+DEEP_ROOT = Path("COLLECTION/AUTO/DEEP-EXTRACTED")
+FRONTIER_META = {}
 _cache = {}
 
 def atomic_write_json(path, payload):
@@ -125,33 +130,102 @@ def owner_from_url(url):
     m = re.search(r"https?://github\.com/([^/]+)/?(?:#.*)?$", url.strip())
     return m.group(1) if m else None
 
-def discover_accounts():
-    """Build the frontier from Collection account records and INDEX references."""
-    owners = set()
-    accounts_dir = Path("COLLECTION/ACCOUNTS")
+def discover_accounts(root=Path(".")):
+    """Discover root owner URLs from all Markdown lines, deduplicated case-insensitively."""
+    owner_keys = set()
+    pattern = re.compile(r"https?://github\.com/([A-Za-z0-9-]+)(?=[\s)\],.;:\n]|$)", re.I)
+    accounts_dir = Path(root) / "COLLECTION" / "ACCOUNTS"
     if accounts_dir.exists():
         for path in accounts_dir.glob("*.md"):
             try:
-                text = path.read_text(encoding="utf-8", errors="ignore")
+                content = path.read_text(encoding="utf-8", errors="ignore")
             except OSError:
                 continue
-            # Prefer explicit Account/Source owner URLs, but accept any root GitHub owner URL.
-            for line in text.splitlines()[:80]:
-                if re.search(r"^\s*(?:Account|Source|Owner|Repository|Official repository):", line, re.I):
-                    m = re.search(r"https?://github\.com/([^/\s)]+)", line)
-                    if m:
-                        owners.add(m.group(1))
-    index = Path("COLLECTION/INDEX.md")
+            for match in pattern.finditer(content):
+                owner_keys.add(match.group(1).lower())
+    index = Path(root) / "COLLECTION" / "INDEX.md"
     if index.exists():
-        text = index.read_text(encoding="utf-8", errors="ignore")
-        # Only root account URLs, not repository URLs.
-        for m in re.finditer(r"https?://github\.com/([^/\s)]+)(?=[\s)\n]|$)", text):
-            owners.add(m.group(1))
-    # Keep known operational owners even if their capture record is temporarily absent.
-    owners.update({"salamou1944"})
-    return sorted(x for x in owners if re.fullmatch(r"[A-Za-z0-9-]+", x))
+        try:
+            content = index.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            content = ""
+        for match in pattern.finditer(content):
+            owner_keys.add(match.group(1).lower())
+    owner_keys.add("salamou1944")
+    return sorted(owner for owner in owner_keys if re.fullmatch(r"[a-z0-9-]+", owner))
+
+
+def load_deep_inventory(inventory_path=None, manifest_path=None):
+    """Reuse the completed deep-extraction inventory instead of re-enumerating every owner."""
+    inventory_path = Path(inventory_path or (DEEP_ROOT / "REPO-INVENTORY.json"))
+    manifest_path = Path(manifest_path or (DEEP_ROOT / "MANIFEST.json"))
+    if not inventory_path.is_file() or not manifest_path.is_file():
+        return None
+    try:
+        inventory = json.loads(inventory_path.read_text(encoding="utf-8"))
+        deep_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f"deep_inventory_invalid:{exc}") from exc
+    if inventory.get("schema_version") != "collection-repo-inventory/v1":
+        raise RuntimeError("deep_inventory_schema_mismatch")
+    rows = inventory.get("rows")
+    if not isinstance(rows, list):
+        raise RuntimeError("deep_inventory_rows_missing")
+    accounts = deep_manifest.get("owners", [])
+    if not isinstance(accounts, list):
+        raise RuntimeError("deep_manifest_owners_invalid")
+    repos = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        full_name = row.get("repo")
+        if not isinstance(full_name, str) or full_name.count("/") != 1:
+            continue
+        owner = (row.get("owner") or full_name.split("/", 1)[0]).lower()
+        license_spdx = row.get("license_spdx_id")
+        meta = {
+            "full_name": full_name, "name": row.get("name") or full_name.split("/", 1)[1],
+            "owner": {"login": owner}, "html_url": row.get("html_url") or f"https://github.com/{full_name}",
+            "description": row.get("description"), "topics": row.get("topics") or [],
+            "language": row.get("language"), "license": {"spdx_id": license_spdx} if license_spdx else None,
+            "stargazers_count": row.get("stargazers_count", 0), "forks_count": row.get("forks_count", 0),
+            "size": row.get("size_kb", 0), "updated_at": row.get("updated_at"),
+            "pushed_at": row.get("pushed_at"), "default_branch": row.get("default_branch"),
+            "archived": bool(row.get("archived", False)), "fork": bool(row.get("fork", False)),
+            "priority_score": row.get("priority_score", 0),
+        }
+        repos.append({"kind": "repo", "full_name": full_name, "owner": owner, "owner_kind": "unknown", "repo_meta": meta})
+    if not accounts:
+        accounts = sorted({item["owner"] for item in repos} | {"salamou1944"})
+    blocked = [
+        {"owner": owner, "kind": "owner_inventory", "error": error}
+        for owner, error in (deep_manifest.get("owner_discovery_errors") or {}).items()
+    ]
+    global FRONTIER_META
+    FRONTIER_META = {
+        "path": str(inventory_path), "sha256": hashlib.sha256(inventory_path.read_bytes()).hexdigest(),
+        "inventory_repo_count": len(repos),
+        "deep_manifest_path": str(manifest_path),
+        "deep_manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        "upstream_refresh_failures": deep_manifest.get("refresh_failures", []),
+    }
+    return repos, [], blocked, sorted({str(owner).lower() for owner in accounts})
+
 
 def discover():
+    """Prefer the completed deep inventory; only use live enumeration for standalone runs."""
+    global FRONTIER_META
+    FRONTIER_META = {}
+    try:
+        inventory_result = load_deep_inventory()
+    except RuntimeError as exc:
+        raise SystemExit(str(exc)) from exc
+    if inventory_result is not None:
+        return inventory_result
+    require_inventory = os.getenv("COLLECTION_REQUIRE_DEEP_INVENTORY", "false").strip().lower() in {"1", "true", "yes"}
+    if require_inventory:
+        raise SystemExit("deep repository inventory is missing; run the bounded deep-extraction workflow first")
+
     repos, gists, blocked = {}, {}, []
     accounts = discover_accounts()
 
@@ -178,28 +252,150 @@ def discover():
             for item in items:
                 repos[item["full_name"]] = {
                     "kind": "repo", "full_name": item["full_name"],
-                    "owner": owner, "owner_kind": kind,
-                    # The owner-repository listing already contains this metadata.
-                    # Reuse it instead of issuing one extra API request per repo.
+                    "owner": owner.lower(), "owner_kind": kind,
                     "repo_meta": {
-                        "pushed_at": item.get("pushed_at"),
-                        "default_branch": item.get("default_branch"),
-                        "updated_at": item.get("updated_at"),
-                        "license": item.get("license"),
-                        "topics": item.get("topics", []),
+                        "full_name": item.get("full_name"), "name": item.get("name"),
+                        "owner": item.get("owner"), "html_url": item.get("html_url"),
+                        "description": item.get("description"), "language": item.get("language"),
+                        "stargazers_count": item.get("stargazers_count", 0), "forks_count": item.get("forks_count", 0),
+                        "size": item.get("size", 0), "archived": item.get("archived", False),
+                        "fork": item.get("fork", False), "pushed_at": item.get("pushed_at"),
+                        "default_branch": item.get("default_branch"), "updated_at": item.get("updated_at"),
+                        "license": item.get("license"), "topics": item.get("topics", []),
                     },
                 }
-            # Gists are optional enrichment, not a prerequisite for repo collection.
-            # They consume the same GitHub API quota and frequently return 403 for
-            # fine-grained tokens even when public repositories are readable. Keep the
-            # default cycle fast and useful; enable them explicitly when quota permits.
             if kind == "user" and os.getenv("COLLECTION_INCLUDE_GISTS", "0").strip().lower() in {"1", "true", "yes"}:
                 try:
                     for item in paged(f"/users/{urllib.parse.quote(owner, safe='')}/gists"):
                         gists[item["id"]] = {"kind": "gist", "id": item["id"], "owner": owner}
                 except RuntimeError as ex2:
                     blocked.append({"owner": owner, "kind": "gists", "error": str(ex2)})
+    FRONTIER_META = {"path": None, "sha256": None, "inventory_repo_count": len(repos), "upstream_refresh_failures": []}
     return list(repos.values()), list(gists.values()), blocked, accounts
+
+
+def repo_priority(item, now=None):
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    meta = item.get("repo_meta") or {}
+    supplied = meta.get("priority_score")
+    if isinstance(supplied, int) and supplied > 0:
+        return supplied
+    topics = meta.get("topics") or []
+    text = " ".join([item.get("full_name", ""), meta.get("description") or "",
+                     " ".join(topics), meta.get("language") or ""]).lower()
+    weights = {
+        "agent": 6, "skill": 6, "mcp": 6, "api": 5, "provider": 5, "gateway": 5,
+        "llm": 5, "model": 4, "inference": 5, "browser": 5, "sandbox": 5,
+        "workflow": 4, "automation": 4, "openapi": 5, "sdk": 3, "security": 4,
+        "auth": 3, "database": 4, "storage": 4, "vector": 3, "embedding": 3,
+        "rag": 3, "prompt": 4, "ollama": 5, "gemini": 4, "free": 3,
+        "eval": 3, "benchmark": 3, "image": 3, "video": 3, "audio": 3,
+        "creative": 4, "deploy": 2, "server": 2, "runtime": 4, "cli": 3,
+        "collection": 3, "orchestration": 4, "research": 2, "dataset": 2,
+        "memory": 3, "computer-use": 4,
+    }
+    result = sum(weight for term, weight in weights.items() if term in text)
+    stars = max(0, int(meta.get("stargazers_count") or 0))
+    result += min(10, stars.bit_length())
+    if (meta.get("license") or {}).get("spdx_id"):
+        result += 2
+    if not meta.get("fork"):
+        result += 1
+    updated = meta.get("pushed_at") or meta.get("updated_at")
+    try:
+        stamp = datetime.datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=datetime.timezone.utc)
+        age_days = max(0, (now - stamp).days)
+        result += 10 if age_days <= 30 else 6 if age_days <= 180 else 3 if age_days <= 365 else 0
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return result
+
+
+def load_deep_extracted_names(deep_root=None):
+    deep_root = Path(deep_root or DEEP_ROOT)
+    manifest_path = deep_root / "MANIFEST.json"
+    if not manifest_path.is_file():
+        return set()
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise RuntimeError("deep extraction manifest is invalid")
+    names = set()
+    for row in manifest.get("repos", []):
+        if not isinstance(row, dict) or not row.get("repo") or not row.get("revision_sha"):
+            continue
+        packet_path = Path(row.get("path") or (deep_root / f"{safe_name(row['repo'])}.json"))
+        if not packet_path.is_absolute():
+            packet_path = Path.cwd() / packet_path
+        try:
+            resolved = packet_path.resolve()
+            if deep_root.resolve() not in resolved.parents:
+                continue
+            packet_doc = json.loads(resolved.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        files = packet_doc.get("files") if isinstance(packet_doc, dict) else None
+        if packet_doc.get("repo") == row["repo"] and packet_doc.get("revision_sha") == row["revision_sha"] and isinstance(files, list) and any(isinstance(f, dict) and isinstance(f.get("content"), str) and f.get("content") for f in files):
+            names.add(row["repo"])
+    return names
+
+
+def select_repo_batch(repos, deep_extracted_names=None, now=None):
+    """Choose a bounded, owner-diverse batch; preserve every other source on the shelf."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    deep_extracted_names = set(deep_extracted_names or ())
+    force_refresh = os.getenv("COLLECTION_FORCE_REFRESH", "0").strip().lower() in {"1", "true", "yes"}
+    by_owner, states, priorities = {}, {}, {}
+    for item in repos:
+        repo = item.get("full_name")
+        if not repo:
+            continue
+        meta = item.get("repo_meta") or {}
+        priorities[repo] = repo_priority(item, now)
+        if meta.get("archived"):
+            states[repo] = "ARCHIVED_METADATA_ONLY"
+            continue
+        packet_path = ROOT / f"{safe_name(repo)}.json"
+        cached = None
+        if packet_path.is_file():
+            try:
+                cached = json.loads(packet_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cached = None
+        if isinstance(cached, dict) and cached.get("state") == "extracted" and has_usable_files(cached):
+            if cached.get("pushed_at") == meta.get("pushed_at") and not force_refresh:
+                states[repo] = "CACHED_CURRENT"
+                continue
+            states[repo] = "NEEDS_REFRESH"
+        else:
+            states[repo] = "NEEDS_REFRESH" if packet_path.exists() else "NEW"
+        if repo in deep_extracted_names and not packet_path.exists():
+            states[repo] = "DEEP_PACKET_ONLY"
+            continue
+        owner = (item.get("owner") or (meta.get("owner") or {}).get("login") or repo.split("/", 1)[0]).lower()
+        by_owner.setdefault(owner, []).append(item)
+    for owner, items in by_owner.items():
+        items.sort(key=lambda item: (
+            priorities[item["full_name"]],
+            int((item.get("repo_meta") or {}).get("stargazers_count") or 0),
+            (item.get("repo_meta") or {}).get("pushed_at") or (item.get("repo_meta") or {}).get("updated_at") or "",
+            item["full_name"].lower(),
+        ), reverse=True)
+    owner_order = sorted(by_owner, key=lambda owner: (max(priorities[item["full_name"]] for item in by_owner[owner]), owner), reverse=True)
+    selected = []
+    if MAX_REPOS_PER_RUN <= 0 or MAX_REPOS_PER_OWNER <= 0:
+        return selected, states, priorities
+    for rank in range(MAX_REPOS_PER_OWNER):
+        for owner in owner_order:
+            if rank < len(by_owner[owner]):
+                selected.append(by_owner[owner][rank])
+                states[selected[-1]["full_name"]] = "SELECTED_FOR_EXTRACTION"
+                if len(selected) >= MAX_REPOS_PER_RUN:
+                    return selected, states, priorities
+    return selected, states, priorities
+
 
 def score(path):
     p = path.lower()
