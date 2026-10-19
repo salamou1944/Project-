@@ -128,3 +128,9 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - README figures moved from the prior capture's 372 providers / 485 entries / 35 pools to 375 providers / 468 entries / 34 pools. The current free-tier document is marked updated 2026-10-18 but still describes full research from 2026-06-17 and partial re-audit 2026-09-02; no automatic zero-cost routing from these aggregate claims.
 - Repo is MIT but ~1.76 GB. It requires unique `JWT_SECRET` and `API_KEY_SECRET`, warns the sample `INITIAL_PASSWORD=CHANGEME` is public, and relies on SQLite persistence. No installation or runtime import performed.
 - Preserved as provider-intelligence only; the gateway remains on the shelf until per-provider official terms/quota/eligibility/hard-stop checks are current.
+
+
+## Owner URL parsing hardening — 2026-10-19
+- Found a second extraction gap: the original URL regex only recognized raw owner URLs followed by whitespace or a slash, so it could miss GitHub URLs embedded in Markdown links with closing punctuation.
+- Fixed the scanner to accept URL terminators, strip trailing punctuation, and deduplicate owners case-insensitively: commit `Project-@79604426ec98243c0bcef7c5e7c4ecf49a2599e5`.
+- Run `39180598182` began before this fix and must not be the final proof. Run `39180853004` is the queued run with both the 151-owner frontier and corrected parser; await its final result and persisted manifest/audit before triggering full Collection.
