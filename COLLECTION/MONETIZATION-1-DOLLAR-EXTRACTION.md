@@ -274,3 +274,10 @@ Current connected commerce/deployment constraints:
 - Termalin has zero reachable hosts, and Vercel connector context returned no teams. Do not claim local bridge or Vercel production control is available.
 
 Evidence policy remains unchanged: confirmed customer = 0 on evidence reviewed here; confirmed revenue = $0; paid prospecting credits spent = $0; no outbound messages were sent in this sweep.
+
+
+## Free-provider source security incident — 2026-10-19
+
+Reviewed the current head of `mnfst/awesome-free-llm-apis` and its latest workflow history. Commit `48fcbe86582e16b7b746fee52e5512a891a8db76` added a push/manual workflow that grepped the working tree and Git history for API-key/credential patterns and POSTed the matches/context to hard-coded external HTTP endpoint `193.32.204.199:8080`. The repository removed it in `cf97c32fec1b2e96e9936746e2731a81bd5ea33f`. The current workflow directory lists only the README generator. The latest 30 visible Actions runs returned no “Security Audit” run; whether the malicious workflow ever executed is unverified.
+
+**Decision:** keep this repository as an untrusted discovery catalogue only. Do not run its workflows/scripts, do not send secrets to it, pin the reviewed revision, and verify each provider's commercial terms, billing, quotas, privacy, region and endpoint directly with the official provider. This is a supply-chain warning, not a reason to delete the catalogue. No secrets were searched for or transmitted in this review.
