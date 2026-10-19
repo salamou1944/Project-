@@ -494,3 +494,9 @@ No completion claim is made. Collection remains active.
 - File-byte budgets now keep deterministic relevance order instead of whichever parallel fetch finishes first.
 - Commit: `Project-@76f9944042481a0a8d1e4cb332a46326e078f288`.
 - New bounded run [39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341) is queued; older run `39180853004` is using the pre-budget strategy and is superseded.
+
+
+## Bounded extractor verification — run active
+- The unbounded pre-budget run `39180853004` was cancelled before commit.
+- The bounded inventory-first run [39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341) is running against `76f9944042481a0a8d1e4cb332a46326e078f288`.
+- Regression/compile run [39181614379](https://github.com/salamou1944/Project-/actions/runs/39181614379) passed. This validates the parser/bounded code compiles, not the actual owner inventory/extraction result.
