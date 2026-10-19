@@ -560,3 +560,10 @@ No completion claim is made. Collection remains active.
 - Resulting state: 24,535 capability groups, 17,298 promotion-review items, 7,237 restricted items. Runtime-readiness claims = 0, explicit declarations = 0, install result `NO_APPROVED_CANDIDATES`, installed = 0. All evidence is preserved on shelf; no unapproved asset was installed.
 - Canonical OmniRoute source record refreshed at `Project-@0bb911fd2359e6d0017fde44827a2a4a1d029666`. Upstream is MIT and actively maintained, but free-tier totals are third-party account estimates, not guaranteed capacity; provider terms are stale/partially audited. Existing API Factory adopts schema/rules only, not OmniRoute runtime.
 - API Factory's successful local SOAT proof is now recorded at `Salamou-31@f2e0b8c73979189555a8583361a5f8d547766033` in `AI-API-HUB/api-factory/SOAT-RUNTIME-VERIFIED-2026-10-19.md`. CI local-Ollama proof is not production proof.
+
+
+## New-source-first extraction follow-up — 2026-10-19
+- The bounded incremental selector now ranks `NEW` repositories ahead of `NEEDS_REFRESH` cached sources in normal mode; explicit force-refresh mode retains its separate stale-cache rotation. Code commit: `Project-@9c3d8e0263eaba904aaabc890dc01138e41d18ba`; regression commit: `Project-@97bafc7f5b36685ac2be7531bceee808cc920f78`; test run [39186643182](https://github.com/salamou1944/Project-/actions/runs/39186643182) passed.
+- Batch run [39186698910](https://github.com/salamou1944/Project-/actions/runs/39186698910) passed and added 98 source records from 100 selected repositories, preserving 2 blocked sources. Total extracted source records: 3,083; inventory remains 31,343 repository identities.
+- Updated JSON/JSONC audit: 11,073 files, zero parse failures, 649,132,457 raw bytes. Generated-state commit: `Project-@4ec33a90e736ba961e470f7441e61cc45350415e`.
+- Next bounded batch [39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) is queued from marker commit `1361748647284429f234734cfaa0a6fa6ac2daee`. No assets were installed; the readiness gate continues to report no approved candidates.
