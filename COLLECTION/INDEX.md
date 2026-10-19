@@ -449,3 +449,8 @@ No completion claim is made. Collection remains active.
 - `FREE_TIERS.md` has `version 3.8.50` and a 2026-10-18 update date, but its full research note remains 2026-06-17 with partial re-audit 2026-09-02 and selected checks 2026-10-08. Treat provider budgets as discovery evidence, not verified free capacity.
 - MIT license, but full repository is ~1.76 GB. Keep it on the shelf; reuse provider-intelligence schema/pool-deduplication only. `.env.example` requires strong `JWT_SECRET` and `API_KEY_SECRET`; never use `INITIAL_PASSWORD=CHANGEME`; SQLite requires durable volume. Browser/web-cookie/OAuth paths need separate security/terms review.
 - Updated canonical capture: [OMNIROUTE_PROVIDER_INTELLIGENCE_2026-10-05.md](VERIFIED_EXTERNAL/OMNIROUTE_PROVIDER_INTELLIGENCE_2026-10-05.md); upstream account capture: [DIEGOSOUZAPW_ACCOUNT_WIDE_2026-10-16.md](ACCOUNTS/DIEGOSOUZAPW_ACCOUNT_WIDE_2026-10-16.md).
+
+
+## Owner-link parser correction — 2026-10-19
+- The owner scanner now recognizes GitHub URLs inside Markdown links and strips trailing punctuation, in addition to case-insensitive owner deduplication. Commit: `Project-@79604426ec98243c0bcef7c5e7c4ecf49a2599e5`.
+- Run `39180598182` was triggered before this parser correction and is not the final parser-evidence run. The next queued run [39180853004](https://github.com/salamou1944/Project-/actions/runs/39180853004) has the corrected scanner and the 151-owner frontier in its checkout; use its final manifest and JSON audit report as the definitive extraction evidence.
