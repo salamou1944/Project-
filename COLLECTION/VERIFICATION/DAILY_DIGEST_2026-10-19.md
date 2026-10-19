@@ -121,3 +121,10 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 ## Outreach suppression evidence — 2026-10-19
 - Persisted 11 observed failed-delivery recipients in the canonical monetization ledger with dates and suppression guidance. Do not retry without independent address verification and a fresh check that the opportunity is still active.
 - This prevents duplicate/spammy outreach. Bounces do not count as leads; no outbound email was sent in this sweep.
+
+
+## OmniRoute source recheck — 2026-10-19
+- Inspected the current `release/v3.8.52` README, `FREE_TIERS.md`, `.env.example`, `SECURITY.md`, Docker Compose, package manifest, postinstall helper and workflow directory.
+- README figures moved from the prior capture's 372 providers / 485 entries / 35 pools to 375 providers / 468 entries / 34 pools. The current free-tier document is marked updated 2026-10-18 but still describes full research from 2026-06-17 and partial re-audit 2026-09-02; no automatic zero-cost routing from these aggregate claims.
+- Repo is MIT but ~1.76 GB. It requires unique `JWT_SECRET` and `API_KEY_SECRET`, warns the sample `INITIAL_PASSWORD=CHANGEME` is public, and relies on SQLite persistence. No installation or runtime import performed.
+- Preserved as provider-intelligence only; the gateway remains on the shelf until per-provider official terms/quota/eligibility/hard-stop checks are current.
