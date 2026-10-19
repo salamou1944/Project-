@@ -112,3 +112,12 @@ Scope limit: repository names were enumerated; README-level triage was performed
 - The removal commit deletes that workflow. The current `.github/workflows/` listing contains only `generate-readme.yml`; that workflow runs the README generator from `data.json` and commits the generated README.
 - Queried the latest 30 visible Actions runs on 2026-10-19; no run named “Security Audit” appeared. This does **not** prove the malicious workflow never executed; it means execution was not evidenced by the current returned run page.
 - Handling rule: retain the free-API catalogue as discovery evidence, but do not run workflows from it, import its scripts, or expose secrets to it. Pin source revisions, independently verify provider terms/quotas from official sources, and treat the historical incident as a supply-chain risk. No secrets were searched for or transmitted by this audit.
+
+
+## Free-provider catalog freshness check — 2026-10-19
+
+- The latest ten commits on the repository's current default branch show the last provider/model data refresh at `41197cb7d053680daf808d6618142045e961caaa` (2026-10-05, “feat: nightly refresh 2026-10-05”), followed by data sync merge `b25c0395fe1e7628ecc99bf119a40365801c6fb4` on 2026-10-05.
+- The only newer commits are the unsafe workflow addition `48fcbe86582e16b7b746fee52e5512a891a8db76` on 2026-10-10 and its removal `cf97c32fec1b2e96e9936746e2731a81bd5ea33f` on 2026-10-11. No newer provider/model catalog refresh was visible.
+- Current `.github/workflows/` lists only `generate-readme.yml`, which triggers on changes to `data.json` and regenerates README. No current nightly provider-sync workflow was found in that directory. The repository's “refresh every two weeks”/nightly language should not be treated as proof of a recent live re-audit.
+- The 2026-10-05 refresh removed several NVIDIA NIM rows after HTTP 410 responses, updated free-tier models/rates for Google Gemini, Cloudflare Workers AI, Groq, Kilo, LLM7, OpenRouter and OVHcloud, and explicitly marked some new Kilo rows unprobed because no key was available. The source's own “Needs a human” list preserves unresolved provider questions; do not silently promote them to verified.
+- Decision unchanged: source is an untrusted discovery catalogue. Provider/model entries require independent official-source and endpoint checks before use in zero-cost routing or a paid customer delivery.
