@@ -26,6 +26,11 @@ class InstallationOutcomeTests(unittest.TestCase):
         self.assertEqual(outcome["installed_or_already_installed"], 2)
         self.assertEqual(outcome["blocked_by_size"], 1)
 
+    def test_safe_noop_when_no_candidate_has_explicit_approval(self):
+        outcome = validate_outcome({"candidate_count": 0, "results": []}, {"items": []})
+        self.assertEqual(outcome["status"], "NO_APPROVED_CANDIDATES")
+        self.assertEqual(outcome["installed_or_already_installed"], 0)
+
     def test_fails_if_nothing_was_installed(self):
         with self.assertRaisesRegex(ValueError, "no asset was installed"):
             validate_outcome({"results": [result("owner/large", "a" * 40, "BLOCKED_SIZE")]}, {"items": []})
