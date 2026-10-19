@@ -1,0 +1,192 @@
+{
+  "canonical_source": "github:agent0ai/a0-plugins",
+  "repo": "agent0ai/a0-plugins",
+  "revision_sha": "1f68424e1f4901997b6825bb902fc331eba201a4",
+  "default_branch": "main",
+  "pushed_at": "2026-10-15T00:18:32Z",
+  "repo_updated_at": "2026-10-15T00:18:36Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "authors/agent0ai/author.yaml",
+      "sha": null,
+      "content_sha256": "c420819a2693c44d76631118a70476a5945bace44b02fd034da02950c2d96829",
+      "score": 186,
+      "content": "level: owner\n"
+    },
+    {
+      "path": ".github/workflows/generate-plugin-state.yml",
+      "sha": null,
+      "content_sha256": "50158a0d8140f923d4194cd0cc0b98f63c0bf9e599ec38a42cb940f9376f5f38",
+      "score": 126,
+      "content": "name: Generate Plugin State\n\non:\n  push:\n    branches: [main]\n    paths:\n      - \"plugins/**\"\n      - \"authors/**\"\n  workflow_dispatch:\n    inputs:\n      rebuild_index:\n        description: \"Rebuild the complete index without downloading the current release; ignores selection and cleanup inputs\"\n        type: boolean\n        required: false\n        default: false\n      max_plugins:\n        description: \"Max number of plugins to process\"\n        required: false\n        default: \"1000\"\n      start_from:\n        description: \"Start processing from this plugin index\"\n        required: false\n        default: \"0\"\n      plugin_names:\n        description: \"Comma-separated list of plugins to process\"\n        required: false\n        default: \"\"\n      cleanup_orphans:\n        description: \"If true, ignore explicit/diff selection and clean up orphaned index/discussion entries without plugin folders\"\n        required: false\n        default: \"false\"\n      before_sha:\n        description: \"Git diff start SHA\"\n        required: false\n        default: \"\"\n      after_sha:\n        description: \"Git diff end SHA\"\n        required: false\n        default: \"\"\n\npermissions:\n  contents: write\n  discussions: write\n\njobs:\n  refresh:\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n\n      - name: Create bot app token\n        id: bot-app-token\n        uses: actions/create-github-app-token@v1\n        with:\n          app-id: ${{ secrets.A0_BOT_APP_ID }}\n          private-key: ${{ secrets.A0_BOT_PRIVATE_KEY }}\n\n      - name: Wait for older index-mutating workflows\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          GITHUB_REPOSITORY: ${{ github.repository }}\n          GITHUB_REF_NAME: ${{ github.ref_name }}\n          GITHUB_RUN_ID: ${{ github.run_id }}\n        run: |\n          python scripts/wait_for_index_serialization.py\n\n      - name: Set up Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n\n      - name: Install dependencies\n        run: |\n          python -m pip install --upgrade pip\n          python -m pip install pyyaml pillow\n\n      - name: Download current index.json\n        if: ${{ github.event.inputs.rebuild_index != 'true' }}\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/download_index_release.py\n\n      - name: Resolve orphan plugin names\n        if: ${{ github.event.inputs.cleanup_orphans == 'true' && github.event.inputs.rebuild_index != 'true' }}\n        id: orphan_names\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n        run: |\n          names=\"$(python scripts/find_orphan_plugin_names.py)\"\n          echo \"plugin_names=${names}\" >> \"$GITHUB_OUTPUT\"\n          echo \"Resolved orphan plugin names: ${names}\"\n\n      - name: Sync plugin state\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          REBUILD_INDEX: ${{ github.event.inputs.rebuild_index || 'false' }}\n          MAX_PLUGINS: ${{ github.event.inputs.max_plugins || '1000' }}\n          START_FROM: ${{ github.event.inputs.start_from || '0' }}\n          PLUGIN_NAMES: ${{ github.event.inputs.cleanup_orphans == 'true' && steps.orphan_names.outputs.plugin_names || github.event.inputs.plugin_names || '' }}\n          BEFORE_SHA: ${{ github.event.inputs.cleanup_orphans == 'true' && github.sha || github.event.inputs.before_sha || github.event.before || '' }}\n          AFTER_SHA: ${{ github.event.inputs.cleanup_orphans == 'true' && github.sha || github.event.inputs.after_sha || github.sha || '' }}\n        run: |\n          if [ \"$REBUILD_INDEX\" = \"true\" ]; then\n            rm -f index.json\n            export PLUGIN_NAMES=\"\" BEFORE_SHA=\"\" AFTER_SHA=\"$GITHUB_SHA\" START_FROM=\"0\"\n          fi\n          python scripts/sync_plugin_state.py\n          if [ \"$REBUILD_INDEX\" = \"true\" ]; then\n            python - <<'PY'\n          import json\n          from pathlib import Path\n\n          expected = {\n              path.parent.name for path in Path(\"plugins\").glob(\"*/index.yaml\")\n              if not path.parent.name.startswith(\"_\") and not (path.parent / \"blocked.md\").exists()\n          }\n          actual = set(json.loads(Path(\"index.json\").read_text())[\"plugins\"])\n          if actual != expected:\n              raise SystemExit(f\"Incomplete rebuild: missing={sorted(expected - actual)}, extra={sorted(actual - expected)}\")\n          print(f\"Verified complete index: {len(actual)} plugins\")\n          PY\n          fi\n\n      - name: Publish index.json to Release (replace asset)\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/publish_index_release.py\n"
+    },
+    {
+      "path": ".github/workflows/update-repos-stats.yml",
+      "sha": null,
+      "content_sha256": "ca26d5e0bbeec56b73c0eac68cd714fd3a72efa42cdf049a7b12f6a196194196",
+      "score": 126,
+      "content": "name: Update Index Stars & Repo Stats (auto)\n\non:\n  schedule:\n    - cron: \"17 * * * *\" # hourly\n  workflow_dispatch:\n\npermissions:\n  contents: write\n\njobs:\n  update:\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Create bot app token\n        id: bot-app-token\n        uses: actions/create-github-app-token@v1\n        with:\n          app-id: ${{ secrets.A0_BOT_APP_ID }}\n          private-key: ${{ secrets.A0_BOT_PRIVATE_KEY }}\n\n      - name: Wait for older index-mutating workflows\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          GITHUB_REPOSITORY: ${{ github.repository }}\n          GITHUB_REF_NAME: ${{ github.ref_name }}\n          GITHUB_RUN_ID: ${{ github.run_id }}\n        run: |\n          python scripts/wait_for_index_serialization.py\n\n      - name: Set up Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n\n      - name: Download index.json from tagged Release\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/download_index_release.py\n\n      - name: Scan repo stats (write repo_stats_updates.json)\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          STARS_CHUNK_SIZE: \"50\"\n        run: |\n          python scripts/update_index_stars.py --mode scan\n\n      - name: Refresh index.json from tagged Release\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/download_index_release.py\n\n      - name: Apply repo stats updates to refreshed index.json\n        run: |\n          python scripts/update_index_stars.py --mode apply\n\n      - name: Publish updated index.json to Release (replace asset)\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/publish_index_release.py\n"
+    },
+    {
+      "path": ".github/workflows/validate-plugin-pr.yml",
+      "sha": null,
+      "content_sha256": "1856599cedaaefb5ef78138a09a55e575f3df96b5af387d64305d3014b9cb346",
+      "score": 126,
+      "content": "name: Validate Plugin PR\n\non:\n  pull_request_target:\n    types: [opened, synchronize, reopened, ready_for_review, labeled]\n\npermissions:\n  contents: read\n  issues: write\n  pull-requests: write\n\njobs:\n  validate:\n    if: ${{ github.event_name == 'pull_request_target' && (github.event.action != 'labeled' || github.event.label.name == 'recheck') }}\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n\n      - name: Create bot app token\n        id: bot-app-token\n        uses: actions/create-github-app-token@v1\n        with:\n          app-id: ${{ secrets.A0_BOT_APP_ID }}\n          owner: ${{ github.repository_owner }}\n          repositories: |\n            a0-plugins\n          private-key: ${{ secrets.A0_BOT_PRIVATE_KEY }}\n\n      - name: Resolve PR metadata\n        id: pr_meta\n        uses: actions/github-script@v7\n        with:\n          github-token: ${{ steps.bot-app-token.outputs.token }}\n          script: |\n            const pr = context.payload.pull_request;\n            const shouldRun = !pr.draft;\n            core.setOutput('should_run', shouldRun ? 'true' : 'false');\n            core.setOutput('number', String(pr.number));\n            core.setOutput('base_sha', pr.base.sha);\n            core.setOutput('head_sha', pr.head.sha);\n            core.setOutput('head_repo', pr.head.repo.full_name);\n            core.setOutput('pr_author', pr.user.login);\n            core.setOutput('is_draft', pr.draft ? 'true' : 'false');\n\n      - name: Fetch PR head commit\n        if: ${{ steps.pr_meta.outputs.should_run == 'true' }}\n        env:\n          HEAD_REPO: ${{ steps.pr_meta.outputs.head_repo }}\n          HEAD_SHA: ${{ steps.pr_meta.outputs.head_sha }}\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          git fetch --no-tags --depth=1 \"https://x-access-token:${GH_TOKEN}@github.com/${HEAD_REPO}.git\" ${HEAD_SHA}\n\n      - name: Set up Python\n        if: ${{ steps.pr_meta.outputs.should_run == 'true' }}\n        uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n\n      - name: Install dependencies\n        if: ${{ steps.pr_meta.outputs.should_run == 'true' }}\n        run: |\n          python -m pip install --upgrade pip\n          python -m pip install pyyaml pillow\n\n      - name: Download current index.json (best effort)\n        if: ${{ steps.pr_meta.outputs.should_run == 'true' }}\n        continue-on-error: true\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/download_index_release.py\n\n      - name: Validate plugin submission\n        id: validate_submission\n        if: ${{ steps.pr_meta.outputs.should_run == 'true' }}\n        continue-on-error: true\n        env:\n          BASE_SHA: ${{ steps.pr_meta.outputs.base_sha }}\n          HEAD_SHA: ${{ steps.pr_meta.outputs.head_sha }}\n          PR_AUTHOR: ${{ steps.pr_meta.outputs.pr_author }}\n          GITHUB_TOKEN: ${{ github.token }}\n        run: |\n          set +e\n          python scripts/validate_plugin_submission.py 2>&1 | tee validate_output.txt\n          status=${PIPESTATUS[0]}\n          reason=$(python -c 'from pathlib import Path; text = Path(\"validate_output.txt\").read_text(encoding=\"utf-8\", errors=\"replace\"); reason = next((line.strip() for line in reversed(text.splitlines()) if line.strip().startswith(\"ERROR: \")), \"Plugin submission validation failed.\"); print(reason)')\n          {\n            echo 'comment_body<<EOF'\n            echo '## Plugin submission validation failed'\n            echo\n            echo \"$reason\"\n            echo 'EOF'\n          } >> \"$GITHUB_OUTPUT\"\n          exit $status\n\n      - name: Comment validation failure on PR\n        if: ${{ steps.validate_submission.outcome == 'failure' && steps.validate_submission.outputs.comment_body != '' }}\n        uses: actions/github-script@v7\n        env:\n          COMMENT_BODY: ${{ steps.validate_submission.outputs.comment_body }}\n        with:\n          github-token: ${{ steps.bot-app-token.outputs.token }}\n          script: |\n            await github.rest.issues.createComment({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n              issue_number: Number('${{ steps.pr_meta.outputs.number }}'),\n              body: process.env.COMMENT_BODY,\n            });\n\n      - name: Fail workflow if validation failed\n        if: ${{ steps.validate_submission.outcome == 'failure' }}\n        run: |\n          echo \"Plugin submission validation failed\"\n          exit 1\n"
+    },
+    {
+      "path": ".github/workflows/generate-missing-thumbnails.yml",
+      "sha": null,
+      "content_sha256": "e6419d0049dd084d1edeb0a560534f68722ed9fda7d451f8dd66e08133d24944",
+      "score": 126,
+      "content": "name: Generate Missing Thumbnails\n\non:\n  push:\n    branches: [main]\n    paths:\n      - \"plugins/**\"\n      - \"generated/thumbnails/**\"\n  workflow_dispatch:\n    inputs:\n      max_generated_thumbnails:\n        description: \"Max number of missing thumbnails to actually generate\"\n        required: false\n        default: \"\"\n\npermissions:\n  contents: write\n  discussions: write\n\njobs:\n  refresh:\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n          persist-credentials: false\n\n      - name: Create bot app token\n        id: bot-app-token\n        uses: actions/create-github-app-token@v1\n        with:\n          app-id: ${{ secrets.A0_BOT_APP_ID }}\n          private-key: ${{ secrets.A0_BOT_PRIVATE_KEY }}\n\n      - name: Wait for older index-mutating workflows\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          GITHUB_REPOSITORY: ${{ github.repository }}\n          GITHUB_REF_NAME: ${{ github.ref_name }}\n          GITHUB_RUN_ID: ${{ github.run_id }}\n        run: |\n          python scripts/wait_for_index_serialization.py\n\n      - name: Set up Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n\n      - name: Install dependencies\n        run: |\n          python -m pip install --upgrade pip\n          python -m pip install pyyaml pillow requests\n\n      - name: Download current index.json\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/download_index_release.py\n\n      - name: Generate missing thumbnails\n        env:\n          MAX_GENERATED_THUMBNAILS: ${{ github.event.inputs.max_generated_thumbnails || '' }}\n          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}\n        run: |\n          python scripts/generate_missing_thumbnails.py\n\n      - name: Commit generated thumbnails\n        env:\n          BOT_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          REF_NAME: ${{ github.ref_name }}\n        run: |\n          git config user.name \"a0-bot\"\n          git config user.email \"bot@agent0.ai\"\n          git add generated/thumbnails\n          if git diff --cached --quiet; then\n            echo \"No generated thumbnail changes to commit.\"\n            exit 0\n          fi\n          git commit -m \"Generate missing plugin thumbnails\"\n          git push \"https://x-access-token:${BOT_TOKEN}@github.com/${GITHUB_REPOSITORY}.git\" \"HEAD:${REF_NAME}\"\n\n      - name: Resolve affected plugin names\n        id: affected_plugins\n        env:\n          BEFORE_SHA: ${{ github.event.before || '' }}\n          AFTER_SHA: ${{ github.sha }}\n        run: |\n          names=$(python - <<'PY'\n          import os\n          import subprocess\n          from pathlib import Path\n\n          before = os.environ.get(\"BEFORE_SHA\", \"\").strip()\n          after = os.environ.get(\"AFTER_SHA\", \"\").strip() or \"HEAD\"\n          if before and set(before) != {\"0\"}:\n              cmd = [\"git\", \"diff\", \"--name-only\", f\"{before}..{after}\"]\n          else:\n              cmd = [\"git\", \"ls-tree\", \"-r\", \"--name-only\", after, \"--\", \"plugins\", \"generated/thumbnails\"]\n          raw = subprocess.check_output(cmd).decode(\"utf-8\", errors=\"replace\")\n          names = set()\n          for line in raw.splitlines():\n              path = Path(line.strip())\n              parts = path.parts\n              if len(parts) >= 2 and parts[0] == \"plugins\":\n                  names.add(parts[1])\n              elif len(parts) >= 3 and parts[0] == \"generated\" and parts[1] == \"thumbnails\":\n                  names.add(parts[2])\n          print(\",\".join(sorted(names)))\n          PY\n          )\n          echo \"plugin_names=${names}\" >> \"$GITHUB_OUTPUT\"\n          echo \"Affected plugins: ${names}\"\n\n      - name: Sync plugin state\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          MAX_PLUGINS: \"1000\"\n          START_FROM: \"0\"\n          PLUGIN_NAMES: ${{ steps.affected_plugins.outputs.plugin_names }}\n          BEFORE_SHA: ${{ github.event.before || '' }}\n          AFTER_SHA: ${{ github.sha }}\n        run: |\n          python scripts/sync_plugin_state.py\n\n      - name: Publish index.json to Release (replace asset)\n        env:\n          GITHUB_TOKEN: ${{ steps.bot-app-token.outputs.token }}\n          INDEX_RELEASE_TAG: generated-index\n        run: |\n          python scripts/publish_index_release.py\n"
+    },
+    {
+      "path": ".github/workflows/recheck-plugin-pr.yml",
+      "sha": null,
+      "content_sha256": "4ee262349a1b4d0f8a5d8c9a76cb5d073a8a27b1a7c1d4d89dda8ee29f734188",
+      "score": 126,
+      "content": "name: Recheck Plugin PR\n\non:\n  issue_comment:\n    types: [created]\n\npermissions:\n  issues: write\n  pull-requests: write\n\njobs:\n  recheck:\n    if: ${{ github.event.issue.pull_request && github.event.comment.body == '/recheck' }}\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Create bot app token\n        id: bot-app-token\n        uses: actions/create-github-app-token@v1\n        with:\n          app-id: ${{ secrets.A0_BOT_APP_ID }}\n          owner: ${{ github.repository_owner }}\n          repositories: |\n            a0-plugins\n          private-key: ${{ secrets.A0_BOT_PRIVATE_KEY }}\n\n      - name: Toggle recheck label on PR\n        uses: actions/github-script@v7\n        with:\n          github-token: ${{ steps.bot-app-token.outputs.token }}\n          script: |\n            const owner = context.repo.owner;\n            const repo = context.repo.repo;\n            const issue_number = context.issue.number;\n            const labelName = 'recheck';\n\n            try {\n              await github.rest.issues.getLabel({\n                owner,\n                repo,\n                name: labelName,\n              });\n            } catch (error) {\n              if (error.status !== 404) {\n                throw error;\n              }\n              await github.rest.issues.createLabel({\n                owner,\n                repo,\n                name: labelName,\n                color: 'ededed',\n              });\n            }\n\n            const existingLabels = await github.paginate(github.rest.issues.listLabelsOnIssue, {\n              owner,\n              repo,\n              issue_number,\n              per_page: 100,\n            });\n\n            const hasLabel = existingLabels.some((label) => label.name === labelName);\n            if (hasLabel) {\n              await github.rest.issues.removeLabel({\n                owner,\n                repo,\n                issue_number,\n                name: labelName,\n              });\n            }\n\n            await github.rest.issues.addLabels({\n              owner,\n              repo,\n              issue_number,\n              labels: [labelName],\n            });\n"
+    },
+    {
+      "path": ".github/workflows/close-inactive-prs.yml",
+      "sha": null,
+      "content_sha256": "093bbd22f851766e05547e5ebef6a2b1826c2daad59d7477552574d91eb46770",
+      "score": 126,
+      "content": "name: Close Inactive PRs (auto)\n\non:\n  schedule:\n    - cron: \"17 4 * * *\" # daily\n  workflow_dispatch:\n\npermissions:\n  pull-requests: write\n  contents: read\n  issues: write\n\njobs:\n  close:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Set up Python\n        uses: actions/setup-python@v5\n        with:\n          python-version: \"3.11\"\n\n      - name: Close inactive failing PRs\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n          OWNER: ${{ github.repository_owner }}\n          REPO: ${{ github.event.repository.name }}\n          INACTIVITY_DAYS: \"7\"\n        run: |\n          python scripts/close_inactive_failing_prs.py"
+    },
+    {
+      "path": "plugins/agentmail/index.yaml",
+      "sha": null,
+      "content_sha256": "c9912d557d45bd3f873b6dd2826b699b9089711feee34b1da0aacbb8eee5483a",
+      "score": 106,
+      "content": "title: AgentMail Integration\ndescription: Send and receive emails with thread continuity and outbox attachments via the AgentMail API.\ngithub: https://github.com/Raleksand/agentmail\ntags:\n  - email\n  - integration\n  - automation\n"
+    },
+    {
+      "path": "plugins/browser_model_override/index.yaml",
+      "sha": null,
+      "content_sha256": "f339b72345274f8edb7c384cdda4fb5334c50cac2b8a58a44a1c950c37026e9c",
+      "score": 106,
+      "content": "title: Browser Model Override\ndescription: Use a dedicated LLM for Agent Zero's bundled browser agent while keeping the main chat model unchanged.\ngithub: https://github.com/jedruch/a0-browser-model-override\ntags:\n  - llm\n  - browser\n  - development\n"
+    },
+    {
+      "path": "plugins/camofox_browser/index.yaml",
+      "sha": null,
+      "content_sha256": "8803409061bd85f4705c6bd5ae5c35962725b6ad2f21dc50f8b385ee1075c56e",
+      "score": 106,
+      "content": "title: CamoFox Browser\ndescription: Connect Agent Zero to CamoFox Browser.\ngithub: https://github.com/a0-community-plugins/camofox-plugin\ntags:\n  - browser\n  - automation\n  - tools\n  - workflow\n  - agents"
+    },
+    {
+      "path": "plugins/qmd_search/index.yaml",
+      "sha": null,
+      "content_sha256": "d18162b6a63b127910bef3e797892acdf205d86eab25f77dc40e24455d7b26aa",
+      "score": 106,
+      "content": "title: QMD Search\ndescription: Search QMD (Query Markup Documents) for information.\ngithub: https://github.com/a0-community-plugins/qmd_search\ntags:\n  - search\n  - qmd\n  - integration\n  - knowledge"
+    },
+    {
+      "path": "plugins/agentmemory/index.yaml",
+      "sha": null,
+      "content_sha256": "1007daa5e382977d0e9032d7d265e4398d24fa5c3f9fe1bf5a5b551e36bcf7e8",
+      "score": 106,
+      "content": "title: AgentMemory\ndescription: Persistent recall and turn capture for Agent Zero through AgentMemory.\ngithub: https://github.com/3clyp50/agentmemory\ntags:\n  - memory\n  - integration\n  - api\n  - agents\n"
+    },
+    {
+      "path": "plugins/agent0-terminal/plugin.yaml",
+      "sha": null,
+      "content_sha256": "79d6b2ddaadf6b6088f77ac2e0ec23ee1caf9620eeb9fcad6b106299fe7aff95",
+      "score": 106,
+      "content": "title: Agent0 Terminal\ndescription: PTY-backed terminal modal for Agent Zero with persistent sessions, TUI support, and TerminalLog integration.\ngithub: https://github.com/Nunezchef/agent0-terminal\ntags:\n  - development\n  - cli\n  - tools\n  - files\n  - workflow\n"
+    },
+    {
+      "path": "plugins/twitterapiio/index.yaml",
+      "sha": null,
+      "content_sha256": "18f556c015d24d79a531783e03fb5e5edc1789760fd0c7046098391e52cd0755",
+      "score": 106,
+      "content": "title: TwitterAPI.io\ndescription: Twitter data retrieval via TwitterAPI.io — search tweets, user profiles, followers, lists, communities, trends, and real-time streams.\ngithub: https://github.com/protolabs42/twitterapiio\ntags:\n  - api\n  - integration\n"
+    },
+    {
+      "path": "plugins/custom_space_agent_url/index.yaml",
+      "sha": null,
+      "content_sha256": "309e192696a443e776b49a33f3b6bf215632c0b4b5956efa13e5b44aaacf4589",
+      "score": 106,
+      "content": "title: Custom Space Agent URL\ndescription: Customize the Space Agent link URL in the Agent Zero sidebar menu. Configure via plugin settings or SPACE_AGENT_URL environment variable in docker-compose.\ngithub: https://github.com/schmidt-silas/custom_space_agent_url\ntags:\n  - tools\n"
+    },
+    {
+      "path": "plugins/browser_session_sync/index.yaml",
+      "sha": null,
+      "content_sha256": "1717b44d9baf5c340fb6be7943cbca4a785e02b31030a758cfde4ceedfc0786c",
+      "score": 106,
+      "content": "title: Browser Session Sync\ndescription: Persists native Browser tabs, cookies, and localStorage across restarts with one-shot startup restore and debounced live-state tracking.\ngithub: https://github.com/Omni-NexusAI/browser_session_sync\ntags:\n  - browser\n  - storage\n  - workflow\n  - automation\n  - ui\n"
+    },
+    {
+      "path": "plugins/autoresearch/index.yaml",
+      "sha": null,
+      "content_sha256": "285a309250c88eedb964f80e0a6b1a7a98cbc49f923147ffaf18a1101dc5b2e9",
+      "score": 106,
+      "content": "title: AutoResearch\ndescription: Autonomous code optimization experiment loop. Generates hypotheses, edits code, runs benchmarks, evaluates results, and iterates until convergence.\ngithub: https://github.com/juanmackie/autoresearch-a0\ntags:\n  - optimization\n  - benchmarking\n  - experiments\n  - performance\n"
+    },
+    {
+      "path": "plugins/agent_harness/index.yaml",
+      "sha": null,
+      "content_sha256": "2293145aa84fb312b5c8e1174997454c1b1638482864dc7c075cf3a526548800",
+      "score": 106,
+      "content": "title: Agent Harness\ndescription: Structured Pro and Ultra coding workflows with inline objectives, action-bound approvals, bounded workers, and right-side observability for Agent Zero\ngithub: https://github.com/a0-community-plugins/agent_harness\ntags:\n  - development\n  - tools\n  - workflow\n  - agents\n"
+    },
+    {
+      "path": "plugins/a0-llmfallback/plugin.yaml",
+      "sha": null,
+      "content_sha256": "4d28adae992ef11ed6f48463079affbb730549dafe08adcf46135d9baff3b5d0",
+      "score": 106,
+      "content": "title: A0 LLM Fallback\ndescription: Automatic per-role LLM failover for Agent Zero with configurable fallback models, settings UI integration, and one-command install.\ngithub: https://github.com/Nunezchef/a0-llmfallback\ntags:\n  - llm\n  - automation\n  - tools\n  - workflow\n  - agents\n"
+    },
+    {
+      "path": "plugins/agent_browser/index.yaml",
+      "sha": null,
+      "content_sha256": "536e559c6ebbacfc0684a7449c9e9f38b387232d8ddd8d1f6fca111d400e4f5a",
+      "score": 106,
+      "content": "title: A0 Agent Browser\ndescription: Native A0 tools for Vercel Agent Browser. Brings CDP-based browser automation into Agent Zero with anti-bot resistance via real Chrome Chromium instances.\ngithub: https://github.com/TurkerTunali/a0-agent-browser\ntags:\n  - browser\n  - automation\n  - cdp\n  - web\n  - tools\n"
+    },
+    {
+      "path": "plugins/file_browser_webdav/index.yaml",
+      "sha": null,
+      "content_sha256": "ad05ba876268aacef5749fae908ea85914391d951964803ab855de84229aed53",
+      "score": 106,
+      "content": "title: File Browser WebDAV access\ndescription: Connect WebDAV folders over verified HTTPS with per-connection permissions, conditional saves and shared Editor support. Requires Agent Zero v2.12 or later.\ngithub: https://github.com/3clyp50/a0-file-browser-webdav\ntags:\n  - files\n  - file-browser\n  - storage\n  - integration\n"
+    },
+    {
+      "path": "plugins/file_browser_s3/index.yaml",
+      "sha": null,
+      "content_sha256": "1e3c6653f4803d9fd8cccb1dc5c0eb0a9e90b0b323bebf7ace12e4021ad2757a",
+      "score": 106,
+      "content": "title: File Browser S3 access\ndescription: Browse S3 buckets and prefixes in Files with explicit credentials, per-connection permissions and conditional object saves. Requires Agent Zero v2.12 or later.\ngithub: https://github.com/3clyp50/a0-file-browser-s3\ntags:\n  - files\n  - file-browser\n  - storage\n  - integration\n"
+    },
+    {
+      "path": "plugins/file_browser_smb/index.yaml",
+      "sha": null,
+      "content_sha256": "3a856b7fc9a45c1aabc2238e37dd354bf4d74679dd99ac92baa4d3d2babe7abc",
+      "score": 106,
+      "content": "title: File Browser SMB 3 for NAS\ndescription: Browse encrypted SMB 3 NAS shares in Files with signed sessions, explicit credentials and per-connection permissions. Requires Agent Zero v2.12 or later.\ngithub: https://github.com/3clyp50/a0-file-browser-smb\ntags:\n  - files\n  - file-browser\n  - storage\n  - integration\n"
+    },
+    {
+      "path": "plugins/llm_cost_tracker/index.yaml",
+      "sha": null,
+      "content_sha256": "9a2b627d635574b99d45b0cc283e6d10633e2f75fdd9a4c95fcbe6e44ae1bf78",
+      "score": 106,
+      "content": "title: LLM Cost Tracker\ndescription: Privacy-conscious LLM usage and cost tracking with a local SQLite dashboard. Tracks chat and utility model calls, separates provider-reported, estimated API, and API-equivalent costs.\ngithub: https://github.com/Jehu/a0-llm-cost-tracker\ntags:\n  - llm\n  - tools\n  - development\n  - automation\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-19T01:49:43.058208+00:00"
+}

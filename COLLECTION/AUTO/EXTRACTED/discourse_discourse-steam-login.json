@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:discourse/discourse-steam-login",
+  "repo": "discourse/discourse-steam-login",
+  "revision_sha": "7e66b376303305cf0399bf113d7971a34c3769b1",
+  "default_branch": "main",
+  "pushed_at": "2026-09-23T00:31:52Z",
+  "repo_updated_at": "2026-09-15T13:40:50Z",
+  "license": "MIT",
+  "topics": [
+    "discourse-plugin",
+    "steam"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "spec/integration/steam_auth_spec.rb",
+      "sha": null,
+      "content_sha256": "f7354489934a1108651a882bcb98375e659037c6e5040cfa9917067bc16d04fa",
+      "score": 171,
+      "content": "# frozen_string_literal: true\n\ndescribe \"Steam OpenID 2.0\" do\n  let(:web_api_key) { \"abcdef11223344\" }\n  let(:steam_user_id) { \"894923402340234\" }\n\n  before do\n    # jack up OpenID logger min severity to remove noisy info messages\n    OpenID::Util.logger.level = 100\n    SiteSetting.steam_web_api_key = web_api_key\n    SiteSetting.enable_steam_logins = true\n\n    cert = OpenSSL::X509::Certificate.new\n    cert.add_extension(OpenSSL::X509::Extension.new(\"subjectAltName\", \"DNS:steamcommunity.com\"))\n    StubSocket::StubIO.any_instance.stubs(:peer_cert).returns(cert)\n\n    stub_request(:get, \"http://steamcommunity.com/openid\").to_return(\n      status: 200,\n      body: <<~XML,\n          <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n          <xrds:XRDS xmlns:xrds=\"xri://$xrds\" xmlns=\"xri://$xrd*($v*2.0)\">\n            <XRD>\n              <Service priority=\"0\">\n                <Type>http://specs.openid.net/auth/2.0/signon</Type>\n                <URI>https://steamcommunity.com/openid/login</URI>\n              </Service>\n            </XRD>\n          </xrds:XRDS>\n        XML\n      headers: {\n        \"Content-Type\" => \"text/xml\",\n      },\n    )\n    stub_request(:post, \"https://steamcommunity.com/openid/login\").to_return(\n      status: 200,\n      body: <<~BODY,\n          ns:http://specs.openid.net/auth/2.0\n          is_valid:true\n        BODY\n      headers: {\n        \"Content-Type\" => \"text/plain\",\n      },\n    )\n    stub_request(:get, \"https://steamcommunity.com/openid/id/#{steam_user_id}\").to_return(\n      status: 200,\n      body: <<~BODY,\n          <?xml version=\"1.0\" encoding=\"UTF-8\"?>\n          <xrds:XRDS xmlns:xrds=\"xri://$xrds\" xmlns=\"xri://$xrd*($v*2.0)\">\n            <XRD>\n              <Service priority=\"0\">\n                <Type>http://specs.openid.net/auth/2.0/signon</Type>\n                <URI>https://steamcommunity.com/openid/login</URI>\n              </Service>\n            </XRD>\n          </xrds:XRDS>\n        BODY\n    )\n    stub_request(\n      :get,\n      \"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=#{web_api_key}&steamids=#{steam_user_id}\",\n    ).with(headers: { \"Host\" => \"api.steampowered.com\" }).to_return(\n      status: 200,\n      body:\n        JSON.dump(\n          response: {\n            players: [\n              {\n                steamid: steam_user_id,\n                communityvisibilitystate: 3,\n                profilestate: 1,\n                personaname: \"SteamyPlayer\",\n                profileurl: \"https://steamcommunity.com/id/SteamyPlayer/\",\n                avatar:\n                  \"https://avatars.akamai.steamstatic.com/734096e84a118c839422fa213faa6885c093374d.jpg\",\n                avatarmedium:\n                  \"https://avatars.akamai.steamstatic.com/734096e84a118c839422fa213faa6885c093374d_medium.jpg\",\n                avatarfull:\n                  \"https://avatars.akamai.steamstatic.com/734096e84a118c839422fa213faa6885c093374d_full.jpg\",\n                avatarhash: \"734096e84a118c839422fa213faa6885c093374d\",\n                lastlogoff: 1_659_365_725,\n                personastate: 0,\n                primaryclanid: \"103588791859221341\",\n                timecreated: 1_524_883_291,\n                personastateflags: 0,\n              },\n            ],\n          },\n        ),\n    )\n  end\n\n  it \"retrieves user details from the Steam API after the authentication flow is complete\" do\n    post \"/auth/steam\"\n    expect(response.status).to eq(303)\n    expect(response.location).to start_with(\"https://steamcommunity.com/openid/login\")\n\n    post \"/auth/steam/callback\",\n         params: {\n           _method: \"post\",\n           \"openid.ns\": \"http://specs.openid.net/auth/2.0\",\n           \"openid.mode\": \"id_res\",\n           \"openid.op_endpoint\": \"https://steamcommunity.com/openid/login\",\n           \"openid.claimed_id\": \"https://steamcommunity.com/openid/id/#{steam_user_id}\",\n           \"openid.identity\": \"https://steamcommunity.com/openid/id/#{steam_user_id}\",\n           \"openid.return_to\": \"http://test.localhost/auth/steam/callback?_method=post\",\n           \"openid.response_nonce\": \"#{1.minute.ago.iso8601}aZq7eHv92/2Mg4OsPKiKcTgI0j4=\",\n           \"openid.assoc_handle\": \"1234567890\",\n           \"openid.signed\":\n             \"signed,op_endpoint,claimed_id,identity,return_to,response_nonce,assoc_handle\",\n           \"openid.sig\": \"ZseI1sqVHGU/f5Ye7Tcn7T3QMIg=\",\n         }\n    expect(response.status).to eq(302)\n    expect(response.location).to eq(\"http://test.localhost/\")\n    expect(session[:current_user_id]).to be_blank\n\n    authentication_data = JSON.parse(cookies[:authentication_data]).deep_symbolize_keys!\n    expect(authentication_data[:email]).to be_blank\n    expect(authentication_data[:username]).to eq(\"SteamyPlayer\")\n    expect(authentication_data[:email_valid]).to eq(false)\n  end\nend\n"
+    },
+    {
+      "path": "spec/lib/auth/steam_authenticator_spec.rb",
+      "sha": null,
+      "content_sha256": "57b420bb7e48c2fd6f9e76a6b83bbe5cf65c2d74d9a6f4e6043976f31613ef09",
+      "score": 169,
+      "content": "# frozen_string_literal: true\n\ndescribe Auth::SteamAuthenticator do\n  describe \"#enabled?\" do\n    subject(:authenticator) { described_class.new }\n\n    it \"requires configured credentials and the login toggle\" do\n      SiteSetting.steam_web_api_key = \"api_key\"\n      expect(authenticator.enabled?).to eq(false)\n\n      SiteSetting.enable_steam_logins = true\n      expect(authenticator.enabled?).to eq(true)\n\n      SiteSetting.steam_web_api_key = \"\"\n      expect(authenticator.enabled?).to eq(false)\n    end\n\n    it \"rejects enabling login without an API key\" do\n      expect { SiteSetting.enable_steam_logins = true }.to raise_error(Discourse::InvalidParameters)\n    end\n  end\n\n  describe \"#can_revoke?\" do\n    it \"should be false be default\" do\n      authenticator = Auth::SteamAuthenticator.new\n\n      expect(authenticator.can_revoke?).to eq(false)\n    end\n\n    it \"should be true when steam_logins_allow_revoke site settings is enabled\" do\n      SiteSetting.steam_logins_allow_revoke = true\n\n      authenticator = Auth::SteamAuthenticator.new\n\n      expect(authenticator.can_revoke?).to eq(true)\n    end\n  end\nend\n"
+    },
+    {
+      "path": ".github/workflows/d-compat-branch.yml",
+      "sha": null,
+      "content_sha256": "e44ad567aa3ba1567e74557323456f1cdf80e2a7c7affae3f05d7fc1345d5627",
+      "score": 126,
+      "content": "name: Create new d-compat branch\n\non:\n  workflow_dispatch:\n  schedule:\n    - cron: \"0 0 * * *\"\n\njobs:\n  ci:\n    uses: discourse/.github/.github/workflows/create-d-compat-branch.yml@v1\n"
+    },
+    {
+      "path": ".github/workflows/discourse-plugin.yml",
+      "sha": null,
+      "content_sha256": "28902cf4eff0b3a9d0ea2e56fc058e7f2f4f1c8e94b74509c6febf58e353b420",
+      "score": 126,
+      "content": "name: Discourse Plugin\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\njobs:\n  ci:\n    uses: discourse/.github/.github/workflows/discourse-plugin.yml@v1\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "860fd5e0cfcf5fcca9683e3a8e979401a6d4afe145d20b95fefd70327e102757",
+      "score": 120,
+      "content": "{\n  \"private\": true,\n  \"devDependencies\": {\n    \"@discourse/lint-configs\": \"2.44.1\",\n    \"@glint/ember-tsc\": \"1.1.1\",\n    \"concurrently\": \"^9.2.1\",\n    \"discourse\": \"npm:@discourse/types@2026.3.0-d02b2966\",\n    \"ember-template-lint\": \"7.9.3\",\n    \"eslint\": \"9.39.2\",\n    \"lint-to-the-future\": \"^2.6.4\",\n    \"lint-to-the-future-eslint\": \"^3.3.0\",\n    \"prettier\": \"3.8.1\",\n    \"stylelint\": \"17.5.0\"\n  },\n  \"scripts\": {\n    \"lint\": \"concurrently \\\"pnpm:lint:*(!fix)\\\" --names \\\"lint:\\\"\",\n    \"lint:fix\": \"concurrently \\\"pnpm:lint:*:fix\\\" --names \\\"fix:\\\"\",\n    \"lint:css\": \"pnpm stylelint 'assets/stylesheets/**/*.scss' --allow-empty-input\",\n    \"lint:css:fix\": \"pnpm stylelint 'assets/stylesheets/**/*.scss' --fix --allow-empty-input\",\n    \"lint:js\": \"eslint {assets,admin/assets,test}/javascripts --cache --no-error-on-unmatched-pattern\",\n    \"lint:js:fix\": \"eslint {assets,admin/assets,test}/javascripts --fix --no-error-on-unmatched-pattern\",\n    \"lint:hbs\": \"ember-template-lint '{assets,admin/assets,test}/javascripts/**/*.gjs' --no-error-on-unmatched-pattern\",\n    \"lint:hbs:fix\": \"ember-template-lint '{assets,admin/assets,test}/javascripts/**/*.gjs' --fix --no-error-on-unmatched-pattern\",\n    \"lint:prettier\": \"pnpm prettier 'assets/stylesheets/**/*.scss' '{assets,admin/assets,test}/javascripts/**/*.{js,gjs}' --check --no-error-on-unmatched-pattern\",\n    \"lint:prettier:fix\": \"pnpm prettier 'assets/stylesheets/**/*.scss' '{assets,admin/assets,test}/javascripts/**/*.{js,gjs}' -w --no-error-on-unmatched-pattern\",\n    \"lint:types\": \"ember-tsc -b\",\n    \"lttf:ignore\": \"lint-to-the-future ignore\"\n  },\n  \"engines\": {\n    \"node\": \">= 22\",\n    \"npm\": \"please-use-pnpm\",\n    \"yarn\": \"please-use-pnpm\",\n    \"pnpm\": \"^10\"\n  },\n  \"packageManager\": \"pnpm@10.28.0\"\n}\n"
+    },
+    {
+      "path": "db/migrate/20190510055357_migrate_steam_auth_data.rb",
+      "sha": null,
+      "content_sha256": "a0c1160e8b667db6b41120d356e4e99ca1f5a83ae72c1e3e5bd192c43cde706f",
+      "score": 111,
+      "content": "# frozen_string_literal: true\n\nclass MigrateSteamAuthData < ActiveRecord::Migration[5.2]\n  def up\n    execute <<~SQL\n    INSERT INTO user_associated_accounts (\n      provider_name,\n      provider_uid,\n      user_id,\n      created_at,\n      updated_at\n    ) SELECT\n      'steam',\n      replace(key, 'steam_uid_', ''),\n      (value::json->>'user_id')::integer,\n      CURRENT_TIMESTAMP,\n      CURRENT_TIMESTAMP\n    FROM plugin_store_rows\n    WHERE plugin_name = 'steam'\n    SQL\n  end\n\n  def down\n    raise ActiveRecord::IrreversibleMigration\n  end\nend\n"
+    },
+    {
+      "path": "lib/auth/steam_authenticator.rb",
+      "sha": null,
+      "content_sha256": "ee1cd79c36dbeb8d9d2c177a5fbb459d16433b187f1ee001cb012cbbbfb5d88e",
+      "score": 111,
+      "content": "# frozen_string_literal: true\n\nclass Auth::SteamAuthenticator < ::Auth::ManagedAuthenticator\n  def name\n    \"steam\"\n  end\n\n  def enable_setting\n    :enable_steam_logins\n  end\n\n  def required_settings\n    %i[steam_web_api_key]\n  end\n\n  def can_revoke?\n    SiteSetting.steam_logins_allow_revoke\n  end\n\n  def register_middleware(omniauth)\n    omniauth.provider :steam,\n                      setup:\n                        lambda { |env|\n                          strategy = env[\"omniauth.strategy\"]\n                          strategy.options[:api_key] = SiteSetting.steam_web_api_key\n                        }\n  end\nend\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "245239c467641e41c4256858fab37d04272c6acb9c3f2a95f667109434dd1c5b",
+      "score": 100,
+      "content": "# Steam Login / Authentication Plugin\n\nA simple plugin that enables authentication via Steam. Users must still provide an email address on first authentication.\n\nFor more information, please see: https://meta.discourse.org/t/steam-login-authentication-plugin/18153\n"
+    },
+    {
+      "path": "spec/system/core_features_spec.rb",
+      "sha": null,
+      "content_sha256": "03180ff061cc7803f4f490e3366365d283ff9c2df3a7b79c2259e032f1adfdd3",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nRSpec.describe \"Core features\" do\n  before { enable_current_plugin }\n\n  it_behaves_like \"having working core features\"\nend\n"
+    },
+    {
+      "path": ".rubocop.yml",
+      "sha": null,
+      "content_sha256": "ec10bb4a3ab7d38292bbf38de2cc9c6feef9de89f7472522ee730f43c1b7df04",
+      "score": 35,
+      "content": "inherit_gem:\n  rubocop-discourse: stree-compat.yml\n"
+    },
+    {
+      "path": "plugin.rb",
+      "sha": null,
+      "content_sha256": "23f51756e2947d70564404d349b2b1c8720320b3b6b12bfce44fae730811ef8b",
+      "score": 35,
+      "content": "# frozen_string_literal: true\n\n# name: discourse-steam-login\n# about: Allows users to login to your forum using Steam Authentication.\n# meta_topic_id: 18153\n# version: 2.0.1\n# author: J. de Faye, tgxworld\n\n# omniauth-openid is not included in core since v2.4.0.beta10\nunless defined?(OmniAuth::Strategies::OpenID)\n  gem \"ruby-openid\", \"2.9.2\", require: false\n  gem \"rack-openid\", \"1.4.2\", require: false\n  gem \"omniauth-openid\", \"2.0.1\"\nend\n\ngem \"omniauth-steam\", \"1.0.6\"\n\nregister_svg_icon \"fab-steam\" if respond_to?(:register_svg_icon)\n\nrequire_relative \"lib/auth/steam_authenticator\"\n\nauth_provider authenticator: Auth::SteamAuthenticator.new, icon: \"fab-steam\"\n"
+    },
+    {
+      "path": "translator.yml",
+      "sha": null,
+      "content_sha256": "27d0eeecceccbe032da0fea7d97e2308c9cb0e76e2e9462d6a5b27a8407fe654",
+      "score": 35,
+      "content": "# Configuration file for discourse-translator-bot\n\nfiles:\n- source_path: config/locales/client.en.yml\n  destination_path: client.yml\n- source_path: config/locales/server.en.yml\n  destination_path: server.yml\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "be4c132a75b1be7747eee7181f7008fb14555da6b0020eff96fe6ab633abcc79",
+      "score": 35,
+      "content": "{\n  \"extends\": \"discourse/tsconfig-plugin\",\n  \"include\": [\n    \"admin/assets/javascripts/**/*\",\n    \"assets/javascripts/**/*\",\n    \"test/javascripts/**/*\",\n    \"node_modules/discourse/declarations/**/*\"\n  ],\n  \"compilerOptions\": {\n    \"paths\": {\n      \"discourse/plugins/discourse-steam-login/*\": [\n        \"./assets/javascripts/*\"\n      ],\n      \"discourse/plugins/discourse-steam-login/admin/*\": [\n        \"./admin/assets/javascripts/admin/*\"\n      ],\n      \"admin/*\": [\"./node_modules/discourse/declarations/admin/*\"],\n      \"float-kit/*\": [\"./node_modules/discourse/declarations/float-kit/*\"],\n      \"select-kit/*\": [\"./node_modules/discourse/declarations/select-kit/*\"],\n      \"truth-helpers\": [\n        \"./node_modules/discourse/declarations/truth-helpers/index.d.ts\"\n      ],\n      \"truth-helpers/*\": [\n        \"./node_modules/discourse/declarations/truth-helpers/*\"\n      ]\n    }\n  }\n}\n"
+    },
+    {
+      "path": "config/settings.yml",
+      "sha": null,
+      "content_sha256": "e0ccd2f9289e603cbb9d0bfcdda5d5de019aa6968033982aa3ce9e227bc60053",
+      "score": 33,
+      "content": "plugins:\n  enable_steam_logins:\n    default: false\n    validator: \"AuthProviderCredentialsValidator\"\n  steam_web_api_key:\n    default: \"\"\n    secret: true\n  steam_logins_allow_revoke:\n    default: false\n"
+    },
+    {
+      "path": "config/locales/client.be.yml",
+      "sha": null,
+      "content_sha256": "6a55966dae5a8e49ac7361e73324dcd4ab4d1f0793bac41b040f40eb010ff01d",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\nbe:\n"
+    },
+    {
+      "path": "config/locales/client.bg.yml",
+      "sha": null,
+      "content_sha256": "4c1fa033d50ce93777316418996798320e6f055f9a98fc8950f2e196a61a8204",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\nbg:\n"
+    },
+    {
+      "path": "config/locales/client.da.yml",
+      "sha": null,
+      "content_sha256": "f4621f2550dfe12e61affd6adaf7e143c80555802c5144400d4ca895faa610f6",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\nda:\n"
+    },
+    {
+      "path": "config/locales/client.ca.yml",
+      "sha": null,
+      "content_sha256": "34a00b4e91e08819dbd54db2a3619b0284384c8e6646abec01b1ae646ee906a6",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\nca:\n"
+    },
+    {
+      "path": "config/locales/client.et.yml",
+      "sha": null,
+      "content_sha256": "dfaefcfbac600b0f2ade8697bb68ac1dfa8dcaf334904e73b2bbeeb960661562",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\net:\n"
+    },
+    {
+      "path": "config/locales/client.gl.yml",
+      "sha": null,
+      "content_sha256": "f2db4d3c2f0d7d135740fbc4b76231fd42a6c9bf4cb187967a346001ea0bd618",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\ngl:\n"
+    },
+    {
+      "path": "config/locales/client.cs.yml",
+      "sha": null,
+      "content_sha256": "01e473b577adb538193e100256ec6d27c2564a67287249cc2baeb7fa4d3dd691",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\ncs:\n"
+    },
+    {
+      "path": "config/locales/client.hr.yml",
+      "sha": null,
+      "content_sha256": "da96a49d62320d6c81a91d8f8960fab92f08bd6061aa470dbb6bf2f38a4c0e24",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\nhr:\n"
+    },
+    {
+      "path": "config/locales/client.en.yml",
+      "sha": null,
+      "content_sha256": "3ffadaae217d5c152a79f19f853ebdffa770aea3770a2de4bbfcffd4d80bd85c",
+      "score": 31,
+      "content": "en:\n  js:\n    login:\n      steam:\n        name: \"Steam\"\n        title: \"Log in with Steam\"\n        message: \"Authenticating with Steam (make sure pop up blockers are not enabled)\"\n"
+    },
+    {
+      "path": "config/locales/client.hu.yml",
+      "sha": null,
+      "content_sha256": "a80119be476bace148fb553c3d8cdfc7c2bbc44cd21ed868d973aa2f034072ae",
+      "score": 31,
+      "content": "# WARNING: Never edit this file.\n# It will be overwritten when translations are pulled from Crowdin.\n#\n# To work with us on translations, join this project:\n# https://translate.discourse.org/\n\nhu:\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-19T01:49:40.804533+00:00"
+}
