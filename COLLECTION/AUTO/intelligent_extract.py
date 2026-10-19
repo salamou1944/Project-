@@ -390,7 +390,12 @@ def select_repo_batch(repos, deep_extracted_names=None, now=None):
                 repo.lower(),
             )
         meta = item.get("repo_meta") or {}
+        # In safe-incremental mode, ingest NEW sources before spending the
+        # bounded budget refreshing already-cached sources. Force-refresh mode
+        # remains the explicit path for rotating through stale cached packets.
+        state_rank = 0 if states.get(repo) == "NEW" else 1 if states.get(repo) == "NEEDS_REFRESH" else 2
         return (
+            state_rank,
             -priorities[repo],
             -int(meta.get("stargazers_count") or 0),
             meta.get("pushed_at") or meta.get("updated_at") or "",
@@ -407,8 +412,7 @@ def select_repo_batch(repos, deep_extracted_names=None, now=None):
     else:
         owner_order = sorted(
             by_owner,
-            key=lambda owner: (max(priorities[item["full_name"]] for item in by_owner[owner]), owner),
-            reverse=True,
+            key=lambda owner: candidate_key(by_owner[owner][0]),
         )
     selected = []
     if MAX_REPOS_PER_RUN <= 0 or MAX_REPOS_PER_OWNER <= 0:
