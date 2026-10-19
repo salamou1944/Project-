@@ -554,7 +554,7 @@ def load_previous_manifest():
     return [item for item in doc.get("sources", []) if isinstance(item, dict)]
 
 
-def preserved_record(item):
+def preserved_record(item, mode="preserved_after_refresh_failure"):
     """Preserve a prior extraction only when its artifact still validates."""
     if item.get("state") != "extracted" or not item.get("path"):
         return None
@@ -585,7 +585,7 @@ def preserved_record(item):
         if isinstance(f, dict) and not f.get("error")
         and isinstance(f.get("content"), str) and f["content"]
     )
-    kept["mode"] = "preserved_after_refresh_failure"
+    kept["mode"] = mode
     return kept
 
 
@@ -593,24 +593,68 @@ def main():
     ROOT.mkdir(parents=True, exist_ok=True)
     previous_sources = load_previous_manifest()
     repos, gists, blocked, accounts = discover()
+    deep_extracted_names = load_deep_extracted_names()
+    selected_repos, cache_states, priorities = select_repo_batch(repos, deep_extracted_names)
+    selected_names = {item["full_name"] for item in selected_repos}
+    selected_gists = gists[:MAX_GISTS_PER_RUN]
+
     manifest = {
+        "schema_version": "collection-intelligent-extraction/v2",
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "account_count": len(accounts), "accounts": accounts,
         "repo_count": len(repos), "gist_count": len(gists),
+        "inventory_repo_count": FRONTIER_META.get("inventory_repo_count", len(repos)),
+        "selected_for_extraction_this_run": len(selected_repos),
+        "selected_gists_this_run": len(selected_gists),
+        "deep_extracted_repo_count": len(deep_extracted_names),
+        "repo_inventory_path": FRONTIER_META.get("path"),
+        "repo_inventory_sha256": FRONTIER_META.get("sha256"),
+        "deep_manifest_path": FRONTIER_META.get("deep_manifest_path"),
+        "deep_manifest_sha256": FRONTIER_META.get("deep_manifest_sha256"),
+        "upstream_deep_extraction_failures": FRONTIER_META.get("upstream_refresh_failures", []),
+        "batch_policy": {
+            "max_repos_per_run": MAX_REPOS_PER_RUN, "max_repos_per_owner": MAX_REPOS_PER_OWNER,
+            "max_files_per_source": MAX_FILES, "max_file_bytes": MAX_BYTES_PER_FILE,
+            "max_source_bytes": MAX_BYTES_PER_SOURCE, "max_workers": MAX_WORKERS,
+            "api_workers": API_WORKERS, "raw_workers": RAW_WORKERS,
+        },
         "policy": {
             "max_files_per_source": MAX_FILES, "max_file_bytes": MAX_BYTES_PER_FILE,
             "max_source_bytes": MAX_BYTES_PER_SOURCE,
             "account_frontier": "COLLECTION/ACCOUNTS + COLLECTION/INDEX.md",
-            "incremental": True, "raw_public_file_fetch": True
+            "inventory_source": FRONTIER_META.get("path") or "live owner enumeration",
+            "incremental": True, "raw_public_file_fetch": True,
+            "bounded_source_batch": True,
         },
-        "sources": [], "blocked": blocked
+        "sources": [], "blocked": blocked,
     }
 
-    jobs = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        for item in repos:
+    # Reuse current canonical packets without refetching. Prior packets not selected
+    # this cycle are preserved below; no existing source file is deleted.
+    for item in repos:
+        repo = item["full_name"]
+        if cache_states.get(repo) != "CACHED_CURRENT":
+            continue
+        out = ROOT / f"{safe_name(repo)}.json"
+        try:
+            data = json.loads(out.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if data.get("state") != "extracted" or not has_usable_files(data):
+            continue
+        manifest["sources"].append({
+            "canonical_source": data["canonical_source"], "state": data["state"],
+            "path": str(out), "files_extracted": len(data["files"]),
+            "tree_truncated": data.get("tree_truncated", False), "mode": "cached",
+            "revision_sha": data.get("revision_sha"),
+        })
+
+    preserved_after_refresh_failure_count = 0
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, max(1, len(selected_repos) + len(selected_gists)))) as ex:
+        jobs = []
+        for item in selected_repos:
             jobs.append(("repo", item, ex.submit(extract_repo, item)))
-        for item in gists:
+        for item in selected_gists:
             jobs.append(("gist", item, ex.submit(extract_gist, item["id"], item["owner"])))
         future_map = {future: (kind, item) for kind, item, future in jobs}
         for future in as_completed(future_map):
@@ -619,22 +663,25 @@ def main():
                 data, mode = future.result()
                 if kind == "repo":
                     out = ROOT / f"{safe_name(item['full_name'])}.json"
+                    if mode != "cached":
+                        atomic_write_json(out, data)
                     record = {
                         "canonical_source": data["canonical_source"], "state": data["state"],
                         "path": str(out), "files_extracted": len(data["files"]),
                         "tree_truncated": data["tree_truncated"], "mode": mode,
-                        "revision_sha": data.get("revision_sha")
+                        "revision_sha": data.get("revision_sha"),
                     }
+                    cache_states[item["full_name"]] = "EXTRACTED_THIS_RUN"
                 else:
                     out = ROOT / f"gist_{safe_name(item['owner'])}_{item['id']}.json"
+                    if mode != "cached":
+                        atomic_write_json(out, data)
                     record = {
                         "canonical_source": data["canonical_source"], "state": data["state"],
-                        "path": str(out), "files_extracted": len(data["files"]), "mode": "refreshed"
+                        "path": str(out), "files_extracted": len(data["files"]), "mode": "refreshed",
                     }
-                if mode != "cached":
-                    atomic_write_json(out, data)
                 manifest["sources"].append(record)
-            except Exception as ex:
+            except Exception as exc:
                 canonical = f"github:{item['full_name']}" if kind == "repo" else f"github-gist:{item['id']}"
                 previous = next(
                     (record for record in previous_sources if record.get("canonical_source") == canonical),
@@ -642,46 +689,102 @@ def main():
                 )
                 preserved = preserved_record(previous) if previous else None
                 if preserved:
-                    # Keep the last validated artifact active while surfacing the
-                    # failed refresh separately. A transient API/raw-fetch failure
-                    # must not demote usable inventory or erase its provenance.
                     manifest["sources"].append(preserved)
                     manifest["blocked"].append({
                         "canonical_source": canonical,
-                        "state": "REFRESH_BLOCKED_PRESERVED_PRIOR",
-                        "error": str(ex),
+                        "state": "REFRESH_BLOCKED_PRESERVED",
+                        "error": str(exc),
                     })
+                    preserved_after_refresh_failure_count += 1
+                    if kind == "repo":
+                        cache_states[item["full_name"]] = "BLOCKED_REFRESH_PRESERVED"
                 else:
                     manifest["sources"].append({
                         "canonical_source": canonical, "state": "BLOCKED_EXTERNAL_ACCESS",
-                        "error": str(ex)
+                        "error": str(exc),
                     })
+                    if kind == "repo":
+                        cache_states[item["full_name"]] = "BLOCKED_EXTERNAL_ACCESS"
 
-    # Preserve validated prior artifacts missing from this refresh. Temporary
-    # API/rate-limit/permission failures must not erase usable Collection inventory.
-    current_sources = {x.get("canonical_source"): x for x in manifest["sources"] if x.get("canonical_source")}
-    preserved_count = 0
+    # Count current-cycle rows before preserving the rest of the prior manifest.
+    current_cycle_sources = list(manifest["sources"])
+    processed_repo_count = sum(
+        1 for row in current_cycle_sources
+        if str(row.get("canonical_source", "")).startswith("github:")
+        and row.get("mode") != "preserved_after_refresh_failure"
+    )
+    processed_gist_count = sum(
+        1 for row in current_cycle_sources
+        if str(row.get("canonical_source", "")).startswith("github-gist:")
+        and row.get("mode") != "preserved_after_refresh_failure"
+    )
+
+    current_sources = {
+        row.get("canonical_source"): row
+        for row in manifest["sources"] if row.get("canonical_source")
+    }
+    preserved_not_selected_count = 0
     for previous in previous_sources:
         canonical = previous.get("canonical_source")
         if not canonical or canonical in current_sources:
             continue
-        kept = preserved_record(previous)
+        kept = preserved_record(previous, mode="preserved_not_selected")
         if kept:
             manifest["sources"].append(kept)
             current_sources[canonical] = kept
-            preserved_count += 1
+            preserved_not_selected_count += 1
 
-    manifest["preserved_sources_after_refresh_failure"] = preserved_count
-    manifest["extracted_sources"] = sum(x["state"] == "extracted" for x in manifest["sources"])
+    deferred_items = []
+    for item in repos:
+        repo = item["full_name"]
+        state = cache_states.get(repo, "NEW")
+        if state in {"NEW", "NEEDS_REFRESH", "SELECTED_FOR_EXTRACTION"}:
+            if repo not in selected_names:
+                state = "DEFERRED_BY_BUDGET"
+            else:
+                state = "BLOCKED_EXTERNAL_ACCESS"
+        if state not in {"DEFERRED_BY_BUDGET", "BLOCKED_EXTERNAL_ACCESS", "BLOCKED_REFRESH_PRESERVED"}:
+            continue
+        meta = item.get("repo_meta") or {}
+        deferred_items.append({
+            "repo": repo, "owner": item.get("owner"),
+            "html_url": meta.get("html_url"), "priority_score": priorities.get(repo, 0),
+            "pushed_at": meta.get("pushed_at"), "state": state,
+            "reason": "bounded batch budget" if state == "DEFERRED_BY_BUDGET" else "source extraction blocked or refresh failed",
+        })
+    deferred_path = ROOT / "DEFERRED-REPOSITORY-QUEUE.json"
+    atomic_write_json(deferred_path, {
+        "schema_version": "collection-canonical-deferred/v1",
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "inventory_source": FRONTIER_META.get("path"),
+        "deferred_count": len(deferred_items),
+        "items": sorted(deferred_items, key=lambda row: (-int(row.get("priority_score") or 0), row["repo"].lower())),
+    })
+
+    manifest["processed_repo_count"] = processed_repo_count
+    manifest["processed_gist_count"] = processed_gist_count
+    manifest["preserved_sources_after_refresh_failure"] = preserved_after_refresh_failure_count
+    manifest["preserved_prior_sources_not_selected"] = preserved_not_selected_count
+    manifest["deferred_repo_count"] = len(deferred_items)
+    manifest["deferred_queue_path"] = str(deferred_path)
+    manifest["deferred_queue_sha256"] = hashlib.sha256(deferred_path.read_bytes()).hexdigest()
+    manifest["extracted_sources"] = sum(x.get("state") == "extracted" for x in manifest["sources"])
     manifest["cached_sources"] = sum(x.get("mode") == "cached" for x in manifest["sources"])
     manifest["refreshed_sources"] = sum(x.get("mode") == "refreshed" for x in manifest["sources"])
-    manifest["blocked_sources"] = sum(x["state"] == "BLOCKED_EXTERNAL_ACCESS" for x in manifest["sources"]) + len(blocked)
+    manifest["blocked_sources"] = sum(x.get("state") == "BLOCKED_EXTERNAL_ACCESS" for x in manifest["sources"]) + len(blocked)
     atomic_write_json(ROOT / "MANIFEST.json", manifest)
     print(json.dumps({
-        k: manifest[k] for k in (
-            "account_count","repo_count","gist_count","extracted_sources",
-            "cached_sources","refreshed_sources","blocked_sources","preserved_sources_after_refresh_failure"
-        )
+        "accounts": len(accounts), "inventory_repos": len(repos),
+        "selected_repos_this_run": len(selected_repos),
+        "deep_extracted_repos": len(deep_extracted_names),
+        "deferred_repos": len(deferred_items),
+        "source_rows": len(manifest["sources"]),
+        "extracted_sources": manifest["extracted_sources"],
+        "cached_sources": manifest["cached_sources"],
+        "refreshed_sources": manifest["refreshed_sources"],
+        "blocked_sources": manifest["blocked_sources"],
+        "preserved_after_refresh_failure": preserved_after_refresh_failure_count,
+        "preserved_not_selected": preserved_not_selected_count,
     }, sort_keys=True))
 
 if __name__ == "__main__":
