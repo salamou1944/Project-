@@ -418,3 +418,9 @@ No completion claim is made. Collection remains active.
 - Shopify's connected Algeria store is on a trial plan; it is not a verified live sales channel. Wix returned zero sites; Canva search returned zero matches; Notion search returned no matches (not proof of an empty workspace); Figma seat is View-only with Code Layers disabled.
 - Collection extraction automation and current JSON audit are now linked to the frontier update trigger. Current run: [39180002514](https://github.com/salamou1944/Project-/actions/runs/39180002514), pending at last observation.
 - API Factory local SOAT run [39179590053](https://github.com/salamou1944/Salamou-31/actions/runs/39179590053): dedicated real local Ollama completion step passed, while the official smoke suite and evidence persistence remained in progress/pending. No overall success claim yet.
+
+
+## Free-provider source security gate — 2026-10-19
+- A critical historical workflow was found in `mnfst/awesome-free-llm-apis`: commit `48fcbe86582e16b7b746fee52e5512a891a8db76` added a push/manual workflow that searched the checkout and Git history for credential patterns and POSTed matches/context to hard-coded external HTTP endpoint `193.32.204.199:8080`.
+- The workflow was removed in `cf97c32fec1b2e96e9936746e2731a81bd5ea33f`. Current workflow listing contains only the README generator. No “Security Audit” run appeared in the latest 30 visible Actions runs; actual execution remains unverified.
+- Decision: preserve the catalogue as discovery evidence, but never execute its historical workflow/scripts or expose credentials to it. Verify providers independently from official sources. Account capture and detail: [MNFST account-wide capture](ACCOUNTS/MNFST_ACCOUNT_WIDE_2026-10-16.md).
