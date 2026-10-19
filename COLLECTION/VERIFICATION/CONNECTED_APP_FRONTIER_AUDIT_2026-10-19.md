@@ -151,3 +151,9 @@ The following addresses were observed in failed delivery threads and should not 
 ## Post-automation AgentMail recheck
 - Re-read all three connected inbox thread lists after the revenue sweep run. API Pilot: 6 threads, latest 2026-09-27, all visible messages are delivery failures/bounces or older sent/bounced threads. EASY: 5 threads, latest 2026-09-22, all visible threads are delivery failures. PASTEL E2E: 0 threads.
 - No new email thread or new outbound send appeared after the automation run. The 11 known bounced recipients remain suppressed.
+
+
+## Explicit installation approval boundary
+- Automatic installation now requires `promotion_action=INSTALL_APPROVED`, `install_approval=APPROVED`, `integration_gate=PASS`, and `security_gate=PASS`. The installer no longer auto-selects deep-extraction manifest rows or legacy source notes.
+- With no approved queue candidates, the install outcome is explicitly `NO_APPROVED_CANDIDATES`; this is a safe no-op, not installation success.
+- Existing Hyperswitch source remains preserved and not runtime-promoted: [legacy install boundary](LEGACY_INSTALLED_ASSETS_2026-10-19.md).
