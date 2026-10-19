@@ -28,20 +28,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run high-throughput incremental Collection harvest
+      - name: Run bounded incremental Collection harvest from shared frontier
         env:
           GH_TOKEN: ${{ github.token }}
-          COLLECTION_WORKERS: "32"
-          COLLECTION_API_WORKERS: "4"
-          COLLECTION_RAW_WORKERS: "32"
+          COLLECTION_REQUIRE_DEEP_INVENTORY: "true"
+          COLLECTION_MAX_REPOS_PER_RUN: "100"
+          COLLECTION_MAX_REPOS_PER_OWNER: "1"
+          COLLECTION_WORKERS: "8"
+          COLLECTION_API_WORKERS: "8"
+          COLLECTION_RAW_WORKERS: "12"
           COLLECTION_MAX_FILES: "24"
-          COLLECTION_MAX_FILE_BYTES: "60000"
-          COLLECTION_MAX_SOURCE_BYTES: "1000000"
+          COLLECTION_MAX_FILE_BYTES: "50000"
+          COLLECTION_MAX_SOURCE_BYTES: "300000"
+          COLLECTION_ALLOW_LEGACY_SOURCE_INSTALL: "false"
           COLLECTION_FORCE_REFRESH: ${{ (inputs.force_refresh || contains(github.event.head_commit.modified, '.github/COLLECTION_FORCE_REFRESH_ONCE') || contains(github.event.head_commit.added, '.github/COLLECTION_FORCE_REFRESH_ONCE')) && '1' || '0' }}
         run: |
           set -euo pipefail
           # Regression gate: keep READY.json readable and validate serialization before regeneration.
-          python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/test_ready_json_compaction.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/promote_router_if_proven.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/test_install_assets_selection.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/validate_installation_outcome.py COLLECTION/AUTO/test_installation_outcome.py COLLECTION/AUTO/audit_large_collection_json.py COLLECTION/AUTO/test_audit_large_collection_json.py COLLECTION/AUTO/audit_current_collection_json.py COLLECTION/AUTO/validate_current_collection_json_audit.py COLLECTION/AUTO/guard_ready_json_regression.py
+          python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_intelligent_extract_batch.py COLLECTION/AUTO/test_collection_state_guard.py COLLECTION/AUTO/test_deep_extract_owner_parser.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/test_ready_json_compaction.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/promote_router_if_proven.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/test_install_assets_selection.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/validate_installation_outcome.py COLLECTION/AUTO/test_installation_outcome.py COLLECTION/AUTO/audit_large_collection_json.py COLLECTION/AUTO/test_audit_large_collection_json.py COLLECTION/AUTO/audit_current_collection_json.py COLLECTION/AUTO/validate_current_collection_json_audit.py COLLECTION/AUTO/guard_ready_json_regression.py
+          python3 COLLECTION/AUTO/test_intelligent_extract_batch.py
+          python3 COLLECTION/AUTO/test_collection_state_guard.py
+          python3 COLLECTION/AUTO/test_deep_extract_owner_parser.py
           python3 COLLECTION/AUTO/test_install_assets_selection.py
           python3 COLLECTION/AUTO/test_installation_outcome.py
           python3 COLLECTION/AUTO/test_audit_large_collection_json.py
@@ -73,10 +80,11 @@ jobs:
           python3 COLLECTION/AUTO/validate_callable_registry.py
           python3 COLLECTION/AUTO/invoke_capability.py --list
 
-      # Install a bounded shortlist from the freshly generated value queue.
-      # Only exact-SHA, explicitly licensed, non-quarantined sources are eligible.
-      # Installation is not callable/runtime proof; verify_installed_assets keeps that gate separate.
-      - name: Install prioritized collected assets
+      # Only sources with explicit install approval plus passing integration/security gates may be installed.
+      # Legacy source notes and deep-extraction packets remain on the shelf; installation is not runtime proof.
+      - name: Install explicitly approved collected assets
+        env:
+          COLLECTION_ALLOW_LEGACY_SOURCE_INSTALL: "false"
         run: |
           set -euo pipefail
           python3 COLLECTION/AUTO/install_assets.py --workers 2 --max-mb 50 --max-auto-candidates 2
@@ -97,12 +105,16 @@ jobs:
       - name: Commit extracted evidence, installed assets, and verification queue
         env:
           GH_TOKEN: ${{ github.token }}
-          COLLECTION_WORKERS: "32"
-          COLLECTION_API_WORKERS: "4"
-          COLLECTION_RAW_WORKERS: "32"
+          COLLECTION_REQUIRE_DEEP_INVENTORY: "true"
+          COLLECTION_MAX_REPOS_PER_RUN: "100"
+          COLLECTION_MAX_REPOS_PER_OWNER: "1"
+          COLLECTION_WORKERS: "8"
+          COLLECTION_API_WORKERS: "8"
+          COLLECTION_RAW_WORKERS: "12"
           COLLECTION_MAX_FILES: "24"
-          COLLECTION_MAX_FILE_BYTES: "60000"
-          COLLECTION_MAX_SOURCE_BYTES: "1000000"
+          COLLECTION_MAX_FILE_BYTES: "50000"
+          COLLECTION_MAX_SOURCE_BYTES: "300000"
+          COLLECTION_ALLOW_LEGACY_SOURCE_INSTALL: "false"
           COLLECTION_FORCE_REFRESH: ${{ (inputs.force_refresh || contains(github.event.head_commit.modified, '.github/COLLECTION_FORCE_REFRESH_ONCE') || contains(github.event.head_commit.added, '.github/COLLECTION_FORCE_REFRESH_ONCE')) && '1' || '0' }}
         run: |
           set -euo pipefail
@@ -121,7 +133,10 @@ jobs:
               git rebase --abort || true
               git reset --hard origin/main
               echo "Concurrent generated-state update detected; rebuilding from latest main" >&2
-              python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/test_install_assets_selection.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/validate_installation_outcome.py COLLECTION/AUTO/test_installation_outcome.py COLLECTION/AUTO/guard_ready_json_regression.py COLLECTION/AUTO/audit_current_collection_json.py COLLECTION/AUTO/validate_current_collection_json_audit.py
+              python3 -m py_compile COLLECTION/AUTO/intelligent_extract.py COLLECTION/AUTO/test_intelligent_extract_batch.py COLLECTION/AUTO/test_collection_state_guard.py COLLECTION/AUTO/test_deep_extract_owner_parser.py COLLECTION/AUTO/test_extraction_cache_policy.py COLLECTION/AUTO/test_install_assets_selection.py COLLECTION/AUTO/repair_extraction_manifest.py COLLECTION/AUTO/process_collection.py COLLECTION/AUTO/validate_readiness.py COLLECTION/AUTO/invoke_capability.py COLLECTION/AUTO/validate_callable_registry.py COLLECTION/AUTO/callable_source_adapter.py COLLECTION/AUTO/collection_state_guard.py COLLECTION/AUTO/collection_value_operator.py COLLECTION/AUTO/install_assets.py COLLECTION/AUTO/verify_installed_assets.py COLLECTION/AUTO/validate_installation_outcome.py COLLECTION/AUTO/test_installation_outcome.py COLLECTION/AUTO/guard_ready_json_regression.py COLLECTION/AUTO/audit_current_collection_json.py COLLECTION/AUTO/validate_current_collection_json_audit.py
+              python3 COLLECTION/AUTO/test_intelligent_extract_batch.py
+              python3 COLLECTION/AUTO/test_collection_state_guard.py
+              python3 COLLECTION/AUTO/test_deep_extract_owner_parser.py
               python3 COLLECTION/AUTO/test_install_assets_selection.py
               python3 COLLECTION/AUTO/test_installation_outcome.py
               python3 COLLECTION/AUTO/test_audit_large_collection_json.py
