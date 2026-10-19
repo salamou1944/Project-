@@ -34,7 +34,7 @@ def strip_jsonc(text):
             out.append(ch)
             if escaped:
                 escaped = False
-            elif ch == "\\\\":
+            elif ch == "\\":
                 escaped = True
             elif ch == '"':
                 in_string = False
@@ -48,7 +48,7 @@ def strip_jsonc(text):
         if ch == "/" and nxt == "/":
             out.extend("  ")
             i += 2
-            while i < len(text) and text[i] not in "\\r\\n":
+            while i < len(text) and text[i] not in "\r\n":
                 out.append(" ")
                 i += 1
             continue
@@ -60,7 +60,7 @@ def strip_jsonc(text):
                     out.extend("  ")
                     i += 2
                     break
-                out.append(text[i] if text[i] in "\\r\\n" else " ")
+                out.append(text[i] if text[i] in "\r\n" else " ")
                 i += 1
             else:
                 raise ValueError("unterminated JSONC block comment")
@@ -79,7 +79,7 @@ def strip_jsonc(text):
             out.append(ch)
             if escaped:
                 escaped = False
-            elif ch == "\\\\":
+            elif ch == "\\":
                 escaped = True
             elif ch == '"':
                 in_string = False
