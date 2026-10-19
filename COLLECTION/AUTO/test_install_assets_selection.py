@@ -18,11 +18,14 @@ def source(repo, *, state="extracted", license_name="MIT", files=1, revision=Non
     return record
 
 
-def queue_item(key, sources, action="API_FACTORY_REVIEW"):
+def queue_item(key, sources, action="API_FACTORY_REVIEW", promotion_action="INSTALL_APPROVED",
+               integration_gate="PASS", security_gate="PASS"):
     return {
         "capability_key": key,
         "operator_action": action,
-        "promotion_action": "REVIEW_NEW_OR_UPGRADE",
+        "promotion_action": promotion_action,
+        "integration_gate": integration_gate,
+        "security_gate": security_gate,
         "sources": sources,
         "priority": [100, 10, len(sources)],
     }
@@ -53,6 +56,26 @@ class InstallSelectionTests(unittest.TestCase):
         self.assertTrue(all(item["license"] in ALLOWED for item in selected))
         self.assertTrue(all(len(item["revision"]) == 40 for item in selected))
         self.assertEqual(selected[0]["selected_capabilities"], ["capability-high"])
+
+    def test_review_only_or_shelf_items_are_never_installed(self):
+        manifest = {"sources": [source("owner/shelf-browser")]}
+        queue = {"items": [
+            queue_item("shelf", ["github:owner/shelf-browser"], promotion_action="REVIEW_NEW_OR_UPGRADE"),
+        ]}
+        self.assertEqual(select_collected_candidates(manifest, queue), [])
+
+    def test_install_approval_requires_both_integration_and_security_gates(self):
+        manifest = {"sources": [
+            source("owner/no-integration-gate"),
+            source("owner/no-security-gate"),
+        ]}
+        queue = {"items": [
+            queue_item("no-integration", ["github:owner/no-integration-gate"],
+                       integration_gate="UNVERIFIED", security_gate="PASS"),
+            queue_item("no-security", ["github:owner/no-security-gate"],
+                       integration_gate="PASS", security_gate="UNVERIFIED"),
+        ]}
+        self.assertEqual(select_collected_candidates(manifest, queue), [])
 
     def test_quarantined_capabilities_are_never_installed(self):
         manifest = {"sources": [source("owner/restricted")]}
