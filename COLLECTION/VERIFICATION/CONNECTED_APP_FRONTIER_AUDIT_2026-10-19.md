@@ -238,3 +238,9 @@ The following addresses were observed in failed delivery threads and should not 
 - `local-bridge.`: read-only diagnostics/listing workflows succeeded on 2026-10-13; no runner dispatch was triggered.
 - `agent-skills`: latest runs visible in the first page are from 2026-10-09; the browser Skill update on 2026-10-19 has no observed post-change CI run.
 - `Files-`: no GitHub Actions runs found.
+
+
+## New-source-first incremental follow-up — 2026-10-19
+- Selector regression: `intelligent_extract.py` now ranks `NEW` repositories ahead of `NEEDS_REFRESH` packets in normal incremental mode; explicit force-refresh remains separate. Code commit `9c3d8e0263eaba904aaabc890dc01138e41d18ba`; regression run [39186643182](https://github.com/salamou1944/Project-/actions/runs/39186643182) passed.
+- Batch [39186698910](https://github.com/salamou1944/Project-/actions/runs/39186698910) passed, adding 98 source records from 100 selected repositories, preserving 2 blocked sources. Total source records: 3,083; metadata inventory remains 31,343 repos.
+- Current-main audit: 11,073 JSON/JSONC files, zero parse failures, 649,132,457 raw bytes. Generated-state commit `4ec33a90e736ba961e470f7441e61cc45350415e`. Next batch [39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) is queued.
