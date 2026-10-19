@@ -251,3 +251,7 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - Security/skills/sandbox candidates preserved: `Infisical/ai-skills`, `vercel-labs/skills`, `browser-use/macos-harness`, `senamakel/agent-browser`, `obra/superpowers-chrome`, `opensandbox-group/fast-sandbox`, `cisco-ai-defense/defenseclaw`, `opensearch-project/skills-eval`.
 - Integration decisions: Microsoft MCP Gateway's built-in tool authorizer tests may inform the existing API Factory authorization boundary; BerriAI/liteagents contains tests that prevent forwarding the provider key to an optional gateway; PostHog's LLM gateway explicitly bills through PostHog and is **not a zero-cost provider**; Vercel/Infisical skill repositories are sources to compare against existing canonical Skills, not permission to import duplicates. OpenSandbox's `fast-sandbox` is a related candidate, not a replacement for the already-preserved OpenSandbox source.
 - These are bounded source packets (max 24 files, 50 KB/file, 300 KB/repository); no repositories were installed, run, or promoted. Security, license, integration, and runtime gates remain required.
+
+
+## Additional connected-app check — 2026-10-19
+- Composio lists Google Docs, Drive, Gmail, Google Super and Slack actions, but all five reported no active connection. No content was accessed and no new connection was initiated.
