@@ -249,3 +249,8 @@ The following addresses were observed in failed delivery threads and should not 
 ## Metricool / YouTube read-only check — 2026-10-19
 - Metricool has one connected YouTube brand. Analytics for 2026-09-19 through 2026-10-19 return zero subscribers and no populated video/revenue history; scheduled posts from 2026-10-19 through 2026-11-18 are empty.
 - No post was created, scheduled, approved, or published. This is an available channel asset but not a current audience/revenue channel. The existing religious-history video plan can be prepared offline, but production should not be claimed until a real upload is published and independently verified.
+
+
+## Termalin execution boundary — 2026-10-19
+- The connected Termalin account returns `hosts: []`; no server is enrolled/reachable through the connector. No shell command or SFTP operation was run.
+- The Termalin account's web cabinet may contain saved servers, but they are not reachable here until the Termalin connector is installed/enrolled on the target host. Keep this as an explicit external execution blocker; do not claim local-server work was performed.
