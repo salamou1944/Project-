@@ -56,9 +56,10 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - Owner URL parser regression test was added in `COLLECTION/AUTO/test_deep_extract_owner_parser.py`; workflow wiring commit `Project-@0c12b53238bde0b43226e9f7f88ebbeda1264627`. Its dedicated test run is queued/awaiting result at the last observation.
 
 ### In progress / not yet proven
-- Full-frontier deep extraction [39180853004](https://github.com/salamou1944/Project-/actions/runs/39180853004) is in progress. Its checkout contains the 151-owner frontier and the corrected Markdown-link/punctuation parser. Do not treat earlier cancelled runs as extraction proof.
+- The pre-budget full-frontier run [39180853004](https://github.com/salamou1944/Project-/actions/runs/39180853004) is still in progress, but it uses the earlier unbounded strategy and is superseded by the bounded inventory-first design below.
+- New bounded extraction run [39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341) is queued. It preserves metadata for every discovered repository, then extracts up to 200 high-priority repositories per run (maximum two per owner; 24 files/repo; 50 KB/file; 300 KB source bytes/repo). Remaining active repositories are preserved in `DEFERRED-REPOSITORY-QUEUE.json`, not discarded.
 - The current-main JSON inventory report `COLLECTION/VERIFICATION/CURRENT_MAIN_JSON_AUDIT.json` has not yet been committed. It must preserve each JSON file's size, SHA-256, root shape and record counts.
-- Full Collection (safe incremental) has not yet been triggered. It must run only after the corrected full-frontier extraction has committed, so it checks out the resulting packets.
+- Full Collection (safe incremental) has not yet been triggered. It must run only after the bounded full-frontier extraction has committed, so it checks out the resulting inventory, packets and deferred queue.
 - No post-change browser runtime test has run.
 
 ## 6. Ready-to-use assets and project status
@@ -113,8 +114,15 @@ This digest separates **preserved source material**, **successful CI evidence**,
 
 ## 11. Next execution order
 
-1. Poll [full-frontier run 39180853004](https://github.com/salamou1944/Project-/actions/runs/39180853004). Inspect its owner errors, extracted repo count, validation result and persisted `CURRENT_MAIN_JSON_AUDIT.json`; do not use the cancelled pre-fix runs.
+1. Poll [bounded full-frontier run 39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341). Inspect all-owner metadata count, selected/deferred/archived counts, owner errors, extracted packet count, validation result and persisted `CURRENT_MAIN_JSON_AUDIT.json`. The older run 39180853004 is superseded by the bounded design.
 2. Once the full-frontier run commits successfully, create `.github/COLLECTION_SAFE_INCREMENTAL_ONCE` to trigger the full Collection workflow from a commit that includes the extracted packets.
 3. Verify the full Collection workflow's large-JSON audit, current-main JSON report, policy tests, value queue, bounded/license-gated installation, and persisted installation outcome. If JSON parsing fails, the report should be committed first and the final gate should fail with the exact paths.
 4. Only then update the digest with the actual final counts, hashes, owner failures and run conclusions. No “complete” or “production-ready” claim before that evidence exists.
 5. Keep API Factory production blocked until separate durable storage, approved service secrets, migration and cross-invocation persistence are verified. Do not reuse EASY's database or relax the zero-cost policy.
+
+
+## Scalable extraction budget — 2026-10-19
+- Found that the old deep extractor would attempt source packets for every active repository across 151 owners, which risks excessive API use, Action time and repository growth.
+- Reworked it to preserve a compact metadata inventory for every discovered repository and a deferred queue for all non-selected/archived/blocked rows, while deep-extracting a relevance-ranked batch of at most 200 repositories per run (max two per owner, 24 files per repo, 50 KB per file, 300 KB source content per repo).
+- The packet selector now applies the byte budget in deterministic relevance order rather than network completion order. New code commit: `Project-@76f9944042481a0a8d1e4cb332a46326e078f288`.
+- The old unbounded run `39180853004` is still in progress; the new bounded run `39181614341` is queued and will use the new strategy. Do not use the older run as the final frontier proof.
