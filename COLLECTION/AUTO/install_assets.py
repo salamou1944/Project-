@@ -143,7 +143,11 @@ def source_records(max_auto_candidates=5):
     quarantined_revisions = load_quarantined_revisions()
     canonical_manifest = ROOT / "COLLECTION" / "AUTO" / "EXTRACTED" / "MANIFEST.json"
     value_queue_path = ROOT / "COLLECTION" / "MASTER" / "VALUE-OPERATOR-QUEUE.json"
-    if canonical_manifest.exists() and value_queue_path.exists() and max_auto_candidates:
+    if not canonical_manifest.is_file():
+        raise SystemExit(f"canonical Collection manifest is missing; refusing automatic install selection: {canonical_manifest}")
+    if not value_queue_path.is_file():
+        raise SystemExit(f"Collection value queue is missing; refusing automatic install selection: {value_queue_path}")
+    if max_auto_candidates:
         try:
             canonical_data = json.loads(canonical_manifest.read_text(encoding="utf-8"))
             value_data = json.loads(value_queue_path.read_text(encoding="utf-8"))
