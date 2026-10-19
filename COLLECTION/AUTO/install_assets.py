@@ -156,11 +156,11 @@ def source_records(max_auto_candidates=5):
     if allow_legacy:
         for p in sorted(SOURCES.glob("*.md")):
             text = p.read_text(encoding="utf-8", errors="ignore")
-            m = re.search(r"^- Source:\\s*(https?://github\\.com/[^\\s]+)", text, re.M)
-            r = re.search(r"^- Repository:\\s*([^\\n]+)", text, re.M)
-            owner = re.search(r"^- Owner:\\s*([^\\n]+)", text, re.M)
-            rev = re.search(r"^- Main revision inspected:\\s*`?([0-9a-f]{7,40})`?", text, re.M)
-            lic = re.search(r"^- License:\\s*([^\\n]+)", text, re.M)
+            m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
+            r = re.search(r"^- Repository:\s*([^\n]+)", text, re.M)
+            owner = re.search(r"^- Owner:\s*([^\n]+)", text, re.M)
+            rev = re.search(r"^- Main revision inspected:\s*`?([0-9a-f]{7,40})`?", text, re.M)
+            lic = re.search(r"^- License:\s*([^\n]+)", text, re.M)
             if not (m and rev and lic):
                 continue
             url = m.group(1).rstrip("/")
