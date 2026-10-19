@@ -134,3 +134,10 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - Found a second extraction gap: the original URL regex only recognized raw owner URLs followed by whitespace or a slash, so it could miss GitHub URLs embedded in Markdown links with closing punctuation.
 - Fixed the scanner to accept URL terminators, strip trailing punctuation, and deduplicate owners case-insensitively: commit `Project-@79604426ec98243c0bcef7c5e7c4ecf49a2599e5`.
 - Run `39180598182` began before this fix and must not be the final proof. Run `39180853004` is the queued run with both the 151-owner frontier and corrected parser; await its final result and persisted manifest/audit before triggering full Collection.
+
+
+## PR #45 state and deployment boundary reconciliation — 2026-10-19
+- Verified PR #45 is merged, not open: merge commit `172328b929513d4a5909a22da4954cd988aa2343`, merged 2026-10-17T18:12:09Z. Its body contains a stale “open and unmerged” line; the GitHub API merge metadata wins.
+- PR body records a historical Vercel deployment `dpl_4vmQMfn4hr5SahXSJxf1ruh8pbYs` as READY at merge time. Current connected Vercel context returns no teams, so current alias/management access is not re-proven.
+- Railway API Factory service config is wired to the feature branch and has a domain/health path, but direct service variable names are empty and its latest five deployment records are removed. This is not a live-production proof.
+- The only visible Supabase project is EASY's healthy database; do not reuse it for API Factory. Separate durable storage, service secrets, migration and cross-invocation persistence remain blockers. Successful CI-pinned SOAT/Ollama proof is recorded separately and does not close production gates.
