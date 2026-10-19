@@ -2,11 +2,12 @@
 """High-throughput, fail-closed installer for valuable OSS sources.
 
 Policy:
-- installs only explicitly eligible permissive/open-source sources;
+- installs only explicitly approved permissive/open-source sources;
+- requires promotion_action=INSTALL_APPROVED plus PASS integration/security gates;
+- never auto-installs directly from the deep-extraction manifest or legacy source notes;
 - pins every install to an exact revision;
 - never copies secrets;
 - deduplicates by source+revision;
-- installs in parallel;
 - records success/failure without stopping the batch;
 - never treats preservation as installation.
 """
@@ -86,7 +87,13 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5, quarant
     blocked_revisions = {(repo, revision.lower()) for repo, revision in (quarantined_revisions or set())}
     selected, seen = [], set()
     for queued in items:
-        if not isinstance(queued, dict) or queued.get("promotion_action") == "QUARANTINE":
+        if not isinstance(queued, dict):
+            continue
+        # Discovery/review/shelf/quarantine actions are not install authorization.
+        # Require explicit approval and both integration/security gates.
+        if queued.get("promotion_action") != "INSTALL_APPROVED":
+            continue
+        if queued.get("integration_gate") != "PASS" or queued.get("security_gate") != "PASS":
             continue
         sources = queued.get("sources", [])
         if not isinstance(sources, list):
@@ -130,31 +137,9 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5, quarant
 
 
 def source_records(max_auto_candidates=5):
+    """Select only explicitly approved candidates from the canonical value queue."""
     out = []
     quarantined_revisions = load_quarantined_revisions()
-    manifest = ROOT / "COLLECTION" / "AUTO" / "DEEP-EXTRACTED" / "MANIFEST.json"
-    if manifest.exists():
-        try:
-            data = json.loads(manifest.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            raise SystemExit(f"invalid deep-extraction manifest; refusing partial install selection: {exc}")
-        repos = data.get("repos", [])
-        if not isinstance(repos, list):
-            raise SystemExit("deep-extraction manifest repos must be a list")
-        for x in repos:
-            if not isinstance(x, dict):
-                continue
-            repo = x.get("repo")
-            rev = x.get("revision_sha")
-            lic = x.get("license")
-            if repo and rev and lic in ALLOWED and not is_quarantined_revision(repo, str(rev), quarantined_revisions):
-                out.append({
-                    "source_record": "DEEP-EXTRACTED/MANIFEST.json",
-                    "repo": repo,
-                    "url": "https://github.com/" + repo,
-                    "revision": rev,
-                    "license": lic,
-                })
     canonical_manifest = ROOT / "COLLECTION" / "AUTO" / "EXTRACTED" / "MANIFEST.json"
     value_queue_path = ROOT / "COLLECTION" / "MASTER" / "VALUE-OPERATOR-QUEUE.json"
     if canonical_manifest.exists() and value_queue_path.exists() and max_auto_candidates:
@@ -165,41 +150,44 @@ def source_records(max_auto_candidates=5):
         except (OSError, ValueError) as exc:
             raise SystemExit(f"invalid Collection shortlist input; refusing automatic install selection: {exc}")
 
-    for p in sorted(SOURCES.glob("*.md")):
-        text = p.read_text(encoding="utf-8", errors="ignore")
-        m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
-        r = re.search(r"^- Repository:\s*([^\s]+)", text, re.M)
-        owner = re.search(r"^- Owner:\s*([^\s]+)", text, re.M)
-        rev = re.search(r"^- Main revision inspected:\s*`?([0-9a-f]{7,40})`?", text, re.M)
-        lic = re.search(r"^- License:\s*([^\n]+)", text, re.M)
-        if not (m and rev and lic):
-            continue
-        url = m.group(1).rstrip("/")
-        license_name = lic.group(1).strip()
-        if license_name not in ALLOWED:
-            continue
-        repo_value = r.group(1).strip() if r else ""
-        owner_value = owner.group(1).strip() if owner else ""
-        if "/" in repo_value:
-            owner_repo = repo_value
-        elif owner_value and repo_value:
-            owner_repo = owner_value.rstrip("/") + "/" + repo_value.lstrip("/")
-        else:
-            parts = url.split("github.com/", 1)[-1].strip("/").split("/")
-            owner_repo = "/".join(parts[:2]) if len(parts) >= 2 else ""
-        if not owner_repo or owner_repo.count("/") != 1:
-            continue
-        if is_quarantined_revision(owner_repo, rev.group(1), quarantined_revisions):
-            continue
-        out.append({
-            "source_record": p.name,
-            "repo": owner_repo,
-            "url": url,
-            "revision": rev.group(1),
-            "license": license_name,
-        })
+    # Legacy source notes are preservation/research records, not install approvals.
+    # A one-off migration can opt in explicitly, but normal Collection runs fail closed.
+    allow_legacy = os.getenv("COLLECTION_ALLOW_LEGACY_SOURCE_INSTALL", "false").lower() in {"1", "true", "yes"}
+    if allow_legacy:
+        for p in sorted(SOURCES.glob("*.md")):
+            text = p.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r"^- Source:\\s*(https?://github\\.com/[^\\s]+)", text, re.M)
+            r = re.search(r"^- Repository:\\s*([^\\n]+)", text, re.M)
+            owner = re.search(r"^- Owner:\\s*([^\\n]+)", text, re.M)
+            rev = re.search(r"^- Main revision inspected:\\s*`?([0-9a-f]{7,40})`?", text, re.M)
+            lic = re.search(r"^- License:\\s*([^\\n]+)", text, re.M)
+            if not (m and rev and lic):
+                continue
+            url = m.group(1).rstrip("/")
+            license_name = lic.group(1).strip()
+            if license_name not in ALLOWED:
+                continue
+            repo_value = r.group(1).strip() if r else ""
+            owner_value = owner.group(1).strip() if owner else ""
+            if "/" in repo_value:
+                owner_repo = repo_value
+            elif owner_value and repo_value:
+                owner_repo = owner_value.rstrip("/") + "/" + repo_value.lstrip("/")
+            else:
+                parts = url.split("github.com/", 1)[-1].strip("/").split("/")
+                owner_repo = "/".join(parts[:2]) if len(parts) >= 2 else ""
+            if not owner_repo or owner_repo.count("/") != 1:
+                continue
+            if is_quarantined_revision(owner_repo, rev.group(1), quarantined_revisions):
+                continue
+            out.append({
+                "source_record": p.name,
+                "repo": owner_repo,
+                "url": url,
+                "revision": rev.group(1),
+                "license": license_name,
+            })
     return out
-
 def safe_name(repo):
     return re.sub(r"[^A-Za-z0-9_.-]+", "__", repo)
 
