@@ -178,3 +178,10 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - Verified marker `COLLECTION/INSTALLED/juspay__hyperswitch/.collection-install.json` pins `juspay/hyperswitch@1d71d94d2e2e1c72f3ede13abebc24132997685f`, Apache-2.0, `vendored_source`, marker-reported size 393 MB.
 - GitHub repository metadata reports `Project-` at 317,118 KB before the new bounded batch. These are different measures (marker-reported source directory vs GitHub repository size) and should not be treated as directly comparable.
 - Keep the existing directory preserved, not runtime-promoted; do not silently delete it. See [legacy asset boundary](LEGACY_INSTALLED_ASSETS_2026-10-19.md).
+
+
+## Canonical extraction bounded and wired to the shared frontier
+- `intelligent_extract.py` now reuses the deep extractor's repository inventory and avoids a second full owner sweep. It selects up to 100 additional repos per run, max 1 per owner, skips successful deep packets and unchanged canonical caches, and caps new packet source bytes at 300 KB/repo.
+- The full Collection workflow requires the shared deep inventory, runs the new parser/batch/accounting tests, and fails fast if the inventory is missing or empty. No second unbounded extraction is permitted.
+- The state guard distinguishes total metadata inventory from processed source rows and preserves the 2,500-row floor. Regression tests passed in [run 39183464384](https://github.com/salamou1944/Project-/actions/runs/39183464384).
+- Code commits: `4569476bab3f7e2f0fd69381fe1ab422469ad053`, `53bd9a0f6f9c3687b02e0a19c89819afb45ecc35`, `6958dd49b45dcf4dcdf0c4467839f949758e50f1`, `9ece959650fdd604d8f50bd02186ff30458fb3d4`, `a97ac71f8ddb2cece5082e663d0609927a1ef016`, `0ae23ec26d61c2890ba293ef724310b31e4cc97c`, `f459e4fb59c4368e07ed31cf4dfc47d51f675f77`, `41fa33a60fcb56ba83f00049a2218f84ea2ac6d8`.
