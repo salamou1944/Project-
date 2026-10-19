@@ -476,3 +476,8 @@ No completion claim is made. Collection remains active.
 - Updated deep extraction to write the audit report even when JSON parse failures are found, commit it, and then fail the final gate after persistence: `Project-@0eacd07b4ac4fbe82541f647bc3d666f6fb4d694`.
 - Updated the full Collection workflow to run the all-JSON inventory after state generation/installation and before commit, then validate the persisted report after commit: `Project-@42dca1510a4295bf993c41d356ee7a3edd773b6b`, ordering fix `Project-@b100aa7fd22306bb83f03a65d4d985a69fdbcd2a`, and conflict-recovery audit fix `Project-@e971fed597e052cb02acd7ec41255b2977577469`.
 - The full-frontier extraction run [39180853004](https://github.com/salamou1944/Project-/actions/runs/39180853004) remains the run to evaluate for the corrected owner parser. Full Collection has not been triggered yet; wait for that run's extraction commit first.
+
+
+## Browser Skill validation boundary — 2026-10-19
+- Canonical `skills/browser-runtime-verification/SKILL.md` was strengthened at `agent-skills@84b4732094d543410a9284ab687405b37fea8e4f`; no duplicate Skill was created.
+- GitHub reports zero check runs for that commit. The sole status context is a Railway watcher saying “No deployment needed - watched paths not modified.” That is not a Skill test pass or browser-runtime verification. The content change is preserved; runtime/domain-redirect/session safety remains unverified until a dedicated browser test executes.
