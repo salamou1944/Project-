@@ -16,7 +16,6 @@ import argparse, concurrent.futures, json, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCES = ROOT / "COLLECTION" / "SOURCES"
 INSTALLED = ROOT / "COLLECTION" / "INSTALLED"
 REPORT = ROOT / "COLLECTION" / "MASTER" / "INSTALLATION-REPORT.json"
 ALLOWED = {"MIT","Apache-2.0","BSD-2-Clause","BSD-3-Clause","ISC","MPL-2.0","Unlicense","0BSD"}
@@ -150,43 +149,7 @@ def source_records(max_auto_candidates=5):
         except (OSError, ValueError) as exc:
             raise SystemExit(f"invalid Collection shortlist input; refusing automatic install selection: {exc}")
 
-    # Legacy source notes are preservation/research records, not install approvals.
-    # A one-off migration can opt in explicitly, but normal Collection runs fail closed.
-    allow_legacy = os.getenv("COLLECTION_ALLOW_LEGACY_SOURCE_INSTALL", "false").lower() in {"1", "true", "yes"}
-    if allow_legacy:
-        for p in sorted(SOURCES.glob("*.md")):
-            text = p.read_text(encoding="utf-8", errors="ignore")
-            m = re.search(r"^- Source:\s*(https?://github\.com/[^\s]+)", text, re.M)
-            r = re.search(r"^- Repository:\s*([^\n]+)", text, re.M)
-            owner = re.search(r"^- Owner:\s*([^\n]+)", text, re.M)
-            rev = re.search(r"^- Main revision inspected:\s*`?([0-9a-f]{7,40})`?", text, re.M)
-            lic = re.search(r"^- License:\s*([^\n]+)", text, re.M)
-            if not (m and rev and lic):
-                continue
-            url = m.group(1).rstrip("/")
-            license_name = lic.group(1).strip()
-            if license_name not in ALLOWED:
-                continue
-            repo_value = r.group(1).strip() if r else ""
-            owner_value = owner.group(1).strip() if owner else ""
-            if "/" in repo_value:
-                owner_repo = repo_value
-            elif owner_value and repo_value:
-                owner_repo = owner_value.rstrip("/") + "/" + repo_value.lstrip("/")
-            else:
-                parts = url.split("github.com/", 1)[-1].strip("/").split("/")
-                owner_repo = "/".join(parts[:2]) if len(parts) >= 2 else ""
-            if not owner_repo or owner_repo.count("/") != 1:
-                continue
-            if is_quarantined_revision(owner_repo, rev.group(1), quarantined_revisions):
-                continue
-            out.append({
-                "source_record": p.name,
-                "repo": owner_repo,
-                "url": url,
-                "revision": rev.group(1),
-                "license": license_name,
-            })
+    # Legacy source notes are preservation/research records only; they never feed auto-install.
     return out
 def safe_name(repo):
     return re.sub(r"[^A-Za-z0-9_.-]+", "__", repo)
