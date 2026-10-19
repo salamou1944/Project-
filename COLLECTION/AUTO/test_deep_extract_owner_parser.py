@@ -37,5 +37,42 @@ class OwnerParserTests(unittest.TestCase):
             self.assertEqual(len(found), 4)
 
 
+    def test_deep_batch_is_bounded_diverse_and_skips_archived(self):
+        import datetime
+        original_total = extractor.MAX_DEEP_REPOS
+        original_per_owner = extractor.MAX_DEEP_REPOS_PER_OWNER
+        try:
+            extractor.MAX_DEEP_REPOS = 3
+            extractor.MAX_DEEP_REPOS_PER_OWNER = 1
+            now = datetime.datetime(2026, 10, 19, tzinfo=datetime.timezone.utc)
+            base = {
+                "description": "MCP agent provider API",
+                "topics": ["agent", "api"],
+                "language": "Python",
+                "license": {"spdx_id": "MIT"},
+                "stargazers_count": 100,
+                "fork": False,
+                "pushed_at": "2026-10-18T00:00:00Z",
+                "updated_at": "2026-10-18T00:00:00Z",
+            }
+            repos = {
+                "alpha/agent-router": {**base, "full_name": "alpha/agent-router", "name": "agent-router", "owner": {"login": "alpha"}},
+                "alpha/old-docs": {**base, "full_name": "alpha/old-docs", "name": "old-docs", "owner": {"login": "alpha"}, "description": "old docs"},
+                "beta/provider-api": {**base, "full_name": "beta/provider-api", "name": "provider-api", "owner": {"login": "beta"}},
+                "gamma/llm-gateway": {**base, "full_name": "gamma/llm-gateway", "name": "llm-gateway", "owner": {"login": "gamma"}},
+                "delta/archived-agent": {**base, "full_name": "delta/archived-agent", "name": "archived-agent", "owner": {"login": "delta"}, "archived": True},
+            }
+            selected, _ = extractor.select_deep_batch(repos, {}, now)
+            self.assertEqual(len(selected), 3)
+            self.assertEqual(len({repo.split("/", 1)[0] for repo in selected}), 3)
+            self.assertNotIn("delta/archived-agent", selected)
+            existing = {"alpha/agent-router": {"revision_sha": "abc", "source_pushed_at": "2026-10-18T00:00:00Z"}}
+            selected_after_packet, _ = extractor.select_deep_batch(repos, existing, now)
+            self.assertNotIn("alpha/agent-router", selected_after_packet)
+        finally:
+            extractor.MAX_DEEP_REPOS = original_total
+            extractor.MAX_DEEP_REPOS_PER_OWNER = original_per_owner
+
+
 if __name__ == "__main__":
     unittest.main()
