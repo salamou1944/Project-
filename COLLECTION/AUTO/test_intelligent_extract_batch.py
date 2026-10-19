@@ -149,6 +149,7 @@ class IntelligentExtractBatchTests(unittest.TestCase):
                 item("ownerD/archived", "ownerD", 120, archived=True),
                 item(cached_repo, "ownerE", 110),
                 item("ownerF/new", "ownerF", 60),
+                item("ownerG/new-low-priority", "ownerG", 10),
             ]
             with mock.patch.object(extractor, "ROOT", root), \
                  mock.patch.object(extractor, "MAX_REPOS_PER_RUN", 3), \
@@ -157,7 +158,9 @@ class IntelligentExtractBatchTests(unittest.TestCase):
                 selected, states, _ = extractor.select_repo_batch(repos, {"ownerC/deep-only"})
 
         selected_names = [row["full_name"] for row in selected]
-        self.assertEqual(set(selected_names), {"ownerA/new-best", "ownerB/stale", "ownerF/new"})
+        self.assertEqual(set(selected_names), {"ownerA/new-best", "ownerF/new", "ownerG/new-low-priority"})
+        self.assertNotIn(stale_repo, selected_names)
+        self.assertEqual(states[stale_repo], "NEEDS_REFRESH")
         self.assertEqual(len(selected_names), 3)
         self.assertEqual(len({row["owner"].lower() for row in selected}), 3)
         self.assertEqual(states["ownerC/deep-only"], "DEEP_PACKET_ONLY")
