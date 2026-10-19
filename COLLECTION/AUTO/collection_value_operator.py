@@ -46,6 +46,9 @@ def main() -> None:
             "source_count": item.get("source_count", 0),
             "sources": item.get("sources", []),
             "promotion_action": item.get("action"),
+            "integration_gate": item.get("integration_gate", "UNVERIFIED"),
+            "security_gate": item.get("security_gate", "UNVERIFIED"),
+            "install_approval": item.get("install_approval", "NOT_APPROVED"),
             "execution_state": "NOT_EXECUTED",
             "next_gate": item.get("next_gate"),
         })
