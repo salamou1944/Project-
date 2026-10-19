@@ -37,7 +37,7 @@ def test_manifest_inventory_counts():
     try:
         validate_manifest_source_count(inconsistent)
     except SystemExit as exc:
-        assert "disagree with discovered inventory" in str(exc)
+        assert "disagree with inventory/batch accounting" in str(exc)
     else:
         raise AssertionError("inconsistent manifest must fail closed")
 
