@@ -228,3 +228,8 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - [Collection batch 39186698910](https://github.com/salamou1944/Project-/actions/runs/39186698910) passed. It selected 100 repositories, added 98 source records, preserved 2 blocked sources and increased the source total from 2,985 to 3,083. The full 31,343-repository metadata inventory and deferred queue remain intact.
 - Current JSON/JSONC audit passed: 11,073 files, zero parse failures, 649,132,457 raw bytes. Generated state commit `4ec33a90e736ba961e470f7441e61cc45350415e`.
 - Next batch [39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) is queued. No automatic installs or production-readiness promotions occurred.
+
+
+## Metricool / YouTube asset check — 2026-10-19
+- Read-only Metricool check found one connected YouTube brand, zero subscribers and no populated video/revenue history in the last 30 days, and zero scheduled posts for the next 30 days.
+- No publishing action was taken. Treat the channel as a connected but unactivated asset, not as revenue evidence.
