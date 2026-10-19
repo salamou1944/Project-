@@ -309,3 +309,10 @@ No new outbound messages were sent during the 2026-10-19 sweep. Re-approach only
 The latest provider/model data refresh visible in the repository history is `41197cb7d053680daf808d6618142045e961caaa` (2026-10-05); the follow-up data sync merge is `b25c0395fe1e7628ecc99bf119a40365801c6fb4` on the same day. The only newer commits are the malicious workflow addition on 2026-10-10 and its removal on 2026-10-11. The current workflow directory contains only `generate-readme.yml`, triggered by `data.json` changes; no current nightly provider-sync workflow was found. Thus no provider/model updates after 2026-10-05 were evidenced in the latest 10 commits.
 
 The Oct 5 refresh itself removed several NVIDIA NIM models after HTTP 410, updated Gemini, Cloudflare Workers AI, Groq, Kilo, LLM7, OpenRouter and OVHcloud entries, and left a “Needs a human” queue. Some new Kilo rows were explicitly unprobed due to no key. Do not treat the catalogue's claimed refresh cadence as current verification; use official provider sources and controlled endpoint evidence before routing.
+
+
+## Upwork/Apollo account readiness — 2026-10-19
+
+Read-only account checks are preserved in [UPWORK_REVENUE_READINESS_2026-10-19.md](VERIFICATION/UPWORK_REVENUE_READINESS_2026-10-19.md). Upwork currently has 0 Connects, no proposals, no contracts, no invitations, a private low-quality profile, no portfolio and 0 completed jobs/reviews. One active AI-automation listing needs 14 Connects and has no hiring history; no application was attempted. One saved CRM/WhatsApp automation job lists $15–$38/hour but could not be opened for a live-status check and was not retried.
+
+Apollo balance was inspected only: 80 lead credits and 5,000 AI credits show zero used; no enrichment/search was performed. Direct-dial balance is inconsistent between endpoints (160 effective vs 80 remaining) and the web-search record counter is anomalous; neither is treated as spendable capacity. No paid credits, Connects or subscriptions were purchased.
