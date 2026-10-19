@@ -500,3 +500,7 @@ No completion claim is made. Collection remains active.
 - The unbounded pre-budget run `39180853004` was cancelled before commit.
 - The bounded inventory-first run [39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341) is running against `76f9944042481a0a8d1e4cb332a46326e078f288`.
 - Regression/compile run [39181614379](https://github.com/salamou1944/Project-/actions/runs/39181614379) passed. This validates the parser/bounded code compiles, not the actual owner inventory/extraction result.
+
+
+## Safe incremental Collection trigger status
+- The marker `.github/COLLECTION_SAFE_INCREMENTAL_ONCE` already exists from 2026-10-16. Do not create a duplicate file; update its content only after bounded extraction commits, so the full Collection workflow checks out the new inventory and source packets.
