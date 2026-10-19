@@ -166,7 +166,7 @@ class IntelligentExtractBatchTests(unittest.TestCase):
         self.assertEqual(states["ownerC/deep-only"], "DEEP_PACKET_ONLY")
         self.assertEqual(states["ownerD/archived"], "ARCHIVED_METADATA_ONLY")
         self.assertEqual(states[cached_repo], "CACHED_CURRENT")
-        self.assertEqual(states[stale_repo], "SELECTED_FOR_EXTRACTION")
+        self.assertEqual(states[stale_repo], "NEEDS_REFRESH")
 
 
 if __name__ == "__main__":
