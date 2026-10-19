@@ -65,9 +65,9 @@ def is_quarantined_revision(repo, revision, quarantined_revisions):
 def select_collected_candidates(manifest, value_queue, max_candidates=5, quarantined_revisions=None):
     """Select a small, evidence-prioritized set from the current Collection manifest.
 
-    A source is eligible only when it is present in the non-quarantined value
-    queue, has a usable extracted artifact, is pinned to a full commit SHA, and
-    declares an explicitly allowed license. This is a bounded install shortlist,
+    A source is eligible only when the value queue explicitly marks INSTALL_APPROVED,
+    install_approval=APPROVED, both integration/security gates PASS, the artifact is
+    usable, the revision is pinned to a full commit SHA, and the license is allowed. This is a bounded install shortlist,
     not a blanket install of every discovered repository.
     """
     if not isinstance(max_candidates, int) or isinstance(max_candidates, bool) or not 0 <= max_candidates <= 20:
@@ -91,6 +91,8 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5, quarant
         # Discovery/review/shelf/quarantine actions are not install authorization.
         # Require explicit approval and both integration/security gates.
         if queued.get("promotion_action") != "INSTALL_APPROVED":
+            continue
+        if queued.get("install_approval") != "APPROVED":
             continue
         if queued.get("integration_gate") != "PASS" or queued.get("security_gate") != "PASS":
             continue
