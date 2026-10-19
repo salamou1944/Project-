@@ -221,3 +221,10 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - The policy deliberately installed **zero** assets: `NO_APPROVED_CANDIDATES`; runtime readiness claims and explicit declarations both remain zero. Collection harvest success means preservation/reconciliation passed, not that a source is production-ready.
 - Refreshed the existing [OmniRoute source record](../API_GATEWAYS/OMNIROUTE_2026-09-27.md) at `Project-@0bb911fd2359e6d0017fde44827a2a4a1d029666`: current upstream advertises 375 providers and 468 free-tier entries, but the budget is across third-party accounts and its detailed research note remains older than its README. Do not treat aggregate numbers as guaranteed free capacity.
 - Added a durable CI evidence note for API Factory at `Salamou-31@f2e0b8c73979189555a8583361a5f8d547766033`; the local-Ollama/SOAT evidence is strong CI proof with `production_status: not_proven`.
+
+
+## New-source-first incremental batch — 2026-10-19
+- Fixed `select_repo_batch` so safe incremental mode prioritizes NEW source packets before stale cache refreshes; explicit force-refresh remains separate. Code `9c3d8e0263eaba904aaabc890dc01138e41d18ba`; regression test `97bafc7f5b36685ac2be7531bceee808cc920f78`; [test run 39186643182](https://github.com/salamou1944/Project-/actions/runs/39186643182) passed.
+- [Collection batch 39186698910](https://github.com/salamou1944/Project-/actions/runs/39186698910) passed. It selected 100 repositories, added 98 source records, preserved 2 blocked sources and increased the source total from 2,985 to 3,083. The full 31,343-repository metadata inventory and deferred queue remain intact.
+- Current JSON/JSONC audit passed: 11,073 files, zero parse failures, 649,132,457 raw bytes. Generated state commit `4ec33a90e736ba961e470f7441e61cc45350415e`.
+- Next batch [39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) is queued. No automatic installs or production-readiness promotions occurred.
