@@ -349,7 +349,7 @@ def select_repo_batch(repos, deep_extracted_names=None, now=None):
     now = now or datetime.datetime.now(datetime.timezone.utc)
     deep_extracted_names = set(deep_extracted_names or ())
     force_refresh = os.getenv("COLLECTION_FORCE_REFRESH", "0").strip().lower() in {"1", "true", "yes"}
-    by_owner, states, priorities = {}, {}, {}
+    by_owner, states, priorities, cache_times, cache_exists = {}, {}, {}, {}, {}
     for item in repos:
         repo = item.get("full_name")
         if not repo:
@@ -361,11 +361,13 @@ def select_repo_batch(repos, deep_extracted_names=None, now=None):
             continue
         packet_path = ROOT / f"{safe_name(repo)}.json"
         cached = None
+        cache_exists[repo] = packet_path.is_file()
         if packet_path.is_file():
             try:
                 cached = json.loads(packet_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 cached = None
+        cache_times[repo] = (cached.get("generated_at") or "") if isinstance(cached, dict) else ""
         if isinstance(cached, dict) and cached.get("state") == "extracted" and has_usable_files(cached):
             if cached.get("pushed_at") == meta.get("pushed_at") and not force_refresh:
                 states[repo] = "CACHED_CURRENT"
@@ -378,14 +380,36 @@ def select_repo_batch(repos, deep_extracted_names=None, now=None):
             continue
         owner = (item.get("owner") or (meta.get("owner") or {}).get("login") or repo.split("/", 1)[0]).lower()
         by_owner.setdefault(owner, []).append(item)
+    def candidate_key(item):
+        repo = item["full_name"]
+        if force_refresh:
+            return (
+                0 if cache_exists.get(repo) else 1,
+                cache_times.get(repo, ""),
+                -priorities[repo],
+                repo.lower(),
+            )
+        meta = item.get("repo_meta") or {}
+        return (
+            -priorities[repo],
+            -int(meta.get("stargazers_count") or 0),
+            meta.get("pushed_at") or meta.get("updated_at") or "",
+            repo.lower(),
+        )
+
     for owner, items in by_owner.items():
-        items.sort(key=lambda item: (
-            priorities[item["full_name"]],
-            int((item.get("repo_meta") or {}).get("stargazers_count") or 0),
-            (item.get("repo_meta") or {}).get("pushed_at") or (item.get("repo_meta") or {}).get("updated_at") or "",
-            item["full_name"].lower(),
-        ), reverse=True)
-    owner_order = sorted(by_owner, key=lambda owner: (max(priorities[item["full_name"]] for item in by_owner[owner]), owner), reverse=True)
+        items.sort(key=candidate_key)
+    if force_refresh:
+        owner_order = sorted(
+            by_owner,
+            key=lambda owner: min(candidate_key(item) for item in by_owner[owner]),
+        )
+    else:
+        owner_order = sorted(
+            by_owner,
+            key=lambda owner: (max(priorities[item["full_name"]] for item in by_owner[owner]), owner),
+            reverse=True,
+        )
     selected = []
     if MAX_REPOS_PER_RUN <= 0 or MAX_REPOS_PER_OWNER <= 0:
         return selected, states, priorities
