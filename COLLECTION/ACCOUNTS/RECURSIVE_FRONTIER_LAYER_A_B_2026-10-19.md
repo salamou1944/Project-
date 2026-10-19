@@ -2,11 +2,16 @@
 
 This Markdown companion intentionally feeds the existing `COLLECTION/AUTO/deep_extract.py` owner scanner, which discovers owners from GitHub URLs in `COLLECTION/ACCOUNTS/*.md`.
 
+**Execution update**
+- The Collection deep-extraction workflow now triggers when account Markdown, the frontier snapshot, or the extraction/audit scripts change.
+- The workflow runs the extractor, validates the ready queue, and writes a current-main JSON inventory report with SHA-256 hashes, byte sizes, JSON root shapes, top-level array lengths, and common record counts.
+- The first run against this frontier is initiated by this commit. Its result, extraction counts, external-access failures, and audit report must be read from the resulting workflow run; this file does not pre-claim success.
+
 **Evidence boundary**
 - Layer A is committed in `RECURSIVE_ACCOUNT_FRONTIER_LAYER_A_2026-10-18.json` (commit `ff4af71f9e5fab97c059321835aaf3d696c8ed34`): 220 repository identity records across the first eight owners below.
 - Layer B entries were observed in owner-scoped GitHub searches but their repository records were not committed in the previous write attempt. Counts below are discovery notes only; do not treat them as committed exhaustive inventories.
 - Owner-scoped search results under 100 rows are not authoritative proof of all repositories. The five 100-result pages are explicitly incomplete and require pagination.
-- This file preserves targets and allows the existing deep-extraction workflow to discover them. It does not claim that extraction has run.
+- This file preserves targets and allows the existing extraction workflow to discover owner URLs. It does not claim that extraction has already succeeded.
 
 ## Layer A — repository identity snapshot committed
 
@@ -38,5 +43,6 @@ This Markdown companion intentionally feeds the existing `COLLECTION/AUTO/deep_e
 - [microsoft/playwright](https://github.com/microsoft/playwright) — targeted browser automation reference only.
 - [microsoft/playwright-mcp](https://github.com/microsoft/playwright-mcp) — targeted MCP reference only.
 
-## Next extraction rule
-Run the existing `.github/workflows/collection-deep-extraction.yml` only after checking its generated output and rate-limit behavior. It discovers owner names from this file, fetches current repository metadata, pins each extraction to the enumerated repository commit, redacts common credential patterns, and writes source packets under `COLLECTION/AUTO/DEEP-EXTRACTED`. Extraction is still source preservation, not runtime proof or production readiness.
+## Extraction rules
+
+The existing workflow pins each extraction to the enumerated repository commit, redacts common credential patterns, and writes source packets under `COLLECTION/AUTO/DEEP-EXTRACTED`. A valid extraction packet is source preservation only, not runtime proof or production readiness. The JSON audit report excludes itself to avoid recursive self-hashing.
