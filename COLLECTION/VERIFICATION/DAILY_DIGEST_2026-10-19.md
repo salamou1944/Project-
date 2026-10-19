@@ -146,3 +146,10 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 ## MNFST provider-data freshness recheck — 2026-10-19
 - Latest visible provider/model refresh was 2026-10-05; later commits only added and then removed the malicious security-audit workflow. Current workflow directory has a README generator triggered by `data.json` changes, not an observed nightly provider-sync workflow.
 - The Oct 5 refresh contains useful updates (including retired NVIDIA NIM rows and changes to Gemini, Cloudflare, Groq, Kilo, LLM7, OpenRouter and OVHcloud) but also unprobed entries and an explicit human-review queue. No post-Oct-5 provider/model refresh is evidenced in the latest 10 commits.
+
+
+## JSON audit persistence hardening — 2026-10-19
+- Added validator `validate_current_collection_json_audit.py` to check persisted report schema, counts, byte totals, SHA-256 shape and parse-failure consistency.
+- Updated the deep-extraction workflow to preserve the current JSON audit report before failing on invalid JSON, rather than losing the report at the first non-zero exit.
+- Updated the full Collection workflow to run the all-JSON inventory after state generation/installation, persist the report with the generated state, then enforce the audit after commit; also covered the conflict-recovery path.
+- Commits: `Project-@80a2c9815f248bfe328d628c164d48491bacad1f`, `Project-@0eacd07b4ac4fbe82541f647bc3d666f6fb4d694`, `Project-@42dca1510a4295bf993c41d356ee7a3edd773b6b`, `Project-@b100aa7fd22306bb83f03a65d4d985a69fdbcd2a`, `Project-@e971fed597e052cb02acd7ec41255b2977577469`.
