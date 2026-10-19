@@ -115,7 +115,7 @@ This digest separates **preserved source material**, **successful CI evidence**,
 ## 11. Next execution order
 
 1. Poll [bounded full-frontier run 39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341). Inspect all-owner metadata count, selected/deferred/archived counts, owner errors, extracted packet count, validation result and persisted `CURRENT_MAIN_JSON_AUDIT.json`. The older run 39180853004 is superseded by the bounded design.
-2. Once the full-frontier run commits successfully, create `.github/COLLECTION_SAFE_INCREMENTAL_ONCE` to trigger the full Collection workflow from a commit that includes the extracted packets.
+2. Once the bounded full-frontier run commits successfully, update the existing `.github/COLLECTION_SAFE_INCREMENTAL_ONCE` marker (already present from 2026-10-16) to trigger the full Collection workflow from a commit that includes the new inventory and extracted packets.
 3. Verify the full Collection workflow's large-JSON audit, current-main JSON report, policy tests, value queue, bounded/license-gated installation, and persisted installation outcome. If JSON parsing fails, the report should be committed first and the final gate should fail with the exact paths.
 4. Only then update the digest with the actual final counts, hashes, owner failures and run conclusions. No “complete” or “production-ready” claim before that evidence exists.
 5. Keep API Factory production blocked until separate durable storage, approved service secrets, migration and cross-invocation persistence are verified. Do not reuse EASY's database or relax the zero-cost policy.
