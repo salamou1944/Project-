@@ -191,3 +191,10 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - `COLLECTION_FORCE_REFRESH` remains bounded: each run refreshes at most 100 repositories and 1 per owner, prioritizing the oldest cached packet first so repeated runs progress instead of refreshing the same top batch.
 - The workflow-dispatch description now accurately says “next bounded batch,” not “every discovered repository.” Tests passed in [run 39183664442](https://github.com/salamou1944/Project-/actions/runs/39183664442), including the two-run rotation test.
 - Workflow/code commit: `2018752f25d17f4a4be2fa2c492c2174d88f2f72`; batch rotation test: `ebd55c78198d7b0beb44a806fc0fc1d341263f07`; selector update: `e8bee353ee794ef3ea8f0941cb44fe3130653a29`.
+
+
+## Connected-app sweep extension — 2026-10-19
+- Added a read-only account/deployment sweep to [CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md](CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md): 10 first-party GitHub repos; Railway latest status for five services; Supabase health; Vercel deployment metadata; GitLab empty project; Replit/Notion/Canva/Wix/Render discovery; and current revenue app blockers.
+- New priority finding: the API Factory Railway service points at feature branch `feat/api-factory-railway-deployable-2026-10-16`, has no configured service variables, and latest deployment failed at image build. Vercel's production-target READY artifact also comes from that feature branch while project metadata says `live:false`; neither is sufficient to claim production runtime readiness.
+- The EASY Supabase database is healthy, but remains EASY-owned and must not be reused as API Factory/MONY durable storage. The EASY Railway variable-name list contains a misspelling (`ESAY_OPENAI_API_KEY`) alongside the correct-looking name; values were not read.
+- No secrets were read, no deploy/redeploy or external mutation occurred, and no paid credits were spent.
