@@ -142,3 +142,9 @@ This digest separates **preserved source material**, **successful CI evidence**,
 
 ## Repository storage baseline — before bounded extraction commit
 - GitHub repository metadata reports `Project-` at 317,118 KB (~310 MiB) before the bounded inventory/packet commit. The 200-repository batch and 300 KB/repo source cap were chosen to avoid an uncontrolled source dump. Recheck the repository size after run `39181614341` commits; this baseline is not the post-run size.
+
+
+## HubSpot CRM audit — 2026-10-19
+- Read-only search returned 0 deals, 2 contacts, and 1 company; no CRM writes were made.
+- The two contacts are sample records: [Brian Halligan (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894044249312?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search) and [Maria Johnson (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894054999231?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search).
+- The only company is [HubSpot / hubspot.com](https://app.hubspot.com/contacts/149568666/record/0-2/453775516896?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), lifecycle stage `lead`; in context this appears to be seed/demo data. Do not count any of these as prospects or revenue.
