@@ -552,3 +552,11 @@ No completion claim is made. Collection remains active.
 - Regression suite [39185928757](https://github.com/salamou1944/Project-/actions/runs/39185928757) passed.
 - Corrected counts: 200 selected, 199 successful source packets, 1 blocked; 31,343 repo identities, 8,800 archived metadata-only, 22,344 deferred/blocked, 7,220 dedupe-ready records.
 - The safe-incremental Collection harvest is the next execution step. Do not treat audit success as canonical promotion or production readiness.
+
+
+## Full safe-incremental harvest — passed 2026-10-19
+- Workflow [39186272221](https://github.com/salamou1944/Project-/actions/runs/39186272221) passed all steps and persisted generated state at `Project-@0cf97579f587c06a0a51bcf2fad1ae5e09fadb66`.
+- Current-main audit: 10,975 JSON/JSONC files, zero parse failures, 626,208,456 raw bytes. The run refreshed 99 of 100 selected repos; one source was blocked. It preserved 31,343 repo metadata rows, 2,985 extracted source records, 2,396 cached records, 490 prior sources not selected and 20,048 deferred repos.
+- Resulting state: 24,535 capability groups, 17,298 promotion-review items, 7,237 restricted items. Runtime-readiness claims = 0, explicit declarations = 0, install result `NO_APPROVED_CANDIDATES`, installed = 0. All evidence is preserved on shelf; no unapproved asset was installed.
+- Canonical OmniRoute source record refreshed at `Project-@0bb911fd2359e6d0017fde44827a2a4a1d029666`. Upstream is MIT and actively maintained, but free-tier totals are third-party account estimates, not guaranteed capacity; provider terms are stale/partially audited. Existing API Factory adopts schema/rules only, not OmniRoute runtime.
+- API Factory's successful local SOAT proof is now recorded at `Salamou-31@f2e0b8c73979189555a8583361a5f8d547766033` in `AI-API-HUB/api-factory/SOAT-RUNTIME-VERIFIED-2026-10-19.md`. CI local-Ollama proof is not production proof.
