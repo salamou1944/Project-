@@ -516,3 +516,9 @@ No completion claim is made. Collection remains active.
 
 ## Storage baseline for bounded extraction
 - `Project-` repository size before the new bounded batch: 317,118 KB (~310 MiB) per GitHub repository metadata. Recheck after run `39181614341`; no post-run size is claimed yet.
+
+
+## HubSpot pipeline status — 2026-10-19
+- Read-only CRM inventory: 0 deals, 2 sample contacts, 1 company record. No writes.
+- Records: [Brian Halligan (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894044249312?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), [Maria Johnson (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894054999231?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), [HubSpot / hubspot.com](https://app.hubspot.com/contacts/149568666/record/0-2/453775516896?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search).
+- Treat as seed/demo records, not a real sales pipeline, until independently verified.
