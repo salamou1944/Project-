@@ -469,3 +469,10 @@ No completion claim is made. Collection remains active.
 - Latest visible provider/model data refresh: `41197cb7d053680daf808d6618142045e961caaa` (2026-10-05), with data-sync merge `b25c0395fe1e7628ecc99bf119a40365801c6fb4`. No newer provider/model refresh appeared in the latest 10 commits.
 - Newer history consists of the credential-exfiltration workflow addition/removal (Oct 10–11). Current workflows show only a README generator triggered by `data.json` changes; no current nightly provider-sync workflow was found. Treat the advertised refresh cadence as unverified.
 - The Oct 5 refresh includes both live/deprecation findings and explicitly unprobed or human-review entries; preserve those evidence classes. No provider has been promoted to production or marked zero-cost from this source alone.
+
+
+## Persisted current-main JSON audit gate — 2026-10-19
+- Added `COLLECTION/AUTO/validate_current_collection_json_audit.py` (commit `Project-@80a2c9815f248bfe328d628c164d48491bacad1f`) to validate report schema, row counts, total bytes, SHA-256 format and parse-failure counts.
+- Updated deep extraction to write the audit report even when JSON parse failures are found, commit it, and then fail the final gate after persistence: `Project-@0eacd07b4ac4fbe82541f647bc3d666f6fb4d694`.
+- Updated the full Collection workflow to run the all-JSON inventory after state generation/installation and before commit, then validate the persisted report after commit: `Project-@42dca1510a4295bf993c41d356ee7a3edd773b6b`, ordering fix `Project-@b100aa7fd22306bb83f03a65d4d985a69fdbcd2a`, and conflict-recovery audit fix `Project-@e971fed597e052cb02acd7ec41255b2977577469`.
+- The full-frontier extraction run [39180853004](https://github.com/salamou1944/Project-/actions/runs/39180853004) remains the run to evaluate for the corrected owner parser. Full Collection has not been triggered yet; wait for that run's extraction commit first.
