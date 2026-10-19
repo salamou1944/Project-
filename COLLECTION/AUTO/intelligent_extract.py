@@ -172,6 +172,8 @@ def load_deep_inventory(inventory_path=None, manifest_path=None):
     if not isinstance(rows, list):
         raise RuntimeError("deep_inventory_rows_missing")
     accounts = deep_manifest.get("owners", [])
+    if not rows and accounts:
+        raise RuntimeError("deep_inventory_contains_no_repositories")
     if not isinstance(accounts, list):
         raise RuntimeError("deep_manifest_owners_invalid")
     repos = []
@@ -771,7 +773,10 @@ def main():
     manifest["extracted_sources"] = sum(x.get("state") == "extracted" for x in manifest["sources"])
     manifest["cached_sources"] = sum(x.get("mode") == "cached" for x in manifest["sources"])
     manifest["refreshed_sources"] = sum(x.get("mode") == "refreshed" for x in manifest["sources"])
-    manifest["blocked_sources"] = sum(x.get("state") == "BLOCKED_EXTERNAL_ACCESS" for x in manifest["sources"]) + len(blocked)
+    manifest["blocked_sources"] = (
+        sum(x.get("state") == "BLOCKED_EXTERNAL_ACCESS" for x in manifest["sources"])
+        + len(blocked) + preserved_after_refresh_failure_count
+    )
     atomic_write_json(ROOT / "MANIFEST.json", manifest)
     print(json.dumps({
         "accounts": len(accounts), "inventory_repos": len(repos),
