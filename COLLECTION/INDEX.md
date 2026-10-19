@@ -569,7 +569,7 @@ No completion claim is made. Collection remains active.
 - Next bounded batch [39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) is queued from marker commit `1361748647284429f234734cfaa0a6fa6ac2daee`. No assets were installed; the readiness gate continues to report no approved candidates.
 
 
-## Third bounded batch — 2026-10-19
+## Second bounded new-source batch — 2026-10-19
 - [Run 39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) passed. It added 98 source records from 100 selected repos; two blocked sources remain explicitly recorded. Total source records: 3,181.
 - Current-main audit: 11,171 JSON/JSONC files, zero parse failures, 668,043,719 raw bytes. Generated-state commit: `Project-@60502ad15f35d970a267a8d0c3c23fc15bd18301`.
 - Capability output: 27,056 groups, 18,774 promotion-review items, 8,282 restricted items. Install gate remains `NO_APPROVED_CANDIDATES`; no runtime-readiness claims.
