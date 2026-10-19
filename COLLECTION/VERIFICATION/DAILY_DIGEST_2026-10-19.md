@@ -102,3 +102,11 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - This is valid CI-pinned local-runtime proof, not production deployment/storage proof or a commercial/free-quota attestation for hosted providers. The explicit `production_status=not_proven` was preserved.
 - Collection automation: created a current-main JSON audit that stores byte sizes, SHA-256 hashes, root shapes and record counts; the extractor now runs on recursive frontier changes. Full extraction run `39179989521` remained in progress at last poll; queued follow-up run `39180283329` is pending. No extraction count or audit result has been claimed yet.
 - Free-provider security review found the removed credential-exfiltration workflow in `mnfst/awesome-free-llm-apis`; preserved it in the MNFST account capture and canonical monetization ledger. No credentials were searched for or transmitted.
+
+
+## Frontier expansion correction — 2026-10-19
+- Rechecked the active extraction graph against `COLLECTION/MASTER/ACCOUNT_COMPLETION_REGISTER_2026-10-06.md`. The prior companion listed only the 8 Layer A and 11 Layer B targets; it did not materialize the register's broader 138+ owner frontier.
+- Fixed that gap: 40 enumerated-account rows plus 116 newly exposed names normalized to 151 distinct GitHub owner targets; all 151 URLs are now committed in the scanner's Markdown input graph at `Project-@0d5c7a50ddfc503de0ac39ba12b42683ebe82f14`.
+- Updated the scanner to deduplicate mixed-case owner logins: `Project-@4a5011bd27c8ce3558e298b99f2669b07d875b51`. Updated workflow concurrency so the newest frontier supersedes stale queued work: `Project-@dc8ffb98b59d0e51313749917310048b5d33f2e4`.
+- The new full-frontier run `39180598182` was pending at last poll. Earlier run `39179989521` started before the 151-owner materialization and must not be used as the final extraction proof even if it finishes successfully. Use the newest full-frontier run's manifest and JSON audit output.
+- Next step after that run succeeds: trigger the full Collection workflow via `.github/COLLECTION_SAFE_INCREMENTAL_ONCE`, then inspect all test, policy, install and persisted-evidence gates. The full Collection workflow has not yet been triggered because it must check out the completed extraction commit.
