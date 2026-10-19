@@ -19,11 +19,12 @@ def source(repo, *, state="extracted", license_name="MIT", files=1, revision=Non
 
 
 def queue_item(key, sources, action="API_FACTORY_REVIEW", promotion_action="INSTALL_APPROVED",
-               integration_gate="PASS", security_gate="PASS"):
+               install_approval="APPROVED", integration_gate="PASS", security_gate="PASS"):
     return {
         "capability_key": key,
         "operator_action": action,
         "promotion_action": promotion_action,
+        "install_approval": install_approval,
         "integration_gate": integration_gate,
         "security_gate": security_gate,
         "sources": sources,
@@ -61,6 +62,14 @@ class InstallSelectionTests(unittest.TestCase):
         manifest = {"sources": [source("owner/shelf-browser")]}
         queue = {"items": [
             queue_item("shelf", ["github:owner/shelf-browser"], promotion_action="REVIEW_NEW_OR_UPGRADE"),
+        ]}
+        self.assertEqual(select_collected_candidates(manifest, queue), [])
+
+    def test_promotion_action_alone_does_not_authorize_install(self):
+        manifest = {"sources": [source("owner/unapproved")]}
+        queue = {"items": [
+            queue_item("unapproved", ["github:owner/unapproved"],
+                       promotion_action="INSTALL_APPROVED", install_approval="NOT_APPROVED"),
         ]}
         self.assertEqual(select_collected_candidates(manifest, queue), [])
 
