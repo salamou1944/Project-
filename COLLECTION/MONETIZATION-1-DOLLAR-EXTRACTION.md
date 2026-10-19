@@ -261,3 +261,16 @@ Do not broaden the toolbox. Search only for:
 - opportunities that can be pursued without upfront API spend.
 
 Never classify a listing, proposal, sent email, or technical capability as a customer or revenue event without acceptance/payment evidence.
+
+
+## Connected app and outreach deliverability refresh — 2026-10-19
+
+Read-only AgentMail inspection covered `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`. The visible API Pilot/EASY thread pages contained delivery failures/bounces dated 2026-09-12 through 2026-09-27; the PASTEL E2E inbox had no threads. No customer reply, acceptance, payment, commission, or revenue evidence was found. These bounces are not leads. Verify each recipient and that the opportunity remains active before sending anything else; do not duplicate prior outreach.
+
+Current connected commerce/deployment constraints:
+- The connected Shopify store is on a trial plan; it is not a proven live sales path.
+- Railway has an API Factory service object, but the service config returned no direct variable names and its latest listed deployment records are removed. Durable registry/artifact storage and a stable production deployment remain unverified.
+- Supabase exposes only the EASY database; do not reuse it for API Factory.
+- Termalin has zero reachable hosts, and Vercel connector context returned no teams. Do not claim local bridge or Vercel production control is available.
+
+Evidence policy remains unchanged: confirmed customer = 0 on evidence reviewed here; confirmed revenue = $0; paid prospecting credits spent = $0; no outbound messages were sent in this sweep.
