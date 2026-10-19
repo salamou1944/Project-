@@ -116,3 +116,8 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - Extended Notion inventory (private sidebar, favorites, recent pages) returned zero pages/databases through these read tools; Canva searches for EASY and API Factory returned zero matching designs. These are access-surface results, not proof that all connected workspaces are empty.
 - AgentMail inbox inventory confirms three inboxes and zero signed-in AgentMail app accounts. Existing visible outreach threads are bounces, not customer replies.
 - Requested an immediate run of the enabled `Revenue + leverage sweep` automation (`6ab730fda9948191a73f262cdb30fa92`). The request was accepted, but execution is asynchronous; results are not yet available and no completion is claimed.
+
+
+## Outreach suppression evidence — 2026-10-19
+- Persisted 11 observed failed-delivery recipients in the canonical monetization ledger with dates and suppression guidance. Do not retry without independent address verification and a fresh check that the opportunity is still active.
+- This prevents duplicate/spammy outreach. Bounces do not count as leads; no outbound email was sent in this sweep.
