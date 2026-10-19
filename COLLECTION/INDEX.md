@@ -528,3 +528,7 @@ No completion claim is made. Collection remains active.
 ## Installed asset shelf check
 - Current `COLLECTION/INSTALLED/` contains only `juspay__hyperswitch`; no browser/sandbox candidate is installed.
 - Hyperswitch remains source-only, not runtime-promoted. New installations require explicit approval and both integration/security gates.
+
+
+## Legacy Hyperswitch storage note
+- `juspay/hyperswitch@1d71d94d2e2e1c72f3ede13abebc24132997685f` is preserved as vendored source only; its marker reports 393 MB. GitHub API reports the containing repository at 317,118 KB before the new batch; these metrics are not directly comparable. Do not delete without an explicit backup/retention decision.
