@@ -138,3 +138,11 @@ The following addresses were observed in failed delivery threads and should not 
 - Upwork account is Freelancer Basic, profile visibility Private, title/description need a verified rewrite, only Customer Service is listed as a skill, no portfolio/highlights, 0 completed jobs/reviews, 0 proposals, 0 active contracts, 0 invitations, and 0 Connects.
 - The checked active AI automation job requires 14 Connects and has 0 hires/0 reviews; no application was attempted. The saved Marketing Ops/Automation Specialist job lists $15–$38/hour but could not be opened for current liveness; it was not retried.
 - Apollo profile shows 80 lead credits and 5,000 AI credits remaining with zero used. Direct-dial counters disagree across endpoints; no search/enrichment was performed and no credits were spent. Details: [UPWORK_REVENUE_READINESS_2026-10-19.md](UPWORK_REVENUE_READINESS_2026-10-19.md).
+
+
+## HubSpot CRM records — read-only audit
+
+- CRM search returned **0 deals**, **2 contacts**, and **1 company**. No writes were performed.
+- Contacts are explicitly sample records: [Brian Halligan (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894044249312?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search) and [Maria Johnson (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894054999231?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search).
+- The sole company record is [HubSpot / hubspot.com](https://app.hubspot.com/contacts/149568666/record/0-2/453775516896?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), lifecycle stage `lead`. In context with the sample contacts and empty deals, treat it as seed/demo data unless independently verified otherwise.
+- Result: HubSpot currently provides no evidenced customer pipeline; the two sample contacts and one company must not be counted as leads, customers, or revenue.
