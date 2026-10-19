@@ -153,3 +153,8 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - Updated the deep-extraction workflow to preserve the current JSON audit report before failing on invalid JSON, rather than losing the report at the first non-zero exit.
 - Updated the full Collection workflow to run the all-JSON inventory after state generation/installation, persist the report with the generated state, then enforce the audit after commit; also covered the conflict-recovery path.
 - Commits: `Project-@80a2c9815f248bfe328d628c164d48491bacad1f`, `Project-@0eacd07b4ac4fbe82541f647bc3d666f6fb4d694`, `Project-@42dca1510a4295bf993c41d356ee7a3edd773b6b`, `Project-@b100aa7fd22306bb83f03a65d4d985a69fdbcd2a`, `Project-@e971fed597e052cb02acd7ec41255b2977577469`.
+
+
+## Browser Skill evidence check — 2026-10-19
+- Confirmed latest canonical Skill change `agent-skills@84b4732094d543410a9284ab687405b37fea8e4f`; no duplicate Skill was created.
+- Commit check-runs API returned zero checks. The only commit status is a Railway path watcher stating no deployment was needed; it is not a test pass. The Skill change is preserved, but no post-change browser runtime test has been observed.
