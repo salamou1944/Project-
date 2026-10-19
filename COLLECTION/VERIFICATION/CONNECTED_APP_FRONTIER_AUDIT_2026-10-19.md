@@ -146,3 +146,8 @@ The following addresses were observed in failed delivery threads and should not 
 - Contacts are explicitly sample records: [Brian Halligan (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894044249312?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search) and [Maria Johnson (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894054999231?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search).
 - The sole company record is [HubSpot / hubspot.com](https://app.hubspot.com/contacts/149568666/record/0-2/453775516896?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), lifecycle stage `lead`. In context with the sample contacts and empty deals, treat it as seed/demo data unless independently verified otherwise.
 - Result: HubSpot currently provides no evidenced customer pipeline; the two sample contacts and one company must not be counted as leads, customers, or revenue.
+
+
+## Post-automation AgentMail recheck
+- Re-read all three connected inbox thread lists after the revenue sweep run. API Pilot: 6 threads, latest 2026-09-27, all visible messages are delivery failures/bounces or older sent/bounced threads. EASY: 5 threads, latest 2026-09-22, all visible threads are delivery failures. PASTEL E2E: 0 threads.
+- No new email thread or new outbound send appeared after the automation run. The 11 known bounced recipients remain suppressed.
