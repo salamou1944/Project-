@@ -134,7 +134,7 @@ def owners():
     out = {}
     for p in sorted(ACCOUNTS.glob("*.md")):
         t = p.read_text(encoding="utf-8", errors="ignore")
-        for m in re.finditer(r"https?://github\\.com/([A-Za-z0-9_.-]+)(?:[\\s/]|$)", t):
+        for m in re.finditer(r"https?://github\.com/([A-Za-z0-9_.-]+)(?:[\s/]|$)", t):
             o = m.group(1)
             key = o.lower()
             if key not in RESERVED and key != "salamou1944":
