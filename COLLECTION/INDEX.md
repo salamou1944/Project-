@@ -504,3 +504,9 @@ No completion claim is made. Collection remains active.
 
 ## Safe incremental Collection trigger status
 - The marker `.github/COLLECTION_SAFE_INCREMENTAL_ONCE` already exists from 2026-10-16. Do not create a duplicate file; update its content only after bounded extraction commits, so the full Collection workflow checks out the new inventory and source packets.
+
+
+## Upwork and Apollo revenue readiness
+- Read-only findings: [UPWORK_REVENUE_READINESS_2026-10-19.md](VERIFICATION/UPWORK_REVENUE_READINESS_2026-10-19.md).
+- Upwork has zero Connects, no proposals/contracts/invitations, a private low-quality profile, no portfolio, and zero completed jobs/reviews. The inspected active AI-automation job requires 14 Connects and the client has no hiring history. No application or purchase was made.
+- Apollo shows 80 lead credits and 5,000 AI credits remaining with zero used; direct-dial counters are inconsistent, so do not treat them as spendable capacity. No enrichment/search was run.
