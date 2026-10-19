@@ -67,6 +67,48 @@ class IntelligentExtractBatchTests(unittest.TestCase):
         self.assertEqual(extractor.FRONTIER_META["inventory_repo_count"], 1)
         self.assertTrue(extractor.FRONTIER_META["sha256"])
 
+    def test_force_refresh_rotates_from_oldest_cached_packet(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "COLLECTION" / "AUTO" / "EXTRACTED"
+            root.mkdir(parents=True)
+            pushed = "2026-10-18T00:00:00Z"
+
+            def item(repo, owner, priority):
+                return {
+                    "kind": "repo", "full_name": repo, "owner": owner,
+                    "repo_meta": {
+                        "full_name": repo, "owner": {"login": owner},
+                        "pushed_at": pushed, "updated_at": pushed, "default_branch": "main",
+                        "archived": False, "fork": False, "stargazers_count": priority,
+                        "priority_score": priority, "license": {"spdx_id": "MIT"},
+                    },
+                }
+
+            repos = [item("ownerA/one", "ownerA", 100), item("ownerB/two", "ownerB", 90)]
+            old_path = root / f"{extractor.safe_name('ownerA/one')}.json"
+            new_path = root / f"{extractor.safe_name('ownerB/two')}.json"
+            def packet(repo, generated_at):
+                return {
+                    "canonical_source": f"github:{repo}", "state": "extracted",
+                    "pushed_at": pushed, "generated_at": generated_at,
+                    "revision_sha": "a" * 40, "files": [{"content": "cached source"}],
+                }
+            old_path.write_text(json.dumps(packet("ownerA/one", "2026-01-01T00:00:00Z")), encoding="utf-8")
+            new_path.write_text(json.dumps(packet("ownerB/two", "2026-10-01T00:00:00Z")), encoding="utf-8")
+
+            with mock.patch.object(extractor, "ROOT", root), \
+                 mock.patch.object(extractor, "MAX_REPOS_PER_RUN", 1), \
+                 mock.patch.object(extractor, "MAX_REPOS_PER_OWNER", 1), \
+                 mock.patch.dict("os.environ", {"COLLECTION_FORCE_REFRESH": "1"}):
+                selected_first, _, _ = extractor.select_repo_batch(repos, set())
+                self.assertEqual(selected_first[0]["full_name"], "ownerA/one")
+                old_doc = json.loads(old_path.read_text(encoding="utf-8"))
+                old_doc["generated_at"] = "2026-10-19T01:00:00Z"
+                old_path.write_text(json.dumps(old_doc), encoding="utf-8")
+                selected_second, _, _ = extractor.select_repo_batch(repos, set())
+
+        self.assertEqual(selected_second[0]["full_name"], "ownerB/two")
+
     def test_batch_is_bounded_owner_diverse_and_skips_cached_deep_and_archived_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "COLLECTION" / "AUTO" / "EXTRACTED"
