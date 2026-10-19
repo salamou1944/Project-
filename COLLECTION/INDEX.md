@@ -6,7 +6,9 @@ Updated: 2026-10-19
 
 ## 2026-10-19 operating update
 - Recursive frontier Layer A snapshot committed: `COLLECTION/ACCOUNTS/RECURSIVE_ACCOUNT_FRONTIER_LAYER_A_2026-10-18.json`, commit `ff4af71f9e5fab97c059321835aaf3d696c8ed34`. It records 220 repository identities across 8 owner-scoped searches; it is a metadata snapshot, not full source extraction.
-- Additional owner searches (jackwener, stickerdaniel, daytonaio, e2b-dev, ChromeDevTools, agentclientprotocol, jina-ai, nicobailon, kurtmckee, xpzouying, vercel-labs) remain partly unpersisted. The five 100-result pages need pagination. Do not count them as a committed complete inventory.
+
+- Layer A/B owner-scanner companion committed: `COLLECTION/ACCOUNTS/RECURSIVE_FRONTIER_LAYER_A_B_2026-10-19.md`, commit `f6393d2de1f95695ab0b09e381f64cdc211a1a18`. It records all 8 Layer A owners plus 11 observed Layer B owners and explicitly labels incomplete inventories. This makes them discoverable to `COLLECTION/AUTO/deep_extract.py`, which scans GitHub URLs in account Markdown. The extraction workflow has not yet been rerun.
+- Additional owner repository rows (jackwener, stickerdaniel, daytonaio, e2b-dev, ChromeDevTools, agentclientprotocol, jina-ai, nicobailon, kurtmckee, xpzouying, vercel-labs) remain partly unpersisted. The five 100-result pages need pagination. Do not count them as a committed complete inventory.
 - Browser runtime verification Skill strengthened with redirect/domain-filter failure semantics, explicit logged-in-session authorization, recording-off defaults, protected harness boundaries, and redacted reproducible evidence. Commit: `agent-skills@84b4732094d543410a9284ab687405b37fea8e4f`. No post-change CI/runtime run is yet claimed.
 - SOAT runtime smoke workflow fixture corrected at `Salamou-31@bada4b0feede31853b4afd246deb0b514a5e1ed0`. The fixture is explicitly local-only and synthetic; this does not attest a hosted provider's free quota or billing terms. Await fresh workflow evidence.
 - The large-JSON audit utility's unit-test CI passed historically in run `39002889620`; a fresh full-data audit of current generated JSON remains unproven.
