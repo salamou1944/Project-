@@ -239,7 +239,7 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - Termalin returned zero reachable hosts. No shell/SFTP work was performed; external server execution remains blocked until the target host is enrolled through Termalin.
 
 
-## Third bounded new-source batch — 2026-10-19
+## Second bounded new-source batch — 2026-10-19
 - [Collection run 39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) passed; 98 source records added, 2 blocked, total source records 3,181 across the preserved 31,343-repo inventory.
 - JSON/JSONC audit passed: 11,171 files, zero parse failures, 668,043,719 raw bytes. Generated-state commit `60502ad15f35d970a267a8d0c3c23fc15bd18301`.
 - Output counts: 27,056 capability groups, 18,774 promotion review items, 8,282 restricted items. No assets installed or promoted to runtime readiness.
