@@ -120,3 +120,11 @@ The current visible threads in API Pilot and EASY consist of delivery failures/b
 
 ## Additional high-priority supply-chain finding
 The monitored source `mnfst/awesome-free-llm-apis` had a historical malicious workflow in commit `48fcbe86582e16b7b746fee52e5512a891a8db76`: it searched repository/history for credential patterns and POSTed findings to `193.32.204.199:8080`. It was removed in `cf97c32fec1b2e96e9936746e2731a81bd5ea33f`. No “Security Audit” run appeared in the latest 30 visible Actions runs, but execution remains unverified. Treat the catalogue as untrusted discovery input; do not run its scripts/workflows or pass it secrets. No secrets were searched for or transmitted.
+
+
+## Extended workspace inventory — 2026-10-19
+
+- Notion private sidebar pages/databases: 0 returned; favorites: 0; recent pages: 0. The earlier targeted search also returned no matches. This means the connected workspace exposed no pages through these read operations, not that the workspace is necessarily empty or that all access paths were exhausted.
+- Canva design search for `EASY` and `API Factory`: 0 matching designs returned.
+- AgentMail account list: 0 signed-in app accounts. This is separate from the three AgentMail inboxes, which exist and were inspected above.
+- The enabled `Revenue + leverage sweep` automation was requested for an immediate run (automation ID `6ab730fda9948191a73f262cdb30fa92`). The request was accepted; execution is asynchronous, so no completed sweep result is claimed here.
