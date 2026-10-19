@@ -152,3 +152,12 @@ This digest separates **preserved source material**, **successful CI evidence**,
 
 ## Post-automation outbound check
 - Rechecked all three AgentMail inboxes after the revenue sweep: API Pilot 6 threads (latest 2026-09-27), EASY 5 threads (latest 2026-09-22), PASTEL E2E 0 threads. No new threads or outbound sends appeared; existing bounced addresses remain suppressed.
+
+
+## Install-safety gate hardening — 2026-10-19
+- Automatic installs now require four explicit signals: `promotion_action=INSTALL_APPROVED`, `install_approval=APPROVED`, `integration_gate=PASS`, and `security_gate=PASS`.
+- Removed automatic selection from `DEEP-EXTRACTED/MANIFEST.json` and legacy `COLLECTION/SOURCES/*.md` notes. Preserved source records are not install authorization.
+- The value-operator queue now carries explicit gate fields defaulting to `UNVERIFIED` / `NOT_APPROVED`. The full Collection workflow will not install newly discovered browser/sandbox or other assets without approval and both gates.
+- The final install validator now permits an explicit `NO_APPROVED_CANDIDATES` safe no-op only when the report has zero candidates/results and the verification queue is empty. It does not call this an install pass.
+- Existing Hyperswitch source remains in `COLLECTION/INSTALLED/juspay__hyperswitch` and is documented in [LEGACY_INSTALLED_ASSETS_2026-10-19.md](LEGACY_INSTALLED_ASSETS_2026-10-19.md); no runtime/payment-provider readiness is claimed.
+- Commits: `Project-@3729ec18a4883f6b1df2fb6d931cfae88e6cb9b7`, `Project-@816f1ceae0026d1ebbce06adb9d5651eed8e7b9a`, `Project-@2f2cd5fc4d3504237977157d3e782091ed46bf6a`, `Project-@236a129314b34a586ddd4cf682f85811f1419fd1`, `Project-@d39ba0a6ca38b7f1d88fe116c07e72b1be5a522e`, `Project-@64d1e60e68ee0ae599631320fdad430ff8ad804a`, `Project-@1ceabf517b5051ec7ce359c93c0a2aa2d2c5e80d`, `Project-@6a61263d1fc66a7c297d2327820fe8d3a24bff23`, `Project-@42023529a52a14082e9815e207a7bc4c67c4c096`, `Project-@f5d52dde36f6c7727bda2532d2797a81edfd652f`.
