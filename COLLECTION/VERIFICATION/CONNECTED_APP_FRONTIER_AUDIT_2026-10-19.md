@@ -112,10 +112,11 @@ The current visible threads in API Pilot and EASY consist of delivery failures/b
 6. Keep ASTRA paper/research-only and EASY creative generation paused behind its provider-credit boundary.
 7. Treat local-bridge as unconnected until a safe Windows self-hosted runner or Termalin host is actually online.
 
-## Current frontier run
+## Current frontier run — refreshed 2026-10-19
 
-- Collection extraction workflow: [run 39180002514](https://github.com/salamou1944/Project-/actions/runs/39180002514), started by the updated owner-frontier commit `857010f226ccd7efdde94a22297d19ed32237053`; it was `pending` at the last observation.
-- API Factory SOAT integration: [run 39179590053](https://github.com/salamou1944/Salamou-31/actions/runs/39179590053); real AI completion through the intended local Ollama provider passed its dedicated step, while the official SOAT smoke and downstream evidence persistence steps remained in progress/pending. No overall workflow success is claimed yet.
+- Bounded deep extraction [run 39181614341](https://github.com/salamou1944/Project-/actions/runs/39181614341) committed its metadata inventory and source packets. The current-main JSON/JSONC audit then passed in [run 39185928703](https://github.com/salamou1944/Project-/actions/runs/39185928703): 10,877 files, zero parse failures, 595,154,410 source bytes.
+- The full safe-incremental Collection run [39186130201](https://github.com/salamou1944/Project-/actions/runs/39186130201) failed early in `test_ready_json_compaction.py` because the test expected an outdated error phrase. The assertion was corrected in `Project-@d642b846f7889d534ea7c3e01975e0f72fe08dfd`; retry run is queued at [39186130201](https://github.com/salamou1944/Project-/actions/runs/39186130201) only if a new marker commit is observed. Do not mark full Collection harvest complete until a later run passes.
+- API Factory SOAT integration [run 39179590053](https://github.com/salamou1944/Salamou-31/actions/runs/39179590053) completed **success**. The pinned SOAT runtime was authenticated, local Ollama produced a real completion (`"4"`), official SOAT smoke passed, execution/business-outcome gates passed, and the verification record was uploaded as artifact [12155088912](https://github.com/salamou1944/Salamou-31/actions/runs/39179590053/artifacts/12155088912) (ZIP SHA-256 `4b7a721294b6e53086e2e89a65c71231906029487383ceeb6ce3dd79b7f0faf5`). This is strong CI-pinned local-provider evidence; the record explicitly says `production_status: not_proven`. It does not prove Railway production or durable cross-invocation storage.
 
 
 ## Additional high-priority supply-chain finding
