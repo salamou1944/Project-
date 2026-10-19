@@ -1,7 +1,16 @@
 # COLLECTION — Research Index
 
 Status: INCREMENTAL_COLLECTION
-Updated: 2026-10-17
+Updated: 2026-10-19
+
+
+## 2026-10-19 operating update
+- Recursive frontier Layer A snapshot committed: `COLLECTION/ACCOUNTS/RECURSIVE_ACCOUNT_FRONTIER_LAYER_A_2026-10-18.json`, commit `ff4af71f9e5fab97c059321835aaf3d696c8ed34`. It records 220 repository identities across 8 owner-scoped searches; it is a metadata snapshot, not full source extraction.
+- Additional owner searches (jackwener, stickerdaniel, daytonaio, e2b-dev, ChromeDevTools, agentclientprotocol, jina-ai, nicobailon, kurtmckee, xpzouying, vercel-labs) remain partly unpersisted. The five 100-result pages need pagination. Do not count them as a committed complete inventory.
+- Browser runtime verification Skill strengthened with redirect/domain-filter failure semantics, explicit logged-in-session authorization, recording-off defaults, protected harness boundaries, and redacted reproducible evidence. Commit: `agent-skills@84b4732094d543410a9284ab687405b37fea8e4f`. No post-change CI/runtime run is yet claimed.
+- SOAT runtime smoke workflow fixture corrected at `Salamou-31@bada4b0feede31853b4afd246deb0b514a5e1ed0`. The fixture is explicitly local-only and synthetic; this does not attest a hosted provider's free quota or billing terms. Await fresh workflow evidence.
+- The large-JSON audit utility's unit-test CI passed historically in run `39002889620`; a fresh full-data audit of current generated JSON remains unproven.
+- Runtime/deployment gates remain strict: health alone is not readiness; API Factory needs durable registry and artifact storage, and no current stable production deployment has been proven.
 
 ## Purpose
 Central collection of repositories, documentation, tools, and reusable implementation knowledge discovered during research. Priority: free/open-source/self-hosted capabilities that can reduce paid SaaS/API dependencies.
@@ -11,7 +20,7 @@ Central collection of repositories, documentation, tools, and reusable implement
 
 - Latest operator recheck: [API Factory operator recheck — 2026-10-17](VERIFICATION/API_FACTORY_OPERATOR_RECHECK_2026-10-17.md). Confirms current smoke run #44 correctly rejects degraded HTTP 200, the latest listed Vercel deployment source differs from the PR head, and Vercel scope access is blocked by 403; no EASY resources or paid services were touched.
 
-- Current source branch: `salamou1944/Salamou-31` / `feat/api-factory-railway-deployable-2026-10-16` (PR #45 remains unmerged).
+- Current source commit: `salamou1944/Salamou-31@172328b929513d4a5909a22da4954cd988aa2343` (PR #45 is merged). Latest SOAT integration run `39057060893` failed closed with `free_policy_incomplete`; workflow fixture omitted `officialSourceVerified` and carried a stale hard-coded research date. The CI-only local Ollama fixture was corrected in `Salamou-31@bada4b0feede31853b4afd246deb0b514a5e1ed0` to supply the explicit verification field and a current synthetic fixture date. This is a source fix only until a fresh workflow run passes; it is not production provider attestation.
 - Runtime smoke history and latest correction: [API Factory Vercel smoke evidence](VERIFICATION/API_FACTORY_VERCEL_SMOKE_2026-10-16.md).
 - Important: health success does not prove persistent registry/artifacts. Source now requires durable registry + artifact storage for `/ready` to return HTTP 200; ephemeral Vercel `/tmp` must return HTTP 503.
 - Deterministic API Factory test suite passed in runs #413 and #414. The stricter live-smoke workflow failed run #44 for the correct reason: the stable Vercel alias still returns HTTP 200 while `degraded: true` and both persistence checks are false. This is a deployment/storage blocker, not a test assertion to weaken. Vercel environment names confirm only `/tmp` registry/artifact paths and no durable Supabase adapter variables.
