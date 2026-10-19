@@ -481,3 +481,8 @@ No completion claim is made. Collection remains active.
 ## Browser Skill validation boundary — 2026-10-19
 - Canonical `skills/browser-runtime-verification/SKILL.md` was strengthened at `agent-skills@84b4732094d543410a9284ab687405b37fea8e4f`; no duplicate Skill was created.
 - GitHub reports zero check runs for that commit. The sole status context is a Railway watcher saying “No deployment needed - watched paths not modified.” That is not a Skill test pass or browser-runtime verification. The content change is preserved; runtime/domain-redirect/session safety remains unverified until a dedicated browser test executes.
+
+
+## Owner parser regression test — passed
+- Run [39181282587](https://github.com/salamou1944/Project-/actions/runs/39181282587) completed success after wiring `test_deep_extract_owner_parser.py` into `collection-install-selection-test`.
+- The test covers raw owner URLs, Markdown link closers, repository paths, trailing punctuation, mixed-case duplicates, and excluded `salamou1944`/reserved paths. This validates the parser fix, not the full account extraction run.
