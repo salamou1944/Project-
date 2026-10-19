@@ -407,3 +407,14 @@ No completion claim is made. Collection remains active.
 ## Gist coverage spot-check — 2026-10-17
 - Confirmed `aw-junaid` 76 public gists and `mufeedvh` 8 public gists via their public Gist pages; `cporter202` page fetch remained inaccessible.
 - The historical 21-owner Gist enumeration failure count remains open; this spot-check does not falsely mark those failures resolved. Details are in `COLLECTION/MASTER/DAILY-DIGEST-2026-10-09.md` and the account completion register.
+
+
+## Connected application and account frontier audit — 2026-10-19
+- Full read-only audit: [CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md](VERIFICATION/CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md), commit `Project-@f2fc1a3519629d1ad00ab5050679b91243e150dc`.
+- GitHub connector currently exposes one authenticated account (`salamou1944`), no organization memberships, and 10 repositories. The account-wide external frontier remains a separate Collection queue.
+- Railway exposes two projects. The API Factory service `salamou31-api-factory` has no direct service variable names and its five latest listed deployment records are removed; production deployment is not proven. EASY's service is separate and untouched.
+- Supabase exposes only `easy-platform-db` (ACTIVE_HEALTHY); do not reuse it for API Factory. Termalin exposes zero reachable hosts; Vercel deployment context exposes no teams; the GitLab project is empty.
+- AgentMail API Pilot/EASY visible threads show delivery failures/bounces, not customer replies. No reply, acceptance, payment, commission, or revenue evidence was found. Fix deliverability and verify active contacts before any new outreach.
+- Shopify's connected Algeria store is on a trial plan; it is not a verified live sales channel. Wix returned zero sites; Canva search returned zero matches; Notion search returned no matches (not proof of an empty workspace); Figma seat is View-only with Code Layers disabled.
+- Collection extraction automation and current JSON audit are now linked to the frontier update trigger. Current run: [39180002514](https://github.com/salamou1944/Project-/actions/runs/39180002514), pending at last observation.
+- API Factory local SOAT run [39179590053](https://github.com/salamou1944/Salamou-31/actions/runs/39179590053): dedicated real local Ollama completion step passed, while the official smoke suite and evidence persistence remained in progress/pending. No overall success claim yet.
