@@ -244,3 +244,8 @@ The following addresses were observed in failed delivery threads and should not 
 - Selector regression: `intelligent_extract.py` now ranks `NEW` repositories ahead of `NEEDS_REFRESH` packets in normal incremental mode; explicit force-refresh remains separate. Code commit `9c3d8e0263eaba904aaabc890dc01138e41d18ba`; regression run [39186643182](https://github.com/salamou1944/Project-/actions/runs/39186643182) passed.
 - Batch [39186698910](https://github.com/salamou1944/Project-/actions/runs/39186698910) passed, adding 98 source records from 100 selected repositories, preserving 2 blocked sources. Total source records: 3,083; metadata inventory remains 31,343 repos.
 - Current-main audit: 11,073 JSON/JSONC files, zero parse failures, 649,132,457 raw bytes. Generated-state commit `4ec33a90e736ba961e470f7441e61cc45350415e`. Next batch [39186862522](https://github.com/salamou1944/Project-/actions/runs/39186862522) is queued.
+
+
+## Metricool / YouTube read-only check — 2026-10-19
+- Metricool has one connected YouTube brand. Analytics for 2026-09-19 through 2026-10-19 return zero subscribers and no populated video/revenue history; scheduled posts from 2026-10-19 through 2026-11-18 are empty.
+- No post was created, scheduled, approved, or published. This is an available channel asset but not a current audience/revenue channel. The existing religious-history video plan can be prepared offline, but production should not be claimed until a real upload is published and independently verified.
