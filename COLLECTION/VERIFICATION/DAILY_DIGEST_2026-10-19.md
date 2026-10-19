@@ -185,3 +185,9 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - The full Collection workflow requires the shared deep inventory, runs the new parser/batch/accounting tests, and fails fast if the inventory is missing or empty. No second unbounded extraction is permitted.
 - The state guard distinguishes total metadata inventory from processed source rows and preserves the 2,500-row floor. Regression tests passed in [run 39183464384](https://github.com/salamou1944/Project-/actions/runs/39183464384).
 - Code commits: `4569476bab3f7e2f0fd69381fe1ab422469ad053`, `53bd9a0f6f9c3687b02e0a19c89819afb45ecc35`, `6958dd49b45dcf4dcdf0c4467839f949758e50f1`, `9ece959650fdd604d8f50bd02186ff30458fb3d4`, `a97ac71f8ddb2cece5082e663d0609927a1ef016`, `0ae23ec26d61c2890ba293ef724310b31e4cc97c`, `f459e4fb59c4368e07ed31cf4dfc47d51f675f77`, `41fa33a60fcb56ba83f00049a2218f84ea2ac6d8`.
+
+
+## Force-refresh rotation and regression proof
+- `COLLECTION_FORCE_REFRESH` remains bounded: each run refreshes at most 100 repositories and 1 per owner, prioritizing the oldest cached packet first so repeated runs progress instead of refreshing the same top batch.
+- The workflow-dispatch description now accurately says “next bounded batch,” not “every discovered repository.” Tests passed in [run 39183664442](https://github.com/salamou1944/Project-/actions/runs/39183664442), including the two-run rotation test.
+- Workflow/code commit: `2018752f25d17f4a4be2fa2c492c2174d88f2f72`; batch rotation test: `ebd55c78198d7b0beb44a806fc0fc1d341263f07`; selector update: `e8bee353ee794ef3ea8f0941cb44fe3130653a29`.
