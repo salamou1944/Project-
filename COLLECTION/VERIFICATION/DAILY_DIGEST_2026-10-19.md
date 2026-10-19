@@ -148,3 +148,7 @@ This digest separates **preserved source material**, **successful CI evidence**,
 - Read-only search returned 0 deals, 2 contacts, and 1 company; no CRM writes were made.
 - The two contacts are sample records: [Brian Halligan (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894044249312?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search) and [Maria Johnson (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894054999231?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search).
 - The only company is [HubSpot / hubspot.com](https://app.hubspot.com/contacts/149568666/record/0-2/453775516896?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), lifecycle stage `lead`; in context this appears to be seed/demo data. Do not count any of these as prospects or revenue.
+
+
+## Post-automation outbound check
+- Rechecked all three AgentMail inboxes after the revenue sweep: API Pilot 6 threads (latest 2026-09-27), EASY 5 threads (latest 2026-09-22), PASTEL E2E 0 threads. No new threads or outbound sends appeared; existing bounced addresses remain suppressed.
