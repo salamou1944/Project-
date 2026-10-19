@@ -540,3 +540,8 @@ No completion claim is made. Collection remains active.
 - Updated [CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md](VERIFICATION/CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md) with read-only inventory across GitHub, Railway, Supabase, Vercel, GitLab, Replit, Notion, Canva, Wix, Render, HubSpot, AgentMail, Apollo and Upwork.
 - GitHub exposes 10 first-party repositories, separate from the 199 external owner targets. Railway latest status reports five services with failed latest deployments; API Factory Railway source uses a feature branch and no service variables. Vercel has a READY production-target deployment but from the same feature branch while project metadata says `live:false`. Supabase EASY database is healthy but must not be reused for other projects.
 - Other connected app findings and safe boundaries are recorded in the audit file. No secrets were read, no deployment or environment mutation was made, and no paid credits were spent.
+
+
+## First-party asset triage — 2026-10-19
+- Preserved first-party source manifests and state boundaries in [connected-app audit](VERIFICATION/CONNECTED_APP_FRONTIER_AUDIT_2026-10-19.md): `Files-/collection/mufeedvh` inventory of 43 repos (content/history/Gists incomplete); `Astra-/collection/aw-junaid` inventory of 33 repos (content verification required); separate `Astra/collection` lanes; EASY API discovery bank and 10 pilot hypotheses; existing revenue service pack; canonical operating memory; ASTRA research gates failing/live OFF.
+- No duplicate Skill was created and no source assets were promoted/installed. Continue per-repo license/security checks and semantic dedupe before promotion.
