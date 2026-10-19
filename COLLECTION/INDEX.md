@@ -442,3 +442,10 @@ No completion claim is made. Collection remains active.
 - Owner scanner now deduplicates case-insensitively: `Project-@4a5011bd27c8ce3558e298b99f2669b07d875b51`. Workflow concurrency was adjusted to prefer the newest frontier: `Project-@dc8ffb98b59d0e51313749917310048b5d33f2e4`.
 - Current full-frontier extraction run: [39180598182](https://github.com/salamou1944/Project-/actions/runs/39180598182), pending at last observation. Earlier runs were triggered before all 151 targets were materialized; do not use them to claim complete frontier extraction.
 - After this full-frontier run completes, trigger the full Collection workflow using the safe incremental marker so it checks out the extracted frontier and then runs the existing large-JSON audit, policy tests, value queue, bounded installation and verification gates.
+
+
+## OmniRoute provider-intelligence refresh — 2026-10-19
+- Revisited the exact `diegosouzapw/OmniRoute` release branch and source docs. Current README: 375 providers, 468 free-tier entries, 34 recurring pools, ~1.62B estimated tokens/month. Older account capture said 372 / 485 / 35; this drift is now recorded rather than silently merged.
+- `FREE_TIERS.md` has `version 3.8.50` and a 2026-10-18 update date, but its full research note remains 2026-06-17 with partial re-audit 2026-09-02 and selected checks 2026-10-08. Treat provider budgets as discovery evidence, not verified free capacity.
+- MIT license, but full repository is ~1.76 GB. Keep it on the shelf; reuse provider-intelligence schema/pool-deduplication only. `.env.example` requires strong `JWT_SECRET` and `API_KEY_SECRET`; never use `INITIAL_PASSWORD=CHANGEME`; SQLite requires durable volume. Browser/web-cookie/OAuth paths need separate security/terms review.
+- Updated canonical capture: [OMNIROUTE_PROVIDER_INTELLIGENCE_2026-10-05.md](VERIFIED_EXTERNAL/OMNIROUTE_PROVIDER_INTELLIGENCE_2026-10-05.md); upstream account capture: [DIEGOSOUZAPW_ACCOUNT_WIDE_2026-10-16.md](ACCOUNTS/DIEGOSOUZAPW_ACCOUNT_WIDE_2026-10-16.md).
