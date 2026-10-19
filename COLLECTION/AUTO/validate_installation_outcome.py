@@ -17,6 +17,17 @@ def validate_outcome(report: dict, queue: dict) -> dict:
     if not isinstance(results, list) or not isinstance(items, list):
         raise ValueError("installation report results and verification queue items must be lists")
 
+    # An empty queue is a safe no-op only when the installer explicitly found
+    # zero approved candidates and persisted no verification items. This is not
+    # reported as an installation pass.
+    if report.get("candidate_count") == 0 and not results and not items:
+        return {
+            "status": "NO_APPROVED_CANDIDATES",
+            "installed_or_already_installed": 0,
+            "ready_for_verification": 0,
+            "blocked_by_size": 0,
+        }
+
     successful = [
         item for item in results
         if isinstance(item, dict) and item.get("status") in {"INSTALLED", "ALREADY_INSTALLED"}
