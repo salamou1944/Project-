@@ -110,3 +110,9 @@ Runtime-proven/production-ready: no new proof in this continuation. Wait for the
 - Updated the scanner to deduplicate mixed-case owner logins: `Project-@4a5011bd27c8ce3558e298b99f2669b07d875b51`. Updated workflow concurrency so the newest frontier supersedes stale queued work: `Project-@dc8ffb98b59d0e51313749917310048b5d33f2e4`.
 - The new full-frontier run `39180598182` was pending at last poll. Earlier run `39179989521` started before the 151-owner materialization and must not be used as the final extraction proof even if it finishes successfully. Use the newest full-frontier run's manifest and JSON audit output.
 - Next step after that run succeeds: trigger the full Collection workflow via `.github/COLLECTION_SAFE_INCREMENTAL_ONCE`, then inspect all test, policy, install and persisted-evidence gates. The full Collection workflow has not yet been triggered because it must check out the completed extraction commit.
+
+
+## Connected workspace follow-up and revenue sweep request — 2026-10-19
+- Extended Notion inventory (private sidebar, favorites, recent pages) returned zero pages/databases through these read tools; Canva searches for EASY and API Factory returned zero matching designs. These are access-surface results, not proof that all connected workspaces are empty.
+- AgentMail inbox inventory confirms three inboxes and zero signed-in AgentMail app accounts. Existing visible outreach threads are bounces, not customer replies.
+- Requested an immediate run of the enabled `Revenue + leverage sweep` automation (`6ab730fda9948191a73f262cdb30fa92`). The request was accepted, but execution is asynchronous; results are not yet available and no completion is claimed.
