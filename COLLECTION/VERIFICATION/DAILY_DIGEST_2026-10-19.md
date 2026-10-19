@@ -170,7 +170,7 @@ This digest separates **preserved source material**, **successful CI evidence**,
 
 
 ## Install safety test evidence — run passed
-- Install-selection and outcome-gate tests completed success in [run 39182669136](https://github.com/salamou1944/Project-/actions/runs/39182669136).
+- Install-selection and outcome-gate tests completed success in [latest run 39182760594](https://github.com/salamou1944/Project-/actions/runs/39182760594); earlier run [39182669136](https://github.com/salamou1944/Project-/actions/runs/39182669136) also passed.
 - The tests enforce explicit `INSTALL_APPROVED`, `install_approval=APPROVED`, `integration_gate=PASS`, and `security_gate=PASS`; review/shelf/unverified candidates remain unselected. The no-approved-candidate state is an explicit safe no-op, not an install pass.
 
 
