@@ -316,3 +316,8 @@ The Oct 5 refresh itself removed several NVIDIA NIM models after HTTP 410, updat
 Read-only account checks are preserved in [UPWORK_REVENUE_READINESS_2026-10-19.md](VERIFICATION/UPWORK_REVENUE_READINESS_2026-10-19.md). Upwork currently has 0 Connects, no proposals, no contracts, no invitations, a private low-quality profile, no portfolio and 0 completed jobs/reviews. One active AI-automation listing needs 14 Connects and has no hiring history; no application was attempted. One saved CRM/WhatsApp automation job lists $15–$38/hour but could not be opened for a live-status check and was not retried.
 
 Apollo balance was inspected only: 80 lead credits and 5,000 AI credits show zero used; no enrichment/search was performed. Direct-dial balance is inconsistent between endpoints (160 effective vs 80 remaining) and the web-search record counter is anomalous; neither is treated as spendable capacity. No paid credits, Connects or subscriptions were purchased.
+
+
+## HubSpot pipeline verification — 2026-10-19
+
+Read-only HubSpot CRM search returned 0 deals, 2 sample contacts and 1 company record. The records are [Brian Halligan (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894044249312?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), [Maria Johnson (Sample Contact)](https://app.hubspot.com/contacts/149568666/record/0-1/894054999231?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search), and [HubSpot / hubspot.com](https://app.hubspot.com/contacts/149568666/record/0-2/453775516896?utm_source=app_12360546_mcp&utm_medium=ai_agent&utm_campaign=search). No writes were performed. Do not count these as prospects, customers or revenue; current HubSpot pipeline is empty on the evidence reviewed.
