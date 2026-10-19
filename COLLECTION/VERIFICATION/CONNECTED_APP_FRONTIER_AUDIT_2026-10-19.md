@@ -261,3 +261,8 @@ The following addresses were observed in failed delivery threads and should not 
 - Current-main JSON/JSONC audit: 11,171 files, zero parse failures, 668,043,719 raw bytes; generated-state commit `60502ad15f35d970a267a8d0c3c23fc15bd18301`.
 - Capability groups 27,056; promotion-review items 18,774; restricted items 8,282. No unapproved asset installed.
 - Next bounded batch [39187054275](https://github.com/salamou1944/Project-/actions/runs/39187054275) is queued.
+
+
+## Additional Composio toolkit check — 2026-10-19
+- The tool directory exposes Google Docs, Google Drive, Gmail, Google Super, and Slack actions, but the connection-status check returned **no active connection** for each toolkit. No content was read and no connection flow was initiated.
+- These are not usable connected data sources in the current session; access requires the user to authorize the specific toolkit first.
