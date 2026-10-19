@@ -27,7 +27,7 @@ def load_nonempty(path):
         raise SystemExit(f"invalid JSON state {path}: {exc}")
 
 def validate_manifest_source_count(manifest):
-    """Validate rows against discovered repos/gists plus preserved missing rows."""
+    """Validate source rows against the bounded batch plus preserved prior rows."""
     sources = manifest.get("sources", [])
     if not isinstance(sources, list):
         raise SystemExit("manifest sources must be a list")
@@ -37,12 +37,31 @@ def validate_manifest_source_count(manifest):
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise SystemExit(f"manifest {key} must be a non-negative integer")
         counts[key] = value
-    expected = counts["repo_count"] + counts["gist_count"] + counts["preserved_sources_after_refresh_failure"]
+
+    # New bounded manifests separate the full metadata inventory from source rows
+    # processed in this run. Preserve compatibility with the historical full-sweep schema.
+    if "processed_repo_count" in manifest:
+        for key in ("processed_repo_count", "processed_gist_count", "preserved_prior_sources_not_selected"):
+            value = manifest.get(key)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise SystemExit(f"manifest {key} must be a non-negative integer")
+            counts[key] = value
+        expected = (
+            counts["processed_repo_count"] + counts["processed_gist_count"]
+            + counts["preserved_sources_after_refresh_failure"]
+            + counts["preserved_prior_sources_not_selected"]
+        )
+    else:
+        expected = counts["repo_count"] + counts["gist_count"] + counts["preserved_sources_after_refresh_failure"]
+
     if expected != len(sources):
         raise SystemExit(
-            f"manifest source rows ({len(sources)}) disagree with discovered inventory "
-            f"(repos={counts['repo_count']}, gists={counts['gist_count']}, "
-            f"preserved_missing={counts['preserved_sources_after_refresh_failure']}, expected={expected}); "
+            f"manifest source rows ({len(sources)}) disagree with inventory/batch accounting "
+            f"(repo_count={counts['repo_count']}, gist_count={counts['gist_count']}, "
+            f"processed_repo_count={counts.get('processed_repo_count', 'legacy')}, "
+            f"processed_gist_count={counts.get('processed_gist_count', 'legacy')}, "
+            f"preserved_after_refresh_failure={counts['preserved_sources_after_refresh_failure']}, "
+            f"preserved_not_selected={counts.get('preserved_prior_sources_not_selected', 0)}, expected={expected}); "
             "refusing to publish derived state"
         )
     return expected
