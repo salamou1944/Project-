@@ -1,0 +1,208 @@
+{
+  "canonical_source": "github:MariaDB/server",
+  "repo": "MariaDB/server",
+  "revision_sha": "327437ade1d6dc6e4e57a6f1723b4abe4ac6c4b4",
+  "default_branch": "main",
+  "pushed_at": "2026-10-19T00:55:11Z",
+  "repo_updated_at": "2026-10-18T19:36:06Z",
+  "license": "GPL-2.0",
+  "topics": [
+    "amazon-web-services",
+    "database",
+    "fulltext-search",
+    "galera",
+    "geographical-information-system",
+    "innodb",
+    "json",
+    "mariadb",
+    "mysql",
+    "nearest-neighbor-search",
+    "rdbms",
+    "relational-databases",
+    "sql",
+    "storage-engine",
+    "vector-database"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "storage/duckdb/docs/security-model.md",
+      "sha": null,
+      "content_sha256": "6137ace5991554ddd45535e09fc9abe1ccb648fecadf756fce553660224fe986",
+      "score": 279,
+      "content": "# Security Model: DuckDB and the `run_in_duckdb` Function\n\nThis document describes the security characteristics of the embedded DuckDB\ninstance used by the engine, the limitations of DuckDB's security model, and\nthe security side effects of the `run_in_duckdb()` SQL function. It is intended\nfor operators deciding whether and where to enable the engine, especially in\nshared or multi-tenant deployments.\n\n> **Summary:** `run_in_duckdb()` executes arbitrary DuckDB SQL, in-process,\n> as the server OS user, on a single shared DuckDB instance. It is gated by two\n> coarse checks: the `duckdb_allow_run_in_duckdb` system variable must be ON\n> (it is **OFF by default**), and the caller must hold the `SUPER` privilege.\n> DuckDB itself applies no access control. Treat the ability to call it as\n> equivalent to granting `FILE` plus arbitrary code-adjacent access on the\n> server host, and do not enable it in untrusted or multi-tenant environments.\n\n## 1. DuckDB's security model and its limitations\n\nDuckDB is an *embedded* analytical database. Its threat model assumes the\nembedding application is trusted and is responsible for access control. As a\nresult:\n\n- **No users, roles, or object privileges.** DuckDB has no `GRANT`/`REVOKE`\n  system comparable to a server DBMS. There is no per-table, per-column, or\n  per-row authorization inside DuckDB. Any SQL that reaches the DuckDB\n  connection runs with full rights over the whole DuckDB catalog.\n- **Filesystem and network access are SQL-level features.** DuckDB SQL can read\n  and write local files (`COPY ... TO`, `read_csv`, `read_parquet`,\n  `read_text`, `ATTACH`) and — once the relevant extensions are present — reach\n  the network (e.g. `httpfs`). These are normal SQL functions, not privileged\n  operations.\n- **Security is configuration-driven and must be locked.** DuckDB's intended\n  hardening mechanism is instance-creation configuration that is then frozen:\n  `enable_external_access`, `allowed_directories` / `allowed_paths`,\n  `autoinstall_known_extensions`, `autoload_known_extensions`,\n  `allow_community_extensions`, `allow_unsigned_extensions`, and\n  `lock_configuration`. If these are not set (and locked), the full SQL surface\n  is available.\n\nSee the upstream guidance: <https://duckdb.org/docs/operations_manual/securing_duckdb/overview>.\n\n## 2. How `run_in_duckdb()` works\n\n`run_in_duckdb(sql_string)` is registered as a `MariaDB_FUNCTION_PLUGIN`\nalongside the storage engine (`duckdb_udf.cc`, `ha_duckdb.cc`). When called:\n\n0. It enforces two access checks before doing anything else:\n   - if the `duckdb_allow_run_in_duckdb` system variable is OFF (the default),\n     it fails with `ER_OPTION_PREVENTS_STATEMENT`\n     (`--duckdb-allow-run-in-duckdb`);\n   - otherwise it requires the caller to hold the global `SUPER` privilege\n     (`check_global_access(thd, SUPER_ACL)`); non-`SUPER` callers get an\n     access-denied error and a `NULL` result.\n1. It takes the single string argument **verbatim** (the only transformation is\n   that backticks are rewritten to double quotes for identifier quoting).\n2. It opens a connection to the **single, server-wide** DuckDB instance\n   (`DuckdbManager::CreateConnection()`), backed by `duckdb.db` in the data\n   directory.\n3. It executes the string with `connection.Query()` and returns the rendered\n   result (or the DuckDB error text) as a binary string.\n\nTwo properties matter for security:\n\n- **Coarse privilege gating only.** Callers must pass the two checks above\n  (`duckdb_allow_run_in_duckdb=ON` plus `SUPER`). There is still no *dedicated*\n  privilege: `SUPER` is a broad server-admin capability, so gating is all-or-\n  nothing rather than per-function or per-object. Any `SUPER` account can call\n  it once the sysvar is enabled.\n- **No schema scoping.** Unlike normal engine query paths, the function does\n  **not** call `config_duckdb_env()`/`config_duckdb_session()`, so the statement\n  is not confined to the caller's current database — it runs against the entire\n  shared DuckDB catalog.\n\n## 3. Current instance configuration\n\nThe shared instance is created in `DuckdbManager::Initialize()` with\nperformance-oriented settings (memory limit, threads, temp directory,\ncheckpoint threshold). Relevant to security:\n\n- `enable_external_access` is **left at its default (enabled)** — filesystem\n  access is permitted.\n- `autoload_known_extensions=true` and `autoinstall_known_extensions=true` are\n  **explicitly enabled**, so known extensions can be fetched and loaded on\n  demand.\n- No `allowed_directories`, `allow_community_extensions=false`, or\n  `lock_configuration` restrictions are applied.\n\nThese are reasonable defaults for a single-tenant analytical box, but they leave\nthe DuckDB SQL surface fully open to anyone who can reach it via\n`run_in_duckdb()` — i.e. any `SUPER` account once\n`duckdb_allow_run_in_duckdb` is enabled.\n\n## 4. Security side effects of `run_in_duckdb()`\n\nBecause the function runs arbitrary DuckDB SQL, in-process, as the server OS\nuser, on the shared instance, a caller can:\n\n- **Bypass the MariaDB privilege system.** Reads and writes to any\n  `ENGINE=DuckDB` table (and the whole DuckDB catalog) are possible regardless\n  of MariaDB table/column/row grants, because authorization is checked by\n  MariaDB only for normal statements — not for SQL executed inside DuckDB.\n- **Read arbitrary local files** the server process can access\n  (e.g. `SELECT * FROM read_text('/etc/passwd')`,\n  `read_csv(...)`), enabling data exfiltration.\n- **Write arbitrary local files** as the server user\n  (e.g. `COPY (...) TO '/path/file'`), which can corrupt data, fill disks, or\n  serve as a step toward code execution.\n- **Reach the network** via auto-installable extensions such as `httpfs`,\n  enabling SSRF and exfiltration to remote endpoints.\n- **Attach external databases** (`ATTACH`) and read/modify their contents.\n- **Change global DuckDB settings** on the shared instance (e.g. `SET GLOBAL\n  memory_limit`/`threads`), enabling resource-exhaustion / denial of service\n  that affects all sessions.\n\nNote that MariaDB's usual file-access guards do **not** constrain these paths:\nneither the `FILE` privilege nor `secure_file_priv` is consulted for I/O\nperformed inside DuckDB.\n\n## 5. What is *not* enforced\n\n- No *dedicated* (per-function/per-object) privilege: access is gated only by\n  `duckdb_allow_run_in_duckdb` plus the broad `SUPER` privilege.\n- No mapping of MariaDB users/grants onto DuckDB objects.\n- No `secure_file_priv` / `FILE`-privilege enforcement for DuckDB file I/O.\n- No restriction on extension install/load or on external (file/network) access.\n- No per-user or per-schema isolation: a single DuckDB instance is shared by the\n  whole server.\n\n## 6. Recommendations\n\nFor operators:\n\n- **Do not enable the engine in untrusted or multi-tenant environments** where\n  untrusted `SUPER` accounts could call `run_in_duckdb()`. Treat the function as\n  a highly privileged, host-level capability.\n- **Keep `duckdb_allow_run_in_duckdb=OFF`** unless you actively need the\n  function; it is off by default. Enabling it exposes the full DuckDB SQL\n  surface to every `SUPER` account.\n- **Restrict who holds `SUPER`.** Because gating is coarse (`SUPER`, not a\n  per-function privilege), access control must be applied at the account level\n  by limiting `SUPER` grants to trusted operators.\n- **Run the server as a least-privileged OS user** and confine it (containers,\n  systemd sandboxing, restrictive filesystem permissions), since DuckDB file I/O\n  inherits the server process's rights.\n- **Isolate the data directory** so that files reachable by the server user do\n  not include secrets unrelated to the database.\n\n`run_in_duckdb()` is now gated behind the `duckdb_allow_run_in_duckdb` sysvar\n(OFF by default) and the `SUPER` privilege. Further engine hardening remains\nunimplemented (out of scope for this document but worth tracking): applying and\nlocking DuckDB security configuration at instance creation —\n`enable_external_access=false`, disabling extension autoinstall/autoload,\n`allow_community_extensions=false`, `allowed_directories`, and\n`lock_configuration=true` — and/or replacing the coarse `SUPER` check with a\ndedicated per-function privilege.\n\n## References\n\n- DuckDB — Securing DuckDB:\n  <https://duckdb.org/docs/operations_manual/securing_duckdb/overview>\n- `duckdb_udf.cc` — `run_in_duckdb()` implementation and access checks\n- `ha_duckdb.cc` — `duckdb_allow_run_in_duckdb` system variable\n- `runtime/duckdb_manager.cc` — shared instance configuration\n- `runtime/duckdb_query.cc` — query execution path\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/r/index_primary_decimal_with_fractional_seconds.result",
+      "sha": null,
+      "content_sha256": "ed4290fb7598578a4ae4f56490e42844a8bdce7bef89c92682bba480852ade20",
+      "score": 262,
+      "content": "DROP TABLE IF EXISTS releases;\nCREATE TABLE releases (\nversion DECIMAL(6, 3) PRIMARY KEY,\nmessage TEXT\n) DEFAULT CHARSET UTF8;\nINSERT INTO releases (version, message) VALUES (10.000, \"10th release!\");\nINSERT INTO releases (version, message) VALUES (10.001, \"minor fix.\");\nINSERT INTO releases (version, message) VALUES (999.999, \"the last release!\");\nSELECT * FROM releases;\nversion\tmessage\n10.000\t10th release!\n10.001\tminor fix.\n999.999\tthe last release!\nSELECT * FROM releases WHERE version BETWEEN \"9.000\" AND \"10.001\";\nversion\tmessage\n10.000\t10th release!\n10.001\tminor fix.\nDROP TABLE releases;\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/r/index_primary_decimal_without_fractional_seconds.result",
+      "sha": null,
+      "content_sha256": "fbdda3ad4e5df67eda9843c44c3efdebdbdeef76d63e7740afda1b2e918d6c4a",
+      "score": 262,
+      "content": "DROP TABLE IF EXISTS releases;\nCREATE TABLE releases (\nversion DECIMAL PRIMARY KEY,\nmessage TEXT\n) DEFAULT CHARSET UTF8;\nINSERT INTO releases (version, message) VALUES (1, \"the first release!!!\");\nINSERT INTO releases (version, message) VALUES (10, \"10th release!\");\nINSERT INTO releases (version, message) VALUES (999, \"the last release!\");\nSELECT * FROM releases;\nversion\tmessage\n1\tthe first release!!!\n10\t10th release!\n999\tthe last release!\nSELECT * FROM releases WHERE version BETWEEN \"1\" AND \"10\";\nversion\tmessage\n1\tthe first release!!!\n10\t10th release!\nDROP TABLE releases;\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/t/index_primary_decimal_without_fractional_seconds.test",
+      "sha": null,
+      "content_sha256": "9dddcc82d8bd70e14070c4f73d0273e241653f18ba1932c4cc7648ad269622d6",
+      "score": 262,
+      "content": "# Copyright(C) 2012 Kouhei Sutou <kou@clear-code.com>\n#\n# This library is free software; you can redistribute it and/or\n# modify it under the terms of the GNU Lesser General Public\n# License as published by the Free Software Foundation; either\n# version 2.1 of the License, or (at your option) any later version.\n#\n# This library is distributed in the hope that it will be useful,\n# but WITHOUT ANY WARRANTY; without even the implied warranty of\n# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n# Lesser General Public License for more details.\n#\n# You should have received a copy of the GNU Lesser General Public\n# License along with this library; if not, write to the Free Software\n# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1335  USA\n\n--source ../../include/mroonga/have_mroonga.inc\n\n--disable_warnings\nDROP TABLE IF EXISTS releases;\n--enable_warnings\n\nCREATE TABLE releases (\n  version DECIMAL PRIMARY KEY,\n  message TEXT\n) DEFAULT CHARSET UTF8;\n\nINSERT INTO releases (version, message) VALUES (1, \"the first release!!!\");\nINSERT INTO releases (version, message) VALUES (10, \"10th release!\");\nINSERT INTO releases (version, message) VALUES (999, \"the last release!\");\n\nSELECT * FROM releases;\n\nSELECT * FROM releases WHERE version BETWEEN \"1\" AND \"10\";\n\nDROP TABLE releases;\n\n--source ../../include/mroonga/have_mroonga_deinit.inc\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/t/column_decimal_fractional_seconds_with_index.test",
+      "sha": null,
+      "content_sha256": "45cd93e93cb28f3ec96ac13c84961005ce4c5def14f0ecf60c49816143deb9db",
+      "score": 262,
+      "content": "# Copyright(C) 2012 Kouhei Sutou <kou@clear-code.com>\n#\n# This library is free software; you can redistribute it and/or\n# modify it under the terms of the GNU Lesser General Public\n# License as published by the Free Software Foundation; either\n# version 2.1 of the License, or (at your option) any later version.\n#\n# This library is distributed in the hope that it will be useful,\n# but WITHOUT ANY WARRANTY; without even the implied warranty of\n# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n# Lesser General Public License for more details.\n#\n# You should have received a copy of the GNU Lesser General Public\n# License along with this library; if not, write to the Free Software\n# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1335  USA\n\n--source ../../include/mroonga/have_mroonga.inc\n\n--disable_warnings\nDROP TABLE IF EXISTS diaries;\n--enable_warnings\n\nCREATE TABLE diaries (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  title TEXT,\n  temperature DECIMAL(6, 3),\n  KEY (temperature)\n) DEFAULT CHARSET UTF8;\n\nINSERT INTO diaries (title, temperature) VALUES (\"clear day\", 21.281);\nINSERT INTO diaries (title, temperature) VALUES (\"rainy day\", 14.213);\nINSERT INTO diaries (title, temperature) VALUES (\"cloudy day\", 17.821);\n\nSELECT * FROM diaries;\n\nSELECT * FROM diaries WHERE temperature BETWEEN \"14.213\" AND \"17.821\";\n\nDROP TABLE diaries;\n\n--source ../../include/mroonga/have_mroonga_deinit.inc\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/t/column_decimal_fractional_seconds_without_index.test",
+      "sha": null,
+      "content_sha256": "9f43cb7196a2ea72cfc1474f3bba452d853db77c7c8b991a68f35672cb333215",
+      "score": 262,
+      "content": "# Copyright(C) 2012 Kouhei Sutou <kou@clear-code.com>\n#\n# This library is free software; you can redistribute it and/or\n# modify it under the terms of the GNU Lesser General Public\n# License as published by the Free Software Foundation; either\n# version 2.1 of the License, or (at your option) any later version.\n#\n# This library is distributed in the hope that it will be useful,\n# but WITHOUT ANY WARRANTY; without even the implied warranty of\n# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n# Lesser General Public License for more details.\n#\n# You should have received a copy of the GNU Lesser General Public\n# License along with this library; if not, write to the Free Software\n# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1335  USA\n\n--source ../../include/mroonga/have_mroonga.inc\n\n--disable_warnings\nDROP TABLE IF EXISTS diaries;\n--enable_warnings\n\nCREATE TABLE diaries (\n  id INT PRIMARY KEY AUTO_INCREMENT,\n  title TEXT,\n  temperature DECIMAL(6, 3)\n) DEFAULT CHARSET UTF8;\n\nINSERT INTO diaries (title, temperature) VALUES (\"clear day\", 21.281);\nINSERT INTO diaries (title, temperature) VALUES (\"rainy day\", 14.213);\nINSERT INTO diaries (title, temperature) VALUES (\"cloudy day\", 17.821);\n\nSELECT * FROM diaries;\n\nSELECT * FROM diaries WHERE temperature BETWEEN \"14.213\" AND \"17.821\";\n\nDROP TABLE diaries;\n\n--source ../../include/mroonga/have_mroonga_deinit.inc\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/t/index_primary_decimal_with_fractional_seconds.test",
+      "sha": null,
+      "content_sha256": "d7f717b1481b62e4a02c36d8e82e3746df042652af897559cf0b21f1b31c5c8c",
+      "score": 262,
+      "content": "# Copyright(C) 2012 Kouhei Sutou <kou@clear-code.com>\n#\n# This library is free software; you can redistribute it and/or\n# modify it under the terms of the GNU Lesser General Public\n# License as published by the Free Software Foundation; either\n# version 2.1 of the License, or (at your option) any later version.\n#\n# This library is distributed in the hope that it will be useful,\n# but WITHOUT ANY WARRANTY; without even the implied warranty of\n# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n# Lesser General Public License for more details.\n#\n# You should have received a copy of the GNU Lesser General Public\n# License along with this library; if not, write to the Free Software\n# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1335  USA\n\n--source ../../include/mroonga/have_mroonga.inc\n\n--disable_warnings\nDROP TABLE IF EXISTS releases;\n--enable_warnings\n\nCREATE TABLE releases (\n  version DECIMAL(6, 3) PRIMARY KEY,\n  message TEXT\n) DEFAULT CHARSET UTF8;\n\nINSERT INTO releases (version, message) VALUES (10.000, \"10th release!\");\nINSERT INTO releases (version, message) VALUES (10.001, \"minor fix.\");\nINSERT INTO releases (version, message) VALUES (999.999, \"the last release!\");\n\nSELECT * FROM releases;\n\nSELECT * FROM releases WHERE version BETWEEN \"9.000\" AND \"10.001\";\n\nDROP TABLE releases;\n\n--source ../../include/mroonga/have_mroonga_deinit.inc\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/r/column_decimal_fractional_seconds_without_index.result",
+      "sha": null,
+      "content_sha256": "dc0c402efd8e301204c585b3a371ceea7edd8aaec91142e6575ce06d42686016",
+      "score": 262,
+      "content": "DROP TABLE IF EXISTS diaries;\nCREATE TABLE diaries (\nid INT PRIMARY KEY AUTO_INCREMENT,\ntitle TEXT,\ntemperature DECIMAL(6, 3)\n) DEFAULT CHARSET UTF8;\nINSERT INTO diaries (title, temperature) VALUES (\"clear day\", 21.281);\nINSERT INTO diaries (title, temperature) VALUES (\"rainy day\", 14.213);\nINSERT INTO diaries (title, temperature) VALUES (\"cloudy day\", 17.821);\nSELECT * FROM diaries;\nid\ttitle\ttemperature\n1\tclear day\t21.281\n2\trainy day\t14.213\n3\tcloudy day\t17.821\nSELECT * FROM diaries WHERE temperature BETWEEN \"14.213\" AND \"17.821\";\nid\ttitle\ttemperature\n2\trainy day\t14.213\n3\tcloudy day\t17.821\nDROP TABLE diaries;\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/storage/r/column_decimal_fractional_seconds_with_index.result",
+      "sha": null,
+      "content_sha256": "ddd481751700997ea77d8a57d9eb090c33c7bb5bf777a9079e48eb1de0380a17",
+      "score": 262,
+      "content": "DROP TABLE IF EXISTS diaries;\nCREATE TABLE diaries (\nid INT PRIMARY KEY AUTO_INCREMENT,\ntitle TEXT,\ntemperature DECIMAL(6, 3),\nKEY (temperature)\n) DEFAULT CHARSET UTF8;\nINSERT INTO diaries (title, temperature) VALUES (\"clear day\", 21.281);\nINSERT INTO diaries (title, temperature) VALUES (\"rainy day\", 14.213);\nINSERT INTO diaries (title, temperature) VALUES (\"cloudy day\", 17.821);\nSELECT * FROM diaries;\nid\ttitle\ttemperature\n1\tclear day\t21.281\n2\trainy day\t14.213\n3\tcloudy day\t17.821\nSELECT * FROM diaries WHERE temperature BETWEEN \"14.213\" AND \"17.821\";\nid\ttitle\ttemperature\n2\trainy day\t14.213\n3\tcloudy day\t17.821\nDROP TABLE diaries;\n"
+    },
+    {
+      "path": "mysql-test/suite/storage_engine/trx/support_transactions.inc",
+      "sha": null,
+      "content_sha256": "9222b69e13097b2021fa9c4760048c4c7139e7e7b721e1e067e8c8aac24ec3b6",
+      "score": 254,
+      "content": "if (!`SELECT transactions='YES' FROM INFORMATION_SCHEMA.ENGINES WHERE engine = '$storage_engine'`)\n{\n  --echo # -- WARNING ----------------------------------------------------------------\n  --echo # According to I_S.ENGINES, $storage_engine does not support transactions.\n  --echo # If it is true, the test will most likely fail; you can \n  --echo # either create an rdiff file, or add the test to disabled.def.\n  --echo # If transactions should be supported, check the data in Information Schema.\n  --echo # ---------------------------------------------------------------------------\n}\n\n"
+    },
+    {
+      "path": "plugin/auth_gssapi/README.md",
+      "sha": null,
+      "content_sha256": "687586327dd9fe90d80ed76290672a316c27a9f23e7de826db78db92d3b82536",
+      "score": 251,
+      "content": "# GSSAPI/SSPI authentication for MariaDB\n\nThis article gives instructions on configuring GSSAPI authentication plugin\nfor MariaDB for passwordless login.\n\nOn Unix systems, GSSAPI is usually synonymous with Kerberos authentication.\nWindows has slightly different but very similar API called SSPI,  that along with Kerberos, also supports NTLM authentication.\n\nThis plugin includes support for Kerberos on Unix, but also can be used as for Windows authentication with or without domain\nenvironment.\n\n## Server-side preparations on Unix\nTo use the plugin, some preparation need to be done on the server side on Unixes.\nMariaDB server will need read access to the Kerberos keytab file, that contains  service principal name for the MariaDB server.\n\n\nIf you are using **Unix Kerberos KDC (MIT,Heimdal)**\n\n-\tCreate service principal using kadmin tool\n\n```\nkadmin -q \"addprinc -randkey mariadb/host.domain.com\"\n```\n\n(replace host.domain.com with fully qualified DNS name for the server host)\n\n-\tExport the newly created user to the keytab file\n\n```\nkadmin -q \"ktadd -k /path/to/mariadb.keytab mariadb/host.domain.com\"\n```\n\nMore details can be found [here](http://www.microhowto.info/howto/create_a_service_principal_using_mit_kerberos.html)\nand [here](http://www.microhowto.info/howto/add_a_host_or_service_principal_to_a_keytab_using_mit_kerberos.html)\n\nIf you are using **Windows Active Directory KDC**\nyou can need to create keytab using ktpass.exe tool on Windows,  map principal user to an existing domain user like this\n\n```\nktpass.exe /princ mariadb/host.domain.com@DOMAIN.COM /mapuser someuser /pass MyPas$w0rd /out mariadb.keytab /crypto all /ptype KRB5_NT_PRINCIPAL /mapop set\n```\n\nand then transfer the keytab file to the Unix server. See [Microsoft documentation](https://technet.microsoft.com/en-us/library/cc753771.aspx) for details.\n\n\n## Server side preparations on Windows.\nUsually nothing need to be done.  MariaDB server should to run on a domain joined machine, either as NetworkService account\n(which is default if it runs as service) or run under any other domain account credentials.\nCreating service principal is not required here (but you can still do it using [_setspn_](https://technet.microsoft.com/en-us/library/cc731241.aspx) tool)\n\n\n## Installing plugin\n-\tStart the server\n\n-\tOn Unix, edit my the my.cnf/my.ini configuration file, set the parameter gssapi-keytab-path to point to previously\ncreated keytab path.\n\n```\n\tgssapi-keytab-path=/path/to/mariadb.keytab\n```\n\n-\tOptionally on Unix, in case the service principal name differs from default mariadb/host.domain.com@REALM,\nconfigure alternative principal name with\n\n```\n    gssapi-principal-name=alternative/principalname@REALM\n```\n\n-\tIn mysql command line client, execute\n\n```\n\tINSTALL SONAME 'auth_gssapi'\n```\n\n## Creating users\n\nNow, you can create a user for GSSAPI/SSPI authentication. CREATE USER command, for Kerberos user\nwould be like this (*long* form, see below for short one)\n\n```\nCREATE USER usr1 IDENTIFIED WITH gssapi AS 'usr1@EXAMPLE.COM';\n```\n\n(replace  with real username and realm)\n\nThe part after AS is mechanism specific, and needs to be ``machine\\\\usr1`` for Windows users identified with NTLM.\n\nYou may also use alternative *short* form of CREATE USER\n\n```\nCREATE USER usr1 IDENTIFIED WITH gssapi;\n```\n\nIf this syntax is used, realm part is *not* used for comparison\nthus 'usr1@EXAMPLE.COM', 'usr1@EXAMPLE.CO.UK' and 'mymachine\\usr1' will all identify as 'usr1'.\n\n## Login as GSSAPI user with command line clients\n\nUsing command line client, do\n\n```\nmysql --plugin-dir=/path/to/plugin-dir -u usr1\n```\n\n## Plugin variables\n-\t**gssapi-keytab-path** (Unix only) - Path to the server keytab file\n-\t**gssapi-principal-name** - name of the service principal.\n-\t**gssapi-mech-name** (Windows only) - Name of the SSPI package used by server. Can be either 'Kerberos' or 'Negotiate'.\n Defaults to 'Negotiate' (both Kerberos and NTLM users can connect)\n Set it to 'Kerberos', to prevent less secure NTLM in domain environments,  but leave it as default(Negotiate)\n to allow non-domain environment (e.g if server does not run in domain environment).\n\n\n## Implementation\n\nOverview of the protocol between client and server\n\n1. Server : Construct gssapi-principal-name if not set in my.cnf. On Unixes defaults to hostbased name for service \"mariadb\". On Windows to user's or machine's domain names.\nAcquire credentials for gssapi-principal-name with ```gss_acquire_cred() / AcquireSecurityCredentials()```.\nSend packet with principal name and mech ```\"gssapi-principal-name\\0gssapi-mech-name\\0\"``` to client ( on Unix, empty string used for gssapi-mech)\n\n2. Client: execute ```gss_init_sec_context() / InitializeSecurityContext()``` passing gssapi-principal-name / gssapi-mech-name parameters.\nSend resulting GSSAPI blob to server.\n\n3. Server : receive blob from client, execute ```gss_accept_sec_context()/ AcceptSecurityContext()```, send resulting blob back to client\n\n4. Perform  2. and 3. can until both client and server decide that authentication is done, or until some error occurred. If authentication was successful, GSSAPI context (an opaque structure) is generated on both client and server sides.\n\n5. Server : Client name is extracted from the context, and compared to the name provided by client(with or without realm). If name matches, plugin returns success.\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/feature/t/slave_transaction_retry_errors.cnf",
+      "sha": null,
+      "content_sha256": "e20f73ef640834f81d992d4ed19caad4d840aa3667959e1c70ec025c11c3c58d",
+      "score": 248,
+      "content": "!include include/default_mysqld.cnf\n!include include/default_client.cnf\n!include ../my_1_1.cnf\n!include ../my_2_1.cnf\n!include ../my_4_1.cnf\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/bugfix/t/slave_transaction_retry_errors_5digit.cnf",
+      "sha": null,
+      "content_sha256": "e31e509ee18e289283be644f8ffe87fc077b945d99025abe4b1d97b8b6252118",
+      "score": 248,
+      "content": "!include include/default_mysqld.cnf\n!include include/default_client.cnf\n!include ../my_1_1.cnf\n!include ../my_2_1.cnf\n!include ../my_4_1.cnf\n[mysqld.4.1]\nslave_transaction_retry_errors=\"10000,20000,30000\"\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/bugfix/include/slave_transaction_retry_errors_5digit_init.inc",
+      "sha": null,
+      "content_sha256": "c1d894ca4c865ae68252c9fcefc4128ef42829bba9a7e2ed949a45b7e16efd6b",
+      "score": 248,
+      "content": "--disable_warnings\n--disable_query_log\n--disable_result_log\n--source ../t/test_init.inc\n--source ../t/slave_test_init.inc\n--connection slave1_1\n--source ../include/init_spider.inc\n--enable_result_log\n--enable_query_log\n--enable_warnings\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/feature/t/slave_transaction_retry_errors.test",
+      "sha": null,
+      "content_sha256": "5619f475a774fa5a21c20b8ebf2ee97cd4b1b33336227ad8f0e50abb80224afd",
+      "score": 248,
+      "content": "--source ../include/slave_transaction_retry_errors_init.inc\n--echo\n\n--connection slave1_1\nSHOW VARIABLES LIKE 'slave_transaction_retry_errors';\n\n--source ../include/slave_transaction_retry_errors_deinit.inc\n--echo\n--echo end of test\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/bugfix/t/slave_transaction_retry_errors_5digit.test",
+      "sha": null,
+      "content_sha256": "f68a959a0b24ffb64df3bc154fb009283e96b64b5c634752c1dc351780548d95",
+      "score": 248,
+      "content": "--source ../include/slave_transaction_retry_errors_5digit_init.inc\n--echo\n\n--connection slave1_1\nSHOW VARIABLES LIKE 'slave_transaction_retry_errors';\n\n--source ../include/slave_transaction_retry_errors_5digit_deinit.inc\n--echo\n--echo end of test\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/feature/include/slave_transaction_retry_errors_deinit.inc",
+      "sha": null,
+      "content_sha256": "6752c453d854f8d60d5e5c7235e5684c7dc10b91fd951c507199251040660709",
+      "score": 248,
+      "content": "--connection slave1_1\n--disable_warnings\n--disable_query_log\n--disable_result_log\n--source ../include/deinit_spider.inc\n--source ../t/slave_test_deinit.inc\n--source ../t/test_deinit.inc\n--enable_result_log\n--enable_query_log\n--enable_warnings\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/feature/r/slave_transaction_retry_errors.result",
+      "sha": null,
+      "content_sha256": "970c8d5f409e4ec52d2f263857e75a77747a47726356aad2d168bf4017780003",
+      "score": 248,
+      "content": "for master_1\nfor child2\nchild2_1\nchild2_2\nchild2_3\nfor child3\nfor slave1_1\ninclude/start_slave.inc\n\nconnection slave1_1;\nSHOW VARIABLES LIKE 'slave_transaction_retry_errors';\nVariable_name\tValue\nslave_transaction_retry_errors\t1158,1159,1160,1161,1205,1213,1020,1429,2013,12701\nconnection slave1_1;\nfor slave1_1\nfor master_1\nfor child2\nchild2_1\nchild2_2\nchild2_3\nfor child3\n\nend of test\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/bugfix/r/slave_transaction_retry_errors_5digit.result",
+      "sha": null,
+      "content_sha256": "72c506719f26c716b6207a9fc433eef0d7a063cca969049ec2a991e02d969802",
+      "score": 248,
+      "content": "for master_1\nfor child2\nchild2_1\nchild2_2\nchild2_3\nfor child3\nfor slave1_1\ninclude/start_slave.inc\n\nconnection slave1_1;\nSHOW VARIABLES LIKE 'slave_transaction_retry_errors';\nVariable_name\tValue\nslave_transaction_retry_errors\t1158,1159,1160,1161,1205,1213,1020,1429,2013,12701,10000,20000,30000\nconnection slave1_1;\nfor slave1_1\nfor master_1\nfor child2\nchild2_1\nchild2_2\nchild2_3\nfor child3\n\nend of test\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/bugfix/include/slave_transaction_retry_errors_5digit_deinit.inc",
+      "sha": null,
+      "content_sha256": "6752c453d854f8d60d5e5c7235e5684c7dc10b91fd951c507199251040660709",
+      "score": 248,
+      "content": "--connection slave1_1\n--disable_warnings\n--disable_query_log\n--disable_result_log\n--source ../include/deinit_spider.inc\n--source ../t/slave_test_deinit.inc\n--source ../t/test_deinit.inc\n--enable_result_log\n--enable_query_log\n--enable_warnings\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/wrapper/t/transaction_query_cache.test",
+      "sha": null,
+      "content_sha256": "1e86f573e05b03058a00ebd59ef467b9f9f3156cbfcb065ba2f706cfad834e94",
+      "score": 248,
+      "content": "# Copyright(C) 2012 Kentoku SHIBA\n#\n# This library is free software; you can redistribute it and/or\n# modify it under the terms of the GNU Lesser General Public\n# License as published by the Free Software Foundation; either\n# version 2.1 of the License, or (at your option) any later version.\n#\n# This library is distributed in the hope that it will be useful,\n# but WITHOUT ANY WARRANTY; without even the implied warranty of\n# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU\n# Lesser General Public License for more details.\n#\n# You should have received a copy of the GNU Lesser General Public\n# License along with this library; if not, write to the Free Software\n# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1335  USA\n\n--source include/have_innodb.inc\n--source ../../include/mroonga/have_mroonga.inc\n\nSET @tmp_query_cache_size = @@query_cache_size;\nSET GLOBAL query_cache_size = 1048576;\n\n--disable_warnings\nDROP TABLE IF EXISTS simple_table;\n--enable_warnings\n\nCREATE TABLE simple_table (\n  id INT PRIMARY KEY\n) COMMENT = 'ENGINE \"InnoDB\"' DEFAULT CHARSET=UTF8;\nSHOW CREATE TABLE simple_table;\n\nINSERT INTO simple_table (id) VALUES (1),(2);\n\ndisable_query_log;\nCONNECT(second_connection, localhost, root);\nenable_query_log;\nUSE test;\nSTART TRANSACTION;\nINSERT INTO simple_table (id) VALUES (3);\n\ndisable_query_log;\nCONNECTION default;\nenable_query_log;\nSELECT * FROM simple_table;\n\ndisable_query_log;\nCONNECTION second_connection;\nenable_query_log;\nCOMMIT;\n\ndisable_query_log;\nCONNECTION default;\nenable_query_log;\nSELECT * FROM simple_table;\n\nDROP TABLE simple_table;\ndisable_query_log;\nDISCONNECT second_connection;\nenable_query_log;\n\nSET GLOBAL query_cache_size = @tmp_query_cache_size;\n\n--source ../../include/mroonga/have_mroonga_deinit.inc\n"
+    },
+    {
+      "path": "storage/mroonga/mysql-test/mroonga/wrapper/r/transaction_query_cache.result",
+      "sha": null,
+      "content_sha256": "1aefbf322851afc4c14f8ac9cd5d723d7873995bb635f2fe57fc2eae234da8f1",
+      "score": 248,
+      "content": "SET @tmp_query_cache_size = @@query_cache_size;\nSET GLOBAL query_cache_size = 1048576;\nDROP TABLE IF EXISTS simple_table;\nCREATE TABLE simple_table (\nid INT PRIMARY KEY\n) COMMENT = 'ENGINE \"InnoDB\"' DEFAULT CHARSET=UTF8;\nSHOW CREATE TABLE simple_table;\nTable\tCreate Table\nsimple_table\tCREATE TABLE `simple_table` (\n  `id` int(11) NOT NULL,\n  PRIMARY KEY (`id`)\n) ENGINE=Mroonga DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci COMMENT='ENGINE \"InnoDB\"'\nINSERT INTO simple_table (id) VALUES (1),(2);\nUSE test;\nSTART TRANSACTION;\nINSERT INTO simple_table (id) VALUES (3);\nSELECT * FROM simple_table;\nid\n1\n2\nCOMMIT;\nSELECT * FROM simple_table;\nid\n1\n2\n3\nDROP TABLE simple_table;\nSET GLOBAL query_cache_size = @tmp_query_cache_size;\n"
+    },
+    {
+      "path": "storage/spider/mysql-test/spider/feature/include/slave_transaction_retry_errors_init.inc",
+      "sha": null,
+      "content_sha256": "c1d894ca4c865ae68252c9fcefc4128ef42829bba9a7e2ed949a45b7e16efd6b",
+      "score": 248,
+      "content": "--disable_warnings\n--disable_query_log\n--disable_result_log\n--source ../t/test_init.inc\n--source ../t/slave_test_init.inc\n--connection slave1_1\n--source ../include/init_spider.inc\n--enable_result_log\n--enable_query_log\n--enable_warnings\n"
+    },
+    {
+      "path": "storage/rocksdb/mysql-test/rocksdb_hotbackup/include/setup_replication_gtid.sh",
+      "sha": null,
+      "content_sha256": "fd1239e260dd5df049083806827346997dc184a78ab38111ae7901c3e059dd67",
+      "score": 227,
+      "content": "#!/bin/bash\n\nset -e\n\nbinlog_line=($(grep -o \"Last binlog file position [0-9]*, file name .*\\.[0-9]*\" ${MYSQLTEST_VARDIR}/log/mysqld.2.err | tail -1))\nbinlog_pos=${binlog_line[4]%?}\nbinlog_file=${binlog_line[7]}\n\nsql=\"show gtid_executed in '$binlog_file' from $binlog_pos\"\nresult=($($MYSQL --defaults-group-suffix=.1 -e \"$sql\"))\ngtid_executed=${result[1]}\n\nsql=\"reset master;\"\nsql=\"$sql reset slave;\"\nsql=\"$sql change master to master_host='127.0.0.1', master_port=${MASTER_MYPORT}, master_user='root', master_auto_position=1, master_connect_retry=1;\"\nsql=\"$sql set global gtid_purged='$gtid_executed';\"\nsql=\"$sql start slave;\"\nsql=\"$sql stop slave;\"\nsql=\"$sql change master to master_auto_position=0;\"\nsql=\"$sql start slave;\"\n$MYSQL --defaults-group-suffix=.2 -e \"$sql\"\necho \"$sql\" > ${MYSQL_TMP_DIR}/gtid_stmt\n"
+    }
+  ],
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-19T01:39:07.577092+00:00"
+}
