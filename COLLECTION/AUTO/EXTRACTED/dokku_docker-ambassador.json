@@ -1,0 +1,96 @@
+{
+  "canonical_source": "github:dokku/docker-ambassador",
+  "repo": "dokku/docker-ambassador",
+  "revision_sha": "b5ea087ff32aa33a26cc10b7e972b6bf10b11d5c",
+  "default_branch": "main",
+  "pushed_at": "2026-09-30T07:44:50Z",
+  "repo_updated_at": "2026-09-18T01:39:23Z",
+  "license": "MIT",
+  "topics": [
+    "ambassador",
+    "docker",
+    "docker-image",
+    "dokku",
+    "paas"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/build.yaml",
+      "sha": null,
+      "content_sha256": "0f99fdb540218e95487310f726ccfdb7663c7ba838faf28f5f83a5370bd2847a",
+      "score": 126,
+      "content": "---\nname: build\n\n# yamllint disable-line rule:truthy\non:\n  pull_request:\n    branches:\n      - \"*\"\n  push:\n    branches:\n      - \"main\"\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n\njobs:\n  docker:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n\n      - name: Docker meta\n        id: meta\n        uses: docker/metadata-action@v6\n        with:\n          images: |\n            dokku/ambassador\n          tags: |\n            type=semver,pattern={{version}}\n            type=semver,pattern={{major}}.{{minor}}\n            type=semver,pattern={{major}}\n            type=sha\n\n      - name: Set up QEMU\n        uses: docker/setup-qemu-action@v4\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v4\n\n      - name: Login to DockerHub\n        if: ${{ github.event_name != 'pull_request' }}\n        uses: docker/login-action@v4\n        with:\n          username: ${{ secrets.DOCKERHUB_USERNAME }}\n          password: ${{ secrets.DOCKERHUB_TOKEN }}\n\n      - name: Build and push\n        uses: docker/build-push-action@v7\n        with:\n          context: .\n          platforms: linux/amd64,linux/arm64,linux/arm\n          push: false\n          tags: ${{ steps.meta.outputs.tags }}\n          labels: ${{ steps.meta.outputs.labels }}\n"
+    },
+    {
+      "path": ".github/workflows/bump-version.yaml",
+      "sha": null,
+      "content_sha256": "800833aa8c5f85ba045f3b6e4d20ce091c9aafbd0f4b173321080b8a89ee9426",
+      "score": 126,
+      "content": "---\nname: \"bump-version\"\n\n# yamllint disable-line rule:truthy\non:\n  workflow_dispatch:\n    inputs:\n      bump_type:\n        description: \"Bump type\"\n        default: \"patch\"\n        required: true\n        type: choice\n        options:\n          - patch\n          - minor\n          - major\n\nenv:\n  GITHUB_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}\n\njobs:\n  bump-version:\n    name: bump-version\n    runs-on: ubuntu-24.04\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n          token: ${{ env.GITHUB_ACCESS_TOKEN }}\n\n      - name: Get Latest Tag\n        id: latest-tag\n        run: |\n          echo GIT_LATEST_TAG=\"$(git describe --tags \"$(git rev-list --tags --max-count=1)\")\" >>\"$GITHUB_OUTPUT\"\n\n      - name: Compute Next Tag\n        id: next-tag\n        uses: docker://ghcr.io/dokku/semver-generator:latest\n        with:\n          bump: ${{ github.event.inputs.bump_type }}\n          input: ${{ steps.latest-tag.outputs.GIT_LATEST_TAG }}\n\n      - name: Create and Push Tag\n        run: |\n          git config --global user.name 'Dokku Bot'\n          git config --global user.email no-reply@dokku.com\n          git tag \"$GIT_NEXT_TAG\"\n          git push origin \"$GIT_NEXT_TAG\"\n        env:\n          GIT_NEXT_TAG: ${{ steps.next-tag.outputs.version }}\n"
+    },
+    {
+      "path": ".github/workflows/release.yaml",
+      "sha": null,
+      "content_sha256": "84dd8143a511ee0592fcb3bfdba144f3ad32a3eb4602fdd34472aa62ff816978",
+      "score": 126,
+      "content": "---\nname: release\n\n# yamllint disable-line rule:truthy\non:\n  push:\n    tags:\n      - \"*\"\n\njobs:\n  docker:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n\n      - name: Docker meta\n        id: meta\n        uses: docker/metadata-action@v6\n        with:\n          images: |\n            dokku/ambassador\n          tags: |\n            type=semver,pattern={{version}}\n            type=semver,pattern={{major}}.{{minor}}\n            type=semver,pattern={{major}}\n            type=sha\n            type=raw,value=latest\n\n      - name: Set up QEMU\n        uses: docker/setup-qemu-action@v4\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v4\n\n      - name: Login to DockerHub\n        uses: docker/login-action@v4\n        with:\n          username: ${{ secrets.DOCKERHUB_USERNAME }}\n          password: ${{ secrets.DOCKERHUB_TOKEN }}\n\n      - name: Build and push\n        uses: docker/build-push-action@v7\n        with:\n          context: .\n          platforms: linux/amd64,linux/arm64,linux/arm\n          push: true\n          tags: ${{ steps.meta.outputs.tags }}\n          labels: ${{ steps.meta.outputs.labels }}\n\n      - name: Create Release\n        uses: softprops/action-gh-release@v3\n        with:\n          generate_release_notes: true\n"
+    },
+    {
+      "path": ".github/workflows/lint.yaml",
+      "sha": null,
+      "content_sha256": "a710cd76adb68981f77e379b0c273a0ebb410011c4d3f7cb9e0818e2d84c4871",
+      "score": 126,
+      "content": "---\nname: \"lint\"\n\n# yamllint disable-line rule:truthy\non:\n  pull_request:\n    branches:\n      - \"*\"\n  push:\n    branches:\n      - \"main\"\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\n\njobs:\n  hadolint:\n    name: hadolint\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Clone\n        uses: actions/checkout@v7\n      - name: Run hadolint\n        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387\n        # v1.5.0 => c27bd9edc1e95eed30474db8f295ff5807ebca14\n\n  markdown-lint:\n    name: markdown-lint\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Clone\n        uses: actions/checkout@v7\n      - name: Run markdown-lint\n        uses: avto-dev/markdown-lint@04d43ee9191307b50935a753da3b775ab695eceb\n        # v1.5.0 => 04d43ee9191307b50935a753da3b775ab695eceb\n        with:\n          config: \".github/linters/.markdown-lint.yaml\"\n          args: \"./README.md\"\n\n  shellcheck:\n    name: shellcheck\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Clone\n        uses: actions/checkout@v7\n      - name: Run shellcheck\n        uses: ludeeus/action-shellcheck@00cae500b08a931fb5698e11e79bfbd38e612a38\n        # 1.1.0 => 94e0aab03ca135d11a35e5bfc14e6746dc56e7e9\n        env:\n          SHELLCHECK_OPTS: -s bash\n  shfmt:\n    name: shfmt\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Clone\n        uses: actions/checkout@v7\n      - name: Run shfmt\n        uses: luizm/action-sh-checker@883217215b11c1fabbf00eb1a9a041f62d74c744\n        # v0.3.0 => 7f44869033b40ee4ffe7dc76c87a1bc66e3d025a\n        env:\n          GITHUB_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}\n          SHFMT_OPTS: -l -d -i 2\n        with:\n          sh_checker_shellcheck_disable: true\n          sh_checker_comment: true\n\n  yamllint:\n    name: yamllint\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Clone\n        uses: actions/checkout@v7\n      - name: Run yamllint\n        uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c\n        # v3.0.2 => c19bd0523a9011c3a3960fe6640a0882b59af15d\n        with:\n          config_file: \".github/linters/.yamllint.yaml\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "65378445fc1e0944f7dc821fd1098ba871c365002d810e136fdb239620cf39fb",
+      "score": 100,
+      "content": "# docker-ambassador\n\n[![dokku/ambassador](http://dockeri.co/image/dokku/ambassador)](https://hub.docker.com/r/dokku/ambassador)\n\nA maintained version of the [ambassador linking](https://github.com/SvenDowideit/dockerfiles/tree/master/ambassador) pattern.\n\nThis ambassador image can be used to automatically proxy all exposed ports from the linked container, or to proxy a specified port at a specific IP address or hostname.\n\n## Use Docker linking to autoattach to all exposed ports\n\n```shell\n# start a container that exposes a port\ndocker run --rm --name nginx.1 nginx\n\n# run the ambassador \ndocker run --rm -ti --link nginx.1 -p 9999:80 -p 8888:443 dokku/ambassador\n```\n\nRunning the ambassador container will result in output lke the following.\n\n```text\nConnecting to 172.17.0.4:80 172.17.0.4:443...\n2016/01/12 13:03:14 socat[19] E connect(5, AF=2 172.17.0.4:443, 16): Connection refused\n```\n\nYou can also proxy exposed ports from more than one container by using more than one --link, but only if there is no duplication of exposed container ports.\n\n## Specify host and port\n\nThis will allow you Dynamically map a container port after its been created.\n\nFor example:\n\n```shell\n# start a container that exposes a port\ndocker run --rm --name nginx.1 nginx\n```\n\nIn the above example, nginx is running, but no-one can make requests to it. By running:\n\n```shell\n# Assuming the nginx.1 container is on IP `172.17.0.4`\ndocker run --rm -p 9999:80 dokku/ambassador 172.17.0.4 80\n```\n\nYou will now be able to make requests to the web server on `http://localhost:9999`\n\n## Credit\n\nThanks to Sven Dowideit for providing the initial implementation.\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "c8ed976e6a7f8ce117c5e976af54b486e7958b48fbd175e933cb95ee93a9f07a",
+      "score": 85,
+      "content": "FROM alpine:3.24.2\n\n# hadolint ignore=DL3018\nRUN apk --no-cache add socat\n\nCOPY entrypoint /entrypoint\n\nENTRYPOINT [\"/entrypoint\"]\n"
+    },
+    {
+      "path": ".github/dependabot.yaml",
+      "sha": null,
+      "content_sha256": "4e43fab744c0dd01457106c7c75632af16a80cab4fd747243a5179549a71a45f",
+      "score": 33,
+      "content": "---\nversion: 2\nupdates:\n  - package-ecosystem: docker\n    directory: \"/\"\n    schedule:\n      interval: daily\n    open-pull-requests-limit: 10\n    ignore:\n      - dependency-name: alpine\n        versions:\n          - 3.13.1\n          - 3.13.2\n          - 3.13.3\n          - 3.13.4\n  - package-ecosystem: \"github-actions\"\n    directory: \"/\"\n    schedule:\n      interval: daily\n    open-pull-requests-limit: 10\n"
+    },
+    {
+      "path": ".github/linters/.markdown-lint.yaml",
+      "sha": null,
+      "content_sha256": "356408c04880b9e7b284c1fd92e85fb7a7555c468e77b8269ea6afefeaa7d387",
+      "score": 31,
+      "content": "---\ndefault: true\n\n# Line length\n# https://github.com/DavidAnson/markdownlint/blob/master/doc/Rules.md#md013\nMD013: false\n"
+    },
+    {
+      "path": ".github/linters/.yamllint.yaml",
+      "sha": null,
+      "content_sha256": "0d4e271ef1f2557033e14d4c604c91b51a5747fec53c79f4fddbd3f37414b4af",
+      "score": 31,
+      "content": "---\nextends: default\n\nrules:\n  line-length: disable\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:37:31.151257+00:00"
+}

@@ -1,0 +1,48 @@
+{
+  "canonical_source": "github:restic/builder",
+  "repo": "restic/builder",
+  "revision_sha": "a3f22e01ec5908b45b72f9bea5408a8ab7619459",
+  "default_branch": "master",
+  "pushed_at": "2026-06-09T16:43:40Z",
+  "repo_updated_at": "2026-10-13T19:36:52Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "55da61587f19555c6fdc8b04cec946584f68a3fbd4f44ffa4112e6920c8e06ba",
+      "score": 100,
+      "content": "This repository contains the build script and `Dockerfile` used to produce the\nbinaries for each restic release starting at 0.9.3.\n\nInstructions\n============\n\n**Note:** For more detailed instructions, reference the Reproducible Builds section of the [Developer Information](https://github.com/restic/restic/blob/master/doc/developer_information.rst).\n\nFirst, clone (or update) this repo:\n\n    $ git clone https://github.com/restic/builder.git\n\n    or\n\n    $ git pull\n\nSecond, pull the base image and build the docker container using the required Go version:\n\n    $ GO_VERSION=1.20.3\n    $ docker pull debian:stable\n    $ docker build --no-cache -t restic/builder:${GO_VERSION} --build-arg GO_VERSION=${GO_VERSION} .\n    $ docker tag restic/builder:${GO_VERSION} restic/builder:latest\n\nMaintainers may also publish the new image to Docker hub:\n\n    $ docker push restic/builder:${GO_VERSION}\n    $ docker push restic/builder:latest\n\nNext, download and extract the restic source code.\n\n    $ curl -L https://github.com/restic/restic/archive/v0.9.3.tar.gz -O\n    $ tar -xzvf v0.9.3.tar.gz\n\nThen run the build as follows, mounting the directory with the source code as `/restic` and putting the resulting files in the directory `output`:\n\n    $ mkdir output\n    $ docker run --rm --volume \"$PWD/restic-0.9.3:/restic\" --volume \"$PWD/output:/output\" restic/builder\n\nVerify Build\n============\nIf all goes well then you've produced exactly the same binaries as in the official release.\n\nTo verify the linux amd64 build for example, run:\n\n    $ sha256_restic=3c882962fc07f611a6147ada99c9909770d3e519210fd483cde9609c6bdd900c\n    $ echo \"${sha256_restic} output/restic_linux_amd64.bz2\" | sha256sum -c -\n\nSoftware\n========\n\nThe Docker container is based on Debian stable and the official Go compiler is\nused in the latest released version.\n\nThe container has the official Go compiler installed in `/usr/local/go`.\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "f9d3bc46e335dc9705ba8630701beccc0a8cc7de7683294b87108e63d6a12eb4",
+      "score": 85,
+      "content": "# This Dockerfiles configures a container that is used to compile the released\n# restic binaries.\n\nFROM debian:stable\n\nRUN true \\\n    # install packages\n    && apt-get update && apt-get install -y --no-install-recommends \\\n        bzip2 \\\n        ca-certificates \\\n        git \\\n        gnupg \\\n        wget \\\n        zip \\\n    # cleanup package lists to save space\n    && rm -rf /var/lib/apt/lists/*\n\n# add go download script and gpg signature file\nCOPY download.sh /usr/local/bin/\nCOPY linux_signing_key.pub .\n\nARG GO_VERSION=1.24.1\n# download and install go compiler\nRUN chmod 755 /usr/local/bin/download.sh && /usr/local/bin/download.sh ${GO_VERSION}\n\nENV \\\n    # add go and local binaries to PATH\n    PATH=\"/usr/local/go/bin:/usr/local/bin:${PATH}\" \\\n    # set default timezone\n    TZ=Europe/Berlin \\\n    # configure user home\n    HOME=/home/build\n\nRUN true \\\n    # add user\n    && useradd -m -d $HOME -s /bin/bash build \\\n    # create directory to hold the source code\n    && mkdir /restic && chown build /restic \\\n    # create directory to save the resulting files to\n    && mkdir /output && chown build /output\n\n# disable cgo\nENV CGO_ENABLED 0\n\n# run everything below as user build\nUSER build\nWORKDIR /restic\n\n# by default, assume restic's source is in /restic, build for all architectures, and save the files to /output\nCMD go run helpers/build-release-binaries/main.go\n\n# usage:\n# docker run --volume \"$PWD/restic-0.10.0:/restic\" --volume \"$PWD/output:/output\"\n"
+    },
+    {
+      "path": "download.sh",
+      "sha": null,
+      "content_sha256": "62a13f370ff91391c4237e8f2c3996e388cb80b69609e7f5f781dd5a19a88111",
+      "score": 35,
+      "content": "#!/bin/bash\n\n# enable strict mode\nset -euo pipefail\nIFS=$'\\n\\t'\n\nif [[ $# -ne 1 ]]; then\n    echo >&2 \"Usage: download.sh GO_VERSION\"\n    exit 1\nfi\n\nlatest=\"$1\"\nfile=\"go${latest}.linux-amd64.tar.gz\"\n\n# import GPG key, can be downloaded here:\n# https://dl.google.com/dl/linux/linux_signing_key.pub\n# more info:\n# https://github.com/golang/go/issues/14739#issuecomment-324528605\ngpg --import linux_signing_key.pub\n\n# download and install Go\ncd /usr/local\nwget --quiet \"https://dl.google.com/go/${file}\"\nwget --quiet \"https://dl.google.com/go/${file}.asc\"\ngpg --verify \"${file}.asc\" \"${file}\"\n\ntar xf \"${file}\"\nrm \"${file}\"\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:37:35.802739+00:00"
+}

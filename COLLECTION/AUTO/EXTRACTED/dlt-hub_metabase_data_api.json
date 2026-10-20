@@ -1,0 +1,115 @@
+{
+  "canonical_source": "github:dlt-hub/metabase_data_api",
+  "repo": "dlt-hub/metabase_data_api",
+  "revision_sha": "587468c5c1552b73476263a9a05c4fd9f21604f1",
+  "default_branch": "master",
+  "pushed_at": "2022-05-31T11:52:57Z",
+  "repo_updated_at": "2025-06-04T12:31:56Z",
+  "license": "MIT",
+  "topics": [
+    "colab-notebook",
+    "colaboratory",
+    "metabase",
+    "notebook-jupyter",
+    "pandas",
+    "python"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "160105015365261db203c17ec34b64422f57476323a7ab82b18b2bd860155ff0",
+      "score": 120,
+      "content": "[tool.poetry]\nname = \"metabase-data-api\"\nversion = \"0.1.11\"\ndescription = \"A package for querying metabase data via api.\"\n\nlicense = \"MIT\"\n\nauthors = [\n    \"Adrian Brudaru <adrian@scalevector.ai>\",\n    \"Marcin Rudolf  <marcin@scalevector.ai>\",\n    \"Mätthaus Krzykowski <matthaus@scalevector.ai>\"\n]\n\nreadme = \"README.md\"\n\nrepository = \"https://github.com/scale-vector/metabase_data_api\"\nhomepage = \"https://github.com/scale-vector/metabase_data_api\"\n\nkeywords = [\"metabase\"]\n\n[tool.poetry.dependencies]\npython = \"^3.7\"\nrequests = \"^2.23.0\"\n\n\n[tool.poetry.dev-dependencies]\nmypy = \"^0.931\"\ntypes-requests = \"^2.27.11\"\n"
+    },
+    {
+      "path": "setup.py",
+      "sha": null,
+      "content_sha256": "6cf2169a9905237f38b9b67c3d4308c07b9245805b4663f8a6422ce6826650c9",
+      "score": 117,
+      "content": "from setuptools import setup\n\nsetup(name='metabase-data-api',\n      version='0.1',\n      description='metabase api query package',\n      url='https://github.com/scale-vector/metabase_data_api',\n      author='scalevector',\n      author_email='adrian@scalevector.ai, marcin@scalevector.ai, matthaus@scalevector.ai,',\n      license='MIT',\n      packages=['metabase_data_api'],\n      zip_safe=False)"
+    },
+    {
+      "path": "metabase_data_api/__init__.py",
+      "sha": null,
+      "content_sha256": "c8b8c80b05800b775ec7667b19b0a8fd950e77c0b8994309569cf7c66e61c9b0",
+      "score": 108,
+      "content": "from .metabase_data_api import MetabaseDataApi\n"
+    },
+    {
+      "path": "metabase_data_api/metabase_data_api.py",
+      "sha": null,
+      "content_sha256": "8a3e7c2c860c075848062278ff4244d3ff15f3882e6977e48d169ad4374e71ac",
+      "score": 108,
+      "content": "import json\nimport requests\n\nfrom requests import Session\nfrom typing import Dict, Any, List, Mapping, cast\nfrom typing_extensions import Literal\n\n\nTResultFormat = Literal[\"json\"]\nTArrayOfRows = List[Dict[str, Any]]\n\n\nclass MetabaseDataApi:\n    _url: str = None\n    _user: str = None\n    _password: str = None\n\n    def __init__(self, url: str, user: str, password: str) -> None:\n        \"\"\"\n\n        Your description goes here\n\n        :param url: Metabase api url\n        :param user: Metabase username\n        :param password: Metabase password\n\n        :return: new MetabaseApi instance\n        \"\"\"\n        self._url = url\n        self._user = user\n        self._password = password\n\n    @property\n    def url(self) -> str:\n        return self._url.strip(\"/\")\n\n    @property\n    def user(self) -> str:\n        return self._user\n\n    @property\n    def password(self) -> str:\n        return self._password\n\n    @property\n    def session(self) -> Session:\n        payload = dict(username=self.user,\n                       password=[REDACTED]\n\n        response = requests.post(f\"{self.url}/api/session\",\n                                 data=json.dumps(payload),\n                                 headers={\"Content-Type\": \"application/json\"})\n\n        response.raise_for_status()\n\n        json_body = response.json()\n\n        json_body[\"X-Metabase-Session\"] = json_body.pop(\"id\")\n        json_body[\"Content-Type\"] = \"application/json\"\n\n        session = requests.Session()\n\n        session.headers.update(json_body)\n\n        return session\n\n    def get_card_data(self, card_id: str, export_format: TResultFormat = \"json\") -> TArrayOfRows:\n        \"\"\"POST /api/card/:card-id/query/:export-format\n\n        Run the query associated with a Card, and return its results as a file in the specified format. Note that this expects the parameters as serialized JSON in the ‘parameters’ parameter.\n\n        :param card_id: you can get the card ID from the card url. The integer is needed, not the whole name.\n        :param export_format: json, rest is not documented\n        :return: returns json array of rows\n\n        \"\"\"\n        if export_format != \"json\":\n            raise ValueError(export_format)\n\n        end_point = f\"api/card/{card_id}/query/{export_format}\"\n\n\n        response = self.session.post(f\"{self.url}/{end_point}\")\n\n        response.raise_for_status()\n\n        return cast(TArrayOfRows, response.json())\n\n\n    def get_query_data(self, query: str, database_id: int = None, tags: Mapping[str, Any] = None, parameters: List[Any] = None) -> TArrayOfRows:\n\n        \"\"\"POST /api/dataset\n\n        Send a query to metabase, get max 2k rows back. This endpoint suports the metabase frontend visualisations\n\n        :param query: a valid sql query. Flavor depends on your database type.\n        :param database_id: Metabase database id, you can find it in the URL when navigating to the connection.\n        :param tags: not documented\n        :param parameters: not documented\n        :return: returns json array of rows\n        \"\"\"\n\n        end_point = f\"api/dataset\"\n\n        payload = {\n            \"type\": \"native\",\n            \"native\": {\n                \"query\": query,\n                \"template-tags\": tags or {}\n            },\n            \"database\": database_id,\n            \"parameters\": parameters or []\n        }\n\n        response = self.session.post(f\"{self.url}/{end_point}\",\n                                     json=payload)\n        response.raise_for_status()\n\n        json_body = response.json()\n\n        rows = json_body[\"data\"][\"rows\"]\n        cols = [c.get(\"display_name\") for c in json_body[\"data\"][\"cols\"]]\n\n        return [dict(zip(cols, row)) for row in rows]\n\n    def export_from_query(self, query: str, database_id: int = None, export_format: str = \"json\", tags: Mapping[str, Any] = None) -> bytes:\n        \"\"\"POST /api/dataset/:export-format\n\n        Send a query to metabase and get results. Max 1m rows. You can choose the format, suggested json.\n\n        :param query: a valid sql query. Flavor depends on your database type.\n        :param database_id: Metabase database id, you can find it in the URL when navigating to the connection.\n        :param export_format: json, csv, or xlsx. For xslx you will probably want to write the contents to file.\n        :param tags: not documented\n        :return: Returns the file contents (eg, json export format returns json rows)\n        \"\"\"\n\n        end_point = f\"api/dataset/{export_format}\"\n\n        request_query = {\n            \"type\": \"native\",\n            \"native\": {\n                \"query\": query,\n                \"template-tags\": tags or {}\n            },\n            \"database\": database_id,\n        }\n        request_data = {\n            \"query\": json.dumps(request_query)\n        }\n\n        s = self.session\n        s.headers.update({\"Content-Type\": \"application/x-www-form-urlencoded\"})\n\n        response = s.post(url=f\"{self.url}/{end_point}\", data=request_data)\n        response.raise_for_status()\n        \n        # return the content as a stream of bytes to be parsed by the caller\n        return response.content\n\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "4120a29eee07a8a369871cad1fe9749e8fa97343ea378ed4f366c3f615babf9a",
+      "score": 100,
+      "content": "# Why?\n\n## Python notebook access\nThis package was created to enable reading data from Metabase into a python notebook for further analysis.\n\nIt's a way to provide business users with access to data in complex analyses.\n\nFor example, a product manager user may refresh an experiment evaluation or a sankey diagram by using only their metabase credentials.\n\nOr, a marketer could use a notebook that their data team made, to get user segmentation data and push it to Mailchimp or Facebook audiences.\n\nPossible uses:\n* Adding notebook-based analyses such as a/b testing significance calculators or data based attribution models\n* Adding complex visualisations such as sankey diagrams\n* Programmatic access to data for other parties (via metabase access management) means you can easily manage access in metabase rather than database.\n\n## Credential management, easy authentication and querying\nThe advantage over going directly to the db are :\n* Unified query method: You can query in the same way a card that reads data from Google Analytics or a database\n* Unified access control: Access to data can be managed in metabase for sources or even individual questions. If metabase reads from multiple source systems, this also reduces #nr of credentials.\n\nTypical use cases are:\n* Simple authentication and querying: Metabase is likely to be publicly accessible (as opposed to data warehouses that might be VPC only). Authentication is handled and does not require any complex flows.\n* Possiblity to consume \"drag and drop\" queries created in Metabase: A non tech user could create and maintain a data feed.\n\n\n# Examples:\n`pip install metabase-data-api`\nsee the examples folder\n\n![sankey](examples/sankey_example/sankey_example.png)\n\n![notebook](examples/regression_example/notebook_mlr.png)\n\ncode snippet:\n```\nimport pandas as pd\nfrom metabase_data_api import MetabaseApi as M\nimport json\n\nsession_params = dict(user='name@company.ai',\n                      password='demopass1',\n                      url='https://yourteam.metabaseapp.com/'\n                      )\n\nmb_api = M(**session_params)\n\nquery = 'SELECT 12 as col'\n\n#get raw file data via export\nd = mb_api.export_from_query(query, database_id=4)\n\njson.loads(d.decode(\"utf-8\"))\n\ndf = pd.DataFrame.from_records(d)\n\n\nprint(df)\n#   col\n#0   12\n```\n\n\n# Limits\nThe export method uses the file download functionality which is ***limited to 1m rows***.\n\nThe get_ methods are calling the same endpoints that are used by metabase for its own charting and are ***limited to 2k rows of results***\n\n"
+    },
+    {
+      "path": "examples/regression_example/README.md",
+      "sha": null,
+      "content_sha256": "a6d7ca1dfa14e5adfcc20760e6bbed1d36e3539aadfc104f21bcf346516c29eb",
+      "score": 96,
+      "content": "#Regression example\n\nThis is an example of a data-driven attribution based on regression.\n\nExample case (theoretical):\n\nAssume some of your app users order in app, but some mmove to the computer to order.\nIn this notebook we check the correlation (regression slope) between app usage and orders, and plot it.\n\n\n![notebook](notebook_mlr.png)"
+    },
+    {
+      "path": "examples/sankey_example/README.md",
+      "sha": null,
+      "content_sha256": "400b8a116c061bc26d842ffdd733b237f9d0433d3b671ee50d45deaf7633b8bc",
+      "score": 96,
+      "content": "#Regression example\n\nThis is an example of a sankey diagram for user flow\n\nExample case (theoretical):\n\nAssume you need to track any kind of non-linear journey and quantify and identify\n\n* Snag points in the journey\n* The happy path\n\n\n\n![sankey](sankey_example.png)"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "baa572acd51dafe297fabe5b742f50bdf4b33145efb2fc3e08ab3b849cd46cfa",
+      "score": 85,
+      "content": "requests==2.27.1\nrequests-toolbelt==0.9.1\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "3d9e159987ca579e1776b94dbbb1eaa0271427c5a359bce5e4e403373d41fdfd",
+      "score": 85,
+      "content": "lint:\n\tpoetry run mypy --config-file mypy.ini mbdata"
+    },
+    {
+      "path": "examples/regression_example/mlr.py",
+      "sha": null,
+      "content_sha256": "79ef7c0d0f59cc6147ffea8e59b1a960bd2a4b20d213d96bc33353e4f2f88695",
+      "score": 31,
+      "content": "# -*- coding: utf-8 -*-\n\"\"\"Mlr.ipynb\n\nAutomatically generated by Colaboratory.\n\nOriginal file is located at\n    https://colab.research.google.com/drive/1EGSeylUNEUBrGm2S08tCINPntY51YDjo\n\"\"\"\n\n!apt-get -qq install -y libarchive-dev && pip install -U metabase-data-api\n\nfrom metabase_data_api import MetabaseDataApi as M\nimport json\n\n\n\nurl = \"\" #@param {type:\"string\"}\nusername = \"\" #@param {type:\"string\"}\npassword = \"\" #@param {type:\"string\"}\n\nsession_params = dict(user=username,\n                      password=password,\n                      url=url\n                      )\n\nquery  = \"\"\"select date_created, \n orders,\n visitors,\n app_users,\n app_orders,\n--\nfrom schema_name.tablename jt \n \"\"\"\n\nmbapi = M(**session_params)\n\n#you can get the database id from the metabase url\ndatabase_id = \"\" #@param {type:\"int\"}\nd = mbapi.export_from_query(query, database_id=database_id)\ndata = json.loads(d.decode(\"utf-8\"))\n#print(data)\n\nimport pandas as pd\nimport statsmodels.api as sm\n\ndf = pd.DataFrame.from_records(data, index = 'date_created')\n\nY = df['orders']\nX = df[['visitors','app_users']]\n\nX = sm.add_constant(X)\nmodel = sm.OLS(Y, X).fit()\n\nsummary = model.summary()\nparams = model.params\n\ndf_out = df[['app_orders']]\ndf_out['orders_correlated_to_app_use'] = df.app_users * params['app_users']\ndf_out['rest_orders'] = df.orders - df.app_users * params['app_users'] - df.app_orders \nprint(summary)\n#print(df_out)\n\ndf_out.sort_index(inplace=True)\n#plot area chart (stacked) and show the slope of the app use contribution to orders\ndf_out.plot.area(title=f\"\"\"Order source regression.\\n App users order contribution slope: {params['app_users']}.\\n Yesterday correlated order contribution: {params['app_users'] * df['app_users'].iloc[0]}\"\"\",\n                 figsize=(20,10))"
+    },
+    {
+      "path": "examples/sankey_example/get_data_in_pandas.py",
+      "sha": null,
+      "content_sha256": "858ccf6b8bc947b0ee9bf050028e06cdca77e9265f2b7a82fd4254460358ef47",
+      "score": 31,
+      "content": "import pandas as pd\nfrom metabase_data_api import MetabaseDataApi as M\nimport json\n\nsession_params = dict(user='your@email.com',\n                      password='yourpass123',\n                      url='https://your.metabaseapp.com/'\n                      )\n\nmbapi = M(**session_params)\n\nquery = 'SELECT 12 as col'\n\n#get raw file data via export\nd = mbapi.export_from_query(query, database_id=4)\n\nd = json.loads(d.decode(\"utf-8\"))\n\ndf = pd.DataFrame.from_records(d)\nprint(df)\n#   col\n#0   12\n\n\n#using the simple query method\nd = mbapi.get_query_data(query, database_id=4)\nprint(d)\n#[{'col': 12}]\n\n\nd = mbapi.get_card_data(card_id='24')\nprint(d)\n#[{'col': 12}]\n\n\n\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:37:33.999529+00:00"
+}

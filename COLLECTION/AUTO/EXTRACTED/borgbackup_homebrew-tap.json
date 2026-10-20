@@ -1,0 +1,48 @@
+{
+  "canonical_source": "github:borgbackup/homebrew-tap",
+  "repo": "borgbackup/homebrew-tap",
+  "revision_sha": "0a99303f7e5b3976756c7d3f965416a166a5600e",
+  "default_branch": "master",
+  "pushed_at": "2026-07-19T06:36:06Z",
+  "repo_updated_at": "2026-07-19T06:36:23Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/main.yml",
+      "sha": null,
+      "content_sha256": "b57c82c0b5c3e638374bb416bd6ed9d84b8c2b58ac70e234a3479691cbaaf1dd",
+      "score": 126,
+      "content": "on:\n  # Allow manually triggering this workflow\n  workflow_dispatch:\n  # Run for all pull requests and pushes to certain branches\n  pull_request:\n  push:\n    branches:\n      - master\n\njobs:\n  test:\n    name: Test Homebrew install\n    runs-on: ${{ matrix.os }}\n    strategy:\n      fail-fast: true\n      matrix:\n        os:\n          - macos-14\n          - macos-15\n    timeout-minutes: 15\n\n    steps:\n      - name: Set up Homebrew\n        id: set-up-homebrew\n        uses: Homebrew/actions/setup-homebrew@master\n        with:\n          test-bot: false\n\n      - name: Cache Homebrew Gems\n        id: cache\n        uses: actions/cache@v4\n        with:\n          path: ${{ steps.set-up-homebrew.outputs.gems-path }}\n          key: ${{ matrix.os }}-rubygems-${{ steps.set-up-homebrew.outputs.gems-hash }}\n          restore-keys: ${{ matrix.os }}-rubygems-\n\n      - name: Install Homebrew Gems\n        id: gems\n        run: brew install-bundler-gems\n        if: steps.cache.outputs.cache-hit != 'true'\n\n      - name: Install macFUSE\n        run: brew install --cask macfuse\n\n      - name: Test formula\n        env:\n          HOMEBREW_NO_INSTALL_FROM_API: 1\n        run: |\n          brew install borgbackup-fuse\n\n          brew test borgbackup-fuse\n          brew style borgbackup-fuse\n          brew audit --online --strict borgbackup-fuse\n\n          brew uninstall borgbackup-fuse\n\n      # This step is disabled because it times out on GitHub-hosted runners\n      # because of a macOS security prompt — it can only be done on\n      # self-hosted runners.\n      - name: Test mount command\n        if: vars.TESTMOUNT\n        run: |\n          borg init -e none test-repo\n          borg create test-repo::test-archive Formula\n\n          mkdir mnt\n          borg mount test-repo::test-archive mnt\n          ls mnt/Formula\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "f0d8cc79534abbd0804566f0c700d715f1877a76b167475aa0e628191367b19b",
+      "score": 100,
+      "content": "# BorgBackup [Homebrew](https://brew.sh/) tap\n\n## Why install [Borg](https://www.borgbackup.org/) using this tap instead of `brew install borgbackup`?\n\nThe `borgbackup-fuse` formula maintained in this tap depends on [macFUSE](https://osxfuse.github.io) and [llfuse](https://github.com/python-llfuse/python-llfuse/) which are required to mount repositories or archives using `borg mount`.\n\nThese dependencies have been [removed](https://github.com/Homebrew/homebrew-core/commit/8c2f17e3b653347ada86d353243e2d6b6cb10fda#diff-4a25217474a5eb61d0776ab4cabc43b42689bc7b3efaaed400f799631dcec71f) from Homebrew’s [borgbackup](https://formulae.brew.sh/formula/borgbackup) formula because [FUSE for macOS](https://osxfuse.github.io/) is no longer open source.\n\nIf one doesn’t plan on using `borg mount`, installing Borg using `brew install borgbackup` works just fine.\n\n## How to install Borg using this tap?\n\n```shell\nbrew install --cask macfuse\nbrew install borgbackup/tap/borgbackup-fuse\n```\n\nAfter that, BorgBackup should upgrade automatically with Homebrew when a new release is made.\n\n## For maintainers: How to make a new release?\n\n1. Get new package URLs and SHAs from [PyPI](https://pypi.org/project/borgbackup/)\n2. ~~Lint `brew audit --strict Formula/borgbackup-fuse.rb`~~\n3. Install `brew install Formula/borgbackup-fuse.rb`\n4. Test `brew test Formula/borgbackup-fuse.rb`\n\n## Documentation\n\nUse `brew help`, `man brew`, or check [Homebrew’s documentation](https://docs.brew.sh).\n"
+    },
+    {
+      "path": "Formula/borgbackup-fuse.rb",
+      "sha": null,
+      "content_sha256": "4c2dbc439093050add6ecd052dfbca4565609a2233054b6c7dcd0d5dc871673d",
+      "score": 93,
+      "content": "require \"digest\"\n\nclass OsxfuseRequirement < Requirement\n  fatal true\n\n  satisfy(build_env: false) { self.class.binary_osxfuse_installed? }\n\n  def self.binary_osxfuse_installed?\n    File.exist?(\"/usr/local/include/fuse/fuse.h\") &&\n      !File.symlink?(\"/usr/local/include/fuse\")\n  end\n\n  env do\n    ENV.append_path \"PKG_CONFIG_PATH\",\n                    \"/usr/local/lib/pkgconfig:#{HOMEBREW_PREFIX}/lib/pkgconfig:\" \\\n                    \"#{HOMEBREW_PREFIX}/opt/openssl@3/lib/pkgconfig\"\n    ENV.append_path \"BORG_OPENSSL_PREFIX\", \"#{HOMEBREW_PREFIX}/opt/openssl@3/\"\n\n    if HOMEBREW_PREFIX.to_s != \"/usr/local\"\n      ENV.append_path \"HOMEBREW_LIBRARY_PATHS\", \"/usr/local/lib\"\n      ENV.append_path \"HOMEBREW_INCLUDE_PATHS\", \"/usr/local/include/fuse\"\n    end\n  end\n\n  def message\n    \"macFUSE is required to build borgbackup-fuse. Please run `brew install --cask macfuse` first.\"\n  end\nend\n\nclass BorgbackupFuse < Formula\n  include Language::Python::Virtualenv\n\n  desc \"Deduplicating archiver with compression and authenticated encryption\"\n  homepage \"https://borgbackup.org/\"\n  url \"https://files.pythonhosted.org/packages/62/5b/aec6c069840f64f744d661c5eea1c648d407bebb836b2e12d8a3b9939bb4/borgbackup-1.4.5.tar.gz\"\n  sha256 \"4f9a5fe584c504b15485841236750dea16aa7cd2ddbc4a594e9d2ce5c49c4508\"\n  license \"BSD-3-Clause\"\n\n  livecheck do\n    url \"https://github.com/borgbackup/borg/releases/latest\"\n    regex(%r{href=.*?/tag/v?(\\d+(?:\\.\\d+)+)[\"' >]}i)\n  end\n\n  depends_on OsxfuseRequirement => :build\n  depends_on \"pkg-config\" => :build\n  depends_on \"libb2\"\n  depends_on \"lz4\"\n  depends_on \"openssl@3\"\n  depends_on \"python@3.14\"\n  depends_on \"xxhash\"\n  depends_on \"zstd\"\n\n  conflicts_with \"borgbackup\", because: \"borgbackup-fuse is a patched version of borgbackup\"\n\n  resource \"llfuse\" do\n    url \"https://files.pythonhosted.org/packages/e7/21/5a4d639746cb0d32ede867012610233da947165994ff07fa9db965460aa6/llfuse-1.5.2.tar.gz\"\n    sha256 \"3f7fdc86e3db433c48cb6505fe3000ec1b3e84a4a40a84ad67b8df3a847f0697\"\n  end\n\n  resource \"msgpack\" do\n    url \"https://files.pythonhosted.org/packages/31/f9/c0a1c127f9049db9155afc316952ea571720dd01833ff5e4d7e8e6352dbb/msgpack-1.2.1.tar.gz\"\n    sha256 \"04c721c2c7448767e9e3f2520a475663d8ee0f09c31890f6d2bd70fd636a9647\"\n  end\n\n  resource \"packaging\" do\n    url \"https://files.pythonhosted.org/packages/d7/f1/e7a6dd94a8d4a5626c03e4e99c87f241ba9e350cd9e6d75123f992427270/packaging-26.2.tar.gz\"\n    sha256 \"ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661\"\n  end\n\n  def install\n    ENV[\"BORG_LIBB2_PREFIX\"] = Formula[\"libb2\"].prefix\n    ENV[\"BORG_LIBLZ4_PREFIX\"] = Formula[\"lz4\"].prefix\n    ENV[\"BORG_LIBXXHASH_PREFIX\"] = Formula[\"xxhash\"].prefix\n    ENV[\"BORG_LIBZSTD_PREFIX\"] = Formula[\"zstd\"].prefix\n    ENV[\"BORG_OPENSSL_PREFIX\"] = Formula[\"openssl@3\"].prefix\n\n    virtualenv_install_with_resources\n\n    man1.install Dir[\"docs/man/*.1\"]\n    bash_completion.install \"scripts/shell_completions/bash/borg\"\n    fish_completion.install \"scripts/shell_completions/fish/borg.fish\"\n    zsh_completion.install \"scripts/shell_completions/zsh/_borg\"\n  end\n\n  test do\n    # Create a repo and archive, then test extraction.\n    cp test_fixtures(\"test.pdf\"), testpath\n    Dir.chdir(testpath) do\n      system \"#{bin}/borg\", \"init\", \"-e\", \"none\", \"test-repo\"\n      system \"#{bin}/borg\", \"create\", \"--compression\", \"zstd\", \"test-repo::test-archive\", \"test.pdf\"\n    end\n    mkdir testpath/\"restore\" do\n      system \"#{bin}/borg\", \"extract\", testpath/\"test-repo::test-archive\"\n    end\n    assert_path_exists testpath/\"restore/test.pdf\"\n    assert_equal Digest::SHA256.file(testpath/\"restore/test.pdf\"), Digest::SHA256.file(testpath/\"test.pdf\")\n  end\nend\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:37:35.344534+00:00"
+}
