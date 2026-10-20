@@ -1,0 +1,201 @@
+{
+  "canonical_source": "github:patrickhulce/third-party-web",
+  "repo": "patrickhulce/third-party-web",
+  "revision_sha": "a631d7a773c9338a20446ba0d106fabc0f87b732",
+  "default_branch": "master",
+  "pushed_at": "2026-09-14T16:14:07Z",
+  "repo_updated_at": "2026-10-15T14:12:09Z",
+  "license": "MIT",
+  "topics": [
+    "analysis",
+    "httparchive",
+    "javascript",
+    "third-party-javascript",
+    "web"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "39e3c3bbdfeac9b223e60645b19753c964e66be9e8babbd77cae9ebf6d465a16",
+      "score": 198,
+      "content": "name: CI\non:\n  push:\n    branches: [master]\n  pull_request:\n    branches: [master]\njobs:\n  build:\n    name: Linux\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write       # semantic-release: create tags & GitHub releases\n      issues: write         # semantic-release: comment on issues\n      pull-requests: write  # semantic-release: comment on PRs\n      id-token: write       # npm trusted publisher: obtain OIDC token\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n      - name: Use Node.js 22.x\n        uses: actions/setup-node@v4\n        with:\n          node-version: '22'\n      - name: apt-get install\n        run: sudo apt-get update && sudo apt-get install build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev\n      - run: corepack enable\n      - run: yarn\n      - run: yarn test\n      - name: yarn semantic-release\n        if: github.ref == 'refs/heads/master'\n        env:\n          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n        run: yarn semantic-release\n"
+    },
+    {
+      "path": "lib/create-entity-finder-api.test.js",
+      "sha": null,
+      "content_sha256": "ba3ec2f2730fc4b37ac3cb73b4b393c570bc5971e90fde517482471a97bf8b8a",
+      "score": 168,
+      "content": "const fs = require('fs')\nconst path = require('path')\nconst {createAPIFromDataset} = require('./create-entity-finder-api.js')\n\ndescribe('getEntity', () => {\n  let api\n\n  beforeEach(() => {\n    api = createAPIFromDataset([\n      {\n        name: 'Domain',\n        domains: ['*.example.com', '*.example.co.uk'],\n      },\n      {\n        name: 'Subdomain',\n        domains: ['*.sub.example.com', '*.sub.example.co.uk'],\n      },\n      {\n        name: 'Subsubdomain',\n        domains: ['very.specific.example.com'],\n      },\n    ])\n  })\n\n  it('should find direct domains', () => {\n    expect(api.getEntity('https://very.specific.example.com/path').name).toEqual('Subsubdomain')\n  })\n\n  it('should find wildcard subdomains', () => {\n    expect(api.getEntity('https://foo.sub.example.com/path').name).toEqual('Subdomain')\n    expect(api.getEntity('https://bar.sub.example.com/path').name).toEqual('Subdomain')\n    expect(api.getEntity('https://baz.bar.sub.example.com/path').name).toEqual('Subdomain')\n    expect(api.getEntity('https://foo.sub.example.co.uk/path').name).toEqual('Subdomain')\n    expect(api.getEntity('https://bar.sub.example.co.uk/path').name).toEqual('Subdomain')\n    expect(api.getEntity('https://baz.bar.sub.example.co.uk/path').name).toEqual('Subdomain')\n  })\n\n  it('should find wildcard domains', () => {\n    expect(api.getEntity('https://foo.example.com/path').name).toEqual('Domain')\n    expect(api.getEntity('https://bar.example.com/path').name).toEqual('Domain')\n    expect(api.getEntity('https://baz.bar.example.com/path').name).toEqual('Domain')\n    expect(api.getEntity('https://foo.example.co.uk/path').name).toEqual('Domain')\n    expect(api.getEntity('https://bar.example.co.uk/path').name).toEqual('Domain')\n    expect(api.getEntity('https://baz.bar.example.co.uk/path').name).toEqual('Domain')\n  })\n\n  it.skip('stress test', () => {\n    const urls = fs\n      .readFileSync(path.join(__dirname, '../data/random-urls.txt'), 'utf8')\n      .split('\\n')\n      .filter(Boolean)\n    console.time('getEntity')\n    for (let i = 0; i < 1_000_000; i++) {\n      api.getEntity(urls[i % urls.length])\n    }\n    console.timeEnd('getEntity')\n  })\n})\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "08e14f1b600cffd241bb73cd82b2f0d1de265b8f933b8577c08f5b1df9dfa575",
+      "score": 120,
+      "content": "{\n  \"name\": \"third-party-web\",\n  \"version\": \"0.0.0-development\",\n  \"description\": \"Categorized data on third party entities on the web.\",\n  \"main\": \"./lib/index.js\",\n  \"scripts\": {\n    \"build:www\": \"cd www/ && npm install && npm run build\",\n    \"build\": \"node bin/convert-entities-db.js && node bin/generate-canonical-domain-csv.js && node bin/build-entity-json-files.js && node bin/generate-sql.js && generate-export-aliases\",\n    \"lint:fix\": \"prettier --print-width=100 --write '**/*.js'\",\n    \"start\": \"mkdir -p .tmp && node bin/merge-origins-with-entities.js && node bin/create-markdown.js\",\n    \"start:update-ha-data\": \"node ./bin/automated-update.js\",\n    \"test\": \"yarn build && yarn test:unit\",\n    \"test:unit\": \"jest 'lib/*'\",\n    \"semantic-release\": \"semantic-release\"\n  },\n  \"keywords\": [\n    \"third-party\",\n    \"third-parties\"\n  ],\n  \"author\": \"Patrick Hulce <patrick.hulce@gmail.com>\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/patrickhulce/third-party-web.git\"\n  },\n  \"license\": \"MIT\",\n  \"publishConfig\": {\n    \"registry\": \"https://registry.npmjs.org/\",\n    \"provenance\": true\n  },\n  \"devDependencies\": {\n    \"@google-cloud/bigquery\": \"^7.9.0\",\n    \"chart.js\": \"^2.9.4\",\n    \"chartjs-node-canvas\": \"^3.2.0\",\n    \"colors\": \"^1.4.0\",\n    \"generate-export-aliases\": \"^1.1.0\",\n    \"jest\": \"^24.9.0\",\n    \"lodash\": \"^4.17.15\",\n    \"prettier\": \"^1.18.2\",\n    \"prompts\": \"^2.4.2\",\n    \"semantic-release\": \"^25.0.3\"\n  },\n  \"config\": {\n    \"exportAliases\": {\n      \"nostats-subset\": \"./lib/subsets/nostats.js\",\n      \"httparchive-nostats-subset\": \"./lib/subsets/httparchive-nostats.js\",\n      \"httparchive-subset\": \"./lib/subsets/httparchive.js\"\n    }\n  },\n  \"packageManager\": \"yarn@4.10.3\"\n}\n"
+    },
+    {
+      "path": "www/package.json",
+      "sha": null,
+      "content_sha256": "386da7eab8527b1b87071bcbc008f45bad6d6bd97d2cce91ca94ee8fa3074bee",
+      "score": 118,
+      "content": "{\n  \"name\": \"thirdpartyweb.today\",\n  \"private\": true,\n  \"description\": \"\",\n  \"version\": \"0.1.0\",\n  \"dependencies\": {\n    \"@rehooks/component-size\": \"^1.0.2\",\n    \"classnames\": \"^2.2.6\",\n    \"color\": \"^3.1.0\",\n    \"d3\": \"^5.9.2\",\n    \"d3plus\": \"^2.0.0-alpha.18\",\n    \"d3plus-react\": \"^0.5.3\",\n    \"gatsby\": \"^3.9.1\",\n    \"gatsby-image\": \"^2.0.37\",\n    \"gatsby-plugin-google-analytics\": \"^2.0.18\",\n    \"gatsby-plugin-layout\": \"^1.0.14\",\n    \"gatsby-plugin-manifest\": \"^3.9.0\",\n    \"gatsby-plugin-offline\": \"^2.0.25\",\n    \"gatsby-plugin-react-helmet\": \"^3.0.12\",\n    \"gatsby-plugin-react-svg\": \"^2.1.1\",\n    \"gatsby-plugin-sharp\": \"^3.9.0\",\n    \"gatsby-source-filesystem\": \"^2.0.29\",\n    \"gatsby-transformer-remark\": \"^2.3.8\",\n    \"gatsby-transformer-sharp\": \"^3.9.0\",\n    \"lodash\": \"^4.17.11\",\n    \"prop-types\": \"^15.7.2\",\n    \"react\": \"^16.8.6\",\n    \"react-dom\": \"^16.8.6\",\n    \"react-helmet\": \"^5.2.0\",\n    \"third-party-web\": \"^0.29.2\"\n  },\n  \"devDependencies\": {\n    \"prettier\": \"^1.17.0\"\n  },\n  \"resolutions\": {\n    \"browserlist\": \"^1.0.1\",\n    \"caniuse-lite\": \"^1.0.30001245\"\n  },\n  \"license\": \"MIT\",\n  \"scripts\": {\n    \"build\": \"gatsby build\",\n    \"develop\": \"gatsby develop\",\n    \"format\": \"prettier --write src/**/*.{js,jsx}\",\n    \"start\": \"npm run develop\",\n    \"serve\": \"gatsby serve\",\n    \"test\": \"echo \\\"Write tests! -> https://gatsby.dev/unit-testing\\\"\"\n  },\n  \"packageManager\": \"yarn@1.22.22\"\n}\n"
+    },
+    {
+      "path": "www/gatsby-browser.js",
+      "sha": null,
+      "content_sha256": "9089a5fa50c46285c585900e96b12cecdf1e34973f95cd7f5beb79d01b36e984",
+      "score": 108,
+      "content": "/**\n * Implement Gatsby's Browser APIs in this file.\n *\n * See: https://www.gatsbyjs.org/docs/browser-apis/\n */\n\n// You can delete this file if you're not using it\n"
+    },
+    {
+      "path": "lib/create-entity-finder-api.js",
+      "sha": null,
+      "content_sha256": "4791961ccf658dbc1f9f779ef2f6088b8f8f94fca1d15fd5c164050e707c6180",
+      "score": 108,
+      "content": "const DOMAIN_IN_URL_REGEX = /:\\/\\/(\\S*?)(:\\d+)?(\\/|$)/\nconst DOMAIN_CHARACTERS = /(?:[a-z0-9.-]+\\.[a-z0-9]+|localhost)/i\nconst IP_REGEX = /^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$/\nconst ROOT_DOMAIN_REGEX = /[^.]+\\.([^.]+|(gov|com|co|ne)\\.\\w{2})$/i\n\n/**\n * @param {string} originOrURL\n * @return {[string|null, string|null]} - The first item is the root domain, the second item is the domain.\n */\nfunction parseDomains(originOrURL) {\n  if (typeof originOrURL !== 'string') return [null, null]\n  if (originOrURL.length > 10000 || originOrURL.startsWith('data:')) return [null, null]\n  let m = originOrURL.match(DOMAIN_IN_URL_REGEX)\n  let domain;\n  if (m) {\n    domain = m[1]\n  }\n  m = originOrURL.match(DOMAIN_CHARACTERS)\n  if (m) {\n    domain = m[0]\n  }\n\n  if (!domain) return [null, null]\n  if (IP_REGEX.test(domain)) return [domain, domain]\n  m = domain.match(ROOT_DOMAIN_REGEX)\n  const rootDomain = m && m[0] || domain;\n\n  return [rootDomain, domain]\n}\n\nfunction getRootDomain(originOrURL,) {\n  return parseDomains(originOrURL)[0];\n}\n\nfunction sliceSubdomainFromDomain(domain, rootDomain) {\n  if (domain.length <= rootDomain.length) return domain\n  return domain\n    .split('.')\n    .slice(1)\n    .join('.')\n}\n\nfunction getEntityInDataset(entityByDomain, entityBySubDomain, entityByRootDomain, originOrURL) {\n  const [rootDomain, domain] = parseDomains(originOrURL);\n  if (!domain || !rootDomain) return undefined\n  if (entityByDomain.has(domain)) return entityByDomain.get(domain)\n\n  for (\n    let subdomain = domain;\n    subdomain.length > rootDomain.length;\n    subdomain = sliceSubdomainFromDomain(subdomain, rootDomain)\n  ) {\n    if (entityBySubDomain.has(subdomain)) return entityBySubDomain.get(subdomain)\n  }\n\n  if (entityByRootDomain.has(rootDomain)) return entityByRootDomain.get(rootDomain)\n  return undefined\n}\n\nfunction getProductInDataset(entityByDomain, entityBySubDomain, entityByRootDomain, originOrURL) {\n  const entity = getEntityInDataset(\n    entityByDomain,\n    entityBySubDomain,\n    entityByRootDomain,\n    originOrURL\n  )\n  const products = entity && entity.products\n  if (!products) return undefined\n  if (typeof originOrURL !== 'string') return undefined\n\n  for (const product of products) {\n    for (const pattern of product.urlPatterns) {\n      if (pattern instanceof RegExp && pattern.test(originOrURL)) return product\n      if (typeof pattern === 'string' && originOrURL.includes(pattern)) return product\n    }\n  }\n  return undefined\n}\n\nfunction cloneEntities(entities) {\n  return entities.map(entity_ => {\n    const entity = {\n      company: entity_.name,\n      categories: [entity_.category],\n      ...entity_,\n    }\n\n    const products = (entity_.products || []).map(product => ({\n      company: entity.company,\n      category: entity.category,\n      categories: [entity.category],\n      facades: [],\n      ...product,\n      urlPatterns: (product.urlPatterns || []).map(s =>\n        s.startsWith('REGEXP:') ? new RegExp(s.slice('REGEXP:'.length)) : s\n      ),\n    }))\n\n    entity.products = products\n    return entity\n  })\n}\n\nfunction createAPIFromDataset(entities_) {\n  const entities = cloneEntities(entities_)\n  const entityByDomain = new Map()\n  const entityByRootDomain = new Map()\n  const entityBySubDomain = new Map()\n\n  for (const entity of entities) {\n    entity.totalExecutionTime = Number(entity.totalExecutionTime) || 0\n    entity.totalOccurrences = Number(entity.totalOccurrences) || 0\n    entity.averageExecutionTime = entity.totalExecutionTime / entity.totalOccurrences\n\n    for (const domain of entity.domains) {\n      if (entityByDomain.has(domain)) {\n        const duplicate = entityByDomain.get(domain)\n        throw new Error(`Duplicate domain ${domain} (${entity.name} and ${duplicate.name})`)\n      }\n\n      entityByDomain.set(domain, entity)\n\n      const rootDomain = getRootDomain(domain)\n      if (domain.startsWith('*.')) {\n        const wildcardDomain = domain.slice(2)\n        if (wildcardDomain === rootDomain) entityByRootDomain.set(rootDomain, entity)\n        else entityBySubDomain.set(wildcardDomain, entity)\n      }\n    }\n  }\n\n  for (const [rootDomain, entity] of entityByRootDomain.entries()) {\n    if (!entity) entityByRootDomain.delete(rootDomain)\n  }\n\n  const getEntity = getEntityInDataset.bind(\n    null,\n    entityByDomain,\n    entityBySubDomain,\n    entityByRootDomain\n  )\n  const getProduct = getProductInDataset.bind(\n    null,\n    entityByDomain,\n    entityBySubDomain,\n    entityByRootDomain\n  )\n  return {getEntity, getProduct, getRootDomain, entities}\n}\n\nmodule.exports = {createAPIFromDataset}\n"
+    },
+    {
+      "path": "lib/index.test.js",
+      "sha": null,
+      "content_sha256": "b7bb966dad36276b6a2a125b80d04f84cb0b6175d58a06fdc19491c65f057891",
+      "score": 93,
+      "content": "const fs = require('fs')\nconst path = require('path')\nconst {entities, getRootDomain, getEntity, getProduct} = require('./index.js')\n\ndescribe('getRootDomain', () => {\n  it('works for IP addresses', () => {\n    expect(getRootDomain('8.8.8.8')).toEqual('8.8.8.8')\n    expect(getRootDomain('192.168.0.1')).toEqual('192.168.0.1')\n  })\n\n  it('works for basic domains', () => {\n    expect(getRootDomain('cdn.cnn.com')).toEqual('cnn.com')\n    expect(getRootDomain('www.hulce.photography')).toEqual('hulce.photography')\n    expect(getRootDomain('api.supercool.io')).toEqual('supercool.io')\n  })\n\n  it('works for country-tlds', () => {\n    expect(getRootDomain('content.yahoo.co.jp')).toEqual('yahoo.co.jp')\n    expect(getRootDomain('go.visit.gov.in')).toEqual('visit.gov.in')\n  })\n\n  it('works for URLs', () => {\n    expect(getRootDomain('https://content.yahoo.co.jp/path/?query=param')).toEqual('yahoo.co.jp')\n    expect(getRootDomain('https://a.b.c.it/path/?query=param&two=2')).toEqual('c.it')\n    expect(getRootDomain('https://foo.bar:433/path/?query=param&two=2')).toEqual('foo.bar')\n  })\n\n  it('works for localhost', () => {\n    expect(getRootDomain('https://localhost:8080/path/?query=param')).toEqual('localhost')\n    expect(getRootDomain('https://localhost/path/?query=param&two=2')).toEqual('localhost')\n    expect(getRootDomain('localhost:9000/path/?query=param&two=2')).toEqual('localhost')\n    expect(getRootDomain('localhost:1200')).toEqual('localhost')\n  })\n\n  it('works for wildcard domains', () => {\n    expect(getRootDomain('*.google.com')).toEqual('google.com')\n    expect(getRootDomain('*.yahoo.co.jp')).toEqual('yahoo.co.jp')\n    expect(getRootDomain('*.hulce.photography')).toEqual('hulce.photography')\n  })\n\n  it('runs on *massive* inputs', () => {\n    const massiveInput = '123456789'.repeat(100e3)\n    expect(getRootDomain(massiveInput)).toEqual(null)\n  })\n\n  it('runs on data URIs', () => {\n    const dataUri = 'data:image/gif;base64,R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs='\n    expect(getRootDomain(dataUri)).toEqual(null)\n  })\n\n  it('returns null on invalid inputs', () => {\n    expect(getRootDomain('this is not a domain')).toEqual(null)\n    expect(getRootDomain('neither-is-this')).toEqual(null)\n    expect(getRootDomain('http://nor this')).toEqual(null)\n  })\n})\n\ndescribe('getEntity', () => {\n  it('works for direct domain usage', () => {\n    expect(getEntity('https://js.connect.facebook.net/lib.js')).toMatchInlineSnapshot(`\n      Object {\n        \"averageExecutionTime\": 513.7506757503379,\n        \"categories\": Array [\n          \"social\",\n        ],\n        \"category\": \"social\",\n        \"company\": \"Facebook\",\n        \"domains\": Array [\n          \"*.facebook.com\",\n          \"*.atlassbx.com\",\n          \"*.fbsbx.com\",\n          \"fbcdn-photos-e-a.akamaihd.net\",\n          \"*.facebook.net\",\n          \"*.fbcdn.net\",\n        ],\n        \"examples\": Array [\n          \"www.facebook.com\",\n          \"connect.facebook.net\",\n          \"staticxx.facebook.com\",\n          \"static.xx.fbcdn.net\",\n          \"m.facebook.com\",\n          \"an.facebook.com\",\n          \"platform-lookaside.fbsbx.com\",\n        ],\n        \"homepage\": \"https://www.facebook.com\",\n        \"name\": \"Facebook\",\n        \"products\": Array [\n          Object {\n            \"categories\": Array [\n              \"social\",\n            ],\n            \"category\": \"social\",\n            \"company\": \"Facebook\",\n            \"facades\": Array [\n              Object {\n                \"name\": \"React Live Chat Loader\",\n                \"repo\": \"https://github.com/calibreapp/react-live-chat-loader\",\n              },\n            ],\n            \"name\": \"Facebook Messenger Customer Chat\",\n            \"urlPatterns\": Array [\n              /connect\\\\\\\\\\\\.facebook\\\\\\\\\\\\.net\\\\\\\\/\\\\.\\\\*\\\\\\\\/sdk\\\\\\\\/xfbml\\\\\\\\\\\\.customerchat\\\\\\\\\\\\.js/,\n            ],\n          },\n        ],\n        \"totalExecutionTime\": 2901178836,\n        \"totalOccurrences\": 5647056,\n      }\n    `)\n  })\n\n  it('works for inferred domain usage', () => {\n    expect(getEntity('https://unknown.typekit.net/fonts.css')).toMatchInlineSnapshot(`\n      Object {\n        \"averageExecutionTime\": 691.2697157512289,\n        \"categories\": Array [\n          \"cdn\",\n        ],\n        \"category\": \"cdn\",\n        \"company\": \"Adobe\",\n        \"domains\": Array [\n          \"*.typekit.com\",\n          \"*.typekit.net\",\n        ],\n        \"examples\": Array [\n          \"use.typekit.net\",\n          \"p.typekit.net\",\n        ],\n        \"homepage\": \"https://fonts.adobe.com/\",\n        \"name\": \"Adobe TypeKit\",\n        \"products\": Array [],\n        \"totalExecutionTime\": 142315844,\n        \"totalOccurrences\": 205876,\n      }\n    `)\n  })\n\n  it('does not over-infer', () => {\n    expect(getEntity('https://unknown.gstatic.com/what')).toEqual(undefined)\n  })\n\n  it('only infers as a fallback', () => {\n    expect(getEntity('http://fbcdn-photos-e-a.akamaihd.net/1234.jpg').name).toEqual('Facebook')\n    expect(getEntity('http://unknown.akamaihd.net/1234.jpg').name).toEqual('Akamai')\n  })\n\n  it('runs on *massive* inputs', () => {\n    const massiveInput = '123456789'.repeat(100e3)\n    expect(getEntity(massiveInput)).toEqual(undefined)\n  })\n\n  it('runs on data URIs', () => {\n    const dataUri = 'data:image/gif;base64,R0lGODlhAQABAIAAAP8AADAAACwAAAAAAQABAAACAkQBADs='\n    expect(getEntity(dataUri)).toEqual(undefined)\n  })\n\n  it('supports multi-tennant domains', () => {\n    expect(getEntity('https://gemius.mgr.consensu.org/cmp/v2/stub.js').name).toEqual('Gemius CMP')\n    expect(\n      getEntity('https://quantcast.mgr.consensu.org/choice/KygWsHah2_7Qa/rssing.com/choice.js').name\n    ).toEqual('Quantcast Choice')\n    expect(getEntity('https://static.quantcast.mgr.consensu.org/v50/cmpui-popup.js').name).toEqual(\n      'Quantcast Choice'\n    )\n  })\n})\n\ndescribe('getProduct', () => {\n  it('works on basic url', () => {\n    expect(getProduct('https://www.youtube.com/embed/alGcULGtiv8')).toMatchObject({\n      name: 'YouTube Embedded Player',\n      company: 'YouTube',\n      category: 'video',\n      categories: ['video'],\n      facades: [\n        {\n          name: 'Lite YouTube',\n          repo: 'https://github.com/paulirish/lite-youtube-embed',\n        },\n        {\n          name: 'Ngx Lite Video',\n          repo: 'https://github.com/karim-mamdouh/ngx-lite-video',\n        },\n      ],\n    })\n  })\n\n  it('works on regex based', () => {\n    expect(\n      getProduct('https://connect.facebook.net/en_US/sdk/xfbml.customerchat.js')\n    ).toMatchObject({\n      name: 'Facebook Messenger Customer Chat',\n      facades: [\n        {\n          name: 'React Live Chat Loader',\n          repo: 'https://github.com/calibreapp/react-live-chat-loader',\n        },\n      ],\n    })\n  })\n\n  it('returns undefined when product does not match', () => {\n    expect(getProduct('https://js.connect.facebook.net/lib.js')).toEqual(undefined)\n  })\n\n  it('returns undefined with no products', () => {\n    expect(getProduct('https://unknown.typekit.net/fonts.css')).toEqual(undefined)\n  })\n})\n\ndescribe('build state', () => {\n  it('should use the complete entities set', () => {\n    const sourceOfTruthEntities = require('../data/entities.js')\n    expect(entities).toHaveLength(sourceOfTruthEntities.length)\n  })\n\n  it('should have all the same subsets in root as lib', () => {\n    const srcSizes = fs.readdirSync(path.join(__dirname, 'subsets'))\n    const dstSizes = fs.readdirSync(path.join(__dirname, '../')).filter(f => f.includes('-subset'))\n    expect(dstSizes).toHaveLength(srcSizes.length) // run `yarn build` if this fails\n\n    for (const file of dstSizes) {\n      if (file.endsWith('.js')) require(path.join(__dirname, '../', file))\n    }\n  })\n})\n\nit('should work on real web data', () => {\n  const urls = fs\n    .readFileSync(path.join(__dirname, '../data/random-urls.txt'), 'utf8')\n    .split('\\n')\n    .filter(Boolean)\n\n  for (const url of urls) {\n    getEntity(url) // ensure it doesn't throw\n  }\n\n  const top1000 = urls.slice(0, 1000).map(url => {\n    const cleanedUrl = url.split('?')[0]\n    const entity = getEntity(url)\n    return `${entity && entity.name} - ${cleanedUrl}`\n  })\n\n  // It's expected that this snapshot will change as coverage changes.\n  expect(top1000).toMatchSnapshot()\n})\n"
+    },
+    {
+      "path": "lib/entities.test.js",
+      "sha": null,
+      "content_sha256": "1f5e8923a3b65448ff2fba41d30bf7a5ab32d788acd30cb4aa3c1d12b1f4aef7",
+      "score": 93,
+      "content": "const _ = require('lodash')\nconst {entities, getRootDomain, getEntity} = require('./index.js')\n\ndescribe('Entities', () => {\n  it('should not have duplicate names', () => {\n    for (let i = 0; i < entities.length; i++) {\n      for (let j = i + 1; j < entities.length; j++) {\n        const nameA = entities[i].name.replace(/\\s+/, '').toLowerCase()\n        const nameB = entities[j].name.replace(/\\s+/, '').toLowerCase()\n        if (nameA !== nameB) continue\n\n        expect(entities[i]).toBe(entities[j])\n      }\n    }\n  })\n\n  it('should not have non-supported wilcards', () => {\n    for (const entity of entities) {\n      for (const domain of entity.domains) {\n        // Wildcards must be like `*.blah.com`\n        // Wildcards cannot be `*blah.com` or `blah*.com`\n        expect(domain).toEqual(expect.not.stringMatching(/\\w\\*/))\n        expect(domain).toEqual(expect.not.stringMatching(/\\*\\w/))\n      }\n    }\n  })\n\n  it('should not have commas within a domain', () => {\n    for (const entity of entities) {\n      for (const domain of entity.domains) {\n        // A domain can be `*.maxymiser.net` or `maxymiser.hs.llnwd.net`\n        // A domain can't be `*.maxymiser.net, maxymiser.hs.llnwd.net`\n        expect(domain).toEqual(expect.not.stringContaining(','))\n      }\n    }\n  })\n})\n"
+    },
+    {
+      "path": ".yarnrc.yml",
+      "sha": null,
+      "content_sha256": "473e6def86fc03638120e0c01d0c8bbab095677256460fa4ea763e5d4697f270",
+      "score": 35,
+      "content": "nodeLinker: node-modules\n"
+    },
+    {
+      "path": "www/gatsby-node.js",
+      "sha": null,
+      "content_sha256": "95c6b7c5ea30a1e31457b2405f8a63fd7d1df27819810cb5ccd843fbfed40d6f",
+      "score": 33,
+      "content": "/**\n * Implement Gatsby's Node APIs in this file.\n *\n * See: https://www.gatsbyjs.org/docs/node-apis/\n */\n\n// You can delete this file if you're not using it\n"
+    },
+    {
+      "path": "lib/index.js",
+      "sha": null,
+      "content_sha256": "39ce5690d3e7a4f9a11f400ed41445d55a4ba879f6b22c18c4df14992ff9a925",
+      "score": 33,
+      "content": "const {createAPIFromDataset} = require('./create-entity-finder-api.js')\nconst entities = require('../dist/entities.json')\nmodule.exports = createAPIFromDataset(entities)\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "214d940291cfd9b997df6bc72802aac3ddcbb4895843195a94453f97215075ca",
+      "score": 33,
+      "content": "version: 2\nupdates:\n  - package-ecosystem: github-actions\n    directory: \"/\"\n    schedule:\n      interval: monthly\n"
+    },
+    {
+      "path": "bin/fix-line-delimited-json.js",
+      "sha": null,
+      "content_sha256": "8432ab383adb5317b51b952fd7216066694ebeb58371e47d9083552db374e0d3",
+      "score": 33,
+      "content": "const fs = require('fs')\nconst path = require('path')\n\nconst fileToFix = path.resolve(process.cwd(), process.argv[2])\nconsole.log('Fixing', fileToFix, '...')\nconst lines = fs\n  .readFileSync(process.argv[2], 'utf8')\n  .split('\\n')\n  .filter(Boolean)\nJSON.parse(lines[0])\n\nfs.writeFileSync(fileToFix, '[\\n' + lines.join(',') + '\\n]')\n"
+    },
+    {
+      "path": "sql/web-almanac-all-observed-domains-identification.sql",
+      "sha": null,
+      "content_sha256": "b5a016044e3f86936389038e125228c4fb530f0193908661d2901ec9da027bdd",
+      "score": 33,
+      "content": "SELECT\n  requestDomain,\n  COUNT(*) as numberOfPages,\n  SUM(requestsOnPage) as totalRequests\nFROM (\n  SELECT\n    page AS pageUrl,\n    NET.HOST(url) AS requestDomain,\n    COUNT(*) as requestsOnPage\n  FROM\n    `httparchive.requests.2019_07_01_mobile`\n    GROUP BY pageUrl, requestDomain\n)\nGROUP BY requestDomain\nHAVING numberOfPages >= 50\n"
+    },
+    {
+      "path": "sql/most-observed-domains-query.sql",
+      "sha": null,
+      "content_sha256": "328341df4db9851f4d208f65b0f1bee4fdfd371235af275571fc24af692116ed",
+      "score": 33,
+      "content": "SELECT\n    domain,\n    COUNT(0) AS totalOccurrences\nFROM\n    (\n        SELECT\n            page,\n            NET.HOST(url) AS domain,\n            COUNT(0) AS totalOccurrences\n        FROM\n            `httparchive.crawl.requests`\n        WHERE\n            date = \"2022-01-01\"\n        AND\n            client = \"mobile\"\n        GROUP BY\n            page,\n            domain\n    )\nGROUP BY\n    domain\nHAVING\n    totalOccurrences >= 50\nORDER BY\n    totalOccurrences DESC"
+    },
+    {
+      "path": "bin/convert-linedelimited-json.js",
+      "sha": null,
+      "content_sha256": "c740332e6dffb1120a89248cb2c9222b058927d56d4b6b45b0a42305979e9b05",
+      "score": 33,
+      "content": "const fs = require('fs')\nconst path = require('path')\n\nconst PATH_TO_JSON = process.argv[2]\nif (!PATH_TO_JSON || !PATH_TO_JSON.endsWith('.json'))\n  throw new Error('Must provide a JSON file to convert')\n\nconst contents = fs.readFileSync(path.resolve(process.cwd(), PATH_TO_JSON), 'utf8')\nif (contents.startsWith('[')) throw new Error('Already converted')\n\nconst lines = contents.split('\\n').filter(Boolean)\n\nfs.writeFileSync(\n  PATH_TO_JSON,\n  ['[', ...lines.map((line, i) => `  ${line}${i === lines.length - 1 ? '' : ','}`), ']'].join('\\n')\n)\n"
+    },
+    {
+      "path": "www/gatsby-ssr.js",
+      "sha": null,
+      "content_sha256": "ac965014a52c4cef00badb221caaa27adc3f89de4964d4b4d3bf8ccf9088cc86",
+      "score": 33,
+      "content": "/**\n * Implement Gatsby's SSR (Server Side Rendering) APIs in this file.\n *\n * See: https://www.gatsbyjs.org/docs/ssr-apis/\n */\n\n// You can delete this file if you're not using it\n"
+    },
+    {
+      "path": "sql/total-time-query.sql",
+      "sha": null,
+      "content_sha256": "f04d464b8eccf2041c657337edc5abfcdf0d50deaa1f49e431f859fcba1c89d2",
+      "score": 33,
+      "content": "SELECT\n  SUM(executionTime) AS totalExecutionTime,\n  COUNT(executionTime) AS totalOccurrences\n  FROM (\n    SELECT\n  domain,\n  canonicalDomain,\n  category,\n  JSON_VALUE(report, '$.requestedUrl') AS pageUrl,\n  NET.HOST(JSON_VALUE(bootupTimeItems, '$.url')) AS observedDomain,\n  JSON_VALUE(bootupTimeItems, '$.url') AS scriptUrl,\n  SAFE_CAST(JSON_VALUE(bootupTimeItems,\n      \"$.scripting\") AS FLOAT64) AS executionTime\nFROM (\n  SELECT\n    url AS page,\n    report\n  FROM\n    `httparchive.lighthouse.2020_05_01_mobile`\n  ),\n  UNNEST(JSON_QUERY_ARRAY(report,\n      '$.audits.bootup-time.details.items')) AS bootupTimeItems\n  INNER JOIN\n    `lighthouse-infrastructure.third_party_web.2020_05_01`\n  ON NET.HOST(JSON_VALUE(bootupTimeItems, \"$.url\")) = domain\n  )\n"
+    },
+    {
+      "path": "bin/convert-entities-db.js",
+      "sha": null,
+      "content_sha256": "7291481825aa4754e1ce7968296f3ed4007cf2ce80e839e548ebbc944f73d4c3",
+      "score": 33,
+      "content": "const fs = require('fs')\nconst path = require('path')\nconst {stringifyEntities} = require('./shared/utils')\n\nconst DIST_DIR = path.join(__dirname, '../dist')\nconst DATA_DIR = path.join(__dirname, '../data')\n\nconst sourceEntities = require(`${DATA_DIR}/entities.js`)\nif (!fs.existsSync(DIST_DIR)) fs.mkdirSync(DIST_DIR)\nfs.writeFileSync(`${DIST_DIR}/entities.json`, stringifyEntities(sourceEntities))\n"
+    },
+    {
+      "path": "sql/bootup-time-scripting.partial.sql",
+      "sha": null,
+      "content_sha256": "dc00ffe7073aa47121e9e32f03c1108b40eab34a8d4ff4b3b5d7d302531c1227",
+      "score": 33,
+      "content": "SELECT\n  domain,\n  canonicalDomain,\n  category,\n  JSON_EXTRACT(report, '$.requestedUrl') AS pageUrl,\n  NET.HOST(JSON_EXTRACT(report, '$.audits.bootup-time.details.items[<%= i %>].url')) AS observedDomain,\n  JSON_EXTRACT(report, '$.audits.bootup-time.details.items[<%= i %>].url') AS scriptUrl,\n  SAFE_CAST(JSON_EXTRACT(report, '$.audits.bootup-time.details.items[<%= i %>].scripting') AS FLOAT64) AS executionTime\nFROM\n  `httparchive.lighthouse.2020_05_01_mobile`\nLEFT JOIN\n  `lighthouse-infrastructure.third_party_web.2020_05_01`\nON NET.HOST(JSON_EXTRACT(report, '$.audits.bootup-time.details.items[<%= i %>].url')) = domain\n<%= where %>\n"
+    },
+    {
+      "path": "sql/url-query.sql",
+      "sha": null,
+      "content_sha256": "9aaba1745560dd00132e3a05ba827c59b237061424cde7ef12fe13b818922c58",
+      "score": 33,
+      "content": "SELECT\n  REGEXP_EXTRACT(url, r'http.*?://(.+)\"') as schemelessURL,\n  SUM(executionTime) AS totalExecutionTime,\n  COUNT(executionTime) AS totalOccurrences,\n  AVG(executionTime) AS averageExecutionTime\nFROM <%= from_statement %>\n<%= where %>\nGROUP BY\n  schemelessURL\nHAVING\n  totalOccurrences > 50\nORDER BY\n  totalOccurrences DESC\nLIMIT\n  1000\n"
+    },
+    {
+      "path": "lib/index.d.ts",
+      "sha": null,
+      "content_sha256": "a4b8a94f5f1db62b9e3489cc1d03cb25b87d37c56809ee869eb5590731303b98",
+      "score": 33,
+      "content": "export interface IFacade {\n  name: string\n  repo: string\n}\n\nexport interface IProduct {\n  name: string\n  company: string\n  homepage?: string\n  category: string\n  /** @deprecated - Use `category` instead. */\n  categories: string[]\n  urlPatterns?: string[]\n  facades?: IFacade[]\n}\n\nexport interface IEntity {\n  name: string\n  company: string\n  homepage?: string\n  category: string\n  /** @deprecated - Use `category` instead. */\n  categories: string[]\n  domains: string[]\n  products?: IProduct[]\n  averageExecutionTime: number\n  totalExecutionTime: number\n  totalOccurrences: number\n}\n\nexport declare const entities: IEntity[]\nexport declare function getRootDomain(url: string): string\nexport declare function getEntity(url: string): IEntity | undefined\nexport declare function getProduct(url: string): IProduct | undefined\n"
+    },
+    {
+      "path": "sql/third-party-requests-by-type.sql",
+      "sha": null,
+      "content_sha256": "e1234c1aef641ab60d66fbed701c1219e6abb80b3c295fe6f37b6861b093960e",
+      "score": 33,
+      "content": "SELECT\n  COUNT(*),\n  COUNTIF(pageOrigin = requestOrigin) AS matchingOrigins,\n  COUNTIF(pageETld = requestETld) AS matchingETlds,\n  SUM(bytes) AS totalBytes,\n  contentType\nFROM (\n  SELECT\n    page AS pageUrl,\n    NET.HOST(page) AS pageOrigin,\n    REGEXP_EXTRACT(NET.HOST(page), r'([^.]+\\.(?:[^.]+|(?:gov|com|co|ne)\\.\\w{2})$)') AS pageETld,\n    url AS requestUrl,\n    NET.HOST(url) AS requestOrigin,\n    REGEXP_EXTRACT(NET.HOST(url), r'([^.]+\\.(?:[^.]+|(?:gov|com|co|ne)\\.\\w{2})$)') AS requestETld,\n    REGEXP_EXTRACT(payload, r'(?i)content-type:\\s*([a-z0-9_\\/-]+)') AS contentType,\n    SAFE_CAST(REGEXP_EXTRACT(payload, r'_bytesIn\":(\\d+)') AS INT64) AS bytes\n  FROM\n    `httparchive.requests.2019_05_01_desktop` )\nJOIN\n  `lighthouse-infrastructure.third_party_web.2019_05_22_all_observed_domains`\nGROUP BY\n  contentType\nLIMIT\n  100\n"
+    },
+    {
+      "path": "sql/web-almanac-top-requests.sql",
+      "sha": null,
+      "content_sha256": "fd2a355ef23e1a1f34e1703a3b42111e187a3a8232f8ecdf28182332e6a2b925",
+      "score": 33,
+      "content": "SELECT\n  requestUrl,\n  COUNT(*) AS totalRequests,\n  SUM(requestBytes) AS totalBytes\nFROM (\n  SELECT\n      url AS requestUrl,\n      SAFE_CAST(REGEXP_EXTRACT(payload, r'_bytesIn\":(\\d+)') AS INT64) AS requestBytes\n    FROM\n      `httparchive.sample_data.requests_mobile_1k`\n)\nGROUP BY\n  requestUrl\nORDER BY\n  totalRequests DESC\nLIMIT 1000\n\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:01:44.808158+00:00"
+}
