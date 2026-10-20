@@ -1,0 +1,235 @@
+{
+  "canonical_source": "github:Dokploy/templates",
+  "repo": "Dokploy/templates",
+  "revision_sha": "eaa6b986a77b0a827be71e1e5e38ee8cf195d849",
+  "default_branch": "canary",
+  "pushed_at": "2026-10-15T19:26:12Z",
+  "repo_updated_at": "2026-10-15T19:26:18Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/validate-docker-compose.yml",
+      "sha": null,
+      "content_sha256": "c56023e2e5655a72a3ebbe5aa081a98966e686cd9f83236d0e688ce9d8cdb6af",
+      "score": 211,
+      "content": "name: Validate Docker Compose Files\n\non:\n  pull_request:\n    branches:\n      - canary\n    paths:\n      - 'blueprints/**/docker-compose.yml'\n      - 'blueprints/**/template.toml'\n  workflow_dispatch:\n\njobs:\n  validate-docker-compose:\n    runs-on: ubuntu-latest\n    \n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n\n      - name: Set up Docker Compose\n        run: docker compose version\n\n      - name: Set up Node.js\n        uses: actions/setup-node@v4\n        with:\n          node-version: 20.16.0\n\n      - name: Set up pnpm\n        uses: pnpm/action-setup@v4\n        with:\n          version: 8\n\n      - name: Install dependencies\n        run: cd build-scripts && pnpm install\n\n      - name: Detect changed blueprints\n        id: changed\n        run: |\n          BASE_SHA=$(git merge-base HEAD origin/${{ github.base_ref }})\n          \n          # Obtener todos los blueprints que tienen cambios (en docker-compose.yml o template.toml)\n          CHANGED_BLUEPRINTS=$(git diff --name-only --diff-filter=ACMRT $BASE_SHA HEAD | \\\n            grep -E 'blueprints/[^/]+/(docker-compose\\.yml|template\\.toml)$' | \\\n            sed 's|blueprints/\\([^/]*\\)/.*|\\1|' | \\\n            sort -u)\n          \n          echo \"Changed blueprints:\"\n          echo \"$CHANGED_BLUEPRINTS\" | while read blueprint; do\n            [ -n \"$blueprint\" ] && echo \"  - $blueprint\"\n          done\n          \n          # Guardar lista de blueprints (una por línea)\n          echo \"blueprints<<EOF\" >> $GITHUB_OUTPUT\n          echo \"$CHANGED_BLUEPRINTS\" >> $GITHUB_OUTPUT\n          echo \"EOF\" >> $GITHUB_OUTPUT\n\n      - name: Validate blueprints\n        run: |\n          BLUEPRINTS=\"${{ steps.changed.outputs.blueprints }}\"\n          \n          if [ -z \"$BLUEPRINTS\" ] || [ \"$BLUEPRINTS\" = \"\" ]; then\n            echo \"ℹ️ No blueprints changed, skipping validation\"\n            exit 0\n          fi\n          \n          ERROR=0\n          \n          # Convertir a array para evitar problemas con subshells\n          mapfile -t BLUEPRINT_ARRAY <<< \"$BLUEPRINTS\"\n          \n          # Iterar sobre cada blueprint\n          for blueprint in \"${BLUEPRINT_ARRAY[@]}\"; do\n            [ -z \"$blueprint\" ] && continue\n            \n            BLUEPRINT_PATH=\"blueprints/$blueprint\"\n            COMPOSE_FILE=\"$BLUEPRINT_PATH/docker-compose.yml\"\n            TOML_FILE=\"$BLUEPRINT_PATH/template.toml\"\n            \n            echo \"\"\n            echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\n            echo \"📦 Validating: $blueprint\"\n            echo \"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\"\n            \n            # 1. Validar best practices de docker-compose.yml\n            if [ ! -f \"$COMPOSE_FILE\" ]; then\n              echo \"⚠️  WARNING: docker-compose.yml not found\"\n              ERROR=1\n              continue\n            fi\n            echo \"🔍 Validating docker-compose.yml best practices...\"\n            if ! (cd build-scripts && pnpm exec tsx validate-docker-compose.ts --file \"../$COMPOSE_FILE\" --verbose); then\n              ERROR=1\n              continue\n            fi\n            \n            # 3. Validar template.toml\n            if [ -f \"$TOML_FILE\" ]; then\n              echo \"🔍 Validating template.toml...\"\n              if ! (cd build-scripts && pnpm exec tsx validate-template.ts --dir \"../$BLUEPRINT_PATH\" --verbose); then\n                ERROR=1\n                continue\n              fi\n            else\n              echo \"⚠️  WARNING: template.toml not found\"\n              ERROR=1\n              continue\n            fi\n            \n            echo \"✅ All validations passed for $blueprint\"\n          done\n          \n          if [ $ERROR -eq 1 ]; then\n            echo \"\"\n            echo \"❌ Validation failed for one or more blueprints\"\n            exit 1\n          else\n            echo \"\"\n            echo \"✅ All blueprints validated successfully\"\n          fi\n"
+    },
+    {
+      "path": ".github/workflows/deploy-production.yml",
+      "sha": null,
+      "content_sha256": "bb5c8b8b6ec72488e7aad0a1607663169429bf8f83606c7fd034bd198f20e7d5",
+      "score": 198,
+      "content": "name: Deploy to Cloudflare Pages (Production)\n\non:\n  push:\n    branches:\n      - main\n\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      deployments: write\n    name: Publish to Cloudflare Pages\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Setup Node.js\n        uses: actions/setup-node@v4\n        with:\n          node-version: '20'\n\n      - name: Setup pnpm\n        uses: pnpm/action-setup@v2\n        with:\n          version: 8\n\n      - name: Install dependencies\n        working-directory: app\n        run: pnpm install\n\n      - name: Build\n        working-directory: app\n        run: pnpm build\n\n      - name: Publish to Cloudflare Pages\n        uses: AdrianGonz97/refined-cf-pages-action@v1\n        with:\n          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}\n          githubToken: ${{ secrets.GITHUB_TOKEN }}\n          projectName: ${{ secrets.CLOUDFLARE_PROJECT_NAME }}\n          directory: app/dist\n          deploymentName: Production\n          branch: main\n          wranglerVersion: '3' "
+    },
+    {
+      "path": ".github/workflows/deploy-preview.yml",
+      "sha": null,
+      "content_sha256": "861a57f5e58093e6b9bec20725d7fad8238e4931cfe5d3a27570447477d9fd21",
+      "score": 198,
+      "content": "name: Upload Preview Deployment\n\non:\n  workflow_run:\n    workflows: [Build Preview Deployment]\n    types:\n      - completed\npermissions:\n  actions: read\n  deployments: write\n  contents: read\n  pull-requests: write\n\njobs:\n  deploy-preview:\n    runs-on: ubuntu-latest\n    if: ${{ github.event.workflow_run.conclusion == 'success' }}\n    steps:\n      - name: Download build artifact\n        uses: actions/download-artifact@v4\n        id: preview-build-artifact\n        with:\n          name: preview-build\n          path: build\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n          run-id: ${{ github.event.workflow_run.id }}\n\n      - name: Deploy to Cloudflare Pages\n        uses: AdrianGonz97/refined-cf-pages-action@v1\n        with:\n          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}\n          githubToken: ${{ secrets.GITHUB_TOKEN }}\n          projectName: templates\n          deploymentName: Preview\n          directory: ${{ steps.preview-build-artifact.outputs.download-path }}"
+    },
+    {
+      "path": "blueprints/stack-auth/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "5ac938f3538a83dd5a57de44c1d36edd0a7128fa4bd33c304aad9e2c59e26ed7",
+      "score": 196,
+      "content": "services:\n  stack-auth-db:\n    image: postgres:17\n    environment:\n      - POSTGRES_USER=${POSTGRES_USER}\n      - POSTGRES_PASSWORD=[REDACTED]}\n      - POSTGRES_DB=${POSTGRES_DB}\n    volumes:\n      - stack-auth-db-data:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready\", \"-d\", \"db_prod\"]\n      interval: 10s\n      timeout: 60s\n      retries: 5\n      start_period: 80s\n      \n  stack-auth:\n    image: stackauth/server:latest\n    environment:\n      - POSTGRES_USER=${POSTGRES_USER}\n      - POSTGRES_PASSWORD=[REDACTED]}\n      - POSTGRES_DB=${POSTGRES_DB}\n      - NEXT_PUBLIC_STACK_API_URL=${NEXT_PUBLIC_STACK_API_URL}\n      - NEXT_PUBLIC_STACK_DASHBOARD_URL=${NEXT_PUBLIC_STACK_DASHBOARD_URL}\n      - STACK_DATABASE_CONNECTION_STRING=${STACK_DATABASE_CONNECTION_STRING}\n      - STACK_DIRECT_DATABASE_CONNECTION_STRING=${STACK_DIRECT_DATABASE_CONNECTION_STRING}\n      - STACK_SERVER_SECRET=[REDACTED]}\n      - STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST=${STACK_SEED_INTERNAL_PROJECT_ALLOW_LOCALHOST}\n      - STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED=${STACK_SEED_INTERNAL_PROJECT_SIGN_UP_ENABLED}\n      - STACK_RUN_MIGRATIONS=${STACK_RUN_MIGRATIONS}\n      - STACK_RUN_SEED_SCRIPT=${STACK_RUN_SEED_SCRIPT}\n      - STACK_EMAIL_HOST=${STACK_EMAIL_HOST}\n    depends_on:\n      stack-auth-db:\n        condition: service_healthy\n\n    \nvolumes:\n  stack-auth-db-data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/authorizer/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "1c0bc7ef001cd7d03e134fa2a88eba3d593602f97e686decec1f36ef8dae526e",
+      "score": 196,
+      "content": "services:\n  authorizer:\n    image: lakhansamani/authorizer:1.4.4\n    restart: unless-stopped\n    expose:\n      - 8080\n    environment:\n      - DATABASE_TYPE=postgres\n      - DATABASE_URL=postgres://postgres:${DB_PASSWORD}@authorizer-db:5432/authorizer?sslmode=disable\n      - REDIS_URL=redis://authorizer-redis:6379\n      - ADMIN_SECRET=[REDACTED]}\n      - JWT_SECRET=[REDACTED]}\n      - COOKIE_NAME=authorizer\n      - ACCESS_TOKEN_EXPIRY_TIME=86400\n      - REFRESH_TOKEN_EXPIRY_TIME=86400\n      - DISABLE_PLAYGROUND=true\n    depends_on:\n      - authorizer-db\n      - authorizer-redis\n\n  authorizer-db:\n    image: postgres:15-alpine\n    restart: unless-stopped\n    environment:\n      - POSTGRES_USER=postgres\n      - POSTGRES_PASSWORD=[REDACTED]}\n      - POSTGRES_DB=authorizer\n    volumes:\n      - db_data:/var/lib/postgresql/data\n\n  authorizer-redis:\n    image: redis:7-alpine\n    restart: unless-stopped\n    volumes:\n      - redis_data:/data\n\nvolumes:\n  db_data: {}\n  redis_data: {} \n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/authentik/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "96fabd21e9e23b71a0ef08afb22aa73c0b6659540e6f9ec6255d4dcd90a07b3b",
+      "score": 196,
+      "content": "services:\n  postgresql:\n    image: docker.io/library/postgres:18-alpine\n    restart: unless-stopped\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}\"]\n      start_period: 20s\n      interval: 30s\n      retries: 5\n      timeout: 5s\n    volumes:\n      - database:/var/lib/postgresql\n    environment:\n      POSTGRES_PASSWORD: ${PG_PASS}\n      POSTGRES_USER: ${PG_USER}\n      POSTGRES_DB: ${PG_DB}\n    expose:\n      - 5432\n\n  server:\n    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.8.2}\n    restart: unless-stopped\n    command: server\n    shm_size: 512mb\n    environment:\n      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}\n      AUTHENTIK_WEB__BASE_URL: ${AUTHENTIK_WEB__BASE_URL}\n      AUTHENTIK_POSTGRESQL__HOST: postgresql\n      AUTHENTIK_POSTGRESQL__USER: ${PG_USER}\n      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB}\n      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}\n    volumes:\n      - data:/data\n      - custom-templates:/templates\n    expose:\n      - 9000\n      - 9443\n    depends_on:\n      postgresql:\n        condition: service_healthy\n\n  worker:\n    image: ${AUTHENTIK_IMAGE:-ghcr.io/goauthentik/server}:${AUTHENTIK_TAG:-2026.8.2}\n    restart: unless-stopped\n    command: worker\n    shm_size: 512mb\n    environment:\n      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}\n      AUTHENTIK_WEB__BASE_URL: ${AUTHENTIK_WEB__BASE_URL}\n      AUTHENTIK_POSTGRESQL__HOST: postgresql\n      AUTHENTIK_POSTGRESQL__USER: ${PG_USER}\n      AUTHENTIK_POSTGRESQL__NAME: ${PG_DB}\n      AUTHENTIK_POSTGRESQL__PASSWORD: ${PG_PASS}\n    user: root\n    volumes:\n      - data:/data\n      - certs:/certs\n      - custom-templates:/templates\n    depends_on:\n      postgresql:\n        condition: service_healthy\n      # Create the worker after the server so both don't populate the fresh\n      # shared \"data\" volume from the image at the same time (race on /data/media).\n      server:\n        condition: service_started\n\nvolumes:\n  database:\n    driver: local\n  data:\n    driver: local\n  certs:\n    driver: local\n  custom-templates:\n    driver: local\n"
+    },
+    {
+      "path": "blueprints/authelia/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "ff645cff4445972ca789c7b0288c393dbf81f857277fac3b2517dc0d756f2c90",
+      "score": 196,
+      "content": "services:\n  authelia:\n    image: authelia/authelia:latest\n    restart: unless-stopped\n    volumes:\n      - authelia_config:/config\n      - ../files/configuration.yml:/config/configuration.yml:ro\n      - ../files/users_database.yml:/config/users_database.yml\n    environment:\n      AUTHELIA_JWT_SECRET: $JWT_SECRET\n      AUTHELIA_SESSION_SECRET: [REDACTED]\n      AUTHELIA_STORAGE_ENCRYPTION_KEY: $STORAGE_ENCRYPTION_KEY\n      AUTHELIA_STORAGE_POSTGRES_PASSWORD: [REDACTED]\n    depends_on:\n      redis:\n        condition: service_healthy\n      postgres:\n        condition: service_healthy\n    expose:\n      - 9091\n  redis:\n    image: redis:7-alpine\n    restart: unless-stopped\n    volumes:\n      - redis_data:/data\n    command: redis-server --save 60 1 --loglevel warning --requirepass $REDIS_PASSWORD\n    environment:\n      REDIS_PASSWORD: [REDACTED]\n    healthcheck:\n      test: [\"CMD\", \"redis-cli\", \"--raw\", \"incr\", \"ping\"]\n      interval: 10s\n      timeout: 3s\n      retries: 5\n\n  postgres:\n    image: postgres:16-alpine\n    restart: unless-stopped\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n    environment:\n      POSTGRES_DB: authelia\n      POSTGRES_USER: authelia\n      POSTGRES_PASSWORD: [REDACTED]\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U authelia -d authelia\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n      start_period: 30s\n\nvolumes:\n  authelia_config:\n  redis_data:\n  postgres_data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/meilisearch/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "8c97de3151e4ce0318f6cbc728483720e2499d71c74a186c2cf61156e467c6b7",
+      "score": 191,
+      "content": "services:\n  meilisearch:\n    image: getmeili/meilisearch:v1.35.1\n    volumes:\n      - meili_data:/meili_data\n    environment:\n      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}\n\nvolumes:\n  meili_data:\n    driver: local\n"
+    },
+    {
+      "path": "blueprints/tor-browser/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "968f90d388c6e408a67b15da9f6530c7d895d93a310b93cc5cc6619217b65bb6",
+      "score": 191,
+      "content": "services:\n  tor:\n    image: domistyle/tor-browser\n    restart: always\n    expose:\n      - 5800\n      - 5900\n    environment:\n      DISPLAY_WIDTH: ${DISPLAY_WIDTH}\n      DISPLAY_HEIGHT: ${DISPLAY_HEIGHT}\n      KEEP_APP_RUNNING: ${KEEP_APP_RUNNING}\n      TZ: ${TZ}\n"
+    },
+    {
+      "path": "blueprints/filebrowser/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "ff90010dc60a79ff45079c807502096a68370f4edeaeeff7b4216e62c0fb8c09",
+      "score": 191,
+      "content": "services:\n  filebrowser:\n    image: hurlenko/filebrowser\n    volumes:\n      - filebrowser-data:/data\n      - filebrowser-config:/config\n    environment:\n      - FB_BASEURL=${FB_BASEURL}\n    restart: always \n\nvolumes:\n  filebrowser-data:\n  filebrowser-config:\n    \n"
+    },
+    {
+      "path": "blueprints/apprise-api/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "13ab0dbabc4d068c47f41bd166641d9605377ed9b3917e3ed9eaa32319b01afc",
+      "score": 191,
+      "content": "services:\n  apprise-api:\n    image: linuxserver/apprise-api:latest\n    restart: unless-stopped\n    expose:\n      - 8000\n    environment:\n      - PUID=1000\n      - PGID=1000\n      - TZ=UTC\n    volumes:\n      - config:/config\n\nvolumes:\n  config: {} \n"
+    },
+    {
+      "path": "blueprints/agent-zero/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "3eed40f313b9e71bc689ca67b0388e7c68ee1a36c8ccc0beafea2de1f74994ce",
+      "score": 191,
+      "content": "services:\n  agent-zero:\n    image: agent0ai/agent-zero:v1.9\n    restart: unless-stopped\n    expose:\n      - \"80\"\n    environment:\n      - AUTH_LOGIN=${AUTH_LOGIN}\n      - AUTH_PASSWORD=[REDACTED]}\n    volumes:\n      - agent-zero-data:/a0/usr\nvolumes:\n  agent-zero-data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/browserless/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "78d947abe6d156e252560be0353180765aa49c54d60b27e34695ffcc50a0745e",
+      "score": 191,
+      "content": "services:\n  browserless:\n    image: ghcr.io/browserless/chromium:latest\n    environment:\n      TOKEN: [REDACTED]}\n    expose:\n      - 3000\n    healthcheck:\n      test:\n        - CMD\n        - curl\n        - '-f'\n        - 'http://127.0.0.1:3000/docs'\n      interval: 2s\n      timeout: 10s\n      retries: 15\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/velix-api/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "2d997a2771140a84dc2bf71ee7a51647d824dd68c3f204db46461f47ca432ed4",
+      "score": 191,
+      "content": "services:\n  velix-api:\n    image: ghcr.io/paulolinder/velix-api:1.1.0\n    restart: always\n    environment:\n      - DATABASE_URL=postgres://postgres:${DB_PASSWORD}@postgres:5432/velix?sslmode=disable\n      - REDIS_URL=redis://redis:6379\n      - JWT_SECRET=[REDACTED]}\n      - HTTP_PORT=8080\n      - APP_ENV=production\n      - LOG_LEVEL=info\n      - MEDIA_STORAGE_PATH=/data/media\n      - ENGINE_STORE_PATH=/data/instances\n      - ENGINE_AUTO_RECONNECT=true\n      - ENGINE_MAX_INSTANCES=200\n      - REGISTRATION_ENABLED=false\n    volumes:\n      - velix-data:/data\n    depends_on:\n      - postgres\n      - redis\n\n  postgres:\n    image: postgres:16-alpine\n    restart: always\n    environment:\n      - POSTGRES_DB=velix\n      - POSTGRES_PASSWORD=[REDACTED]}\n    volumes:\n      - postgres-data:/var/lib/postgresql/data\n\n  redis:\n    image: redis:7-alpine\n    restart: always\n    volumes:\n      - redis-data:/data\n\nvolumes:\n  velix-data:\n  postgres-data:\n  redis-data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/crawlab-worker/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "bed89aeebb409b792572ec8ada54f35b9adab4073e2ec3c92654f06c4c8d8f2c",
+      "score": 191,
+      "content": "services:\n  crawlab-worker:\n    image: crawlabteam/crawlab:latest\n    restart: unless-stopped\n    environment:\n      - CRAWLAB_NODE_MASTER=N\n      - CRAWLAB_GRPC_ADDRESS=${MASTER_GRPC_ADDRESS}\n      - CRAWLAB_FS_FILER_URL=${MASTER_FILER_URL}\n    volumes:\n      - crawlab-worker-data:/root/.crawlab\n      - crawlab-worker-app:/data\n    deploy:\n      resources:\n        limits:\n          cpus: \"${CPU_LIMIT:-0.8}\" # 0.8 will limit to 80% of CPU if one core. If 2 cores, you need to put 0.8*2=1.6\n\nvolumes:\n  crawlab-worker-data:\n  crawlab-worker-app:\n"
+    },
+    {
+      "path": "blueprints/agentdvr/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "3843e3adbf6634247c7086be9a7205e837a81341945f1cf5ef724162a85d17ed",
+      "score": 191,
+      "content": "services:\n  agentdvr:\n    image: mekayelanik/ispyagentdvr:latest\n    restart: unless-stopped\n    environment:\n      - PUID=1000\n      - PGID=1000\n      - TZ=${TIMEZONE:-America/New_York}\n      - AGENTDVR_WEBUI_PORT=8090\n    volumes:\n      - agentdvr-config:/AgentDVR/Media/XML/\n      - agentdvr-media:/AgentDVR/Media/WebServerRoot/Media/\n      - agentdvr-commands:/AgentDVR/Commands/\n    expose:\n      - 8090\n      - 3478/udp\n      - 50000-50100/udp\nvolumes:\n  agentdvr-config: {}\n  agentdvr-media: {}\n  agentdvr-commands: {}\n"
+    },
+    {
+      "path": "blueprints/wise-mcp/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "19c5e266eb69e93895860dc711589892fb9d2c398037e821594d8f963e29f333",
+      "score": 191,
+      "content": "services:\n  wise-mcp:\n    image: ghcr.io/blanketbyte/wise-mcp:1.1.1\n    restart: unless-stopped\n    expose:\n      - 3000\n    environment:\n      - PUBLIC_URL=${PUBLIC_URL}\n      - TOKEN_ENCRYPTION_KEY=${TOKEN_ENCRYPTION_KEY}\n      - ALLOWED_WISE_USERS=${ALLOWED_WISE_USERS}\n      - WRITES_ENABLED=${WRITES_ENABLED}\n    volumes:\n      - wise-mcp-data:/data\n\nvolumes:\n  wise-mcp-data: {}\n"
+    },
+    {
+      "path": "blueprints/freellmapi/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "d20eba172538e7f1d5b067957f7d125db229431b18d33e3733390461f8a3d52e",
+      "score": 191,
+      "content": "services:\n  freellmapi:\n    image: ghcr.io/tashfeenahmed/freellmapi:v0.8.4\n    restart: unless-stopped\n    environment:\n      NODE_ENV: production\n      PORT: ${PORT}\n      ENCRYPTION_KEY: ${ENCRYPTION_KEY}\n    expose:\n      - 3001\n    volumes:\n      - freellmapi-data:/app/server/data\n    healthcheck:\n      test:\n        [\n          \"CMD\",\n          \"node\",\n          \"-e\",\n          \"fetch('http://127.0.0.1:3001/api/ping').then((res) => { if (!res.ok) process.exit(1); }).catch(() => process.exit(1));\"\n        ]\n      interval: 30s\n      timeout: 5s\n      start_period: 15s\n      retries: 3\n\nvolumes:\n  freellmapi-data:\n"
+    },
+    {
+      "path": "blueprints/crawl4ai/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "64b367fbaba10ae34788419190a42c2e6c2c5c7b4728ffafd950fcef8eaca000",
+      "score": 191,
+      "content": "services:\n  crawl4ai:\n    image: unclecode/crawl4ai:latest\n    restart: unless-stopped\n    shm_size: 1g\n    expose:\n      - 11235\n    environment:\n      - LLM_PROVIDER=${LLM_PROVIDER}\n      - OPENAI_API_KEY=[REDACTED]}\n      - ANTHROPIC_API_KEY=[REDACTED]}\n      - DEEPSEEK_API_KEY=[REDACTED]}\n      - GROQ_API_KEY=[REDACTED]}\n      - TOGETHER_API_KEY=[REDACTED]}\n      - MISTRAL_API_KEY=[REDACTED]}\n      - GEMINI_API_TOKEN=[REDACTED]}\n    healthcheck:\n      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:11235/health\"]\n      interval: 30s\n      timeout: 10s\n      retries: 3\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/anythingllm/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "d3d73f2c196d995ef817646d26a0d737a9bb122d47ea62520c9a6f646bb4bf9f",
+      "score": 191,
+      "content": "services:\n  anythingllm:\n    image: mintplexlabs/anythingllm:latest\n    restart: unless-stopped\n    expose:\n      - 3001\n    environment:\n      - STORAGE_DIR=/app/server/storage\n    volumes:\n      - storage:/app/server/storage\n    cap_add:\n      - SYS_ADMIN\n\nvolumes:\n  storage: {} \n"
+    },
+    {
+      "path": "blueprints/wakapi/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "c64028c1180a3c085276f6f4ba701db9b8d1b03c27e1f2b57d19a394bf5a17e5",
+      "score": 191,
+      "content": "services:\n  wakapi:\n    image: ghcr.io/muety/wakapi:latest\n    restart: unless-stopped\n    expose:\n      - \"3000\"\n    environment:\n      - WAKAPI_PASSWORD_SALT=${WAKAPI_PASSWORD_SALT}\n      - WAKAPI_DB_TYPE=sqlite3\n      - WAKAPI_DB_NAME=/data/wakapi.db\n      - WAKAPI_LISTEN_IPV4=0.0.0.0\n    volumes:\n      - wakapi-data:/data\n\nvolumes:\n  wakapi-data:\n"
+    },
+    {
+      "path": "blueprints/wuzapi/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "968a4f427982dbf073a9b7eba65105b7573b9356a030afeca967fb92af9b740f",
+      "score": 191,
+      "content": "services:\n  wuzapi-server:\n    image: asternic/wuzapi:sha-30c1805\n    restart: unless-stopped\n    expose:\n      - 8080\n    environment:\n      - WUZAPI_ADMIN_TOKEN=[REDACTED]}\n      - WUZAPI_GLOBAL_ENCRYPTION_KEY=${WUZAPI_GLOBAL_ENCRYPTION_KEY}\n      - DB_USER=${DB_USER:-wuzapi}\n      - DB_PASSWORD=[REDACTED]}\n      - DB_NAME=${DB_NAME:-wuzapi}\n      - DB_HOST=db\n      - DB_PORT=5432\n      - TZ=${TZ:-UTC}\n    depends_on:\n      - db\n\n  db:\n    image: postgres:16-alpine\n    restart: always\n    environment:\n      POSTGRES_USER: ${DB_USER:-wuzapi}\n      POSTGRES_PASSWORD: [REDACTED]}\n      POSTGRES_DB: ${DB_NAME:-wuzapi}\n    volumes:\n      - db_data:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U $${DB_USER:-wuzapi}\"]\n      interval: 5s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  db_data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/strapi/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "362f3252b8fb56c6ee51bc90c5fe13a9f44be93e1a79480376cc87eac9fc2bf0",
+      "score": 191,
+      "content": "# Self-host guide:\n# - https://strapi.io/blog/how-to-self-host-your-headless-cms-using-docker-compose\n\nservices:\n  strapi:\n    image: elestio/strapi-production:v5.33.0\n    environment:\n      # https://docs.strapi.io/cms/configurations/environment\n      NODE_ENV: production\n      STRAPI_TELEMETRY_DISABLED: true\n      STRAPI_PLUGIN_I18N_INIT_LOCALE_CODE: en\n      FAST_REFRESH: true\n      JWT_SECRET: [REDACTED]}\n      ADMIN_JWT_SECRET: [REDACTED]}\n      DATABASE_CLIENT: postgres\n      DATABASE_HOST: strapi_postgres\n      DATABASE_PORT: 5432\n      DATABASE_NAME: strapi\n      DATABASE_USERNAME: strapi\n      DATABASE_PASSWORD: [REDACTED]}\n    volumes:\n      - strapi_data:/srv/app\n    expose:\n      - 1337\n    depends_on:\n      - strapi_postgres\n    healthcheck:\n      test:\n        - CMD\n        - wget\n        - \"-q\"\n        - \"--spider\"\n        - \"http://127.0.0.1:1337\"\n      start_period: 3s\n      interval: 30s\n      timeout: 10s\n      retries: 5\n\n  strapi_postgres:\n    image: postgres:18\n    environment:\n      POSTGRES_DB: strapi\n      POSTGRES_USER: strapi\n      POSTGRES_PASSWORD: [REDACTED]}\n    volumes:\n      - strapi_postgres_data:/var/lib/postgresql\n    healthcheck:\n      test:\n        - CMD-SHELL\n        - \"pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}\"\n      start_period: 3s\n      interval: 30s\n      timeout: 10s\n      retries: 5\n\nvolumes:\n  strapi_data:\n  strapi_postgres_data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "blueprints/crawlab-master/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "2e26161b01b84a80ce36c0861fc41af2ceb2a859ba1156347a4e53c5c0ce53e9",
+      "score": 191,
+      "content": "services:\n  crawlab-master:\n    image: crawlabteam/crawlab:latest\n    restart: unless-stopped\n    environment:\n      - CRAWLAB_NODE_MASTER=Y\n      - CRAWLAB_MONGO_HOST=mongo\n      - CRAWLAB_MONGO_PORT=27017\n      - CRAWLAB_MONGO_DB=crawlab\n      - CRAWLAB_MONGO_USERNAME=${MONGO_USERNAME}\n      - CRAWLAB_MONGO_PASSWORD=[REDACTED]}\n      - CRAWLAB_MONGO_AUTHSOURCE=admin\n    volumes:\n      - crawlab-master-data:/root/.crawlab\n      - crawlab-app-data:/data\n      - crawlab-logs:/var/log/crawlab\n    expose:\n      - \"8080\"\n      - \"9666\"\n    depends_on:\n      - mongo\n    deploy:\n      resources:\n        limits:\n          cpus: \"${CPU_LIMIT:-0.8}\" # 0.8 will limit to 80% of CPU if one core. If 2 cores, you need to put 0.8*2=1.6\n\n  mongo:\n    image: mongo:4.2\n    restart: unless-stopped\n    environment:\n      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}\n      - MONGO_INITDB_ROOT_PASSWORD=[REDACTED]}\n    volumes:\n      - mongo-data:/data/db\n\nvolumes:\n  crawlab-master-data:\n  crawlab-app-data:\n  crawlab-logs:\n  mongo-data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T18:58:23.269298+00:00"
+}

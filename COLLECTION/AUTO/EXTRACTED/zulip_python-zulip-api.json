@@ -1,0 +1,203 @@
+{
+  "canonical_source": "github:zulip/python-zulip-api",
+  "repo": "zulip/python-zulip-api",
+  "revision_sha": "b172347594a4634517f925f9e30522fe987dbb9c",
+  "default_branch": "main",
+  "pushed_at": "2026-05-20T13:10:26Z",
+  "repo_updated_at": "2026-10-15T06:14:50Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "python",
+    "python3",
+    "zulip"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/zulip-ci.yml",
+      "sha": null,
+      "content_sha256": "c74bcf2cfb075d9fdc9132fd8ed063b3e618ebb3a00f4ab734891fa50d8ff035",
+      "score": 198,
+      "content": "# This file is largely copied from the Zulip server's continuous\n# integration.  The intent is to run the Zulip server's API\n# documentation test suite using the current version of this project,\n# to verify that the API client is generally compatible with the old\n# server release.\nname: Zulip server CI\n\non: [push, pull_request]\n\npermissions:\n  contents: read\n\ndefaults:\n  run:\n    shell: bash\n\njobs:\n  tests:\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          # Bullseye ships with Python 3.9.2.\n          - docker_image: zulip/ci:bullseye\n            name: Debian 11 (Python 3.9, backend)\n            os: bullseye\n            legacy_client_interface: \"4\"\n            server_version: refs/tags/4.0\n          # Ubuntu 22.04 ships with Python 3.10.6.\n          - docker_image: zulip/ci:jammy\n            name: Ubuntu 22.04 (Python 3.10, backend)\n            os: jammy\n            legacy_client_interface: \"6\"\n            server_version: refs/pull/36159/head\n          # Debian 12 ships with Python 3.11.2.\n          - docker_image: zulip/ci:bookworm\n            name: Debian 12 (Python 3.11, backend + documentation)\n            os: bookworm\n            legacy_client_interface: \"7\"\n            server_version: refs/tags/7.0\n          # Ubuntu 24.04 ships with Python 3.12.3.\n          - docker_image: zulip/ci:noble\n            name: Ubuntu 24.04 (Python 3.12, backend)\n            os: noble\n            legacy_client_interface: \"8\"\n            server_version: refs/tags/8.5\n\n    runs-on: ubuntu-latest\n    name: ${{ matrix.name }} (Zulip ${{matrix.server_version}})\n    container: ${{ matrix.docker_image }}\n    env:\n      # GitHub Actions sets HOME to /github/home which causes\n      # problem later in provison and frontend test that runs\n      # tools/setup/postgresql-init-dev-db because of the .pgpass\n      # location. PostgreSQL (psql) expects .pgpass to be at\n      # /home/github/.pgpass and setting home to `/home/github/`\n      # ensures it written there because we write it to ~/.pgpass.\n      HOME: /home/github/\n\n    steps:\n      - name: \"Check out python-zulip-api\"\n        uses: actions/checkout@v6\n        with:\n          path: api\n\n      - name: \"Check out Zulip server ${{ matrix.server_version }}\"\n        uses: actions/checkout@v6\n        with:\n          repository: zulip/zulip\n          ref: ${{ matrix.server_version }}\n          path: server\n\n      - name: Install dependencies\n        run: |\n          cd server\n          # This is the main setup job for the test suite\n          ./tools/ci/setup-backend --skip-dev-db-build\n\n          # Cleaning caches is mostly unnecessary in GitHub Actions, because\n          # most builds don't get to write to the cache.\n          # scripts/lib/clean_unused_caches.py --verbose --threshold 0\n\n      - name: Replace dependency with the latest python-zulip-api\n        run: |\n          cd server\n          source tools/ci/activate-venv\n          pip install ../api/zulip\n          pip install ../api/zulip_bots\n\n      - name: Run documentation and api tests\n        run: |\n          cd server\n          source tools/ci/activate-venv\n          ./tools/test-api\n        env:\n          LEGACY_CLIENT_INTERFACE_FROM_SERVER_DOCS_VERSION: ${{ matrix.legacy_client_interface }}\n\n      - name: Run backend tests\n        run: |\n          cd server\n          source tools/ci/activate-venv\n          ./tools/test-backend zerver.tests.test_bots zerver.tests.test_embedded_bot_system\n        env:\n          LEGACY_CLIENT_INTERFACE_FROM_SERVER_DOCS_VERSION: ${{ matrix.legacy_client_interface }}\n"
+    },
+    {
+      "path": ".github/workflows/zulip-tests.yml",
+      "sha": null,
+      "content_sha256": "c2d0ae766054947b34acf376266db4caef419b40ab4da69ede0912d9c4e85e03",
+      "score": 186,
+      "content": "name: build\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\npermissions:\n  contents: read\n\njobs:\n  static-analysis:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v6\n\n      - name: Set up Python 3.9\n        uses: actions/setup-python@v6\n        with:\n          python-version: \"3.9\"\n\n      - name: Install dependencies\n        run: tools/provision --force\n\n      - name: Running Test-Suite\n        run: |\n          source zulip-api-py3-venv/bin/activate\n          tools/lint --skip=gitlint\n\n  test:\n    runs-on: ${{ matrix.os }}\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ubuntu-latest, windows-latest]\n        python-version: [\"3.9\", \"3.10\", \"3.11\", \"3.12\"]\n\n    steps:\n      - uses: actions/checkout@v6\n\n      - name: Set up Python ${{ matrix.python-version }}\n        uses: actions/setup-python@v6\n        with:\n          python-version: ${{ matrix.python-version }}\n\n      - name: Install dependencies\n        run: python tools/provision --force\n\n      - if: runner.os == 'Linux'\n        name: Running Test-Suite on Linux\n        run: |\n          source zulip-api-py3-venv/bin/activate\n          pytest --cov --cov-config=tools/.coveragerc --cov-report=xml\n\n      - if: runner.os == 'Windows'\n        name: Running Test-Suite on Windows\n        run: |\n          zulip-api-py3-venv\\Scripts\\Activate.ps1\n          pytest --cov --cov-config=tools\\.coveragerc --cov-report=xml\n\n      - uses: codecov/codecov-action@v5\n        with:\n          files: coverage.xml\n          token: ${{ secrets.CODECOV_TOKEN }}\n"
+    },
+    {
+      "path": "zulip/integrations/litellm/README.md",
+      "sha": null,
+      "content_sha256": "ebbdfdce497abde537bc527fa1331d099080b7480fd6b43d006d87f5346177f0",
+      "score": 169,
+      "content": "# Summarize topic\n\nGenerate a short summary of the last 100 messages in the provided topic URL.\n\n### API Keys\n\nFor testing you need access token from\nhttps://huggingface.co/settings/tokens (or set the correct env\nvariable with the access token if using a different model)\n\nIn `~/.zuliprc` add a section named `litellm` and set the api key for\nthe model you are trying to use.  For example:\n\n```\n[litellm]\nHUGGINGFACE_API_KEY=[REDACTED]\n```\n\n### Setup\n\n```bash\n$ pip install -r zulip/integrations/litellm/requirements.txt\n```\n\nJust run `zulip/integrations/litellm/summarize-topic` to generate\nsample summary.\n\n```bash\n$ zulip/integrations/litellm/summarize-topic --help\nusage: summarize-topic [-h] [--url URL] [--model MODEL]\n\noptions:\n  -h, --help     show this help message and exit\n  --url URL      The URL to fetch content from\n  --model MODEL  The model name to use for summarization\n```\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/beeminder/fixtures/test_valid_auth_token.json",
+      "sha": null,
+      "content_sha256": "b16c7fbcd7ba1abcbb03cd4cc370b077a50cf72bd853ab7e16d9273b69b224f5",
+      "score": 165,
+      "content": "{\n    \"request\": {\n        \"api_url\": \"https://www.beeminder.com/api/v1/users/me.json\",\n        \"method\": \"GET\",\n        \"params\": {\n            \"auth_token\": \"XXXXXX\"\n        }\n    },\n    \"response\": {\n        \"username\": \"testuser\",\n        \"timezone\": \"Asia/Kolkata\",\n        \"goals\": [\n            \"gainweight\"\n        ],\n        \"updated_at\": 1527962842,\n        \"deadbeat\": false,\n        \"has_authorized_fitbit\": false,\n        \"default_leadtime\": 0,\n        \"default_alertstart\": 82620,\n        \"default_deadline\": -3000,\n        \"subscription\": null,\n        \"subs_downto\": null,\n        \"subs_freq\": null,\n        \"subs_lifetime\": null,\n        \"remaining_subs_credit\": 0,\n        \"id\": \"5a7c8509bfec03755800544a\"\n    },\n    \"response-headers\": {\n        \"status\": 200,\n        \"content-type\": \"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/google_translate/fixtures/test_api_access_not_configured.json",
+      "sha": null,
+      "content_sha256": "ecca084812df0dfa221b563d0c2df1157cbcc10bd044dbd9247d4185b0babaec",
+      "score": 160,
+      "content": "{\n  \"request\": {\n    \"method\": \"GET\",\n    \"api_url\": \"https://translation.googleapis.com/language/translate/v2/languages\",\n    \"params\": {\n      \"key\": \"abcdefg\",\n      \"target\": \"en\"\n    }\n  },\n  \"response\": {\n    \"error\": {\n      \"code\": 403,\n      \"message\": \"Invalid API Key.\",\n      \"errors\": [\n        {\n          \"message\": \"Invalid API Key\",\n          \"domain\": \"usageLimits\",\n          \"reason\": \"accessNotConfigured\",\n          \"extendedHelp\": \"https://console.developers.google.com\"\n        }\n      ],\n      \"status\": \"PERMISSION_DENIED\"\n    }\n  },\n  \"response-headers\": {\n    \"status\": 403,\n    \"content-type\": \"application/json; charset=utf-8\"\n  }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/google_translate/fixtures/test_invalid_api_key.json",
+      "sha": null,
+      "content_sha256": "5c266f8c61e4892543ea62af01e8703947a6d34bb918b0248290810263b88bf3",
+      "score": 160,
+      "content": "{\n  \"request\": {\n    \"method\": \"GET\",\n    \"api_url\": \"https://translation.googleapis.com/language/translate/v2/languages\",\n    \"params\": {\n      \"key\": \"abcdefg\",\n      \"target\": \"en\"\n    }\n  },\n  \"response\": {\n    \"error\":{\n      \"status\": \"INVALID_ARGUMENT\",\n      \"message\": \"API key not valid. Please pass a valid API key.\",\n      \"code\": 400,\n      \"errors\": [\n        {\n          \"domain\":\"global\",\n          \"message\":\"API key not valid. Please pass a valid API key.\",\n          \"reason\":\"badRequest\"\n        }\n      ]\n    }\n  },\n  \"response-headers\": {\n    \"status\": 400,\n    \"content-type\": \"application/json; charset=utf-8\"\n  }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/yoda/fixtures/test_api_key_error.json",
+      "sha": null,
+      "content_sha256": "436588bd704ed47060b85cdbded4ce85938cf505abcf9e9dd71e8468abec4960",
+      "score": 160,
+      "content": "{\n  \"request\": {\n    \"api_url\": \"https://yoda.p.mashape.com/yoda\",\n    \"params\": {\n      \"sentence\": \"You+will+learn+how+to+speak+like+me+someday.\"\n    },\n    \"headers\": {\n      \"X-Mashape-Key\": \"12345678\",\n      \"Accept\": \"text/plain\"\n    }\n  },\n  \"response\": {},\n  \"response-headers\": {\n    \"status\": 403,\n    \"content-type\": \"text/html; charset=utf-8\"\n  }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/mention/fixtures/invalid_api_key.json",
+      "sha": null,
+      "content_sha256": "cd034142b09f46064918ebca60c54afdc49e377d4afcd3f9b4569cfb163cc157",
+      "score": 160,
+      "content": "{\n    \"request\": {\n        \"api_url\": \"https://api.mention.net/api/accounts/me\",\n        \"headers\": {\n            \"Authorization\": \"Bearer TEST\",\n            \"Accept-Version\": \"1.15\"\n        }\n    },\n    \"response\": {\n        \"error_description\": \"The access token provided is invalid.\",\n        \"error\": \"invalid_grant\"\n    },\n    \"response-headers\": {\n        \"X-Protected-By\":\"Sqreen\",\n        \"X-Content-Type-Options\":\"nosniff\",\n        \"Transfer-Encoding\":\"chunked\",\n        \"Cache-Control\":\"no-store, private\",\n        \"WWW-Authenticate\":\"Bearer realm=\\\"Service\\\", error=\\\"invalid_grant\\\", error_description=\\\"The access token provided is invalid.\\\"\",\n        \"Set-Cookie\":\"www_bucket=23; Expires=Thu, 08 Mar 2018 14:08:36 GMT; Domain=mention.com; Path=/\",\n        \"Vary\":\"Accept-Language, X-Accept-Language\",\n        \"X-Upstream2\":\"mention_backend\",\n        \"X-Frame-Options\":\"SAMEORIGIN\",\n        \"Connection\":\"keep-alive\",\n        \"Content-Type\":\"application/json\",\n        \"Referrer-Policy\":\"same-origin\",\n        \"X-XSS-Protection\":\"1; mode=block\",\n        \"Pragma\":\"no-cache\",\n        \"Date\":\"Tue, 06 Feb 2018 14:08:36 GMT\",\n        \"Server\":\"nginx\",\n        \"X-S\":\"web14\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/jira/fixtures/test_search.json",
+      "sha": null,
+      "content_sha256": "62bd68e9a089a5c3bc7208cf940a2d41f9481295b3b7e87343c13ebc9ab28c2d",
+      "score": 160,
+      "content": "{\n  \"request\": {\n    \"api_url\": \"https://example.atlassian.net/rest/api/2/search?jql=summary ~ TEST&fields=key,summary,status\",\n    \"method\": \"GET\",\n    \"headers\": {\n      \"Authorization\": \"Basic ZXhhbXBsZUBleGFtcGxlLmNvbTpxd2VydHkhMTIz\"\n    }\n  },\n  \"response\": {\n    \"expand\": \"schema,names\",\n    \"startAt\": 0,\n    \"maxResults\": 50,\n    \"total\": 2,\n    \"issues\": [\n      {\n        \"id\": \"1\",\n        \"key\": \"TEST-1\",\n        \"fields\": {\n          \"creator\": {\"name\": \"admin\"},\n          \"description\": \"description\",\n          \"priority\": {\"name\": \"Medium\"},\n          \"project\": {\"name\": \"Tests\"},\n          \"issuetype\": {\"name\": \"Task\"},\n          \"status\": {\"name\": \"To Do\"},\n          \"summary\": \"summary test 1\"\n        }\n      },\n      {\n        \"id\": \"2\",\n        \"key\": \"TEST-2\",\n        \"fields\": {\n          \"creator\": {\"name\": \"admin\"},\n          \"description\": \"description\",\n          \"priority\": {\"name\": \"Medium\"},\n          \"project\": {\"name\": \"Tests\"},\n          \"issuetype\": {\"name\": \"Task\"},\n          \"status\": {\"name\": \"To Do\"},\n          \"summary\": \"summary test 2\"\n        }\n      }\n    ]\n  },\n  \"response-headers\": {\n    \"status\": 200,\n    \"content-type\": \"application/json; charset=utf-8\"\n  }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/idonethis/fixtures/api_noop.json",
+      "sha": null,
+      "content_sha256": "561bfbee17d879e932e77d62bb9333d0d1ec16095326b4f67ee7a7d77b726c9c",
+      "score": 160,
+      "content": "{\n  \"request\": {\n    \"api_url\": \"https://beta.idonethis.com/api/v2/noop\",\n    \"headers\": {\n        \"Authorization\": \"Token 12345678\"\n    },\n    \"params\": null\n  },\n  \"response\": {\"doesnt\": \"matter\"},\n  \"response-headers\": {\n    \"status\": 200,\n    \"content-type\": \"application/json; charset=utf-8\"\n  }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/jira/fixtures/test_search_scheme.json",
+      "sha": null,
+      "content_sha256": "0e76264e590a249124699f7df48b5f2c8a3c18a41879d02bab433f5e22b1b604",
+      "score": 160,
+      "content": "{\n  \"request\": {\n    \"api_url\": \"http://example.atlassian.net/rest/api/2/search?jql=summary ~ TEST&fields=key,summary,status\",\n    \"method\": \"GET\",\n    \"headers\": {\n      \"Authorization\": \"Basic ZXhhbXBsZUBleGFtcGxlLmNvbTpxd2VydHkhMTIz\"\n    }\n  },\n  \"response\": {\n    \"expand\": \"schema,names\",\n    \"startAt\": 0,\n    \"maxResults\": 50,\n    \"total\": 2,\n    \"issues\": [\n      {\n        \"id\": \"1\",\n        \"key\": \"TEST-1\",\n        \"fields\": {\n          \"creator\": {\"name\": \"admin\"},\n          \"description\": \"description\",\n          \"priority\": {\"name\": \"Medium\"},\n          \"project\": {\"name\": \"Tests\"},\n          \"issuetype\": {\"name\": \"Task\"},\n          \"status\": {\"name\": \"To Do\"},\n          \"summary\": \"summary test 1\"\n        }\n      },\n      {\n        \"id\": \"2\",\n        \"key\": \"TEST-2\",\n        \"fields\": {\n          \"creator\": {\"name\": \"admin\"},\n          \"description\": \"description\",\n          \"priority\": {\"name\": \"Medium\"},\n          \"project\": {\"name\": \"Tests\"},\n          \"issuetype\": {\"name\": \"Task\"},\n          \"status\": {\"name\": \"To Do\"},\n          \"summary\": \"summary test 2\"\n        }\n      }\n    ]\n  },\n  \"response-headers\": {\n    \"status\": 200,\n    \"content-type\": \"application/json; charset=utf-8\"\n  }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/baremetrics/fixtures/invalid_api_key.json",
+      "sha": null,
+      "content_sha256": "510c279cc0138ed3159d06152d8c79029d18149c2c012e58f3bd9f272ae512fb",
+      "score": 160,
+      "content": "{\n    \"request\": {\n        \"api_url\": \"https://api.baremetrics.com/v1/account\",\n        \"headers\": {\n            \"Authorization\": \"Bearer TEST\"\n        }\n    },\n    \"response\": {\n        \"error\": \"Unauthorized. Token not found (001)\"\n    },\n    \"response-headers\": {\n        \"Cache-Control\":\"no-cache\",\n        \"X-Version\":\"751\",\n        \"X-Runtime\":\"0.003459\",\n        \"Access-Control-Allow-Methods\":\"GET, OPTIONS, POST, PUT, DELETE\",\n        \"Transfer-Encoding\":\"chunked\",\n        \"Date\":\"Tue, 06 Feb 2018 14:00:34 GMT\",\n        \"Connection\":\"keep-alive\",\n        \"CF-RAY\":\"3e8ea2ed2dbe3de4-PRG\",\n        \"Access-Control-Allow-Credentials\":\"false\",\n        \"Content-Type\":\"application/json; charset=utf-8\",\n        \"Set-Cookie\":\"__cfduid=d17cabc42559cc2d84e59a61d199208c11517925634; expires=Wed, 06-Feb-19 14:00:34 GMT; path=/; domain=.baremetrics.com; HttpOnly; Secure, LSW_WEB=\\\"LSW_WEB1\\\"; path=/\",\n        \"Access-Control-Allow-Headers\":\"Authorization,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\",\n        \"X-Request-Id\":\"4c6d2ef3-2b72-4b7a-b535-991ee8c06fba\",\n        \"X-Commit\":\"f5e0698f0a82d2d5040eb00762ff69f6d633eb50\",\n        \"X-Powered-By\":\"Phusion Passenger 5.1.11\",\n        \"Expect-CT\":\"max-age=604800, report-uri=\\\"https://report-uri.cloudflare.com/cdn-cgi/beacon/expect-ct\\\"\",\n        \"Server\":\"cloudflare\",\n        \"Status\":\"401 Unauthorized\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/twitpost/fixtures/api_response.json",
+      "sha": null,
+      "content_sha256": "286959a5166be3cd0de337cbce8b74a86a7a41cd2b94255f090e14dfcf414fdf",
+      "score": 160,
+      "content": "{\n    \"coordinates\": null,\n    \"favorited\": false,\n    \"created_at\": \"Wed Sep 05 00:37:15 +0000 2012\",\n    \"truncated\": false,\n    \"id_str\": \"243145735212777472\",\n    \"entities\": {\n        \"urls\": [],\n        \"hashtags\": [\n            {\n                \"text\": \"peterfalk\",\n                \"indices\": [\n                    35,\n                    45\n                ]\n            }\n        ],\n        \"user_mentions\": []\n    },\n    \"in_reply_to_user_id_str\": null,\n    \"text\": \"Maybe he'll finally find his keys. #peterfalk\",\n    \"contributors\": null,\n    \"retweet_count\": 0,\n    \"id\": 243145735212777472,\n    \"in_reply_to_status_id_str\": null,\n    \"geo\": null,\n    \"retweeted\": false,\n    \"in_reply_to_user_id\": null,\n    \"place\": null,\n    \"user\": {\n        \"name\": \"Jason Costa\",\n        \"profile_sidebar_border_color\": \"86A4A6\",\n        \"profile_sidebar_fill_color\": \"A0C5C7\",\n        \"profile_background_tile\": false,\n        \"profile_image_url\": \"http://a0.twimg.com/profile_images/1751674923/new_york_beard_normal.jpg\",\n        \"created_at\": \"Wed May 28 00:20:15 +0000 2008\",\n        \"location\": \"\",\n        \"is_translator\": true,\n        \"follow_request_sent\": false,\n        \"id_str\": \"14927800\",\n        \"profile_link_color\": \"FF3300\",\n        \"entities\": {\n            \"url\": {\n                \"urls\": [\n                    {\n                        \"expanded_url\": \"http://www.jason-costa.blogspot.com/\",\n                        \"url\": \"http://t.co/YCA3ZKY\",\n                        \"indices\": [\n                            0,\n                            19\n                        ],\n                        \"display_url\": \"jason-costa.blogspot.com\"\n                    }\n                ]\n            },\n            \"description\": {\n                \"urls\": []\n            }\n        },\n        \"default_profile\": false,\n        \"contributors_enabled\": false,\n        \"url\": \"http://t.co/YCA3ZKY\",\n        \"favourites_count\": 883,\n        \"utc_offset\": -28800,\n        \"id\": 14927800,\n        \"profile_image_url_https\": \"https://si0.twimg.com/profile_images/1751674923/new_york_beard_normal.jpg\",\n        \"profile_use_background_image\": true,\n        \"listed_count\": 150,\n        \"profile_text_color\": \"333333\",\n        \"protected\": false,\n        \"lang\": \"en\",\n        \"followers_count\": 8760,\n        \"time_zone\": \"Pacific Time (US & Canada)\",\n        \"profile_background_image_url_https\": \"https://si0.twimg.com/images/themes/theme6/bg.gif\",\n        \"verified\": false,\n        \"profile_background_color\": \"709397\",\n        \"notifications\": false,\n        \"description\": \"Platform at Twitter\",\n        \"geo_enabled\": true,\n        \"statuses_count\": 5532,\n        \"default_profile_image\": false,\n        \"friends_count\": 166,\n        \"profile_background_image_url\": \"http://a0.twimg.com/images/themes/theme6/bg.gif\",\n        \"show_all_inline_media\": true,\n        \"screen_name\": \"jasoncosta\",\n        \"following\": false\n    },\n    \"source\": \"My Shiny App\",\n    \"in_reply_to_screen_name\": null,\n    \"in_reply_to_status_id\": null\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/xkcd/test_xkcd.py",
+      "sha": null,
+      "content_sha256": "0e78be71d4dae594e77fe6bd2f904da00c7b83000a132f36f5662cde4f1bdec3",
+      "score": 159,
+      "content": "from unittest.mock import MagicMock, patch\n\nfrom zulip_bots.test_lib import BotTestCase, DefaultTests\n\n\nclass TestXkcdBot(BotTestCase, DefaultTests):\n    bot_name = \"xkcd\"\n\n    def test_latest_command(self) -> None:\n        bot_response = (\n            \"#1866: **Russell's Teapot**\\n\"\n            \"[Unfortunately, NASA regulations state that Bertrand Russell-related \"\n            \"payloads can only be launched within launch vehicles which do not launch \"\n            \"themselves.](https://imgs.xkcd.com/comics/russells_teapot.png)\"\n        )\n        with self.mock_http_conversation(\"test_latest\"):\n            self.verify_reply(\"latest\", bot_response)\n\n    def test_random_command(self) -> None:\n        bot_response = (\n            \"#1800: **Chess Notation**\\n\"\n            \"[I've decided to score all my conversations using chess win-loss \"\n            \"notation. (??)](https://imgs.xkcd.com/comics/chess_notation.png)\"\n        )\n        with self.mock_http_conversation(\"test_random\"):\n            # Mock randint function.\n            with patch(\"zulip_bots.bots.xkcd.xkcd.random.randint\") as randint:\n                mock_rand_value = MagicMock()\n                mock_rand_value.return_value = 1800\n                randint.return_value = mock_rand_value.return_value\n                self.verify_reply(\"random\", bot_response)\n\n    def test_numeric_comic_id_command_1(self) -> None:\n        bot_response = (\n            \"#1: **Barrel - Part 1**\\n[Don't we all.]\"\n            \"(https://imgs.xkcd.com/comics/barrel_cropped_(1).jpg)\"\n        )\n        with self.mock_http_conversation(\"test_specific_id\"):\n            self.verify_reply(\"1\", bot_response)\n\n    @patch(\"logging.exception\")\n    def test_invalid_comic_ids(self, mock_logging_exception: MagicMock) -> None:\n        invalid_id_txt = \"Sorry, there is likely no xkcd comic strip with id: #\"\n\n        for comic_id, fixture in (\n            (\"0\", \"test_not_existing_id_2\"),\n            (\"999999999\", \"test_not_existing_id\"),\n        ):\n            with self.mock_http_conversation(fixture):\n                self.verify_reply(comic_id, invalid_id_txt + comic_id)\n\n    def test_help_responses(self) -> None:\n        help_txt = \"xkcd bot supports these commands:\"\n        err_txt = \"xkcd bot only supports these commands, not `{}`:\"\n        commands = \"\"\"\n* `{0} help` to show this help message.\n* `{0} latest` to fetch the latest comic strip from xkcd.\n* `{0} random` to fetch a random comic strip from xkcd.\n* `{0} <comic id>` to fetch a comic strip based on `<comic id>` e.g `{0} 1234`.\"\"\".format(\n            \"@**test-bot**\"\n        )\n        self.verify_reply(\"\", err_txt.format(\"\") + commands)\n        self.verify_reply(\"help\", help_txt + commands)\n        # Example invalid command\n        self.verify_reply(\"x\", err_txt.format(\"x\") + commands)\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/xkcd/fixtures/test_not_existing_id_2.json",
+      "sha": null,
+      "content_sha256": "25bcc06eec27bde3628d8350153b0abb76ab0848f697b37fbfcd3bdc5a38c1e1",
+      "score": 157,
+      "content": "{\n    \"request\": {\n        \"api_url\":\"https://xkcd.com/0/info.0.json\"\n    },\n    \"response\": {\n        \"data\": {\n            \"status_code\":404\n        }\n    },\n    \"response-headers\":{\n        \"status\":404,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/xkcd/fixtures/test_latest.json",
+      "sha": null,
+      "content_sha256": "d568151945e81fbb9d0b2c7334d9b69b84d89f1eb43478a2e52903b9ccecc5c3",
+      "score": 157,
+      "content": "{\n    \"request\": {\n        \"api_url\":\"https://xkcd.com/info.0.json\"\n    },\n    \"response\": {\n        \"data\": {\n            \"status_code\":200\n        },\n        \"month\":\"7\",\n        \"num\":1866,\n        \"link\":\"\",\n        \"year\":\"2017\",\n        \"news\":\"\",\n        \"safe_title\":\"Russell's Teapot\",\n        \"transcript\":\"\",\n        \"alt\":\"Unfortunately, NASA regulations state that Bertrand Russell-related payloads can only be launched within launch vehicles which do not launch themselves.\",\n        \"img\":\"https://imgs.xkcd.com/comics/russells_teapot.png\",\n        \"title\":\"Russell's Teapot\",\n        \"day\":\"21\"\n\n    },\n    \"response-headers\":{\n        \"status\":200,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/xkcd/fixtures/test_not_existing_id.json",
+      "sha": null,
+      "content_sha256": "443172d9f15b8f196df3367e34da412a44d21f6f163eef7b7f48eee7d8f6afe6",
+      "score": 157,
+      "content": "{\n    \"request\": {\n        \"api_url\":\"https://xkcd.com/999999999/info.0.json\"\n    },\n    \"response\": {\n        \"data\": {\n            \"status_code\":404\n        }\n    },\n    \"response-headers\":{\n        \"status\":404,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/flock/fixtures/test_no_recipient_found.json",
+      "sha": null,
+      "content_sha256": "d58060e6d567c8ebefec7d6cd85173648be50e3f023bfebfcad4086058317d23",
+      "score": 157,
+      "content": "{\n    \"request\": {\n        \"api_url\": \"https://api.flock.co/v1/roster.listContacts\",\n        \"method\": \"GET\",\n        \"params\": {\n            \"token\": \"12345\"\n        }\n    },\n    \"response\": [\n        {\n            \"id\": 1,\n            \"firstName\": \"user1\"\n        }\n    ],\n    \"response-headers\": {\n        \"content-type\": \"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/xkcd/fixtures/test_random.json",
+      "sha": null,
+      "content_sha256": "95e78b4c26e33d641fac0d0201c31d0bff1424a1d09afc6a030df21af7e82216",
+      "score": 157,
+      "content": "{\n    \"request\": {\n        \"api_url\":\"https://xkcd.com/1800/info.0.json\"\n    },\n    \"response\": {\n        \"data\": {\n            \"status_code\":200\n        },\n        \"month\":\"2\",\n        \"num\":1800,\n        \"link\":\"\",\n        \"year\":\"2017\",\n        \"news\":\"\",\n        \"safe_title\":\"Chess Notation\",\n        \"transcript\":\"\",\n        \"alt\":\"I've decided to score all my conversations using chess win-loss notation. (??)\",\n        \"img\":\"https://imgs.xkcd.com/comics/chess_notation.png\",\n        \"title\":\"Chess Notation\",\n        \"day\":\"17\"\n    },\n    \"response-headers\":{\n        \"status\":200,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/weather/fixtures/test_city_with_country.json",
+      "sha": null,
+      "content_sha256": "8e3dbfe5af7a22c53621574115c38bd40cc25ae9a22f94a9180e0777f408d865",
+      "score": 157,
+      "content": "{\n    \"request\":{\n        \"api_url\":\"http://api.openweathermap.org/data/2.5/weather\",\n        \"params\": {\n            \"q\": \"New Delhi, India\",\n            \"APPID\": \"123456\"\n        }\n    },\n    \"response\":{\n        \"coord\":{\n            \"lon\":77.23,\n            \"lat\":28.61\n        },\n        \"weather\":[\n            {\n                \"id\":701,\n                \"main\":\"Mist\",\n                \"description\":\"mist\",\n                \"icon\":\"50n\"\n            }\n        ],\n        \"base\":\"stations\",\n        \"main\":{\n            \"temp\":300.15,\n            \"pressure\":998,\n            \"humidity\":100,\n            \"temp_min\":300.15,\n            \"temp_max\":300.15\n        },\n        \"visibility\":2500,\n        \"wind\":{\n            \"speed\":3.1,\n            \"deg\":90\n        },\n        \"clouds\":{\n            \"all\":90\n        },\n        \"dt\":1500822000,\n        \"sys\":{\n            \"type\":1,\n            \"id\":7809,\n            \"message\":0.0159,\n            \"country\":\"IN\",\n            \"sunrise\":1500768469,\n            \"sunset\":1500817624\n        },\n        \"id\":1261481,\n        \"name\":\"New Delhi\",\n        \"cod\":200\n    },\n    \"response-headers\":{\n        \"status\":200,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/weather/fixtures/test_city_not_found.json",
+      "sha": null,
+      "content_sha256": "76c65ded4a52f50af92cf0e00b2440d47babc14a343d10e3fe8906333b126f68",
+      "score": 157,
+      "content": "{\n    \"request\":{\n        \"api_url\":\"http://api.openweathermap.org/data/2.5/weather\",\n        \"params\": {\n            \"q\": \"fghjklasdfgh\",\n            \"APPID\": \"123456\"\n        }\n    },\n    \"response\":{\n        \"cod\":\"404\",\n        \"message\":\"city not found\"\n    },\n    \"response-headers\":{\n        \"status\":200,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/xkcd/fixtures/test_specific_id.json",
+      "sha": null,
+      "content_sha256": "652a8f152b900d5470c514b759c6304cd4685299155d09af8cd1397a61ed4fe8",
+      "score": 157,
+      "content": "{\n    \"request\": {\n        \"api_url\":\"https://xkcd.com/1/info.0.json\"\n    },\n    \"response\": {\n        \"data\": {\n            \"status_code\":200\n        },\n        \"month\":\"1\",\n        \"num\":1,\n        \"link\":\"\",\n        \"year\":\"2006\",\n        \"news\":\"\",\n        \"safe_title\":\"Barrel - Part 1\",\n        \"transcript\":\"[[A boy sits in a barrel which is floating in an ocean.]]\\nBoy: I wonder where I'll float next?\\n[[The barrel drifts into the distance. Nothing else can be seen.]]\\n{{Alt: Don't we all.}}\",\n        \"alt\":\"Don't we all.\",\n        \"img\":\"https://imgs.xkcd.com/comics/barrel_cropped_(1).jpg\",\n        \"title\":\"Barrel - Part 1\",\n        \"day\":\"1\"\n    },\n    \"response-headers\":{\n        \"status\":200,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/flock/fixtures/test_found_invalid_recipient.json",
+      "sha": null,
+      "content_sha256": "1f8c9c1f9ed6b0c45402a48f361469a2008b3d72e82d55ec109890a025f5f91e",
+      "score": 157,
+      "content": "{\n    \"request\": {\n        \"api_url\": \"https://api.flock.co/v1/roster.listContacts\",\n        \"method\": \"GET\",\n        \"params\": {\n            \"token\": \"12345\"\n        }\n    },\n    \"response\": [\n        {\n            \"id\": 1234567890123456789012345678901,\n            \"firstName\": \"david\"\n        }\n    ],\n    \"response-headers\": {\n        \"content-type\": \"application/json; charset=utf-8\"\n    }\n}\n"
+    },
+    {
+      "path": "zulip_bots/zulip_bots/bots/weather/fixtures/test_only_city.json",
+      "sha": null,
+      "content_sha256": "639ac7e63d2ed506fd6cd32c9da3d57d81e1fe0f587cc2c1ac21a3ea21e171cb",
+      "score": 157,
+      "content": "{\n    \"request\":{\n        \"api_url\":\"http://api.openweathermap.org/data/2.5/weather\",\n        \"params\": {\n            \"q\": \"New York\",\n            \"APPID\": \"123456\"\n        }\n    },\n    \"response\":{\n        \"coord\":{\n                \"lon\":-74.01,\n                \"lat\":40.71\n        },\n        \"weather\":[\n            {\n                \"id\":701,\n                \"main\":\"Mist\",\n                \"description\":\"mist\",\n                \"icon\":\"50d\"\n            },\n            {\n                \"id\":721,\n                \"main\":\"Haze\",\n                \"description\":\"haze\",\n                \"icon\":\"50d\"\n            },\n            {\n                \"id\":500,\n                \"main\":\"Rain\",\n                \"description\":\"light rain\",\n                \"icon\":\"10d\"\n            }\n        ],\n        \"base\":\"stations\",\n        \"main\":{\n            \"temp\":295.6,\n            \"pressure\":1008,\n            \"humidity\":94,\n            \"temp_min\":294.15,\n            \"temp_max\":297.15\n        },\n        \"visibility\":12874,\n        \"wind\":{\n            \"speed\":2.56,\n            \"deg\":56.5027\n        },\n        \"clouds\":{\n            \"all\":90\n        },\n        \"dt\":1500810900,\n        \"sys\":{\n            \"type\":1,\n            \"id\":1975,\n            \"message\":0.0161,\n            \"country\":\"US\",\n            \"sunrise\":1500803105,\n            \"sunset\":1500855570\n        },\n        \"id\":5128581,\n        \"name\":\"New York\",\n        \"cod\":200\n    },\n    \"response-headers\":{\n        \"status\":200,\n        \"ok\":true,\n        \"content-type\":\"application/json; charset=utf-8\"\n    }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T18:58:20.194197+00:00"
+}

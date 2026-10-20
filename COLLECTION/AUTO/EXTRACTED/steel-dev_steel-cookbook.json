@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:steel-dev/steel-cookbook",
+  "repo": "steel-dev/steel-cookbook",
+  "revision_sha": "be18b2e77f2fd7c2c9f9509393469b1737c925d2",
+  "default_branch": "main",
+  "pushed_at": "2026-10-19T21:55:54Z",
+  "repo_updated_at": "2026-10-19T21:55:59Z",
+  "license": "MIT",
+  "topics": [
+    "browser-automation",
+    "llms",
+    "web-automation"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "examples/vercel-ai-sdk-ts/package.json",
+      "sha": null,
+      "content_sha256": "d114dad1f79b321109889a8c131525fd6a3d419286323c0dafdb8d066c34c5b5",
+      "score": 263,
+      "content": "{\n  \"name\": \"vercel-ai-sdk-ts\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Build a browser agent with Vercel AI SDK v6 (ToolLoopAgent) and Steel\",\n  \"main\": \"index.ts\",\n  \"scripts\": {\n    \"start\": \"ts-node index.ts\"\n  },\n  \"keywords\": [\n    \"steel\",\n    \"ai-sdk\",\n    \"vercel\",\n    \"tool-loop-agent\",\n    \"browser-automation\",\n    \"ai-agent\"\n  ],\n  \"author\": \"Steel Dev\",\n  \"license\": \"MIT\",\n  \"dependencies\": {\n    \"@ai-sdk/anthropic\": \"^2.0.0\",\n    \"ai\": \"^6.0.0\",\n    \"dotenv\": \"^16.4.7\",\n    \"playwright\": \"^1.50.0\",\n    \"steel-sdk\": \"^0.16\",\n    \"zod\": \"^3.25.76 || ^4.2.0\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20.0.0\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.4.2\"\n  }\n}\n"
+    },
+    {
+      "path": "examples/vercel-ai-sdk-nextjs/package.json",
+      "sha": null,
+      "content_sha256": "d11f2825fe465036c9a4f671df2fac52a8f7ba4eaaa9900e04a1bac4fc987f8d",
+      "score": 263,
+      "content": "{\n  \"name\": \"vercel-ai-sdk-nextjs\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Next.js chat app with a Vercel AI SDK v6 browser agent on Steel\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build\",\n    \"start\": \"next start\"\n  },\n  \"dependencies\": {\n    \"@ai-sdk/anthropic\": \"^2.0.0\",\n    \"@ai-sdk/react\": \"^2.0.0\",\n    \"ai\": \"^6.0.0\",\n    \"isomorphic-dompurify\": \"^2.36.0\",\n    \"marked\": \"^18.0.2\",\n    \"next\": \"^15.0.0\",\n    \"playwright\": \"^1.50.0\",\n    \"react\": \"^19.0.0\",\n    \"react-dom\": \"^19.0.0\",\n    \"steel-sdk\": \"^0.16\",\n    \"zod\": \"^3.25.76 || ^4.2.0\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20.0.0\",\n    \"@types/react\": \"^19.0.0\",\n    \"@types/react-dom\": \"^19.0.0\",\n    \"typescript\": \"^5.4.2\"\n  }\n}\n"
+    },
+    {
+      "path": "examples/vercel-ai-sdk-nextjs/README.md",
+      "sha": null,
+      "content_sha256": "fec613dd178be4c2c1131093c59e00fae85a949d48788916f1d4d78022c4054d",
+      "score": 243,
+      "content": "# Vercel AI SDK v6 Starter (Next.js)\n\nA Next.js chat app where an AI SDK v6 agent drives a Steel cloud browser server-side and streams every tool call back into the UI. `useChat` on the client posts to `/api/chat`; that route calls `streamText` with four Steel-backed tools (`openSession`, `navigate`, `snapshot`, `extract`). Each tool call surfaces as a typed `tool-*` part on the message stream, and a Live View iframe on the right lights up the moment the agent opens a session.\n\n```\napp/\n├── api/chat/route.ts   # streamText + Steel tools, Node runtime\n├── page.tsx            # useChat, tool-call rendering, Live View iframe\n├── layout.tsx          # Geist fonts, dark theme\n└── globals.css\n```\n\n`app/api/chat/route.ts` pins `runtime = \"nodejs\"` (Playwright will not run on Edge) and `maxDuration = 120`. `next.config.mjs` lists `playwright`, `playwright-core`, and `steel-sdk` under `serverExternalPackages` so Next skips bundling them into the server build.\n\nThe `POST` handler builds a per-request closure around three variables (`session`, `browser`, `page`) shared by every tool's `execute`, and `streamText` runs up to 15 steps (`stopWhen: stepCountIs(15)`). Both `onFinish` and `onAbort` call `cleanup()` to close the browser and `steel.sessions.release(session.id)`.\n\nA fifth tool, `submitForm`, carries `needsApproval: true`. Its body only runs if your approval UI confirms the call. It ships as a demo hook; wire it up when you add real destructive actions.\n\n## Phase-gating with `prepareStep`\n\nTool misuse by the model is a real failure mode. A second `openSession` mid-run would leak a browser; a `navigate` before any session exists throws. `prepareStep` constrains the active tool set per step:\n\n```ts\nprepareStep: async ({ stepNumber, steps }) => {\n  const sessionOpened = steps.some((s) =>\n    s.toolCalls?.some((tc) => tc.toolName === \"openSession\")\n  );\n  if (stepNumber === 0 || !sessionOpened) {\n    return { activeTools: [\"openSession\"] };\n  }\n  return { activeTools: [\"navigate\", \"snapshot\", \"extract\", \"submitForm\"] };\n},\n```\n\n## Run it\n\n```bash\ncd examples/vercel-ai-sdk-nextjs\ncp .env.example .env          # set STEEL_API_KEY and ANTHROPIC_API_KEY\nnpm install\nnpx playwright install chromium\nnpm run dev\n```\n\nGet keys at [app.steel.dev/settings/api-keys](https://app.steel.dev/settings/api-keys) and [console.anthropic.com](https://console.anthropic.com/). Open [http://localhost:3000](http://localhost:3000) and try one of the seeded prompts:\n\n> Go to https://github.com/trending/python and tell me the top 3 AI/ML repos.\n\nA typical run takes ~20 seconds: `openSession` (~3s), `navigate` (~2s), `snapshot` (~1s), `extract` (~1s), then the model writes its reply. Server console logs each step:\n\n```text\n  step: openSession | 412 tokens\n  step: navigate | 1083 tokens\n  step: snapshot | 2847 tokens\n  step: extract | 3104 tokens\n  step: (text) | 3298 tokens\n```\n\n## Deploying to Vercel\n\nPush to GitHub, import into Vercel, add `STEEL_API_KEY` and `ANTHROPIC_API_KEY` as environment variables. Playwright's Chromium has to be downloaded during the build, so set the Build Command to:\n\n```\nnpx playwright install chromium && next build\n```\n\nThe `/api/chat` route already declares `maxDuration = 120` and `runtime = \"nodejs\"`.\n\n## Make it yours\n\n- **Change the model.** Swap `anthropic(\"claude-haiku-4-5\")` for any model in `@ai-sdk/*`. The Zod tool schemas stay the same.\n- **Add a screenshot tool.** `await page.screenshot({ type: \"png\" })` returns a Buffer; return it base64-encoded and render it as an `<img>` in the tool-call panel.\n- **Stream a plan step.** Add a `plan` tool with no side effects and a string input. The model can narrate its intent before executing.\n- **Turn on stealth.** Pass `useProxy`, `solveCaptcha`, or `sessionTimeout` options to `steel.sessions.create()` inside `openSession`.\n- **Wire the approval UI.** `needsApproval: true` on `submitForm` pauses execution and surfaces the call as a `tool-submitForm` part in `state: \"input-available\"`. Render an Approve/Reject pair and call `addToolResult` from `@ai-sdk/react` to resume.\n\n## Related\n\n[Plain TS version](../vercel-ai-sdk-ts) · [AI SDK agents](https://ai-sdk.dev/docs/agents/overview) · [Loop control](https://ai-sdk.dev/docs/agents/loop-control) · [Next.js App Router](https://nextjs.org/docs/app)\n"
+    },
+    {
+      "path": "examples/vercel-ai-sdk-ts/README.md",
+      "sha": null,
+      "content_sha256": "a6ba47056e62ac675febd75cd1d8aabf7211d4a619e48a3511cb6d05707f0625",
+      "score": 243,
+      "content": "# Vercel AI SDK v6 Starter (TypeScript)\n\nThe [Vercel AI SDK v6](https://ai-sdk.dev/docs/agents/overview) ships `ToolLoopAgent`, a typed agent that picks a tool, calls it, observes the result, and decides the next step. Give it tools that drive a Playwright page connected to a Steel session and you get a terminal browser agent with no UI scaffolding in the way.\n\n```typescript\nconst researchAgent = new ToolLoopAgent({\n  model: anthropic(\"claude-haiku-4-5\"),\n  instructions: \"You operate a Steel cloud browser via tools...\",\n  stopWhen: [stepCountIs(15), hasToolCall(\"reportFindings\")],\n  tools: { openSession, navigate, snapshot, extract, reportFindings },\n  onStepFinish: async ({ stepNumber, toolCalls, usage }) => { ... },\n});\n\nconst result = await researchAgent.generate({ prompt: \"...\" });\n```\n\n`reportFindings` is the terminator. Its `inputSchema` is a Zod object (a `summary` string and an array of repo records) and it has **no `execute`**. In AI SDK v6, a tool with no `execute` stops the loop the moment the model calls it, and the call's `input` is your final typed answer. This sidesteps the Anthropic-on-tools issue where forcing JSON response format disables tool calling.\n\n## Run it\n\n```bash\ncd examples/vercel-ai-sdk-ts\ncp .env.example .env          # set STEEL_API_KEY and ANTHROPIC_API_KEY\nnpm install\nnpm start\n```\n\nGet keys at [app.steel.dev/settings/api-keys](https://app.steel.dev/settings/api-keys) and [console.anthropic.com](https://console.anthropic.com/). The demo task is wired into `main()`: find the top 3 AI/ML repos on `github.com/trending/python?since=daily` and return name, URL, stars, and description.\n\nYour output varies. Structure looks like this:\n\n```text\nSteel + AI SDK v6 (ToolLoopAgent) Starter\n============================================================\n    openSession: session=842ms cdp=411ms\n  step 1: openSession | 1183 tokens\n    navigate: 1621ms\n  step 2: navigate | 1402 tokens\n    snapshot: 124ms (3892 chars, 48 links)\n  step 3: snapshot | 5104 tokens\n    extract: 98ms (10 rows)\n  step 4: extract | 2881 tokens\n  step 5: reportFindings | 3150 tokens\n\nAgent finished.\n\nStructured output:\n{\n  \"summary\": \"The top trending Python repos today center on...\",\n  \"repos\": [\n    { \"name\": \"owner/repo\", \"url\": \"...\", \"stars\": \"1,204\", \"description\": \"...\" },\n    ...\n  ]\n}\n\nReleasing Steel session...\nSession released. Replay: https://app.steel.dev/sessions/ab12cd34...\n```\n\nA full run takes ~20 seconds and costs a few cents of Steel session time plus a small number of Anthropic tokens. The `finally` block in `main` calls `steel.sessions.release()`.\n\n## Make it yours\n\n- **Swap the task.** Change the `prompt` in `main()` and the `reportFindings` schema. Everything else is task-agnostic.\n- **Swap the model.** `claude-haiku-4-5` is the default. For harder tasks, try `anthropic(\"claude-sonnet-4-6\")`, `openai(\"gpt-5\")`, or `google(\"gemini-2.5-pro\")`. You can also use the [AI Gateway](https://vercel.com/docs/ai-gateway) string form, like `\"anthropic/claude-haiku-4-5\"`, to route through Vercel.\n- **Add tools.** A `click` tool wrapping `page.click`, a `fill` tool over `page.fill`, a `screenshot` tool that returns a base64 PNG for vision models.\n- **Phase-gate steps.** Use `prepareStep` to restrict which tools are callable on a given step. See the AI SDK's [loop control](https://ai-sdk.dev/docs/agents/loop-control) page.\n- **Turn on stealth.** Pass `useProxy`, `solveCaptcha`, or `sessionTimeout` to `steel.sessions.create({...})` inside `openSession` for sites with anti-bot.\n\n## Related\n\n[Next.js version](../vercel-ai-sdk-nextjs) · [AI SDK agents docs](https://ai-sdk.dev/docs/agents/overview) · [ToolLoopAgent reference](https://ai-sdk.dev/docs/agents/building-agents)\n"
+    },
+    {
+      "path": "examples/auth-context-py/pyproject.toml",
+      "sha": null,
+      "content_sha256": "1eb4582c9a00d5e8e5b1eed6f291f751f3896a4d3c296f540db02d5a998d1778",
+      "score": 196,
+      "content": "[project]\nname = \"auth-context-py\"\nversion = \"0.1.0\"\ndescription = \"Steel + Playwright (Python): capture an auth context and restore it into a fresh session\"\nreadme = \"README.md\"\nrequires-python = \">=3.10\"\ndependencies = [\n    \"playwright>=1.48.0\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.17.0\",\n]\n"
+    },
+    {
+      "path": "examples/auth-context-rs/Cargo.toml",
+      "sha": null,
+      "content_sha256": "3057336a9161b4d9b45629b348640ba0a47c4b312d46939de9fac86fc336a6d0",
+      "score": 196,
+      "content": "[package]\nname = \"auth-context-rs\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nsteel-rs = \"0.1\"\nchromiumoxide = { version = \"0.7\", default-features = false, features = [\"tokio-runtime\"] }\nasync-tungstenite = { version = \"0.27\", features = [\"tokio-native-tls\"] }\ntokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }\nfutures = \"0.3\"\nserde = { version = \"1\", features = [\"derive\"] }\ndotenvy = \"0.15\"\n"
+    },
+    {
+      "path": "examples/auth-context-ts/package.json",
+      "sha": null,
+      "content_sha256": "e402c9691beea92aa9c526688d3aa6269cd74ea99a8a618b7de7b3fb1109a5c5",
+      "score": 196,
+      "content": "{\n  \"name\": \"auth-context-ts\",\n  \"version\": \"1.0.0\",\n  \"description\": \"A starter project for reusing authentication across Steel sessions with Playwright\",\n  \"main\": \"index.ts\",\n  \"scripts\": {\n    \"test\": \"echo \\\"Error: no test specified\\\" && exit 1\",\n    \"start\": \"ts-node index.ts\"\n  },\n  \"keywords\": [\n    \"steel\",\n    \"playwright\",\n    \"authentication\",\n    \"session-reuse\"\n  ],\n  \"author\": \"\",\n  \"license\": \"ISC\",\n  \"dependencies\": {\n    \"dotenv\": \"^16.4.5\",\n    \"playwright\": \"^1.48.2\",\n    \"steel-sdk\": \"^0.10\",\n    \"typescript\": \"^5.6.3\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^22.9.0\",\n    \"ts-node\": \"^10.9.2\"\n  }\n}\n"
+    },
+    {
+      "path": "examples/mcp-py/pyproject.toml",
+      "sha": null,
+      "content_sha256": "c56b207a5f75a4841bafd504305626f7775a4b5da71f2dc21c4c4321ec577850",
+      "score": 191,
+      "content": "[project]\nname = \"mcp-py\"\nversion = \"0.1.0\"\ndescription = \"Expose a Steel cloud browser to any MCP client\"\nreadme = \"README.md\"\nrequires-python = \">=3.10\"\ndependencies = [\n    \"mcp>=1.2.0\",\n    \"playwright>=1.48.0\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.16.0\",\n]\n"
+    },
+    {
+      "path": "examples/browser-use-captcha-auto/pyproject.toml",
+      "sha": null,
+      "content_sha256": "ac607aa0f861fc933d90e0a126b1d0b08bd1f0dd7a5dfd6aa44f4188dd5ee7cc",
+      "score": 191,
+      "content": "[project]\nname = \"browser-use-captcha-auto\"\nversion = \"0.1.0\"\ndescription = \"Steel + Browser-Use: Automatic CAPTCHA solving\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"browser-use>=0.12.5,<0.13\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.16.0\",\n]\n"
+    },
+    {
+      "path": "examples/browser-use/pyproject.toml",
+      "sha": null,
+      "content_sha256": "e6da3b6362907d1f34185842b3b50fa8e34fd15b814f6b10e48bb3db8f3f7c6b",
+      "score": 191,
+      "content": "[project]\nname = \"browser-use-example\"\nversion = \"0.1.0\"\ndescription = \"Add your description here\"\nreadme = \"README.md\"\nrequires-python = \">=3.12\"\ndependencies = [\n    \"browser-use>=0.12\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.16.0\",\n]\n"
+    },
+    {
+      "path": "examples/browser-use-captcha-manual/pyproject.toml",
+      "sha": null,
+      "content_sha256": "639ddf0d6cbbc143017cc4571c4d5e1a4a2dca03f2d62e4b52a4f355ba008936",
+      "score": 191,
+      "content": "[project]\nname = \"browser-use-captcha-manual\"\nversion = \"0.1.0\"\ndescription = \"Steel + Browser-Use: Manual reCAPTCHA v2 solver\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"browser-use>=0.12.5,<0.13\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.16.0\",\n]\n"
+    },
+    {
+      "path": "examples/claude-agent-sdk-py/pyproject.toml",
+      "sha": null,
+      "content_sha256": "03b23c16b2b9e34a608db2635b6b123a4c1bc2028d4869bbff8f7287d2907229",
+      "score": 191,
+      "content": "[project]\nname = \"claude-agent-sdk-py\"\nversion = \"0.1.0\"\ndescription = \"Build a browser agent with the Claude Agent SDK and Steel\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"claude-agent-sdk>=0.1.71\",\n    \"playwright>=1.48.0\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.17.0\",\n]\n"
+    },
+    {
+      "path": "examples/microsoft-agent-framework/pyproject.toml",
+      "sha": null,
+      "content_sha256": "1973a7f0240e5849a62bba2209a07a91a0d9941c0dfe7bca5eaa394c35db8f3c",
+      "score": 191,
+      "content": "[project]\nname = \"microsoft-agent-framework-example\"\nversion = \"0.1.0\"\ndescription = \"Build a browser agent with Microsoft Agent Framework and Steel\"\nreadme = \"README.md\"\nrequires-python = \">=3.10\"\ndependencies = [\n    \"agent-framework>=1.0.0\",\n    \"playwright>=1.48.0\",\n    \"pydantic>=2.0.0\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.16.0\",\n]\n"
+    },
+    {
+      "path": "examples/openai-agents-py/pyproject.toml",
+      "sha": null,
+      "content_sha256": "8ac1294bd8552568d7d54d0e35d8b0990943256c5e21192812365da666279c93",
+      "score": 191,
+      "content": "[project]\nname = \"openai-agents-py\"\nversion = \"0.1.0\"\ndescription = \"Build an AI browser agent with the OpenAI Agents SDK (Python) and Steel\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"openai-agents>=0.1.0\",\n    \"playwright>=1.48.0\",\n    \"pydantic>=2.0.0\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.16.0\",\n]\n"
+    },
+    {
+      "path": "examples/restate-agent-rs/Cargo.toml",
+      "sha": null,
+      "content_sha256": "788dc26f2c729c2519020d91c9122d9199a22b9253d938e48a3db89b49394fd8",
+      "score": 191,
+      "content": "[package]\nname = \"restate-agent-rs\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nanyhow = \"1\"\ndotenvy = \"0.15\"\nrestate-sdk = \"0.10\"\nreqwest = { version = \"0.12\", features = [\"json\"] }\nserde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\nsteel-rs = \"0.1\"\ntokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\"] }\nurl = \"2\"\n"
+    },
+    {
+      "path": "examples/deep-research-py/pyproject.toml",
+      "sha": null,
+      "content_sha256": "c7780c4d7de2257032d9571fef2d3296c9e218f5278215e633cb2fe466f132b9",
+      "score": 191,
+      "content": "[project]\nname = \"deep-research-py\"\nversion = \"0.1.0\"\ndescription = \"Deep-research scenario: Claude Agent SDK orchestrator dispatches parallel Steel-driven researcher subagents.\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"anthropic>=0.50.0\",\n    \"beautifulsoup4>=4.12.0\",\n    \"claude-agent-sdk>=0.1.71\",\n    \"httpx>=0.27.0\",\n    \"playwright>=1.48.0\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.17.0\",\n]\n"
+    },
+    {
+      "path": "examples/temporal-browser-workflow-rs/Cargo.toml",
+      "sha": null,
+      "content_sha256": "5dfac2fa91c8f26d838b1359d859611180fc0b4deb09ec2385a6530bcde5057c",
+      "score": 191,
+      "content": "[package]\nname = \"temporal-browser-workflow-rs\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nanyhow = \"1\"\ndotenvy = \"0.15\"\nfutures = \"0.3\"\nfutures-util = \"0.3\"\nprost-wkt-types = \"0.7\"\nreqwest = { version = \"0.12\", features = [\"json\"] }\nserde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\nsteel-rs = \"0.1.3\"\ntemporalio-client = \"0.4\"\ntemporalio-common = \"0.4\"\ntemporalio-macros = \"0.4\"\ntemporalio-sdk = \"0.4\"\ntemporalio-sdk-core = \"0.4\"\ntokio = { version = \"1\", features = [\"full\"] }\nurl = \"2\"\n"
+    },
+    {
+      "path": "examples/temporal-browser-workflow-py/pyproject.toml",
+      "sha": null,
+      "content_sha256": "4c506265974d30552f9cef5e66dcfb8de3e3f441c4860d1aba77d1012be4214a",
+      "score": 191,
+      "content": "[project]\nname = \"temporal-browser-workflow-py\"\nversion = \"0.1.0\"\ndescription = \"Run durable Steel browser capture workflows with Temporal and Python\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.19.0\",\n    \"temporalio>=1.29.0\",\n]\n\n[build-system]\nrequires = [\"setuptools>=68\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools]\npy-modules = [\"main\", \"workflows\"]\n"
+    },
+    {
+      "path": "examples/you-com-search/pyproject.toml",
+      "sha": null,
+      "content_sha256": "c47ff5471d131af66e46574867e4231a2c0191d70c07ec28359a6a8b44d82735",
+      "score": 191,
+      "content": "[project]\nname = \"you-com-search\"\nversion = \"0.1.0\"\ndescription = \"Combine You.com Search/Contents APIs with Steel cloud browsers in a search-then-act agent.\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"httpx>=0.27.0\",\n    \"langchain>=0.3.0\",\n    \"langchain-anthropic>=0.3.0\",\n    \"langchain-core>=0.3.0\",\n    \"playwright>=1.48.0\",\n    \"python-dotenv>=1.0.0\",\n    \"steel-sdk>=0.16.0\",\n]\n"
+    },
+    {
+      "path": "examples/restate-agent-py/pyproject.toml",
+      "sha": null,
+      "content_sha256": "204ea6b05f4e74d7c2180f2aa188cfe1705448509f0c58099e8b877f9ba07d3d",
+      "score": 191,
+      "content": "[project]\nname = \"restate-agent-py\"\nversion = \"0.1.0\"\ndescription = \"Durable browser research agent with Restate, Steel, and Python\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"hypercorn>=0.17.3\",\n    \"python-dotenv>=1.0.0\",\n    \"restate-sdk[serde]>=1.0.0\",\n    \"steel-sdk>=0.19.0\",\n]\n"
+    },
+    {
+      "path": "examples/mcp-rs/Cargo.toml",
+      "sha": null,
+      "content_sha256": "287eea5c9054f946a3531939088abb5b8be6251d30a9ab863974444ed2d8d337",
+      "score": 191,
+      "content": "[package]\nname = \"mcp-rs\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[dependencies]\nsteel-rs = \"0.1\"\nrmcp = { version = \"2\", features = [\"server\", \"macros\", \"transport-io\", \"schemars\"] }\nchromiumoxide = \"0.9\"\nasync-tungstenite = { version = \"0.32\", features = [\"tokio-native-tls\"] }\ntokio = { version = \"1\", features = [\"macros\", \"rt-multi-thread\", \"sync\"] }\nfutures = \"0.3\"\nserde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\nbase64 = \"0.22\"\nanyhow = \"1\"\ndotenvy = \"0.15\"\n"
+    },
+    {
+      "path": "examples/restate-agent-ts/package.json",
+      "sha": null,
+      "content_sha256": "5680f95fed41968d8a11cb08f14202d145f29e46b0c481346915efea22196461",
+      "score": 191,
+      "content": "{\n  \"name\": \"restate-agent-ts\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Durable browser research agent with Restate, Steel, and TypeScript\",\n  \"main\": \"index.ts\",\n  \"scripts\": {\n    \"start\": \"tsx index.ts\",\n    \"typecheck\": \"tsc --noEmit\"\n  },\n  \"keywords\": [],\n  \"author\": \"\",\n  \"license\": \"MIT\",\n  \"dependencies\": {\n    \"@restatedev/restate-sdk\": \"^1.15.1\",\n    \"dotenv\": \"^16.4.5\",\n    \"steel-sdk\": \"^0.18.0\",\n    \"tsx\": \"^4.19.2\",\n    \"typescript\": \"^5.6.3\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^22.9.0\"\n  }\n}\n"
+    },
+    {
+      "path": "examples/mcp-ts/package.json",
+      "sha": null,
+      "content_sha256": "9b14790e63562341b9dcd130ab4aae1fd18ecc9c80d870a3dac226866f99f531",
+      "score": 191,
+      "content": "{\n  \"name\": \"mcp-ts\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Expose a Steel cloud browser to any MCP client\",\n  \"license\": \"MIT\",\n  \"scripts\": {\n    \"start\": \"ts-node index.ts\"\n  },\n  \"dependencies\": {\n    \"@modelcontextprotocol/sdk\": \"^1.29.0\",\n    \"dotenv\": \"^16.4.7\",\n    \"playwright\": \"^1.50.0\",\n    \"steel-sdk\": \"^0.16\",\n    \"zod\": \"^4.4.3\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20.0.0\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.4.2\"\n  }\n}\n"
+    },
+    {
+      "path": "examples/agentkit/package.json",
+      "sha": null,
+      "content_sha256": "39b7f46a0a4a7549497d9038b5bdd33319d49496fcabde535802f738f3704c9c",
+      "score": 191,
+      "content": "{\n  \"name\": \"agentkit\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Steel Browser with Agent Kit\",\n  \"main\": \"index.ts\",\n  \"scripts\": {\n    \"start\": \"ts-node index.ts\"\n  },\n  \"keywords\": [\n    \"steel\",\n    \"agent-kit\",\n    \"ai\",\n    \"ai-agents\",\n    \"browser-automation\"\n  ],\n  \"author\": \"Steel Dev\",\n  \"license\": \"MIT\",\n  \"dependencies\": {\n    \"dotenv\": \"^16.4.7\",\n    \"@inngest/agent-kit\": \"^0.13.2\",\n    \"playwright\": \"^1.50.0\",\n    \"zod\": \"^4.0.0\",\n    \"steel-sdk\": \"^0.16\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20.0.0\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.4.2\"\n  }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T18:58:10.712772+00:00"
+}

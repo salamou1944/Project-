@@ -1,0 +1,108 @@
+{
+  "canonical_source": "github:mem0ai/eve-mem0-template",
+  "repo": "mem0ai/eve-mem0-template",
+  "revision_sha": "dbc29fee8342d019f21904c2a7dec0c9ddd9b4a0",
+  "default_branch": "main",
+  "pushed_at": "2026-09-14T03:25:22Z",
+  "repo_updated_at": "2026-09-18T22:33:33Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "fc11b768f6c72416a485cd1bcd42990a5a4e6371411b2fe833a38bb7aa95e76c",
+      "score": 120,
+      "content": "{\n  \"name\": \"mem0-eve-template\",\n  \"version\": \"0.0.0\",\n  \"type\": \"module\",\n  \"imports\": {\n    \"#*\": \"./agent/*\",\n    \"#evals/*\": \"./evals/*\"\n  },\n  \"scripts\": {\n    \"build\": \"eve build\",\n    \"deploy\": \"eve deploy\",\n    \"dev\": \"eve dev\",\n    \"eval\": \"eve eval\",\n    \"start\": \"eve start\",\n    \"typecheck\": \"tsc\"\n  },\n  \"dependencies\": {\n    \"@vercel/connect\": \"1.0.0\",\n    \"ai\": \"^7.0.93\",\n    \"eve\": \"^0.53.1\",\n    \"mem0ai\": \"^3.1.6\",\n    \"zod\": \"4.5.4\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"24.x\",\n    \"typescript\": \"7.0.2\"\n  },\n  \"engines\": {\n    \"node\": \"24.x\"\n  }\n}\n"
+    },
+    {
+      "path": "agent/agent.ts",
+      "sha": null,
+      "content_sha256": "bea85ced3ced47ec28c4790632bf2a34d800302bcfebb53ad9fba1c9e3ab5457",
+      "score": 108,
+      "content": "import { defineAgent } from \"eve\";\n\nexport default defineAgent({\n  model: \"openai/gpt-5.6-luna-fast\",\n});\n"
+    },
+    {
+      "path": "agent/lib/mem0.ts",
+      "sha": null,
+      "content_sha256": "f7b468f5bb113d82679bee25328fdb032a074c261c0590377680477a076eb48a",
+      "score": 106,
+      "content": "import MemoryClient from \"mem0ai\";\n\n// The Mem0 Vercel integration injects MEM0_API_KEY, scoped to your org and project.\n// Created lazily so this module can be imported during build without the key present.\nlet client: MemoryClient | undefined;\n\nexport function getMem0(): MemoryClient {\n  if (!client) {\n    const apiKey = [REDACTED];\n    if (!apiKey) {\n      throw new Error(\n        \"MEM0_API_KEY is not set. Install the Mem0 integration from the Vercel Marketplace, \" +\n          \"or run `vercel env pull` for local development.\",\n      );\n    }\n    client = new MemoryClient({ apiKey });\n  }\n  return client;\n}\n\n// Memory is scoped per authenticated caller. Unprotected sessions share one id so the\n// demo remembers across sessions; add real auth and this becomes per-user automatically.\nexport function memoryUserId(principalId: string | null | undefined): string {\n  return principalId ?? \"default-user\";\n}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "agent/channels/eve.ts",
+      "sha": null,
+      "content_sha256": "988ed70090c9d8527903751602d083b7dcf5f232ce84b7eb44f47301a0eb6faf",
+      "score": 106,
+      "content": "import { localDev, placeholderAuth, vercelOidc } from \"eve/channels/auth\";\nimport { eveChannel } from \"eve/channels/eve\";\n\nexport default eveChannel({\n  auth: [\n    // Lets the eve TUI and your own Vercel deployments reach the agent.\n    vercelOidc(),\n    // Open on localhost for `eve dev` and the REPL; ignored in production.\n    localDev(),\n    // Safe default: blocks anonymous browser requests in production. Replace\n    // with your auth provider (Auth.js, Clerk, ...) so each user gets their own\n    // memory, or use `none()` for a public demo where everyone shares memory.\n    placeholderAuth(),\n  ],\n});\n"
+    },
+    {
+      "path": "agent/tools/remember.ts",
+      "sha": null,
+      "content_sha256": "22c3b6cbf8b3baf8a8cea183c83ca2a0ec0c796b028190d104494529dd39fe20",
+      "score": 106,
+      "content": "import { defineTool } from \"eve/tools\";\nimport { z } from \"zod\";\nimport { getMem0, memoryUserId } from \"../lib/mem0\";\n\nexport default defineTool({\n  description:\n    \"Save a durable fact or preference about the user to long-term memory. \" +\n    \"Use this whenever the user shares something worth remembering across sessions \" +\n    \"(their name, preferences, goals, or context about their work).\",\n  inputSchema: z.object({\n    content: z\n      .string()\n      .min(1)\n      .describe(\"A single fact or preference to remember, in natural language.\"),\n  }),\n  label: { start: ({ content }) => `Remember: ${content.slice(0, 60)}` },\n  async execute({ content }, ctx) {\n    const userId = memoryUserId(ctx.session.auth.current?.principalId);\n    await getMem0().add([{ role: \"user\", content }], { userId });\n    return { saved: true };\n  },\n});\n"
+    },
+    {
+      "path": "agent/tools/recall_memories.ts",
+      "sha": null,
+      "content_sha256": "66b748b3e7b03b9658ed4a03e281fffa7de9df0acf19edb68f32739a4551445e",
+      "score": 106,
+      "content": "import { defineTool } from \"eve/tools\";\nimport { z } from \"zod\";\nimport { getMem0, memoryUserId } from \"../lib/mem0\";\n\nexport default defineTool({\n  description:\n    \"Search the user's long-term memory for facts relevant to a query. \" +\n    \"Call this before answering anything personal so replies use what you already know about the user.\",\n  inputSchema: z.object({\n    query: z\n      .string()\n      .min(1)\n      .describe(\"What to look up, e.g. the user's question or the current topic.\"),\n  }),\n  label: { start: ({ query }) => `Recall: ${query.slice(0, 60)}` },\n  async execute({ query }, ctx) {\n    const userId = memoryUserId(ctx.session.auth.current?.principalId);\n    const res = (await getMem0().search(query, {\n      filters: { user_id: userId },\n    })) as unknown;\n\n    // Mem0 returns either an array of memories or an object with a `results` array.\n    const items = Array.isArray(res) ? res : ((res as { results?: unknown[] }).results ?? []);\n    const memories = (items as Array<{ memory?: string }>)\n      .map((item) => item.memory)\n      .filter((memory): memory is string => Boolean(memory));\n\n    return { memories };\n  },\n});\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3e93052fdbadef34409aa046130d14a712e9ae8e48e0659d0ecff440615067ee",
+      "score": 100,
+      "content": "# Mem0 eve template\n\nAn [eve](https://eve.dev) agent template with long-term memory powered by\n[Mem0](https://mem0.ai). eve is Vercel's framework for durable backend AI agents;\nthis template wires Mem0 into an eve agent so it remembers facts and preferences\nabout each user across conversations, getting more helpful over time instead of\nstarting from scratch.\n\n## Deploy\n\n[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/mem0ai/mem0-eve-template&project-name=mem0-eve-template&repository-name=mem0-eve-template&integration-ids=oac_rTG82TypBWqzWTr1IpOUG7EB)\n\nDeploy clones this repo and installs the Mem0 integration, which sets `MEM0_API_KEY`\non your project automatically. Model access uses the Vercel AI Gateway through your\nlinked project.\n\n## How it works\n\nThe agent has two Mem0-backed tools:\n\n- **`remember`** — saves a durable fact or preference (`mem0.add`).\n- **`recall_memories`** — searches long-term memory for relevant facts (`mem0.search`).\n\nThe instructions (`agent/instructions.md`) tell the model to recall before answering\nand to remember durable facts. Memory is scoped per user via\n`ctx.session.auth.current.principalId` (see `agent/lib/mem0.ts`).\n\n## Auth\n\nThe chat channel (`agent/channels/eve.ts`) ships with `placeholderAuth()`, the\nsafe default: local development works, your own Vercel deployments and the eve\nTUI can reach the agent, and anonymous browser traffic is blocked in production.\n\nAdd your auth provider (Auth.js, Clerk, `vercelOidc()`) to open it to real\nusers. Memory is scoped per authenticated user via `principalId`, so each user\ngets their own memory automatically once a provider is in place. For a throwaway\npublic demo where everyone shares one memory, swap `placeholderAuth()` for\n`none()`.\n\n## Run locally\n\n```bash\nnpm install\nvercel env pull            # pulls MEM0_API_KEY from your Vercel project\n# set AI_GATEWAY_API_KEY, or link a Vercel project for model access\nnpm run dev                # opens the eve development REPL\n```\n\nTry it: tell the agent something (\"I'm vegetarian and allergic to nuts\"), start a\nnew session, and ask \"what can I eat?\" — it recalls what you told it.\n\n## Learn more\n\n- [Mem0 on Vercel](https://docs.mem0.ai/integrations/vercel)\n- [Mem0 quickstart](https://docs.mem0.ai/platform/quickstart)\n- [eve documentation](https://eve.dev/docs)\n\n## License\n\nApache-2.0. See [LICENSE](./LICENSE).\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha": null,
+      "content_sha256": "3c7d8c997dc35b38d346321b04eb721f41e83aece9e95baa47b03d5c45c8a15d",
+      "score": 75,
+      "content": "# eve Agent App\n\nThis project uses the eve framework: an agent is a directory of files under `agent/`, and eve compiles and runs it.\n\nFor a content-only change to the root agent's identity, purpose, tone, or response guidelines, edit its existing authored instructions. Fresh projects use `agent/instructions.md`; a project may instead use `agent/instructions.ts` or files under `agent/instructions/`. You do not need to read the framework docs for a content-only instructions change. A fresh project already has its selected model in `agent/agent.ts`; preserve that file unless the user asks to change the model.\n\n## Read the docs before writing code\n\n```sh\nls node_modules/eve/docs\n```\n\nStart with `docs/README.md`: it maps each task to the page that covers it. Read that page before authoring tools, connections, channels, skills, subagents, schedules, or deployment. In a workspace or local package install, resolve the installed `eve` package location first. If the package docs are missing, use https://eve.dev/docs.\n\nUse a bounded authoring loop:\n\n1. Read the relevant page and inspect only files you will modify or need to imitate.\n2. Stop discovery once the file location, imports, and definition shape are clear. Implement the smallest complete behavior the user requested.\n3. Run one narrow verification. Expand investigation only when it fails or the request needs project-specific details.\n\nFollow links or inspect public types only when the routed page leaves the task unanswered. Do not recursively glob `node_modules`, enumerate the entire docs tree, or read unrelated scaffold files when the direct path is known. Package-manager links can hide files from recursive glob tools even though direct reads work.\n\n## Prefer an existing integration\n\nWhen a task names an external product or service, search the registry before implementing its integration. For a generic capability, author a tool instead.\n\n```sh\neve registry search <query> --json\neve registry view <item>\n```\n\nPrefer items whose `implementation` is `native`; use Chat SDK adapters when no native channel fits. `registry view` links the item's documentation.\n\nInstall without driving interactive prompts:\n\n```sh\neve add <item> --non-interactive\n```\n\nExit code 0 means setup completed, 1 failed, and 2 needs an answer or a prerequisite. On exit 2, run the `next.command` from the final NDJSON event. For a non-secret question, replace its `<JSON value>` answer placeholder with the answer you collected; string values need JSON quotes. Never pass a secret in `--answer`. See `docs/install-integrations.mdx` for setup prerequisites.\n\n## Use eve for Vercel operations\n\nUse eve to link and deploy Vercel projects:\n\n```sh\neve link --non-interactive --project <name-or-id> [--team <team-id-or-slug>]\neve deploy --non-interactive --yes [--project <name-or-id>]\n```\n\nA setup may report `eve link` as a prerequisite; run it, then retry the continuation. When a completed setup event has `deploymentRequired: true`, run the `next` command it reports.\n\n## Validate the change\n\nRun the validation the task requests. When it does not establish the behavior you changed, run the narrowest relevant check.\n"
+    },
+    {
+      "path": "agent/instructions.md",
+      "sha": null,
+      "content_sha256": "e601595a1f62e6574e3f199a6ab7b872fdb59a8e77c2bd7900a1af4bc5360131",
+      "score": 73,
+      "content": "# Identity\n\nYou are a helpful personal assistant with long-term memory, powered by Mem0. You\nremember facts and preferences about each user across conversations, so you get\nmore helpful over time instead of starting from scratch.\n\n# Using memory\n\n- Before answering anything personal, call `recall_memories` to look up what you\n  already know about the user, then use those memories to personalize your reply.\n- When the user shares a durable fact or preference (their name, likes and\n  dislikes, goals, or context about their work), call `remember` to save it. Save\n  one clear fact per call.\n- Do not save trivial or one-off details. Save things that will still matter next\n  time you talk.\n\n# Style\n\nBe concise, friendly, and personal. When you use a remembered fact, weave it in\nnaturally rather than announcing that you looked it up.\n"
+    },
+    {
+      "path": ".vercelignore",
+      "sha": null,
+      "content_sha256": "de662fb5eaba0c16f6099d46e93556780b42fbe960156e1fc737232e7574be8c",
+      "score": 72,
+      "content": "node_modules\n.env*\n.eve\n.next\n.output\n.nitro\ndist\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "504bd35b95645564f7ad5bbc1dd699ceeeda1e65656c8ba91dd276b3c0e7ae17",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2022\",\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"types\": [\"node\", \"eve/workflow-modules\"],\n    \"strict\": true,\n    \"esModuleInterop\": true,\n    \"skipLibCheck\": true,\n    \"noEmit\": true\n  },\n  \"include\": [\"agent/**/*.ts\", \"evals/**/*.ts\"]\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T18:58:23.647943+00:00"
+}
