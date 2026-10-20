@@ -1,0 +1,202 @@
+{
+  "canonical_source": "github:xpzouying/kimi-code",
+  "repo": "xpzouying/kimi-code",
+  "revision_sha": "e7d5a0aee74e7f116cca0273c416ece9139a78a0",
+  "default_branch": "main",
+  "pushed_at": "2026-08-27T09:17:43Z",
+  "repo_updated_at": "2026-08-05T03:12:54Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "packages/agent-core-v2/test/agent/permissionPolicy/policies/default-tool-approve.test.ts",
+      "sha": null,
+      "content_sha256": "0537295273a713584eab4315cca165f0846cb026bb303af3f27f15083e2cd685",
+      "score": 310,
+      "content": "import type { ToolCall } from '#/kosong/contract/message';\nimport { describe, expect, it } from 'vitest';\n\nimport type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport { DefaultToolApprovePermissionPolicyService } from '#/agent/permissionPolicy/policies/default-tool-approve';\nimport { ToolAccesses } from '#/tool/toolContract';\n\nconst signal = new AbortController().signal;\n\nfunction policyContext(toolName: string, args: unknown): ResolvedToolExecutionHookContext {\n  return {\n    turnId: '0',\n    stepNumber: 1,\n    signal,\n    llm: {},\n    args,\n    toolCall: {\n      type: 'function',\n      id: `call_${toolName}`,\n      name: toolName,\n      arguments: JSON.stringify(args),\n    } satisfies ToolCall,\n    toolCalls: [\n      {\n        type: 'function',\n        id: `call_${toolName}`,\n        name: toolName,\n        arguments: JSON.stringify(args),\n      },\n    ],\n    execution: {\n      accesses: ToolAccesses.none(),\n      approvalRule: toolName,\n      execute: async () => ({ output: '' }),\n    },\n  } as unknown as ResolvedToolExecutionHookContext;\n}\n\ndescribe('DefaultToolApprovePermissionPolicyService', () => {\n  const policy = new DefaultToolApprovePermissionPolicyService();\n\n  it.each([\n    ['Read', { path: '/workspace/notes.md' }],\n    ['Grep', { pattern: 'TODO', path: '/workspace' }],\n    ['Glob', { pattern: '**/*.ts', path: '/workspace' }],\n    ['ReadMediaFile', { path: '/workspace/image.png' }],\n    ['SetTodoList', { items: [] }],\n    ['TodoList', {}],\n    ['TaskList', {}],\n    ['TaskOutput', { task_id: 'task_1' }],\n    ['CronList', {}],\n    ['WebSearch', { query: 'kimi code' }],\n    ['FetchURL', { url: 'https://example.com' }],\n    ['Agent', { prompt: 'review this' }],\n    [\n      'AgentSwarm',\n      {\n        description: 'Check files',\n        prompt_template: 'Check {{item}}',\n        items: ['a.ts', 'b.ts'],\n      },\n    ],\n    ['AskUserQuestion', { questions: [] }],\n    ['Skill', { name: 'test-skill' }],\n    ['EnterPlanMode', {}],\n    ['ExitPlanMode', {}],\n    ['CreateGoal', { title: 'ship it' }],\n    ['GetGoal', {}],\n    ['SetGoalBudget', { tokenBudget: 1000 }],\n    ['UpdateGoal', { status: 'complete' }],\n  ] as const)('approves %s', (toolName, args) => {\n    expect(policy.evaluate(policyContext(toolName, args))).toEqual({ kind: 'approve' });\n  });\n\n  it.each([\n    ['Bash', { command: 'printf first', timeout: 60 }],\n    ['Write', { path: '/workspace/a.ts', content: 'x' }],\n    ['Edit', { path: '/workspace/a.ts', old_string: 'a', new_string: 'b' }],\n    ['Custom', { value: 1 }],\n    ['CronCreate', { cron: '*/5 * * * *', prompt: 'ping' }],\n    ['CronDelete', { id: 'job_1' }],\n  ] as const)('does not approve %s', (toolName, args) => {\n    expect(\n      policy.evaluate(policyContext(toolName, args)),\n    ).toBeUndefined();\n  });\n});\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/auto-mode-ask-user-question-deny.ts",
+      "sha": null,
+      "content_sha256": "903a7cd4db13928d7c6bf32b8d6a5c6a6bd0a1eda8a534b71437b62866ad2c5c",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\n\nexport class AutoModeAskUserQuestionDenyPermissionPolicy implements PermissionPolicy {\n  readonly name = 'auto-mode-ask-user-question-deny';\n\n  constructor(private readonly agent: Agent) {}\n\n  evaluate(context: PermissionPolicyContext): PermissionPolicyResult | undefined {\n    if (this.agent.permission.mode !== 'auto') return;\n    if (context.toolCall.name !== 'AskUserQuestion') return;\n    return {\n      kind: 'deny',\n      message:\n        'AskUserQuestion is disabled while auto permission mode is active. Make a reasonable decision and continue without asking the user.',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/fallback-ask.ts",
+      "sha": null,
+      "content_sha256": "e57c7a5083c3e41eb9a7bd62e87f700cc730d429ea57ed0f665da3fa5b58ed23",
+      "score": 250,
+      "content": "import type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\n\nexport class FallbackAskPermissionPolicy implements PermissionPolicy {\n  readonly name = 'fallback-ask';\n\n  evaluate(_context: PermissionPolicyContext): PermissionPolicyResult {\n    return {\n      kind: 'ask',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/sensitive-file-access-ask.ts",
+      "sha": null,
+      "content_sha256": "bd6f67cdc170d2c6185d6540a9fd4c0189907daeaa42d8b500bb67b5ff5f6497",
+      "score": 250,
+      "content": "import type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport { isSensitiveFile } from '#/tool/path-access';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\nimport { fileAccesses } from './path-utils';\n\nexport class SensitiveFileAccessAskPermissionPolicyService implements PermissionPolicy {\n  readonly name = 'sensitive-file-access-ask';\n\n  evaluate(context: ResolvedToolExecutionHookContext): PermissionPolicyResult | undefined {\n    const access = fileAccesses(context).find((fileAccess) => isSensitiveFile(fileAccess.path));\n    return access === undefined ? undefined : { kind: 'ask' };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/swarm-mode-agent-swarm-approve.ts",
+      "sha": null,
+      "content_sha256": "f3ebf690407286224e4c859ecaac4d3ae1e35de24530d9b62305e51924e89151",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\n\nexport class SwarmModeAgentSwarmApprovePermissionPolicy implements PermissionPolicy {\n  readonly name = 'swarm-mode-agent-swarm-approve';\n\n  constructor(private readonly agent: Agent) {}\n\n  evaluate(context: PermissionPolicyContext): PermissionPolicyResult | undefined {\n    if (context.toolCall.name !== 'AgentSwarm') return;\n    if (!this.agent.swarmMode.isActive) return;\n    return {\n      kind: 'approve',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/yolo-mode-approve.ts",
+      "sha": null,
+      "content_sha256": "04d78539d38f4119620f74610a1055e1e2c1e6f881523c46fb36522e5c72dc9b",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport type { PermissionPolicy, PermissionPolicyResult } from '../types';\n\nexport class YoloModeApprovePermissionPolicy implements PermissionPolicy {\n  readonly name = 'yolo-mode-approve';\n\n  constructor(private readonly agent: Agent) {}\n\n  evaluate(): PermissionPolicyResult | undefined {\n    if (this.agent.permission.mode !== 'yolo') return;\n    return {\n      kind: 'approve',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/auto-mode-approve.ts",
+      "sha": null,
+      "content_sha256": "cd4539b54010258d1d86c39afe85c37ef1181fc476be2f0e93e2a41d5d800885",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport type { PermissionPolicy, PermissionPolicyResult } from '../types';\n\nexport class AutoModeApprovePermissionPolicy implements PermissionPolicy {\n  readonly name = 'auto-mode-approve';\n\n  constructor(private readonly agent: Agent) {}\n\n  evaluate(): PermissionPolicyResult | undefined {\n    if (this.agent.permission.mode !== 'auto') return;\n    return {\n      kind: 'approve',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/deny-all.ts",
+      "sha": null,
+      "content_sha256": "0cf727d509dc405ef7f299ee48caad80cf88672034a701c7a4cda5dcce247266",
+      "score": 250,
+      "content": "import type { PermissionPolicy, PermissionPolicyResult } from '../types';\n\nexport class DenyAllPermissionPolicy implements PermissionPolicy {\n  readonly name = 'deny-all';\n\n  constructor(private readonly message: string) {}\n\n  evaluate(): PermissionPolicyResult {\n    return {\n      kind: 'deny',\n      message: this.message,\n      reason: { source: 'side_question' },\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/user-configured-deny.ts",
+      "sha": null,
+      "content_sha256": "16b66b9f0519a93be45d8288edeeac7eb0b6805593a4e96bc517bd4dfad26354",
+      "score": 250,
+      "content": "import type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport { IAgentPermissionRulesService } from '#/agent/permissionRules/permissionRules';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\nimport { evaluateUserConfiguredRule } from './user-configured-rule';\n\nexport class UserConfiguredDenyPermissionPolicyService implements PermissionPolicy {\n  readonly name = 'user-configured-deny';\n\n  constructor(@IAgentPermissionRulesService private readonly rulesService: IAgentPermissionRulesService) {}\n\n  evaluate(context: ResolvedToolExecutionHookContext): PermissionPolicyResult | undefined {\n    return evaluateUserConfiguredRule(context, 'deny', this.rulesService);\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/pre-tool-call-hook.ts",
+      "sha": null,
+      "content_sha256": "b551fbbbad7c05946e0a5539f938ef844b3d7d1c99e06add6f485be714fcbdcb",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport { isPlainRecord } from '../../turn/canonical-args';\nimport type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\n\nexport class PreToolCallHookPermissionPolicy implements PermissionPolicy {\n  readonly name = 'pre-tool-call-hook';\n\n  constructor(private readonly agent: Agent) {}\n\n  async evaluate(context: PermissionPolicyContext): Promise<PermissionPolicyResult | undefined> {\n    const hookResult = await this.agent.hooks?.triggerBlock('PreToolUse', {\n      matcherValue: context.toolCall.name,\n      signal: context.signal,\n      inputData: {\n        toolName: context.toolCall.name,\n        toolInput: isPlainRecord(context.args) ? context.args : {},\n        toolCallId: context.toolCall.id,\n      },\n    });\n    context.signal.throwIfAborted();\n    if (hookResult === undefined) return;\n    return {\n      kind: 'deny',\n      message: hookResult.reason,\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/default-tool-approve.ts",
+      "sha": null,
+      "content_sha256": "72ba6e43f3f5e3cbaaa4858c55939cb91b37d92436b2381df84e398926820639",
+      "score": 250,
+      "content": "import type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\n\nconst DEFAULT_APPROVE_TOOLS = new Set([\n  'Read',\n  'Grep',\n  'Glob',\n  'ReadMediaFile',\n  'SetTodoList',\n  'TodoList',\n  'TaskList',\n  'TaskOutput',\n  'CronList',\n  'WebSearch',\n  'FetchURL',\n  'Agent',\n  'AgentSwarm',\n  'AskUserQuestion',\n  'Skill',\n  'EnterPlanMode',\n  'ExitPlanMode',\n  'CreateGoal',\n  'GetGoal',\n  'SetGoalBudget',\n  'UpdateGoal',\n  'select_tools',\n]);\n\nexport class DefaultToolApprovePermissionPolicyService implements PermissionPolicy {\n  readonly name = 'default-tool-approve';\n\n  evaluate(context: ResolvedToolExecutionHookContext): PermissionPolicyResult | undefined {\n    return DEFAULT_APPROVE_TOOLS.has(context.toolCall.name)\n      ? { kind: 'approve' }\n      : undefined;\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/default-tool-approve.ts",
+      "sha": null,
+      "content_sha256": "994a3088f7f06af7d7f2aa559f88b4a273997b5883d7fdbe3e5b3ce71d16b1dc",
+      "score": 250,
+      "content": "import type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\n\nconst DEFAULT_APPROVE_TOOLS = new Set([\n  'Read',\n  'Grep',\n  'Glob',\n  'ReadMediaFile',\n  'SetTodoList',\n  'TodoList',\n  'TaskList',\n  'TaskOutput',\n  'CronList',\n  'WebSearch',\n  'FetchURL',\n  'Agent',\n  'AskUserQuestion',\n  'Skill',\n  // Goal control tools have no side effects on the world: GetGoal reads, and\n  // mutation tools only record the goal's own runtime state.\n  'GetGoal',\n  'SetGoalBudget',\n  'UpdateGoal',\n  // Loading a tool definition into context has no side effects on the world;\n  // executing the loaded tool still goes through its own approval.\n  'select_tools',\n]);\n\nexport class DefaultToolApprovePermissionPolicy implements PermissionPolicy {\n  readonly name = 'default-tool-approve';\n\n  evaluate(context: PermissionPolicyContext): PermissionPolicyResult | undefined {\n    if (!DEFAULT_APPROVE_TOOLS.has(context.toolCall.name)) return;\n    return {\n      kind: 'approve',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/auto-mode-ask-user-question-deny.ts",
+      "sha": null,
+      "content_sha256": "9d269af9b6a76196afcd4fed60413e2700633739625592d81a3741d66e42b2b9",
+      "score": 250,
+      "content": "import type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport { IAgentPermissionModeService } from '#/agent/permissionMode/permissionMode';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\n\nexport class AutoModeAskUserQuestionDenyPermissionPolicyService implements PermissionPolicy {\n  readonly name = 'auto-mode-ask-user-question-deny';\n\n  constructor(\n    @IAgentPermissionModeService private readonly modeService: IAgentPermissionModeService,\n  ) {}\n\n  evaluate(context: ResolvedToolExecutionHookContext): PermissionPolicyResult | undefined {\n    if (this.modeService.mode !== 'auto') return undefined;\n    if (context.toolCall.name !== 'AskUserQuestion') return undefined;\n    return {\n      kind: 'deny',\n      message:\n        'AskUserQuestion is disabled while auto permission mode is active. Make a reasonable decision and continue without asking the user.',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/fallback-ask.ts",
+      "sha": null,
+      "content_sha256": "5949dc7f6494e37d7d5033d8469872b9d6fad69e61ac488ec656d33fc4910b53",
+      "score": 250,
+      "content": "import type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\n\nexport class FallbackAskPermissionPolicyService implements PermissionPolicy {\n  readonly name = 'fallback-ask';\n\n  evaluate(): PermissionPolicyResult {\n    return { kind: 'ask' };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/session-approval-history.ts",
+      "sha": null,
+      "content_sha256": "f076a2a4280bf410e03b60abea9e54738738ddc849cff7276a793f5258aee837",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport {\n  matchPermissionRule,\n  type PermissionRuleMatch,\n} from '../matches-rule';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyContext,\n  PermissionPolicyResult,\n} from '../types';\n\nexport class SessionApprovalHistoryPermissionPolicy implements PermissionPolicy {\n  readonly name = 'session-approval-history';\n\n  constructor(private readonly agent: Agent) {}\n\n  evaluate(context: PermissionPolicyContext): PermissionPolicyResult | undefined {\n    const match = this.matchSessionApprovalRule(context);\n    if (match === undefined) return;\n    return {\n      kind: 'approve',\n      reason: {\n        has_rule_args: match.hasRuleArgs,\n        match_strategy: match.strategy,\n      },\n    };\n  }\n\n  private matchSessionApprovalRule(\n    context: PermissionPolicyContext,\n  ): PermissionRuleMatch | undefined {\n    for (const pattern of this.agent.permission.sessionApprovalRulePatterns) {\n      const match = matchPermissionRule({\n        rule: {\n          decision: 'allow',\n          scope: 'session-runtime',\n          pattern,\n          reason: 'approve for session',\n        },\n        toolName: context.toolCall.name,\n        execution: context.execution,\n      });\n      if (match !== undefined) return match;\n    }\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/auto-mode-approve.ts",
+      "sha": null,
+      "content_sha256": "4d1e57397ea52d8ec6b511185975e940a81480ab08e193845d3d112d09fdeab3",
+      "score": 250,
+      "content": "import { IAgentPermissionModeService } from '#/agent/permissionMode/permissionMode';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\n\nexport class AutoModeApprovePermissionPolicyService implements PermissionPolicy {\n  readonly name = 'auto-mode-approve';\n\n  constructor(\n    @IAgentPermissionModeService private readonly modeService: IAgentPermissionModeService,\n  ) {}\n\n  evaluate(): PermissionPolicyResult | undefined {\n    return this.modeService.mode === 'auto' ? { kind: 'approve' } : undefined;\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/yolo-mode-approve.ts",
+      "sha": null,
+      "content_sha256": "a7019bef7cf581222719757f0a2a94339e5ae17279c7e64eb616d9e0613e5cda",
+      "score": 250,
+      "content": "import { IAgentPermissionModeService } from '#/agent/permissionMode/permissionMode';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\n\nexport class YoloModeApprovePermissionPolicyService implements PermissionPolicy {\n  readonly name = 'yolo-mode-approve';\n\n  constructor(\n    @IAgentPermissionModeService private readonly modeService: IAgentPermissionModeService,\n  ) {}\n\n  evaluate(): PermissionPolicyResult | undefined {\n    return this.modeService.mode === 'yolo' ? { kind: 'approve' } : undefined;\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/user-configured-ask.ts",
+      "sha": null,
+      "content_sha256": "aa93e67fcb22826a2571312425e89604021864bbb21fdaee6797150c9ef446c0",
+      "score": 250,
+      "content": "import type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport { IAgentPermissionRulesService } from '#/agent/permissionRules/permissionRules';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\nimport { evaluateUserConfiguredRule } from './user-configured-rule';\n\nexport class UserConfiguredAskPermissionPolicyService implements PermissionPolicy {\n  readonly name = 'user-configured-ask';\n\n  constructor(@IAgentPermissionRulesService private readonly rulesService: IAgentPermissionRulesService) {}\n\n  evaluate(context: ResolvedToolExecutionHookContext): PermissionPolicyResult | undefined {\n    return evaluateUserConfiguredRule(context, 'ask', this.rulesService);\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/plan-mode-tool-approve.ts",
+      "sha": null,
+      "content_sha256": "97b45eed12d345e13f45d57f4b999e6d1ed4ecfd12320971c185f0465270d14b",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\nimport { writeFileAccesses } from './file-access-ask';\n\nexport class PlanModeToolApprovePermissionPolicy implements PermissionPolicy {\n  readonly name = 'plan-mode-tool-approve';\n\n  constructor(private readonly agent: Agent) {}\n\n  evaluate(context: PermissionPolicyContext): PermissionPolicyResult | undefined {\n    const toolName = context.toolCall.name;\n    if (toolName === 'EnterPlanMode') {\n      return {\n        kind: 'approve',\n      };\n    }\n\n    if (\n      (toolName === 'Write' || toolName === 'Edit') &&\n      this.agent.planMode.isActive &&\n      writesOnlyPlanFile(context, this.agent.planMode.planFilePath)\n    ) {\n      return {\n        kind: 'approve',\n      };\n    }\n\n    if (toolName === 'ExitPlanMode') {\n      if (!this.agent.planMode.isActive) {\n        return {\n          kind: 'approve',\n        };\n      }\n      if (context.execution.display?.kind !== 'plan_review') {\n        return {\n          kind: 'approve',\n        };\n      }\n      if (context.execution.display.plan.trim().length > 0) return;\n      return {\n        kind: 'approve',\n      };\n    }\n  }\n}\n\nfunction writesOnlyPlanFile(\n  context: PermissionPolicyContext,\n  planFilePath: string | null,\n): boolean {\n  if (planFilePath === null) return false;\n  const writeAccesses = writeFileAccesses(context);\n  return writeAccesses.every((access) => access.path === planFilePath);\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/path-utils.ts",
+      "sha": null,
+      "content_sha256": "b84c321c6f41e61aa6fc135054483f8487400adf5467f34bb395b7dd93f83f33",
+      "score": 250,
+      "content": "import * as posixPath from 'node:path/posix';\nimport * as win32Path from 'node:path/win32';\n\nimport type { GitWorkTree } from '#/app/git/workTree';\nimport type { ToolFileAccess } from '#/tool/toolContract';\nimport type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport {\n  isWithinDirectory,\n  type PathClass,\n} from '#/tool/path-access';\n\nexport function fileAccesses(context: ResolvedToolExecutionHookContext): ToolFileAccess[] {\n  return (\n    context.execution.accesses?.filter((access): access is ToolFileAccess => access.kind === 'file') ??\n    []\n  );\n}\n\nexport function writeFileAccesses(context: ResolvedToolExecutionHookContext): ToolFileAccess[] {\n  return fileAccesses(context).filter(\n    (access) => access.operation === 'write' || access.operation === 'readwrite',\n  );\n}\n\nexport function hasGitPathComponent(\n  targetPath: string,\n  cwd: string,\n  pathClass: PathClass,\n): boolean {\n  return relativePathParts(targetPath, cwd, pathClass).some(\n    (part) => part.toLowerCase() === '.git',\n  );\n}\n\nexport function isGitControlPath(\n  targetPath: string,\n  marker: GitWorkTree,\n  pathClass: PathClass,\n): boolean {\n  return (\n    isWithinDirectory(targetPath, marker.dotGitPath, pathClass) ||\n    isWithinDirectory(targetPath, marker.controlDirPath, pathClass)\n  );\n}\n\nexport function defaultPathClass(): PathClass {\n  return process.platform === 'win32' ? 'win32' : 'posix';\n}\n\nfunction relativePathParts(targetPath: string, cwd: string, pathClass: PathClass): string[] {\n  return pathMod(pathClass)\n    .relative(cwd, targetPath)\n    .split(/[\\\\/]+/)\n    .filter((part) => part.length > 0);\n}\n\nfunction pathMod(pathClass: PathClass): typeof posixPath {\n  return pathClass === 'win32' ? win32Path : posixPath;\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/agent-swarm-exclusive-deny.ts",
+      "sha": null,
+      "content_sha256": "9d6ea71ac1d1e05e68404877ca31c6f2a34a9b6a8703c5596f6a65373f2c7827",
+      "score": 250,
+      "content": "import type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\n\nexport class AgentSwarmExclusiveDenyPermissionPolicy implements PermissionPolicy {\n  readonly name = 'agent-swarm-exclusive-deny';\n\n  evaluate(context: PermissionPolicyContext): PermissionPolicyResult | undefined {\n    const toolCalls = context.toolCalls;\n    const agentSwarmCount = toolCalls.filter(\n      (toolCall) => toolCall.name === 'AgentSwarm',\n    ).length;\n\n    if (agentSwarmCount === 0) return;\n    if (agentSwarmCount === 1 && toolCalls.length === 1) return;\n\n    return {\n      kind: 'deny',\n      message:\n        agentSwarmCount > 1\n          ? multipleAgentSwarmDeniedMessage(toolCalls.length > agentSwarmCount)\n          : mixedAgentSwarmDeniedMessage(),\n      reason: {\n        agent_swarm_tool_calls: agentSwarmCount,\n        tool_calls: toolCalls.length,\n      },\n    };\n  }\n}\n\nfunction multipleAgentSwarmDeniedMessage(hasOtherToolCalls: boolean): string {\n  const suffix = hasOtherToolCalls\n    ? ' AgentSwarm also must not be combined with other tools in the same response.'\n    : '';\n  return (\n    'AgentSwarm must be called one swarm at a time. Multiple AgentSwarm calls are not forbidden, ' +\n    'but issue them sequentially: call one AgentSwarm, wait for its result, then call the next; ' +\n    `or merge the work into a single AgentSwarm when one swarm can cover it.${suffix}`\n  );\n}\n\nfunction mixedAgentSwarmDeniedMessage(): string {\n  return (\n    'AgentSwarm must be the only tool call in a model response. Retry with a single AgentSwarm ' +\n    'call by itself, then call any other tools after it returns.'\n  );\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/user-configured-allow.ts",
+      "sha": null,
+      "content_sha256": "01307ed3a035eaea789fa9129a2d391b891c8abf147143f39bfce5391ee49f59",
+      "score": 250,
+      "content": "import type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport { IAgentPermissionRulesService } from '#/agent/permissionRules/permissionRules';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\nimport { evaluateUserConfiguredRule } from './user-configured-rule';\n\nexport class UserConfiguredAllowPermissionPolicyService implements PermissionPolicy {\n  readonly name = 'user-configured-allow';\n\n  constructor(@IAgentPermissionRulesService private readonly rulesService: IAgentPermissionRulesService) {}\n\n  evaluate(context: ResolvedToolExecutionHookContext): PermissionPolicyResult | undefined {\n    return evaluateUserConfiguredRule(context, 'allow', this.rulesService);\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core/src/agent/permission/policies/git-cwd-write-approve.ts",
+      "sha": null,
+      "content_sha256": "4c7c9be60e10cd0f66e745ad4656e8a456ed009ad42291c3b87d12f0aa80d0d4",
+      "score": 250,
+      "content": "import type { Agent } from '../..';\nimport { isWithinWorkspace } from '../../../tools/policies/path-access';\nimport { findGitWorkTreeMarker } from '../../../tools/support/git-worktree';\nimport type { PermissionPolicy, PermissionPolicyContext, PermissionPolicyResult } from '../types';\nimport { writeFileAccesses } from './file-access-ask';\n\nexport class GitCwdWriteApprovePermissionPolicy implements PermissionPolicy {\n  readonly name = 'git-cwd-write-approve';\n\n  constructor(private readonly agent: Agent) {}\n\n  async evaluate(context: PermissionPolicyContext): Promise<PermissionPolicyResult | undefined> {\n    const toolName = context.toolCall.name;\n    if (toolName !== 'Write' && toolName !== 'Edit') return;\n    if (this.agent.kaos.pathClass() !== 'posix') return;\n\n    const cwd = this.agent.config.cwd;\n    if (cwd.length === 0) return;\n\n    const writeAccesses = writeFileAccesses(context);\n    if (writeAccesses.length === 0) return;\n    if (\n      !writeAccesses.every((access) =>\n        isWithinWorkspace(\n          access.path,\n          { workspaceDir: cwd, additionalDirs: this.agent.getAdditionalDirs() },\n          'posix',\n        ),\n      )\n    ) {\n      return;\n    }\n\n    const marker = await findGitWorkTreeMarker(this.agent.kaos, cwd);\n    if (marker === null) return;\n\n    return {\n      kind: 'approve',\n    };\n  }\n}\n"
+    },
+    {
+      "path": "packages/agent-core-v2/src/agent/permissionPolicy/policies/session-approval-history.ts",
+      "sha": null,
+      "content_sha256": "b700d9855c0ef4ec17fadfd13435504e68659ba6d911ad74a5819a184475c177",
+      "score": 250,
+      "content": "import type { ResolvedToolExecutionHookContext } from '#/agent/toolExecutor/toolHooks';\nimport { matchPermissionRule } from '#/agent/permissionRules/matchesRule';\nimport { IAgentPermissionRulesService } from '#/agent/permissionRules/permissionRules';\nimport type {\n  PermissionPolicy,\n  PermissionPolicyResult,\n} from '#/agent/permissionPolicy/types';\n\nexport class SessionApprovalHistoryPermissionPolicyService implements PermissionPolicy {\n  readonly name = 'session-approval-history';\n\n  constructor(\n    @IAgentPermissionRulesService private readonly rulesService: IAgentPermissionRulesService,\n  ) {}\n\n  evaluate(context: ResolvedToolExecutionHookContext): PermissionPolicyResult | undefined {\n    for (const pattern of this.rulesService.sessionApprovalRulePatterns) {\n      const match = matchPermissionRule({\n        rule: {\n          decision: 'allow',\n          scope: 'session-runtime',\n          pattern,\n          reason: 'approve for session',\n        },\n        toolName: context.toolCall.name,\n        execution: context.execution,\n      });\n      if (match !== undefined) {\n        return {\n          kind: 'approve',\n          reason: {\n            has_rule_args: match.hasRuleArgs,\n            match_strategy: match.strategy,\n          },\n        };\n      }\n    }\n    return undefined;\n  }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": ".npmrc",
+      "sha": "fd6158e562ac4344de1863a5c5a167c8c9d9f83f",
+      "size": 74,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:23:06.060827+00:00"
+}
