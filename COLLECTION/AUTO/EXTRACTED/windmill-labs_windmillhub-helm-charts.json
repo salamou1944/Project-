@@ -1,0 +1,94 @@
+{
+  "canonical_source": "github:windmill-labs/windmillhub-helm-charts",
+  "repo": "windmill-labs/windmillhub-helm-charts",
+  "revision_sha": "7e43ab25c52a32324c10db8cbd1af4301258e4d6",
+  "default_branch": "main",
+  "pushed_at": "2026-09-23T14:50:04Z",
+  "repo_updated_at": "2026-09-23T14:49:43Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/helm_test.yml",
+      "sha": null,
+      "content_sha256": "f446430326bcf89a813dbd7bb72cbb16e7ceb6e739f4dbbd452c009846b73960",
+      "score": 258,
+      "content": "name: Lint and Test Charts\r\n\r\non:\r\n  push:\r\n    branches:\r\n      - main\r\n  # Allows you to run this workflow manually from the Actions tab\r\n  workflow_dispatch:\r\n  pull_request:\r\n\r\njobs:\r\n  lint-test:\r\n    runs-on: ubicloud-standard-8\r\n    steps:\r\n      - name: Checkout\r\n        uses: actions/checkout@v2\r\n        with:\r\n          fetch-depth: 0\r\n      - name: Replace LICENSE_KEY placeholder\r\n        run: |\r\n          sed -i -e 's|LICENSE_KEY|${{ secrets.LICENSE_KEY }}|g' ./charts/windmillhub/ci/ee-values.yaml\r\n      - name: Set up Helm\r\n        uses: azure/setup-helm@v3\r\n        with:\r\n          version: v3.10.0\r\n\r\n      - uses: actions/setup-python@v4\r\n        with:\r\n          python-version: \"3.9\"\r\n          check-latest: true\r\n\r\n      - name: Set up chart-testing\r\n        uses: helm/chart-testing-action@v2.3.1\r\n\r\n      - name: Run chart-testing (list-changed)\r\n        id: list-changed\r\n        run: |\r\n          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})\r\n          if [[ -n \"$changed\" ]]; then\r\n            echo \"::set-output name=changed::true\"\r\n          fi\r\n\r\n      - name: Add Dependencies\r\n        run: |\r\n          helm repo add bitnami https://charts.bitnami.com/bitnami\r\n          helm repo update\r\n\r\n      - name: Run chart-testing (lint)\r\n        run:\r\n          ct lint --target-branch ${{ github.event.repository.default_branch }} --check-version-increment=false --validate-maintainers=false\r\n\r\n      - name: Create kind cluster\r\n        uses: helm/kind-action@v1.4.0\r\n\r\n      - name: Run chart-testing (install)\r\n        run: ct install --all"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "5086ccf88957fd2bc175f25509249049821f6b05697cdc08bb6af22603c2b0ee",
+      "score": 126,
+      "content": "name: Windmillhub Chart Release\n\non:\n  push:\n    paths:\n      - charts/windmillhub/Chart.yaml\n    branches:\n      - main\n  # Allows you to run this workflow manually from the Actions tab\n  workflow_dispatch:\n\njobs:\n  release:\n    # depending on default permission settings for your org (contents being read-only or read-write for workloads), you will have to add permissions\n    # see: https://docs.github.com/en/actions/security-guides/automatic-token-authentication#modifying-the-permissions-for-the-github_token\n    permissions:\n      contents: write\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v2\n        with:\n          fetch-depth: 0\n\n      - name: Configure Git\n        run: |\n          git config user.name \"$GITHUB_ACTOR\"\n          git config user.email \"$GITHUB_ACTOR@users.noreply.github.com\"\n\n      - name: Install Helm\n        uses: azure/setup-helm@v3\n        with:\n          version: v3.10.0\n\n      - name: Run chart-releaser\n        uses: helm/chart-releaser-action@v1.5.0\n        with:\n          skip_existing: true\n        env:\n          CR_TOKEN: \"${{ secrets.GITHUB_TOKEN }}\"\n"
+    },
+    {
+      "path": ".github/workflows/discord-notification.yml",
+      "sha": null,
+      "content_sha256": "3d8322ae2c2b703fb5cef5ffd6b8eac1f93a39cb69db149bbdfdb0b1d7e5614a",
+      "score": 126,
+      "content": "name: Create discord thread when a PR is opened, react with green checkmark when PR is merged\n\non:\n  pull_request:\n    types:\n      - opened\n      - ready_for_review\n      - closed\n\njobs:\n  notify_discord_when_pr_opened:\n    if: (github.event.pull_request.draft == false) && (github.event.action == 'opened' || github.event.action == 'ready_for_review')\n    uses: windmill-labs/windmill/.github/workflows/shareable-discord-notification.yml@main\n    with:\n      PR_TITLE: ${{ github.event.pull_request.title }}\n      PR_URL: ${{ github.event.pull_request.html_url }}\n      PR_AUTHOR: ${{ github.event.pull_request.user.login }}\n      PR_STATUS: \"opened\"\n      PR_NUMBER: \"HELM/${{ github.event.pull_request.number }}\"\n      DISCORD_CHANNEL_ID: \"1372204995868491786\"\n      DISCORD_GUILD_ID: \"930051556043276338\"\n    secrets:\n      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_PR_REVIEWS_WEBHOOK }}\n      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_AI_BOT_TOKEN }}\n\n  merge_success_emoji:\n    if: github.event.action == 'closed'\n    uses: windmill-labs/windmill/.github/workflows/shareable-discord-notification.yml@main\n    with:\n      PR_STATUS: \"merged\"\n      DISCORD_CHANNEL_ID: \"1372204995868491786\"\n      DISCORD_GUILD_ID: \"930051556043276338\"\n      PR_NUMBER: \"HELM/${{ github.event.pull_request.number }}\"\n    secrets:\n      DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_AI_BOT_TOKEN }}\n"
+    },
+    {
+      "path": "charts/windmillhub/ci/ee-values.yaml",
+      "sha": null,
+      "content_sha256": "b4be6a8e905716038dcdc0130d85d5e32fec66b9f0f464850aeca2ad05466a16",
+      "score": 101,
+      "content": "postgresql:\n  enabled: true\n\nhub:\n  licenseKey: LICENSE_KEY\n"
+    },
+    {
+      "path": "charts/windmillhub/templates/deploy_hub.yaml",
+      "sha": null,
+      "content_sha256": "713f578d6c283b8adabf11dc91db269f4bc2f88440cc3f27267120a714fe6039",
+      "score": 101,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: hub\n# prettier-ignore\nspec:\n  replicas: 2\n  revisionHistoryLimit: 0\n  strategy:\n    type: RollingUpdate\n    rollingUpdate:\n      maxSurge: 1\n      maxUnavailable: 1\n  selector:\n    matchLabels:\n      app: windmillhub\n  template:\n    metadata:\n      labels:\n        app: windmillhub\n        container: hub\n    spec:\n    {{- with .Values.hub.affinity }}\n      affinity:\n{{ toYaml . | indent 8 }}\n    {{- end }}\n      containers:\n      - name: hub\n        image: {{ .Values.hub.image }}:{{ default .Chart.AppVersion .Values.hub.tag }}\n        imagePullPolicy: Always\n        readinessProbe:\n          initialDelaySeconds: 1\n          periodSeconds: 10\n          timeoutSeconds: 5\n          successThreshold: 1\n          failureThreshold: 5\n          httpGet:\n            host:\n            scheme: HTTP\n            path: /ready\n            port: 3000\n        env:\n        {{- with .Values.hub.extraEnv }}\n        {{- toYaml . | nindent 8 }}\n        {{- end }}\n        - name: \"DATABASE_URL\"\n          value: {{ .Values.hub.databaseUrl }}\n        {{- if not .Values.hub.privateHub }}\n        - name: PUBLIC_PRIVATE_HUB\n          value: \"false\"\n        {{- end }}\n        - name: PUBLIC_APP_URL\n          value: {{ .Values.hub.appUrl }}\n        - name: \"LICENSE_KEY\"\n          value: {{ .Values.hub.licenseKey }}\n        {{- if .Values.hub.githubDispatchRepo }}\n        - name: GITHUB_DISPATCH_REPO\n          value: {{ .Values.hub.githubDispatchRepo | quote }}\n        {{- end }}\n        {{- if .Values.hub.githubDispatchTokenSecret.name }}\n        - name: GITHUB_DISPATCH_TOKEN\n          valueFrom:\n            secretKeyRef:\n              name: {{ .Values.hub.githubDispatchTokenSecret.name | quote }}\n              key: {{ .Values.hub.githubDispatchTokenSecret.key | quote }}\n        {{- else if .Values.hub.githubDispatchToken }}\n        - name: GITHUB_DISPATCH_TOKEN\n          value: {{ .Values.hub.githubDispatchToken | quote }}\n        {{- end }}\n        ports:\n        - containerPort: 3000\n        resources:\n          limits:\n              memory: \"2.5Gi\"\n              ephemeral-storage: \"20Gi\"\n      securityContext:\n        runAsUser: 0\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: windmill-hub\nspec:\n  externalTrafficPolicy: Cluster\n  ports:\n    - port: 3000\n      protocol: TCP\n      targetPort: 3000\n  selector:\n    app: windmillhub\n    container: hub\n  sessionAffinity: ClientIP\n  type: NodePort\nstatus:\n  loadBalancer: {}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "ceb9eddcd1b8f3c07ec1500624576c7b1b636408f6a3dfe3063bed6fa0bb5756",
+      "score": 100,
+      "content": "# Windmill Hub Helm Chart\n\nThis is the Helm chart for the Windmill Hub.\n\nFor the Windmill helm chart, see\n[windmill-helm-charts](https://github.com/windmill-labs/windmill-helm-charts).\n\n## Usage\n\n```bash\nhelm repo add windmill-labs https://windmill-labs.github.io/windmillhub-helm-charts/\nhelm repo update\n```\n\nExample values.yaml:\n\n```yaml\nhub:\n  databaseUrl: postgres://username:password@host:port/database\n  imageName: ghcr.io/windmill-labs/windmillhub-ee-public:main\n  appUrl: https://app.mywindmill.dev\n  imageName: ghcr.io/windmill-labs/windmillhub-ee-public:main\n  sslIngress: true\n  certArn: arn:aws:acm:us-east-1::myarn\n  licenseKey: \"LICENSE_KEY\"\n  # Optional: notify a GitHub content repo on script create/approve (drives its review-PR sync)\n  githubDispatchRepo: \"owner/content-repo\"\n  githubDispatchToken: \"[REDACTED]\" # or use githubDispatchTokenSecret below\n  githubDispatchTokenSecret:\n    name: hub-github-dispatch\n    key: token\n  extraEnv: []\n  affinity: {}\n```\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "charts/windmillhub/Chart.yaml",
+      "sha": null,
+      "content_sha256": "d56cd85c8de72c2e05aa02839f6fff601e9d2b95368047532198b6a0729e113e",
+      "score": 31,
+      "content": "apiVersion: v2\nname: windmill-hub\ndescription: Helm chart for deploying the Windmill Hub\ntype: application\nmaintainers:\n  - name: Windmill Labs\n    email: support@windmill.dev\n    url: https://windmill.dev\nversion: 0.1.68\nappVersion: \"2.17.0\"\ndependencies:\n  - condition: postgresql.enabled\n    name: postgresql\n    repository: https://charts.bitnami.com/bitnami\n    version: 12.3.1\n"
+    },
+    {
+      "path": "charts/windmillhub/values.yaml",
+      "sha": null,
+      "content_sha256": "e1bc5e5d780683f529b8ed91a649c6ab1203d6ce27c572ff1abe470e13ed4746",
+      "score": 31,
+      "content": "hub:\n  databaseUrl: postgres://postgres:windmill@windmill-hub-postgresql/windmillhub?sslmode=disable\n  appUrl: https://app.mywindmill.dev\n  privateHub: true\n  image: ghcr.io/windmill-labs/windmillhub-ee-public\n  tag: \"\"\n  licenseKey: \"LICENSE_KEY\"\n  # Notify a GitHub content repo on script create/approve (drives its review-PR sync); set both to enable.\n  githubDispatchRepo: \"\" # \"owner/repo\" of the content repo\n  # githubDispatchToken: \"\" # inline token, or use the Secret ref below\n  githubDispatchTokenSecret:\n    name: \"\" # existing Secret holding the token\n    key: \"\"\n  annotations: {}\n  className: \"\"\n  tls: []\n  extraEnv: []\n  affinity: {}\n\npostgresql:\n  enabled: false\n  fullnameOverride: windmill-hub-postgresql\n  primary:\n    persistence:\n      enabled: true\n    resources:\n      limits:\n        memory: \"2Gi\"\n      requests:\n        cpu: \"1\"\n        memory: \"1024Mi\"\n  auth:\n    postgresPassword: windmill\n    database: windmillhub\n"
+    },
+    {
+      "path": "charts/windmillhub/templates/ingress_hub.yaml",
+      "sha": null,
+      "content_sha256": "3c519fd8626bf009999d60bc409438fad0c0f2db6e1e67320965f2cecf78e171",
+      "score": 29,
+      "content": "apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: windmill-hub-ingress\n{{- with .Values.hub.annotations }}\n  annotations:\n{{ toYaml . | indent 4 }}\n{{- end }}\n\nspec:\n{{- if .Values.hub.tls }}\n  tls:\n  {{- range .Values.hub.tls }}\n    - hosts:\n      {{- range .hosts }}\n        - {{ . | quote }}\n      {{- end }}\n      secretName: {{ .secretName }}\n  {{- end }}\n{{- end }}\n  {{ if .Values.hub.className }}\n  ingressClassName: \"{{ .Values.hub.className }}\"\n  {{ end }}\n  rules:\n    - host:  {{ .Values.hub.baseDomain }}\n      http:\n        paths:\n          - path: /\n            pathType: Prefix\n            backend:\n              service:\n                name: windmill-hub\n                port:\n                  number: 3000\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:47:50.111631+00:00"
+}

@@ -1,0 +1,210 @@
+{
+  "canonical_source": "github:RocketChat/server-snap",
+  "repo": "RocketChat/server-snap",
+  "revision_sha": "5e3b3ae927b49fa7e635a525fd05007c7742ff75",
+  "default_branch": "develop",
+  "pushed_at": "2026-06-18T04:28:30Z",
+  "repo_updated_at": "2026-06-18T04:28:34Z",
+  "license": "MIT",
+  "topics": [
+    "chat",
+    "chat-application",
+    "communication"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/test.yml",
+      "sha": null,
+      "content_sha256": "61e1dcc27a35966f27074cdd1ceba54f8d7f8bdcbee9bc8f83b67a3413387de4",
+      "score": 186,
+      "content": "name: Test snap (reusable)\non:\n  workflow_call:\n    inputs:\n      tag:\n        required: true\n        type: string\n      snap-artifact-key:\n        required: true\n        type: string\n      snap-basename:\n        required: true\n        type: string\n      run-id:\n        type: string\n        required: false\n    secrets:\n      snapcraft-credential:\n        required: true\n      github-token:\n        required: false\n\njobs:\n  can-i-run:\n    env:\n      ROCKETCHAT_SNAP: ${{ format('/tmp/{0}', inputs.snap-basename) }}\n    runs-on: ubuntu-latest\n    steps:\n      - name: Download snap from another run-id\n        uses: actions/download-artifact@v4\n        if: inputs.run-id != ''\n        with:\n          repository: RocketChat/server-snap\n          name: ${{ inputs.snap-artifact-key }}\n          path: /tmp\n          run-id: ${{ inputs.run-id }}\n          github-token: ${{ secrets.github-token || secrets.GITHUB_TOKEN }} # https://github.com/actions/download-artifact/blob/7fba95161a0924506ed1ae69cdbae8371ee00b3f/src/download-artifact.ts#L42-L52\n\n      - name: Download snap\n        uses: actions/download-artifact@v4\n        if: inputs.run-id == ''\n        with:\n          repository: RocketChat/server-snap\n          name: ${{ inputs.snap-artifact-key }}\n          path: /tmp\n\n      - run: ls /tmp\n\n      - name: 'Clone tests repository'\n        uses: actions/checkout@v3\n        with:\n          repository: RocketChat/public-releases\n          submodules: true\n\n      - uses: samuelmeuli/action-snapcraft@v2\n        name: 'Install snapcraft'\n\n      - id: track\n        env:\n          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.snapcraft-credential }}\n        shell: bash\n        run: |\n          track=${{ inputs.tag }}\n          track=${track:0:1}.x\n          if ! snapcraft list-revisions rocketchat-server | tail -n '+2' | grep -q \"$track/stable\"; then\n            last_channel=\"$((${track:0:1}-1)).x/stable\"\n          fi\n\n          echo \"last_channel: $last_channel\"\n          echo \"last-channel=$last_channel\" >> $GITHUB_OUTPUT\n\n      - name: 'Run tests'\n        shell: bash\n        env:\n          ROCKETCHAT_PREVIOUS_CHANNEL: ${{ steps.track.outputs.last-channel}}\n          ROCKETCHAT_TAG: ${{ inputs.tag }}\n        run: |\n          sudo apt-get --no-install-recommends install jo jq -y\n          bash ./run_snap.bash\n\n"
+    },
+    {
+      "path": ".github/workflows/pr.yaml",
+      "sha": null,
+      "content_sha256": "f3401e4d098dde2b23123b3064b9762fc0aa6b0bbc6d6fc456b49226cad05dfa",
+      "score": 126,
+      "content": "name: Pull request, build and test the snap\n\non:\n  pull_request:\n    branches: '**'\n\njobs:\n  variables:\n    runs-on: ubuntu-latest\n    outputs:\n      tag: ${{ steps.vars.outputs.tag }}\n    steps:\n      - uses: actions/checkout@v4\n      - id: vars\n        shell: bash\n        run: |\n          tag=\"$(awk -F: '/version/ { print $2 }' snap/snapcraft.yaml | tr -d '[:space:]')\"\n          echo \"tag: $tag\"\n          echo \"tag=$tag\" >> $GITHUB_OUTPUT\n\n  build:\n    needs:\n      - variables\n    uses: RocketChat/server-snap/.github/workflows/build.yml@develop\n    with:\n      tag: ${{ needs.variables.outputs.tag }}\n\n  test:\n    # uses: RocketChat/server-snap/.github/workflows/test.yml@${{ github.head_ref || github.ref_name }}\n    uses: RocketChat/server-snap/.github/workflows/test.yml@develop\n    needs: [build, variables]\n    with:\n      tag: ${{ needs.variables.outputs.tag }}\n      snap-artifact-key: ${{ needs.build.outputs.snap-artifact-key }}\n      snap-basename: ${{ needs.build.outputs.snap-basename }}\n    secrets:\n      snapcraft-credential: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}\n\n"
+    },
+    {
+      "path": ".github/workflows/aio_manual.yml",
+      "sha": null,
+      "content_sha256": "74f59cfe6d31382bbb37bcba5aa243f999a359f01f3c63b952c8934367a6f407",
+      "score": 126,
+      "content": "name: All in one, manual\n\non:\n  workflow_dispatch:\n    inputs:\n      tag:\n        type: string\n        required: false\n      release:\n        type: choice\n        options:\n          - 'yes'\n          - 'no'\n      fetch-latest:\n        type: choice\n        options:\n          - 'yes'\n          - 'no'\n      run-id:\n        type: number\n        required: false\n        description: Download artifact from this run instead of rebuilding.\n\nenv:\n  REPO: RocketChat/server-snap\n  SNAP_ARTIFACT_KEY: snap\n\n\njobs:\n  prereqs:\n    runs-on: ubuntu-latest\n    outputs:\n      version: ${{ steps.version.outputs.version }}\n    steps:\n      - uses: actions/checkout@v3\n        with:\n          repository: ${{ env.REPO }}\n\n      - shell: bash\n        id: version\n        run: |\n          tag=\"${{ inputs.tag }}\"\n\n          if [[ -z \"$tag\" ]]; then # like in case of workflow_dispatch with no tag set\n            if [[ '${{ inputs.fetch-latest }}' == 'yes' ]]; then\n              tag=\"$(curl https://releases.rocket.chat/latest/info --silent | jq .tag -r)\"\n            else\n              tag=\"$(awk -F: '/^version:/ {print $2}' snap/snapcraft.yaml | tr -d '[:space:]')\"\n            fi\n          fi\n\n          echo \"tag: $tag\"\n          echo \"version=$tag\" >> $GITHUB_OUTPUT\n\n  build:\n    if: inputs.run-id == ''\n    needs: [ prereqs ]\n    uses: RocketChat/server-snap/.github/workflows/build.yml@develop\n    with:\n      snap-artifact-key: snap #${{ env.SNAP_ARTIFACT_KEY }}\n      tag: ${{ needs.prereqs.outputs.version }}\n\n  test:\n    needs: [ build, prereqs ]\n    if: |\n      always() &&\n      (needs.build.result == 'skipped' || needs.build.result == 'success')\n    uses: RocketChat/server-snap/.github/workflows/test.yml@develop\n    with:\n      tag: ${{ needs.prereqs.outputs.version }}\n      snap-artifact-key:  snap #${{ env.SNAP_ARTIFACT_KEY }}\n      snap-basename: ${{ needs.build.result == 'success' && needs.build.outputs.snap-basename || format('rocketchat-server_{0}_amd64.snap',  needs.prereqs.outputs.version) }}\n      run-id: ${{ inputs.run-id }}\n    secrets:\n      snapcraft-credential: ${{secrets.SNAPCRAFT_STORE_CREDENTIALS }}\n      github-token: [REDACTED] }}\n\n\n  release:\n    if: |\n      always() &&\n      (needs.build.result == 'skipped' || needs.build.result == 'success') &&\n      needs.test.result == 'success' &&\n      inputs.release == 'yes'\n    needs:\n      - prereqs\n      - build\n      - test\n    uses: RocketChat/server-snap/.github/workflows/release.yml@develop\n    with:\n      tag: ${{ needs.prereqs.outputs.version }}\n      snap-artifact-key: snap #${{ env.SNAP_ARTIFACT_KEY }}\n      snap-basename: ${{ needs.build.result == 'success' && needs.build.outputs.snap-basename || format('rocketchat-server_{0}_amd64.snap', needs.prereqs.outputs.version) }}\n      run-id: ${{ inputs.run-id }}\n    secrets:\n      snapcraft-credential: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}\n      github-token: ${{ secrets.GH_TOKEN_PERSONAL2}}\n      snapcraft-key: ${{ secrets.SNAPCRAFT_KEY }}\n      snapcraft-key-passphrase: ${{ secrets.SNAPCRAFT_KEY_PASSPHRASE }}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".github/workflows/aio_scheduled.yml",
+      "sha": null,
+      "content_sha256": "93d7c9bb01b4321e5b8654bbdc5155664534f44bb0a8b0a8ce8efcf6634e67e7",
+      "score": 126,
+      "content": "name: All in one, once a day\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch: {}\n\nenv:\n  REPO: RocketChat/server-snap\n  SNAP_ARTIFACT_KEY: snap\n\njobs:\n  prereqs:\n    runs-on: ubuntu-latest\n    outputs:\n      version: ${{ steps.version.outputs.version }}\n      skip: ${{ steps.version.outputs.skip }}\n    steps:\n      - uses: actions/checkout@v3\n        with:\n          repository: ${{ env.REPO }}\n          ref: 7.x\n\n      - uses: debdutdeb/semis@main\n\n      - shell: bash\n        id: version\n        run: |\n          tag=\"$(curl -s https://releases.rocket.chat/latest/info | jq -r .tag)\"\n\n          if [[ -z \"$tag\" ]]; then\n            echo \"something wrong, releases endpoint returned nothing?\"\n            exit 1\n          fi\n\n          current=\"$(awk -F: '/^version:/ {print $2}' snap/snapcraft.yaml | tr -d '[:space:]')\"\n\n          skip=false\n\n          if semis eq $tag $current; then\n            echo \"No new version found\"\n            echo \"skip=true\" >>$GITHUB_OUTPUT\n            exit 0\n          fi\n\n          if semis lt $tag $current; then\n            echo \"Got version that is less than what is in repo, weird, alarms should go off at this point\"\n            echo \"skip=true\" >>$GITHUB_OUTPUT\n            exit 0\n          fi\n\n          echo \"skip=$skip\" >>$GITHUB_OUTPUT\n\n          echo \"tag: $tag\"\n          echo \"version=$tag\" >> $GITHUB_OUTPUT\n\n  build:\n    if: needs.prereqs.outputs.skip == 'false'\n    needs: [ prereqs ]\n    uses: RocketChat/server-snap/.github/workflows/build.yml@develop\n    with:\n      tag: ${{ needs.prereqs.outputs.version }}\n      snap-artifact-key: snap #${{ env.SNAP_ARTIFACT_KEY }}\n\n  test:\n    needs: [ build, prereqs ]\n    uses: RocketChat/server-snap/.github/workflows/test.yml@develop\n    with:\n      tag: ${{ needs.prereqs.outputs.version }}\n      snap-artifact-key: snap #${{ env.SNAP_ARTIFACT_KEY }}\n      snap-basename: ${{needs.build.outputs.snap-basename }}\n    secrets:\n      snapcraft-credential: ${{secrets.SNAPCRAFT_STORE_CREDENTIALS }}\n\n\n  release:\n    needs:\n      - prereqs\n      - build\n      - test\n    uses: RocketChat/server-snap/.github/workflows/release.yml@develop\n    with:\n      tag: ${{ needs.prereqs.outputs.version }}\n      snap-artifact-key: snap #${{ env.SNAP_ARTIFACT_KEY }}\n      snap-basename: ${{ needs.build.outputs.snap-basename }}\n    secrets:\n      snapcraft-credential: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}\n      github-token: ${{ secrets.GH_TOKEN_PERSONAL2 }}\n\n"
+    },
+    {
+      "path": ".github/workflows/build.yml",
+      "sha": null,
+      "content_sha256": "88b2f0c93006ca832858bc6f9fb2377113d02e8533e5966182291f818b64ae68",
+      "score": 126,
+      "content": "name: Just build the snap (reusable, manual)\n\n\non:\n  workflow_call:\n    inputs:\n      tag:\n        required: true\n        type: string\n      snap-artifact-key:\n        required: true\n        type: string\n    outputs:\n      snap-basename:\n        value: ${{ jobs.build.outputs.snap-basename }}\n  workflow_dispatch:\n    inputs:\n      tag:\n        required: true\n\n\nenv:\n  REPO: RocketChat/server-snap\n\njobs:\n  build:\n    outputs:\n      snap-basename: ${{ steps.snap-filename.outputs.filename }}\n\n    runs-on: ubuntu-latest\n    steps:\n      - uses: samuelmeuli/action-snapcraft@v2\n        name: 'Install snapcraft'\n\n\n      - name: Branch to clone\n        id: branch\n        run: |\n          version=${{ inputs.tag }}\n          snap_track=\"${version:0:1}.x\"\n          echo \"snap-track: $snap_track\"\n          echo \"snap-track=$snap_track\" >> $GITHUB_OUTPUT\n\n      - name: 'Clone repository'\n        uses: actions/checkout@v3\n        with:\n          repository: ${{ env.REPO }}\n          ref: ${{ steps.branch.outputs.snap-track }}\n\n      - name: 'Update version'\n        shell: bash\n        run: |\n          sed -i -r '/^version:/ s/ .+/ ${{ inputs.tag }}/' ./snap/snapcraft.yaml\n\n      - name: 'Build the Snap package'\n        uses: snapcore/action-build@v1\n        id: snap-build\n\n      - name: Upload snap\n        uses: actions/upload-artifact@v4\n        with:\n          name: ${{inputs.snap-artifact-key}}\n          path: ${{ steps.snap-build.outputs.snap }}\n\n      - name: Set snap file name\n        id: snap-filename\n        run: |\n          file_name=$(basename ${{ steps.snap-build.outputs.snap }})\n          echo \"filename: $file_name\"\n          echo \"filename=$file_name\" >>$GITHUB_OUTPUT\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "e5e261bd50641f85e4ddcad99b49b8b868b09f39da506a5d05ad08e542dd20b9",
+      "score": 126,
+      "content": "name: Release snap (reusable)\n\non:\n  workflow_call:\n    inputs:\n      tag:\n        required: true\n        type: string\n      snap-basename:\n        required: true\n        type: string\n      snap-artifact-key:\n        required: true\n        type: string\n      run-id:\n        type: string # this needs to be string here, since apparently inputs.run-id in caller is sending a string, action converts back to int\n        required: false\n    secrets:\n      snapcraft-credential:\n        required: true\n      snapcraft-key:\n        required: true\n      snapcraft-key-passphrase:\n        required: true\n      github-token:\n        required: true\n\nenv:\n  REPO: RocketChat/server-snap\n\n\njobs:\n  publish-snap:\n    env:\n      ROCKETCHAT_SNAP: ${{ format('/tmp/{0}', inputs.snap-basename) }}\n    runs-on: ubuntu-latest\n    outputs:\n      track: ${{ steps.track.outputs.track }}\n    steps:\n      - id: track\n        run: |\n          tag=${{inputs.tag}}\n          track=${tag:0:1}.x\n          echo \"track: $track\"\n          echo \"track=$track\" >> $GITHUB_OUTPUT\n\n      - name: Download snap from another run-id\n        uses: actions/download-artifact@v4\n        if: inputs.run-id != ''\n        with:\n          repository: RocketChat/server-snap\n          name: ${{ inputs.snap-artifact-key }}\n          path: /tmp\n          run-id: ${{ inputs.run-id }}\n          github-token: ${{ secrets.github-token || secrets.GITHUB_TOKEN }} # https://github.com/actions/download-artifact/blob/7fba95161a0924506ed1ae69cdbae8371ee00b3f/src/download-artifact.ts#L42-L52\n\n      - name: Download snap\n        uses: actions/download-artifact@v4\n        if: inputs.run-id == ''\n        with:\n          repository: RocketChat/server-snap\n          name: ${{ inputs.snap-artifact-key }}\n          path: /tmp\n\n      - uses: samuelmeuli/action-snapcraft@v2\n        name: 'Install snapcraft'\n\n      - run: |\n          ls /tmp\n          snap_file=${ROCKETCHAT_SNAP}\n          test -f $snap_file\n          test -f ~/.snap/gnupg || mkdir -p ~/.snap/gnupg\n          echo \"${{ secrets.snapcraft-key }}\" | gpg --batch --import\n          snapcraft sign-build $snap_file --key-name snapcraft-builds --passphrase ${{ secrets.snapcraft-key-passphrase }}\n          assertion=${snap_file%%.snap}.ack\n          test -f $assertion\n          echo \"assertion=$assertion\"\n        id: assertion\n        \n      - name: 'Create release with artifact'\n        uses: softprops/action-gh-release@v1\n        with:\n          files: |\n            ${{ env.ROCKETCHAT_SNAP }}\n            ${{ steps.assertion.outputs.assertion }}\n          prerelease: false\n          repository: ${{ env.REPO }}\n          token: ${{ secrets.github-token }}\n          name: ${{ inputs.tag }}\n          tag_name: ${{ inputs.tag }}\n          body: ${{ format('https://github.com/RocketChat/Rocket.Chat/releases/{0}', inputs.tag) }}\n          draft: false\n          fail_on_unmatched_files: true\n          target_commitish: ${{steps.track.outputs.track}}\n          generate_release_notes: true\n\n      - name: 'Upload to snapstore'\n        uses: snapcore/action-publish@v1\n        env:\n          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.snapcraft-credential }}\n        with:\n          snap: ${{ env.ROCKETCHAT_SNAP }}\n          release: ${{ format('{0}/stable', steps.track.outputs.track) }}\n\n  repo-actions:\n    runs-on: ubuntu-latest\n    needs:\n      - publish-snap\n    steps:\n      - name: 'Clone snap repo'\n        uses: actions/checkout@v3\n        with:\n          repository: ${{ env.REPO }}\n          ref: ${{needs.publish-snap.outputs.track}}\n\n      - uses: debdutdeb/semis@main\n\n      - shell: bash\n        id: commit\n        run: |\n          current=\"$(awk -F: '/^version:/ {print $2}' snap/snapcraft.yaml | tr -d '[:space:]')\"\n          if semis gt ${{ inputs.tag }} $current; then\n            echo \"committing\"\n            echo \"commit=true\" >>$GITHUB_OUTPUT\n            sed -i -r '/^version:/ s/ .+/ ${{ inputs.tag }}/' ./snap/snapcraft.yaml\n          fi\n\n      - name: 'Commit snapcraft file'\n        if: steps.commit.outputs.commit == 'true'\n        uses: EndBug/add-and-commit@v9\n        with:\n          add: ./snap/snapcraft.yaml\n          message: 'Bump Rocket.Chat version to ${{ inputs.tag }}'\n          push: true\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "889a238864571dc4304850fdece0fd48909a399bf16cc34931fe3367223d0f4e",
+      "score": 100,
+      "content": "<p align=\"center\"> \n  <img  src=\"https://github.com/RocketChat/Rocket.Chat.Artwork/raw/master/Logos/2020/png/logo-horizontal-red.png\" data-canonical-src=\"https://github.com/RocketChat/Rocket.Chat.Artwork/raw/master/Logos/2020/png/logo-horizontal-red.png\" width=\"400\" />\n</p>\n\nIn development\n"
+    },
+    {
+      "path": "commands/backupdb.sh",
+      "sha": null,
+      "content_sha256": "0d9434994c095dfe00804849a3c53bd0ae5a0d090bfeac4798efb1d2796b0345",
+      "score": 93,
+      "content": "#!/bin/bash\n\nif [[ ${EUID} != 0 ]]; then\n    echo \"[-] This task must be run with 'sudo'.\"\n    exit 1\nfi\n\nif $(ps x | grep \"node ${SNAP}/main.js\" | grep -qv \"grep\"); then\n    echo \"[-] Please shutdown Rocket.Chat first to get a clean backup\"\n    echo \"[-] Use 'sudo systemctl stop snap.rocketchat-server.rocketchat-server'\"\nfi\n\nTIMESTAMP=$(date +\"%Y%m%d.%H%M\")\nBACKUP_DIR=\"${SNAP_COMMON}/backup\"\n\nif [[ ! -d ${BACKUP_DIR} ]]; then\n    mkdir ${BACKUP_DIR}\nfi\n\nif [[ -d ${BACKUP_DIR}/dump ]]; then\n    rm -rf ${BACKUP_DIR}/dump\nfi\n\nif [[ -f ${BACKUP_DIR}/rocketchat_backup_${TIMESTAMP}.tar.gz ]]; then\n    rm -f ${BACKUP_DIR}/rocketchat_backup_${TIMESTAMP}.tar.gz\nfi\n\nif [[ -f ${BACKUP_DIR}/backup_${TIMESTAMP}.log ]]; then\n    rm -f ${BACKUP_DIR}/backup_${TIMESTAMP}.log\nfi\n\necho \"[*] Creating backup file...\"\nmkdir ${BACKUP_DIR}/dump\necho \"[*] Dumping database with \\\"mongodump -d parties -o ${BACKUP_DIR}/dump\\\"\" > \"${BACKUP_DIR}/backup_${TIMESTAMP}.log\"\nmongodump -d parties -o ${BACKUP_DIR}/dump &>> \"${BACKUP_DIR}/backup_${TIMESTAMP}.log\"\necho \"[*] Packing archive with \\\"tar czvf ${BACKUP_DIR}/rocketchat_backup_${TIMESTAMP}.tar.gz ${BACKUP_DIR}/dump\\\"\" >> \"${BACKUP_DIR}/backup_${TIMESTAMP}.log\"\ntar czvf ${BACKUP_DIR}/rocketchat_backup_${TIMESTAMP}.tar.gz -C ${BACKUP_DIR} dump &>> \"${BACKUP_DIR}/backup_${TIMESTAMP}.log\"\nrm -rf ${BACKUP_DIR}/dump\n\necho \"[+] A backup of your data can be found at ${BACKUP_DIR}/rocketchat_backup_${TIMESTAMP}.tar.gz\"\n"
+    },
+    {
+      "path": "migrations/post_refresh/02-remove-mongod-storage_journal_enabled.sh",
+      "sha": null,
+      "content_sha256": "76c628b611aa6839ec50cb37b8d9c2f501bc8bb09e1399c5d9da3c09f6f1fe21",
+      "score": 91,
+      "content": "#!/bin/bash\n\n>/dev/null cat <<CommentEnd\n\nstorage:\n  journal:\n    enabled: <true|false>\n\nis no longer a supported config flag; having it breaks mongod startup.\n\nCommentEnd\n\nstart() {\n  python3 -c '\nimport sys\n\nfrom ruamel.yaml import YAML\nyaml = YAML()\n# important since mongod.conf is user editable, we want to preserve their comments;\nyaml.preserve_quotes = True\nyaml.indent(mapping=2, sequence=2, offset=0)\n\nmongod_conf = {}\nwith open(sys.argv[1], \"r\") as f:\n  mongod_conf = yaml.load(f)\n\n  \nif \"storage\" in mongod_conf and \"journal\" in mongod_conf[\"storage\"]:\n  del mongod_conf[\"storage\"][\"journal\"]\n  if not mongod_conf[\"storage\"]:\n    del mongod_conf[\"storage\"]\n\nwith open(sys.argv[1], \"w\") as f:\n  yaml.dump(mongod_conf, f)\n  ' $SNAP_DATA/mongod.conf\n}\n"
+    },
+    {
+      "path": "rocket_craft/requirements.txt",
+      "sha": null,
+      "content_sha256": "31aa9d0a1f234e83e2c3e0c1ea10f5a50e35d983e36ef4b869d9a0522a15af15",
+      "score": 83,
+      "content": "annotated-types==0.7.0\ncertifi==2026.2.25\ncharset-normalizer==3.4.6\nclick==8.3.2\ncraft-parts==2.30.0\nexceptiongroup==1.3.1\nidna==3.11\niniconfig==2.3.0\nJinja2==3.1.6\nlxml==6.0.2\nMarkupSafe==3.0.3\npackaging==26.1\npluggy==1.6.0\npydantic==2.12.5\npydantic_core==2.41.5\nPygments==2.20.0\npytest==9.0.3\npyxdg==0.28\nPyYAML==6.0.3\nrequests==2.32.5\nrequests-unixsocket2==1.0.1\nruamel.yaml==0.19.1\nsemver==3.0.4\ntomli==2.4.0\ntyping-inspection==0.4.2\ntyping_extensions==4.15.0\nurllib3==2.6.3\n"
+    },
+    {
+      "path": "snap/hooks/install",
+      "sha": null,
+      "content_sha256": "78fabdb37373160222c669fdd2f174a0324e888caf8ce5081a7f8edeb7c91f61",
+      "score": 78,
+      "content": "#!/bin/bash\n\nsource $SNAP/helpers/mongo.sh\n\ninit_replicaset() {\n  mongo_eval_with_error_check '\n      JSON.stringify(\n        rs.initiate(\n          {\n            _id: \"rs0\",\n            members: [\n              {\n                _id: 0,\n                host: \"localhost:27017\"\n              }\n            ]\n          }\n        )\n      )' \"replicaset initialization failed\"\n}\n\ninit_mongod_conf() {\n  cat >$SNAP_DATA/mongod.conf <<EOF\n\n# For documentation of all options, see:\n#   http://docs.mongodb.org/manual/reference/configuration-options/\n\n# processManagement::fork and systemlog::* are ignored\n\nnet:\n  bindIp: 127.0.0.1\n  port: 27017\n\nsetParameter:\n  enableLocalhostAuthBypass: false\n\nstorage:\n  dbPath: $SNAP_COMMON\n#   journal:\n#     enabled: true\n\nsystemLog:\n  destination: syslog\n\nreplication:\n  replSetName: rs0\n\nprocessManagement:\n  pidFilePath: $SNAP_COMMON/mongod.pid\n\nEOF\n}\ninit_caddy_conf() {\n  touch $SNAP_DATA/Caddyfile\n}\n\ninit_default_snap_configurations() {\n  snapctl set port=3000\n  snapctl set siteurl=http://localhost:3000\n  snapctl set mongo-url=mongodb://localhost:27017/parties\n  snapctl set mongo-oplog-url=mongodb://localhost:27017/local\n  snapctl set backup-on-refresh=disable\n  snapctl set ignore-errors=false\n}\n\ninit_mongod_feature_compatibility_version() {\n\tlocal fcv=$(mongod_version_excluding_patch)\n\techo \"fcv: $fcv\"\n  set_feature_compatibility $(mongod_version_excluding_patch)\n}\n\ninit_extra_environment_variables() {\n  cat >$SNAP_DATA/Rocker.Chat.Extra.env <<EOF\n# DO NOT UPDATE unless you know what you're doing\nXDG_DATA_HOME=\\$SNAP/usr/share\nFONTCONFIG_PATH=\\$SNAP/etc/fonts/config.d\nFONTCONFIG_FILE=\\$SNAP/etc/fonts/fonts.conf\nBABEL_CACHE_DIR=/tmp\nEOF\n}\n\ncheck_avx() {\n  (($(grep -Ewc 'avx2?' /proc/cpuinfo) == 0)) &&\n    error \"Your cpu does not support avx or avx2 instructions, which is required to run mongo 5.x, shipped with the next version of this snap.\" ||\n    return 0\n}\n\nmain() {\n  check_avx\n  init_default_snap_configurations\n  init_caddy_conf\n  init_mongod_conf\n  start_mongod\n  is_mongod_ready\n  init_replicaset\n  is_mongod_primary\n  init_mongod_feature_compatibility_version\n  stop_mongod\n  init_extra_environment_variables\n}\n\nmain\n"
+    },
+    {
+      "path": "docs/upgrades-manual.md",
+      "sha": null,
+      "content_sha256": "93110b9ffd22fd9d4a328b9ecfabcbce5e917fa536da0a6b8f556fde33b778a4",
+      "score": 68,
+      "content": "This document guides one through the process of upgrading the snap with a new version.\n\nIt takes care of\n1. Rocket.Chat version\n2. MongoDB version\n3. Node.js version\n\n**0. Fetch the old mongodb version, install required tools**\n\nIt should be available in `rocket_craft/parts-{rocketchat_version}.yaml`, look at `mongodb-version` property under `mongodb` part.\n\nAlso install `direnv` for easier environment management <https://direnv.net>.\n\nOnce you `cd` into this repository, run `direnv allow .` to load the environment.\n\nYou can run `source ._rocketcraft_completion.bash` to load the completion for `rocketcraft` command if using `bash` for shell, or use `source ._rocketcraft_completion.zsh` if using `zsh`.\n\n**1. Prepare the artifacts for new build**\n\nRun the following command\n```sh\nrocketcraft rocketchat prepare \\\n--craft-file snap/snapcraft.yaml \\\n--version <new_rocketchat_version> \\\n--current-mongodb-version <old_mongodb_version>\n```\n\nPass `--skip-run` to skip the run step, this is useful if you are not using an ubuntu based system;\n\nThis will\n1. Find the next upgradable MongoDB version\n2. Update epoch depending on \\#1\n3. Update/add the part file for mongodb and nodejs\n\n**2. Build the snap**\n\nRun the following command\n```sh\nsnapcraft pack\n```\n\nThis will pack the snap and save it to `rocketchat-server_<new_rocketchat_version>_amd64.snap`.\n"
+    },
+    {
+      "path": "migrations.sh",
+      "sha": null,
+      "content_sha256": "efe64d2d8b7b151102c73ef4215953aa95e655591cc319280e74314982e413ac",
+      "score": 35,
+      "content": "#! /bin/bash\n\nexec 3>&1\n\nfiles=($(find migrations -type f))\noptions=()\nindex=1\n\nfor file in ${files[@]}; do\n\toptions+=(\"$index ${file#migrations/} off\")\n\tdeclare -p options\n\t((index++))\ndone\n\nindexes=$(dialog \\\n\t--nocancel --extra-button --extra-label disable --ok-label enable \\\n\t--checklist \"Migrations\" 0 0 ${#options[@]} ${options[@]} \\\n\t2>&1 1>&3)\n\ncase $? in\n\t0)\n\t\tclear\n\t\tset -x\n\t\tfor index in $indexes; do\n\t\t\tchmod +x ${files[$(($index-1))]}\n\t\tdone\n\t\t;;\n\t3)\n\t\tclear\n\t\tset -x\n\t\tfor index in $indexes; do\n\t\t\tchmod -x ${files[$(($index-1))]}\n\t\tdone\n\t\t;;\nesac\n\nexec 3>&-\n"
+    },
+    {
+      "path": "daemons/stop_mongod.sh",
+      "sha": null,
+      "content_sha256": "de180946cc132eb2c35fc85f6216112cc4eee4ba20d5ba9394b15a886a612019",
+      "score": 33,
+      "content": "#!/bin/bash\n\nsource $SNAP/helpers/mongo.sh\n\nstop_mongod\n"
+    },
+    {
+      "path": "rocket_craft/parts-7.13.5.yaml",
+      "sha": null,
+      "content_sha256": "7d8edfd324ab646f90cc61a0acf6233a1f09a436a9b0777f68339faad5d93bc1",
+      "score": 33,
+      "content": "parts:\n  mongodb:\n    plugin: mongodb\n    mongodb-version: 7.0.31\n    mongodb-distro-override: ubuntu2004\n  node:\n    plugin: novm\n    novm-node-version: 22.16.0"
+    },
+    {
+      "path": "daemons/stop_rocketchat.sh",
+      "sha": null,
+      "content_sha256": "7d236fb88c7beb7f703dc9c040a485ee9e9727f0d19c2fa03056d53db07afae1",
+      "score": 33,
+      "content": "#!/bin/bash\n\nsource $SNAP/helpers/rocketchat.sh\n\nstop_rocketchat\n"
+    },
+    {
+      "path": "commands/mongo-server-version.sh",
+      "sha": null,
+      "content_sha256": "9e24170c72d1371f444b83531c0897d44ac2533d928e0ea9753bb49c2854c659",
+      "score": 33,
+      "content": "#!/bin/bash\n\nsource \"$SNAP/helpers/mongo.sh\"\n\nif is_mongod_running; then\n\tmongo_eval 'db.version()'\nelse\n\tmongod --version | awk '/db version/ {print $3}' | sed 's/v//'\nfi\n"
+    },
+    {
+      "path": ".vscode/settings.json",
+      "sha": null,
+      "content_sha256": "f0aa78066f5637ddbca4d0774ff801586d74934e4e25e47af96c19ad34f9e668",
+      "score": 33,
+      "content": "{\n\t\"git.ignoreLimitWarning\": true,\n\t\"python.autoComplete.extraPaths\": [\n\t\t\"/usr/lib/python3/dist-packages\"\n\t]\n}\n"
+    },
+    {
+      "path": "daemons/start_mongod.sh",
+      "sha": null,
+      "content_sha256": "025a268b634d1175c5f8fc19954eabc0a82d25aba64c4dd0c8aece096acaeb0c",
+      "score": 33,
+      "content": "#! /bin/bash\n\nsource $SNAP/helpers/mongo.sh\n\nstart_mongod\n"
+    },
+    {
+      "path": "rocket_craft/parts-8.5.1.yaml",
+      "sha": null,
+      "content_sha256": "6c42852794b32f8605b047b62198729b749e908a75fe6b00520c9fb5f4ed819d",
+      "score": 33,
+      "content": "parts:\n  mongodb:\n    plugin: mongodb\n    mongodb-version: 8.0.26\n    mongodb-distro-override: ubuntu2404\n  node:\n    plugin: novm\n    novm-node-version: 22.22.3"
+    },
+    {
+      "path": "scripts/lib.sh",
+      "sha": null,
+      "content_sha256": "8ce0bcc7dcc4be05a286ced375a5083f833aa230e121cb3df3febf2eae39b53d",
+      "score": 33,
+      "content": "#!/usr/bin/env bash\n\n_escape_regex() {\n\techo \"$1\" | sed -e 's/[]\\/$*.^|()[]/\\\\&/g'\n}\n\nget_latest_version_for_channel() {\n\tlocal channel=\"$1\"\n\ttest -n \"$channel\" || {\n\t\techo \"Channel is required\"\n\t\treturn 1\n\t}\n\n\tsnap info rocketchat-server | awk \"/$(_escape_regex \"$channel\")/ { print \\$2 }\"\n}\n"
+    },
+    {
+      "path": "rocket_craft/parts-8.3.2.yaml",
+      "sha": null,
+      "content_sha256": "d2afac203d075cce1b08d0e8500d2ed19423c98bc27538ecfce953dc508f1070",
+      "score": 33,
+      "content": "parts:\n  mongodb:\n    plugin: mongodb\n    mongodb-version: 8.0.20\n    mongodb-distro-override: ubuntu2404\n  node:\n    plugin: novm\n    novm-node-version: 22.16.0"
+    },
+    {
+      "path": "daemons/start_caddy.sh",
+      "sha": null,
+      "content_sha256": "2dfe937cff6e33a5fae5e83458ad2dc8a2cfdd45da6c692e5fec502a4451b80b",
+      "score": 33,
+      "content": "#! /bin/bash\n\nsource $SNAP/helpers/caddy.sh\n\nif [[ -s $SNAP_DATA/Caddyfile ]]; then\n  # Prioritize v2 over v1\n  start_caddy_v2_with_config || start_caddy_v1_with_config\nelse\n  caddy_v2_reverse_proxy $(snapctl get siteurl) http://127.0.0.1:$(snapctl get port)\nfi\n"
+    },
+    {
+      "path": "daemons/start_rocketchat.sh",
+      "sha": null,
+      "content_sha256": "1f6e7fc222e9c6a3402322a1269bea7859bfab45dee852187588e464b3fb5f52",
+      "score": 33,
+      "content": "#! /bin/bash\n\nsource $SNAP/helpers/rocketchat.sh\n\n[[ $(snapctl get siteurl) =~ ^https:// ]] && snapctl start rocketchat-server.rocketchat-caddy\n\nstart_rocketchat\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": ".envrc",
+      "sha": "13044e547e30ab390bac22ef21104213f21a4b9b",
+      "size": 358,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:47:47.408635+00:00"
+}

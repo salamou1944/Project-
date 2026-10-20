@@ -1,0 +1,174 @@
+{
+  "canonical_source": "github:matomo-org/matomo-icons",
+  "repo": "matomo-org/matomo-icons",
+  "revision_sha": "fb96bd3a8edc74f196b736d7050f02a01afd24cf",
+  "default_branch": "master",
+  "pushed_at": "2026-08-17T12:49:29Z",
+  "repo_updated_at": "2026-08-17T12:51:12Z",
+  "license": null,
+  "topics": [
+    "browser-icons",
+    "icons",
+    "imagemagick",
+    "matomo"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/tests.yml",
+      "sha": null,
+      "content_sha256": "18fbaffe09e0cc48d149ee955883c977c7024deef968ee750760953336f93efe",
+      "score": 186,
+      "content": "name: Tests\r\n\r\non:\r\n  pull_request:\r\n    types: [opened, synchronize]\r\n  push:\r\n    branches:\r\n      - 'master'\r\n\r\npermissions:\r\n  actions: read\r\n  checks: read\r\n  contents: read\r\n  deployments: none\r\n  issues: read\r\n  packages: none\r\n  pull-requests: read\r\n  repository-projects: none\r\n  security-events: none\r\n  statuses: none\r\n\r\njobs:\r\n  build:\r\n    runs-on: 'ubuntu-latest'\r\n    name: Tests\r\n    steps:\r\n      - uses: actions/checkout@v4\r\n      - name: Checkout Matomo\r\n        uses: actions/checkout@v4\r\n        with:\r\n          repository: matomo-org/matomo\r\n          path: tmp/matomo\r\n      - name: Set up Python\r\n        uses: actions/setup-python@v5\r\n        with:\r\n          python-version: 3.9\r\n      - name: Install Dependencies\r\n        run: |\r\n          composer install\r\n          yarn install\r\n          pip install -r requirements.txt\r\n        shell: bash\r\n      - name: Run Tests\r\n        run: |\r\n          shellcheck *.sh\r\n          python tests.py\r\n        shell: bash"
+    },
+    {
+      "path": ".github/workflows/convertimages.yml",
+      "sha": null,
+      "content_sha256": "eb9cf0ccd2c02d3dcad8840c6852a751236be97d018d31e4b8f5560ee6a33ac5",
+      "score": 126,
+      "content": "name: Convert Images\r\n\r\non:\r\n  pull_request:\r\n    types: [opened, synchronize]\r\n\r\npermissions:\r\n  actions: read\r\n  checks: read\r\n  # the \"Push changes\" step commits the generated dist files back to the pull request branch\r\n  contents: write\r\n  deployments: none\r\n  issues: read\r\n  packages: none\r\n  pull-requests: write\r\n  repository-projects: none\r\n  security-events: none\r\n  statuses: none\r\n\r\njobs:\r\n  build:\r\n    runs-on: 'ubuntu-22.04'\r\n    name: Convert Images\r\n    steps:\r\n      - name: Detect branch for PR\r\n        id: vars\r\n        run: |\r\n          PR=\"${{ github.event.pull_request.number }}\"\r\n\r\n          PR_INFO=$( curl \\\r\n                   --request GET \\\r\n                   --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \\\r\n                   --header 'content-type: application/json' \\\r\n                   --url https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/$PR )\r\n          REF=$(echo \"${PR_INFO}\" | jq -r .head.ref)\r\n          BASE=$(echo \"${PR_INFO}\" | jq -r .head.repo.full_name)\r\n          STATE=$(echo \"${PR_INFO}\" | jq -r .state)\r\n          BASE_SHA=$(echo \"${PR_INFO}\" | jq -r .base.sha)\r\n\r\n          if [[ $STATE == \"closed\" ]]\r\n          then\r\n            echo \"Pull Request already closed.\"\r\n            exit 0;\r\n          fi\r\n\r\n          echo \"islocalbranch=$(expr $BASE == $GITHUB_REPOSITORY)\" >> $GITHUB_OUTPUT\r\n          echo \"branch=$REF\" >> $GITHUB_OUTPUT\r\n          echo \"base=$BASE_SHA\" >> $GITHUB_OUTPUT\r\n      # keep the checkout credentials, the \"Push changes\" step pushes with them\r\n      - uses: actions/checkout@v4\r\n        if: steps.vars.outputs.branch != ''\r\n      - name: Check images changes\r\n        id: imagecheck\r\n        run: |\r\n          git fetch --depth=1 origin ${{ steps.vars.outputs.base }}\r\n\r\n          IMAGES_MODIFIED=$(git diff --name-only ${{ steps.vars.outputs.base }} -- src/ convert.sh .github/workflows/convertimages.yml | wc -l)\r\n\r\n          if [[ $IMAGES_MODIFIED == \"0\" ]]\r\n          then\r\n            echo \"No images modified\"\r\n            exit 0;\r\n          fi\r\n\r\n          echo \"images_modified=1\" >> $GITHUB_OUTPUT\r\n        if: steps.vars.outputs.branch != ''\r\n      - name: Install Dependencies\r\n        run: |\r\n          npm install\r\n\r\n          sudo apt-get update\r\n\r\n          git clone --recursive --branch 3.0.3 https://github.com/kornelski/pngquant.git\r\n          cd pngquant\r\n          cargo build --release\r\n          sudo cp target/release/pngquant /usr/local/bin/\r\n          cd ..\r\n          pngquant --version\r\n\r\n          sudo add-apt-repository universe\r\n          sudo add-apt-repository ppa:inkscape.dev/stable\r\n          sudo apt-get update\r\n          sudo apt-get install inkscape\r\n\r\n          sudo apt-get install imagemagick\r\n        shell: bash\r\n        if: steps.vars.outputs.branch != '' && steps.imagecheck.outputs.images_modified == '1'\r\n      - name: Prepare git checkout\r\n        run: |\r\n          git config --global user.email \"innocraft-automation@users.noreply.github.com\"\r\n          git config --global user.name \"innocraft-automation\"\r\n          if [[ \"${{ steps.vars.outputs.islocalbranch }}\" == \"1\" ]]\r\n          then\r\n            git fetch --depth=1 origin \"$BRANCH_NAME\"\r\n            git checkout \"$BRANCH_NAME\"\r\n          fi\r\n        env:\r\n          BRANCH_NAME: ${{ steps.vars.outputs.branch }}\r\n        if: steps.vars.outputs.branch != '' && steps.imagecheck.outputs.images_modified == '1'\r\n      - name: Run convert images\r\n        run: ./convert.sh\r\n        shell: bash\r\n        if: steps.vars.outputs.branch != '' && steps.imagecheck.outputs.images_modified == '1'\r\n      - name: Push changes\r\n        id: push\r\n        run: |\r\n          git add dist\r\n          if [[ $( git diff --numstat HEAD dist ) ]]\r\n          then\r\n            if [[ \"${{ steps.vars.outputs.islocalbranch }}\" != \"1\" ]]\r\n            then\r\n              echo \"It's only possible to update local branches automatically. Adding a comment instead.\"\r\n              echo \"failure=1\" >> $GITHUB_OUTPUT\r\n            else\r\n              cd $GITHUB_WORKSPACE\r\n              git add dist/ versions.txt\r\n              git commit -m \"Generated image files\"\r\n              git push origin \"HEAD:$BRANCH_NAME\"\r\n            fi\r\n          fi\r\n        env:\r\n          BRANCH_NAME: ${{ steps.vars.outputs.branch }}\r\n        if: steps.vars.outputs.branch != '' && steps.imagecheck.outputs.images_modified == '1'\r\n      - uses: actions/github-script@v7\r\n        with:\r\n          script: |\r\n            github.rest.issues.createComment({\r\n              issue_number: context.issue.number,\r\n              owner: context.repo.owner,\r\n              repo: context.repo.repo,\r\n              body: 'Image files are not up to date. Please generate them locally and push them to your branch.'\r\n            })\r\n        if: steps.push.outputs.failure == '1'\r\n      - name: Fail if not up to date\r\n        run: exit 1\r\n        if: steps.push.outputs.failure == '1'\r\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "5f89b8e0c89d6d13ea4f9852709b361215472368b290554764275d0003435e55",
+      "score": 120,
+      "content": "{\n  \"dependencies\": {\n    \"browser-logos\": \"github:Findus23/browser-logos\",\n    \"flag-icons\": \"github:lipis/flag-icon-css\"\n  }\n}\n"
+    },
+    {
+      "path": "composer.json",
+      "sha": null,
+      "content_sha256": "c4c51fa2805db2d5226093277558a8966e08f0e57d99a37cbf21d3e5156d89fc",
+      "score": 120,
+      "content": "{\n    \"config\": {\n        \"preferred-install\": \"source\"\n    },\n    \"require-dev\": {\n    },\n    \"require\": {\n        \"matomo/searchengine-and-social-list\": \"dev-master\",\n        \"matomo/device-detector\": \"dev-master\"\n    }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "4fbde35f2ccf6abfa22af1f15c89bfc46052d9d17c298f10f0b222d20cd1568a",
+      "score": 100,
+      "content": "# Matomo Icons\n\n[![Tests](https://github.com/matomo-org/matomo-icons/actions/workflows/tests.yml/badge.svg)](https://github.com/matomo-org/matomo-icons/actions/workflows/tests.yml)\n\nThis repository provides the source files for the icons in [Matomo](https://github.com/matomo-org/matomo) and the scripts used to convert them into a unified format.\n\n## Contributing\n\nAn icon is missing, or you have a better one? Create a [new issue](https://github.com/matomo-org/matomo-icons/issues/new) or, even better, open a pull request.\n\n🖌️ Hint: We regularly generate a [list of improvable icons](https://app.travis-ci.com/github/matomo-org/matomo-icons). Some may have the wrong source file format, some may be too small. Feel free to pick one or two and provide a PR for it.\n\nAll source files are stored in categorized subfolders in `/src`.\nPlease check whether your icon proposal complies with the following conventions. Then run the `convert.sh` script once to update the icon build in the `/dist` folder.\n\n### File Formats\n\nIdeally all source files should be SVGs or high resolution (> 100px) PNGs.\n\nAs this is not always possible, JPGs, GIFs and (even multi resolution) ICOs are supported as well.\n\n### Naming\n\nThe grouping and naming of all icons results from the data sets that Matomo uses in its own tracking analysis.\n\n| Icon category   | Data source for naming                                                                             | Example                      |\n|-----------------|----------------------------------------------------------------------------------------------------|------------------------------|\n| `brand`         | *Device detection* in Matomo Administration page                                                   | `Apple.png`                  |\n| `browsers`      | https://github.com/matomo-org/device-detector/blob/master/Parser/Client/Browser.php                | `FF.png` for Firefox Browser |\n| `devices`       | https://github.com/matomo-org/matomo/blob/5.x-dev/plugins/DevicesDetection/functions.php#L183-L198 | `smartphone.png`             |\n| `flags`         | https://github.com/lipis/flag-icons/tree/main/flags/4x3                                            | `at.png` for Austria         |\n| `os`            | https://github.com/matomo-org/device-detector/blob/master/Parser/OperatingSystem.php#L38           | `WIN.png` for Windows        |\n| `plugins`       | https://github.com/matomo-org/matomo/tree/5.x-dev/plugins/DevicePlugins/Columns                    | `flash.png`                  |\n| `searchEngines` | https://github.com/matomo-org/searchengine-and-social-list/blob/master/SearchEngines.yml           | `google.com.png`             |\n| `SEO`           | https://github.com/matomo-org/matomo/tree/5.x-dev/plugins/SEO                                      | `bing.com.png`               |\n| `socials`       | https://github.com/matomo-org/searchengine-and-social-list/blob/master/Socials.yml                 | `facebook.com.png`           |\n\n### Attribution\n\nEvery source file, except those in `devices`, `flags`, `searchEngines` and `socials`, needs to have a second file according to the scheme `<icon name>.<file extension>.source` that mentions where the image is from.\n"
+    },
+    {
+      "path": "src/devices/README.md",
+      "sha": null,
+      "content_sha256": "3612c964ad34d13b1c3911e37dfc0034fbb9352eda8d4984fa9f4c50f718dcca",
+      "score": 96,
+      "content": "## Device Icons\n\nSource: https://material.io/icons/\n\nLicense: Apache License Version 2.0. (see LICENSE)\n\n\n### feature_phone.svg\n\nhttps://commons.wikimedia.org/wiki/File:Maki-mobile-phone-15.svg\n\nCC0 1.0 Universal Public Domain Dedication.\n"
+    },
+    {
+      "path": "tests-ignore.yml",
+      "sha": null,
+      "content_sha256": "ff3111c38c319e220ea0d748f65c6f3395a1481339183021af357143e2a61503",
+      "score": 95,
+      "content": "ignore_that_icon_isnt_square:\n- dist/searchEngines/www.x-recherche.com.png\n- dist/plugins/gears.png\n- dist/brand/Landvo.png\n- dist/brand/AMGOO.png\nignored_source_files:\n- src/flags/un.svg\n- src/flags/gb-wls.svg\n- src/flags/gb-sct.svg\n- src/flags/gb-eng.svg\n- src/flags/gb-nir.svg\n- src/flags/es-ct.svg\n- src/flags/xk.svg\nless_important_device_detector_icons:\n  brand:\n  - Ainol\n  - Airness\n  - Airties\n  - Altech_UEC\n  - altron\n  - Amoi\n  - ANS\n  - Arian_Space\n  - Ark\n  - Arnova\n  - ARRIS\n  - Ask\n  - Assistant\n  - AVH\n  - Axxion\n  - Barnes_Noble\n  - BenQ-Siemens\n  - Bird\n  - Black_Fox\n  - Bluegood\n  - Bmobile\n  - bogo\n  - Boway\n  - Bravis\n  - Brondi\n  - Bush\n  - CAGI\n  - Capitel\n  - Captiva\n  - Carrefour\n  - Casio\n  - Changhong\n  - China_Mobile\n  - Coby_Kyros\n  - Concord\n  - Cowon\n  - Crescent\n  - Cube\n  - Datang\n  - Datsun\n  - Dbtel\n  - Desay\n  - Dicam\n  - Digiland\n  - DNS\n  - Doov\n  - Dopod\n  - Dune_HD\n  - E-tel\n  - EBEST\n  - ECS\n  - Elenberg\n  - Elephone\n  - Energy_Sistem\n  - Ericy\n  - Eton\n  - Explay\n  - Ezio\n  - Ezze\n  - FinePower\n  - Forstar\n  - Foxconn\n  - G-TiDE\n  - Garmin-Asus\n  - Gateway\n  - Geotel\n  - Goly\n  - Grape\n  - Hasee\n  - Hi-Level\n  - Hoffmann\n  - Homtom\n  - Hosin\n  - i-Joy\n  - i-mate\n  - iBall\n  - iKoMo\n  - iNew\n  - Infinix\n  - Inkti\n  - Innostream\n  - Intex\n  - iOcean\n  - Irbis\n  - iTel\n  - Jiayu\n  - K-Touch\n  - Kiano\n  - Kingsun\n  - Komu\n  - Konka\n  - Koobee\n  - KOPO\n  - Koridy\n  - KRONO\n  - KT-Tech\n  - Kumai\n  - Lark\n  - LCT\n  - Ledstar\n  - LeEco\n  - Lemhoov\n  - Lenco\n  - Lexand\n  - Lexibook\n  - Lingwin\n  - Logicom\n  - Lumus\n  - M_T_T_\n  - Majestic\n  - Maze\n  - Mecer\n  - Mecool\n  - Mediacom\n  - MEEG\n  - MegaFon\n  - Memup\n  - MEU\n  - Miray\n  - MIXC\n  - MLLED\n  - Mobistel\n  - Modecom\n  - Mofut\n  - Mpman\n  - MTN\n  - Navon\n  - Netgear\n  - NeuImage\n  - Newgen\n  - NEXBOX\n  - NextBook\n  - Noain\n  - Nomi\n  - Nous\n  - Opsson\n  - Ouki\n  - OUYA\n  - Overmax\n  - Oysters\n  - PCBOX\n  - Pentagram\n  - phoneOne\n  - Pioneer\n  - Pixus\n  - Ployer\n  - Point_of_View\n  - Polytron\n  - Pomp\n  - Positivo\n  - PPTV\n  - Prestigio\n  - Primepad\n  - ProScan\n  - PULID\n  - Q-Touch\n  - Qilive\n  - Qtek\n  - R-TV\n  - Ramos\n  - RCA_Tablets\n  - Readboy\n  - Rikomagic\n  - Roku\n  - Rover\n  - Sanei\n  - Santin_BiTBiZ\n  - Sendo\n  - Senseit\n  - Shuttle\n  - Sigma\n  - Sky\n  - Skyworth\n  - Smartisan\n  - Star\n  - Starway\n  - STF_Mobile\n  - Stonex\n  - Storex\n  - Sumvision\n  - SunVan\n  - SuperSonic\n  - Supra\n  - SWISSMOBILITY\n  - Symphony\n  - TB_Touch\n  - Telego\n  - Telenor\n  - Tesco\n  - ThL\n  - TIANYU\n  - Top_House\n  - Toplux\n  - Trevi\n  - Turbo-X\n  - TVC\n  - Unimax\n  - Uniscope\n  - Unknown\n  - Unowhy\n  - UTStarcom\n  - Vastking\n  - Vertex\n  - Vinsoc\n  - Vitelcom\n  - Vizio\n  - VK_Mobile\n  - Voto\n  - Vulcan\n  - Walton\n  - Web_TV\n  - Weimei\n  - WellcoM\n  - Wexler\n  - Wink\n  - Wonu\n  - Woo\n  - X-View\n  - Xion\n  - Xolo\n  - XYQ\n  - 'Yes'\n  - Ytone\n  - Yu\n  - Yusun\n  - Zeemi\n  - Zenek\n  - ZYQ\n  browsers:\n  - AF\n  - C0\n  - CS\n  - CX\n  - DB\n  - DO\n  - EB\n  - EU\n  - FX\n  - KB\n  - LF\n  - LL\n  - LO\n  - LU\n  - MN\n  - MY\n  - OD\n  - OY\n  - S1\n  - SC\n  - SN\n  - SR\n  - SU\n  - TA\n  - TV\n  - UB\n  - VB\n  - VV\n  - WT\n  - XI\n  - ZV\n  os:\n  - BMP\n  - INF\n  - MCD\n  - MLD\n  - MTK\n  - RZD\n  - S40\n  - S60\n  - SY3\n  - SYS\n  - WTV\nplaceholder_icon_filenames:\n  brand: unk.png\n  browsers: UNK.png\n  devices: unknown.png\n  os: UNK.png\n  searchEngines: xx.png\n  socials: xx.png\n"
+    },
+    {
+      "path": "tests.py",
+      "sha": null,
+      "content_sha256": "e7a3aee7bb9d8e66ef32d53634d0311fd1081edb275fb8e3aba65ebf1503df23",
+      "score": 95,
+      "content": "#!/usr/bin/env python3\n# Copyright (C) 2017 Lukas Winkler\n#\n# This program is free software: you can redistribute it and/or modify it under\n# the terms of the GNU General Public License as published by the Free Software\n# Foundation, either version 3 of the License, or (at your option) any later\n# version.\n#\n# This program is distributed in the hope that it will be useful, but WITHOUT\n# ANY WARRANTY; without even the implied warranty of  MERCHANTABILITY or FITNESS\n# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.\n#\n# You should have received a copy of the GNU General Public License along with\n# this program.  If not, see <http://www.gnu.org/licenses/>.\nimport hashlib\nimport json\nimport os\nimport re\nimport subprocess\nimport sys\nfrom pathlib import Path\nfrom typing import Dict, List, Iterator, Iterable\nfrom urllib.parse import urlparse\n\nimport yaml\nfrom PIL import Image\n\nbuild_script_regex = re.compile(r\"rm [-rf]+ plugins/Morpheus/icons/(.*)\")\n\nmin_image_size = 48\n\nplaceholder_icon_hash = \"398a623a3b0b10eba6d1884b0ff1713ee12aeafaa8efaf67b60a4624f4dce48c\"\n\nsearchEnginesFile = Path(\"vendor/matomo/searchengine-and-social-list/SearchEngines.yml\")\naiAssistantsFile = Path(\"vendor/matomo/searchengine-and-social-list/AIAssistants.yml\")\nsocialsEnginesFile = Path(\"vendor/matomo/searchengine-and-social-list/Socials.yml\")\nbuild_script_file = Path(\"tmp/matomo/.github/scripts/clean-build.sh\")\n\nsrc = Path(\"src/\")\ndist: Path = Path(\"dist/\")\n\n\ndef print_warning(string: str) -> None:\n    print(\"\\033[33;1m⚠\\033[0m \" + string)\n\n\ndef print_error(string: str) -> None:\n    print(\"\\033[31;1m⚠ \" + string + \"\\033[0m\")\n\n\ndef load_yaml(file: Path):\n    with file.open() as stream:\n        return yaml.safe_load(stream)\n\n\ndef image_exists(pathslug: Path) -> bool:\n    for filetype in [\"svg\", \"png\", \"gif\", \"jpg\", \"ico\", \"webp\"]:\n        if pathslug.with_suffix(pathslug.suffix + f\".{filetype}\").exists():\n            return True\n    return False\n\n\ndef walk(path: Path) -> Iterator[Path]:\n    for p in path.iterdir():\n        if p.is_dir():\n            yield p\n            yield from walk(p)\n            continue\n        yield p.resolve()\n\n\ndef test_if_all_icons_are_converted(ignored_source_files) -> None:\n    global error\n    for filetype in [\"svg\", \"png\", \"gif\", \"jpg\", \"ico\", \"webp\"]:\n        for file in src.glob(f\"**/*.{filetype}\"):\n            distfile = Path(\"dist/\") / Path(*file.parts[1:]).with_suffix(\".png\")\n\n            if not distfile.exists() and file not in ignored_source_files:\n                print_error(f\"{distfile} is missing (From {file})\")\n                error = True\n\n\ndef test_if_source_for_images() -> None:\n    global error\n    for icontype in [\"brand\", \"browsers\", \"os\", \"plugins\", \"SEO\"]:\n        for filetype in [\"svg\", \"png\", \"gif\", \"jpg\", \"ico\", \"webp\"]:\n            for source_file in (src / icontype).glob(f\"*.{filetype}\"):\n                if (\n                        not source_file.is_symlink()\n                        and not source_file.with_suffix(source_file.suffix + \".source\")\n                        and \"UNK\" not in source_file\n                ):\n                    print_error(f\"Source is missing for {source_file}\")\n                    error = True\n\n\ndef test_if_all_symlinks_are_valid() -> None:\n    global error\n    for file in src.glob(\"**/*\"):\n        if file.is_symlink():\n            target = file.resolve()\n            if not target.exists():\n                print_error(f\"Symlink doesn't link to file (from {file} to {target} ({file.readlink()}))\")\n                error = True\n\n\ndef test_if_placeholder_icon_exist(placeholder_icon_filenames: Dict[str, str]) -> None:\n    global error\n    for folder, filename in placeholder_icon_filenames.items():\n        file = src / folder / filename\n        if not (file.exists() and hashlib.sha256(file.read_bytes()).hexdigest() == placeholder_icon_hash):\n            print_error(f\"The placeholder icon {file} is missing or invalid\")\n            error = True\n\n\ndef test_if_icons_are_large_enough() -> None:\n    # ignore searchEngines and socials\n    for filetype in [\"png\", \"gif\", \"jpg\", \"ico\", \"webp\"]:\n        for source_file in src.glob(f\"*/*.{filetype}\"):\n            im = Image.open(source_file)\n            if im.size[0] < min_image_size or im.size[1] < min_image_size:\n                width, height = im.size\n                print_warning(\n                    f\"{source_file} is smaller ({width}x{height}) that the target size ({min_image_size}x{min_image_size})\"\n                )\n            if filetype in [\"jpg\", \"gif\", \"ico\"]:\n                print_warning(\n                    f\"{source_file} is saved in a lossy image format ({filetype}). \"\n                    \"Maybe try to find an PNG or SVG from another source.\"\n                )\n\n\ndef test_if_dist_icons_are_square(ignore_that_icon_isnt_square: List[str]) -> None:\n    global error\n    for file in dist.glob(\"**/*.png\"):\n        if (dist / \"flags\") not in file.parents:\n            im = Image.open(file)\n            width, height = im.size\n            if width != height:\n                string = f\"{file} isn't square ({width}x{height})\"\n                if str(file) not in ignore_that_icon_isnt_square:\n                    error = True\n                    print_error(string)\n                else:\n                    print_warning(string)\n\n\ndef is_in_allowed_dir(file: Path) -> bool:\n    allowed_dirs = [dist, Path(\"node_modules\"), Path(\"tmp\"), Path(\"vendor\"), Path(\".idea\")]\n    for dir in allowed_dirs:\n        dir = dir.resolve()\n        if dir == file:\n            return True\n        if dir in file.parents:\n            return True\n    return False\n\n\ndef is_deleted(file: Path, deleted_files: Iterable[Path]) -> bool:\n    # print(file, deleted_files)\n    for del_file in deleted_files:\n        if del_file == file:\n            return True\n        if del_file in file.parents:\n            return True\n    return False\n\n\ndef test_if_build_script_is_deleting_all_unneeded_files() -> None:\n    global error\n    build_script = build_script_file.read_text()\n    deleted_files = set()\n    all_files = set(walk(Path(\".\").resolve()))\n    for pattern in build_script_regex.findall(build_script):\n        deleted_files.update(Path(\".\").resolve().glob(pattern))\n    for file in all_files:\n        if is_deleted(file, deleted_files):\n            continue\n        if is_in_allowed_dir(file):\n            continue\n        if file == Path(\"README.md\").resolve():\n            continue\n        print_error(f\"{file} should be deleted by the build script\")\n        error = True\n\n\ndef test_if_icons_are_indicated_to_be_improvable() -> None:\n    for file in src.glob(\"**/*.todo\"):\n        print_warning(f\"{str(file)[:-5]} could be improved\")\n\n\ndef look_for_search_and_social_icon(source, mode, outputdir: Path) -> None:\n    global error\n    correct_files = set()\n    for i, element in source.items():\n        if mode == \"searchengines\":\n            search_engine = element[0]\n            urls = search_engine[\"urls\"]\n        else:\n            urls = element\n        url = next((url for url in urls if \"{}\" not in url), False)\n        url = urlparse(\"https://\" + url).netloc\n        if url and not image_exists(outputdir / url):\n            print_error(f\"icon for {url} is missing\")\n            error = True\n        correct_files.add(url)\n    for filetype in [\"svg\", \"png\", \"gif\", \"jpg\", \"ico\", \"webp\"]:\n        for file in outputdir.glob(f\"*.{filetype}\"):\n            domain = file.stem\n            if domain not in correct_files and domain != \"xx\":\n                print_error(f\"{file} is not necessary\")\n                error = True\n\n\ndef test_if_all_search_and_social_sites_have_an_icon() -> None:\n    look_for_search_and_social_icon(load_yaml(searchEnginesFile), \"searchengines\", Path(\"src/searchEngines/\"))\n    look_for_search_and_social_icon(load_yaml(aiAssistantsFile), \"aiAssistants\", Path(\"src/aiAssistants/\"))\n    look_for_search_and_social_icon(load_yaml(socialsEnginesFile), \"socials\", Path(\"src/socials/\"))\n\n\ndef test_if_there_are_icons_for_all_device_detector_categories(\n        less_important_device_detector_icons: Dict[str, List[str]]\n) -> None:\n    global error\n    output = subprocess.run([\"php\", \"devicedetector.php\"], capture_output=True)\n    regex = re.compile(r\"[^a-z0-9_\\-]+\", re.IGNORECASE)\n    categories = json.loads(output.stdout)\n    for icontype, category in categories.items():\n        for code in category:\n            if icontype == \"brand\":\n                slug = regex.sub(\"_\", category[code])\n            else:\n                slug = code\n            found = False\n            for filetype in [\"svg\", \"png\", \"gif\", \"jpg\", \"ico\", \"webp\"]:\n                file = Path(f\"src/{icontype}/{slug}.{filetype}\")\n                if file.exists():\n                    found = True\n                    break\n            if not found:\n                warning = f\"icon for {category[code]} missing (should be at src/{icontype}/{slug}.{{png|svg}})\"\n                if slug in less_important_device_detector_icons[icontype]:\n                    print_warning(warning)\n                else:\n                    print_error(warning)\n                    # error = True\n\n\nif __name__ == \"__main__\":\n    error = False\n\n    ignore = load_yaml(Path(\"tests-ignore.yml\"))\n\n    test_if_all_icons_are_converted(ignore[\"ignored_source_files\"])\n    test_if_source_for_images()\n    test_if_all_symlinks_are_valid()\n    test_if_placeholder_icon_exist(ignore[\"placeholder_icon_filenames\"])\n    test_if_dist_icons_are_square(ignore[\"ignore_that_icon_isnt_square\"])\n    is_ci = \"CI\" in os.environ and os.environ[\"CI\"]  # collapse on CI\n    if is_ci:\n        print(\"::group::improvable icons: (click to expand)\")\n    test_if_there_are_icons_for_all_device_detector_categories(ignore[\"less_important_device_detector_icons\"])\n    test_if_icons_are_indicated_to_be_improvable()\n    test_if_icons_are_large_enough()\n    if is_ci:\n        print(\"::endgroup::\")\n    test_if_all_search_and_social_sites_have_an_icon()\n    # test_if_build_script_is_deleting_all_unneeded_files()\n\n    sys.exit(error)\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "1a5631e01649e698363479190781c0890bee049968a69b5d060df5a20efd90a1",
+      "score": 85,
+      "content": "Pillow==10.0.0\nPyYAML==6.0.1\n"
+    },
+    {
+      "path": "src/searchEngines/blogsearch.google.com.svg",
+      "sha": null,
+      "content_sha256": "c6d0ab1d1ba88f47f63901d721d5a8f9282905ebe4a5fa418bb6ee74d50cc382",
+      "score": 71,
+      "content": "../brand/Google.svg"
+    },
+    {
+      "path": "src/searchEngines/google.com.svg",
+      "sha": null,
+      "content_sha256": "c6d0ab1d1ba88f47f63901d721d5a8f9282905ebe4a5fa418bb6ee74d50cc382",
+      "score": 71,
+      "content": "../brand/Google.svg"
+    },
+    {
+      "path": "src/searchEngines/images.google.com.svg",
+      "sha": null,
+      "content_sha256": "c6d0ab1d1ba88f47f63901d721d5a8f9282905ebe4a5fa418bb6ee74d50cc382",
+      "score": 71,
+      "content": "../brand/Google.svg"
+    },
+    {
+      "path": "src/browsers/LG.svg",
+      "sha": null,
+      "content_sha256": "5c5f4b19fc2b3a5e713fb45f08938b5afa3939ef7f3df2d647e0537a118edff0",
+      "score": 71,
+      "content": "../brand/LG.svg"
+    },
+    {
+      "path": "src/searchEngines/video.google.com.svg",
+      "sha": null,
+      "content_sha256": "c6d0ab1d1ba88f47f63901d721d5a8f9282905ebe4a5fa418bb6ee74d50cc382",
+      "score": 71,
+      "content": "../brand/Google.svg"
+    },
+    {
+      "path": "src/searchEngines/googlesyndicatedsearch.com.svg",
+      "sha": null,
+      "content_sha256": "c6d0ab1d1ba88f47f63901d721d5a8f9282905ebe4a5fa418bb6ee74d50cc382",
+      "score": 71,
+      "content": "../brand/Google.svg"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [
+    {
+      "path": "src/browsers/BX.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/AB.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/ES.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/LS.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/PO.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/NF.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/WO.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/NP.todo",
+      "error": "empty content"
+    },
+    {
+      "path": "src/browsers/KP.todo",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 9,
+  "generated_at": "2026-10-20T23:47:45.482835+00:00"
+}

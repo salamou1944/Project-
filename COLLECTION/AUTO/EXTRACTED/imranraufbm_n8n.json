@@ -1,0 +1,1428 @@
+{
+  "canonical_source": "github:imranraufbm/n8n",
+  "repo": "imranraufbm/n8n",
+  "revision_sha": "7a5d34a8406a377a56ed999359b8cd0d51a5cfe7",
+  "default_branch": "master",
+  "pushed_at": "2026-03-08T21:20:46Z",
+  "repo_updated_at": "2026-03-08T21:21:12Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci-postgres-mysql.yml",
+      "sha": null,
+      "content_sha256": "3762adca9d9f8143b579676861e424544ef2e0d330c5b3a7210efb58a8448860",
+      "score": 258,
+      "content": "name: Test Postgres and MySQL schemas\n\non:\n  schedule:\n    - cron: '0 0 * * *'\n  workflow_dispatch:\n  pull_request:\n    paths:\n      - packages/cli/src/databases/**\n      - .github/workflows/ci-postgres-mysql.yml\n      - .github/docker-compose.yml\n  pull_request_review:\n    types: [submitted]\n\nconcurrency:\n  group: db-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true\n\njobs:\n  build:\n    name: Install & Build\n    runs-on: ubuntu-latest\n    if: github.event_name != 'pull_request_review' || startsWith(github.event.pull_request.base.ref, 'release/')\n    steps:\n      - uses: actions/checkout@v4.1.1\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: 'pnpm'\n      - run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Build Backend\n        run: pnpm build:backend\n\n      - name: Cache build artifacts\n        uses: actions/cache/save@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}:db-tests\n\n  sqlite-pooled:\n    name: SQLite Pooled\n    runs-on: ubuntu-latest\n    needs: build\n    timeout-minutes: 20\n    env:\n      DB_TYPE: sqlite\n      DB_SQLITE_POOL_SIZE: 4\n    steps:\n      - uses: actions/checkout@v4.1.1\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: 'pnpm'\n      - run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Restore cached build artifacts\n        uses: actions/cache/restore@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}:db-tests\n\n      - name: Test SQLite Pooled\n        working-directory: packages/cli\n        run: pnpm jest\n\n  mariadb:\n    name: MariaDB\n    runs-on: ubuntu-latest\n    needs: build\n    timeout-minutes: 20\n    env:\n      DB_MYSQLDB_PASSWORD: password\n    steps:\n      - uses: actions/checkout@v4.1.1\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: 'pnpm'\n      - run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Restore cached build artifacts\n        uses: actions/cache/restore@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}:db-tests\n\n      - name: Start MariaDB\n        uses: isbang/compose-action@v2.0.0\n        with:\n          compose-file: ./.github/docker-compose.yml\n          services: |\n            mariadb\n\n      - name: Test MariaDB\n        working-directory: packages/cli\n        run: pnpm test:mariadb --testTimeout 20000\n\n  postgres:\n    name: Postgres\n    runs-on: ubuntu-latest\n    needs: build\n    timeout-minutes: 20\n    env:\n      DB_POSTGRESDB_PASSWORD: password\n      DB_POSTGRESDB_POOL_SIZE: 1 # Detect connection pooling deadlocks\n    steps:\n      - uses: actions/checkout@v4.1.1\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: 'pnpm'\n      - run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Restore cached build artifacts\n        uses: actions/cache/restore@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}:db-tests\n\n      - name: Start Postgres\n        uses: isbang/compose-action@v2.0.0\n        with:\n          compose-file: ./.github/docker-compose.yml\n          services: |\n            postgres\n\n      - name: Test Postgres\n        working-directory: packages/cli\n        run: pnpm test:postgres\n\n  notify-on-failure:\n    name: Notify Slack on failure\n    runs-on: ubuntu-latest\n    needs: [mariadb, postgres]\n    steps:\n      - name: Notify Slack on failure\n        uses: act10ns/slack@v2.0.0\n        if: failure() && github.ref == 'refs/heads/master'\n        with:\n          status: ${{ job.status }}\n          channel: '#alerts-build'\n          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}\n          message: Postgres or MariaDB tests failed (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n"
+    },
+    {
+      "path": "packages/@n8n/benchmark/scripts/n8n-setups/postgres/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "a712c390d758f0b0ed5a971d94c4e57bc8ea225263025d923e5b2fd5b7a1db38",
+      "score": 250,
+      "content": "services:\n  mockapi:\n    image: wiremock/wiremock:3.9.1\n    ports:\n      - '8088:8080'\n    volumes:\n      - ${MOCK_API_DATA_PATH}/mappings:/home/wiremock/mappings\n\n  postgres:\n    image: postgres:16.4\n    restart: always\n    user: root:root\n    environment:\n      - POSTGRES_DB=n8n\n      - POSTGRES_USER=postgres\n      - POSTGRES_PASSWORD=password\n      - PGDATA=/var/lib/postgresql/data/pgdata\n    volumes:\n      - ${RUN_DIR}/postgres:/var/lib/postgresql/data\n    healthcheck:\n      test: ['CMD-SHELL', 'pg_isready -U postgres']\n      interval: 5s\n      timeout: 5s\n      retries: 5\n\n  n8n:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    user: root:root\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n    ports:\n      - 5678:5678\n    volumes:\n      - ${RUN_DIR}/n8n:/n8n\n    depends_on:\n      postgres:\n        condition: service_healthy\n      mockapi:\n        condition: service_started\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  benchmark:\n    image: ghcr.io/n8n-io/n8n-benchmark:${N8N_BENCHMARK_VERSION:-latest}\n    depends_on:\n      n8n:\n        condition: service_healthy\n    environment:\n      - N8N_BASE_URL=http://n8n:5678\n      - K6_API_TOKEN=[REDACTED]}\n      - BENCHMARK_RESULT_WEBHOOK_URL=${BENCHMARK_RESULT_WEBHOOK_URL}\n      - BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER=${BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "packages/editor-ui/src/components/CommunityPackageInstallModal.test.ts",
+      "sha": null,
+      "content_sha256": "67caba011f3bd31741bec7daada981dfd688c8398ee959c0d8230fb9c9d154c4",
+      "score": 244,
+      "content": "import { createComponentRenderer } from '@/__tests__/render';\nimport CommunityPackageInstallModal from './CommunityPackageInstallModal.vue';\nimport { createTestingPinia } from '@pinia/testing';\nimport { COMMUNITY_PACKAGE_INSTALL_MODAL_KEY, STORES } from '@/constants';\nimport userEvent from '@testing-library/user-event';\nimport { cleanupAppModals, createAppModals, retry } from '@/__tests__/utils';\n\nconst renderComponent = createComponentRenderer(CommunityPackageInstallModal, {\n\tprops: {\n\t\tappendToBody: false,\n\t},\n\tdata() {\n\t\treturn {\n\t\t\tpackageName: 'n8n-nodes-hello',\n\t\t};\n\t},\n\tpinia: createTestingPinia({\n\t\tinitialState: {\n\t\t\t[STORES.UI]: {\n\t\t\t\tmodalsById: {\n\t\t\t\t\t[COMMUNITY_PACKAGE_INSTALL_MODAL_KEY]: { open: true },\n\t\t\t\t},\n\t\t\t},\n\t\t\t[STORES.SETTINGS]: {\n\t\t\t\tsettings: {\n\t\t\t\t\ttemplates: {\n\t\t\t\t\t\thost: '',\n\t\t\t\t\t},\n\t\t\t\t},\n\t\t\t},\n\t\t},\n\t}),\n});\n\ndescribe('CommunityPackageInstallModal', () => {\n\tbeforeEach(() => {\n\t\tcreateAppModals();\n\t});\n\n\tafterEach(() => {\n\t\tcleanupAppModals();\n\t});\n\tit('should disable install button until user agrees', async () => {\n\t\tconst { getByTestId } = renderComponent();\n\n\t\tawait retry(() => expect(getByTestId('communityPackageInstall-modal')).toBeInTheDocument());\n\n\t\tconst packageNameInput = getByTestId('package-name-input');\n\t\tconst installButton = getByTestId('install-community-package-button');\n\n\t\tawait userEvent.type(packageNameInput, 'n8n-nodes-test');\n\n\t\texpect(installButton).toBeDisabled();\n\n\t\tawait userEvent.click(getByTestId('user-agreement-checkbox'));\n\n\t\texpect(installButton).toBeEnabled();\n\n\t\tawait userEvent.click(getByTestId('user-agreement-checkbox'));\n\n\t\texpect(installButton).toBeDisabled();\n\t});\n});\n"
+    },
+    {
+      "path": "packages/cli/test/integration/auth.api.test.ts",
+      "sha": null,
+      "content_sha256": "0409a8f17b0f693d8ba344fc818f89ee61e77ac9bf64b223dcf77ec3051dafe2",
+      "score": 242,
+      "content": "import { Container } from 'typedi';\nimport validator from 'validator';\n\nimport config from '@/config';\nimport { AUTH_COOKIE_NAME } from '@/constants';\nimport type { User } from '@/databases/entities/user';\nimport { UserRepository } from '@/databases/repositories/user.repository';\nimport { MfaService } from '@/mfa/mfa.service';\n\nimport { LOGGED_OUT_RESPONSE_BODY } from './shared/constants';\nimport { createUser, createUserShell } from './shared/db/users';\nimport { randomValidPassword } from './shared/random';\nimport * as testDb from './shared/test-db';\nimport type { SuperAgentTest } from './shared/types';\nimport * as utils from './shared/utils/';\n\nlet owner: User;\nlet authOwnerAgent: SuperAgentTest;\nconst ownerPassword = [REDACTED];\n\nconst testServer = utils.setupTestServer({ endpointGroups: ['auth'] });\nconst license = testServer.license;\n\nlet mfaService: MfaService;\n\nbeforeAll(async () => {\n\tmfaService = Container.get(MfaService);\n});\n\nbeforeEach(async () => {\n\tawait testDb.truncate(['User']);\n\tconfig.set('ldap.disabled', true);\n\tawait utils.setInstanceOwnerSetUp(true);\n});\n\ndescribe('POST /login', () => {\n\tbeforeEach(async () => {\n\t\towner = await createUser({\n\t\t\tpassword: [REDACTED],\n\t\t\trole: 'global:owner',\n\t\t});\n\t});\n\n\ttest('should log user in', async () => {\n\t\tconst response = await testServer.authlessAgent.post('/login').send({\n\t\t\temail: owner.email,\n\t\t\tpassword: [REDACTED],\n\t\t});\n\n\t\texpect(response.statusCode).toBe(200);\n\n\t\tconst {\n\t\t\tid,\n\t\t\temail,\n\t\t\tfirstName,\n\t\t\tlastName,\n\t\t\tpassword,\n\t\t\tpersonalizationAnswers,\n\t\t\trole,\n\t\t\tapiKey,\n\t\t\tglobalScopes,\n\t\t\tmfaSecret,\n\t\t\tmfaRecoveryCodes,\n\t\t} = response.body.data;\n\n\t\texpect(validator.isUUID(id)).toBe(true);\n\t\texpect(email).toBe(owner.email);\n\t\texpect(firstName).toBe(owner.firstName);\n\t\texpect(lastName).toBe(owner.lastName);\n\t\texpect(password).toBeUndefined();\n\t\texpect(personalizationAnswers).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(role).toBe('global:owner');\n\t\texpect(apiKey).toBeUndefined();\n\t\texpect(globalScopes).toBeDefined();\n\t\texpect(mfaRecoveryCodes).toBeUndefined();\n\t\texpect(mfaSecret).toBeUndefined();\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeDefined();\n\t});\n\n\ttest('should log user with MFA enabled', async () => {\n\t\tconst secret = 'test';\n\t\tconst recoveryCodes = ['1'];\n\t\tawait mfaService.saveSecretAndRecoveryCodes(owner.id, secret, recoveryCodes);\n\t\tawait mfaService.enableMfa(owner.id);\n\n\t\tconst response = await testServer.authlessAgent.post('/login').send({\n\t\t\temail: owner.email,\n\t\t\tpassword: [REDACTED],\n\t\t\tmfaCode: mfaService.totp.generateTOTP(secret),\n\t\t});\n\n\t\texpect(response.statusCode).toBe(200);\n\n\t\tconst {\n\t\t\tid,\n\t\t\temail,\n\t\t\tfirstName,\n\t\t\tlastName,\n\t\t\tpassword,\n\t\t\tpersonalizationAnswers,\n\t\t\trole,\n\t\t\tapiKey,\n\t\t\tmfaRecoveryCodes,\n\t\t\tmfaSecret,\n\t\t} = response.body.data;\n\n\t\texpect(validator.isUUID(id)).toBe(true);\n\t\texpect(email).toBe(owner.email);\n\t\texpect(firstName).toBe(owner.firstName);\n\t\texpect(lastName).toBe(owner.lastName);\n\t\texpect(password).toBeUndefined();\n\t\texpect(personalizationAnswers).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(role).toBe('global:owner');\n\t\texpect(apiKey).toBeUndefined();\n\t\texpect(mfaRecoveryCodes).toBeUndefined();\n\t\texpect(mfaSecret).toBeUndefined();\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeDefined();\n\t});\n\n\ttest('should throw AuthError for non-owner if not within users limit quota', async () => {\n\t\tlicense.setQuota('quota:users', 0);\n\t\tconst password = '[REDACTED]';\n\t\tconst member = await createUser({\n\t\t\tpassword,\n\t\t});\n\n\t\tconst response = await testServer.authlessAgent.post('/login').send({\n\t\t\temail: member.email,\n\t\t\tpassword,\n\t\t});\n\t\texpect(response.statusCode).toBe(403);\n\t});\n\n\ttest('should not throw AuthError for owner if not within users limit quota', async () => {\n\t\tlicense.setQuota('quota:users', 0);\n\t\tconst ownerUser = await createUser({\n\t\t\tpassword: [REDACTED],\n\t\t\trole: 'global:owner',\n\t\t});\n\n\t\tconst response = await testServer.authAgentFor(ownerUser).get('/login');\n\t\texpect(response.statusCode).toBe(200);\n\t});\n});\n\ndescribe('GET /login', () => {\n\ttest('should return 401 Unauthorized if no cookie', async () => {\n\t\tconst response = await testServer.authlessAgent.get('/login');\n\n\t\texpect(response.statusCode).toBe(401);\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeUndefined();\n\t});\n\n\ttest('should return 401 Unauthorized if invalid cookie', async () => {\n\t\ttestServer.authlessAgent.jar.setCookie(`${AUTH_COOKIE_NAME}=invalid`);\n\n\t\tconst response = await testServer.authlessAgent.get('/login');\n\n\t\texpect(response.statusCode).toBe(401);\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeUndefined();\n\t});\n\n\ttest('should return logged-in owner shell', async () => {\n\t\tconst ownerShell = await createUserShell('global:owner');\n\n\t\tconst response = await testServer.authAgentFor(ownerShell).get('/login');\n\n\t\texpect(response.statusCode).toBe(200);\n\n\t\tconst {\n\t\t\tid,\n\t\t\temail,\n\t\t\tfirstName,\n\t\t\tlastName,\n\t\t\tpassword,\n\t\t\tpersonalizationAnswers,\n\t\t\trole,\n\t\t\tapiKey,\n\t\t\tglobalScopes,\n\t\t} = response.body.data;\n\n\t\texpect(validator.isUUID(id)).toBe(true);\n\t\texpect(email).toBeDefined();\n\t\texpect(firstName).toBeNull();\n\t\texpect(lastName).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(personalizationAnswers).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(role).toBe('global:owner');\n\t\texpect(apiKey).toBeUndefined();\n\t\texpect(globalScopes).toBeDefined();\n\t\texpect(globalScopes).toContain('workflow:read');\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeUndefined();\n\t});\n\n\ttest('should return logged-in member shell', async () => {\n\t\tconst memberShell = await createUserShell('global:member');\n\n\t\tconst response = await testServer.authAgentFor(memberShell).get('/login');\n\n\t\texpect(response.statusCode).toBe(200);\n\n\t\tconst {\n\t\t\tid,\n\t\t\temail,\n\t\t\tfirstName,\n\t\t\tlastName,\n\t\t\tpassword,\n\t\t\tpersonalizationAnswers,\n\t\t\trole,\n\t\t\tapiKey,\n\t\t\tglobalScopes,\n\t\t} = response.body.data;\n\n\t\texpect(validator.isUUID(id)).toBe(true);\n\t\texpect(email).toBeDefined();\n\t\texpect(firstName).toBeNull();\n\t\texpect(lastName).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(personalizationAnswers).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(role).toBe('global:member');\n\t\texpect(apiKey).toBeUndefined();\n\t\texpect(globalScopes).toBeDefined();\n\t\texpect(globalScopes).not.toContain('workflow:read');\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeUndefined();\n\t});\n\n\ttest('should return logged-in owner', async () => {\n\t\tconst owner = await createUser({ role: 'global:owner' });\n\n\t\tconst response = await testServer.authAgentFor(owner).get('/login');\n\n\t\texpect(response.statusCode).toBe(200);\n\n\t\tconst {\n\t\t\tid,\n\t\t\temail,\n\t\t\tfirstName,\n\t\t\tlastName,\n\t\t\tpassword,\n\t\t\tpersonalizationAnswers,\n\t\t\trole,\n\t\t\tapiKey,\n\t\t\tglobalScopes,\n\t\t} = response.body.data;\n\n\t\texpect(validator.isUUID(id)).toBe(true);\n\t\texpect(email).toBe(owner.email);\n\t\texpect(firstName).toBe(owner.firstName);\n\t\texpect(lastName).toBe(owner.lastName);\n\t\texpect(password).toBeUndefined();\n\t\texpect(personalizationAnswers).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(role).toBe('global:owner');\n\t\texpect(apiKey).toBeUndefined();\n\t\texpect(globalScopes).toBeDefined();\n\t\texpect(globalScopes).toContain('workflow:read');\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeUndefined();\n\t});\n\n\ttest('should return logged-in member', async () => {\n\t\tconst member = await createUser({ role: 'global:member' });\n\n\t\tconst response = await testServer.authAgentFor(member).get('/login');\n\n\t\texpect(response.statusCode).toBe(200);\n\n\t\tconst {\n\t\t\tid,\n\t\t\temail,\n\t\t\tfirstName,\n\t\t\tlastName,\n\t\t\tpassword,\n\t\t\tpersonalizationAnswers,\n\t\t\trole,\n\t\t\tapiKey,\n\t\t\tglobalScopes,\n\t\t} = response.body.data;\n\n\t\texpect(validator.isUUID(id)).toBe(true);\n\t\texpect(email).toBe(member.email);\n\t\texpect(firstName).toBe(member.firstName);\n\t\texpect(lastName).toBe(member.lastName);\n\t\texpect(password).toBeUndefined();\n\t\texpect(personalizationAnswers).toBeNull();\n\t\texpect(password).toBeUndefined();\n\t\texpect(role).toBe('global:member');\n\t\texpect(apiKey).toBeUndefined();\n\t\texpect(globalScopes).toBeDefined();\n\t\texpect(globalScopes).not.toContain('workflow:read');\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeUndefined();\n\t});\n});\n\ndescribe('GET /resolve-signup-token', () => {\n\tbeforeEach(async () => {\n\t\towner = await createUser({\n\t\t\tpassword: [REDACTED],\n\t\t\trole: 'global:owner',\n\t\t});\n\t\tauthOwnerAgent = testServer.authAgentFor(owner);\n\t});\n\n\ttest('should validate invite token', async () => {\n\t\tconst memberShell = await createUserShell('global:member');\n\n\t\tconst response = await authOwnerAgent\n\t\t\t.get('/resolve-signup-token')\n\t\t\t.query({ inviterId: owner.id })\n\t\t\t.query({ inviteeId: memberShell.id });\n\n\t\texpect(response.statusCode).toBe(200);\n\t\texpect(response.body).toEqual({\n\t\t\tdata: {\n\t\t\t\tinviter: {\n\t\t\t\t\tfirstName: owner.firstName,\n\t\t\t\t\tlastName: owner.lastName,\n\t\t\t\t},\n\t\t\t},\n\t\t});\n\t});\n\n\ttest('should return 403 if user quota reached', async () => {\n\t\tlicense.setQuota('quota:users', 0);\n\t\tconst memberShell = await createUserShell('global:member');\n\n\t\tconst response = await authOwnerAgent\n\t\t\t.get('/resolve-signup-token')\n\t\t\t.query({ inviterId: owner.id })\n\t\t\t.query({ inviteeId: memberShell.id });\n\n\t\texpect(response.statusCode).toBe(403);\n\t});\n\n\ttest('should fail with invalid inputs', async () => {\n\t\tconst { id: inviteeId } = await createUser({ role: 'global:member' });\n\n\t\tconst first = await authOwnerAgent.get('/resolve-signup-token').query({ inviterId: owner.id });\n\n\t\tconst second = await authOwnerAgent.get('/resolve-signup-token').query({ inviteeId });\n\n\t\tconst third = await authOwnerAgent.get('/resolve-signup-token').query({\n\t\t\tinviterId: '5531199e-b7ae-425b-a326-a95ef8cca59d',\n\t\t\tinviteeId: 'cb133beb-7729-4c34-8cd1-a06be8834d9d',\n\t\t});\n\n\t\t// user is already set up, so call should error\n\t\tconst fourth = await authOwnerAgent\n\t\t\t.get('/resolve-signup-token')\n\t\t\t.query({ inviterId: owner.id })\n\t\t\t.query({ inviteeId });\n\n\t\t// cause inconsistent DB state\n\t\towner.email = '';\n\t\tawait Container.get(UserRepository).save(owner);\n\t\tconst fifth = await authOwnerAgent\n\t\t\t.get('/resolve-signup-token')\n\t\t\t.query({ inviterId: owner.id })\n\t\t\t.query({ inviteeId });\n\n\t\tfor (const response of [first, second, third, fourth, fifth]) {\n\t\t\texpect(response.statusCode).toBe(400);\n\t\t}\n\t});\n});\n\ndescribe('POST /logout', () => {\n\ttest('should log user out', async () => {\n\t\tconst owner = await createUser({ role: 'global:owner' });\n\t\tconst ownerAgent = testServer.authAgentFor(owner);\n\t\t// @ts-expect-error `accessInfo` types are incorrect\n\t\tconst cookie = ownerAgent.jar.getCookie(AUTH_COOKIE_NAME, { path: '/' });\n\n\t\tconst response = await ownerAgent.post('/logout');\n\n\t\texpect(response.statusCode).toBe(200);\n\t\texpect(response.body).toEqual(LOGGED_OUT_RESPONSE_BODY);\n\n\t\tconst authToken = [REDACTED];\n\t\texpect(authToken).toBeUndefined();\n\n\t\townerAgent.jar.setCookie(`${AUTH_COOKIE_NAME}=${cookie!.value}`);\n\t\tawait ownerAgent.get('/login').expect(401);\n\t});\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "packages/cli/test/integration/controllers/oauth/oauth2.api.test.ts",
+      "sha": null,
+      "content_sha256": "5c3f3ba3ae4e2b70521ab6a082d4476398fce3b71a433c53e861dacf550f64aa",
+      "score": 238,
+      "content": "import { response as Response } from 'express';\nimport nock from 'nock';\nimport { parse as parseQs } from 'querystring';\nimport { Container } from 'typedi';\n\nimport { OAuth2CredentialController } from '@/controllers/oauth/oauth2-credential.controller';\nimport { CredentialsHelper } from '@/credentials-helper';\nimport type { CredentialsEntity } from '@/databases/entities/credentials-entity';\nimport type { User } from '@/databases/entities/user';\nimport { saveCredential } from '@test-integration/db/credentials';\nimport { createMember, createOwner } from '@test-integration/db/users';\nimport * as testDb from '@test-integration/test-db';\nimport type { SuperAgentTest } from '@test-integration/types';\nimport { setupTestServer } from '@test-integration/utils';\n\ndescribe('OAuth2 API', () => {\n\tconst testServer = setupTestServer({ endpointGroups: ['oauth2'] });\n\n\tlet owner: User;\n\tlet anotherUser: User;\n\tlet ownerAgent: SuperAgentTest;\n\tlet credential: CredentialsEntity;\n\tconst credentialData = {\n\t\tclientId: 'client_id',\n\t\tclientSecret: '[REDACTED]',\n\t\tauthUrl: 'https://test.domain/oauth2/auth',\n\t\taccessTokenUrl: 'https://test.domain/oauth2/token',\n\t\tauthQueryParameters: 'access_type=offline',\n\t};\n\n\tCredentialsHelper.prototype.applyDefaultsAndOverwrites = (_, decryptedDataOriginal) =>\n\t\tdecryptedDataOriginal;\n\n\tbeforeAll(async () => {\n\t\towner = await createOwner();\n\t\tanotherUser = await createMember();\n\t\townerAgent = testServer.authAgentFor(owner);\n\t});\n\n\tbeforeEach(async () => {\n\t\tawait testDb.truncate(['SharedCredentials', 'Credentials']);\n\t\tcredential = await saveCredential(\n\t\t\t{\n\t\t\t\tname: 'Test',\n\t\t\t\ttype: 'testOAuth2Api',\n\t\t\t\tdata: credentialData,\n\t\t\t},\n\t\t\t{\n\t\t\t\tuser: owner,\n\t\t\t\trole: 'credential:owner',\n\t\t\t},\n\t\t);\n\t});\n\n\tit('should return a valid auth URL when the auth flow is initiated', async () => {\n\t\tconst controller = Container.get(OAuth2CredentialController);\n\t\tconst csrfSpy = jest.spyOn(controller, 'createCsrfState').mockClear();\n\n\t\tconst response = await ownerAgent\n\t\t\t.get('/oauth2-credential/auth')\n\t\t\t.query({ id: credential.id })\n\t\t\t.expect(200);\n\t\tconst authUrl = new URL(response.body.data);\n\t\texpect(authUrl.hostname).toBe('test.domain');\n\t\texpect(authUrl.pathname).toBe('/oauth2/auth');\n\n\t\texpect(csrfSpy).toHaveBeenCalled();\n\t\tconst [_, state] = csrfSpy.mock.results[0].value;\n\t\texpect(parseQs(authUrl.search.slice(1))).toEqual({\n\t\t\taccess_type: 'offline',\n\t\t\tclient_id: 'client_id',\n\t\t\tredirect_uri: 'http://localhost:5678/rest/oauth2-credential/callback',\n\t\t\tresponse_type: 'code',\n\t\t\tstate,\n\t\t\tscope: 'openid',\n\t\t});\n\t});\n\n\tit('should fail on auth when callback is called as another user', async () => {\n\t\tconst controller = Container.get(OAuth2CredentialController);\n\t\tconst csrfSpy = jest.spyOn(controller, 'createCsrfState').mockClear();\n\t\tconst renderSpy = (Response.render = jest.fn(function () {\n\t\t\tthis.end();\n\t\t}));\n\n\t\tawait ownerAgent.get('/oauth2-credential/auth').query({ id: credential.id }).expect(200);\n\n\t\tconst [_, state] = csrfSpy.mock.results[0].value;\n\n\t\tawait testServer\n\t\t\t.authAgentFor(anotherUser)\n\t\t\t.get('/oauth2-credential/callback')\n\t\t\t.query({ code: 'auth_code', state })\n\t\t\t.expect(200);\n\n\t\texpect(renderSpy).toHaveBeenCalledWith('oauth-error-callback', {\n\t\t\terror: { message: 'Unauthorized' },\n\t\t});\n\t});\n\n\tit('should handle a valid callback without auth', async () => {\n\t\tconst controller = Container.get(OAuth2CredentialController);\n\t\tconst csrfSpy = jest.spyOn(controller, 'createCsrfState').mockClear();\n\t\tconst renderSpy = (Response.render = jest.fn(function () {\n\t\t\tthis.end();\n\t\t}));\n\n\t\tawait ownerAgent.get('/oauth2-credential/auth').query({ id: credential.id }).expect(200);\n\n\t\tconst [_, state] = csrfSpy.mock.results[0].value;\n\n\t\tnock('https://test.domain').post('/oauth2/token').reply(200, { access_token: '[REDACTED]' });\n\n\t\tawait ownerAgent\n\t\t\t.get('/oauth2-credential/callback')\n\t\t\t.query({ code: 'auth_code', state })\n\t\t\t.expect(200);\n\n\t\texpect(renderSpy).toHaveBeenCalledWith('oauth-callback');\n\n\t\tconst updatedCredential = await Container.get(CredentialsHelper).getCredentials(\n\t\t\tcredential,\n\t\t\tcredential.type,\n\t\t);\n\t\texpect(updatedCredential.getData()).toEqual({\n\t\t\t...credentialData,\n\t\t\toauthTokenData: { access_token: '[REDACTED]' },\n\t\t});\n\t});\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/shared/spec/responses/unauthorized.yml",
+      "sha": null,
+      "content_sha256": "5f04ecfebfb0fab8417e49721f33f1c7d50a4114f2ea1ca822958ce4073799a1",
+      "score": 234,
+      "content": "description: Unauthorized\n"
+    },
+    {
+      "path": "packages/cli/test/integration/security-audit/database-risk-reporter.test.ts",
+      "sha": null,
+      "content_sha256": "59df2a8bde2da39ade874ac49b8e6e4620302d26e2f4a5366d4b5d96b89275ab",
+      "score": 225,
+      "content": "import { mock } from 'jest-mock-extended';\nimport Container from 'typedi';\nimport { v4 as uuid } from 'uuid';\n\nimport { WorkflowRepository } from '@/databases/repositories/workflow.repository';\nimport { generateNanoId } from '@/databases/utils/generators';\nimport {\n\tDATABASE_REPORT,\n\tSQL_NODE_TYPES,\n\tSQL_NODE_TYPES_WITH_QUERY_PARAMS,\n} from '@/security-audit/constants';\nimport { SecurityAuditService } from '@/security-audit/security-audit.service';\n\nimport { getRiskSection, saveManualTriggerWorkflow } from './utils';\nimport * as testDb from '../shared/test-db';\n\nlet securityAuditService: SecurityAuditService;\n\nbeforeAll(async () => {\n\tawait testDb.init();\n\n\tsecurityAuditService = new SecurityAuditService(Container.get(WorkflowRepository), mock());\n});\n\nbeforeEach(async () => {\n\tawait testDb.truncate(['Workflow']);\n});\n\nafterAll(async () => {\n\tawait testDb.terminate();\n});\n\ntest('should report expressions in queries', async () => {\n\tconst map = [...SQL_NODE_TYPES].reduce<{ [nodeType: string]: string }>((acc, cur) => {\n\t\treturn (acc[cur] = uuid()), acc;\n\t}, {});\n\n\tconst promises = Object.entries(map).map(async ([nodeType, nodeId]) => {\n\t\tconst details = {\n\t\t\tid: generateNanoId(),\n\t\t\tname: 'My Test Workflow',\n\t\t\tactive: false,\n\t\t\tconnections: {},\n\t\t\tnodeTypes: {},\n\t\t\tnodes: [\n\t\t\t\t{\n\t\t\t\t\tid: nodeId,\n\t\t\t\t\tname: 'My Node',\n\t\t\t\t\ttype: nodeType,\n\t\t\t\t\tparameters: {\n\t\t\t\t\t\toperation: 'executeQuery',\n\t\t\t\t\t\tquery: '=SELECT * FROM {{ $json.table }}',\n\t\t\t\t\t\tadditionalFields: {},\n\t\t\t\t\t},\n\t\t\t\t\ttypeVersion: 1,\n\t\t\t\t\tposition: [0, 0] as [number, number],\n\t\t\t\t},\n\t\t\t],\n\t\t};\n\n\t\treturn await Container.get(WorkflowRepository).save(details);\n\t});\n\n\tawait Promise.all(promises);\n\n\tconst testAudit = await securityAuditService.run(['database']);\n\n\tconst section = getRiskSection(\n\t\ttestAudit,\n\t\tDATABASE_REPORT.RISK,\n\t\tDATABASE_REPORT.SECTIONS.EXPRESSIONS_IN_QUERIES,\n\t);\n\n\texpect(section.location).toHaveLength(SQL_NODE_TYPES.size);\n\n\tfor (const loc of section.location) {\n\t\tif (loc.kind === 'node') {\n\t\t\texpect(loc.nodeId).toBe(map[loc.nodeType]);\n\t\t}\n\t}\n});\n\ntest('should report expressions in query params', async () => {\n\tconst map = [...SQL_NODE_TYPES_WITH_QUERY_PARAMS].reduce<{ [nodeType: string]: string }>(\n\t\t(acc, cur) => {\n\t\t\treturn (acc[cur] = uuid()), acc;\n\t\t},\n\t\t{},\n\t);\n\n\tconst promises = Object.entries(map).map(async ([nodeType, nodeId]) => {\n\t\tconst details = {\n\t\t\tid: generateNanoId(),\n\t\t\tname: 'My Test Workflow',\n\t\t\tactive: false,\n\t\t\tconnections: {},\n\t\t\tnodeTypes: {},\n\t\t\tnodes: [\n\t\t\t\t{\n\t\t\t\t\tid: nodeId,\n\t\t\t\t\tname: 'My Node',\n\t\t\t\t\ttype: nodeType,\n\t\t\t\t\tparameters: {\n\t\t\t\t\t\toperation: 'executeQuery',\n\t\t\t\t\t\tquery: 'SELECT * FROM users WHERE id = $1;',\n\t\t\t\t\t\tadditionalFields: {\n\t\t\t\t\t\t\tqueryParams: '={{ $json.userId }}',\n\t\t\t\t\t\t},\n\t\t\t\t\t},\n\t\t\t\t\ttypeVersion: 1,\n\t\t\t\t\tposition: [0, 0] as [number, number],\n\t\t\t\t},\n\t\t\t],\n\t\t};\n\n\t\treturn await Container.get(WorkflowRepository).save(details);\n\t});\n\n\tawait Promise.all(promises);\n\n\tconst testAudit = await securityAuditService.run(['database']);\n\n\tconst section = getRiskSection(\n\t\ttestAudit,\n\t\tDATABASE_REPORT.RISK,\n\t\tDATABASE_REPORT.SECTIONS.EXPRESSIONS_IN_QUERY_PARAMS,\n\t);\n\n\texpect(section.location).toHaveLength(SQL_NODE_TYPES_WITH_QUERY_PARAMS.size);\n\n\tfor (const loc of section.location) {\n\t\tif (loc.kind === 'node') {\n\t\t\texpect(loc.nodeId).toBe(map[loc.nodeType]);\n\t\t}\n\t}\n});\n\ntest('should report unused query params', async () => {\n\tconst map = [...SQL_NODE_TYPES_WITH_QUERY_PARAMS].reduce<{ [nodeType: string]: string }>(\n\t\t(acc, cur) => {\n\t\t\treturn (acc[cur] = uuid()), acc;\n\t\t},\n\t\t{},\n\t);\n\n\tconst promises = Object.entries(map).map(async ([nodeType, nodeId]) => {\n\t\tconst details = {\n\t\t\tid: generateNanoId(),\n\t\t\tname: 'My Test Workflow',\n\t\t\tactive: false,\n\t\t\tconnections: {},\n\t\t\tnodeTypes: {},\n\t\t\tnodes: [\n\t\t\t\t{\n\t\t\t\t\tid: nodeId,\n\t\t\t\t\tname: 'My Node',\n\t\t\t\t\ttype: nodeType,\n\t\t\t\t\tparameters: {\n\t\t\t\t\t\toperation: 'executeQuery',\n\t\t\t\t\t\tquery: 'SELECT * FROM users WHERE id = 123;',\n\t\t\t\t\t},\n\t\t\t\t\ttypeVersion: 1,\n\t\t\t\t\tposition: [0, 0] as [number, number],\n\t\t\t\t},\n\t\t\t],\n\t\t};\n\n\t\treturn await Container.get(WorkflowRepository).save(details);\n\t});\n\n\tawait Promise.all(promises);\n\n\tconst testAudit = await securityAuditService.run(['database']);\n\n\tconst section = getRiskSection(\n\t\ttestAudit,\n\t\tDATABASE_REPORT.RISK,\n\t\tDATABASE_REPORT.SECTIONS.UNUSED_QUERY_PARAMS,\n\t);\n\n\texpect(section.location).toHaveLength(SQL_NODE_TYPES_WITH_QUERY_PARAMS.size);\n\n\tfor (const loc of section.location) {\n\t\tif (loc.kind === 'node') {\n\t\t\texpect(loc.nodeId).toBe(map[loc.nodeType]);\n\t\t}\n\t}\n});\n\ntest('should not report non-database node', async () => {\n\tawait saveManualTriggerWorkflow();\n\n\tconst testAudit = await securityAuditService.run(['database']);\n\n\texpect(testAudit).toBeEmptyArray();\n});\n"
+    },
+    {
+      "path": ".github/workflows/ci-pull-requests.yml",
+      "sha": null,
+      "content_sha256": "44fdeb5cbf5dcf5613f9420f3fd5e71ae4ad1d9aa1b2c324249d456a1bc6b7c7",
+      "score": 198,
+      "content": "name: Build, unit test and lint branch\n\non:\n  pull_request:\n    branches:\n      - '**'\n      - '!release/*'\n\njobs:\n  install-and-build:\n    name: Install & Build\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4.1.1\n        with:\n          ref: refs/pull/${{ github.event.pull_request.number }}/merge\n\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: pnpm\n\n      - name: Install dependencies\n        run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Build\n        run: pnpm build\n\n      - name: Run formatcheck\n        run: pnpm format:check\n\n      - name: Run typecheck\n        run: pnpm typecheck\n\n      - name: Cache build artifacts\n        uses: actions/cache/save@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}-base:build\n\n  unit-test:\n    name: Unit tests\n    uses: ./.github/workflows/units-tests-reusable.yml\n    needs: install-and-build\n    with:\n      ref: refs/pull/${{ github.event.pull_request.number }}/merge\n      cacheKey: ${{ github.sha }}-base:build\n      collectCoverage: true\n    secrets:\n      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}\n\n  lint:\n    name: Lint\n    uses: ./.github/workflows/linting-reusable.yml\n    needs: install-and-build\n    with:\n      ref: refs/pull/${{ github.event.pull_request.number }}/merge\n      cacheKey: ${{ github.sha }}-base:build\n"
+    },
+    {
+      "path": ".github/workflows/ci-master.yml",
+      "sha": null,
+      "content_sha256": "d116968a26203a75257edfa524fa78f3255faaf46debde938cc0da6ed93f82c4",
+      "score": 198,
+      "content": "name: Test Master\n\non:\n  push:\n    branches:\n      - master\n\njobs:\n  install-and-build:\n    runs-on: ubuntu-latest\n\n    timeout-minutes: 10\n\n    steps:\n      - uses: actions/checkout@v4.1.1\n\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: pnpm\n\n      - name: Install dependencies\n        run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Build\n        run: pnpm build\n\n      - name: Cache build artifacts\n        uses: actions/cache/save@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}-base:build\n\n  unit-test:\n    name: Unit tests\n    uses: ./.github/workflows/units-tests-reusable.yml\n    needs: install-and-build\n    strategy:\n      matrix:\n        node-version: [18.x, 20.x, 22.4]\n    with:\n      ref: ${{ inputs.branch }}\n      nodeVersion: ${{ matrix.node-version }}\n      cacheKey: ${{ github.sha }}-base:build\n      collectCoverage: ${{ matrix.node-version == '20.x' }}\n    secrets:\n      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}\n\n  lint:\n    name: Lint\n    uses: ./.github/workflows/linting-reusable.yml\n    needs: install-and-build\n    with:\n      ref: ${{ inputs.branch }}\n      cacheKey: ${{ github.sha }}-base:build\n\n  notify-on-failure:\n    name: Notify Slack on failure\n    runs-on: ubuntu-latest\n    needs: [unit-test, lint]\n    steps:\n      - name: Notify Slack on failure\n        uses: act10ns/slack@v2.0.0\n        if: failure()\n        with:\n          status: ${{ job.status }}\n          channel: '#alerts-build'\n          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}\n          message: Master branch (build or test or lint) failed (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n"
+    },
+    {
+      "path": "packages/@n8n/permissions/package.json",
+      "sha": null,
+      "content_sha256": "790be24b77b66436f6cd82f396e14b5d2dfb3ebbb0124ce27f1fb4ae4b607743",
+      "score": 194,
+      "content": "{\n  \"name\": \"@n8n/permissions\",\n  \"version\": \"0.16.0\",\n  \"scripts\": {\n    \"clean\": \"rimraf dist .turbo\",\n    \"dev\": \"pnpm watch\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"build\": \"tsc -p tsconfig.build.json\",\n    \"format\": \"biome format --write .\",\n    \"format:check\": \"biome ci .\",\n    \"lint\": \"eslint . --quiet\",\n    \"lintfix\": \"eslint . --fix\",\n    \"watch\": \"tsc -p tsconfig.build.json --watch\",\n    \"test\": \"jest\",\n    \"test:dev\": \"jest --watch\"\n  },\n  \"main\": \"dist/index.js\",\n  \"module\": \"src/index.ts\",\n  \"types\": \"dist/index.d.ts\",\n  \"files\": [\n    \"dist/**/*\"\n  ]\n}\n"
+    },
+    {
+      "path": "packages/@n8n/client-oauth2/package.json",
+      "sha": null,
+      "content_sha256": "a1df96bd55b4368e9c62b2dc4f5bc5d483bee6e71a9bde8abe858d63c70269d6",
+      "score": 194,
+      "content": "{\n  \"name\": \"@n8n/client-oauth2\",\n  \"version\": \"0.21.0\",\n  \"scripts\": {\n    \"clean\": \"rimraf dist .turbo\",\n    \"dev\": \"pnpm watch\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"build\": \"tsc -p tsconfig.build.json\",\n    \"format\": \"biome format --write src test\",\n    \"format:check\": \"biome ci src test\",\n    \"lint\": \"eslint . --quiet\",\n    \"lintfix\": \"eslint . --fix\",\n    \"watch\": \"tsc -p tsconfig.build.json --watch\",\n    \"test\": \"jest\",\n    \"test:dev\": \"jest --watch\"\n  },\n  \"main\": \"dist/index.js\",\n  \"module\": \"src/index.ts\",\n  \"types\": \"dist/index.d.ts\",\n  \"files\": [\n    \"dist/**/*\"\n  ],\n  \"dependencies\": {\n    \"axios\": \"catalog:\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/@n8n/benchmark/scripts/n8n-setups/sqlite-legacy/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "7d2f0266f4cec4a31fde3b59966819e1e1bc5daa9cc2635dd5050da938974d25",
+      "score": 190,
+      "content": "services:\n  mockapi:\n    image: wiremock/wiremock:3.9.1\n    ports:\n      - '8088:8080'\n    volumes:\n      - ${MOCK_API_DATA_PATH}/mappings:/home/wiremock/mappings\n\n  n8n:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    user: root:root\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n\n    ports:\n      - 5678:5678\n    volumes:\n      - ${RUN_DIR}:/n8n\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n    depends_on:\n      mockapi:\n        condition: service_started\n\n  benchmark:\n    image: ghcr.io/n8n-io/n8n-benchmark:${N8N_BENCHMARK_VERSION:-latest}\n    depends_on:\n      n8n:\n        condition: service_healthy\n    environment:\n      - N8N_BASE_URL=http://n8n:5678\n      - K6_API_TOKEN=[REDACTED]}\n      - BENCHMARK_RESULT_WEBHOOK_URL=${BENCHMARK_RESULT_WEBHOOK_URL}\n      - BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER=${BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "packages/@n8n/benchmark/scripts/n8n-setups/scaling-multi-main/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "a03f4ae80f59f54575726f1ecca9c367591a2287a406b18c1fbf0d1f0ff23d54",
+      "score": 190,
+      "content": "services:\n  mockapi:\n    image: wiremock/wiremock:3.9.1\n    ports:\n      - '8088:8080'\n    volumes:\n      - ${MOCK_API_DATA_PATH}/mappings:/home/wiremock/mappings\n\n  redis:\n    image: redis:6.2.14-alpine\n    restart: always\n    ports:\n      - 6379:6379\n    healthcheck:\n      test: ['CMD', 'redis-cli', 'ping']\n      interval: 1s\n      timeout: 3s\n\n  postgres:\n    image: postgres:16.4\n    restart: always\n    environment:\n      - POSTGRES_DB=n8n\n      - POSTGRES_USER=postgres\n      - POSTGRES_PASSWORD=password\n      - PGDATA=/var/lib/postgresql/data/pgdata\n    volumes:\n      - ${RUN_DIR}/postgres:/var/lib/postgresql/data\n    healthcheck:\n      test: ['CMD-SHELL', 'pg_isready -U postgres']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  n8n_worker1:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n/worker1\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      - N8N_LICENSE_CERT=${N8N_LICENSE_CERT}\n      - N8N_LICENSE_ACTIVATION_KEY=${N8N_LICENSE_ACTIVATION_KEY}\n      - N8N_LICENSE_TENANT_ID=${N8N_LICENSE_TENANT_ID}\n      # Scaling mode config\n      - EXECUTIONS_MODE=queue\n      - QUEUE_BULL_REDIS_HOST=redis\n      - QUEUE_HEALTH_CHECK_ACTIVE=true\n      - N8N_CONCURRENCY_PRODUCTION_LIMIT=10\n      # DB config\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n    command: worker\n    volumes:\n      - ${RUN_DIR}/n8n-worker1:/n8n\n    depends_on:\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://localhost:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  n8n_worker2:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n/worker2\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      - N8N_LICENSE_CERT=${N8N_LICENSE_CERT}\n      - N8N_LICENSE_ACTIVATION_KEY=${N8N_LICENSE_ACTIVATION_KEY}\n      - N8N_LICENSE_TENANT_ID=${N8N_LICENSE_TENANT_ID}\n      # Scaling mode config\n      - EXECUTIONS_MODE=queue\n      - QUEUE_BULL_REDIS_HOST=redis\n      - QUEUE_HEALTH_CHECK_ACTIVE=true\n      - N8N_CONCURRENCY_PRODUCTION_LIMIT=10\n      # DB config\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n    command: worker\n    volumes:\n      - ${RUN_DIR}/n8n-worker2:/n8n\n    depends_on:\n      # We let the worker 1 start first so it can run the DB migrations\n      n8n_worker1:\n        condition: service_healthy\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://localhost:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  n8n_main2:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      - N8N_LICENSE_CERT=${N8N_LICENSE_CERT}\n      - N8N_LICENSE_ACTIVATION_KEY=${N8N_LICENSE_ACTIVATION_KEY}\n      - N8N_LICENSE_TENANT_ID=${N8N_LICENSE_TENANT_ID}\n      # Scaling mode config\n      - N8N_PROXY_HOPS=1\n      - EXECUTIONS_MODE=queue\n      - QUEUE_BULL_REDIS_HOST=redis\n      - N8N_MULTI_MAIN_SETUP_ENABLED=true\n      # DB config\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n    volumes:\n      - ${RUN_DIR}/n8n-main2:/n8n\n    depends_on:\n      n8n_worker1:\n        condition: service_healthy\n      n8n_worker2:\n        condition: service_healthy\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n      mockapi:\n        condition: service_started\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n_main2:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  n8n_main1:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      - N8N_LICENSE_CERT=${N8N_LICENSE_CERT}\n      - N8N_LICENSE_ACTIVATION_KEY=${N8N_LICENSE_ACTIVATION_KEY}\n      - N8N_LICENSE_TENANT_ID=${N8N_LICENSE_TENANT_ID}\n      # Scaling mode config\n      - N8N_PROXY_HOPS=1\n      - EXECUTIONS_MODE=queue\n      - QUEUE_BULL_REDIS_HOST=redis\n      - N8N_MULTI_MAIN_SETUP_ENABLED=true\n      # DB config\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n\n    volumes:\n      - ${RUN_DIR}/n8n-main1:/n8n\n    depends_on:\n      n8n_worker1:\n        condition: service_healthy\n      n8n_worker2:\n        condition: service_healthy\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n      mockapi:\n        condition: service_started\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n_main1:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  # Load balancer that acts as an entry point for n8n\n  n8n:\n    image: nginx:1.27.2\n    ports:\n      - '5678:80'\n    volumes:\n      - ./nginx.conf:/etc/nginx/nginx.conf\n    depends_on:\n      n8n_main1:\n        condition: service_healthy\n      n8n_main2:\n        condition: service_healthy\n\n  benchmark:\n    image: ghcr.io/n8n-io/n8n-benchmark:${N8N_BENCHMARK_VERSION:-latest}\n    depends_on:\n      - n8n\n    environment:\n      - N8N_BASE_URL=http://n8n:80\n      - K6_API_TOKEN=[REDACTED]}\n      - BENCHMARK_RESULT_WEBHOOK_URL=${BENCHMARK_RESULT_WEBHOOK_URL}\n      - BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER=${BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "packages/@n8n/benchmark/scripts/n8n-setups/scaling-single-main/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "89659919b1d1d9403a0a7429d22108814dc2bad1092e7561e1fcba621c7d5f5f",
+      "score": 190,
+      "content": "services:\n  mockapi:\n    image: wiremock/wiremock:3.9.1\n    ports:\n      - '8088:8080'\n    volumes:\n      - ${MOCK_API_DATA_PATH}/mappings:/home/wiremock/mappings\n\n  redis:\n    image: redis:6.2.14-alpine\n    ports:\n      - 6379:6379\n    healthcheck:\n      test: ['CMD', 'redis-cli', 'ping']\n      interval: 1s\n      timeout: 3s\n\n  postgres:\n    image: postgres:16.4\n    user: root:root\n    restart: always\n    environment:\n      - POSTGRES_DB=n8n\n      - POSTGRES_USER=postgres\n      - POSTGRES_PASSWORD=password\n      - PGDATA=/var/lib/postgresql/data/pgdata\n    volumes:\n      - ${RUN_DIR}/postgres:/var/lib/postgresql/data\n    healthcheck:\n      test: ['CMD-SHELL', 'pg_isready -U postgres']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  n8n_worker1:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    user: root:root\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n/worker1\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      # Queue mode config\n      - EXECUTIONS_MODE=queue\n      - QUEUE_BULL_REDIS_HOST=redis\n      - QUEUE_HEALTH_CHECK_ACTIVE=true\n      - N8N_CONCURRENCY_PRODUCTION_LIMIT=10\n      # DB config\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n    command: worker\n    volumes:\n      - ${RUN_DIR}/n8n-worker1:/n8n\n    depends_on:\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n_worker1:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  n8n_worker2:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    user: root:root\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n/worker2\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      # Queue mode config\n      - EXECUTIONS_MODE=queue\n      - QUEUE_BULL_REDIS_HOST=redis\n      - QUEUE_HEALTH_CHECK_ACTIVE=true\n      - N8N_CONCURRENCY_PRODUCTION_LIMIT=10\n      # DB config\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n    command: worker\n    volumes:\n      - ${RUN_DIR}/n8n-worker2:/n8n\n    depends_on:\n      # We let the worker 1 start first so it can run the DB migrations\n      n8n_worker1:\n        condition: service_healthy\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n_worker2:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  n8n:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    user: root:root\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n/main\n      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}\n      # Queue mode config\n      - EXECUTIONS_MODE=queue\n      - QUEUE_BULL_REDIS_HOST=redis\n      # DB config\n      - DB_TYPE=postgresdb\n      - DB_POSTGRESDB_HOST=postgres\n      - DB_POSTGRESDB_PASSWORD=password\n    ports:\n      - 5678:5678\n    volumes:\n      - ${RUN_DIR}/n8n-main:/n8n\n    depends_on:\n      n8n_worker1:\n        condition: service_healthy\n      n8n_worker2:\n        condition: service_healthy\n      postgres:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n      mockapi:\n        condition: service_started\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n\n  benchmark:\n    image: ghcr.io/n8n-io/n8n-benchmark:${N8N_BENCHMARK_VERSION:-latest}\n    depends_on:\n      n8n:\n        condition: service_healthy\n    environment:\n      - N8N_BASE_URL=http://n8n:5678\n      - K6_API_TOKEN=[REDACTED]}\n      - BENCHMARK_RESULT_WEBHOOK_URL=${BENCHMARK_RESULT_WEBHOOK_URL}\n      - BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER=${BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "packages/@n8n/benchmark/scripts/n8n-setups/sqlite/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "8abe9efab46c016959a8ecbfc49ede7f8a06b9ca1b9be00ea8d76d052905011e",
+      "score": 190,
+      "content": "services:\n  mockapi:\n    image: wiremock/wiremock:3.9.1\n    ports:\n      - '8088:8080'\n    volumes:\n      - ${MOCK_API_DATA_PATH}/mappings:/home/wiremock/mappings\n\n  n8n:\n    image: ghcr.io/n8n-io/n8n:${N8N_VERSION:-latest}\n    user: root:root\n    environment:\n      - N8N_DIAGNOSTICS_ENABLED=false\n      - N8N_USER_FOLDER=/n8n\n      - DB_SQLITE_POOL_SIZE=3\n      - DB_SQLITE_ENABLE_WAL=true\n    ports:\n      - 5678:5678\n    volumes:\n      - ${RUN_DIR}:/n8n\n    healthcheck:\n      test: ['CMD-SHELL', 'wget --spider -q http://n8n:5678/healthz || exit 1']\n      interval: 5s\n      timeout: 5s\n      retries: 10\n    depends_on:\n      mockapi:\n        condition: service_started\n\n  benchmark:\n    image: ghcr.io/n8n-io/n8n-benchmark:${N8N_BENCHMARK_VERSION:-latest}\n    depends_on:\n      n8n:\n        condition: service_healthy\n    environment:\n      - N8N_BASE_URL=http://n8n:5678\n      - K6_API_TOKEN=[REDACTED]}\n      - BENCHMARK_RESULT_WEBHOOK_URL=${BENCHMARK_RESULT_WEBHOOK_URL}\n      - BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER=${BENCHMARK_RESULT_WEBHOOK_AUTH_HEADER}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "packages/@n8n/api-types/package.json",
+      "sha": null,
+      "content_sha256": "ace54322822fbc549854082abec9f9552d7ebda2a282f5a1c4b02e8b4127c430",
+      "score": 189,
+      "content": "{\n  \"name\": \"@n8n/api-types\",\n  \"version\": \"0.8.0\",\n  \"scripts\": {\n    \"clean\": \"rimraf dist .turbo\",\n    \"dev\": \"pnpm watch\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"build\": \"tsc -p tsconfig.build.json\",\n    \"format\": \"biome format --write .\",\n    \"format:check\": \"biome ci .\",\n    \"lint\": \"eslint .\",\n    \"lintfix\": \"eslint . --fix\",\n    \"watch\": \"tsc -p tsconfig.build.json --watch\",\n    \"test\": \"jest\",\n    \"test:dev\": \"jest --watch\"\n  },\n  \"main\": \"dist/index.js\",\n  \"module\": \"src/index.ts\",\n  \"types\": \"dist/index.d.ts\",\n  \"files\": [\n    \"dist/**/*\"\n  ],\n  \"devDependencies\": {\n    \"@n8n/config\": \"workspace:*\",\n    \"n8n-workflow\": \"workspace:*\"\n  },\n  \"dependencies\": {\n    \"xss\": \"catalog:\",\n    \"zod\": \"catalog:\",\n    \"zod-class\": \"0.0.15\"\n  }\n}\n"
+    },
+    {
+      "path": ".github/workflows/e2e-tests-pr.yml",
+      "sha": null,
+      "content_sha256": "242d8237eb0a025082969914644b80099132ef34bf5bb0c52425c07c745ab8a6",
+      "score": 186,
+      "content": "name: PR E2E\n\non:\n  pull_request_review:\n    types: [submitted]\n\nconcurrency:\n  group: e2e-${{ github.event.pull_request.number || github.ref }}\n  cancel-in-progress: true\n\njobs:\n  get-metadata:\n    name: Get Metadata\n    runs-on: ubuntu-latest\n    steps:\n      - name: Check out current commit\n        uses: actions/checkout@v4\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n          fetch-depth: 2\n\n      - name: Determine changed files\n        uses: tomi/paths-filter-action@v3.0.2\n        id: changed\n        with:\n          filters: |\n            not_ignored:\n              - '!.devcontainer/**'\n              - '!.github/*'\n              - '!.github/scripts/*'\n              - '!.github/workflows/benchmark-*'\n              - '!.github/workflows/check-*'\n              - '!.vscode/**'\n              - '!docker/**'\n              - '!packages/@n8n/benchmark/**'\n              - '!**/*.md'\n          predicate-quantifier: 'every'\n\n    outputs:\n      # The workflow should run when:\n      # - It has changes to files that are not ignored\n      # - It is not a community PR\n      # - It is targeting master or a release branch\n      should_run: ${{ steps.changed.outputs.not_ignored == 'true' && !contains(github.event.pull_request.labels.*.name, 'community') && (github.event.pull_request.base.ref == 'master' || startsWith(github.event.pull_request.base.ref, 'release/')) }}\n\n  run-e2e-tests:\n    name: E2E [Electron/Node 18]\n    uses: ./.github/workflows/e2e-reusable.yml\n    needs: [get-metadata]\n    if: ${{ github.event.review.state == 'approved' && needs.get-metadata.outputs.should_run == 'true' }}\n    with:\n      pr_number: ${{ github.event.pull_request.number }}\n      user: ${{ github.event.pull_request.user.login || 'PR User' }}\n    secrets:\n      CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}\n\n  post-e2e-tests:\n    runs-on: ubuntu-latest\n    name: E2E [Electron/Node 18] - Checks\n    needs: [get-metadata, run-e2e-tests]\n    if: always()\n    steps:\n      - name: E2E success comment\n        if: ${{ needs.get-metadata.outputs.should_run == 'true' && needs.run-e2e-tests.outputs.tests_passed == 'true' }}\n        uses: peter-evans/create-or-update-comment@v4.0.0\n        with:\n          issue-number: ${{ github.event.pull_request.number }}\n          body: |\n            :white_check_mark: All Cypress E2E specs passed\n          token: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: E2E fail comment\n        if: needs.run-e2e-tests.result == 'failure'\n        uses: peter-evans/create-or-update-comment@v4.0.0\n        with:\n          issue-number: ${{ github.event.pull_request.number }}\n          body: |\n            :warning: Some Cypress E2E specs are failing, please fix them before merging\n          token: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Success job if community PR\n        if: ${{ contains(github.event.pull_request.labels.*.name, 'community') }}\n        run: exit 0\n\n      - name: Fail job if run-e2e-tests failed\n        if: ${{ (github.event.review.state != 'approved' && github.event.review.state != 'commented') || needs.run-e2e-tests.result == 'failure' }}\n        run: exit 1\n"
+    },
+    {
+      "path": ".github/workflows/units-tests-reusable.yml",
+      "sha": null,
+      "content_sha256": "7c168139a67a762878ac0428d34d66d2e1008c13ee198ee5d4d16065135de33e",
+      "score": 186,
+      "content": "name: Reusable units test workflow\n\non:\n  workflow_call:\n    inputs:\n      ref:\n        description: GitHub ref to test.\n        required: false\n        type: string\n        default: master\n      nodeVersion:\n        description: Version of node to use.\n        required: false\n        type: string\n        default: 20.x\n      cacheKey:\n        description: Cache key for modules and build artifacts.\n        required: false\n        default: ''\n        type: string\n      collectCoverage:\n        required: false\n        default: false\n        type: boolean\n    secrets:\n      CODECOV_TOKEN:\n        [REDACTED] 'Codecov upload token.'\n        required: false\n\njobs:\n  unit-test:\n    name: Unit tests\n    runs-on: ubuntu-latest\n    env:\n      COVERAGE_ENABLED: ${{ inputs.collectCoverage }}\n    steps:\n      - uses: actions/checkout@v4.1.1\n        with:\n          ref: ${{ inputs.ref }}\n\n      - run: corepack enable\n      - name: Use Node.js ${{ inputs.nodeVersion }}\n        uses: actions/setup-node@v4.0.2\n        with:\n          node-version: ${{ inputs.nodeVersion }}\n          cache: pnpm\n\n      - name: Install dependencies\n        run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        if: inputs.collectCoverage != true\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Build\n        if: ${{ inputs.cacheKey == '' }}\n        run: pnpm build\n\n      - name: Restore cached build artifacts\n        if: ${{ inputs.cacheKey != '' }}\n        uses: actions/cache/restore@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ inputs.cacheKey }}\n\n      - name: Test Backend\n        run: pnpm test:backend\n\n      - name: Test Nodes\n        run: pnpm test:nodes\n\n      - name: Test Frontend\n        run: pnpm test:frontend\n\n      - name: Upload coverage to Codecov\n        if: inputs.collectCoverage\n        uses: codecov/codecov-action@v4.5.0\n        with:\n          token: ${{ secrets.CODECOV_TOKEN }}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".github/workflows/test-workflows.yml",
+      "sha": null,
+      "content_sha256": "555de1a5184fea4ebddb0e42389df53c998066c5923ae63ec5d5727bf5bd9b5d",
+      "score": 186,
+      "content": "name: Run test workflows\n\non:\n  schedule:\n    - cron: '0 2 * * *'\n  workflow_dispatch:\n  pull_request:\n    paths:\n      - packages/core/package.json\n      - packages/nodes-base/package.json\n      - packages/@n8n/nodes-langchain/package.json\n      - .github/workflows/test-workflows.yml\n  pull_request_review:\n    types: [submitted]\n\njobs:\n  build:\n    name: Install & Build\n    runs-on: ubuntu-latest\n    if: github.event_name != 'pull_request_review' || startsWith(github.event.pull_request.base.ref, 'release/')\n    steps:\n      - uses: actions/checkout@v4.1.1\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: 'pnpm'\n      - run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Build Backend\n        run: pnpm build:backend\n\n      - name: Cache build artifacts\n        uses: actions/cache/save@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}:workflow-tests\n\n  run-test-workflows:\n    name: Workflow Tests\n    runs-on: ubuntu-latest\n    needs: build\n    timeout-minutes: 10\n    steps:\n      - uses: actions/checkout@v4.1.1\n      - run: corepack enable\n      - uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n          cache: 'pnpm'\n      - run: pnpm install --frozen-lockfile\n\n      - name: Setup build cache\n        uses: rharkor/caching-for-turbo@v1.5\n\n      - name: Restore cached build artifacts\n        uses: actions/cache/restore@v4.0.0\n        with:\n          path: ./packages/**/dist\n          key: ${{ github.sha }}:workflow-tests\n\n      - name: Install OS dependencies\n        run: |\n          sudo apt update -y\n          echo 'tzdata tzdata/Areas select Europe' | sudo debconf-set-selections\n          echo 'tzdata tzdata/Zones/Europe select Paris' | sudo debconf-set-selections\n          DEBIAN_FRONTEND=\"noninteractive\" sudo apt-get install -y graphicsmagick\n\n      - name: Checkout workflows repo\n        uses: actions/checkout@v4.1.1\n        with:\n          repository: n8n-io/test-workflows\n          path: test-workflows\n\n      - name: Import credentials\n        run: packages/cli/bin/n8n import:credentials --input=test-workflows/credentials.json\n        env:\n          N8N_ENCRYPTION_KEY: ${{secrets.ENCRYPTION_KEY}}\n\n      - name: Import workflows\n        run: packages/cli/bin/n8n import:workflow --separate --input=test-workflows/workflows\n        env:\n          N8N_ENCRYPTION_KEY: ${{secrets.ENCRYPTION_KEY}}\n\n      - name: Copy static assets\n        run: |\n          cp assets/n8n-logo.png /tmp/n8n-logo.png\n          cp assets/n8n-screenshot.png /tmp/n8n-screenshot.png\n          cp test-workflows/testData/pdfs/*.pdf /tmp/\n\n      - name: Run tests\n        run: packages/cli/bin/n8n executeBatch --shallow --skipList=test-workflows/skipList.txt --githubWorkflow --shortOutput --concurrency=16 --compare=test-workflows/snapshots\n        id: tests\n        env:\n          N8N_ENCRYPTION_KEY: ${{secrets.ENCRYPTION_KEY}}\n          SKIP_STATISTICS_EVENTS: true\n          DB_SQLITE_POOL_SIZE: 4\n          N8N_SENTRY_DSN: ${{secrets.CI_SENTRY_DSN}}\n\n      - name: Notify Slack on failure\n        uses: act10ns/slack@v2.0.0\n        if: failure() && github.ref == 'refs/heads/master'\n        with:\n          status: ${{ job.status }}\n          channel: '#alerts-build'\n          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}\n          message: |\n            🛑 Workflow test failed 🛑:\n            ${{ steps.tests.outputs.slackMessage}}\n            Sent by *Github Action*: <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}| Test workflow>\n"
+    },
+    {
+      "path": ".github/workflows/e2e-tests.yml",
+      "sha": null,
+      "content_sha256": "cf32f067254bca0780f0934d75a0d3013e4793e802a5e2fd8a312b4607f9e383",
+      "score": 186,
+      "content": "name: End-to-End tests\nrun-name: E2E Tests ${{ inputs.branch }} - ${{ inputs.user }}\n\non:\n  schedule:\n    - cron: '0 3 * * *'\n  workflow_dispatch:\n    inputs:\n      branch:\n        description: 'GitHub branch to test.'\n        required: false\n        default: 'master'\n      spec:\n        description: 'Specify specs.'\n        required: false\n        default: 'e2e/*'\n        type: string\n      user:\n        description: 'User who kicked this off.'\n        required: false\n        default: 'schedule'\n      start-url:\n        description: 'URL to call after workflow is kicked off.'\n        required: false\n        default: ''\n      success-url:\n        description: 'URL to call after workflow is done.'\n        required: false\n        default: ''\n      node_view_version:\n        description: 'Node View version to run tests with.'\n        required: false\n        default: '1'\n        type: string\n\njobs:\n  calls-start-url:\n    name: Calls start URL\n    runs-on: ubuntu-latest\n    if: ${{ github.event.inputs.start-url != '' }}\n    steps:\n      - name: Calls start URL\n        run: |\n          [[ \"${{github.event.inputs.start-url}}\" != \"\" ]] && curl -v -X POST -d 'url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' ${{github.event.inputs.start-url}} || echo \"\"\n        shell: bash\n\n  run-e2e-tests:\n    name: E2E [Electron/Node 18]\n    uses: ./.github/workflows/e2e-reusable.yml\n    with:\n      branch: ${{ github.event.inputs.branch || 'master' }}\n      user: ${{ github.event.inputs.user || 'PR User' }}\n      spec: ${{ github.event.inputs.spec || 'e2e/*' }}\n      node_view_version: ${{ github.event.inputs.node_view_version || '1' }}\n    secrets:\n      CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}\n\n  calls-success-url-notify:\n    name: Calls success URL and notifies\n    runs-on: ubuntu-latest\n    needs: [run-e2e-tests]\n    if: ${{ github.event.inputs.success-url != '' }}\n    steps:\n      - name: Notify Slack on failure\n        uses: act10ns/slack@v2.0.0\n        if: failure()\n        with:\n          status: ${{ job.status }}\n          channel: '#alerts-build'\n          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}\n          message: E2E failure for branch `${{ inputs.branch || 'master' }}` deployed by ${{ inputs.user || 'schedule' }} (${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n\n      - name: Call Success URL - optionally\n        run: |\n          [[ \"${{github.event.inputs.success-url}}\" != \"\" ]] && curl -v ${{github.event.inputs.success-url}} || echo \"\"\n        shell: bash\n"
+    },
+    {
+      "path": ".github/workflows/check-tests.yml",
+      "sha": null,
+      "content_sha256": "bab77434567047e13a4c7e05c2d4269c3e402a56072aacf10dd9e747f54bf466",
+      "score": 186,
+      "content": "name: Check Test Files\n\non:\n  pull_request:\n    branches:\n      - '**'\n      - '!release/*'\n  pull_request_target:\n    branches:\n      - master\n\njobs:\n  check-tests:\n    runs-on: ubuntu-latest\n    continue-on-error: true\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v4.1.1\n        with:\n          fetch-depth: 0\n\n      - name: Use Node.js\n        uses: actions/setup-node@v4.0.2\n        with:\n          node-version: 20.x\n\n      - run: npm install --prefix=.github/scripts --no-package-lock\n\n      - name: Check for test files\n        run: node .github/scripts/check-tests.mjs\n"
+    },
+    {
+      "path": ".github/workflows/units-tests-dispatch.yml",
+      "sha": null,
+      "content_sha256": "772c8b3903ddf37a8399c9e5b24890511df7188c30338b0690b906606b5c86f9",
+      "score": 186,
+      "content": "name: Runs unit tests for a given ref\n\non:\n  workflow_dispatch:\n    inputs:\n      ref:\n        description: 'GitHub ref to test.'\n        required: false\n        default: 'master'\n        type: string\n      prNumber:\n        description: 'PR number to run tests for.'\n        required: false\n        type: number\n\njobs:\n  prepare:\n    name: Prepare\n    runs-on: ubuntu-latest\n    outputs:\n      branch: ${{ steps.compute-branch.outputs.branch }}\n    steps:\n      - name: Compute branch\n        id: compute-branch\n        run: |\n          BRANCH_NAME=\"\"\n          if [[ \"${{ inputs.prNumber }}\" != \"\" && \"${{ inputs.prNumber }}\" != \"null\" ]]; then\n            BRANCH_NAME=\"refs/pull/${{ inputs.prNumber }}/merge\"\n          else\n            BRANCH_NAME=\"${{ inputs.ref }}\"\n          fi\n          echo \"branch=$BRANCH_NAME\" >> $GITHUB_OUTPUT\n\n  unit-test:\n    name: Unit tests\n    needs: prepare\n    uses: ./.github/workflows/units-tests-reusable.yml\n    with:\n      ref: ${{ needs.prepare.outputs.branch }}\n"
+    },
+    {
+      "path": "packages/nodes-base/nodes/TheHiveProject/actions/alert/search.operation.ts",
+      "sha": null,
+      "content_sha256": "7eb291cf6d2273c7c92eb1c83f74742f06d2682ac81c98b82768f93ff1bfb173",
+      "score": 180,
+      "content": "import type {\n\tIDataObject,\n\tIExecuteFunctions,\n\tINodeExecutionData,\n\tINodeProperties,\n} from 'n8n-workflow';\nimport {\n\tgenericFiltersCollection,\n\treturnAllAndLimit,\n\tsearchOptions,\n\tsortCollection,\n} from '../../descriptions';\nimport { theHiveApiQuery } from '../../transport';\nimport { updateDisplayOptions, wrapData } from '@utils/utilities';\n\nconst properties: INodeProperties[] = [\n\t...returnAllAndLimit,\n\tgenericFiltersCollection,\n\tsortCollection,\n\tsearchOptions,\n];\n\nconst displayOptions = {\n\tshow: {\n\t\tresource: ['alert'],\n\t\toperation: ['search'],\n\t},\n};\n\nexport const description = updateDisplayOptions(displayOptions, properties);\n\nexport async function execute(this: IExecuteFunctions, i: number): Promise<INodeExecutionData[]> {\n\tlet responseData: IDataObject | IDataObject[] = [];\n\n\tconst filtersValues = this.getNodeParameter('filters.values', i, []) as IDataObject[];\n\tconst sortFields = this.getNodeParameter('sort.fields', i, []) as IDataObject[];\n\tconst returnAll = this.getNodeParameter('returnAll', i);\n\tconst { returnCount, extraData } = this.getNodeParameter('options', i);\n\tlet limit;\n\n\tif (!returnAll) {\n\t\tlimit = this.getNodeParameter('limit', i);\n\t}\n\n\tresponseData = await theHiveApiQuery.call(\n\t\tthis,\n\t\t{ query: 'listAlert' },\n\t\tfiltersValues,\n\t\tsortFields,\n\t\tlimit,\n\t\treturnCount as boolean,\n\t\textraData as string[],\n\t);\n\n\tconst executionData = this.helpers.constructExecutionMetaData(wrapData(responseData), {\n\t\titemData: { item: i },\n\t});\n\n\treturn executionData;\n}\n"
+    },
+    {
+      "path": "packages/nodes-base/nodes/TheHiveProject/actions/case/search.operation.ts",
+      "sha": null,
+      "content_sha256": "a79035a4f5125b456bbb96bbc6f7127f979b5f6a9cb46f74e51d8a5bcc51ef71",
+      "score": 180,
+      "content": "import type {\n\tIDataObject,\n\tIExecuteFunctions,\n\tINodeExecutionData,\n\tINodeProperties,\n} from 'n8n-workflow';\nimport {\n\tgenericFiltersCollection,\n\treturnAllAndLimit,\n\tsearchOptions,\n\tsortCollection,\n} from '../../descriptions';\nimport { theHiveApiQuery } from '../../transport';\nimport { updateDisplayOptions, wrapData } from '@utils/utilities';\n\nconst properties: INodeProperties[] = [\n\t...returnAllAndLimit,\n\tgenericFiltersCollection,\n\tsortCollection,\n\tsearchOptions,\n];\n\nconst displayOptions = {\n\tshow: {\n\t\tresource: ['case'],\n\t\toperation: ['search'],\n\t},\n};\n\nexport const description = updateDisplayOptions(displayOptions, properties);\n\nexport async function execute(this: IExecuteFunctions, i: number): Promise<INodeExecutionData[]> {\n\tlet responseData: IDataObject | IDataObject[] = [];\n\n\tconst filtersValues = this.getNodeParameter('filters.values', i, []) as IDataObject[];\n\tconst sortFields = this.getNodeParameter('sort.fields', i, []) as IDataObject[];\n\tconst returnAll = this.getNodeParameter('returnAll', i);\n\tconst { returnCount, extraData } = this.getNodeParameter('options', i);\n\tlet limit;\n\n\tif (!returnAll) {\n\t\tlimit = this.getNodeParameter('limit', i);\n\t}\n\n\tresponseData = await theHiveApiQuery.call(\n\t\tthis,\n\t\t{ query: 'listCase' },\n\t\tfiltersValues,\n\t\tsortFields,\n\t\tlimit,\n\t\treturnCount as boolean,\n\t\textraData as string[],\n\t);\n\n\tconst executionData = this.helpers.constructExecutionMetaData(wrapData(responseData), {\n\t\titemData: { item: i },\n\t});\n\n\treturn executionData;\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 463,
+  "sensitive_files_skipped": [
+    {
+      "path": ".npmrc",
+      "sha": "42d2964a046a801d6975300e872e393cfbd31a77",
+      "size": 368,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cypress/fixtures/Custom_credential.json",
+      "sha": "b30439765f823258a331ce724e05170fb088e1a2",
+      "size": 325,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cypress/fixtures/Custom_node_custom_credential.json",
+      "sha": "642309f99d90e1075a91cb3fd4d78033d8b9e784",
+      "size": 1076,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cypress/fixtures/Custom_node_n8n_credential.json",
+      "sha": "9b8a5575074148cdd9ab226796b0338fed60c182",
+      "size": 1067,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cypress/fixtures/Test_workflow_partial_execution_with_missing_credentials.json",
+      "sha": "c02f01e59c1e70b0d63af91b4a731b52e6b9a9fd",
+      "size": 2420,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cypress/fixtures/workflow-with-unknown-credentials.json",
+      "sha": "9a04cd87e512b41563e1a40d50387d9139521bf1",
+      "size": 982,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/AnthropicApi.credentials.ts",
+      "sha": "80bea687130966a0c79ab5ce125960350b9cc66c",
+      "size": 925,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/AzureOpenAiApi.credentials.ts",
+      "sha": "1dbc62b4ed56afb352974c8bd5c9ec54f824bbb0",
+      "size": 1002,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/CohereApi.credentials.ts",
+      "sha": "f243593e7b63e5a4e2008870b701a209a552af6c",
+      "size": 729,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/GooglePalmApi.credentials.ts",
+      "sha": "3c474e31986f4fa13081b8b1115336e4031f847f",
+      "size": 855,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/GroqApi.credentials.ts",
+      "sha": "1c2d2ae343957e7fe73bf8c95d0ace25604cd2e8",
+      "size": 712,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/HuggingFaceApi.credentials.ts",
+      "sha": "9545b1619c73eeaf45033508088e53e739c0c243",
+      "size": 754,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/MistralCloudApi.credentials.ts",
+      "sha": "c5b47b3760b0a2ca0a3a934fc6135886cd39cfc5",
+      "size": 757,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/MotorheadApi.credentials.ts",
+      "sha": "2a3b3e4640a79e87242f9fa5c36c10cdbaa26203",
+      "size": 997,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/OllamaApi.credentials.ts",
+      "sha": "acfbbcd3f92a010c4f6fbd468f21fdf607ce86d5",
+      "size": 531,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/PineconeApi.credentials.ts",
+      "sha": "0605a0af09f0e2042de68f433fb6da73c6afafd5",
+      "size": 769,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/QdrantApi.credentials.ts",
+      "sha": "25c1bec32ad07a0aa2a8f230cee6a8964da3d46a",
+      "size": 927,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/SerpApi.credentials.ts",
+      "sha": "a1ab3a55c47ceedacc3152949da780f4a083055d",
+      "size": 693,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/WolframAlphaApi.credentials.ts",
+      "sha": "642161c46299f05296fa493769eb9a8d50387d5b",
+      "size": 807,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/XataApi.credentials.ts",
+      "sha": "0d66cdf89b8f3ec6ccb4eed2a2feca68a55fbc4a",
+      "size": 1036,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/@n8n/nodes-langchain/credentials/ZepApi.credentials.ts",
+      "sha": "916d3125b1596fc111af8a336b03b99ee685a0b2",
+      "size": 1295,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/credentials/__tests__/credentials.service.test.ts",
+      "sha": "4d1cbd5256ca302dd192ae5c72b85cb8c619d7d7",
+      "size": 1754,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/credentials/credentials.controller.ts",
+      "sha": "76db501cf7959a0908b6f3c0daee68497b5a0424",
+      "size": 10772,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/credentials/credentials.service.ee.ts",
+      "sha": "aad78fe7b7303bebd62a47ab491c58441d1a23d9",
+      "size": 5675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/credentials/credentials.service.ts",
+      "sha": "f9bbf89e57cdb6fb9bae4fccf62009662b61a73f",
+      "size": 22146,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/credentials.handler.ts",
+      "sha": "d987aa827ef8ef76ff01768ad6413687c9e152bd",
+      "size": 3388,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/credentials.middleware.ts",
+      "sha": "59ebb7b6d06273adfc56a7078f9bd4a77345c53b",
+      "size": 1350,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/credentials.service.ts",
+      "sha": "2477ef928f8071e71a150ef34ff48f33badf1ee7",
+      "size": 9561,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/paths/credentials.id.transfer.yml",
+      "sha": "a9e9c5cf7c22930f96d326cefc0591000981adc4",
+      "size": 998,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/paths/credentials.id.yml",
+      "sha": "7ab682ffabd4671625f5d9ba2734256a7ffefa0c",
+      "size": 787,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/paths/credentials.schema.id.yml",
+      "sha": "923d3c0ce13788adc146c67c778024671627e2c9",
+      "size": 1223,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/paths/credentials.yml",
+      "sha": "13a1be6de436c173b06e020303606b3902ec4317",
+      "size": 747,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/schemas/create-credential-response.yml",
+      "sha": "fa906cfd2939249106f33e7af2d34fcf91ae75f9",
+      "size": 487,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/schemas/credential.yml",
+      "sha": "08c208f59a208d8c97c74e489223855a75e69916",
+      "size": 575,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/schemas/credentialType.yml",
+      "sha": "8ccf3bde8d5dc60c8b6612f0ac948c9d67f1f454",
+      "size": 289,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/src/public-api/v1/handlers/credentials/spec/schemas/parameters/credentialId.yml",
+      "sha": "f16676ce0b96ca015c3cfd5f8d3dc0dbd4d82138",
+      "size": 95,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/test/integration/commands/import-credentials/credentials-updated.json",
+      "sha": "67fad38ef79deb470fc78172991bc6e3157086f4",
+      "size": 269,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/test/integration/commands/import-credentials/credentials.json",
+      "sha": "0e6269d2670f1a25ebd11c8894d4f7d4b39a3b91",
+      "size": 269,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/test/integration/commands/import-credentials/separate/separate-credential.json",
+      "sha": "24ce8467ed757659b4418e44691991dafd0d8e20",
+      "size": 253,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/test/integration/credentials/credentials.api.ee.test.ts",
+      "sha": "5428cafbd4dd2ba032619a02eb3c06eee28efe6e",
+      "size": 44427,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/test/integration/credentials/credentials.api.test.ts",
+      "sha": "5f40850e599f7e725059065e9a434074017f124b",
+      "size": 37581,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/cli/test/integration/credentials/credentials.service.test.ts",
+      "sha": "ecfafada3fad1bcea2daf682a04cc101bb308e8c",
+      "size": 4253,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/node-dev/templates/credentials/simple.ts",
+      "sha": "b6d9ba3aac1bfeb4b37c34948d1c1e1e12817093",
+      "size": 573,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ActionNetworkApi.credentials.ts",
+      "sha": "ebc6eaf9a0970d1188e826603044dcd53f68e063",
+      "size": 860,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ActiveCampaignApi.credentials.ts",
+      "sha": "837869f39b43039c5fb0038e8517264fe016f43d",
+      "size": 818,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AcuitySchedulingApi.credentials.ts",
+      "sha": "658a65e8ba838dda9e6aedb3cd005a77cde59cdc",
+      "size": 504,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AcuitySchedulingOAuth2Api.credentials.ts",
+      "sha": "242b54007a1ce62577c0cc570e4c05147f0f926a",
+      "size": 1120,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AdaloApi.credentials.ts",
+      "sha": "4c5003b1e252c6d554b8f27baf3f678aa2c2b78a",
+      "size": 1029,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AffinityApi.credentials.ts",
+      "sha": "eaf92cdeff8fedc72018cea14beef69828c4eeef",
+      "size": 381,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AgileCrmApi.credentials.ts",
+      "sha": "350ca70ff50880d344467ff6facc6a15f70ac06a",
+      "size": 728,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AirtableApi.credentials.ts",
+      "sha": "26832901a1b6632b9d11cdfdb242f3b9e54b801b",
+      "size": 773,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AirtableOAuth2Api.credentials.ts",
+      "sha": "65a2bcce4883065e9271f90a7f67b4b50a4ae587",
+      "size": 1105,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AirtableTokenApi.credentials.ts",
+      "sha": "31030e41a18fb7db4017ad31d02ada82e4c2a745",
+      "size": 1018,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AlienVaultApi.credentials.ts",
+      "sha": "9dad5720459ed7521c26b5dc53b0e649fe2ad437",
+      "size": 945,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/Amqp.credentials.ts",
+      "sha": "8afc480137347732a203527455e51fd0981c5376",
+      "size": 923,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ApiTemplateIoApi.credentials.ts",
+      "sha": "8fddb9733b2a51d3a584336baf7318d62466603e",
+      "size": 732,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AsanaApi.credentials.ts",
+      "sha": "fc7562819804236ac193a0da1dd8bdb5d7f270bc",
+      "size": 565,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AsanaOAuth2Api.credentials.ts",
+      "sha": "0ffde5ac59d20db3669ba1163d529f2e75763dfe",
+      "size": 1039,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/Auth0ManagementApi.credentials.ts",
+      "sha": "d4d2865220e8469b998825ae7b26debb727d6187",
+      "size": 2090,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AutomizyApi.credentials.ts",
+      "sha": "3e186c9632e897f5f06e37921e1dc8de128c6aa5",
+      "size": 558,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/AutopilotApi.credentials.ts",
+      "sha": "bf98d44f7421d885f44e506bc260e7c4bb790635",
+      "size": 385,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/Aws.credentials.ts",
+      "sha": "bb7b30d4cf041987bdb7008c49f6240ea46ead1f",
+      "size": 11064,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BambooHrApi.credentials.ts",
+      "sha": "8fe5de7cb671f7ae9ebf5a7bc212e52b30cffc9b",
+      "size": 476,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BannerbearApi.credentials.ts",
+      "sha": "81ea35d9869979096cc948ae98c6fa37227e194a",
+      "size": 397,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BaserowApi.credentials.ts",
+      "sha": "28fd1d899007b3892267e284ccedb76c7d71db96",
+      "size": 649,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BeeminderApi.credentials.ts",
+      "sha": "dcdfb0b4e20642c0ed9919d535c00c1c3419c01b",
+      "size": 827,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BitbucketApi.credentials.ts",
+      "sha": "bc5cb0ad76a9d534e18fd244ea9a3fdff72fc847",
+      "size": 488,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BitlyApi.credentials.ts",
+      "sha": "6e6ca9c9974eca64f0758e91dc00db255c6279b9",
+      "size": 379,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BitlyOAuth2Api.credentials.ts",
+      "sha": "0175c6b1bd0b6478f38aa6438a75ac6f445b0d6f",
+      "size": 1450,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BitwardenApi.credentials.ts",
+      "sha": "f63e00230d5f7f715939a4f87bd1b528166d8574",
+      "size": 1045,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BoxOAuth2Api.credentials.ts",
+      "sha": "70145fbf2b347dd78b7de94f377f0a5fe62d6bf9",
+      "size": 1033,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BrandfetchApi.credentials.ts",
+      "sha": "263cd4a1147493b294a1d0d0ac0bed172b3174ad",
+      "size": 734,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BrevoApi.credentials.ts",
+      "sha": "2690f3207d6ccfeae7ecef8350f58346f9164d63",
+      "size": 738,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/BubbleApi.credentials.ts",
+      "sha": "e065d727905041e41cfbe215ade964c2d70f5c09",
+      "size": 1166,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CalApi.credentials.ts",
+      "sha": "bfe5232f66dba143fe5b5852bb32590efc46bd3a",
+      "size": 779,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CalendlyApi.credentials.ts",
+      "sha": "c999e6459039defa9ffb83c4555b5b2a3de7619b",
+      "size": 1529,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CalendlyOAuth2Api.credentials.ts",
+      "sha": "200d238c6d73f3acaf13d26b62360a52f1a18bf1",
+      "size": 1067,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CarbonBlackApi.credentials.ts",
+      "sha": "70119d362e142c747b3f3d727c82135d25723647",
+      "size": 1117,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ChargebeeApi.credentials.ts",
+      "sha": "81c5ac787bb483947a6dfa6b309d4032876ca140",
+      "size": 485,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CircleCiApi.credentials.ts",
+      "sha": "f96b76d732ac562084ef1cdf67bdc016069fd9c9",
+      "size": 392,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CiscoMerakiApi.credentials.ts",
+      "sha": "24346845badf370ed32b169bb7aa36debdce2ed2",
+      "size": 984,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CiscoSecureEndpointApi.credentials.ts",
+      "sha": "7ffac617797a271ce71b104c3fa8db15403264ae",
+      "size": 2740,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CiscoUmbrellaApi.credentials.ts",
+      "sha": "f2bca5986039f06c4671fffc29f78b8b154b207a",
+      "size": 1932,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CiscoWebexOAuth2Api.credentials.ts",
+      "sha": "9de1ff62f8fcf8d881db8dcdbdf8f5e1ed71f188",
+      "size": 1384,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ClearbitApi.credentials.ts",
+      "sha": "c5b7d55f20a1c3007cd95dc8c63a6f24be3075ed",
+      "size": 381,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ClickUpApi.credentials.ts",
+      "sha": "9f6cf2e000363c406e5626f1db974fa3febee640",
+      "size": 715,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ClickUpOAuth2Api.credentials.ts",
+      "sha": "5f90547566b96bb7bc5794adbb736ac7e761e087",
+      "size": 1042,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ClockifyApi.credentials.ts",
+      "sha": "35a99937cae59436346078708740c9967bb554e3",
+      "size": 708,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CloudflareApi.credentials.ts",
+      "sha": "f360e46ac54c58520861e5dfe5e3095b6cd242af",
+      "size": 733,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CockpitApi.credentials.ts",
+      "sha": "e55f5bd9dc609dcc915db05c03dc691f85a6842c",
+      "size": 517,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CodaApi.credentials.ts",
+      "sha": "06a96a7cbc1f184b39d5c6c80f045e56ade28763",
+      "size": 581,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ContentfulApi.credentials.ts",
+      "sha": "12a01b35d209115826105dc677b298f5b51f4e8b",
+      "size": 1080,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ConvertKitApi.credentials.ts",
+      "sha": "2c75ddf0869dfdf1a4b85497e29dbda2a0401a10",
+      "size": 403,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CopperApi.credentials.ts",
+      "sha": "1cfe5aa1709b69017ab04ba0fa46eb010b61952c",
+      "size": 963,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CortexApi.credentials.ts",
+      "sha": "b2070cbc55d473c909c81cd7fba9c02229a13bec",
+      "size": 903,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CrateDb.credentials.ts",
+      "sha": "8b5aa627beec067786e9150aba52c773aa1e6e3b",
+      "size": 1026,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CrowdDevApi.credentials.ts",
+      "sha": "cfb98983438a19636dcf1dbf81a2bbe76d7943a5",
+      "size": 1630,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CrowdStrikeOAuth2Api.credentials.ts",
+      "sha": "de69b0d5db1e5ff82aff56ef77199704aff22dec",
+      "size": 1984,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/CustomerIoApi.credentials.ts",
+      "sha": "abec2b2348407ffcafc946687b8ebde77d2b174d",
+      "size": 2179,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DatadogApi.credentials.ts",
+      "sha": "2c962a92a00a23a11c33ca64f2d7cd6e42fba863",
+      "size": 1622,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DeepLApi.credentials.ts",
+      "sha": "8724162dcc47739aab4a4bbbce0c64ef042083c4",
+      "size": 984,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DemioApi.credentials.ts",
+      "sha": "e8257255306b93f6d1392b7ca29f79aba081ea90",
+      "size": 501,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DfirIrisApi.credentials.ts",
+      "sha": "c1db485bdbf0e922b3f8f971a0942d0ce2b67fab",
+      "size": 1489,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DhlApi.credentials.ts",
+      "sha": "8a7c2564a32537d6ced1e4e40941b32c970c1f27",
+      "size": 361,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DiscordBotApi.credentials.ts",
+      "sha": "464ae963ed6884959bd7c8e26e5e47a12578b247",
+      "size": 757,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DiscordOAuth2Api.credentials.ts",
+      "sha": "d0a026507e1b0b947a20da1cfc8883991efe202e",
+      "size": 1153,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DiscordWebhookApi.credentials.ts",
+      "sha": "b0fcc51f230fd4efb001ad31b4955052421c7f37",
+      "size": 491,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DiscourseApi.credentials.ts",
+      "sha": "f409edf4dacb9f041bd2f1c0961ba9fce2d4f679",
+      "size": 1195,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DisqusApi.credentials.ts",
+      "sha": "7b383fc628945c6440df50ac0cdd894ded66e5e2",
+      "size": 531,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DriftApi.credentials.ts",
+      "sha": "943bb24f393a376046d03828a0c094dd4432a7d9",
+      "size": 544,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DriftOAuth2Api.credentials.ts",
+      "sha": "b02525f79a8d2bd75f456c4a5282c5d4a35c1f5a",
+      "size": 1029,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DropboxApi.credentials.ts",
+      "sha": "a4f02b421b653d3ddd456244322b4bec07115f5c",
+      "size": 1007,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DropboxOAuth2Api.credentials.ts",
+      "sha": "968e8f89c8e277156bf0325322d5b33d32e1c45a",
+      "size": 1461,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DropcontactApi.credentials.ts",
+      "sha": "bba3f0fbf75018ef770c8e284b0bbead4ae9baca",
+      "size": 804,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/DynatraceApi.credentials.ts",
+      "sha": "9934bd1b9614fb2b6fc5cda463a9d498af44b023",
+      "size": 876,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ERPNextApi.credentials.ts",
+      "sha": "78eb6795f9093b9b1816cda116160d04a2d576a4",
+      "size": 2811,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/EgoiApi.credentials.ts",
+      "sha": "ab9a9add00c2f759a5cd44975cf1f6d127413cb0",
+      "size": 504,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ElasticSecurityApi.credentials.ts",
+      "sha": "6571428f97c20a779d030c689c82823f43cb876d",
+      "size": 2153,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ElasticsearchApi.credentials.ts",
+      "sha": "b487ce894fa2259f842fc03e305cd49fe2934dd6",
+      "size": 1332,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/EmeliaApi.credentials.ts",
+      "sha": "7ce585ae2ecfbd1533f595e447510976a62fd9d0",
+      "size": 373,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/EventbriteApi.credentials.ts",
+      "sha": "2afcc3728ef4bbad8bfadf5856ab595fae8835d2",
+      "size": 393,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/EventbriteOAuth2Api.credentials.ts",
+      "sha": "3eee3d8c8d511f15af890a0675efa81f56a7e81b",
+      "size": 1065,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/F5BigIpApi.credentials.ts",
+      "sha": "85245b7179c13456f682d34d4ec3b2c901682705",
+      "size": 876,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FacebookGraphApi.credentials.ts",
+      "sha": "51214d4ff6f25482a9f1b5c769a71384360d00a3",
+      "size": 733,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FacebookGraphAppApi.credentials.ts",
+      "sha": "ac8816d339d99550e6cbce642436112878f216c1",
+      "size": 601,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FacebookLeadAdsOAuth2Api.credentials.ts",
+      "sha": "a21dece4068dc55641238835e82d9b76d0a512fe",
+      "size": 1197,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FigmaApi.credentials.ts",
+      "sha": "d67946fc6d23f1bef45cc459702823da88a05e2f",
+      "size": 379,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FileMaker.credentials.ts",
+      "sha": "d862a2821348e7879c522a64c44f56088d32dec6",
+      "size": 649,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FilescanApi.credentials.ts",
+      "sha": "ebc4562b0f5bd46af4e743cc5420ad4666e91baf",
+      "size": 1013,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FlowApi.credentials.ts",
+      "sha": "73e7e3a6dd7c738247f2431076757a0b9c07a4ea",
+      "size": 480,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FormIoApi.credentials.ts",
+      "sha": "3322d2d6ec5a9f105d9b50db63bf7b4143007cb5",
+      "size": 1001,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FormstackApi.credentials.ts",
+      "sha": "bd38be992d62d82e25a90351eda773eab57d6ad1",
+      "size": 402,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FormstackOAuth2Api.credentials.ts",
+      "sha": "4dfedaa149e7ca69a41658a34c7f7adbdd91520a",
+      "size": 1128,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FortiGateApi.credentials.ts",
+      "sha": "9f7febf53cfaf3ce36a3a90664be1b43b1b43b66",
+      "size": 825,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FreshdeskApi.credentials.ts",
+      "sha": "a962a8d1dfcccef05993ad1af46698be291906b1",
+      "size": 617,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FreshserviceApi.credentials.ts",
+      "sha": "5d0287878363a0dc11a895ee669e223a6dce99f0",
+      "size": 697,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/FreshworksCrmApi.credentials.ts",
+      "sha": "dd947244f9bfa04a37b09485cb779a940aeb722b",
+      "size": 1105,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/Ftp.credentials.ts",
+      "sha": "0592a8ecc4a1011abd19b22aae61e435f705c5da",
+      "size": 692,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GSuiteAdminOAuth2Api.credentials.ts",
+      "sha": "4a7720de0c832c87e99e81ba135d41e5c207c880",
+      "size": 702,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GetResponseApi.credentials.ts",
+      "sha": "7087568369bf68e00fce0ff88526ed07df6b34ac",
+      "size": 730,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GetResponseOAuth2Api.credentials.ts",
+      "sha": "52195355a016f9dec5baca231c856c9fc80c1741",
+      "size": 1076,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GhostAdminApi.credentials.ts",
+      "sha": "7c85f425274de02b3a85f0779e863db4c6f88b04",
+      "size": 1243,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GhostContentApi.credentials.ts",
+      "sha": "f2e4bee6d240ff9697aeabd328f592cef008151e",
+      "size": 1006,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GitPassword.credentials.ts",
+      "sha": "d90f127a1d58cd28683a568706b4a68f5149b0a2",
+      "size": 592,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GithubApi.credentials.ts",
+      "sha": "0dafd8bcd212f8272a8d106ef884d5f070f84745",
+      "size": 1028,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GithubOAuth2Api.credentials.ts",
+      "sha": "48b9f83eb070166094924fee92bd4a3f466cf980",
+      "size": 1545,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GitlabApi.credentials.ts",
+      "sha": "a8700e4ac831a338f3a0208e6ffdf1130d3891ba",
+      "size": 887,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GitlabOAuth2Api.credentials.ts",
+      "sha": "3a124097c1b76324bc1408b2076e6a2d454a8b22",
+      "size": 1154,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GmailOAuth2Api.credentials.ts",
+      "sha": "2747d2efc95d915f2bb8ec969e20fd8a84941dd8",
+      "size": 757,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoToWebinarOAuth2Api.credentials.ts",
+      "sha": "1d002093c932e055840964c8d774c28e9a31bb21",
+      "size": 1067,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GongApi.credentials.ts",
+      "sha": "19c56a65defb1979b919d395b5cd998d24ca0dea",
+      "size": 1047,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GongOAuth2Api.credentials.ts",
+      "sha": "bea935c4f1f765c9c8b96ae68445830a40d9ddf5",
+      "size": 2046,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleAdsOAuth2Api.credentials.ts",
+      "sha": "103e6603953ca0bcfeccd3946e7e4a66016ef9dc",
+      "size": 653,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleAnalyticsOAuth2Api.credentials.ts",
+      "sha": "52928a02d588056a7c6d514a73632cfd3b2d30cd",
+      "size": 568,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleApi.credentials.ts",
+      "sha": "96fa9e5f4071184a616793578c951f81b18c5322",
+      "size": 3884,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleBigQueryOAuth2Api.credentials.ts",
+      "sha": "0564048612f6c78d5c1cdd0267539a4be5216f2f",
+      "size": 605,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleBooksOAuth2Api.credentials.ts",
+      "sha": "b20d4008359a92eb472b4bf285e0a1e88c7e0f5b",
+      "size": 496,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleBusinessProfileOAuth2Api.credentials.ts",
+      "sha": "2f83adb0e713ac349725feb8387a1b845c020d90",
+      "size": 1106,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleCalendarOAuth2Api.credentials.ts",
+      "sha": "ee376e4b78a2b9c378ac410bec37f58c7bdf59aa",
+      "size": 564,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleCloudNaturalLanguageOAuth2Api.credentials.ts",
+      "sha": "ffe101a3a2faf1075e935fac2eb0a796c6f6377e",
+      "size": 607,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleCloudStorageOAuth2Api.credentials.ts",
+      "sha": "1475126df17ce4a73a5427491943b33ef3bbbff8",
+      "size": 767,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleContactsOAuth2Api.credentials.ts",
+      "sha": "41d03586afeaa2f68a40e41b869fba339e094c4f",
+      "size": 508,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleDocsOAuth2Api.credentials.ts",
+      "sha": "b7149b06d0808bfa209ee1666197473c49d5c9bb",
+      "size": 590,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleDriveOAuth2Api.credentials.ts",
+      "sha": "a5b5312705d9d2041aa7901604d1b5fdb5d47c6d",
+      "size": 899,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleFirebaseCloudFirestoreOAuth2Api.credentials.ts",
+      "sha": "97a82f094e6bd7474262ee41c197b671a87d3bda",
+      "size": 602,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleFirebaseRealtimeDatabaseOAuth2Api.credentials.ts",
+      "sha": "2a62994130aee2b40af37ffcc98ff954a56b701f",
+      "size": 1044,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleOAuth2Api.credentials.ts",
+      "sha": "4af21afdd70d2524aa42e7b592f89bd0f40bf795",
+      "size": 1017,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GooglePerspectiveOAuth2Api.credentials.ts",
+      "sha": "b827cce45457b690e460402b19cc1f49b06c2742",
+      "size": 523,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleSheetsOAuth2Api.credentials.ts",
+      "sha": "a80b5c761623a95b3c0b46eb880cc1f09486067f",
+      "size": 985,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleSheetsTriggerOAuth2Api.credentials.ts",
+      "sha": "f5d83423edd538082c285f19fcd8b7663bb22aee",
+      "size": 1054,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleSlidesOAuth2Api.credentials.ts",
+      "sha": "9a42a6aceabb84f64d0c204d1a074e36bda1b7a8",
+      "size": 558,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleTasksOAuth2Api.credentials.ts",
+      "sha": "0eb9736f71aebca47a966004722ac5dba5dc5ca4",
+      "size": 496,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GoogleTranslateOAuth2Api.credentials.ts",
+      "sha": "af64d620dddc3ad2b386c5ad6e1c2c042229069f",
+      "size": 520,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GotifyApi.credentials.ts",
+      "sha": "a609dce92fb7716e1edfba702440c4ea7cd8abb7",
+      "size": 1033,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GrafanaApi.credentials.ts",
+      "sha": "e93a9cedcccccc2c26b4d53c2d6545ffff74e795",
+      "size": 977,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GristApi.credentials.ts",
+      "sha": "514b15f19d4907b2485bee7db69eb72d2ea3b156",
+      "size": 1271,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/GumroadApi.credentials.ts",
+      "sha": "a02abe043b3b626e07b47d1e6daee463a0c497d9",
+      "size": 387,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HaloPSAApi.credentials.ts",
+      "sha": "45039c3de85300d5b75b66883bed2c1bf5447a24",
+      "size": 1651,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HarvestApi.credentials.ts",
+      "sha": "6e0a74ecfcb26263b4c7b30b24e4f83a2f15fdb7",
+      "size": 605,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HarvestOAuth2Api.credentials.ts",
+      "sha": "6e9ca97895f0314595ea25f1b2301409e480ac7e",
+      "size": 1063,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HelpScoutOAuth2Api.credentials.ts",
+      "sha": "e9797c20fcb4d4dc85cb8628f97263a3d5d97b5e",
+      "size": 1092,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HighLevelApi.credentials.ts",
+      "sha": "08505fbb2371f9b41de6a54a84f10020b408428e",
+      "size": 726,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HighLevelOAuth2Api.credentials.ts",
+      "sha": "656cfcc0fb2b82e88b6439886a3a796e5b11437f",
+      "size": 1556,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HomeAssistantApi.credentials.ts",
+      "sha": "ab54a56544666b57f7aecda225e658e56f0757fd",
+      "size": 671,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HttpBasicAuth.credentials.ts",
+      "sha": "3d92244ba54c90c0cb1129de2e7c9afb44fe94d9",
+      "size": 560,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HttpCustomAuth.credentials.ts",
+      "sha": "2b23865e18abd07ea46b95d2a814e3c60473dd35",
+      "size": 774,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HttpDigestAuth.credentials.ts",
+      "sha": "e3dd31704d749f3a2352c71b1c79e7c700e9c66b",
+      "size": 563,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HttpHeaderAuth.credentials.ts",
+      "sha": "a689e1bcfd33161a4c562912b0b77b3a9175f23b",
+      "size": 741,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HttpQueryAuth.credentials.ts",
+      "sha": "71055a713bb721e8e5043ea773025dd0b393c03e",
+      "size": 554,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HttpSslAuth.credentials.ts",
+      "sha": "541306de4c9d2076c26462970c0f2ad5e3defa12",
+      "size": 1132,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HubspotApi.credentials.ts",
+      "sha": "223d4bae56c051a6a7ea29182bf7d0e8304777bb",
+      "size": 1043,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HubspotAppToken.credentials.ts",
+      "sha": "7e7d910db284ed08394df73c55cec1e4e0b188ae",
+      "size": 740,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HubspotDeveloperApi.credentials.ts",
+      "sha": "4a3c03e2b9118e48ff6869eef67be3e03f9c60b9",
+      "size": 1811,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HubspotOAuth2Api.credentials.ts",
+      "sha": "2158078536e75c8252af637945824a81845be3df",
+      "size": 1450,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HumanticAiApi.credentials.ts",
+      "sha": "066270ccf182e8f59d4780f51a97c708f0d0c33c",
+      "size": 390,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HunterApi.credentials.ts",
+      "sha": "698516dbfd8cd5d096a297abc0179e56ac1ee3af",
+      "size": 373,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/HybridAnalysisApi.credentials.ts",
+      "sha": "a0c6dd6eee2a053d23eb5b0223aa239bc2148774",
+      "size": 806,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/Imap.credentials.ts",
+      "sha": "f1e49356278fad1aefdc68f7e25b56445af2c9ef",
+      "size": 1387,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/ImpervaWafApi.credentials.ts",
+      "sha": "b37b3e7d3434944edf34960cc3c5c5d1063563d6",
+      "size": 969,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/nodes-base/credentials/IntercomApi.credentials.ts",
+      "sha": "b4b129ab5c486d5a693e76a4d3e0068bab8b0395",
+      "size": 752,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 263,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:47:49.267849+00:00"
+}
