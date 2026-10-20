@@ -85,16 +85,36 @@ def is_quarantined(key, group, previous_quarantine_keys=None, quarantine_locks=N
     )
     return key in previous_quarantine_keys and not released
 
-def atomic_json_write(path: Path, payload: dict) -> None:
-    """Publish complete JSON files atomically so interrupted runs never leave zero-byte state."""
+def atomic_json_write(path: Path, payload: dict, compact_array_keys: set[str] | None = None) -> None:
+    """Atomically write readable JSON; large decision arrays keep one record per line.
+
+    Compacting each record (rather than the whole document) preserves valid,
+    reviewable JSON while preventing generated evidence graphs from approaching
+    GitHub's hard per-file size limit. All records and fields are preserved.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     with tmp.open("w", encoding="utf-8", newline="\n") as handle:
-        # Keep generated JSON readable and diffable. Do not collapse the
-        # large READY evidence graph into one line: line-count collapse hides
-        # data regressions in reviews and makes recovery harder.
-        json.dump(payload, handle, ensure_ascii=False, indent=2)
-        handle.write("\n")
+        if compact_array_keys and isinstance(payload, dict):
+            handle.write("{\n")
+            entries = list(payload.items())
+            for index, (key, value) in enumerate(entries):
+                if key in compact_array_keys and isinstance(value, list):
+                    if value:
+                        rendered = "[\n" + ",\n".join(
+                            "    " + json.dumps(item, ensure_ascii=False, separators=(",", ":"))
+                            for item in value
+                        ) + "\n  ]"
+                    else:
+                        rendered = "[]"
+                else:
+                    rendered = json.dumps(value, ensure_ascii=False, indent=2).replace("\n", "\n  ")
+                comma = "," if index + 1 < len(entries) else ""
+                handle.write(f"  {json.dumps(key, ensure_ascii=False)}: {rendered}{comma}\n")
+            handle.write("}\n")
+        else:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
         handle.flush()
         os.fsync(handle.fileno())
     os.replace(tmp, path)
@@ -247,13 +267,13 @@ def main():
     }
 
     ready={"generated_at":now,"pipeline":["extract","normalize","classify","dedupe","decide","verify"],"counts":counts,"decisions":decisions}
-    atomic_json_write(MASTER/"READY.json", ready)
+    atomic_json_write(MASTER/"READY.json", ready, compact_array_keys={"decisions"})
 
     queue=[d for d in decisions if d["action"]!="QUARANTINE"]
-    atomic_json_write(MASTER/"PROMOTION-QUEUE.json", {"generated_at":now,"items":queue})
+    atomic_json_write(MASTER/"PROMOTION-QUEUE.json", {"generated_at":now,"items":queue}, compact_array_keys={"items"})
 
     restricted_queue=[d for d in decisions if d["action"]=="QUARANTINE"]
-    atomic_json_write(VERIFY/"RESTRICTED-QUEUE.json", {"generated_at":now,"items":restricted_queue})
+    atomic_json_write(VERIFY/"RESTRICTED-QUEUE.json", {"generated_at":now,"items":restricted_queue}, compact_array_keys={"items"})
 
     readiness_items=[]
     for d in decisions:
@@ -275,7 +295,7 @@ def main():
         "rule":"collection evidence is provenance; readiness is never inferred",
         "states":["ON_SHELF","READY_FOR_ADAPTATION","READY_ON_DEMAND","READY_TO_USE","INTEGRATED","TESTED","HUMAN_READY","PRODUCTION_PROVEN","QUARANTINED"],
         "items":readiness_items
-    })
+    }, compact_array_keys={"items"})
     print(json.dumps(counts))
 
 if __name__=="__main__":
