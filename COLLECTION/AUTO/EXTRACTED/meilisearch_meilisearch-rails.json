@@ -1,0 +1,211 @@
+{
+  "canonical_source": "github:meilisearch/meilisearch-rails",
+  "repo": "meilisearch/meilisearch-rails",
+  "revision_sha": "44e70c9930d0d44d65a9eddfcd82380cc6ba032a",
+  "default_branch": "main",
+  "pushed_at": "2026-10-14T13:14:31Z",
+  "repo_updated_at": "2026-10-14T06:29:32Z",
+  "license": "MIT",
+  "topics": [
+    "meilisearch",
+    "rails",
+    "ruby",
+    "ruby-on-rails"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "spec/support/mongo_models/citizen.rb",
+      "sha": null,
+      "content_sha256": "b5cf7bd863f95e3fbaa0cf76ebc709d67bb6d9b61484b188a3c474c3f04f7294",
+      "score": 296,
+      "content": "class Citizen\n  include Mongoid::Document\n  include Mongoid::Timestamps\n\n  field :name, type: String\n  field :age, type: Integer\n\n  include Meilisearch::Rails\n\n  meilisearch index_uid: safe_index_uid('Citizen')\nend\n"
+    },
+    {
+      "path": "spec/support/models/specialty_models.rb",
+      "sha": null,
+      "content_sha256": "c37ae7dad47968e1039912d9bfa343f61754a565ede0c2508a7a0e53d72cfc6f",
+      "score": 296,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :namespaced_models do |t|\n  t.string :name\n  t.integer :another_private_value\nend\n\nar_schema.create_table :nested_items do |t|\n  t.integer :parent_id\n  t.boolean :hidden\nend\n\nar_schema.create_table :misconfigured_blocks do |t|\n  t.string :name\nend\n\nar_schema.create_table :serialized_documents do |t|\n  t.string :name\n  t.string :skip\nend\n\nar_schema.create_table :encoded_strings\n\nmodule Namespaced\n  def self.table_name_prefix\n    'namespaced_'\n  end\n\n  class Model < ActiveRecord::Base\n    include Meilisearch::Rails\n\n    meilisearch synchronous: true, index_uid: safe_index_uid(ms_index_uid({})) do\n      attribute :customAttr do\n        40 + another_private_value\n      end\n      attribute :myid do\n        id\n      end\n      searchable_attributes ['customAttr']\n    end\n  end\nend\n\nclass NestedItem < ActiveRecord::Base\n  has_many :children, class_name: 'NestedItem', foreign_key: 'parent_id'\n\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('NestedItem'), unless: :hidden do\n    attribute :nb_children\n  end\n\n  def nb_children\n    children.count\n  end\nend\n\nclass MisconfiguredBlock < ActiveRecord::Base\n  include Meilisearch::Rails\nend\n\nclass SerializedDocumentSerializer < ActiveModel::Serializer\n  attributes :name\nend\n\nclass SerializedDocument < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch index_uid: safe_index_uid('SerializedDocument') do\n    use_serializer SerializedDocumentSerializer\n  end\nend\n\nclass EncodedString < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, force_utf8_encoding: true, index_uid: safe_index_uid('EncodedString') do\n    attribute :value do\n      \"\\xC2\\xA0\\xE2\\x80\\xA2\\xC2\\xA0\".force_encoding('ascii-8bit')\n    end\n  end\nend\n"
+    },
+    {
+      "path": "playground/test/models/author_test.rb",
+      "sha": null,
+      "content_sha256": "0f9cfe3f2f06f95dc283144ab209a5174ef059d16ef93ad14228253a5cb95598",
+      "score": 244,
+      "content": "require \"test_helper\"\n\nclass AuthorTest < ActiveSupport::TestCase\n  # test \"the truth\" do\n  #   assert true\n  # end\nend\n"
+    },
+    {
+      "path": "spec/support/1_initialize_meilisearch.rb",
+      "sha": null,
+      "content_sha256": "b4811095bee4471bd80e22fb406f5b883fb477408e85e9998ed9d4111b89fa07",
+      "score": 226,
+      "content": "Meilisearch::Rails.configuration = {\n  meilisearch_url: ENV.fetch('MEILISEARCH_HOST', 'http://127.0.0.1:7700'),\n  meilisearch_api_key: ENV.fetch('MEILISEARCH_API_KEY', 'masterKey'),\n  per_environment: true\n}\n"
+    },
+    {
+      "path": "spec/support/legacy_search_helper.rb",
+      "sha": null,
+      "content_sha256": "42a16fef5f7c0ca2534a052d752460f602c9a4a3e4e18b779450b6a9362abc80",
+      "score": 226,
+      "content": "require 'json'\nrequire 'net/http'\nrequire 'uri'\n\n# This helper is used as a workaround to enable legacy search in tests.\n# See https://github.com/meilisearch/meilisearch/issues/6482\n\nmodule LegacySearchHelper\n  LEGACY_SEARCH_ENDPOINT = '/experimental-features'.freeze\n  private_constant :LEGACY_SEARCH_ENDPOINT\n\n  def enable_meilisearch_legacy_search!\n    update_meilisearch_legacy_search!(enabled: true)\n  end\n\n  def disable_meilisearch_legacy_search!\n    update_meilisearch_legacy_search!(enabled: false)\n  end\n\n  private\n\n  def update_meilisearch_legacy_search!(enabled:)\n    config = Meilisearch::Rails.configuration\n    host = config.fetch(:meilisearch_url)\n    api_key = [REDACTED]]\n    action = enabled ? 'enable' : 'disable'\n\n    uri = URI.parse(\"#{host.chomp('/')}#{LEGACY_SEARCH_ENDPOINT}\")\n    request = Net::HTTP::Patch.new(uri)\n    request['Content-Type'] = 'application/json'\n    request['Authorization'] = \"Bearer #{api_key}\" if api_key.present?\n    request.body = { legacySearch: enabled }.to_json\n\n    response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == 'https') do |http|\n      http.request(request)\n    end\n\n    return if response.is_a?(Net::HTTPSuccess)\n\n    raise \"Failed to #{action} Meilisearch legacy search in tests: \" \\\n          \"HTTP #{response.code} #{response.message}. Response body: #{response.body}\"\n  rescue KeyError => e\n    raise \"Missing Meilisearch test configuration: #{e.message}\"\n  rescue StandardError => e\n    raise if e.message.start_with?(\"Failed to #{action} Meilisearch legacy search in tests:\")\n\n    raise \"Failed to #{action} Meilisearch legacy search in tests: #{e.class}: #{e.message}\"\n  end\nend\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "spec/support/models/task.rb",
+      "sha": null,
+      "content_sha256": "839f87bd9a86bef332dead617de9162ae76bc03b5e1718ecb6f9fc4f6e74689f",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :tasks do |t|\n  t.string :title\nend\n\nclass Task < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('Task')\nend\n"
+    },
+    {
+      "path": "spec/support/models/movie.rb",
+      "sha": null,
+      "content_sha256": "1537645b738de3c6aec4556d080aafa46d2756d78ae59f6b216d96249d48731c",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :movies do |t|\n  t.string :title\nend\n\nclass Movie < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch index_uid: safe_index_uid('Movie') do\n    pagination max_total_hits: 5\n    typo_tolerance enabled: false\n  end\nend\n\nmodule TestUtil\n  def self.reset_movies!\n    Movie.clear_index!\n    Movie.delete_all\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/sequel_models/book.rb",
+      "sha": null,
+      "content_sha256": "d16faf251d92692c0dd13a090eff58ba8143fb315e4ac68cd28b0edc628ea8ee",
+      "score": 224,
+      "content": "require 'support/sequel_db'\n\nsequel_db.create_table(:sequel_books) do\n  primary_key :id\n  String :name\n  String :author\n  FalseClass :released\n  FalseClass :premium\nend\n\nclass SequelBook < Sequel::Model(sequel_db)\n  plugin :active_model\n\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('SequelBook'), sanitize: true do\n    add_attribute :test\n    add_attribute :test2\n\n    searchable_attributes [:name]\n  end\n\n  def after_create\n    SequelBook.new\n  end\n\n  def test\n    'test'\n  end\n\n  def test2\n    'test2'\n  end\n\n  private\n\n  def public?\n    released && !premium\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/post.rb",
+      "sha": null,
+      "content_sha256": "a3cf9905cfed60ea9fcc5e9952e7a80748b669c5654971fab38abe60e1a94f73",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :posts do |t|\n  t.string :title\nend\n\nar_schema.create_table :comments do |t|\n  t.integer :post_id\n  t.string :body\nend\n\nclass Post < ActiveRecord::Base\n  has_many :comments\n\n  include Meilisearch::Rails\n\n  meilisearch index_uid: safe_index_uid('Post'), synchronous: true do\n    attribute :comments do\n      comments.map(&:body)\n    end\n  end\n\n  scope :meilisearch_import, -> { includes(:comments) }\nend\n\nclass Comment < ActiveRecord::Base\n  belongs_to :post\n\n  include Meilisearch::Rails\n\n  meilisearch\nend\n"
+    },
+    {
+      "path": "spec/support/models/fruit.rb",
+      "sha": null,
+      "content_sha256": "c0bff9fba99107db849d88a4e81657ef758739faafa6af82b2f4fd85a93e08a8",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :fruits do |t|\n  t.string :name\nend\n\nclass Fruit < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  # only raise exceptions in development env\n  meilisearch raise_on_failure: true, index_uid: safe_index_uid('Fruit') do\n    attribute :name\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/vegetable.rb",
+      "sha": null,
+      "content_sha256": "36cdebdaa322bf83a54003711deb7815cf8feff77705172df20443a7b3aac0bc",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :vegetables do |t|\n  t.string :name\nend\n\nclass Vegetable < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch raise_on_failure: false, index_uid: safe_index_uid('Fruit') do\n    attribute :name\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/restaurant.rb",
+      "sha": null,
+      "content_sha256": "e0fac736338a83e10792284d59ca4cda1584c44e0abc15fa8e05d4f48ec9dd0f",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :restaurants do |t|\n  t.string :name\n  t.string :kind\n  t.text :description\nend\n\nclass Restaurant < ActiveRecord::Base\n  include GlobalID::Identification\n  include Meilisearch::Rails\n\n  meilisearch index_uid: safe_index_uid('Restaurant') do\n    attributes_to_crop [:description]\n    crop_length 10\n    pagination max_total_hits: 2\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/color.rb",
+      "sha": null,
+      "content_sha256": "c2c22fb16fa2ff47671507fb78d5115690113ba93a4f47f9f2f83bf57c0d5bc3",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :colors do |t|\n  t.string :name\n  t.string :short_name\n  t.integer :hex\nend\n\nclass Color < ActiveRecord::Base\n  include Meilisearch::Rails\n  attr_accessor :not_indexed\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('Color') do\n    searchable_attributes [:name]\n    filterable_attributes ['short_name']\n    sortable_attributes [:name]\n    ranking_rules [\n      'words',\n      'typo',\n      'proximity',\n      'attribute',\n      'sort',\n      'exactness',\n      'hex:asc'\n    ]\n    attributes_to_highlight [:name]\n    faceting max_values_per_facet: 20\n    proximity_precision 'byWord'\n  end\n\n  def will_save_change_to_hex?\n    false\n  end\n\n  def will_save_change_to_short_name?\n    false\n  end\nend\n\nmodule TestUtil\n  def self.reset_colors!\n    Color.clear_index!\n    Color.delete_all\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/animals.rb",
+      "sha": null,
+      "content_sha256": "fccac1cc5c46e6fed46cfac292183ea60aed26c610276fea359f0ea1f2778305",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :cats do |t|\n  t.string :name\nend\n\nar_schema.create_table :dogs do |t|\n  t.string :name\nend\n\nclass Cat < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch index_uid: safe_index_uid('animals'), synchronous: true, primary_key: :ms_id\n\n  private\n\n  def ms_id\n    \"cat_#{id}\"\n  end\nend\n\nclass Dog < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch index_uid: safe_index_uid('animals'), synchronous: true, primary_key: :ms_id\n\n  private\n\n  def ms_id\n    \"dog_#{id}\"\n  end\nend\n\nmodule TestUtil\n  def self.reset_animals!\n    Cat.clear_index!\n    Cat.delete_all\n    Dog.clear_index!\n    Dog.delete_all\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/queued_models.rb",
+      "sha": null,
+      "content_sha256": "51113a4c6faca8c41b233706372068aa2b398f1c8fa334f7c49274c5b579195e",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :enqueued_documents do |t|\n  t.string :name\nend\n\nar_schema.create_table :disabled_enqueued_documents do |t|\n  t.string :name\nend\n\nar_schema.create_table :conditionally_enqueued_documents do |t|\n  t.string :name\n  t.boolean :is_public\nend\n\nclass EnqueuedDocument < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  include GlobalID::Identification\n\n  def id\n    read_attribute(:id)\n  end\n\n  def self.find(_id)\n    EnqueuedDocument.first\n  end\n\n  meilisearch enqueue: proc { |record| raise \"enqueued #{record.name}\" },\n              index_uid: safe_index_uid('EnqueuedDocument') do\n    attributes [:name]\n  end\nend\n\nclass DisabledEnqueuedDocument < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch(enqueue: proc { |_record| raise 'enqueued' },\n              index_uid: safe_index_uid('EnqueuedDocument'),\n              disable_indexing: true) do\n    attributes [:name]\n  end\nend\n\nclass ConditionallyEnqueuedDocument < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch(enqueue: true,\n              index_uid: safe_index_uid('ConditionallyEnqueuedDocument'),\n              if: :should_index?) do\n    attributes %i[name is_public]\n  end\n\n  def should_index?\n    is_public\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/song.rb",
+      "sha": null,
+      "content_sha256": "bea28a0612e2e11d26a749fb04d682a21ec8744847824c9aa800ff80182ca3db",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :songs do |t|\n  t.string :name\n  t.string :artist\n  t.boolean :released\n  t.boolean :premium\nend\n\nclass Song < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  PUBLIC_INDEX_UID  = safe_index_uid('Songs')\n  SECURED_INDEX_UID = safe_index_uid('PrivateSongs')\n\n  meilisearch index_uid: SECURED_INDEX_UID do\n    searchable_attributes %i[name artist]\n\n    add_index PUBLIC_INDEX_UID, if: :public? do\n      searchable_attributes %i[name artist]\n    end\n\n    proximity_precision 'byAttribute'\n  end\n\n  private\n\n  def public?\n    released && !premium\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/custom_attribute_builder_models.rb",
+      "sha": null,
+      "content_sha256": "9b192cebeba04df52275bda5613988cc33e29def20fad51ad2d89c903b5839bb",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :search_blob_from_attribute_models do |t|\n  t.string :name\nend\n\nar_schema.create_table :search_blob_from_add_attribute_models do |t|\n  t.string :name\nend\n\nclass SearchBlobFromAttributeModel < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  class << self\n    attr_accessor :search_blob_evaluations\n  end\n\n  self.search_blob_evaluations = 0\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('SearchBlobFromAttributeModel') do\n    attribute :search_blob do\n      self.class.search_blob_evaluations += 1\n      \"#{name}--#{self.class.search_blob_evaluations}\"\n    end\n\n    searchable_attributes ['search_blob']\n  end\n\n  def self.reset_evaluations!\n    self.search_blob_evaluations = 0\n  end\n\n  def will_save_change_to_search_blob?\n    will_save_change_to_name?\n  end\nend\n\nclass SearchBlobFromAddAttributeModel < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  class << self\n    attr_accessor :search_blob_evaluations\n  end\n\n  self.search_blob_evaluations = 0\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('SearchBlobFromAddAttributeModel') do\n    attribute :name\n\n    add_attribute :search_blob do\n      self.class.search_blob_evaluations += 1\n      \"#{name}--#{self.class.search_blob_evaluations}\"\n    end\n\n    searchable_attributes ['name']\n  end\n\n  def self.reset_evaluations!\n    self.search_blob_evaluations = 0\n  end\n\n  def will_save_change_to_search_blob?\n    will_save_change_to_name?\n  end\nend\n\nmodule TestUtil\n  def self.reset_search_blob_from_attribute_models!\n    SearchBlobFromAttributeModel.clear_index!\n    SearchBlobFromAttributeModel.delete_all\n    SearchBlobFromAttributeModel.reset_evaluations!\n  end\n\n  def self.reset_search_blob_from_add_attribute_models!\n    SearchBlobFromAddAttributeModel.clear_index!\n    SearchBlobFromAddAttributeModel.delete_all\n    SearchBlobFromAddAttributeModel.reset_evaluations!\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/book.rb",
+      "sha": null,
+      "content_sha256": "5631c0941b1b27b260ccdc749537571a82599d95c1e0af8e7af62a5b041d0c3f",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :books do |t|\n  t.string :name\n  t.string :author\n  t.boolean :premium\n  t.boolean :released\n  t.string :genre\nend\n\nclass Book < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('SecuredBook'), sanitize: true do\n    searchable_attributes [:name]\n    typo_tolerance min_word_size_for_typos: { one_typo: 5, twoTypos: 8 }\n    filterable_attributes %i[genre author]\n    faceting max_values_per_facet: 3\n\n    add_index safe_index_uid('BookAuthor') do\n      searchable_attributes [:author]\n    end\n\n    add_index safe_index_uid('Book'), if: :public? do\n      searchable_attributes [:name]\n    end\n  end\n\n  private\n\n  def public?\n    released && !premium\n  end\nend\n\nmodule TestUtil\n  def self.reset_books!\n    Book.clear_index!\n    Book.index(safe_index_uid('BookAuthor')).delete_all_documents\n    Book.index(safe_index_uid('Book')).delete_all_documents\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/disabled_models.rb",
+      "sha": null,
+      "content_sha256": "0f424cc9c6de2f37f754986f2ec44cd04409357db053c0c50d8f949c740d6112",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :disabled_booleans do |t|\n  t.string :name\nend\n\nar_schema.create_table :disabled_procs do |t|\n  t.string :name\nend\n\nar_schema.create_table :disabled_symbols do |t|\n  t.string :name\nend\n\nclass DisabledBoolean < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, disable_indexing: true, index_uid: safe_index_uid('DisabledBoolean')\nend\n\nclass DisabledProc < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, disable_indexing: proc { true }, index_uid: safe_index_uid('DisabledProc')\nend\n\nclass DisabledSymbol < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, disable_indexing: :truth, index_uid: safe_index_uid('DisabledSymbol')\n\n  def self.truth\n    true\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/people.rb",
+      "sha": null,
+      "content_sha256": "49052995656a1685fa878fa528f6ed447a509b4bd1ee3cfec0636ef0d92e95af",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :people do |t|\n  t.string :first_name\n  t.string :last_name\n  t.integer :card_number\nend\n\nclass People < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch synchronous: true, index_uid: safe_index_uid('MyCustomPeople'), primary_key: :card_number,\n              auto_remove: false do\n    add_attribute :full_name\n  end\n\n  def full_name\n    \"#{first_name} #{last_name}\"\n  end\n\n  def will_save_change_to_full_name?\n    will_save_change_to_first_name? || will_save_change_to_last_name?\n  end\nend\n\nmodule TestUtil\n  def self.reset_people!\n    People.clear_index!\n    People.delete_all\n  end\nend\n"
+    },
+    {
+      "path": "spec/support/models/product.rb",
+      "sha": null,
+      "content_sha256": "5bcf5aa105dec88fbd85c043d48c6cf705f6bffed60b7b6ea7d0a60b8affaa98",
+      "score": 224,
+      "content": "require 'support/active_record_schema'\n\nar_schema.create_table :products do |t|\n  t.string :name\n  t.string :href\n  t.string :tags\n  t.string :type\n  t.text :description\n  t.datetime :release_date\nend\n\nclass Product < ActiveRecord::Base\n  include Meilisearch::Rails\n\n  meilisearch auto_index: false,\n              if: :published?, unless: ->(o) { o.href.blank? },\n              index_uid: safe_index_uid('my_products_index') do\n    attribute :href, :name\n\n    synonyms({\n               iphone: %w[applephone iBidule],\n               pomme: ['apple'],\n               samsung: ['galaxy'],\n               m_b_p: ['macbookpro']\n             })\n  end\n\n  def published?\n    release_date.blank? || release_date <= Time.now\n  end\nend\n\nclass Camera < Product\nend\n"
+    },
+    {
+      "path": ".github/workflows/tests.yml",
+      "sha": null,
+      "content_sha256": "eace71877bf2d8d5d3e1824b84af6a31243015ce82efa86da5cd2858e280b8c1",
+      "score": 186,
+      "content": "name: Tests\n\non:\n  pull_request:\n  push:\n    branches:\n      - main\n  merge_group:\n\njobs:\n  integration-tests:\n    # Will not run if the event is a PR to bump-meilisearch-v* (so a pre-release PR)\n    # Will still run for each push to bump-meilisearch-v*\n    if: github.event_name != 'pull_request' || !startsWith(github.base_ref, 'bump-meilisearch-v')\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n      matrix:\n        ruby-version: [\"3.2\", \"3.3\", \"3.4\"]\n        rails-version: [6.1, 7.0]\n        mongodb-version: [8.0]\n    env:\n      RAILS_VERSION: ${{ matrix.rails-version }}\n    name: integration-tests (Rails ${{ matrix.rails-version }} with Ruby ${{ matrix.ruby-version }})\n    steps:\n      - uses: actions/checkout@v6\n      - name: Install SQLite dependencies\n        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev\n      - name: Set up Ruby\n        uses: ruby/setup-ruby@v1\n        with:\n          ruby-version: ${{ matrix.ruby-version }}\n          bundler-cache: true\n      - name: Meilisearch (latest) setup with Docker\n        run: docker run -d -p 7700:7700 getmeili/meilisearch-enterprise:latest meilisearch --master-key=masterKey --no-analytics\n      - name: Start MongoDB\n        uses: supercharge/mongodb-github-action@1.12.0\n        with:\n          mongodb-version: ${{ matrix.mongodb-version }}\n      - name: Run tests\n        run: bundle exec rspec\n      - name: Upload coverage reports to Codecov\n        uses: codecov/codecov-action@v5\n        if: matrix.ruby-version == '3.4' && matrix.rails-version == '7.0'\n        with:\n          token: ${{ secrets.CODECOV_TOKEN }}\n\n  linter_check:\n    name: linter-check\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - name: Install SQLite dependencies\n        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev\n      - name: Set up Ruby\n        uses: ruby/setup-ruby@v1\n        env:\n          BUNDLE_WITH: test\n        with:\n          ruby-version: \"3.4\"\n          bundler-cache: true\n      - name: Run linter\n        run: bundle exec rubocop lib/ spec/\n\n  yaml-lint:\n    name: Yaml linting check\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - name: Yaml lint check\n        uses: ibiqlik/action-yamllint@v3\n        with:\n          config_file: .yamllint.yml\n\n  smoke-test:\n    name: smoke-test\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - name: Install SQLite dependencies\n        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev\n      - name: Set up Ruby\n        uses: ruby/setup-ruby@v1\n        env:\n          BUNDLE_WITHOUT: test\n          BUNDLE_GEMFILE: ./playground/Gemfile\n        with:\n          ruby-version: \"3.4\"\n          bundler-cache: true\n      - name: Meilisearch (latest) setup with Docker\n        run: docker run -d -p 7700:7700 getmeili/meilisearch-enterprise:latest meilisearch --master-key=masterKey --no-analytics\n      - name: Run smoke tests\n        working-directory: ./playground\n        run: |\n          bundle install\n          bundle exec rake db:setup meilisearch:reindex meilisearch:clear_indexes\n"
+    },
+    {
+      "path": ".github/workflows/pre-release-tests.yml",
+      "sha": null,
+      "content_sha256": "e7a741cbe98a0fc86b92eab6cb0374a7ceffe2fdd883c3f21d30830f67d6a71d",
+      "score": 186,
+      "content": "# Testing the code base against the Meilisearch pre-releases\nname: Pre-Release Tests\n\n# Will only run for PRs and pushes to bump-meilisearch-v*\non:\n  push:\n    branches:\n      - bump-meilisearch-v*\n  pull_request:\n    branches:\n      - bump-meilisearch-v*\n\njobs:\n  integration-tests:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n      matrix:\n        rails-version: [6.1, 7.0]\n    env:\n      RAILS_VERSION: ${{ matrix.rails-version }}\n    name: integration-tests-against-rc (Rails ${{ matrix.rails-version }})\n    steps:\n      - uses: actions/checkout@v6\n      - name: Set up Ruby\n        uses: ruby/setup-ruby@v1\n        with:\n          ruby-version: 3.0\n      - name: Install dependencies\n        run: bundle install\n      - name: Get the latest Meilisearch RC\n        run: echo \"MEILISEARCH_VERSION=$(curl https://raw.githubusercontent.com/meilisearch/integration-guides/main/scripts/get-latest-meilisearch-rc.sh | bash)\" >> $GITHUB_ENV\n      - name: Meilisearch (${{ env.MEILISEARCH_VERSION }}) setup with Docker\n        run: docker run -d -p 7700:7700 getmeili/meilisearch-enterprise:${{ env.MEILISEARCH_VERSION }} meilisearch --master-key=masterKey --no-analytics\n      - name: Run integration tests\n        run: bundle exec rspec\n"
+    },
+    {
+      "path": "playground/app/models/author.rb",
+      "sha": null,
+      "content_sha256": "03ba334edf17abec9a10d6e1bdc272b7623c278e8d7ab2b7552b6318277f3b67",
+      "score": 184,
+      "content": "class Author < ApplicationRecord\n  has_many :songs\nend\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": "playground/config/credentials.yml.enc",
+      "sha": "189bde96c4bfc04b8c033a1c1daa9bc6e4f7462e",
+      "size": 464,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:34:11.543687+00:00"
+}

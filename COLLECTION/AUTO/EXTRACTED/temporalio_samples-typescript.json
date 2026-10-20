@@ -1,0 +1,602 @@
+{
+  "canonical_source": "github:temporalio/samples-typescript",
+  "repo": "temporalio/samples-typescript",
+  "revision_sha": "cdd92ef58166ae7fdb0f81d3f9f39d9a39406496",
+  "default_branch": "main",
+  "pushed_at": "2026-10-20T21:08:21Z",
+  "repo_updated_at": "2026-10-12T14:49:09Z",
+  "license": "NOASSERTION",
+  "topics": [
+    "durable-execution"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "worker-specific-task-queues/package.json",
+      "sha": null,
+      "content_sha256": "451c2ca48202fad5d929afeef73093fc76151e217f569dd2902b62cf1ff4abbf",
+      "score": 250,
+      "content": "{\n  \"name\": \"worker-specific-task-queues\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"build.watch\": \"tsc --build --watch\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"lint\": \"eslint .\",\n    \"start\": \"ts-node src/worker.ts\",\n    \"start.watch\": \"nodemon src/worker.ts\",\n    \"workflow\": \"ts-node src/client.ts\"\n  },\n  \"nodemonConfig\": {\n    \"execMap\": {\n      \"ts\": \"ts-node\"\n    },\n    \"ext\": \"ts\",\n    \"watch\": [\n      \"src\"\n    ]\n  },\n  \"dependencies\": {\n    \"@temporalio/activity\": \"^1.24.0\",\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/envconfig\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\",\n    \"uuid\": \"^8.3.2\"\n  },\n  \"devDependencies\": {\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/node\": \"^22.9.1\",\n    \"@types/uuid\": \"^8.3.1\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"nodemon\": \"^3.1.7\",\n    \"prettier\": \"^3.4.2\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.6.3\"\n  }\n}\n"
+    },
+    {
+      "path": "openai-agents/src/tracing/README.md",
+      "sha": null,
+      "content_sha256": "38a461da65fda80f0c78986370d8c7b20f94100f1e746c5a5d1709ed646ba5cd",
+      "score": 241,
+      "content": "# OpenAI Agents: Tracing\n\nShows the three tracing paths the Temporal OpenAI Agents integration supports. OpenAI Agents SDK\ntracing works across Client, Workflow, Activity, Nexus, and MCP boundaries, and Workflow replay does\nnot duplicate spans.\n\nThe Worker selects a tracing mode (default `custom`):\n\n```bash\nnpx ts-node src/tracing/worker.ts <mode>     # mode: custom | openai | otel\n# or set TRACING_MODE=<mode>\n```\n\nAll modes also set `interceptorOptions: { addTemporalSpans: true }`, which emits `temporal:*`\norchestration spans (Workflow starts, Activities, Signals, and so on) to whichever sink is active.\n\n### 1. `custom` — a custom `TracingProcessor`\n\nRegisters a `RecordingTracingProcessor` (see `src/tracing/recording-processor.ts`) via `addTraceProcessor`.\nIt receives every trace and span lifecycle callback, so you can record, filter, or forward spans\nanywhere. This is the mode exercised by the test.\n\n### 2. `openai` — OpenAI hosted traces\n\nRegisters the upstream hosted exporter before constructing the plugin, so traces appear on the\nOpenAI dashboard:\n\n```ts\naddTraceProcessor(new BatchTraceProcessor(new OpenAITracingExporter()));\n```\n\nRegister this in the Worker process, not inside Workflow code.\n\n### 3. `otel` — OpenTelemetry\n\nInstalls a replay-safe tracer provider from `@temporalio/openai-agents/otel` and enables\n`useOtelInstrumentation`:\n\n```ts\ntrace.setGlobalTracerProvider(createTracerProvider());\n// plugin: interceptorOptions: { useOtelInstrumentation: true }\n```\n\n`createTracerProvider` uses `TemporalIdGenerator` for replay-safe span/trace IDs. This mode requires\nthe optional peer dependency `@opentelemetry/sdk-trace-base`.\n\n## Run\n\n```bash\ntemporal server start-dev\n```\n\nRun these from the `openai-agents/` root (run `npm install` there once first).\n\n```bash\nexport OPENAI_API_KEY=sk-...\nnpx ts-node src/tracing/worker.ts custom\n```\n\n```bash\nnpx ts-node src/tracing/client.ts \"What is 42 plus 58?\"\n```\n\n## Test\n\nThe test runs offline with a `FakeModelProvider`. It registers a custom `TracingProcessor`, runs an\nagent that calls a function tool, and asserts that `agent` and `function` spans were emitted.\n\n```bash\nnpx mocha --exit --require ts-node/register --require source-map-support/register \"src/tracing/mocha/*.test.ts\"\n```\n"
+    },
+    {
+      "path": "openai-agents/src/tracing/mocha/workflows.test.ts",
+      "sha": null,
+      "content_sha256": "e957b78023d19a33d33aab4358f4bf2703ba1d3cc23781e120aa40c74adf348d",
+      "score": 234,
+      "content": "import { TestWorkflowEnvironment } from '@temporalio/testing';\nimport { after, before, describe, it } from 'mocha';\nimport { Worker } from '@temporalio/worker';\nimport { OpenAIAgentsPlugin } from '@temporalio/openai-agents';\nimport { addTraceProcessor } from '@openai/agents-core';\nimport assert from 'assert';\nimport { FakeModelProvider, textResponse, toolCallResponse } from './fake-model';\nimport { RecordingTracingProcessor } from '../recording-processor';\nimport { tracedAgent } from '../workflows';\n\ndescribe('openai-agents/tracing custom TracingProcessor', function () {\n  this.timeout(30_000);\n\n  let testEnv: TestWorkflowEnvironment;\n\n  before(async () => {\n    testEnv = await TestWorkflowEnvironment.createLocal();\n  });\n\n  after(async () => {\n    await testEnv?.teardown();\n  });\n\n  it('captures agent and function spans emitted during the run', async () => {\n    const taskQueue = 'test-tracing-custom';\n    const recorder = new RecordingTracingProcessor();\n    addTraceProcessor(recorder);\n\n    const provider = new FakeModelProvider([\n      toolCallResponse('add', { a: 42, b: 58 }),\n      textResponse('42 plus 58 is 100.'),\n    ]);\n    const worker = await Worker.create({\n      connection: testEnv.nativeConnection,\n      taskQueue,\n      workflowsPath: require.resolve('../workflows'),\n      plugins: [new OpenAIAgentsPlugin({ modelProvider: provider, interceptorOptions: { addTemporalSpans: true } })],\n      bundlerOptions: {\n        webpackConfigHook: (config) => ({\n          ...config,\n          resolve: {\n            ...config.resolve,\n            conditionNames: ['require', 'browser', 'default'],\n          },\n        }),\n      },\n    });\n\n    const result = await worker.runUntil(\n      testEnv.client.workflow.execute(tracedAgent, {\n        args: ['What is 42 plus 58?'],\n        workflowId: 'test-tracing-custom-' + Date.now(),\n        taskQueue,\n      }),\n    );\n    assert.strictEqual(result, '42 plus 58 is 100.');\n\n    assert.ok(recorder.traceIds.length >= 1, 'at least one trace should be recorded');\n    assert.ok(recorder.spanTypes.includes('agent'), 'an agent span should be recorded');\n    assert.ok(recorder.spanTypes.includes('function'), 'a function tool span should be recorded');\n  });\n});\n"
+    },
+    {
+      "path": "worker-specific-task-queues/README.md",
+      "sha": null,
+      "content_sha256": "17cbe3ed90fdb429d592ccdbdeb924ec7c9f2cdbc8189baff0e38368e55cd206",
+      "score": 230,
+      "content": "# Worker-Specific Task Queues\n\nUse a unique Task Queue for each Worker in order to have certain Activities run on a specific Worker.\n\nThis is useful in scenarios where multiple Activities need to run in the same process or on the same host, for example to share memory or disk. This sample has a file processing Workflow, where one Activity downloads the file to disk and other Activities process it and clean it up.\n\nThe strategy is:\n\n- Each Worker process creates two `Worker` instances:\n  - One instance listens on the `normal-task-queue` Task Queue.\n  - Another instance listens on a uniquely generated Task Queue (in this case, `uuid` is used, but you can inject smart logic here to uniquely identify the Worker, [as Netflix did](https://community.temporal.io/t/using-dynamic-task-queues-for-traffic-routing/3045)).\n- The Workflow and the first Activity are run on `normal-task-queue`.\n- The first Activity returns one of the uniquely generated Task Queues (that only one Worker is listening on—i.e. the **Worker-specific Task Queue**).\n- The rest of the Activities do the file processing and are run on the Worker-specific Task Queue.\n\nActivities have been artificially slowed with `sleep(3000)` to simulate doing more work.\n\n### Running this sample\n\n1. `temporal server start-dev` to start [Temporal Server](https://github.com/temporalio/cli/#installation).\n1. `npm install` to install dependencies.\n1. `npm run start.watch` to start the Worker.\n1. In another shell, `npm run workflow` to run the Workflow.\n\nExample output:\n\n```bash\nDownloading https://temporal.io and saving to /tmp/b15036de-dbc7-4bc9-b2c7-7c48635c5797\n\nDid some work on /tmp/b15036de-dbc7-4bc9-b2c7-7c48635c5797, checksum: b3fc767460efa514753a75e6f3d7af97\n\nRemoving /tmp/b15036de-dbc7-4bc9-b2c7-7c48635c5797\n```\n\n<details>\n<summary>Example history in Temporal Web</summary>\n\n![image](https://user-images.githubusercontent.com/6764957/137707555-967503fd-d0d5-4b57-a04e-48d297ab7dfb.png)\n\n</details>\n\n### Things to try\n\nYou can try to intentionally crash Workers while they are doing work to see what happens when work gets \"stuck\" in a unique queue: currently the Workflow will `scheduleToCloseTimeout` without a Worker, and retry when a Worker comes back online.\n\n<details>\n<summary>Workflow history with crash</summary>\n\n![image](https://user-images.githubusercontent.com/6764957/137708492-41611a1f-3093-4221-800c-017c0a9d88b2.png)\n\n</details>\n\nAfter the 5th attempt, it logs `Final attempt 5 failed, giving up` and exits. But you may wish to implement compensatory logic, including notifying you.\n"
+    },
+    {
+      "path": "google-adk-agents/src/observability/README.md",
+      "sha": null,
+      "content_sha256": "4d2b593427a81519ee44becde771b0bf7b15e327dd7f4e61d36e6b38c9ac9516",
+      "score": 229,
+      "content": "# Google ADK Agents: Observability\n\nWhere an agent's token usage, latency, and call counts come from once `OpenTelemetryPlugin` is composed onto the Worker alongside `GoogleAdkPlugin`, as this sample's `worker.ts` does. Without it, ADK's agent-loop spans are created inside the Workflow sandbox and dropped; the [`@temporalio/google-adk-agents` README](https://github.com/temporalio/sdk-typescript/tree/main/contrib/google-adk-agents#telemetry-and-observability) covers why, and the caveats that come with exporting them.\n\nEverything here is traces. ADK defines no OpenTelemetry metric instruments, so there is no metric stream to scrape — the numbers below are span attributes.\n\n## What the spans carry\n\n`call_llm`, one per model call:\n\n- `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens`. There is no total; add the two, as this sample's Worker does when it prints each call.\n- `gen_ai.request.model`.\n- Latency is the span's own duration. ADK records no latency attribute, on this span or any other.\n\n`invoke_agent <name>` carries nothing numeric, so a call count means counting `call_llm` spans.\n\n## Run\n\nRun these from the `google-adk-agents/` root (run `npm install` there once first).\n\n```bash\n# In one terminal, start the Worker (requires a local Temporal server and GEMINI_API_KEY):\nGEMINI_API_KEY=... npx ts-node src/observability/worker.ts\n\n# In another terminal, run the scenario:\ntemporal workflow start --type observedAgent --task-queue google-adk-observability --workflow-id google-adk-observability-1 --input '[\"Write a haiku about durable execution.\",\"Write a haiku about replay.\"]'\n```\n\nFor a credential-free local run, start the Worker with `MODEL_PROVIDER=fake npx ts-node src/observability/worker.ts`.\n\nThe per-call token, model, and latency lines print in the Worker's terminal.\n\n## Test\n\n```bash\nnpx mocha --exit --require ts-node/register --require source-map-support/register \"src/observability/mocha/*.test.ts\"\n```\n\nThe test runs a real Worker against `TestWorkflowEnvironment` with `fakeModelProvider`, asserting that ADK's `call_llm` spans reach the span processor carrying their model name and token counts. No `GEMINI_API_KEY` is required.\n"
+    },
+    {
+      "path": "google-adk-agents/src/observability/mocha/workflows.test.ts",
+      "sha": null,
+      "content_sha256": "3a22ebcb70d7615a729386caeab55dbc70a4e4ec6dbb0e0da7f504b275e69175",
+      "score": 222,
+      "content": "import type { LlmResponse } from '@google/adk';\nimport { Resource } from '@opentelemetry/resources';\nimport { TestWorkflowEnvironment } from '@temporalio/testing';\nimport { Worker } from '@temporalio/worker';\nimport { GoogleAdkPlugin } from '@temporalio/google-adk-agents';\nimport { fakeModelProvider } from '@temporalio/google-adk-agents/testing';\nimport { OpenTelemetryPlugin } from '@temporalio/interceptors-opentelemetry';\nimport { after, before, describe, it } from 'mocha';\nimport assert from 'assert';\nimport { AdkUsageSpanProcessor, type ModelCall } from '../adk-usage-span-processor';\nimport { observedAgent } from '../workflows';\n\nconst prompts = ['Write a haiku about durable execution.', 'Write a haiku about workflow replay.'];\n\nconst responses: LlmResponse[] = [\n  {\n    content: { role: 'model', parts: [{ text: 'snow on the mountain' }] },\n    usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 7 },\n    turnComplete: true,\n  },\n];\n\ndescribe('google-adk-agents/observability workflow scenarios', function () {\n  this.timeout(30_000);\n\n  let testEnv: TestWorkflowEnvironment;\n\n  before(async () => {\n    testEnv = await TestWorkflowEnvironment.createLocal();\n  });\n\n  after(async () => {\n    await testEnv?.teardown();\n  });\n\n  it('observedAgent: composing OpenTelemetryPlugin exports the ADK spans and their token usage', async () => {\n    const taskQueue = 'test-google-adk-observability';\n    const modelCalls: ModelCall[] = [];\n    const worker = await Worker.create({\n      connection: testEnv.nativeConnection,\n      taskQueue,\n      workflowsPath: require.resolve('../workflows'),\n      plugins: [\n        new OpenTelemetryPlugin({\n          resource: new Resource({ 'service.name': 'test-google-adk-observability' }),\n          spanProcessor: new AdkUsageSpanProcessor((call) => modelCalls.push(call)),\n        }),\n        new GoogleAdkPlugin({ modelProvider: fakeModelProvider(responses) }),\n      ],\n    });\n    const result = await worker.runUntil(\n      testEnv.client.workflow.execute(observedAgent, {\n        args: [prompts],\n        workflowId: `${taskQueue}-${Date.now()}`,\n        taskQueue,\n      }),\n    );\n    assert.deepStrictEqual(result, ['snow on the mountain', 'snow on the mountain']);\n\n    assert.ok(\n      modelCalls.length >= prompts.length,\n      `expected at least ${prompts.length} call_llm spans, got ${modelCalls.length}`,\n    );\n    for (const call of modelCalls) {\n      assert.deepStrictEqual(\n        { model: call.model, inputTokens: call.inputTokens, outputTokens: call.outputTokens },\n        { model: 'gemini-2.5-flash', inputTokens: 11, outputTokens: 7 },\n      );\n      assert.ok(call.durationMs > 0, 'each call_llm span should have a duration');\n    }\n  });\n});\n"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "2f174fb20628f98a20c09a0fa8f0cbfc660a95ee497f8b17c67f135a9d87fb57",
+      "score": 198,
+      "content": "name: CI\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\n\npermissions:\n  contents: read\n\nenv:\n  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\njobs:\n  test:\n    runs-on: ${{ matrix.os }}\n    timeout-minutes: 30\n\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ ubuntu-latest, windows-latest, macos-latest ]\n        node: [ 20, 22, 24 ]\n\n    steps:\n      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n\n      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5\n        name: Install pnpm\n        with:\n          run_install: false\n          version: 10\n\n      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6\n        with:\n          node-version: ${{ matrix.node }}\n          # Comment out cache line when testing with act:\n          # (Test command is: act --platform ubuntu-latest=lucasalt/act_base:latest)\n          cache: 'pnpm'\n\n      - run: pnpm install\n\n      # Download the time-skipping test server once, before the test loop. The\n      # binary is fetched lazily on first use and cached in the system temp dir;\n      # doing it here keeps the cold download off the critical path of any test's\n      # default 5s hook timeout (which flakes on slower runners).\n      - name: Pre-download time-skipping test server\n        run: pnpm prewarm-test-server\n\n      - name: Build and test sample projects\n        shell: bash\n        run: |\n          set +e\n          failed=()\n          projects=(\n            activities-examples\n            ai-sdk\n            eager-workflow-start\n            early-return\n            empty\n            google-adk-agents\n            hello-world\n            langsmith\n            mutex\n            nestjs-exchange-rates\n            sleep-for-days\n            standalone-activity\n            timer-examples\n            workflow-streams\n            message-passing/introduction\n            message-passing/safe-message-handlers\n            openai-agents\n            openrouter\n            polling/infrequent\n          )\n          for project in \"${projects[@]}\"; do\n            echo \"::group::$project — build\"\n            (cd \"$project\" && npm run build) || failed+=(\"$project (build)\")\n            echo \"::endgroup::\"\n            echo \"::group::$project — test\"\n            (cd \"$project\" && npm test) || failed+=(\"$project (test)\")\n            echo \"::endgroup::\"\n          done\n          if [ ${#failed[@]} -ne 0 ]; then\n            echo \"Failed:\"\n            printf ' - %s\\n' \"${failed[@]}\"\n            exit 1\n          fi\n\n  lint-format-build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 30\n    steps:\n      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n\n      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5\n        name: Install pnpm\n        with:\n          run_install: false\n          version: 10\n\n      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6\n        with:\n          node-version: 22\n          cache: 'pnpm'\n\n      - run: pnpm install\n\n      - run: pnpm lint\n      - run: pnpm format:check\n      - run: pnpm build\n"
+    },
+    {
+      "path": "openai-agents/package.json",
+      "sha": null,
+      "content_sha256": "bf0443f783397aa949d8c5d1bad550de8f54f72386ffc2b5f8341f43dcbacf94",
+      "score": 193,
+      "content": "{\n  \"name\": \"temporal-openai-agents\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"build.watch\": \"tsc --build --watch\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"lint\": \"eslint .\",\n    \"test\": \"mocha --exit --require ts-node/register --require source-map-support/register \\\"src/*/mocha/*.test.ts\\\"\"\n  },\n  \"dependencies\": {\n    \"@temporalio/activity\": \"^1.24.0\",\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/nexus\": \"^1.24.0\",\n    \"@temporalio/openai-agents\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\",\n    \"@temporalio/workflow-streams\": \"^1.24.0\",\n    \"@openai/agents-core\": \"~0.14.3\",\n    \"@openai/agents-openai\": \"~0.14.3\",\n    \"@modelcontextprotocol/sdk\": \"^1.29.0\",\n    \"@opentelemetry/api\": \"^1.9.0\",\n    \"openai\": \"^6.46.0\",\n    \"nexus-rpc\": \"^0.0.3\",\n    \"nanoid\": \"3.x\",\n    \"zod\": \"^4.0.0\"\n  },\n  \"devDependencies\": {\n    \"@temporalio/testing\": \"^1.24.0\",\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/mocha\": \"8.x\",\n    \"@types/node\": \"^22.9.1\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"@opentelemetry/sdk-trace-base\": \"^1.30.0\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"mocha\": \"8.x\",\n    \"prettier\": \"^3.4.2\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.6.3\",\n    \"source-map-support\": \"^0.5.21\"\n  }\n}\n"
+    },
+    {
+      "path": "patching-api/package.json",
+      "sha": null,
+      "content_sha256": "e9bbd77e0bfff7840be77d9a45a53255a55fd38d83abe2028fba6062796bb057",
+      "score": 193,
+      "content": "{\n  \"name\": \"temporal-patching-api\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"build.watch\": \"tsc --build --watch\",\n    \"lint\": \"eslint .\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"start\": \"ts-node src/worker.ts\",\n    \"start.watch\": \"nodemon src/worker.ts\",\n    \"workflow\": \"ts-node src/client.ts\"\n  },\n  \"nodemonConfig\": {\n    \"execMap\": {\n      \"ts\": \"ts-node\"\n    },\n    \"ext\": \"ts\",\n    \"watch\": [\n      \"src\"\n    ]\n  },\n  \"dependencies\": {\n    \"@temporalio/activity\": \"^1.24.0\",\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/envconfig\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\",\n    \"axios\": \"0.28.0\",\n    \"eslint\": \"^8.57.1\",\n    \"node-fetch\": \"2.x\"\n  },\n  \"devDependencies\": {\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/mocha\": \"10.x\",\n    \"@types/node\": \"^22.9.1\",\n    \"@types/node-fetch\": \"^2.5.12\",\n    \"@types/sinon\": \"^10.0.4\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"nodemon\": \"^3.1.7\",\n    \"prettier\": \"^3.4.2\",\n    \"sinon\": \"^11.1.2\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.6.3\"\n  }\n}\n"
+    },
+    {
+      "path": "search-attributes/package.json",
+      "sha": null,
+      "content_sha256": "c5183247d74390ad06bb3af33c0d4f9e111f31d726e48b4a7c916b1b0d7e0c6f",
+      "score": 193,
+      "content": "{\n  \"name\": \"temporal-search-attributes\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"build.watch\": \"tsc --build --watch\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"lint\": \"eslint .\",\n    \"start\": \"ts-node src/worker.ts\",\n    \"start.watch\": \"nodemon src/worker.ts\",\n    \"workflow\": \"ts-node src/client.ts\",\n    \"create-attributes\": \"ts-node src/client-operator-service.ts\"\n  },\n  \"nodemonConfig\": {\n    \"execMap\": {\n      \"ts\": \"ts-node\"\n    },\n    \"ext\": \"ts\",\n    \"watch\": [\n      \"src\"\n    ]\n  },\n  \"dependencies\": {\n    \"@temporalio/activity\": \"^1.24.0\",\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/envconfig\": \"^1.24.0\",\n    \"@temporalio/common\": \"^1.24.0\",\n    \"@temporalio/proto\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\"\n  },\n  \"devDependencies\": {\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/node\": \"^22.9.1\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"nodemon\": \"^3.1.7\",\n    \"prettier\": \"^3.4.2\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.6.3\"\n  }\n}\n"
+    },
+    {
+      "path": "google-adk-agents/package.json",
+      "sha": null,
+      "content_sha256": "4e6437cca11ed71cf40fad23aa339a4591dfa2fdd5aacd5ad2c75db335d4968a",
+      "score": 193,
+      "content": "{\n  \"name\": \"temporal-google-adk-agents\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"build.watch\": \"tsc --build --watch\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"lint\": \"eslint .\",\n    \"test\": \"mocha --exit --require ts-node/register --require source-map-support/register \\\"src/*/mocha/*.test.ts\\\"\"\n  },\n  \"dependencies\": {\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/common\": \"^1.24.0\",\n    \"@temporalio/google-adk-agents\": \"^1.24.0\",\n    \"@temporalio/interceptors-opentelemetry\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\",\n    \"@temporalio/workflow-streams\": \"^1.24.0\",\n    \"@google/adk\": \">=1.5.0 <1.6.0\",\n    \"@google/genai\": \"^2.9.0\",\n    \"@opentelemetry/api\": \"^1.9.0\",\n    \"@opentelemetry/resources\": \"^1.25.1\",\n    \"@opentelemetry/sdk-trace-base\": \"^1.25.1\",\n    \"nanoid\": \"3.x\"\n  },\n  \"devDependencies\": {\n    \"@temporalio/testing\": \"^1.24.0\",\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/mocha\": \"8.x\",\n    \"@types/node\": \"^22.9.1\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"mocha\": \"8.x\",\n    \"prettier\": \"^3.4.2\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.6.3\",\n    \"source-map-support\": \"^0.5.21\"\n  }\n}\n"
+    },
+    {
+      "path": "ai-sdk/package.json",
+      "sha": null,
+      "content_sha256": "79d7e76abe91bea61bbe2ce0dc8c8e5ee3e8c80dd66cf3a73704dc9b3d99336d",
+      "score": 193,
+      "content": "{\n  \"name\": \"temporal-ai-sdk\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"build.watch\": \"tsc --build --watch\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"lint\": \"eslint .\",\n    \"start\": \"ts-node src/worker.ts\",\n    \"start.watch\": \"nodemon src/worker.ts\",\n    \"workflow\": \"ts-node src/client.ts\",\n    \"test\": \"mocha --exit --node-option experimental-require-module --require ts-node/register --require source-map-support/register src/mocha/*.test.ts\"\n  },\n  \"nodemonConfig\": {\n    \"execMap\": {\n      \"ts\": \"ts-node\"\n    },\n    \"ext\": \"ts\",\n    \"watch\": [\n      \"src\"\n    ]\n  },\n  \"dependencies\": {\n    \"@ai-sdk/openai\": \"^4.0.0\",\n    \"@ai-sdk/provider\": \"^4.0.0\",\n    \"@ai-sdk/mcp\": \"^2.0.0\",\n    \"@modelcontextprotocol/sdk\": \"^1.25.2\",\n    \"@temporalio/activity\": \"^1.24.0\",\n    \"@temporalio/ai-sdk\": \"^1.24.0\",\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/envconfig\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\",\n    \"@temporalio/workflow-streams\": \"^1.24.0\",\n    \"ai\": \"7.0.41\",\n    \"nanoid\": \"3.x\",\n    \"zod\": \"^4.0.0\"\n  },\n  \"devDependencies\": {\n    \"@temporalio/testing\": \"^1.24.0\",\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/mocha\": \"10.x\",\n    \"@types/node\": \"^22.9.1\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"mocha\": \"10.x\",\n    \"nodemon\": \"^3.1.7\",\n    \"prettier\": \"^3.4.2\",\n    \"ts-node\": \"^10.9.2\",\n    \"typescript\": \"^5.6.3\"\n  }\n}\n"
+    },
+    {
+      "path": "strands-agents/package.json",
+      "sha": null,
+      "content_sha256": "054f3584badf2f5e146b4a9545b4b277ae6fb780523315190366ffb89c5b4b30",
+      "score": 193,
+      "content": "{\n  \"name\": \"temporal-strands-agents\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"build.watch\": \"tsc --build --watch\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"lint\": \"eslint .\",\n    \"start\": \"tsx src/worker.ts\",\n    \"start.watch\": \"tsx watch src/worker.ts\",\n    \"workflow:hello-world\": \"tsx src/hello-world.ts\",\n    \"workflow:tools\": \"tsx src/tools.ts\",\n    \"workflow:human-in-the-loop\": \"tsx src/human-in-the-loop.ts\",\n    \"workflow:activity-interrupt\": \"tsx src/activity-interrupt.ts\",\n    \"workflow:hooks\": \"tsx src/hooks.ts\",\n    \"workflow:mcp\": \"tsx src/mcp.ts\",\n    \"workflow:structured-output\": \"tsx src/structured-output.ts\",\n    \"workflow:streaming\": \"tsx src/streaming.ts\",\n    \"workflow:continue-as-new\": \"tsx src/continue-as-new.ts\",\n    \"test\": \"tsx ./node_modules/mocha/bin/mocha.js --exit \\\"src/mocha/*.test.ts\\\"\"\n  },\n  \"dependencies\": {\n    \"@modelcontextprotocol/sdk\": \"^1.25.2\",\n    \"@strands-agents/sdk\": \"^1.3.0\",\n    \"@temporalio/activity\": \"^1.24.0\",\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/common\": \"^1.24.0\",\n    \"@temporalio/envconfig\": \"^1.24.0\",\n    \"@temporalio/strands-agents\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\",\n    \"@temporalio/workflow-streams\": \"^1.24.0\",\n    \"zod\": \"^4.1.12\"\n  },\n  \"devDependencies\": {\n    \"@temporalio/testing\": \"^1.24.0\",\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/mocha\": \"^10.0.10\",\n    \"@types/node\": \"^22.9.1\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"mocha\": \"^11.7.4\",\n    \"prettier\": \"^3.4.2\",\n    \"tsx\": \"^4.20.6\",\n    \"typescript\": \"^5.6.3\"\n  }\n}\n"
+    },
+    {
+      "path": "monorepo-folders/packages/backend-apis/package.json",
+      "sha": null,
+      "content_sha256": "b46025be3483532b6b0761467e98a8d6d076569e3a8e9b63b611bc9fd0acbda9",
+      "score": 189,
+      "content": "{\n  \"name\": \"backend-apis\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"build\": \"tsc --build\",\n    \"lint\": \"eslint .\",\n    \"start\": \"nodemon server.ts --watch . --watch ../temporal-workflows\"\n  },\n  \"dependencies\": {\n    \"@temporalio/client\": \"^1.24.0\",\n    \"express\": \"~4.20.0\",\n    \"temporal-workflows\": \"workspace:*\",\n    \"ts-node\": \"^10.9.2\"\n  },\n  \"devDependencies\": {\n    \"@types/express\": \"^4.17.13\",\n    \"nodemon\": \"^3.1.7\"\n  }\n}\n"
+    },
+    {
+      "path": "nextjs-ecommerce-oneclick/package.json",
+      "sha": null,
+      "content_sha256": "53497836cf4158dfeccc304e430df6ce0b4ee6e8bc9f58e5a78756ba7652c187",
+      "score": 178,
+      "content": "{\n  \"name\": \"temporal-nextjs-oneclick\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"npm-run-all -l build:temporal --parallel dev:temporal dev:next start:worker\",\n    \"dev:next\": \"next dev\",\n    \"dev:temporal\": \"tsc --build --watch ./temporal/tsconfig.json\",\n    \"build\": \"npm-run-all -l --parallel build:next build:temporal\",\n    \"build:next\": \"next build\",\n    \"build:temporal\": \"tsc --build ./temporal/tsconfig.json\",\n    \"start\": \"npm run dev\",\n    \"start:worker\": \"node ./temporal/lib/worker\",\n    \"format\": \"prettier --write .\",\n    \"format:check\": \"prettier --check .\",\n    \"lint\": \"eslint .\"\n  },\n  \"dependencies\": {\n    \"@headlessui/react\": \"^1.4.1\",\n    \"@heroicons/react\": \"^1.0.4\",\n    \"@tailwindcss/aspect-ratio\": \"^0.2.1\",\n    \"@tailwindcss/forms\": \"^0.3.3\",\n    \"@temporalio/activity\": \"^1.24.0\",\n    \"@temporalio/client\": \"^1.24.0\",\n    \"@temporalio/envconfig\": \"^1.24.0\",\n    \"@temporalio/worker\": \"^1.24.0\",\n    \"@temporalio/workflow\": \"^1.24.0\",\n    \"next\": \"^16.2.6\",\n    \"react\": \"^18.2.0\",\n    \"react-dom\": \"^18.2.0\",\n    \"react-toastify\": \"^8.0.3\",\n    \"swr\": \"^1.0.1\",\n    \"uuid\": \"^8.3.2\"\n  },\n  \"devDependencies\": {\n    \"@tsconfig/node22\": \"^22.0.0\",\n    \"@types/node\": \"^22.9.1\",\n    \"@types/react\": \"^18.0.0\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.18.0\",\n    \"@typescript-eslint/parser\": \"^8.18.0\",\n    \"autoprefixer\": \"^10.2.6\",\n    \"eslint\": \"^8.57.1\",\n    \"eslint-config-next\": \"^15.0.4\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-deprecation\": \"^3.0.0\",\n    \"husky\": \"^7.0.2\",\n    \"npm-run-all\": \"^4.1.5\",\n    \"postcss\": \"^8.3.5\",\n    \"prettier\": \"^3.4.2\",\n    \"tailwindcss\": \"^2.2.4\",\n    \"typescript\": \"^5.6.3\"\n  }\n}\n"
+    },
+    {
+      "path": "openai-agents/src/tracing/workflows.ts",
+      "sha": null,
+      "content_sha256": "c88cf4aaa8a4bcd74d40f4f61859256232c0b28f6e413b00adafa0b112039f91",
+      "score": 176,
+      "content": "import { Agent, tool } from '@openai/agents-core';\nimport { TemporalOpenAIRunner } from '@temporalio/openai-agents/workflow';\nimport z from 'zod';\n\nexport async function tracedAgent(prompt: string): Promise<string> {\n  const addTool = tool({\n    name: 'add',\n    description: 'Add two numbers together.',\n    parameters: z.object({ a: z.number().describe('First number'), b: z.number().describe('Second number') }),\n    execute: async ({ a, b }) => String(a + b),\n  });\n\n  const agent = new Agent({\n    name: 'TracedAgent',\n    instructions: 'You are a math assistant. Use the add tool to compute sums.',\n    tools: [addTool],\n  });\n  const result = await new TemporalOpenAIRunner().run(agent, prompt);\n  return result.finalOutput ?? '';\n}\n"
+    },
+    {
+      "path": "openai-agents/src/tracing/worker.ts",
+      "sha": null,
+      "content_sha256": "44b782b3e79a8fc279d263f4d718e8c545999125129a668923230b0edfba2a07",
+      "score": 176,
+      "content": "import { NativeConnection, Worker } from '@temporalio/worker';\nimport { OpenAIAgentsPlugin } from '@temporalio/openai-agents';\nimport { OpenAIProvider } from '@openai/agents-openai';\nimport { OpenAITracingExporter } from '@openai/agents-openai';\nimport { addTraceProcessor, BatchTraceProcessor } from '@openai/agents-core';\nimport { trace } from '@opentelemetry/api';\nimport { createTracerProvider } from '@temporalio/openai-agents/otel';\nimport { RecordingTracingProcessor } from './recording-processor';\n\ntype TracingMode = 'openai' | 'custom' | 'otel';\n\nasync function run() {\n  const apiKey = [REDACTED];\n  if (!apiKey) {\n    throw new Error('OPENAI_API_KEY environment variable is required');\n  }\n\n  const mode = (process.argv[2] ?? process.env.TRACING_MODE ?? 'custom') as TracingMode;\n  console.log(`Tracing mode: ${mode}`);\n\n  let useOtelInstrumentation = false;\n  switch (mode) {\n    case 'openai':\n      addTraceProcessor(new BatchTraceProcessor(new OpenAITracingExporter()));\n      break;\n    case 'custom':\n      addTraceProcessor(new RecordingTracingProcessor());\n      break;\n    case 'otel':\n      trace.setGlobalTracerProvider(createTracerProvider());\n      useOtelInstrumentation = true;\n      break;\n    default:\n      throw new Error(`Unknown tracing mode: ${mode}`);\n  }\n\n  const connection = await NativeConnection.connect({ address: 'localhost:7233' });\n  try {\n    const worker = await Worker.create({\n      connection,\n      taskQueue: 'openai-agents-tracing',\n      workflowsPath: require.resolve('./workflows'),\n      // @@@SNIPSTART typescript-openai-agents-tracing-worker\n      plugins: [\n        new OpenAIAgentsPlugin({\n          modelProvider: new OpenAIProvider({ apiKey }),\n          modelParams: { useLocalActivity: true },\n          interceptorOptions: { useOtelInstrumentation, addTemporalSpans: true },\n        }),\n      ],\n      // @@@SNIPEND\n      bundlerOptions: {\n        webpackConfigHook: (config) => ({\n          ...config,\n          resolve: {\n            ...config.resolve,\n            conditionNames: ['require', 'browser', 'default'],\n          },\n        }),\n      },\n    });\n    await worker.run();\n  } finally {\n    await connection.close();\n  }\n}\n\nrun().catch((err) => {\n  console.error(err);\n  process.exit(1);\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "openai-agents/src/tracing/client.ts",
+      "sha": null,
+      "content_sha256": "14985562fdb6df4cd780cf1e713473c8ff7aad0ffeae58d1acd22454d56f1a32",
+      "score": 176,
+      "content": "import { Connection, Client } from '@temporalio/client';\nimport { OpenAIAgentsPlugin } from '@temporalio/openai-agents';\nimport { OpenAIProvider } from '@openai/agents-openai';\nimport { tracedAgent } from './workflows';\nimport { nanoid } from 'nanoid';\n\nasync function run() {\n  const apiKey = [REDACTED];\n  if (!apiKey) {\n    throw new Error('OPENAI_API_KEY environment variable is required');\n  }\n\n  const prompt = process.argv[2] ?? 'What is 42 plus 58?';\n\n  const connection = await Connection.connect();\n  const client = new Client({\n    connection,\n    plugins: [new OpenAIAgentsPlugin({ modelProvider: new OpenAIProvider({ apiKey }) })],\n  });\n\n  const handle = await client.workflow.start(tracedAgent, {\n    taskQueue: 'openai-agents-tracing',\n    workflowId: 'openai-agents-' + nanoid(),\n    args: [prompt],\n  });\n\n  console.log(`Started workflow ${handle.workflowId}`);\n  console.log(await handle.result());\n}\n\nrun().catch((err) => {\n  console.error(err);\n  process.exit(1);\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "openai-agents/src/tracing/recording-processor.ts",
+      "sha": null,
+      "content_sha256": "6a99eceadba392240583e6ee72b122c7f65154fdc82388a20b052c0fdec2be00",
+      "score": 176,
+      "content": "import type { Span, SpanData, Trace, TracingProcessor } from '@openai/agents-core';\n\nexport class RecordingTracingProcessor implements TracingProcessor {\n  readonly spanTypes: string[] = [];\n  readonly traceIds: string[] = [];\n\n  async onTraceStart(trace: Trace): Promise<void> {\n    this.traceIds.push(trace.traceId);\n  }\n\n  async onTraceEnd(_trace: Trace): Promise<void> {}\n\n  async onSpanStart(_span: Span<SpanData>): Promise<void> {}\n\n  async onSpanEnd(span: Span<SpanData>): Promise<void> {\n    this.spanTypes.push(span.spanData.type);\n  }\n\n  async shutdown(_timeout?: number): Promise<void> {}\n\n  async forceFlush(): Promise<void> {}\n}\n"
+    },
+    {
+      "path": "openai-agents/src/tracing/mocha/fake-model.ts",
+      "sha": null,
+      "content_sha256": "fadf5c0731f5921a725fad6a9a8ecbc26cc7531c645c5c0a7541b0c903e0996f",
+      "score": 174,
+      "content": "import {\n  Usage,\n  type AgentOutputItem,\n  type Model,\n  type ModelProvider,\n  type ModelRequest,\n  type ModelResponse,\n  type StreamEvent,\n} from '@openai/agents-core';\n\nexport class FakeModel implements Model {\n  readonly requests: ModelRequest[] = [];\n  private getNext: () => ModelResponse;\n  constructor(source: ModelResponse[]) {\n    let index = 0;\n    this.getNext = () => {\n      if (index >= source.length) {\n        throw new Error(\n          `FakeModel: no more canned responses (called ${index + 1} times, only ${source.length} provided)`,\n        );\n      }\n      return source[index++]!;\n    };\n  }\n  async getResponse(request: ModelRequest): Promise<ModelResponse> {\n    this.requests.push(request);\n    return this.getNext();\n  }\n  // eslint-disable-next-line require-yield\n  async *getStreamedResponse(_request: ModelRequest): AsyncIterable<StreamEvent> {\n    throw new Error('Streaming not supported in FakeModel');\n  }\n}\n\nexport class FakeModelProvider implements ModelProvider {\n  readonly requestedModelNames: (string | undefined)[] = [];\n  readonly model: FakeModel;\n  constructor(source: ModelResponse[]) {\n    this.model = new FakeModel(source);\n  }\n  getModel(name?: string): Model {\n    this.requestedModelNames.push(name);\n    return this.model;\n  }\n}\n\nfunction fakeUsage(outputTokens: number): Usage {\n  return new Usage({ requests: 1, inputTokens: 10, outputTokens, totalTokens: 10 + outputTokens });\n}\n\nexport function textResponse(text: string): ModelResponse {\n  const output: AgentOutputItem[] = [\n    { type: 'message', role: 'assistant', content: [{ type: 'output_text', text }], status: 'completed' },\n  ];\n  return { output, usage: fakeUsage(text.length) };\n}\n\nexport function toolCallResponse(toolName: string, args: Record<string, unknown>): ModelResponse {\n  const output: AgentOutputItem[] = [\n    {\n      type: 'function_call',\n      name: toolName,\n      arguments: JSON.stringify(args),\n      callId: `call_fake_${toolName}`,\n      status: 'completed',\n    },\n  ];\n  return { output, usage: fakeUsage(20) };\n}\n"
+    },
+    {
+      "path": "search-attributes/README.md",
+      "sha": null,
+      "content_sha256": "88cec337557cee0d572a29ba532c0fff5dadbc197c00e6b498662ce5981c95dc",
+      "score": 173,
+      "content": "# Search Attributes\n\n> Background: [Search Attribute docs](https://docs.temporal.io/dev-guide/typescript/observability#visibility)\n\n### Adding to Server\n\n```\nnpm run create-attributes\n```\n\nThis runs [`src/client-operator-service.ts`](./src/client-operator-service.ts), which adds two custom Search Attributes to Temporal Server.\n\n### Adding to Workflow and using\n\n- Client: [`src/client.ts`](./src/client.ts)\n  - Add [custom search attributes](https://docs.temporal.io/dev-guide/typescript/observability#custom-search-attributes) to your Workflow Executions on start\n  - Use `describe()` to read search attributes\n- Workflow: [`src/workflows.ts`](./src/workflows.ts)\n  - Read search attributes from `WorkflowInfo`\n  - Upsert search attributes\n\n### Running this sample\n\n1. `temporal server start-dev` to start [Temporal Server](https://github.com/temporalio/cli/#installation).\n1. `npm install` to install dependencies.\n1. `npm run start.watch` to start the Worker.\n1. In another shell, `npm run workflow` to run the Workflow.\n\nYou can see the search attributes in Temporal Web ([localhost:8088](http://localhost:8088)):\n\n![image](https://user-images.githubusercontent.com/6764957/139664903-9fc3a3a9-7e02-4184-9d19-7de15c9e52d7.png)\n\nExample output:\n\n```\nhello workflow\n```\n"
+    },
+    {
+      "path": "patching-api/README.md",
+      "sha": null,
+      "content_sha256": "9da1894f24125ae0a8f8f16a6b904e2b5a5e21d9e626fff8761189c913994173",
+      "score": 173,
+      "content": "# Patching API\n\nThis sample shows how to use the [patching/versioning API](https://docs.temporal.io/workflows/#workflow-versioning) to update the code of a Workflow that has executions in progress in production.\n\n### Running this sample\n\n1. `temporal server start-dev` to start [Temporal Server](https://github.com/temporalio/cli/#installation).\n2. `npm install` to install dependencies.\n3. `npm run start.watch` to start the Worker.\n4. In another shell, `npm run workflow` to run the v1 Workflow.\n5. Now we need to simulate a migration: patch in the new code\n\n- Go into [`src/workflows.ts`](./src/workflows.ts) and swap `workflows-v1` for `workflows-v2`.\n- Wait for the Worker to rebuild (back in the `npm run start.watch` shell).\n- Start a v2 Workflow with `npm run workflow`. This will run alongside the v1 Workflow.\n- You can see the deprecation marker recorded in Temporal Web for the v2 Workflow.\n  ![image](https://user-images.githubusercontent.com/6764957/139673361-35d61b38-ab94-401e-ae7b-feaa52eae8c6.png)\n\n6. Step 2 of the migration: deprecate the patch\n\n- Manually terminate the v1 Workflow. We only deprecate the patch when all instances of v1 are no longer running.\n- Go into `src/workflows.ts` and swap `workflows-v2` for `workflows-v3`.\n- Wait for the Worker to rebuild.\n- Start a v3 Workflow with `npm run workflow`. This will run alongside the v2 Workflow.\n\n7. Step 3 of the migration: Solely deploy new code\n\n- Manually terminate the v2 Workflow. We only remove the deprecation when all instances of v2 are no longer running.\n- Go into `src/workflows.ts` and swap `workflows-v3` for `workflows-vFinal`.\n- etc.\n"
+    },
+    {
+      "path": "ai-sdk/README.md",
+      "sha": null,
+      "content_sha256": "9652f9ca7d6af727486e399c50c93b0d771c992caf329b6e52e4e76c968235d0",
+      "score": 173,
+      "content": "# AI Sdk\n\nThis project demonstrates some uses of the AI SDK inside Temporal.\n\n### Setup\n\n1. `temporal server start-dev` to start [Temporal Server](https://github.com/temporalio/cli/#installation).\n1. `npm install` to install dependencies.\n1. `export OPENAI_API_KEY=<KEY>`\n1. `npm run start.watch` to start the Worker.\n\n### Run the samples\n\n1. `npm run workflow haiku`\n1. `npm run workflow tools`\n1. `npm run workflow mcp`\n1. `npm run workflow middleware`\n1. `npm run workflow stream`\n\n### Streaming\n\nThe `stream` sample shows how to stream model output out of a\nWorkflow. `streamText` runs the model call in\nan activity that publishes each delta onto a\n[Workflow Stream](https://docs.temporal.io/develop/typescript/workflows/workflow-streams)\ntopic. The Workflow hosts the stream (`new WorkflowStream()`) and durably reassembles the\nfinal result, while external consumers subscribe by Workflow id to render the tokens live\nas they arrive — see `src/client.ts`.\n"
+    },
+    {
+      "path": "google-adk-agents/README.md",
+      "sha": null,
+      "content_sha256": "7f0a28c55e41c61947cc1da8efb50acc2d7f045f401cbef882ab2dc973ceef36",
+      "score": 173,
+      "content": "# Google ADK Agents\n\nThese samples use the `@temporalio/google-adk-agents` integration to run [Google Agent Development Kit](https://github.com/google/adk-js) (`@google/adk`) agents as durable Temporal Workflows. The ADK agent graph — the `Runner` loop, `LlmAgent`s, tools, and MCP toolsets — runs inside the Workflow and replays deterministically, while its non-deterministic I/O — model calls, MCP tool calls, and Activities exposed as tools — runs as durable Activities, so they retry on failure and are not repeated during Workflow replay.\n\nThis is a single project: one `package.json` and one set of configs at the `google-adk-agents/` root, with each scenario in its own subdirectory under `src/`. Run `npm install` once here, then run any scenario by path (see each scenario's README). The integration package itself is documented in the [`@temporalio/google-adk-agents` README](https://github.com/temporalio/sdk-typescript/tree/main/contrib/google-adk-agents).\n\n## Prerequisites\n\nThese apply to every sample in this directory:\n\n- A running Temporal dev server: `temporal server start-dev`.\n- Node 22 or later.\n- A Gemini API key for live runs: `export GEMINI_API_KEY=...`. Each scenario also documents a credential-free local mode.\n- Dependencies installed once at the `google-adk-agents/` root: `npm install`.\n\nEach scenario's README describes how to start its Worker and run its scenarios by path.\n\n## Samples\n\n| Sample                                         | Demonstrates                                                                                                                    |\n| :--------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------ |\n| [`agent-chat`](./src/agent-chat)               | Multi-turn chat through Updates, inspectable state through a Query, and Continue-As-New with conversation history.              |\n| [`tools`](./src/tools)                         | An existing Temporal Activity exposed to the agent as an ADK tool via `activityAsTool`.                                         |\n| [`multi-agent`](./src/multi-agent)             | A `transfer_to_agent` relay from a coordinator `LlmAgent` through a researcher and a writer, each with its own `TemporalModel`. |\n| [`mcp`](./src/mcp)                             | A `TemporalMCPToolset` backed by an `mcpToolsets` factory on the plugin (a filesystem MCP server over stdio).                   |\n| [`streaming`](./src/streaming)                 | Token streaming from a direct `TemporalModel` call — no agent loop — over the Workflow streams API.                             |\n| [`human-in-the-loop`](./src/human-in-the-loop) | A `LongRunningFunctionTool` whose completion is gated by a Temporal Signal or Update.                                           |\n| [`structured-output`](./src/structured-output) | An agent constrained by an output schema, with validation at the Workflow boundary.                                             |\n| [`observability`](./src/observability)         | Token usage, latency, and call counts, by composing `OpenTelemetryPlugin` onto the Worker alongside `GoogleAdkPlugin`.          |\n\nADK code executors are not included because the integration does not provide a durable Activity boundary for sandbox execution.\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 66,
+  "sensitive_files_skipped": [
+    {
+      "path": ".shared/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "activities-cancellation-heartbeating/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "activities-dependency-injection/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "activities-examples/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "ai-sdk/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "batch-sliding-window/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "child-workflows/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "continue-as-new/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cron-workflows/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "custom-logger/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "dsl-interpreter/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "eager-workflow-start/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "early-return/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "ejson/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "empty/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "encryption/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "env-config/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "expense/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "fetch-esm/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "food-delivery/.npmrc",
+      "sha": "43f2a87d07c12949be93399fec3b139cd97f2f98",
+      "size": 64,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "food-delivery/apps/driver/.env.production",
+      "sha": "9acf8b9667d50ed32ea7ba74fbc77fe63da098fa",
+      "size": 68,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "food-delivery/apps/menu/.env.production",
+      "sha": "9acf8b9667d50ed32ea7ba74fbc77fe63da098fa",
+      "size": 68,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "google-adk-agents/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "grpc-calls/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "hello-world-js/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "hello-world-mtls/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "hello-world/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "interceptors-opentelemetry/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "lambda-worker/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "langsmith/.npmrc",
+      "sha": "43c97e719a5a824700932f72e6e7e6748ce45d01",
+      "size": 19,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "message-passing/execute-update/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "message-passing/introduction/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "message-passing/safe-message-handlers/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "monorepo-folders/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "mutex/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nestjs-exchange-rates/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nextjs-ecommerce-oneclick/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nexus-cancellation/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nexus-hello/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nexus-messaging-temporal-operation/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nexus-messaging/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nexus-standalone-activity/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nexus-standalone-operations/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "openai-agents/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "openrouter/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "patching-api/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "polling/infrequent/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "production/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "protobufs/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "query-subscriptions/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "saga/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "schedules/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "scratchpad/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "search-attributes/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "signals-queries/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "sinks/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "sleep-for-days/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "snippets/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "standalone-activity/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "state/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "strands-agents/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "timer-examples/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "timer-progress/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "worker-specific-task-queues/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "worker-versioning/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "workflow-streams/.npmrc",
+      "sha": "9cf9495031ecc409c92933d3b0467c07c691ce98",
+      "size": 18,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:34:10.453975+00:00"
+}

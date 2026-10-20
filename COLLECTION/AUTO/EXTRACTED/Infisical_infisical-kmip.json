@@ -1,0 +1,204 @@
+{
+  "canonical_source": "github:Infisical/infisical-kmip",
+  "repo": "Infisical/infisical-kmip",
+  "revision_sha": "1192f14f5010aa26da4d6618dd969201f8580e60",
+  "default_branch": "master",
+  "pushed_at": "2026-08-17T17:22:02Z",
+  "repo_updated_at": "2026-10-10T17:17:48Z",
+  "license": "MPL-2.0",
+  "topics": [
+    "infisical",
+    "key-management",
+    "kmip",
+    "kms"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "manual-tests/percona-postgres/compose.yml",
+      "sha": null,
+      "content_sha256": "115d979c4c7d947b9816194aa2d917e36405e746f11dde34dc78dfc001b44800",
+      "score": 236,
+      "content": "version: \"3.8\"\n\nservices:\n  percona-pg-1:\n    image: percona/percona-distribution-postgresql:latest\n    container_name: percona-postgres-db-1\n    restart: unless-stopped\n    environment:\n      - POSTGRES_PASSWORD=password\n      - ENABLE_PG_TDE=1\n    ports:\n      - \"5433:5432\"\n    volumes:\n      - percona_pg_data:/var/lib/postgresql/data\n      - ./certs:/etc/pg/certs\n\nvolumes:\n  percona_pg_data:\n"
+    },
+    {
+      "path": "manual-tests/percona-postgres/README.md",
+      "sha": null,
+      "content_sha256": "810ce8bfe80fe86ff4d7d7e77b53f5bc16706caeb6e839e7e57afce6bf6baf05",
+      "score": 216,
+      "content": "## References\n\nhttps://docs.percona.com/postgresql/17/docker.html#enable-encryption\n\nhttps://docs.percona.com/pg-tde/setup.html\n\n## Step by step\n\nCREATE EXTENSION pg_tde;\n\nSELECT pg_tde_add_key_provider_kmip('infisical-kmip-final','host.docker.internal', 5696, '/etc/pg/certs/client-chain.pem', '/etc/pg/certs/client-cert.pem');\n\nSELECT pg_tde_set_principal_key('infisical-key', 'infisical-kmip-final');\n\nCREATE TABLE albums (\nalbum_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\nartist_id INTEGER,\ntitle TEXT NOT NULL,\nreleased DATE NOT NULL\n) USING tde_heap;\nINSERT INTO albums(artist_id, title, released) VALUES (1, 'The dane', '03-07-2003');\n\nSELECT \\* FROM albums;\n\nSELECT pg_tde_is_encrypted('albums');\n\n## Notes\n\n- Client certificate file must contain certificate (PEM format) and private key (PKCS#8 format)\n"
+    },
+    {
+      "path": "manual-tests/percona-mongo/compose.yml",
+      "sha": null,
+      "content_sha256": "7f456b91684b1843f5ebb693bd5e0ec7e9907dd92c598c0954999726c85d770a",
+      "score": 176,
+      "content": "version: \"3.8\"\n\nservices:\n  mongodb:\n    image: percona/percona-server-mongodb:latest\n    container_name: percona-db\n    restart: unless-stopped\n    environment:\n      MONGO_INITDB_ROOT_USERNAME: mongoadmin\n      MONGO_INITDB_ROOT_PASSWORD: secret\n    ports:\n      - \"27017:27017\"\n    volumes:\n      - mongo_data:/data/db\n      - ./certs:/etc/mongo/certs\n    command: >\n      mongod --enableEncryption\n      --kmipServerName host.docker.internal\n      --kmipPort 5696\n      --kmipServerCAFile /etc/mongo/certs/client-chain.pem\n      --kmipClientCertificateFile /etc/mongo/certs/client-cert.pem\n\nvolumes:\n  mongo_data:\n"
+    },
+    {
+      "path": "manual-tests/pykmip/README.md",
+      "sha": null,
+      "content_sha256": "eb0caac55bab380d584f4eb5b1945674b9c9368169412a9955c37569b4a80467",
+      "score": 156,
+      "content": "source .venv/bin/activate\n\npyenv global 3.7.17\n"
+    },
+    {
+      "path": "auth.go",
+      "sha": null,
+      "content_sha256": "9f32a08214a7d6ef6607b3325c95f057f4ee8f1d132799e294f134206f5a914f",
+      "score": 115,
+      "content": "package kmip\n\n/* This Source Code Form is subject to the terms of the Mozilla Public\n * License, v. 2.0. If a copy of the MPL was not distributed with this\n * file, You can obtain one at http://mozilla.org/MPL/2.0/. */\n\nimport \"github.com/pkg/errors\"\n\n// Authentication is an Authentication structure\ntype Authentication struct {\n\tTag `kmip:\"AUTHENTICATION\"`\n\n\tCredential Credential `kmip:\"CREDENTIAL\"`\n}\n\n// Credential is a structure for that contains a credential value and type\ntype Credential struct {\n\tTag `kmip:\"CREDENTIAL\"`\n\n\tCredentialType  Enum        `kmip:\"CREDENTIAL_TYPE,required\"`\n\tCredentialValue interface{} `kmip:\"CREDENTIAL_VALUE,required\"`\n}\n\n// BuildFieldValue builds value for CredentialValue based on CredentialType\nfunc (c *Credential) BuildFieldValue(name string) (v interface{}, err error) {\n\tswitch c.CredentialType {\n\tcase CREDENTIAL_TYPE_USERNAME_AND_PASSWORD:\n\t\tv = &CredentialUsernamePassword{}\n\tdefault:\n\t\terr = errors.Errorf(\"unsupported credential type: %v\", c.CredentialType)\n\t}\n\n\treturn\n}\n\n// CredentialUsernamePassword is a CredentialValue structure for username/password authentication\ntype CredentialUsernamePassword struct {\n\tTag `kmip:\"CREDENTIAL_VALUE\"`\n\n\tUsername string `kmip:\"USERNAME,required\"`\n\tPassword string `kmip:\"PASSWORD,required\"`\n}\n"
+    },
+    {
+      "path": "api.go",
+      "sha": null,
+      "content_sha256": "023db1bb2ea79b2e8d6d5a1b6b3d39eea60dd95dc77c7cf4feec14f2298e63f3",
+      "score": 110,
+      "content": "package kmip\n\nimport \"time\"\n\ntype KmipGetAPIResponse struct {\n\tId           string       `json:\"id\"`\n\tValue        string       `json:\"value\"`\n\tAlgorithm    string       `json:\"algorithm\"`\n\tKmipMetadata KmipMetadata `json:\"kmipMetadata\"`\n}\n\ntype KmipGetAPIRequest struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipCreateAPIResponse struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipCreateAPIRequest struct {\n\tAlgorithm string `json:\"algorithm\"`\n}\n\ntype KmipDestroyAPIRequest struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipDestroyAPIResponse struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipGetAttributeAPIRequest struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipGetAttributeAPIResponse struct {\n\tId           string       `json:\"id\"`\n\tAlgorithm    string       `json:\"algorithm\"`\n\tIsActive     bool         `json:\"isActive\"`\n\tCreatedAt    time.Time    `json:\"createdAt\"`\n\tUpdatedAt    time.Time    `json:\"updatedAt\"`\n\tKmipMetadata KmipMetadata `json:\"kmipMetadata\"`\n}\n\ntype KmipActivateAPIRequest struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipActivateAPIResponse struct {\n\tId       string `json:\"id\"`\n\tIsActive bool   `json:\"isActive\"`\n}\n\ntype KmipRevokeAPIRequest struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipRevokeAPIResponse struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipLocateAPIResponse struct {\n\tObjects []struct {\n\t\tId           string       `json:\"id\"`\n\t\tIsActive     bool         `json:\"isActive\"`\n\t\tAlgorithm    string       `json:\"algorithm\"`\n\t\tName         string       `json:\"name\"`\n\t\tKmipMetadata KmipMetadata `json:\"kmipMetadata\"`\n\t} `json:\"objects\"`\n}\n\ntype AttributeMetadata struct {\n\tValue interface{} `json:\"value\"`\n\tType  string      `json:\"type\"`\n}\n\ntype KmipMetadata struct {\n\tSecretDataType       int                          `json:\"secretDataType\"`\n\tSecretDataFormatType int                          `json:\"secretDataFormatType\"`\n\tObjectType           int                          `json:\"objectType\"`\n\tAttributes           map[string]AttributeMetadata `json:\"attributes\"`\n\tIsHexEncoded         bool                         `json:\"isHexEncoded,omitempty\"`\n}\n\ntype KmipRegisterAPIRequest struct {\n\tName         string       `json:\"name\"`\n\tKey          string       `json:\"key\"`\n\tAlgorithm    string       `json:\"algorithm\"`\n\tKmipMetadata KmipMetadata `json:\"kmipMetadata\"`\n}\n\ntype KmipRegisterAPIResponse struct {\n\tId string `json:\"id\"`\n}\n\ntype KmipServerRegistrationAPIRequest struct {\n\tHostnamesOrIps string `json:\"hostnamesOrIps\"`\n\tCommonName     string `json:\"commonName\"`\n\tTTL            string `json:\"ttl\"`\n}\n\ntype KmipServerRegistrationAPIResponse struct {\n\tCertificate            string `json:\"certificate\"`\n\tCertificateChain       string `json:\"certificateChain\"`\n\tPrivateKey             string `json:\"privateKey\"`\n\tClientCertificateChain string `json:\"clientCertificateChain\"`\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "aae52e396e538f6be61919b88cddc85820a129a64ed34a7b1339634ae0e83f71",
+      "score": 100,
+      "content": "# Infisical KMIP\n\n[![Documentation](https://img.shields.io/badge/docs-online-blue)](https://infisical.com/docs/documentation/platform/kms/kmip)\n[![Go Report Card](https://goreportcard.com/badge/github.com/infisical/infisical-kmip)](https://goreportcard.com/report/github.com/infisical/infisical-kmip)\n\nInfisical KMIP is a fork of the [go-kmip](https://github.com/smira/go-kmip) project, extended to integrate with Infisical as a Key Management Service (KMS) for comprehensive key management and security solutions. It is designed to be used with KMIP clients, enabling seamless interaction with Infisical's KMS capabilities.\n\nThis package implements a subset of the [KMIP 1.4](http://docs.oasis-open.org/kmip/spec/v1.4/os/kmip-spec-v1.4-os.html) protocol, including basic client/server operations.\n\n## Features\n\n- **Infisical KMS Integration**: Extended to work with Infisical as a KMS, providing enhanced key management capabilities.\n- **Full Key Management**: Implements key processing and management functionalities.\n\n## Supported Operations\n\nThe server currently supports the following KMIP operations, primarily for symmetric keys:\n\n- **Create**: Create symmetric keys.\n- **Register**: Register symmetric keys.\n- **Locate**: Locate keys based on attributes.\n- **Get**: Retrieve symmetric keys.\n- **Activate**: Activate keys.\n- **Revoke**: Revoke keys.\n- **Destroy**: Destroy keys.\n- **Get Attributes**: Retrieve attributes of keys.\n- **Query**: Query server capabilities and supported operations.\n\n## Compatibility\n\n- **Tested KMIP Versions**: The server has been tested for compatibility with KMIP versions 1.0 to 1.4.\n\n## Recent Changes\n\n- **Extension for Infisical KMS**: The fork has been extended to integrate with Infisical as a KMS, moving beyond the original encoding/decoding and base-level implementation.\n\n## License\n\nThis code is licensed under [MPL 2.0](https://www.mozilla.org/en-US/MPL/2.0/).\n"
+    },
+    {
+      "path": "manual-tests/pykmip/get-attributes.py",
+      "sha": null,
+      "content_sha256": "2696e559c7f84caa1e4581af9ac9384e1e9b19472918b00c170d5d8b3e7bc0cb",
+      "score": 91,
+      "content": "import ssl\n\nfrom kmip.pie.client import ProxyKmipClient, enums\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_0\n)\n\nclient.open()\n\nattributes = client.get_attributes(\"97b81c55-56a3-4ac0-a99c-7cf60fe940be\")\nprint(attributes)\n"
+    },
+    {
+      "path": "manual-tests/local-client/main.go",
+      "sha": null,
+      "content_sha256": "93be76c4a874b9700b88ef84754c1168a64a88a9cf5df4e58b552be9626a6d28",
+      "score": 91,
+      "content": "package main\n\nfunc main() {\n\t// ExecuteQuery()\n\tExecuteRegister()\n}\n"
+    },
+    {
+      "path": "manual-tests/pykmip/destroy.py",
+      "sha": null,
+      "content_sha256": "615b18dc7e1b61c1d330abd49d40e68b0fbcab74e6347aee58324f353bcc9b9f",
+      "score": 91,
+      "content": "import ssl\n\nfrom kmip.pie.client import ProxyKmipClient, enums\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_4\n)\n\nclient.open()\n\nclient.destroy(\"8b823975-b2ba-4f31-b5bc-0a9a1b5cb3d4\")\n"
+    },
+    {
+      "path": "manual-tests/pykmip/create.py",
+      "sha": null,
+      "content_sha256": "5a85a348102173c94b744c3f7b4eada6a67132f15693aa4acc15d8d41aea2dc2",
+      "score": 91,
+      "content": "import ssl\n\nfrom kmip.pie.client import ProxyKmipClient, enums\nfrom kmip.core.enums import CryptographicAlgorithm\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_4\n)\n\nclient.open()\n\nclient.create(\n    CryptographicAlgorithm.AES,\n    256,\n)\n"
+    },
+    {
+      "path": "manual-tests/pykmip/activate.py",
+      "sha": null,
+      "content_sha256": "5b016536475a3cc6f8806c721d691073d9abdb43ce22a940c22144998ba3b738",
+      "score": 91,
+      "content": "import ssl\n\nfrom kmip.pie.client import ProxyKmipClient, enums\nfrom kmip.core.enums import CryptographicAlgorithm\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_4\n)\n\nclient.open()\nclient.activate(\"c43d75e8-79e6-433b-8fe8-782e5fdf6803\")\n"
+    },
+    {
+      "path": "manual-tests/pykmip/locate.py",
+      "sha": null,
+      "content_sha256": "4b1fd11b78ff461bddeef8b1900a4d367d4cdf8be7bd4d393d43886407a1bf23",
+      "score": 91,
+      "content": "from kmip.pie.client import ProxyKmipClient, enums\nfrom kmip.core.factories import attributes\n\nf = attributes.AttributeFactory()\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_4\n)\n\nclient.open()\nlocs = client.locate(offset_items=0, maximum_items=3, attributes=[\n         f.create_attribute(\n             enums.AttributeType.STATE,\n             enums.State.ACTIVE,\n         ),\n        f.create_attribute(\n             \"x-Isilon-ClusterGUID\",\n             \"cluster-guid-12345\",\n             0\n         ),\n        f.create_attribute(\n             \"x-my-custom-property\",\n             \"some custom value\",\n             1\n         ),\n     ])\n\nprint(locs)\n"
+    },
+    {
+      "path": "manual-tests/pykmip/register-symmetric.py",
+      "sha": null,
+      "content_sha256": "bd7d4e22306fff21838d3970db01585006956e74f30add3fd1442f873785228b",
+      "score": 91,
+      "content": "from kmip.pie.client import ProxyKmipClient, enums\nfrom kmip.pie import objects\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_0\n)\n\nclient.open()\n\nsymmetric_key = objects.SymmetricKey(\n   enums.CryptographicAlgorithm.AES,\n   128,\n   (\n       b'\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07'\n       b'\\x08\\x09\\x0A\\x0B\\x0C\\x0D\\x0E\\x0F'\n   )\n )\n\nclient.register(\n    symmetric_key\n)\n"
+    },
+    {
+      "path": "manual-tests/pykmip/batch.py",
+      "sha": null,
+      "content_sha256": "4027d568812043d9a111741e29e4f763730b4d9ec60c5f7ff54d58ec5eebf89c",
+      "score": 91,
+      "content": "from kmip.pie.client import ProxyKmipClient, enums\nfrom kmip.core.enums import CryptographicAlgorithm\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_4\n)\n\nclient.open()\n\nobject_id = client.create(\n    CryptographicAlgorithm.AES,\n    256,\n)\n\nobject = client.get(object_id)\nprint(object.cryptographic_algorithm)\nprint(object.cryptographic_length)\nprint(object.cryptographic_usage_masks)\n\nclient.destroy(object_id)\n"
+    },
+    {
+      "path": "manual-tests/local-client/query.go",
+      "sha": null,
+      "content_sha256": "1e55b41edf9d237da8fcbf167f5dc8c6ebe291ce6af132f72bd1a8eb84a956d2",
+      "score": 91,
+      "content": "package main\n\nimport (\n\t\"crypto/tls\"\n\t\"crypto/x509\"\n\t\"fmt\"\n\t\"io/ioutil\"\n\t\"log\"\n\n\tkmip \"github.com/infisical/infisical-kmip\"\n)\n\nfunc ExecuteQuery() {\n\t// Try to load client certificates\n\tvar cert tls.Certificate\n\tvar err error\n\n\t// Try to load client certificate and key\n\tcertFile := \"./certificates/client-cert.pem\"\n\tkeyFile := \"./certificates/client-private-key.pem\"\n\n\tif cert, err = tls.LoadX509KeyPair(certFile, keyFile); err != nil {\n\t\tlog.Printf(\"Warning: Could not load client certificates from %s and %s: %v\", certFile, keyFile, err)\n\t\tlog.Println(\"Continuing without client certificates (this may fail if server requires them)\")\n\t}\n\n\t// Try to load CA certificate for server verification\n\tvar caCertPool *x509.CertPool\n\tcaFile := \"./client-chain.pem\"\n\tif caCert, err := ioutil.ReadFile(caFile); err == nil {\n\t\tcaCertPool = x509.NewCertPool()\n\t\tcaCertPool.AppendCertsFromPEM(caCert)\n\t\tlog.Printf(\"Loaded CA certificate from %s\", caFile)\n\t} else {\n\t\tlog.Printf(\"Warning: Could not load CA certificate from %s: %v\", caFile, err)\n\t\tlog.Println(\"Using InsecureSkipVerify for server certificate verification\")\n\t}\n\n\t// Create TLS config for client authentication\n\ttlsConfig := &tls.Config{\n\t\tInsecureSkipVerify: caCertPool == nil, // Only skip if we don't have CA cert\n\t\tCertificates:       []tls.Certificate{cert},\n\t\tRootCAs:            caCertPool,\n\t}\n\n\t// Create KMIP client\n\tclient := &kmip.Client{\n\t\tEndpoint:  \"127.0.0.1:5696\",\n\t\tTLSConfig: tlsConfig,\n\t}\n\n\t// Connect to server\n\tif err := client.Connect(); err != nil {\n\t\tlog.Fatalf(\"Failed to connect: %v\", err)\n\t}\n\tdefer client.Close()\n\n\tfmt.Println(\"Connected to KMIP server\")\n\n\t// Test OPERATION_QUERY with different query functions\n\tqueryFunctions := []kmip.Enum{\n\t\tkmip.QUERY_OPERATIONS,\n\t\tkmip.QUERY_OBJECTS,\n\t\tkmip.QUERY_SERVER_INFORMATION,\n\t\tkmip.QUERY_APPLICATION_NAMESPACES,\n\t\tkmip.QUERY_EXTENSION_LIST,\n\t\tkmip.QUERY_EXTENSION_MAP,\n\t\tkmip.QUERY_ATTESTATION_TYPES,\n\t\tkmip.QUERY_RNGS,\n\t\tkmip.QUERY_VALIDATIONS,\n\t\tkmip.QUERY_PROFILES,\n\t\tkmip.QUERY_CAPABILITIES,\n\t\tkmip.QUERY_CLIENT_REGISTRATION_METHODS,\n\t\tkmip.QUERY_DEFAULTS_INFORMATION,\n\t\tkmip.QUERY_STORAGE_PROTECTION_MASKS,\n\t}\n\n\tfor _, queryFunc := range queryFunctions {\n\t\tfmt.Printf(\"\\n=== Testing Query Function: %d ===\\n\", queryFunc)\n\n\t\t// Create query request\n\t\tqueryReq := kmip.QueryRequest{\n\t\t\tQueryFunctions: []kmip.Enum{queryFunc},\n\t\t}\n\n\t\t// Send query request\n\t\tresp, err := client.Send(kmip.OPERATION_QUERY, queryReq)\n\t\tif err != nil {\n\t\t\tfmt.Printf(\"Error: %v\\n\", err)\n\t\t\tcontinue\n\t\t}\n\n\t\t// Cast response to QueryResponse\n\t\tqueryResp := resp.(kmip.QueryResponse)\n\n\t\tfmt.Printf(\"Operations: %v\\n\", queryResp.Operations)\n\t\tfmt.Printf(\"Object Types: %v\\n\", queryResp.ObjectTypes)\n\t\tfmt.Printf(\"Vendor Identification: %s\\n\", queryResp.VendorIdentification)\n\t\tfmt.Printf(\"Profile Information: %v\\n\", queryResp.ProfileInformation)\n\t}\n}\n"
+    },
+    {
+      "path": "manual-tests/pykmip/revoke.py",
+      "sha": null,
+      "content_sha256": "ae187be09dcfa92dd75b4f5e52cb2f29856853e1fc6d8d1ebd4ab48e5a79e25f",
+      "score": 91,
+      "content": "from kmip.pie.client import ProxyKmipClient, enums\nfrom kmip.core.enums import RevocationReasonCode\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_4\n)\n\nclient.open()\nclient.revoke(RevocationReasonCode.PRIVILEGE_WITHDRAWN, \"c43d75e8-79e6-433b-8fe8-782e5fdf6803\")\n"
+    },
+    {
+      "path": "manual-tests/pykmip/get.py",
+      "sha": null,
+      "content_sha256": "a6d62375bfab3f6ef225134bbea4f68125f430381ec5c628e706b919e6039ec0",
+      "score": 91,
+      "content": "from kmip.pie.client import ProxyKmipClient, enums\n\nclient = ProxyKmipClient(\n   hostname='localhost',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_4\n)\n\nclient.open()\n\nobject = client.get(\"e758de61-96ee-4b8a-bb26-6f64e52c67be\")\nprint(object.cryptographic_algorithm)\nprint(object.cryptographic_length)\nprint(object.cryptographic_usage_masks)\n\nobject = client.get(\"e758de61-96ee-4b8a-bb26-6f64e52c67be\", {\n          'wrapping_method': enums.WrappingMethod.ENCRYPT,\n          'encryption_key_information': {\n              'unique_identifier': \"97b81c55-56a3-4ac0-a99c-7cf60fe940be\",\n              'cryptographic_parameters': {\n                  'block_cipher_mode':\n                      enums.BlockCipherMode.NIST_KEY_WRAP\n              }\n          },\n          'encoding_option': enums.EncodingOption.NO_ENCODING\n      })\n\nprint(object.cryptographic_algorithm)\nprint(object.cryptographic_length)\nprint(object.cryptographic_usage_masks)\n"
+    },
+    {
+      "path": "manual-tests/local-client/register.go",
+      "sha": null,
+      "content_sha256": "b8a10c2576a7a906f633e5154c8c0f82896b3a5b905c896bf37587d0e987da74",
+      "score": 91,
+      "content": "package main\n\nimport (\n\t\"crypto/tls\"\n\t\"crypto/x509\"\n\t\"fmt\"\n\t\"io/ioutil\"\n\t\"log\"\n\n\tkmip \"github.com/infisical/infisical-kmip\"\n)\n\nfunc ExecuteRegister() {\n\t// Load client certificates and CA certificate\n\tvar cert tls.Certificate\n\tvar err error\n\n\tcertFile := \"./certificates/client-cert.pem\"\n\tkeyFile := \"./certificates/client-private-key.pem\"\n\n\tif cert, err = tls.LoadX509KeyPair(certFile, keyFile); err != nil {\n\t\tlog.Printf(\"Warning: Could not load client certificates: %v\", err)\n\t}\n\n\tvar caCertPool *x509.CertPool\n\tcaFile := \"./client-chain.pem\"\n\tif caCert, err := ioutil.ReadFile(caFile); err == nil {\n\t\tcaCertPool = x509.NewCertPool()\n\t\tcaCertPool.AppendCertsFromPEM(caCert)\n\t}\n\n\t// Create TLS config\n\ttlsConfig := &tls.Config{\n\t\tInsecureSkipVerify: caCertPool == nil,\n\t\tCertificates:       []tls.Certificate{cert},\n\t\tRootCAs:            caCertPool,\n\t}\n\n\t// Create KMIP client\n\tclient := &kmip.Client{\n\t\tEndpoint:  \"127.0.0.1:5696\",\n\t\tTLSConfig: tlsConfig,\n\t}\n\n\t// Connect to server\n\tif err := client.Connect(); err != nil {\n\t\tlog.Fatalf(\"Failed to connect: %v\", err)\n\t}\n\tdefer client.Close()\n\n\tfmt.Println(\"Connected to KMIP server\")\n\n\t// Simulating PowerScale OneFS sending symmetric key as SecretData\n\tsymmetricKeyBytes := []byte{\n\t\t0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,\n\t\t0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,\n\t\t0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,\n\t\t0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F,\n\t}\n\n\t// Create SecretData object\n\tsecretData := kmip.SecretData{\n\t\tSecretDataType: kmip.SECRET_DATA_TYPE_PASSWORD,\n\t\tKeyBlock: kmip.KeyBlock{\n\t\t\tFormatType: kmip.KEY_FORMAT_RAW,\n\t\t\tValue: kmip.KeyValue{\n\t\t\t\tKeyMaterial: symmetricKeyBytes,\n\t\t\t},\n\t\t},\n\t}\n\n\t// Create a name attribute\n\tnameAttribute := kmip.Attribute{\n\t\tName: kmip.ATTRIBUTE_NAME_NAME,\n\t\tValue: kmip.Name{\n\t\t\tValue: \"my-secret-key-name-z\",\n\t\t\tType:  kmip.NAME_TYPE_UNINTERPRETED_TEXT_STRING,\n\t\t},\n\t}\n\n\t// Test custom attribute with x- prefix\n\tcustomAttribute1 := kmip.Attribute{\n\t\tName:  \"x-Isilon-ClusterGUID\",\n\t\tValue: \"cluster-guid-12345\",\n\t}\n\n\t// Test standard custom attribute approach\n\tcustomAttribute2 := kmip.Attribute{\n\t\tName: kmip.ATTRIBUTE_NAME_CUSTOM_ATTRIBUTE,\n\t\tValue: kmip.CustomAttribute{\n\t\t\tAttributeName:  \"x-my-custom-property\", // This is where the x- prefix goes\n\t\t\tAttributeValue: \"some custom value\",\n\t\t},\n\t}\n\n\t// Application Specific Information attribute\n\tappSpecificInfo := kmip.Attribute{\n\t\tName: kmip.ATTRIBUTE_NAME_APPLICATION_SPECIFIC_INFORMATION,\n\t\tValue: kmip.ApplicationSpecificInformation{\n\t\t\tApplicationNamespace: \"com.example.myapp\",\n\t\t\tApplicationData:      \"custom-application-data-value\",\n\t\t},\n\t}\n\n\t// Link attribute - links this secret to a certificate\n\tlinkAttribute := kmip.Attribute{\n\t\tName: kmip.ATTRIBUTE_NAME_LINK,\n\t\tValue: kmip.Link{\n\t\t\tLinkType:               kmip.LINK_TYPE_CERTIFICATE_LINK,\n\t\t\tLinkedObjectIdentifier: \"cert-12345-abcde\", // ID of the linked certificate\n\t\t},\n\t}\n\n\t// Contact Information attribute - will trigger type mismatch on decode\n\tcontactInfo := kmip.Attribute{\n\t\tName: kmip.ATTRIBUTE_NAME_CONTACT_INFORMATION,\n\t\tValue: kmip.ContactInformation{\n\t\t\tContactInformation: \"admin@example.com\",\n\t\t},\n\t}\n\n\t// Create template attribute with all attributes\n\ttemplateAttribute := kmip.TemplateAttribute{\n\t\tAttributes: []kmip.Attribute{nameAttribute, customAttribute1, customAttribute2, appSpecificInfo, linkAttribute, contactInfo},\n\t}\n\n\t// Create register request\n\tregisterReq := kmip.RegisterRequest{\n\t\tObjectType:        kmip.OBJECT_TYPE_SECRET_DATA,\n\t\tTemplateAttribute: templateAttribute,\n\t\tSecretData:        secretData,\n\t}\n\n\t// Send register request\n\tresp, err := client.Send(kmip.OPERATION_REGISTER, registerReq)\n\tif err != nil {\n\t\tlog.Fatalf(\"Failed to register secret data: %v\", err)\n\t}\n\n\t// Cast response to RegisterResponse\n\tregisterResp := resp.(kmip.RegisterResponse)\n\n\tfmt.Printf(\"Successfully registered secret data with unique identifier: %s\\n\", registerResp.UniqueIdentifier)\n}\n"
+    },
+    {
+      "path": "manual-tests/pykmip/register-secret-data.py",
+      "sha": null,
+      "content_sha256": "a81836db0bd1541f8a00286466a5d94d073d4bd06526a5c8dfc680245fb44608",
+      "score": 91,
+      "content": "from kmip.pie.client import ProxyKmipClient, enums\nfrom kmip.pie import objects\n\nclient = ProxyKmipClient(\n   hostname='127.0.0.1',\n   port=5696,\n   cert='./certificates/client-cert.pem',\n   key='./certificates/client-private-key.txt',\n   ca='./certificates/client-chain.pem',\n   ssl_version=\"PROTOCOL_SSLv23\",\n   username='',\n   password='',\n   config='client',\n   config_file='./pykmip.conf',\n   kmip_version=enums.KMIPVersion.KMIP_1_0\n)\n\nclient.open()\n\n# Simulating PowerScale OneFS sending symmetric key as SecretData\n# OneFS typically sends encryption keys as SecretData to external key managers\nsymmetric_key_bytes = (\n    b'\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07'\n    b'\\x08\\x09\\x0A\\x0B\\x0C\\x0D\\x0E\\x0F'\n    b'\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17'\n    b'\\x18\\x19\\x1A\\x1B\\x1C\\x1D\\x1E\\x1F'\n)\n\nsecret_data = objects.SecretData(\n    symmetric_key_bytes,\n    enums.SecretDataType.PASSWORD  # Using PASSWORD as it's a common available type\n)\n\nclient.register(\n    secret_data\n)\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "b521d845a007ef7c9d97c658c2c98d7dd56dc1673ad497f8bf717d67d525874c",
+      "score": 85,
+      "content": "all: test lint\n\n.PHONY: test\ntest:\n\tgo test -v -race -coverprofile=coverage.txt -covermode=atomic -count 1 .\n\n.PHONY: lint\nlint:\n\tgolangci-lint run\n"
+    },
+    {
+      "path": "go.mod",
+      "sha": null,
+      "content_sha256": "220d5dce28312f9d8aa37a1bb5286ffab48f28e27fa10770cbf8875236e3c7ef",
+      "score": 85,
+      "content": "module github.com/infisical/infisical-kmip\n\ngo 1.21\n\nrequire (\n\tgithub.com/go-resty/resty/v2 v2.16.5\n\tgithub.com/gosimple/slug v1.15.0\n\tgithub.com/infisical/go-sdk v0.4.8\n\tgithub.com/pkg/errors v0.9.1\n)\n\nrequire (\n\tcloud.google.com/go/auth v0.7.0 // indirect\n\tcloud.google.com/go/auth/oauth2adapt v0.2.2 // indirect\n\tcloud.google.com/go/compute/metadata v0.4.0 // indirect\n\tcloud.google.com/go/iam v1.1.11 // indirect\n\tgithub.com/aws/aws-sdk-go-v2 v1.27.2 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/config v1.27.18 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/credentials v1.17.18 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.5 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/internal/configsources v1.3.9 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.9 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/internal/ini v1.8.0 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.11.2 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.11.11 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/service/sso v1.20.11 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/service/ssooidc v1.24.5 // indirect\n\tgithub.com/aws/aws-sdk-go-v2/service/sts v1.28.12 // indirect\n\tgithub.com/aws/smithy-go v1.20.2 // indirect\n\tgithub.com/felixge/httpsnoop v1.0.4 // indirect\n\tgithub.com/go-logr/logr v1.4.1 // indirect\n\tgithub.com/go-logr/stdr v1.2.2 // indirect\n\tgithub.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect\n\tgithub.com/golang/protobuf v1.5.4 // indirect\n\tgithub.com/google/s2a-go v0.1.7 // indirect\n\tgithub.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect\n\tgithub.com/googleapis/gax-go/v2 v2.12.5 // indirect\n\tgithub.com/gosimple/unidecode v1.0.1 // indirect\n\tgithub.com/hashicorp/golang-lru/v2 v2.0.7 // indirect\n\tgo.opencensus.io v0.24.0 // indirect\n\tgo.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect\n\tgo.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect\n\tgo.opentelemetry.io/otel v1.24.0 // indirect\n\tgo.opentelemetry.io/otel/metric v1.24.0 // indirect\n\tgo.opentelemetry.io/otel/trace v1.24.0 // indirect\n\tgolang.org/x/crypto v0.31.0 // indirect\n\tgolang.org/x/net v0.33.0 // indirect\n\tgolang.org/x/oauth2 v0.21.0 // indirect\n\tgolang.org/x/sync v0.10.0 // indirect\n\tgolang.org/x/sys v0.28.0 // indirect\n\tgolang.org/x/text v0.21.0 // indirect\n\tgolang.org/x/time v0.6.0 // indirect\n\tgoogle.golang.org/api v0.188.0 // indirect\n\tgoogle.golang.org/genproto/googleapis/api v0.0.0-20240701130421-f6361c86f094 // indirect\n\tgoogle.golang.org/genproto/googleapis/rpc v0.0.0-20240708141625-4ad9e859172b // indirect\n\tgoogle.golang.org/grpc v1.64.1 // indirect\n\tgoogle.golang.org/protobuf v1.34.2 // indirect\n)\n"
+    },
+    {
+      "path": "manual-tests/pykmip/pykmip.conf",
+      "sha": null,
+      "content_sha256": "f0dff9dc6a365b328df3f7b540fda9a8d4fc6f101d248e5b3cabeeb1d11722d6",
+      "score": 56,
+      "content": "[client]\nhost=127.0.0.1\nport=5696\ncertfile=/path/to/certificate/file\nkeyfile=/path/to/certificate/key/file\nca_certs=/path/to/ca/certificate/file\ncert_reqs=CERT_REQUIRED\nssl_version=PROTOCOL_SSLv23\ndo_handshake_on_connect=True\nsuppress_ragged_eofs=True\nusername=example_username\npassword=[REDACTED]\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "tls.go",
+      "sha": null,
+      "content_sha256": "83187862ce711a23da7b3446ca39ef886055e0f8bd5d9f2ff78e73af8315dec2",
+      "score": 35,
+      "content": "package kmip\n\nimport \"crypto/tls\"\n\n/* This Source Code Form is subject to the terms of the Mozilla Public\n * License, v. 2.0. If a copy of the MPL was not distributed with this\n * file, You can obtain one at http://mozilla.org/MPL/2.0/. */\n\n// DefaultServerTLSConfig fills in good defaults for server TLS configuration\nfunc DefaultServerTLSConfig(config *tls.Config) {\n\tconfig.MinVersion = tls.VersionTLS12\n\tconfig.PreferServerCipherSuites = true\n\tconfig.ClientAuth = tls.RequireAndVerifyClientCert\n}\n\n// DefaultClientTLSConfig fills in good defaults for client TLS configuration\nfunc DefaultClientTLSConfig(config *tls.Config) {\n\tconfig.MinVersion = tls.VersionTLS12\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:34:15.835328+00:00"
+}

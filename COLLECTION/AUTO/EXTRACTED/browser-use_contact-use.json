@@ -1,0 +1,73 @@
+{
+  "canonical_source": "github:browser-use/contact-use",
+  "repo": "browser-use/contact-use",
+  "revision_sha": "acee03a1344fb2cce2922d342b228ee9b22a9463",
+  "default_branch": "main",
+  "pushed_at": "2025-07-30T10:08:00Z",
+  "repo_updated_at": "2026-10-17T22:25:54Z",
+  "license": null,
+  "topics": [
+    "ai",
+    "browser-agent",
+    "browser-use",
+    "computer-use",
+    "contact-info-scraper",
+    "operator",
+    "sales",
+    "sales-automation",
+    "scraping",
+    "scraping-bot"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "8c5047318c6fa91d74790f2e652ebcd4da5dfce736a24f0179d831a731abd887",
+      "score": 120,
+      "content": "[project]\nname = \"contact-use\"\nversion = \"0.1.0\"\ndescription = \"Find anyone by any means necessary\"\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"fastapi>=0.115.5\",\n    \"uvicorn>=0.32.1\",\n    \"pydantic>=2.10.3\",\n    \"python-multipart>=0.0.12\",\n    \"browser-use>=0.5.6\",\n]\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "72468a4401405393d73309386a3e2b9055c7941b9063850b1618f66a5adfcc2e",
+      "score": 100,
+      "content": "# ✉️ contact-use: Contact any person or organization\r\n\r\nNeed to contact someone in a hurry and cant figure out the best way?\r\n\r\nUse browser-use's LLM-powered browser agent to find the best way to reach them.\r\n\r\n<img width=\"1317\" height=\"997\" alt=\"image\" src=\"https://github.com/user-attachments/assets/e674ffc9-7140-4efc-8941-c879aec52d6e\" />\r\n<img width=\"2600\" height=\"1974\" alt=\"image\" src=\"https://github.com/user-attachments/assets/f292cba4-7a65-4443-a31b-6aadf888faa6\" />\r\n<img width=\"1088\" height=\"622\" alt=\"image\" src=\"https://github.com/user-attachments/assets/ebe5369d-d2fb-499a-a8e9-4ada8c70d9ef\" />\r\n\r\n\r\n## Quickstart\r\n\r\nFirst set either `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in your environment, it will automatically use `claude-sonnet-4-20250514` or `gpt-4.1-mini`.\r\n\r\n```bash\r\ngit clone https://github.com/browser-use/contact-use && cd contact-use\r\nuv sync\r\n\r\nuv run server.py\r\nopen http://localhost:8000\r\n```\r\n"
+    },
+    {
+      "path": "main.py",
+      "sha": null,
+      "content_sha256": "0a54476c0c6be27de63827492867a6169324c7a83e8deb2549b7ebb21e01276b",
+      "score": 35,
+      "content": "def main():\n    print(\"Hello from contact-use!\")\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "path": "server.py",
+      "sha": null,
+      "content_sha256": "9366da002288be4c0739569676d45075c60e3a49378a0bcaa7d973519e44c234",
+      "score": 35,
+      "content": "#!/usr/bin/env python3\nimport asyncio\nimport uuid\nfrom datetime import datetime\nfrom typing import Dict, List, Optional\nfrom pathlib import Path\n\nfrom fastapi import FastAPI, HTTPException\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom fastapi.responses import HTMLResponse\nfrom pydantic import BaseModel, Field\nimport uvicorn\n\n# Import browser-use\nfrom browser_use import Agent\nfrom browser_use.browser.browser import Browser, BrowserConfig\nfrom browser_use.llm import ChatOpenAI, ChatAnthropic\n\napp = FastAPI(title=\"Contact-Use API\")\n\n# Enable CORS for the frontend\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"*\"],\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)\n\n# Models\nclass ContactSearchRequest(BaseModel):\n    keywords: str\n    organization: Optional[str] = None\n    location: Optional[str] = None\n    role: Optional[str] = None\n    fields_to_find: List[str] = Field(default_factory=list)\n\nclass ContactResult(BaseModel):\n    full_name: Optional[str] = None\n    city: Optional[str] = None\n    company: Optional[str] = None\n    job_title: Optional[str] = None\n    email: Optional[str] = None\n    company_phone_number: Optional[str] = None\n    contact_form_url: Optional[str] = None\n    profile_image_url: Optional[str] = None\n    cv_url: Optional[str] = None\n    github_profile_url: Optional[str] = None\n    twitter_profile_url: Optional[str] = None\n    linkedin_profile_url: Optional[str] = None\n\nclass QueryStatus(BaseModel):\n    id: str\n    request: ContactSearchRequest\n    status: str  # \"pending\", \"running\", \"completed\", \"failed\"\n    result: Optional[ContactResult] = None\n    error: Optional[str] = None\n    created_at: datetime\n    completed_at: Optional[datetime] = None\n\n# In-memory storage for queries\nqueries: Dict[str, QueryStatus] = {}\n\n# Background task executor\nasync def run_browser_search(query_id: str):\n    query = queries[query_id]\n    query.status = \"running\"\n    \n    try:\n        # Build the task description\n        task_parts = [\"Find this contact info by any means necessary, take as long as you need and don't give up.\"]\n        \n        task_parts.append(f\"\\nSearch keywords: {query.request.keywords}\")\n        \n        if query.request.organization:\n            task_parts.append(f\"Organization: {query.request.organization}\")\n        if query.request.location:\n            task_parts.append(f\"Location: {query.request.location}\")\n        if query.request.role:\n            task_parts.append(f\"Role/Job Title: {query.request.role}\")\n        \n        task_parts.append(\"\\nFind the following information:\")\n        for field in query.request.fields_to_find:\n            task_parts.append(f\"- {field.replace('_', ' ').title()}\")\n        \n        task_parts.append(\"\\nReturn the results in a structured format with the field names exactly as requested.\")\n        \n        task = \" \".join(task_parts)\n        \n        # Create browser\n        user_data_dir = Path.home() / '.config' / 'browseruse' / 'profiles' / 'default'\n        browser = Browser(\n            config=BrowserConfig(\n                headless=False,\n                user_data_dir=str(user_data_dir)\n            )\n        )\n        \n        # Get LLM from browser_use config\n        llm = get_llm()\n        \n        agent = Agent(\n            task=task,\n            browser=browser,\n            llm=llm\n        )\n        \n        # Run the search\n        result = await agent.run()\n        \n        # Parse the result - the agent should return structured data\n        # For now, we'll just store the raw result\n        query.result = ContactResult()\n        if isinstance(result, str):\n            # Simple parsing - in practice, you'd want more sophisticated parsing\n            result_lower = result.lower()\n            if \"email:\" in result_lower or \"@\" in result:\n                # Extract email if present\n                import re\n                email_match = re.search(r'[\\w\\.-]+@[\\w\\.-]+\\.\\w+', result)\n                if email_match:\n                    query.result.email = email_match.group(0)\n            \n            # You can add more parsing logic here based on the agent's response format\n            \n        query.status = \"completed\"\n        query.completed_at = datetime.now()\n        \n    except Exception as e:\n        query.status = \"failed\"\n        query.error = str(e)\n        query.completed_at = datetime.now()\n\n@app.post(\"/api/search\", response_model=QueryStatus)\nasync def create_search(request: ContactSearchRequest):\n    \"\"\"Create a new contact search query\"\"\"\n    query_id = str(uuid.uuid4())\n    \n    query = QueryStatus(\n        id=query_id,\n        request=request,\n        status=\"pending\",\n        created_at=datetime.now()\n    )\n    \n    queries[query_id] = query\n    \n    # Start the search in the background\n    asyncio.create_task(run_browser_search(query_id))\n    \n    return query\n\n@app.get(\"/api/queries\", response_model=List[QueryStatus])\nasync def get_all_queries():\n    \"\"\"Get all search queries\"\"\"\n    return list(queries.values())\n\n@app.get(\"/api/queries/{query_id}\", response_model=QueryStatus)\nasync def get_query(query_id: str):\n    \"\"\"Get a specific search query by ID\"\"\"\n    if query_id not in queries:\n        raise HTTPException(status_code=404, detail=\"Query not found\")\n    return queries[query_id]\n\n@app.get(\"/health\")\nasync def health_check():\n    \"\"\"Health check endpoint\"\"\"\n    return {\"status\": \"healthy\"}\n\n@app.get(\"/\", response_class=HTMLResponse)\nasync def serve_frontend():\n    \"\"\"Serve the frontend HTML\"\"\"\n    html_path = Path(__file__).parent / \"index.html\"\n    if html_path.exists():\n        return html_path.read_text()\n    else:\n        return \"<h1>Frontend not found. Please ensure index.html is in the same directory as server.py</h1>\"\n\nif __name__ == \"__main__\":\n    uvicorn.run(app, host=\"0.0.0.0\", port=8000)"
+    },
+    {
+      "path": ".claude/settings.local.json",
+      "sha": null,
+      "content_sha256": "912fbb84a94e4915f27649472418db8c790fd318dcc3f340f99f95eee9423359",
+      "score": 33,
+      "content": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(uv run:*)\"\n    ],\n    \"deny\": []\n  }\n}"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:34:08.243345+00:00"
+}
