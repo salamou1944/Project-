@@ -1,0 +1,62 @@
+{
+  "canonical_source": "github:kopia/htmluibuild",
+  "repo": "kopia/htmluibuild",
+  "revision_sha": "0de3041cb26b457406dfc9af62fd02a723e0e3e0",
+  "default_branch": "main",
+  "pushed_at": "2026-10-15T14:03:38Z",
+  "repo_updated_at": "2026-10-15T14:03:42Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/after-push.yaml",
+      "sha": null,
+      "content_sha256": "784829c81bacb7d98bbfaebd928a2e53368b1182d5514b0fedc12d0d3ef18272",
+      "score": 126,
+      "content": "name: After Push\non:\n  push:\n    branches: [ main ]\nconcurrency: \n  group: ${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: true\njobs:\n  tests:\n    name: Make Kopia PR\n    runs-on: ubuntu-latest\n    steps:\n    - name: Check out repository\n      uses: actions/checkout@9bb56186c3b09b4f86b1c65136769dd318469633 # v4.1.2\n      with:\n        fetch-depth: 0\n    - name: Set up Go\n      uses: actions/setup-go@0c52d547c9bc32b1aa3301fd7a9cb496313a4491 # v5.0.0\n      with:\n        go-version-file: 'go.mod'\n        check-latest: true\n      id: go\n    - name: Make PR to kopia/kopia\n      run: ./tools/make-pr.sh\n      env:\n        GH_TOKEN: ${{ secrets.MAKE_PR_GH_TOKEN }}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "a129136d35a313e3c0f858a19e84d78fac900da42955568ac643c7893f525bed",
+      "score": 100,
+      "content": "# Pre-built embedded UI for Kopia\n\nThis repository exposes a single Go module `github.com/kopia/htmluibuild` which contains pre-built HTML UI files.\n\nThe source code is in https://github.com/kopia/htmlui and the builds are fully automated using GitHub actions.\n"
+    },
+    {
+      "path": "go.mod",
+      "sha": null,
+      "content_sha256": "a695d0ca0111928c99614bea37de3ce457bc3b6d9b69939e293695388e097e19",
+      "score": 85,
+      "content": "module github.com/kopia/htmluibuild\n\ngo 1.21\n"
+    },
+    {
+      "path": "htmlui.go",
+      "sha": null,
+      "content_sha256": "ea83dcf2ce19f9cc5fc3d4cf7c402575cd20f32df1c11ef099e851accba71913",
+      "score": 35,
+      "content": "package htmluibuild\n\nimport (\n\t\"embed\"\n\t\"io/fs\"\n\t\"net/http\"\n)\n\n//go:embed build\nvar data embed.FS\n\n// AssetFile return a http.FileSystem instance that data backend by asset.\nfunc AssetFile() http.FileSystem {\n\tf, err := fs.Sub(data, \"build\")\n\tif err != nil {\n\t\tpanic(\"could not embed htmlui\")\n\t}\n\n\treturn http.FS(f)\n}\n"
+    },
+    {
+      "path": "tools/make-pr.sh",
+      "sha": null,
+      "content_sha256": "235a036cbc89dd3981ee62c36bbad9640441bc98b4d1bc9d3207bf736e1b6678",
+      "score": 33,
+      "content": "#!/bin/bash\nset -e\nkopia_tmp=/tmp/kopia-src\n\nif [ ! -d \"$kopia_tmp\" ]; then\n    git clone https://$GH_TOKEN@github.com/kopia/kopia.git $kopia_tmp\nfi\n\n(cd $kopia_tmp && git fetch && git checkout -f master && git pull)\n\n# determine SHA to upgrade to\nhtmluibuild_new_hash=${GITHUB_SHA:-$(git rev-parse HEAD)}\nhtmluibuild_old_hash=$(cd $kopia_tmp && grep /htmluibuild go.mod | cut -f 3 -d -)\n\necho htmluibuild_new_hash: $htmluibuild_new_hash\necho htmluibuild_old_hash: $htmluibuild_old_hash\n\nhtmlui_old_hash=$(git show $htmluibuild_old_hash | grep \"HTMLUI update for\" | cut -f 7 -d /)\necho htmlui_old_hash: $htmlui_old_hash\nhtmlui_new_hash=$(git show $htmluibuild_new_hash | grep \"HTMLUI update for\" | cut -f 7 -d /)\necho htmlui_new_hash: $htmlui_new_hash\n\nif [ \"$htmlui_new_hash\" == \"\" ]; then\n    echo Not a HTMLUI update commit, \n    htmlui_new_hash=\"HEAD\"\nfi\n\ngenerate_log() {\n    htmlui_old_hash=$1\n    htmlui_new_hash=$2\n    htmlui_tmp=/tmp/kopia-htmlui-src\n\n    if [ ! -d \"$htmlui_tmp\" ]; then\n        git clone https://github.com/kopia/htmlui.git $htmlui_tmp\n    fi\n\n    echo \"## Changes\"\n    echo\n    echo \"Compare: https://github.com/kopia/htmlui/compare/$htmlui_old_hash...$htmlui_new_hash\"\n    echo\n\n    (cd $htmlui_tmp && git fetch && git log --reverse --pretty=format:\"* %ch https://github.com/kopia/htmlui/commit/%h %an %s\" --no-patch $htmlui_old_hash..$htmlui_new_hash | sed -r 's@ [(]#.*$@@g')\n    echo\n    echo\n    echo \"*This PR description was [auto-generated](https://github.com/kopia/htmluibuild/blob/main/.github/workflows/after-push.yaml) at $(date)*\"\n}\n\ngenerate_log $htmlui_old_hash $htmlui_new_hash > /tmp/pr-body.txt\npr_title=\"feat(ui): upgraded htmlui to the latest version\"\n\ncd $kopia_tmp\n\ngit checkout -B htmlui-update\ngo get github.com/kopia/htmluibuild@$htmluibuild_new_hash\ngo mod tidy\ngit add -A \ngit -c \"user.name=Kopia Builder\" -c \"user.email=builder@kopia.io\" commit -m \"$pr_title\"\ngit push --set-upstream origin htmlui-update -f\n\nexisting_pr=$(gh pr list -L 1 -l htmlui-update | cut -f 1)\nif [ \"$existing_pr\" == \"\" ]; then\n  echo PR does not exist, creating...\n  gh pr create --title=\"$pr_title\" --body-file=/tmp/pr-body.txt -l htmlui-update\nelse\n  echo PR $existing_pr exists updating...\n  gh pr edit $existing_pr --title=\"$pr_title\" --body-file=/tmp/pr-body.txt\nfi\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T20:07:56.157622+00:00"
+}
