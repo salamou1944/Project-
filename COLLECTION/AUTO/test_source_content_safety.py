@@ -44,6 +44,15 @@ class SourceContentSafetyTests(unittest.TestCase):
         self.assertNotIn("abcdef1234567890", redacted)
         self.assertIn("secret_assignment", reasons)
 
+    def test_google_oauth_access_tokens_and_json_assignments_are_redacted(self):
+        synthetic = "ya29." + "A" * 32
+        source = '{"access_token":"' + synthetic + '","client_secret":"demo-secret-value-12345"}'
+        redacted, reasons = redact_sensitive_content(source)
+        self.assertNotIn(synthetic, redacted)
+        self.assertNotIn("demo-secret-value-12345", redacted)
+        self.assertIn("google_oauth_access_token", reasons)
+        self.assertIn("secret_assignment", reasons)
+
     def test_recursive_packet_sanitizer_preserves_raw_hash_and_path(self):
         raw = "AQICAHh0aGlzLWlzLWRlbW8tY3lwaGVydGV4dA=="
         document = {
