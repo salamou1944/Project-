@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:caprover/caprover-api",
+  "repo": "caprover/caprover-api",
+  "revision_sha": "1319e5e87b136011e74701783bb556041c2c9a6d",
+  "default_branch": "master",
+  "pushed_at": "2026-09-23T04:17:12Z",
+  "repo_updated_at": "2026-09-23T04:17:04Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "src/models/DockerAuthObj.ts",
+      "sha": null,
+      "content_sha256": "b97c35a2fa38f439bd14a26201512ea50e8fef9f9f75c6eb6b20ae56cc4e967a",
+      "score": 186,
+      "content": "export interface DockerAuthObj {\n    serveraddress: string\n    username: string\n    password: string\n    // email: string // Email is optional in auth\n}\n\n/*\n{\n  \"docker.example.com\": {\n    \"username\": \"janedoe\",\n    \"password\": \"hunter2\"\n  },\n  \"https://index.docker.io/v1/\": {\n    \"username\": \"mobydock\",\n    \"password\": \"[REDACTED]\"\n  }\n}\n*/\nexport interface DockerRegistryConfig {\n    [serveraddress: string]: {\n        username: string\n        password: string\n    }\n}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/models/OneClickAppDeploymentState.ts",
+      "sha": null,
+      "content_sha256": "b493d898dc2ee708bfb1fa1ce939e9ec33e63d46afcd523a280fdb41b53ac129",
+      "score": 178,
+      "content": "export default interface OneClickAppDeploymentState {\n    steps: string[]\n    error?: string\n    successMessage?: string\n    currentStep: number\n}\n"
+    },
+    {
+      "path": "test/ApiManager.test.js",
+      "sha": null,
+      "content_sha256": "6a8c68090a1b6719d3c9fb3259ecd8d1bf72bb6fe0a5e0f2d3aaf874cd4dda01",
+      "score": 168,
+      "content": "const assert = require('node:assert/strict')\nconst test = require('node:test')\n\nconst ApiManagerModule = require('../dist/api/ApiManager')\nconst ApiManager = ApiManagerModule.default\nconst { SimpleAuthenticationProvider } = ApiManagerModule\n\nfunction createApiWithRequestRecorder(response = {}) {\n    const api = new ApiManager(\n        'https://captain.example.com',\n        new SimpleAuthenticationProvider(() =>\n            Promise.resolve({ password: 'password' })\n        )\n    )\n    const requests = []\n\n    api.http = {\n        GET: 'GET',\n        POST: 'POST',\n        PATCH: 'PATCH',\n        FORM_DATA: 'form-data',\n        fetch(method, endpoint, data, bodyType = 'json') {\n            requests.push({ method, endpoint, data, bodyType })\n            return () => Promise.resolve(response)\n        },\n    }\n\n    return { api, requests }\n}\n\ntest('patchAppDefinition uses the partial update endpoint', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.patchAppDefinition('test-app', {\n        instanceCount: 2,\n        description: 'scaled app',\n    })\n\n    assert.deepEqual(requests, [\n        {\n            method: 'PATCH',\n            endpoint: '/user/apps/appDefinitions/update',\n            data: {\n                instanceCount: 2,\n                description: 'scaled app',\n                appName: 'test-app',\n            },\n            bodyType: 'json',\n        },\n    ])\n})\n\ntest('fetchAppLogs exposes the backend encoding argument', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.fetchAppLogs('test-app', 'utf8')\n\n    assert.deepEqual(requests[0], {\n        method: 'GET',\n        endpoint: '/user/apps/appData/test-app/logs',\n        data: { encoding: 'utf8' },\n        bodyType: 'json',\n    })\n})\n\ntest('fetchAppLogsInHex remains backward compatible', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.fetchAppLogsInHex('test-app')\n\n    assert.deepEqual(requests[0].data, { encoding: 'hex' })\n})\n\ntest('uploadAppData keeps detached deployment as the default', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.uploadAppData('test-app', 'tar contents')\n\n    assert.equal(\n        requests[0].endpoint,\n        '/user/apps/appData/test-app?detached=1'\n    )\n    assert.equal(requests[0].bodyType, 'form-data')\n})\n\ntest('uploadAppData can wait for an attached deployment', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.uploadAppData('test-app', 'tar contents', false)\n\n    assert.equal(requests[0].endpoint, '/user/apps/appData/test-app')\n    assert.equal(requests[0].bodyType, 'form-data')\n})\n\ntest('executeGenericApiCommand accepts PATCH', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.executeGenericApiCommand('PATCH', '/user/example', {\n        value: true,\n    })\n\n    assert.equal(requests[0].method, 'PATCH')\n})\n\ntest('saveTheme sends supplied writable theme fields', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.saveTheme('old-theme', {\n        name: 'new-theme',\n        content: 'theme-content',\n        extra: '{\"siderTheme\":\"dark\"}',\n        headEmbed: '<meta name=\"theme-marker\" content=\"test\">',\n        builtIn: true,\n    })\n\n    assert.deepEqual(requests, [\n        {\n            method: 'POST',\n            endpoint: '/user/system/themes/update',\n            data: {\n                oldName: 'old-theme',\n                name: 'new-theme',\n                content: 'theme-content',\n                extra: '{\"siderTheme\":\"dark\"}',\n                headEmbed: '<meta name=\"theme-marker\" content=\"test\">',\n            },\n            bodyType: 'json',\n        },\n    ])\n})\n\ntest('saveTheme omits unspecified optional theme fields', async () => {\n    const { api, requests } = createApiWithRequestRecorder()\n\n    await api.saveTheme('old-theme', {\n        name: 'new-theme',\n        content: 'theme-content',\n    })\n\n    assert.deepEqual(requests[0].data, {\n        oldName: 'old-theme',\n        name: 'new-theme',\n        content: 'theme-content',\n    })\n    assert.equal('extra' in requests[0].data, false)\n    assert.equal('headEmbed' in requests[0].data, false)\n    assert.equal(JSON.stringify(requests[0].data).includes('undefined'), false)\n})\n\ntest('getOneClickAppByName returns the parsed template object', async () => {\n    const appTemplate = {\n        services: {\n            'srv-captain--demo': {\n                image: 'nginx:alpine',\n            },\n        },\n        captainVersion: 4,\n        caproverOneClickApp: {\n            instructions: {\n                start: 'Start instructions',\n                end: 'End instructions',\n            },\n            displayName: 'Demo',\n            variables: [],\n        },\n    }\n    const { api, requests } = createApiWithRequestRecorder({ appTemplate })\n\n    const response = await api.getOneClickAppByName(\n        'demo',\n        'https://repo.example.com'\n    )\n\n    assert.deepEqual(requests[0], {\n        method: 'GET',\n        endpoint: '/user/oneclick/template/app',\n        data: {\n            appName: 'demo',\n            baseDomain: 'https://repo.example.com',\n        },\n        bodyType: 'json',\n    })\n    assert.strictEqual(response.appTemplate, appTemplate)\n})\n\ntest('getDockerRegistries exposes the backend default push registry ID', async () => {\n    const registries = [{ id: 'registry-1', registryDomain: 'ghcr.io' }]\n    const data = { registries, defaultPushRegistryId: 'registry-1' }\n    const { api, requests } = createApiWithRequestRecorder(data)\n\n    const response = await api.getDockerRegistries()\n\n    assert.deepEqual(requests, [{\n        method: 'GET',\n        endpoint: '/user/registries',\n        data: {},\n        bodyType: 'json',\n    }])\n    assert.strictEqual(response, data)\n})\n"
+    },
+    {
+      "path": "src/models/BackupMeta.ts",
+      "sha": null,
+      "content_sha256": "611787340882eaf2e946933dde852498aff7d109f25063c150be56687eab19e4",
+      "score": 166,
+      "content": "import { ServerDockerInfo } from './ServerDockerInfo'\n\nexport interface RestoringNode {\n    oldIp: string\n    newIp: string\n    user: string\n    privateKeyPath: string\n}\n\nexport interface OldNodesForReference {\n    appsLockOnThisNode: string[]\n\n    nodeData: ServerDockerInfo\n}\n\nexport interface RestoringInfo {\n    nodesMapping: RestoringNode[]\n\n    oldNodesForReference: OldNodesForReference[]\n}\n\nexport interface BackupMeta {\n    salt: string\n\n    nodes: ServerDockerInfo[]\n}\n"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "sha": null,
+      "content_sha256": "21673f4b98ca2ae05263a74405b487e8083365dd7a1378ed5860f02dd761a9ab",
+      "score": 126,
+      "content": "name: Publish npm package\n\non:\n    push:\n        branches:\n            - release\n\npermissions:\n    contents: read\n    id-token: write\n\njobs:\n    publish:\n        runs-on: ubuntu-latest\n        steps:\n            - name: Check out repository\n              uses: actions/checkout@v4\n\n            - name: Set up Node.js\n              uses: actions/setup-node@v4\n              with:\n                  node-version: 24\n                  registry-url: https://registry.npmjs.org\n\n            - name: Install dependencies\n              run: npm ci\n\n            - name: Run tests\n              run: npm test\n\n            - name: Publish package\n              run: npm publish --access public\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "48483985e10e0a3b382c0703c80cfaf78e3ca1866b405d9058d8e3456db4fcaa",
+      "score": 120,
+      "content": "{\n    \"name\": \"caprover-api\",\n    \"version\": \"0.0.25\",\n    \"description\": \"API client for CapRover\",\n    \"types\": \"dist/index.d.ts\",\n    \"main\": \"dist/index.js\",\n    \"scripts\": {\n        \"formatter\": \"prettier --check './src/**/*.ts*'\",\n        \"formatter-write\": \"prettier --write './src/**/*.ts*'\",\n        \"tslint\": \"tslint -c tslint.json -p tsconfig.json\",\n        \"tslint-fix\": \"tslint --fix -c tslint.json -p tsconfig.json\",\n        \"test\": \"npm run build && npm run test-types && node --test test/*.test.js\",\n        \"test-types\": \"npx tsc --noEmit --strict --skipLibCheck --target ES2020 --module commonjs --moduleResolution Node test/*.test.ts\",\n        \"build\": \"rm -rf ./dist && npm run tslint && npx tsc && chmod +x ./dist -R\",\n        \"dev\": \"rm -rf ./dist && npx tsc && node ./dist/example.js\",\n        \"generate-barrels\": \"rm ./src/models/index.ts && barrelsby --directory src/models\"\n    },\n    \"keywords\": [\n        \"caprover\",\n        \"api\"\n    ],\n    \"repository\": {\n        \"type\": \"git\",\n        \"url\": \"https://github.com/caprover/caprover-api.git\"\n    },\n    \"author\": \"\",\n    \"license\": \"ISC\",\n    \"dependencies\": {\n        \"cross-fetch\": \"^4.1.0\"\n    },\n    \"devDependencies\": {\n        \"@types/node\": \"^24.0.10\",\n        \"barrelsby\": \"^2.8.1\",\n        \"prettier\": \"^3.6.2\",\n        \"tslint\": \"^6.1.3\",\n        \"tslint-config-prettier\": \"^1.18.0\",\n        \"typescript\": \"^5.8.3\"\n    }\n}\n"
+    },
+    {
+      "path": "src/models/ContainerProps.ts",
+      "sha": null,
+      "content_sha256": "29da40ea607c6ffe9d985e36d4d3bef9f196ac48e8d29af705dc9c8977522c19",
+      "score": 106,
+      "content": "export interface IMobileComponent {\n    isMobile: boolean\n}\n"
+    },
+    {
+      "path": "src/models/IBuiltImage.ts",
+      "sha": null,
+      "content_sha256": "6497ecbbd6251cb6c514b46d43e346091856a750ef4abe8a9402420d6d3231a4",
+      "score": 106,
+      "content": "export interface IBuiltImage {\n    imageName: string\n    gitHash: string\n}\n"
+    },
+    {
+      "path": "src/models/IHashMapGeneric.ts",
+      "sha": null,
+      "content_sha256": "a58ef32de30049fc3a7ee3d2abb9f5cec28a8ac8a4dd443fef73eb5fb8d3eb21",
+      "score": 106,
+      "content": "export interface IHashMapGeneric<T> {\n    [id: string]: T\n}\n"
+    },
+    {
+      "path": "src/models/DockerSecret.ts",
+      "sha": null,
+      "content_sha256": "8a09011c70e69fdc2def03b73aab69912e3af794f3f42f2a535fe98f47052750",
+      "score": 106,
+      "content": "export interface DockerSecret {\n    secretName: string\n    secretId: string\n}\n"
+    },
+    {
+      "path": "src/models/LogsResponse.ts",
+      "sha": null,
+      "content_sha256": "2c4fdc0303a727a10aa7d40fd554e0411917fd56c54ee67d28d54a02d087f19f",
+      "score": 106,
+      "content": "export default interface LogsResponse {\n    logs: string\n}\n"
+    },
+    {
+      "path": "src/models/OneClickAppRepositories.ts",
+      "sha": null,
+      "content_sha256": "a46369367151f4db55df279c86aa2a41ee3800f6e79f7017ab48d95f6ea8d0fb",
+      "score": 106,
+      "content": "export default interface OneClickAppRepositories {\n    urls: string[]\n}\n"
+    },
+    {
+      "path": "src/models/UnusedImagesResponse.ts",
+      "sha": null,
+      "content_sha256": "a57991494a7a5f4939a31f92d353288d9fedf156fdc588280703e5df0b5a80ed",
+      "score": 106,
+      "content": "export default interface UnusedImagesResponse {\n    unusedImages: { id: string; tags: string[] }[]\n}\n"
+    },
+    {
+      "path": "src/models/BuildLogsResponse.ts",
+      "sha": null,
+      "content_sha256": "c51d17d31bfcc49a5c7ffedd9bb44422b4eb27c38052b94ead79967249a3c3c3",
+      "score": 106,
+      "content": "export interface BuildLogsResponse {\n    isAppBuilding: boolean\n    logs: { lines: string[]; firstLineNumber: number }\n    isBuildFailed: boolean\n}\n"
+    },
+    {
+      "path": "src/models/IVersionInfo.ts",
+      "sha": null,
+      "content_sha256": "2bf51cfea21fa74e118c8dd496f9a3f5d220bd77616051bc08eff6f054e9f1ad",
+      "score": 106,
+      "content": "export interface IVersionInfo {\n    currentVersion: string\n    latestVersion: string\n    canUpdate: boolean\n    changeLogMessage: string\n}\n"
+    },
+    {
+      "path": "src/models/ProjectDefinition.ts",
+      "sha": null,
+      "content_sha256": "04ba64cb7b2f2a65d289a47e2750acc7e12ce15362230742e2ef5b2b13959207",
+      "score": 106,
+      "content": "export interface ProjectDefinition {\n    id: string\n    name: string\n    description: string\n    parentProjectId?: string\n}\n"
+    },
+    {
+      "path": "src/models/OneClickAppResponse.ts",
+      "sha": null,
+      "content_sha256": "d1e20dc144742a53c9a873f5fc17ecb833c36006baf0aa9567a430503664350d",
+      "score": 106,
+      "content": "import { IOneClickAppIdentifier } from './IOneClickAppModels'\n\nexport default interface OneClickAppResponse {\n    oneClickApps: IOneClickAppIdentifier[]\n}\n"
+    },
+    {
+      "path": "src/models/GoAccessReportResponse.ts",
+      "sha": null,
+      "content_sha256": "23540ab7758d80be0579fdc9926526ca8c1446b213c949924f2af20a3da6236c",
+      "score": 106,
+      "content": "export default interface GoAccessReportResponse {\n    domainName: string\n    name: string\n    lastModifiedTime: string\n    url: string\n}\n"
+    },
+    {
+      "path": "src/models/AppDeleteResponse.ts",
+      "sha": null,
+      "content_sha256": "7e91936908cbcdf034088345c57c0b34203d1925637393ec612f8f1fc723e887",
+      "score": 106,
+      "content": "export default interface AppDeleteResponse {\n    volumesFailedToDelete?: string[]\n}\n"
+    },
+    {
+      "path": "src/models/IGoAccessInfo.ts",
+      "sha": null,
+      "content_sha256": "9f2685f0162a661b5f432dcfe3c0008e279964a06a322a97139d9812c3dd85dc",
+      "score": 106,
+      "content": "export default interface IGoAccessInfo {\n    isEnabled: boolean\n    data: {\n        rotationFrequencyCron: string\n        logRetentionDays?: number\n    }\n}\n"
+    },
+    {
+      "path": "src/models/CaptainInfo.ts",
+      "sha": null,
+      "content_sha256": "3e2dc1b0789f2539107949c4f9f2766fb89481cddf6fe9645c32dc916d02af6b",
+      "score": 106,
+      "content": "export default interface CaptainInfo {\n    hasRootSsl: boolean\n    forceSsl: boolean\n    rootDomain: string\n    captainSubDomain: string\n}\n"
+    },
+    {
+      "path": "src/models/OneClickAppDefinitionResponse.ts",
+      "sha": null,
+      "content_sha256": "6981a3a6d0c2cef1d2458645840db1425408221a0eb3b4a118341d93f1943fa5",
+      "score": 106,
+      "content": "import { IOneClickTemplate } from './IOneClickAppModels'\n\nexport default interface OneClickAppDefinitionResponse {\n    appTemplate: IOneClickTemplate\n}\n"
+    },
+    {
+      "path": "src/models/ProjectsResponse.ts",
+      "sha": null,
+      "content_sha256": "4ba0345c58928be94bffe32573f6a25891e1491ab21bd3868314819faf9d5ba3",
+      "score": 106,
+      "content": "import { ProjectDefinition } from './ProjectDefinition'\n\nexport default interface ProjectsResponse {\n    projects: ProjectDefinition[]\n}\n"
+    },
+    {
+      "path": "src/models/GoAccessInfo.ts",
+      "sha": null,
+      "content_sha256": "4aa6425eedc199b68e8e78dcafb9910e3ea8bc49d99e35c0dbfa10156b919c4c",
+      "score": 106,
+      "content": "export interface GoAccessInfo {\n    isEnabled: boolean\n    data: {\n        rotationFrequencyCron: string\n        logRetentionDays: number\n    }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:19:57.900137+00:00"
+}

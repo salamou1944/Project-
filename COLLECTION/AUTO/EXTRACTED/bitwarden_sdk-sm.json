@@ -1,0 +1,210 @@
+{
+  "canonical_source": "github:bitwarden/sdk-sm",
+  "repo": "bitwarden/sdk-sm",
+  "revision_sha": "03a4220327bfdb00b8aec3179c81f9e62f1fcde1",
+  "default_branch": "main",
+  "pushed_at": "2026-10-20T15:13:04Z",
+  "repo_updated_at": "2026-10-19T16:37:30Z",
+  "license": "NOASSERTION",
+  "topics": [
+    "bitwarden",
+    "rust",
+    "sdk"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/build-napi.yml",
+      "sha": null,
+      "content_sha256": "bf4457dc77ab1dedaec87975ec9b28ad7f9645ae9abb6db339d39d275a70f22a",
+      "score": 201,
+      "content": "name: Build @bitwarden/sdk-napi\n\non:\n  pull_request:\n  push:\n    branches:\n      - \"main\"\n      - \"rc\"\n      - \"hotfix-rc\"\n  workflow_dispatch:\n\ndefaults:\n  run:\n    shell: bash\n    working-directory: crates/bitwarden-napi\n\npermissions:\n  contents: read\n\njobs:\n  generate_schemas:\n    name: Generate schemas\n    uses: ./.github/workflows/generate_schemas.yml\n\n  build:\n    name: Building @bitwarden/sdk-napi for - ${{ matrix.settings.os }}\n    runs-on: ${{ matrix.settings.os || 'ubuntu-24.04' }}\n    needs: generate_schemas\n    strategy:\n      fail-fast: false\n      matrix:\n        settings:\n          - os: macos-15\n            target: x86_64-apple-darwin\n            build: |\n              npm run build-x64\n              strip -x *.node\n\n          - os: macos-15\n            target: aarch64-apple-darwin\n            build: |\n              npm run build-arm64\n              strip -x *.node\n\n          - os: windows-2022\n            target: x86_64-pc-windows-msvc\n            build: npm run build\n\n          - os: ubuntu-22.04\n            target: x86_64-unknown-linux-gnu\n            build: |\n              set -e &&\n              npm run build &&\n              strip *.node\n    steps:\n      - name: Checkout repo\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Setup Node\n        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0\n        with:\n          node-version: 18\n          cache: \"npm\"\n          cache-dependency-path: crates/bitwarden-napi/package-lock.json\n\n      - name: Install rust\n        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable\n        with:\n          toolchain: stable\n          targets: ${{ matrix.settings.target }}\n\n      - name: Cache cargo registry\n        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2\n        with:\n          key: ${{ matrix.settings.target }}-cargo-${{ matrix.settings.os }}\n\n      - name: Retrieve schemas\n        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1\n        with:\n          name: schemas.ts\n          path: ${{ github.workspace }}/crates/bitwarden-napi/src-ts/bitwarden_client/\n\n      - name: Install dependencies\n        run: npm ci\n\n      - name: Build\n        run: ${{ matrix.settings.build }}\n\n      - name: Upload artifact\n        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0\n        with:\n          name: sdk-bitwarden-napi-${{ matrix.settings.target }}\n          path: ${{ github.workspace }}/crates/bitwarden-napi/sdk-napi.*.node\n          if-no-files-found: error\n"
+    },
+    {
+      "path": ".github/workflows/release-napi.yml",
+      "sha": null,
+      "content_sha256": "47e8446f5def47ae38da167edec6ca1e46933bee235a0d33e0f68dd4ba9ff3e9",
+      "score": 201,
+      "content": "name: Release @bitwarden/sdk-napi\nrun-name: Release @bitwarden/sdk-napi ${{ inputs.release_type }}\n\non:\n  workflow_dispatch:\n    inputs:\n      release_type:\n        description: \"Release Options\"\n        required: true\n        default: \"Initial Release\"\n        type: choice\n        options:\n          - Initial Release\n          - Redeploy\n          - Dry Run\n\ndefaults:\n  run:\n    shell: bash\n    working-directory: crates/bitwarden-napi\n\npermissions: {}\n\njobs:\n  setup:\n    name: Setup\n    runs-on: ubuntu-22.04\n    permissions:\n      contents: read\n    outputs:\n      version: ${{ steps.version.outputs.version }}\n    steps:\n      - name: Checkout repo\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Branch check\n        if: ${{ inputs.release_type != 'Dry Run' }}\n        run: |\n          if [[ \"$GITHUB_REF\" != \"refs/heads/main\" ]]; then\n            echo \"===================================\"\n            echo \"[!] Can only release from the 'main' branch\"\n            echo \"===================================\"\n            exit 1\n          fi\n\n      - name: Check Release Version\n        id: version\n        uses: bitwarden/gh-actions/release_version-check@main\n        with:\n          release-type: ${{ inputs.release_type }}\n          project-type: ts\n          file: crates/bitwarden-napi/package.json\n          monorepo: false\n\n  release:\n    name: Create GitHub release\n    runs-on: ubuntu-22.04\n    permissions:\n      contents: write\n      actions: read\n    needs: setup\n    steps:\n      - name: Checkout Repository\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Download artifacts\n        uses: dawidd6/action-download-artifact@b6e2e70617bc3265edd6dab6c906732b2f1ae151 # v21\n        with:\n          workflow: build-napi.yml\n          workflow_conclusion: success\n          branch: main\n          name: sdk-bitwarden-napi-(.*)|schemas.ts\n          name_is_regexp: true\n          path: dist\n\n      - name: Move artifact files to single directory\n        run: |\n          ls -alhR\n          shopt -s globstar\n          mv ./**/*.node .\n          mv schemas.ts/ schemas/\n          mv schemas/schemas.ts .\n        working-directory: dist\n\n      - name: Create release\n        if: ${{ inputs.release_type != 'Dry Run' }}\n        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0\n        env:\n          _VERSION: ${{ needs.setup.outputs.version }}\n        with:\n          commit: ${{ github.sha }}\n          tag: napi-v${{ env._VERSION }}\n          name: napi v${{ env._VERSION }}\n          body: \"<insert release notes here>\"\n          token: ${{ secrets.GITHUB_TOKEN }}\n          draft: true\n          artifacts: |\n            dist/sdk-napi.darwin-arm64.node\n            dist/sdk-napi.darwin-x64.node\n            dist/sdk-napi.win32-x64-msvc.node\n            dist/sdk-napi.linux-x64-gnu.node\n            dist/schemas.ts\n"
+    },
+    {
+      "path": ".github/workflows/publish-napi.yml",
+      "sha": null,
+      "content_sha256": "ce81171840e19f10a1adc307e61eaa3e996e078df314affccd6fa9105d5b59fa",
+      "score": 201,
+      "content": "name: Publish @bitwarden/sdk-napi\nrun-name: Publish @bitwarden/sdk-napi ${{ inputs.release_type }}\n\non:\n  workflow_dispatch:\n    inputs:\n      release_type:\n        description: \"Release Options\"\n        required: true\n        default: \"Release\"\n        type: choice\n        options:\n          - Release\n          - Dry Run\n      version:\n        description: \"Release Version\"\n        required: false\n        default: \"latest\"\n\ndefaults:\n  run:\n    working-directory: crates/bitwarden-napi\n\njobs:\n  setup:\n    name: Setup\n    runs-on: ubuntu-22.04\n    permissions:\n      contents: read\n    outputs:\n      release_version: ${{ steps.version-output.outputs.version }}\n      tag_name: ${{ steps.version-output.outputs.tag_name }}\n    steps:\n      - name: Checkout repo\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Branch check\n        if: ${{ inputs.release_type != 'Dry Run' }}\n        run: |\n          if [[ \"$GITHUB_REF\" != \"refs/heads/main\" ]]; then\n            echo \"===================================\"\n            echo \"[!] Can only release from the 'main' branch\"\n            echo \"===================================\"\n            exit 1\n          fi\n\n      - name: Version output\n        id: version-output\n        env:\n          VERSION: ${{ inputs.version }}\n        run: |\n          if [[ \"${VERSION}\" == \"latest\" || \"${VERSION}\" == \"\" ]]; then\n            TAG_NAME=$(curl  \"https://api.github.com/repos/bitwarden/sdk-sm/releases\" | jq -c '.[] | select(.tag_name | contains(\"napi\")) | .tag_name' | head -1)\n            VERSION=$(echo \"$TAG_NAME\" | grep -ohE '20[0-9]{2}\\.([1-9]|1[0-2])\\.[0-9]+')\n            echo \"Latest Released Version: $VERSION\"\n            echo \"version=$VERSION\" >> \"$GITHUB_OUTPUT\"\n\n            echo \"Latest Released Tag name: $TAG_NAME\"\n            echo \"tag_name=$TAG_NAME\" >> \"$GITHUB_OUTPUT\"\n          else\n            echo \"Release Version: ${VERSION}\"\n            echo \"version=${VERSION}\" >> \"$GITHUB_OUTPUT\"\n          fi\n\n  npm:\n    name: Publish NPM\n    environment: \"Bitwarden SDK NAPI - Production\"\n    runs-on: ubuntu-22.04\n    needs: setup\n    permissions:\n      contents: read\n      deployments: write\n      id-token: write\n    env:\n      _PKG_VERSION: ${{ needs.setup.outputs.release_version }}\n      _TAG_NAME: ${{ needs.setup.outputs.tag_name }}\n    steps:\n      - name: Checkout repo\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          ref: ${{ env._TAG_NAME }}\n          persist-credentials: false\n\n      - name: Create GitHub deployment\n        if: ${{ inputs.release_type != 'Dry Run' }}\n        uses: chrnorm/deployment-action@55729fcebec3d284f60f5bcabbd8376437d696b1 # v2.0.7\n        id: deployment\n        with:\n          token: \"${{ secrets.GITHUB_TOKEN }}\"\n          initial-status: \"in_progress\"\n          environment: \"Bitwarden SDK NAPI - Production\"\n          description: \"Deployment ${{ env._PKG_VERSION }} from branch ${{ github.ref_name }}\"\n          task: release\n\n      - name: Download and prepare artifacts\n        run: |\n          # Download schema\n          wget \"https://github.com/bitwarden/sdk-sm/releases/download/napi-v${_PKG_VERSION}/schemas.ts\"\n          mv schemas.ts ${{ github.workspace }}/crates/bitwarden-napi/src-ts/bitwarden_client/schemas.ts\n\n          # Download native binaries\n          wget \"https://github.com/bitwarden/sdk-sm/releases/download/napi-v${_PKG_VERSION}/sdk-napi.darwin-arm64.node\"\n          wget \"https://github.com/bitwarden/sdk-sm/releases/download/napi-v${_PKG_VERSION}/sdk-napi.darwin-x64.node\"\n          wget \"https://github.com/bitwarden/sdk-sm/releases/download/napi-v${_PKG_VERSION}/sdk-napi.win32-x64-msvc.node\"\n          wget \"https://github.com/bitwarden/sdk-sm/releases/download/napi-v${_PKG_VERSION}/sdk-napi.linux-x64-gnu.node\"\n          mv sdk-napi.*.node ${{ github.workspace }}/crates/bitwarden-napi/artifacts\n\n      - name: Set up Node\n        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0\n        with:\n          node-version: 24\n          registry-url: \"https://registry.npmjs.org/\"\n          cache: \"npm\"\n          cache-dependency-path: crates/bitwarden-napi/package-lock.json\n\n      - name: Install dependencies\n        run: npm ci\n\n      - name: Run tsc\n        run: npm run tsc\n\n      - name: Move artifacts\n        run: npm run artifacts\n\n      - name: Publish NPM\n        if: ${{ inputs.release_type != 'Dry Run' }}\n        run: npm publish --access public\n\n      - name: Update deployment status to Success\n        if: ${{ inputs.release_type != 'Dry Run' && success() }}\n        uses: chrnorm/deployment-status@9a72af4586197112e0491ea843682b5dc280d806 # v2.0.3\n        with:\n          token: \"${{ secrets.GITHUB_TOKEN }}\"\n          state: \"success\"\n          deployment-id: ${{ steps.deployment.outputs.deployment_id }}\n\n      - name: Update deployment status to Failure\n        if: ${{ inputs.release_type != 'Dry Run' && failure() }}\n        uses: chrnorm/deployment-status@9a72af4586197112e0491ea843682b5dc280d806 # v2.0.3\n        with:\n          token: \"${{ secrets.GITHUB_TOKEN }}\"\n          state: \"failure\"\n          deployment-id: ${{ steps.deployment.outputs.deployment_id }}\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/Cargo.toml",
+      "sha": null,
+      "content_sha256": "34f688471a3c6b10aec4c32f4802a487312bb66da6d599f63911af7fe8ce8a7d",
+      "score": 191,
+      "content": "[package]\nname = \"bitwarden-napi\"\nversion = \"1.0.0\"\ndescription = \"\"\"\nN-API bindings for the Bitwarden Secrets Manager SDK\n\"\"\"\nkeywords = [\"bitwarden\", \"secrets-manager\"]\npublish = false\n\nauthors.workspace = true\nedition.workspace = true\nrust-version.workspace = true\nhomepage.workspace = true\nrepository.workspace = true\nlicense-file.workspace = true\n\n[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n\n[dependencies]\nbitwarden-json = { path = \"../bitwarden-json\", version = \"0.3.0\", features = [\n    \"secrets\",\n] }\nenv_logger = \"0.11.1\"\nlog = { workspace = true }\nnapi = { version = \"2\", features = [\"async\"] }\nnapi-derive = \"2\"\n\n[build-dependencies]\nnapi-build = \"2.1.0\"\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "crates/sdk-schemas/Cargo.toml",
+      "sha": null,
+      "content_sha256": "0fdc36e0773ac87faa5225d8df9733d3ae5809dab93522bd22dfaa2f94136004",
+      "score": 191,
+      "content": "[package]\nname = \"sdk-schemas\"\nversion = \"0.1.0\"\npublish = false\n\nauthors.workspace = true\nedition.workspace = true\nrust-version.workspace = true\nhomepage.workspace = true\nrepository.workspace = true\nlicense-file.workspace = true\nkeywords.workspace = true\n\n[features]\n\n[dependencies]\nanyhow = \"1.0.82\"\nbitwarden = { workspace = true }\nbitwarden-json = { path = \"../bitwarden-json\" }\nitertools = \"0.15.0\"\nschemars = { workspace = true, features = [\"preserve_order\"] }\nserde_json = \"1.0.113\"\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/package.json",
+      "sha": null,
+      "content_sha256": "88e148ba9bb2780079e5bae7caca30832ebd9dda27402d5c2c86001b9e2e5e61",
+      "score": 191,
+      "content": "{\n  \"name\": \"@bitwarden/sdk-napi\",\n  \"version\": \"1.0.0\",\n  \"homepage\": \"https://github.com/bitwarden/sdk-sm#readme\",\n  \"bugs\": {\n    \"url\": \"https://github.com/bitwarden/sdk-sm/issues\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/bitwarden/sdk-sm.git\"\n  },\n  \"license\": \"SEE LICENSE IN LICENSE\",\n  \"author\": \"Bitwarden Inc. <hello@bitwarden.com> (https://bitwarden.com)\",\n  \"main\": \"./dist/index.js\",\n  \"types\": \"./dist/index.d.ts\",\n  \"files\": [\n    \"binding.js\",\n    \"binding.d.ts\",\n    \"./dist/\",\n    \"./dist/bitwarden_client/\"\n  ],\n  \"scripts\": {\n    \"artifacts\": \"napi artifacts\",\n    \"build\": \"napi build --platform --release --js binding.js --dts binding.d.ts && tsc\",\n    \"build-arm64\": \"napi build --target aarch64-apple-darwin --platform --release --js binding.js --dts binding.d.ts && tsc\",\n    \"build-x64\": \"napi build --target x86_64-apple-darwin --platform --release --js binding.js --dts binding.d.ts && tsc\",\n    \"build:debug\": \"napi build --platform\",\n    \"prepublishOnly\": \"napi prepublish --skip-gh-release\",\n    \"tsc\": \"tsc\",\n    \"version\": \"napi version\"\n  },\n  \"devDependencies\": {\n    \"@napi-rs/cli\": \"2.18.4\",\n    \"typescript\": \"5.9.3\"\n  },\n  \"engines\": {\n    \"node\": \">= 10\"\n  },\n  \"publishConfig\": {\n    \"access\": \"public\",\n    \"registry\": \"https://registry.npmjs.org/\"\n  },\n  \"napi\": {\n    \"name\": \"sdk-napi\",\n    \"triples\": {\n      \"additional\": [\n        \"aarch64-apple-darwin\"\n      ]\n    }\n  }\n}\n"
+    },
+    {
+      "path": "languages/js/sdk-client/package.json",
+      "sha": null,
+      "content_sha256": "8e5f822533f1b16c26af92d276a100af020a905fdbeb08b98e7de321dde48139",
+      "score": 189,
+      "content": "{\n  \"name\": \"@bitwarden/sdk-client\",\n  \"exports\": {\n    \".\": {\n      \"types\": \"./dist/src/lib.d.ts\",\n      \"default\": \"./dist/src/lib.js\"\n    }\n  },\n  \"main\": \"dist/src/lib.js\",\n  \"types\": \"dist/src/lib.d.ts\",\n  \"scripts\": {\n    \"build\": \"npm run clean && tsc\",\n    \"clean\": \"rimraf dist\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^24.0.0\",\n    \"rimraf\": \"^6.0.0\",\n    \"typescript\": \"^5.0.3\"\n  }\n}\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/linux-x64-gnu/package.json",
+      "sha": null,
+      "content_sha256": "5aa14971c7f63e2b1d65b061484759f1c8eda5bc5f59a091cdac8ee98035f15c",
+      "score": 187,
+      "content": "{\n  \"name\": \"@bitwarden/sdk-napi-linux-x64-gnu\",\n  \"version\": \"1.0.0\",\n  \"homepage\": \"https://github.com/bitwarden/sdk-sm#readme\",\n  \"bugs\": {\n    \"url\": \"https://github.com/bitwarden/sdk-sm/issues\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/bitwarden/sdk-sm.git\"\n  },\n  \"license\": \"SEE LICENSE IN LICENSE\",\n  \"author\": \"Bitwarden Inc. <hello@bitwarden.com> (https://bitwarden.com)\",\n  \"main\": \"sdk-napi.linux-x64-gnu.node\",\n  \"files\": [\n    \"sdk-napi.linux-x64-gnu.node\"\n  ],\n  \"engines\": {\n    \"node\": \">= 10\"\n  },\n  \"os\": [\n    \"linux\"\n  ],\n  \"cpu\": [\n    \"x64\"\n  ],\n  \"libc\": [\n    \"glibc\"\n  ]\n}\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/darwin-arm64/package.json",
+      "sha": null,
+      "content_sha256": "d8c585365a7b5ca76744f4c22cbf0491530f3e15c8d1d0413227e4a88cc8c0e1",
+      "score": 187,
+      "content": "{\n  \"name\": \"@bitwarden/sdk-napi-darwin-arm64\",\n  \"version\": \"1.0.0\",\n  \"homepage\": \"https://github.com/bitwarden/sdk-sm#readme\",\n  \"bugs\": {\n    \"url\": \"https://github.com/bitwarden/sdk-sm/issues\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/bitwarden/sdk-sm.git\"\n  },\n  \"license\": \"SEE LICENSE IN LICENSE\",\n  \"author\": \"Bitwarden Inc. <hello@bitwarden.com> (https://bitwarden.com)\",\n  \"main\": \"sdk-napi.darwin-arm64.node\",\n  \"files\": [\n    \"sdk-napi.darwin-arm64.node\"\n  ],\n  \"engines\": {\n    \"node\": \">= 10\"\n  },\n  \"os\": [\n    \"darwin\"\n  ],\n  \"cpu\": [\n    \"arm64\"\n  ],\n  \"publishConfig\": {\n    \"access\": \"public\",\n    \"registry\": \"https://registry.npmjs.org/\"\n  }\n}\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/darwin-x64/package.json",
+      "sha": null,
+      "content_sha256": "28076d2aee8192bb02b6eb88c1a52e589e9b47372673f45f18a08e8384e638d5",
+      "score": 187,
+      "content": "{\n  \"name\": \"@bitwarden/sdk-napi-darwin-x64\",\n  \"version\": \"1.0.0\",\n  \"homepage\": \"https://github.com/bitwarden/sdk-sm#readme\",\n  \"bugs\": {\n    \"url\": \"https://github.com/bitwarden/sdk-sm/issues\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/bitwarden/sdk-sm.git\"\n  },\n  \"license\": \"SEE LICENSE IN LICENSE\",\n  \"author\": \"Bitwarden Inc. <hello@bitwarden.com> (https://bitwarden.com)\",\n  \"main\": \"sdk-napi.darwin-x64.node\",\n  \"files\": [\n    \"sdk-napi.darwin-x64.node\"\n  ],\n  \"engines\": {\n    \"node\": \">= 10\"\n  },\n  \"os\": [\n    \"darwin\"\n  ],\n  \"cpu\": [\n    \"x64\"\n  ],\n  \"publishConfig\": {\n    \"access\": \"public\",\n    \"registry\": \"https://registry.npmjs.org/\"\n  }\n}\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/win32-x64-msvc/package.json",
+      "sha": null,
+      "content_sha256": "7e6e2802f53d5566a1492668dc680a511ffcdabb90027e2a7a9a6866a824dab3",
+      "score": 187,
+      "content": "{\n  \"name\": \"@bitwarden/sdk-napi-win32-x64-msvc\",\n  \"version\": \"1.0.0\",\n  \"homepage\": \"https://github.com/bitwarden/sdk-sm#readme\",\n  \"bugs\": {\n    \"url\": \"https://github.com/bitwarden/sdk-sm/issues\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/bitwarden/sdk-sm.git\"\n  },\n  \"license\": \"SEE LICENSE IN LICENSE\",\n  \"author\": \"Bitwarden Inc. <hello@bitwarden.com> (https://bitwarden.com)\",\n  \"main\": \"sdk-napi.win32-x64-msvc.node\",\n  \"files\": [\n    \"sdk-napi.win32-x64-msvc.node\"\n  ],\n  \"engines\": {\n    \"node\": \">= 10\"\n  },\n  \"os\": [\n    \"win32\"\n  ],\n  \"cpu\": [\n    \"x64\"\n  ],\n  \"publishConfig\": {\n    \"access\": \"public\",\n    \"registry\": \"https://registry.npmjs.org/\"\n  }\n}\n"
+    },
+    {
+      "path": ".github/workflows/rust-test.yml",
+      "sha": null,
+      "content_sha256": "ecc7bb5622feb10c933a5fcb02aa9f7a9c1cf22fe3191a638d981b5f868e486e",
+      "score": 186,
+      "content": "name: Rust tests\n\non:\n  workflow_dispatch:\n  push:\n    branches:\n      - \"main\"\n  pull_request:\n\nenv:\n  CARGO_TERM_COLOR: always\n\npermissions:\n  contents: read\n\njobs:\n  ci-pass:\n    name: CI is green\n    runs-on: ubuntu-22.04\n    needs:\n      - test\n      - wasm\n    steps:\n      - name: Exit 0\n        run: exit 0\n\n  test:\n    name: ${{ matrix.os }} / default\n\n    runs-on: ${{ matrix.os || 'ubuntu-22.04' }}\n\n    strategy:\n      matrix:\n        os:\n          - ubuntu-22.04\n          - macOS-14\n          - windows-2022\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Install rust\n        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable\n        with:\n          toolchain: stable\n\n      - name: Cache cargo registry\n        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2\n\n      - name: Test\n        # Termporarily exclude NAPI due to a test error on windows\n        run: cargo test --workspace --exclude bitwarden-napi --all-features\n\n  coverage:\n    name: Coverage\n    runs-on: ubuntu-22.04\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Install rust\n        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable\n        with:\n          toolchain: stable\n          components: llvm-tools\n\n      - name: Cache cargo registry\n        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2\n\n      - name: Install cargo-llvm-cov\n        run: cargo install cargo-llvm-cov --version 0.5.38\n\n      - name: Generate coverage\n        run: cargo llvm-cov --all-features --lcov --output-path lcov.info --ignore-filename-regex \"crates/bitwarden-api-\"\n\n      - name: Upload to codecov.io\n        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0\n\n  wasm:\n    name: WASM\n\n    runs-on: ubuntu-22.04\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Install rust\n        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable\n        with:\n          toolchain: stable\n          targets: wasm32-unknown-unknown\n\n      - name: Cache cargo registry\n        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2\n\n      - name: Check\n        run: cargo check -p bitwarden-wasm --target wasm32-unknown-unknown\n\n      - name: Install wasm-pack\n        run: npm --ignore-scripts ci\n\n      - name: Wasm-pack test firefox\n        run: npx --ignore-scripts wasm-pack test --headless --firefox crates/bitwarden-wasm\n\n      - name: Wasm-pack test chrome\n        run: npx --ignore-scripts wasm-pack test --headless --chrome crates/bitwarden-wasm\n"
+    },
+    {
+      "path": ".github/workflows/test-go.yml",
+      "sha": null,
+      "content_sha256": "c8356cc7b5011042cfee91b9fbb74805eab098f4c4ec9ebae7691b20b1ac67ca",
+      "score": 186,
+      "content": "name: Test Go SDK\n\non:\n  push:\n    branches:\n      - \"main\"\n      - \"rc\"\n      - \"hotfix-rc\"\n    paths:\n      - \"languages/python/**\"\n      - \"crates/bitwarden/**\"\n      - \"crates/bitwarden-c/**\"\n      - \"crates/fake-server/**\"\n      - \".github/workflows/test-go.yml\"\n  pull_request:\n    types: [opened, synchronize]\n    paths:\n      - \"languages/go/**\"\n      - \"crates/bitwarden/**\"\n      - \"crates/bitwarden-c/**\"\n      - \"crates/fake-server/**\"\n      - \".github/workflows/test-go.yml\"\n\npermissions:\n  contents: read\n\ndefaults:\n  run:\n    shell: bash\n\njobs:\n  test:\n    name: Test Go SDK\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os:\n          - ubuntu-latest\n          - macos-latest\n          # - windows-latest FIXME: https://gist.github.com/tangowithfoxtrot/beb737c1a804533870f10560eaf2f7c3\n\n    steps:\n      - name: Checkout repo\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Set up Go\n        uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0\n        with:\n          go-version: \"1.25\"\n          cache: \"true\"\n\n      - name: Set up Node.js\n        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0\n        with:\n          node-version: \"18\"\n          cache: \"npm\"\n\n      - name: Set up Rust\n        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable\n        with:\n          toolchain: stable\n\n      - name: Cache Rust dependencies\n        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0\n        with:\n          path: |\n            ~/.cargo/registry\n            ~/.cargo/git\n            target\n          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}\n          restore-keys: |\n            ${{ runner.os }}-cargo-\n\n      - name: Setup Go SDK\n        run: ./scripts/bootstrap.sh setup go\n\n      - name: Run Go SDK tests\n        run: ./scripts/bootstrap.sh test go\n"
+    },
+    {
+      "path": ".github/workflows/test-python.yml",
+      "sha": null,
+      "content_sha256": "913e4dbe608f5d4e9f91488d545cba8527b43d3b3379286524829bbaf9f54246",
+      "score": 186,
+      "content": "name: Test Python SDK\n\non:\n  push:\n    branches:\n      - \"main\"\n      - \"rc\"\n      - \"hotfix-rc\"\n    paths:\n      - \"languages/python/**\"\n      - \"crates/bitwarden/**\"\n      - \"crates/bitwarden-py/**\"\n      - \"crates/fake-server/**\"\n      - \".github/workflows/test-python.yml\"\n  pull_request:\n    types: [opened, synchronize]\n    paths:\n      - \"languages/python/**\"\n      - \"crates/bitwarden/**\"\n      - \"crates/bitwarden-py/**\"\n      - \"crates/fake-server/**\"\n      - \".github/workflows/test-python.yml\"\n\npermissions:\n  contents: read\n\nenv:\n  CARGO_TERM_COLOR: always\n\ndefaults:\n  run:\n    shell: bash\n\njobs:\n  test:\n    name: Test Python SDK\n    runs-on: ${{ matrix.os }}\n    strategy:\n      matrix:\n        os:\n          - ubuntu-latest\n          - macos-latest\n          # FIXME: https://gist.github.com/tangowithfoxtrot/9303dac6001b753403e396ddc2acb1c4#file-windows-python-error-log-L1282\n          # - windows-latest\n\n        python-version: [\"3.9\", \"3.10\", \"3.11\", \"3.12\", \"3.13\"]\n        exclude:\n          # Skip some combinations to reduce CI time\n          - os: macos-latest\n            python-version: \"3.10\"\n          - os: macos-latest\n            python-version: \"3.11\"\n\n    steps:\n      - name: Checkout repo\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Set up Python ${{ matrix.python-version }}\n        uses: actions/setup-python@83679a892e2d95755f2dac6acb0bfd1e9ac5d548 # v6.1.0\n        with:\n          python-version: ${{ matrix.python-version }}\n\n      - name: Install uv\n        uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244 # v7.1.4\n\n      - name: Set up Node.js\n        uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0\n        with:\n          node-version: \"18\"\n          cache: \"npm\"\n\n      - name: Set up Rust\n        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable\n        with:\n          toolchain: stable\n\n      - name: Cache Rust dependencies\n        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0\n        with:\n          path: |\n            ~/.cargo/registry\n            ~/.cargo/git\n            target\n          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}\n          restore-keys: |\n            ${{ runner.os }}-cargo-\n\n      - name: Install system dependencies (Ubuntu)\n        if: matrix.os == 'ubuntu-latest'\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y build-essential\n\n      - name: Setup Python SDK\n        run: ./scripts/bootstrap.sh setup python\n\n      - name: Run Python SDK tests\n        run: ./scripts/bootstrap.sh test python\n"
+    },
+    {
+      "path": "languages/ruby/bitwarden_sdk_secrets/lib/auth.rb",
+      "sha": null,
+      "content_sha256": "85fd29fe10fadedbe11de943b1404f25b39c2a2d98a9adb0f4f9464d18ec4af3",
+      "score": 182,
+      "content": "# frozen_string_literal: true\nrequire_relative 'bitwarden_error'\n\nmodule BitwardenSDKSecrets\n  class AuthClient\n    def initialize(command_runner)\n      @command_runner = command_runner\n    end\n\n    def login_access_token(access_token, state_file = nil)\n      access_token_request = AccessTokenLoginRequest.new(access_token: [REDACTED], state_file: state_file)\n      @command_runner.run(SelectiveCommand.new(login_access_token: [REDACTED]\n      nil\n    end\n  end\nend\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "languages/java/src/main/java/com/bitwarden/sdk/AuthClient.java",
+      "sha": null,
+      "content_sha256": "ce8c64205de74fb4843b9048e2381a9cc2cb96c9bf2d348efddf8642bf957ba1",
+      "score": 174,
+      "content": "package com.bitwarden.sdk;\n\nimport com.bitwarden.sdk.schema.*;\n\nimport java.util.function.Function;\n\npublic class AuthClient {\n\n    private final CommandRunner commandRunner;\n\n    AuthClient(CommandRunner commandRunner) {\n        this.commandRunner = commandRunner;\n    }\n\n    public AccessTokenLoginResponse loginAccessToken(String accessToken, String stateFile) {\n        Command command = new Command();\n        AccessTokenLoginRequest accessTokenLoginRequest = new AccessTokenLoginRequest();\n        accessTokenLoginRequest.setAccessToken(accessToken);\n        accessTokenLoginRequest.setStateFile(stateFile);\n\n        command.setLoginAccessToken(accessTokenLoginRequest);\n\n        ResponseForAccessTokenLoginResponse response = commandRunner.runCommand(command,\n            BitwardenClient.throwingFunctionWrapper(Converter::ResponseForAccessTokenLoginResponseFromJsonString));\n\n        if (response == null || !response.getSuccess()) {\n            throw new BitwardenClientException(response != null ? response.getErrorMessage() : \"Login failed\");\n        }\n\n        return response.getData();\n    }\n}\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/README.md",
+      "sha": null,
+      "content_sha256": "6b194d2353b4bc81613417795a7f265dd6257ac867b619a51eafac36908e8143",
+      "score": 171,
+      "content": "## Bitwarden Secrets Manager SDK\n\nNode-API bindings for interacting with the Bitwarden Secrets Manager. This is a beta release and\nmight be missing some functionality.\n\n## Getting started\n\n```ts\nimport { BitwardenClient, ClientSettings, DeviceType, LogLevel } from \"@bitwarden/sdk-napi\";\n\n// Optional settings\nconst settings: ClientSettings = {\n  apiUrl: \"https://api.bitwarden.com\",\n  identityUrl: \"https://identity.bitwarden.com\",\n  userAgent: \"Bitwarden SDK\",\n  deviceType: DeviceType.SDK,\n};\n\nconst accessToken = \"-- REDACTED --\";\nconst stateFile = \"some/path/to/state/file\";\n\nconst client = new BitwardenClient(settings, LogLevel.Info);\n\n// Authenticating using a machine account access token\nawait client.auth().loginAccessToken(accessToken, stateFile);\n\n// List secrets\nconst secrets = await client.secrets().list();\n\n// Get a specific secret\nconst secret = await client.secrets().get(\"secret-id\");\n```\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/darwin-x64/README.md",
+      "sha": null,
+      "content_sha256": "bf7dd5a087b519f9b9a0a80bb3b413abe843c776ee81c7dd739cc4a19123fff7",
+      "score": 167,
+      "content": "# `@bitwarden/sdk-napi-darwin-x64`\n\nThis is the **x86_64-apple-darwin** binary for `@bitwarden/sdk-napi`\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/win32-x64-msvc/README.md",
+      "sha": null,
+      "content_sha256": "c5919d235f69afbcd528ae9188ab5848d2a901674787441758dc150116adc249",
+      "score": 167,
+      "content": "# `@bitwarden/sdk-napi-win32-x64-msvc`\n\nThis is the **x86_64-pc-windows-msvc** binary for `@bitwarden/sdk-napi`\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/darwin-arm64/README.md",
+      "sha": null,
+      "content_sha256": "14bf0c0d0812b1e508fb08c77f9ad55357f01c3416808280435a4b1043decd52",
+      "score": 167,
+      "content": "# `@bitwarden/sdk-napi-darwin-arm64`\n\nThis is the **aarch64-apple-darwin** binary for `@bitwarden/sdk-napi`\n"
+    },
+    {
+      "path": "crates/bitwarden-napi/npm/linux-x64-gnu/README.md",
+      "sha": null,
+      "content_sha256": "274610b78b721f1de2e125fe811ae28bc2a49f4da236b529410f7c7daf34a8c8",
+      "score": 167,
+      "content": "# `@bitwarden/sdk-napi-linux-x64-gnu`\n\nThis is the **x86_64-unknown-linux-gnu** binary for `@bitwarden/sdk-napi`\n"
+    },
+    {
+      "path": "languages/ruby/bitwarden_sdk_secrets/spec/settings_spec.rb",
+      "sha": null,
+      "content_sha256": "8fbae8cccd067107c1547fe3bcb5a829de2267771a17c70543232dc3913d70ac",
+      "score": 162,
+      "content": "require 'schemas'\nrequire 'extended_schemas/schemas'\n\ndescribe ClientSettings do\n  it \"test\" do\n    client_settings = ClientSettings.new(\n      api_url: nil,\n      identity_url: nil,\n      user_agent: 'Bitwarden RUBY-SDK',\n      device_type: nil\n    )\n\n    expect(client_settings.to_dynamic.compact.to_json).to eq('{\"userAgent\":\"Bitwarden RUBY-SDK\"}')\n  end\nend\n"
+    },
+    {
+      "path": "languages/csharp/Bitwarden.Sdk/BitwardenAuthException.cs",
+      "sha": null,
+      "content_sha256": "ecaba9e1a38720251a87f4c7d7c3ab7da1717f3a4cfd7d90652f96f4cc8250cd",
+      "score": 149,
+      "content": "﻿namespace Bitwarden.Sdk;\n\npublic class BitwardenAuthException : Exception\n{\n    public BitwardenAuthException(string message) : base(message)\n    {\n    }\n\n    public BitwardenAuthException(string message, Exception innerException)\n        : base(message, innerException)\n    {\n    }\n}\n"
+    },
+    {
+      "path": "languages/csharp/Bitwarden.Sdk/AuthClient.cs",
+      "sha": null,
+      "content_sha256": "975d7bf74341b692b47546b29f431dd6f72310f1fe5e337a806e278dcff48796",
+      "score": 149,
+      "content": "﻿namespace Bitwarden.Sdk;\n\npublic class AuthClient\n{\n    private readonly CommandRunner _commandRunner;\n\n    internal AuthClient(CommandRunner commandRunner)\n    {\n        _commandRunner = commandRunner;\n    }\n\n    public async Task LoginAccessTokenAsync(string accessToken, string stateFile = \"\", CancellationToken cancellationToken = default)\n    {\n        var command = new Command { LoginAccessToken = new AccessTokenLoginRequest { AccessToken = accessToken, StateFile = stateFile } };\n        var response = await _commandRunner.RunCommandAsync<ResponseForAccessTokenLoginResponse>(command, cancellationToken);\n        if (response is not { Success: true })\n        {\n            throw new BitwardenAuthException(response != null ? response.ErrorMessage : \"Login failed\");\n        }\n    }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": ".npmrc",
+      "sha": "cffe8cdef132f31903a4971117f33f60cd9a56e6",
+      "size": 16,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:19:52.289410+00:00"
+}

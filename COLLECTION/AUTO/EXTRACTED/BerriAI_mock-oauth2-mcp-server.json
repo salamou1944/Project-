@@ -1,0 +1,52 @@
+{
+  "canonical_source": "github:BerriAI/mock-oauth2-mcp-server",
+  "repo": "BerriAI/mock-oauth2-mcp-server",
+  "revision_sha": "670ff9dc1ba71774a8a2a344ea56853f718244e3",
+  "default_branch": "main",
+  "pushed_at": "2026-02-09T23:16:17Z",
+  "repo_updated_at": "2026-06-05T12:35:50Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "mock_oauth2_mcp_server.py",
+      "sha": null,
+      "content_sha256": "5789b910d06ed67a1ddd72de42d4253798b18955bc54f87b95c70767f41d6767",
+      "score": 250,
+      "content": "\"\"\"\nMock OAuth2 + MCP Server for E2E Testing\n\nA combined OAuth2 authorization server and MCP (Streamable HTTP) server\nfor testing LiteLLM's OAuth2 client_credentials flow with MCP backends.\n\nHardcoded test credentials:\n    client_id:     test-client\n    client_secret: test-secret\n\nUsage:\n    python mock_oauth2_mcp_server.py          # starts on port 8765\n\nLiteLLM proxy config example:\n\n    mcp_servers:\n      test_oauth2_server:\n        url: \"http://localhost:8765/mcp\"\n        transport: \"http\"\n        auth_type: \"oauth2\"\n        client_id: \"test-client\"\n        client_secret: \"test-secret\"\n        token_url: \"http://localhost:8765/oauth/token\"\n\"\"\"\n\nimport uuid\nfrom typing import Any, Dict, Optional, Set\n\nfrom fastapi import FastAPI, Form, Header, Request\nfrom fastapi.responses import JSONResponse\n\n# ---------------------------------------------------------------------------\n# Constants\n# ---------------------------------------------------------------------------\nTEST_CLIENT_ID = \"test-client\"\nTEST_CLIENT_SECRET = \"test-secret\"\n\nSERVER_INFO = {\n    \"protocolVersion\": \"2025-03-26\",\n    \"capabilities\": {\"tools\": {}},\n    \"serverInfo\": {\n        \"name\": \"mock-oauth2-mcp-server\",\n        \"version\": \"0.1.0\",\n    },\n}\n\nECHO_TOOL = {\n    \"name\": \"echo\",\n    \"description\": \"Echoes back the provided message\",\n    \"inputSchema\": {\n        \"type\": \"object\",\n        \"properties\": {\n            \"message\": {\n                \"type\": \"string\",\n                \"description\": \"The message to echo back\",\n            }\n        },\n        \"required\": [\"message\"],\n    },\n}\n\n# ---------------------------------------------------------------------------\n# App & state\n# ---------------------------------------------------------------------------\napp = FastAPI(title=\"Mock OAuth2 MCP Server\")\n\n# In-memory set of valid bearer tokens\n_valid_tokens: Set[str] = set()\n\n\n# ---------------------------------------------------------------------------\n# Helpers\n# ---------------------------------------------------------------------------\ndef _jsonrpc_response(id: Any, result: Any) -> Dict[str, Any]:\n    return {\"jsonrpc\": \"2.0\", \"id\": id, \"result\": result}\n\n\ndef _jsonrpc_error(id: Any, code: int, message: str) -> Dict[str, Any]:\n    return {\"jsonrpc\": \"2.0\", \"id\": id, \"error\": {\"code\": code, \"message\": message}}\n\n\ndef _validate_bearer_token(authorization: [REDACTED]]) -> bool:\n    \"\"\"Return True if the Authorization header carries a valid bearer token.\"\"\"\n    if not authorization:\n        return False\n    parts = authorization.split(\" \", 1)\n    if len(parts) != 2 or parts[0].lower() != \"bearer\":\n        return False\n    return parts[1] in _valid_tokens\n\n\n# ---------------------------------------------------------------------------\n# OAuth2 token endpoint\n# ---------------------------------------------------------------------------\n@app.post(\"/oauth/token\")\nasync def oauth_token(\n    grant_type: str = Form(...),\n    client_id: str = Form(...),\n    client_secret: str = Form(...),\n):\n    if grant_type != \"client_credentials\":\n        return JSONResponse(\n            status_code=400,\n            content={\"error\": \"unsupported_grant_type\"},\n        )\n\n    if client_id != TEST_CLIENT_ID or client_secret != TEST_CLIENT_SECRET:\n        return JSONResponse(\n            status_code=401,\n            content={\"error\": \"invalid_client\"},\n        )\n\n    token = [REDACTED]\n    _valid_tokens.add(token)\n\n    return {\n        \"access_token\": token,\n        \"token_type\": \"bearer\",\n        \"expires_in\": 3600,\n    }\n\n\n# ---------------------------------------------------------------------------\n# MCP Streamable HTTP endpoint\n# ---------------------------------------------------------------------------\n@app.post(\"/mcp\")\nasync def mcp_endpoint(\n    request: Request,\n    authorization: [REDACTED]] = Header(None),\n):\n    # -- Auth check ----------------------------------------------------------\n    if not _validate_bearer_token(authorization):\n        return JSONResponse(\n            status_code=401,\n            content={\"error\": \"invalid_or_missing_bearer_token\"},\n        )\n\n    # -- Parse JSON-RPC body -------------------------------------------------\n    try:\n        body = await request.json()\n    except Exception:\n        return JSONResponse(\n            status_code=400,\n            content=_jsonrpc_error(None, -32700, \"Parse error\"),\n        )\n\n    req_id = body.get(\"id\")\n    method = body.get(\"method\", \"\")\n    params = body.get(\"params\", {})\n\n    # -- initialize ----------------------------------------------------------\n    if method == \"initialize\":\n        return JSONResponse(content=_jsonrpc_response(req_id, SERVER_INFO))\n\n    # -- tools/list ----------------------------------------------------------\n    if method == \"tools/list\":\n        return JSONResponse(\n            content=_jsonrpc_response(req_id, {\"tools\": [ECHO_TOOL]})\n        )\n\n    # -- tools/call ----------------------------------------------------------\n    if method == \"tools/call\":\n        tool_name = params.get(\"name\", \"\")\n        arguments = params.get(\"arguments\", {})\n\n        if tool_name != \"echo\":\n            return JSONResponse(\n                content=_jsonrpc_error(req_id, -32602, f\"Unknown tool: {tool_name}\")\n            )\n\n        message = arguments.get(\"message\", \"\")\n        return JSONResponse(\n            content=_jsonrpc_response(\n                req_id,\n                {\n                    \"content\": [{\"type\": \"text\", \"text\": message}],\n                },\n            ),\n        )\n\n    # -- notifications (no response required) --------------------------------\n    if method.startswith(\"notifications/\"):\n        return JSONResponse(content={}, status_code=202)\n\n    # -- Unknown method ------------------------------------------------------\n    return JSONResponse(\n        content=_jsonrpc_error(req_id, -32601, f\"Method not found: {method}\")\n    )\n\n\n# ---------------------------------------------------------------------------\n# Entrypoint\n# ---------------------------------------------------------------------------\nif __name__ == \"__main__\":\n    import uvicorn\n\n    uvicorn.run(app, host=\"127.0.0.1\", port=8765)\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "c6898a6fb7e29fc3d5cbf4fe69d5d0c6dc22b3e0bab429c1534c4aaf29bed6af",
+      "score": 100,
+      "content": "# Mock OAuth2 MCP Server\n\nA lightweight mock server that combines an OAuth2 token endpoint with an MCP (Model Context Protocol) Streamable HTTP endpoint. Built for testing OAuth2 client_credentials (M2M) flows with LiteLLM proxy.\n\n## Features\n\n- **OAuth2 token endpoint** (`POST /oauth/token`) — issues bearer tokens via the `client_credentials` grant\n- **MCP endpoint** (`POST /mcp`) — Streamable HTTP transport with a built-in `echo` tool\n- **Bearer token validation** — the MCP endpoint rejects requests without a valid token\n\n## Quick Start\n\n```bash\npip install fastapi uvicorn\n```\n\n```bash\npython mock_oauth2_mcp_server.py\n```\n\nThe server starts on **port 8765**.\n\n### Test Credentials\n\n| Parameter       | Value           |\n|-----------------|-----------------|\n| `client_id`     | `test-client`   |\n| `client_secret` | `test-secret`   |\n\n## LiteLLM Config\n\nAdd the following to your LiteLLM proxy config YAML:\n\n```yaml\nmcp_servers:\n  test_oauth2_server:\n    url: \"http://localhost:8765/mcp\"\n    transport: \"http\"\n    auth_type: \"oauth2\"\n    client_id: \"test-client\"\n    client_secret: \"test-secret\"\n    token_url: \"http://localhost:8765/oauth/token\"\n```\n\n## Documentation\n\nSee the full LiteLLM MCP OAuth docs: https://docs.litellm.ai/docs/mcp_oauth\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "e9af2913de609d1de45b2fbab270c5a77281543c4dab6d1dd182f221fd04f683",
+      "score": 85,
+      "content": "fastapi\nuvicorn\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:19:50.902701+00:00"
+}

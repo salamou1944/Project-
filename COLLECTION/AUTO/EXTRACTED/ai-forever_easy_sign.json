@@ -1,0 +1,92 @@
+{
+  "canonical_source": "github:ai-forever/easy_sign",
+  "repo": "ai-forever/easy_sign",
+  "revision_sha": "b1be3c089407acb128f75ed335a68f94851f0906",
+  "default_branch": "main",
+  "pushed_at": "2026-09-01T11:11:57Z",
+  "repo_updated_at": "2026-10-10T21:08:28Z",
+  "license": "CC-BY-SA-4.0",
+  "topics": [
+    "ai4good",
+    "computer-vision",
+    "deep-learning",
+    "gesture-recognition",
+    "open-source",
+    "russian-language",
+    "sign-language-recognition",
+    "sign-language-recognition-system"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "model.py",
+      "sha": null,
+      "content_sha256": "90fb571244f0faeb416dcad586bc48e1a4f3ff5920b009c6a0f0beb1b0db9485",
+      "score": 110,
+      "content": "from sys import platform\nimport onnxruntime as rt\nfrom einops import rearrange\nimport numpy as np\n\nif platform in {\"win32\", \"win64\"}:\n    import onnxruntime.tools.add_openvino_win_libs as utils\n    utils.add_openvino_libs_to_path()\n\n\nclass Predictor:\n    def __init__(self, model_config):\n        \"\"\"\n        Initialize the Predictor class.\n\n        Args:\n            model_config (dict): Model configuration containing path_to_model,\n                path_to_class_list, threshold, and topk values.\n        \"\"\"\n        self.config = model_config\n        self.provider = self.config[\"provider\"]\n        self.threshold = self.config[\"threshold\"]\n        self.labels = {}\n\n        self.model_init(self.config[\"path_to_model\"])\n        self.create_labels()\n\n    def create_labels(self):\n        \"\"\"\n        Create a dictionary of labels from the provided path_to_class_list.\n        \"\"\"\n        with open(self.config[\"path_to_class_list\"], \"r\") as f:\n            labels = [line.strip() for line in f]\n            labels = self.decode_preds(labels)\n\n            idx_lbl_pairs = [x.split(\"\\t\") for x in labels]\n            self.labels = {int(x[0]): x[1] for x in idx_lbl_pairs}\n\n\n    def softmax(self, x):\n        exp_x = np.exp(x - np.max(x, axis=1, keepdims=True))\n        return exp_x / np.sum(exp_x, axis=1, keepdims=True)\n\n    def predict(self, x):\n        \"\"\"\n        Make a prediction using the provided input frames.\n\n        Args:\n            x (list): List of input frames.\n\n        Returns:\n            dict: Dictionary containing predicted labels and confidence values.\n        \"\"\"\n        clip = np.array(x).astype(np.float32) / 255.0\n        clip = rearrange(clip, \"t h w c -> 1 c t h w\")\n\n        prediction = self.model([self.output_name], {self.input_name: clip})[0]\n        prediction = self.softmax(prediction)\n        prediction = np.squeeze(prediction)\n        topk_labels = prediction.argsort()[-self.config[\"topk\"] :][::-1]\n        topk_confidence = prediction[topk_labels]\n\n        result = [self.labels[lbl_idx] for lbl_idx in topk_labels]\n        if np.max(topk_confidence) < self.threshold:\n            return None\n\n        return {\n            \"labels\": dict(zip([i for i in range(len(result))], result)),\n            \"confidence\": dict(zip([i for i in range(len(result))], topk_confidence)),\n        }\n\n    def model_init(self, path_to_model: str) -> None:\n        \"\"\"\n        Load and init the ONNX model using the provided path.\n\n        Args:\n            path_to_model (str): Path to the ONNX model file.\n\n        Returns:\n            None\n        \"\"\"\n        session = rt.InferenceSession(path_to_model, providers=[self.provider])\n        self.input_name = session.get_inputs()[0].name\n        self.output_name = session.get_outputs()[0].name\n\n        self.model = session.run\n\n    def decode_preds(self, data):\n        if platform in {\"win32\", \"win64\"}:\n            data = [i.encode(\"cp1251\").decode(\"utf-8\") for i in data]\n        return data"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "fb3e31f13c7a18ea7c7f776127257bcc8bbe86a6f571e194781907fe1a614887",
+      "score": 100,
+      "content": "[English version](README_en.md)\n# Easy_sign\nEasy_sign - опенсорс проект по распознаванию Русского жестового языка, спроектированный для развёртывания через [Streamlit](https://streamlit.io/). В проекте используется \"лёгкая\" ML-модель, способная работать на CPU. \n\n## О проекте\nEasy_sign использует ML-модель для распознавания отдельных жестов Русского жестового языка.\nМодель была обучена на ~180 000 примеров жестов. Приблизительно 20 000 из которых были взяты из датасета [Slovo](https://github.com/hukenovs/slovo). \nМодель распознаёт 1598 жестов Русского жестового языка и может обеспечить распознавание 3-3.5 жестов в секунду на процессоре Intel(R) Core(TM) i5-6600 CPU @3.30GHz. Список распознаваемых жестов содержится в файле [RSL_class_list.txt](RSL_class_list.txt). \n\nБольше информации о проекте - в статье на [habr](https://habr.com/ru/companies/sberbank/articles/775688/).\n\n## Порядок установки\n```\nconda create --name fleury-env python=3.10\nconda activate fleury-env\npip install -r requirements.txt\n```\n\n## Использование\n```\nstreamlit run app.py\n```\n![Good day](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExY3lsZXJvd296NW9qYzhlcThkbnFvOXg3ZG9qaXhkamg1aHJ0OWVpOCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/WyoGGzp74qzWdtPiik/giphy.gif)\n\n\n## Ссылки\nКоманда ПИН-КОД выпустила на базе easy_sign тренажёр для изучения РЖЯ. [Статья на хабр](https://habr.com/ru/articles/777700/), [репозиторий](https://github.com/PINCODE-project/RSL-Recognition-API-exe)  \n\nS3D модели, обученные на датасете [Slovo](https://github.com/hukenovs/slovo) для различного количества кадров, подаваемых на вход. Веса: [Hugging Face](https://huggingface.co/maximazzik/easy_sign).\n\n| Кол-во кадров | Ссылка | Mean accuracy, % |\n|:---------------:|:--------:|:----------------:|\n|       32        |  https://huggingface.co/maximazzik/easy_sign/resolve/main/slovo/S3Dx32x1x1001.onnx  |      44.22       |\n|       48        |  https://huggingface.co/maximazzik/easy_sign/resolve/main/slovo/S3Dx48x1x1001.onnx  |      52.28       |\n|       64        |  https://huggingface.co/maximazzik/easy_sign/resolve/main/slovo/S3Dx64x1x1001.onnx  |      55.86       |\n\n\n## Лицензия\n<a rel=\"license\" href=\"http://creativecommons.org/licenses/by-sa/4.0/\"><img alt=\"Creative Commons License\" style=\"border-width:0\" src=\"https://i.creativecommons.org/l/by-sa/4.0/88x31.png\" /></a><br />This work is licensed under the <a rel=\"license\" href=\"http://creativecommons.org/licenses/by-sa/4.0/\">Creative Commons Attribution-ShareAlike 4.0 International License</a>.\n"
+    },
+    {
+      "path": "README_en.md",
+      "sha": null,
+      "content_sha256": "5f0302b901534b9bea303793f0a3a7683384667250d3e60dbb7b09eabe0439cc",
+      "score": 100,
+      "content": "[Русская версия](README.md)\n# Easy_sign\n\nEasy_sign is an open source russian sign language recognition project that uses small CPU model for predictions and is designed for easy deployment via Streamlit.\n\n## About the project\nEasy_sign uses a machine learning model to recognize Russian sign language gestures. \nThe model was trained on ~180,000 examples of Russian sign language gestures. Approximately 20,000 of which are taken from the [Slovo](https://github.com/hukenovs/slovo) dataset.\nThe model recognizes 1598 Russian sign language gestures and can process 3-3.5 gestures per second on an Intel(R) Core(TM) i5-6600 CPU @3.30GHz. The list of recognized gestures is available in the file [RSL_class_list.txt](RSL_class_list.txt). \n\nTo learn more about the project - visit the link to our article on [habr](https://habr.com/ru/companies/sberbank/articles/775688/).\n\n## Installation\n```\nconda create --name fleury-env python=3.10\nconda activate fleury-env\npip install -r requirements.txt\n```\n\n## Usage\n```\nstreamlit run app.py\n```\n![Good day](https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExY3lsZXJvd296NW9qYzhlcThkbnFvOXg3ZG9qaXhkamg1aHJ0OWVpOCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/WyoGGzp74qzWdtPiik/giphy.gif)\n\n\n## Links\nThe PINCODE team has released a training simulator based on easy_sign to study Russian sign language. [Habr (Russian)](https://habr.com/ru/articles/777700/), [github](https://github.com/PINCODE-project/RSL-Recognition-API-exe)\n\nS3D models trained on the [Slovo](https://github.com/hukenovs/slovo) dataset for different input lengths. Weights: [Hugging Face](https://huggingface.co/maximazzik/easy_sign).\n\n| Frames | Link | Mean accuracy, % |\n|:---------------:|:--------:|:----------------:|\n|       32        |  https://huggingface.co/maximazzik/easy_sign/resolve/main/slovo/S3Dx32x1x1001.onnx  |      44.22       |\n|       48        |  https://huggingface.co/maximazzik/easy_sign/resolve/main/slovo/S3Dx48x1x1001.onnx  |      52.28       |\n|       64        |  https://huggingface.co/maximazzik/easy_sign/resolve/main/slovo/S3Dx64x1x1001.onnx  |      55.86       |\n\n\n ## License\n<a rel=\"license\" href=\"http://creativecommons.org/licenses/by-sa/4.0/\"><img alt=\"Creative Commons License\" style=\"border-width:0\" src=\"https://i.creativecommons.org/l/by-sa/4.0/88x31.png\" /></a><br />This work is licensed under the <a rel=\"license\" href=\"http://creativecommons.org/licenses/by-sa/4.0/\">Creative Commons Attribution-ShareAlike 4.0 International License</a>.\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "d8a099a7fe904ffc80bbe5660a95bb67b4eefe0eedaafea2109c40b0296f463c",
+      "score": 85,
+      "content": "onnx==1.14.0\nstreamlit==1.28.2\nstreamlit-webrtc==0.47.1\neinops==0.6.1\nopencv-python\n\n# only for mac\nonnxruntime==1.16.0; sys_platform == 'darwin'\n# only linux or windows\nonnxruntime-openvino==1.16; sys_platform != 'darwin'\n# Windows-specific dependency\nopenvino==2023.1; sys_platform == 'win32'"
+    },
+    {
+      "path": "utils.py",
+      "sha": null,
+      "content_sha256": "e895665ea4466bcf7032bde1ef83aa9b90cdfc2ce66a1401df49604eac5561cc",
+      "score": 35,
+      "content": "from collections import deque\nimport json\nfrom threading import Thread\nfrom model import Predictor\nimport time\n\nclass SLInference:\n    \"\"\"\n    Main prediction thread.\n\n    Attributes:\n        running (bool): Flag to control the running of the thread.\n        config (dict): Configuration parameters for the model.\n        model (Predictor): The prediction model.\n        input_queue (deque): A queue to hold the input data.\n        pred (str): The prediction result.\n        thread (Thread): The worker thread.\n    \"\"\"\n    def __init__(self, config_path):\n        \"\"\"\n        Initialize the SLInference object.\n\n        Args:\n            config_path (str): Path to the configuration file.\n        \"\"\"\n        self.running = True\n        self.config = self.read_config(config_path)\n        self.model = Predictor(self.config)\n        self.input_queue = deque(maxlen=self.config[\"window_size\"])\n        self.pred = \"\"\n\n    def read_config(self, config_path):\n        \"\"\"\n        Read the configuration file.\n\n        Args:\n            config_path (str): Path to the configuration file.\n\n        Returns:\n            dict: The configuration parameters.\n        \"\"\"\n        with open(config_path, \"r\") as f:\n            config = json.load(f)\n        return config\n\n    def worker(self):\n        \"\"\"\n        The main worker function that runs in a separate thread.\n        \"\"\"\n        while self.running:\n            if len(self.input_queue) == self.config[\"window_size\"]:\n                pred_dict = self.model.predict(self.input_queue)\n                if pred_dict:\n                    self.pred = pred_dict[\"labels\"][0]\n                    self.input_queue.clear()\n                else:\n                    self.pred = \"\"\n            time.sleep(0.1)\n\n    def start(self):\n        \"\"\"\n        Start the worker thread.\n        \"\"\"\n        self.thread = Thread(target=self.worker)\n        self.thread.start()\n\n    def stop(self):\n        \"\"\"\n        Stop the worker thread.\n        \"\"\"\n        self.running = False\n        self.thread.join()"
+    },
+    {
+      "path": "opencv_inference.py",
+      "sha": null,
+      "content_sha256": "b14f5f57578ada5c584672db099da1ac5e137698253dc5cf12f0cec44d5ded44",
+      "score": 35,
+      "content": "from collections import deque\n\nimport cv2\n\nfrom utils import SLInference\n\n\ndef main(config_path):\n    \"\"\"\n    Main function of the app.\n    \"\"\"\n\n    cap = cv2.VideoCapture(0)\n\n    inference_thread = SLInference(config_path)\n    inference_thread.start()\n\n    gestures_deque = deque(maxlen=5)\n\n    while True:\n        _, img = cap.read()\n        img_resized = cv2.resize(img, (224, 224))\n        inference_thread.input_queue.append(img_resized)\n\n        gesture = inference_thread.pred\n        if gesture not in ['no', '']:\n            if not gestures_deque:\n                gestures_deque.append(gesture)\n            elif gesture != gestures_deque[-1]:\n                gestures_deque.append(gesture)\n\n        if gestures_deque:\n            print(gestures_deque[-1])\n\n        cv2.imshow(\"img\", img)\n        cv2.waitKey(1)\n\n\nif __name__ == \"__main__\":\n    main(\"configs/config.json\")"
+    },
+    {
+      "path": "app.py",
+      "sha": null,
+      "content_sha256": "1b782caf7d10ea81139a7971afef665a95960d707811f7bfd5c9d1977cfe1424",
+      "score": 35,
+      "content": "import logging\nimport queue\nfrom collections import deque\n\nimport streamlit as st\nfrom streamlit_webrtc import WebRtcMode, webrtc_streamer\n\nfrom utils import SLInference\n\n\nlogger = logging.getLogger(__name__)\n\ndef main(config_path):\n    \"\"\"\n    Main function of the app.\n    \"\"\"\n    inference_thread = SLInference(config_path)\n    inference_thread.start()\n\n    webrtc_ctx = webrtc_streamer(\n        key=\"video-sendonly\",\n        mode=WebRtcMode.SENDONLY,\n        media_stream_constraints={\"video\": True},\n    )\n\n    gestures_deque = deque(maxlen=5)\n\n    # Set up Streamlit interface\n    st.title(\"Sign Language Recognition Demo\")\n    image_place = st.empty()\n    text_output = st.empty()\n    last_5_gestures = st.empty()\n    st.markdown(\n        \"\"\"\n\n        This application is designed to recognize sign language using a webcam feed.\n        The model has been trained to recognize various sign language gestures and display the corresponding text in real-time.\n\n        This demo app is based on code here: https://github.com/ai-forever/easy_sign\n        The project is open for collaboration. If you have any suggestions or want to contribute, please feel free to reach out.\n        \"\"\"\n    )\n\n    while True:\n        if webrtc_ctx.video_receiver:\n            try:\n                video_frame = webrtc_ctx.video_receiver.get_frame(timeout=1)\n            except queue.Empty:\n                logger.warning(\"Queue is empty\")\n                continue\n\n            img_rgb = video_frame.to_ndarray(format=\"rgb24\")\n            image_place.image(img_rgb)\n            inference_thread.input_queue.append(video_frame.reformat(224,224).to_ndarray(format=\"rgb24\"))\n\n            gesture = inference_thread.pred\n            if gesture not in ['no', '']:\n                if not gestures_deque:\n                    gestures_deque.append(gesture)\n                elif gesture != gestures_deque[-1]:\n                    gestures_deque.append(gesture)\n\n            text_output.markdown(f'<p style=\"font-size:20px\"> Current gesture: {gesture}</p>',\n                                 unsafe_allow_html=True)\n            last_5_gestures.markdown(f'<p style=\"font-size:20px\"> Last 5 gestures: {\" \".join(gestures_deque)}</p>',\n                                 unsafe_allow_html=True)\n            print(gestures_deque)\n\n\n\nif __name__ == \"__main__\":\n    main(\"configs/config.json\")\n\n"
+    },
+    {
+      "path": "configs/config.json",
+      "sha": null,
+      "content_sha256": "7c3d61a50f117229321e9fd4eb6cc4ad8cd848045ebc0586e04510ca7dd5106c",
+      "score": 33,
+      "content": "{\n    \"path_to_model\": \"S3D.onnx\",\n    \"threshold\": 0.5,\n    \"topk\": 1,\n    \"path_to_class_list\": \"RSL_class_list.txt\",\n    \"window_size\": 32,\n    \"provider\": \"OpenVINOExecutionProvider\"\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:19:54.947688+00:00"
+}

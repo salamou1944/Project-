@@ -1,0 +1,62 @@
+{
+  "canonical_source": "github:RocketChat/TenableAgent-Daemonset",
+  "repo": "RocketChat/TenableAgent-Daemonset",
+  "revision_sha": "5a945e35208fcae09c46c87c799bc957b2c9f044",
+  "default_branch": "main",
+  "pushed_at": "2023-05-24T18:59:33Z",
+  "repo_updated_at": "2026-07-16T18:42:53Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/main.yml",
+      "sha": null,
+      "content_sha256": "f884b85bfc93ccaa8a977b9465d8b5846e7992bcf0b99e454cb1272cc4ff7666",
+      "score": 126,
+      "content": "name: Build Image in Rocket.Chat Docker Hub\n\non:\n  push:\n    branches:\n    - main\n\njobs:\n  build_image:\n    name: build\n    runs-on: ubuntu-latest\n    steps:\n      -\n        name: Checkout Code\n        uses: actions/checkout@v3\n      -\n        name: Set up QEMU\n        uses: docker/setup-qemu-action@v2\n      -\n        name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v2\n      -\n        name: Login to Docker Hub\n        uses: docker/login-action@v2\n        with:\n          username: ${{ secrets.DOCKERHUB_USERNAME }}\n          password: ${{ secrets.DOCKERHUB_TOKEN }}\n      -\n        name: Build and push\n        uses: docker/build-push-action@v3\n        with:\n          context: .\n          file: Dockerfile\n          push: true\n          tags: rocketchat/darwiny:latest\n    \n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "5653069d2212c27e1d2c9a9394de6e591e11b597898b19a12f8c7fee90344692",
+      "score": 100,
+      "content": "# Tenable.io Agent DaemonSet\n\n**First Problem:** \"I need to start a manual process of installing the tenable.io agent everytime that a node joins my cluster\"  \n\n**Second Problem:** \"I need to implement tenable.io agent in a pod and use this pod to scan the node filesystem\"\n\n**Third Problem:** \"I need to avoid agents permanently writing files in my kubernetes nodes\"\n\n**Solution:** Create an unprivilleged DaemonSet POD with tenable.io agent and change the filesystem root of the process to the node filesystem\n\n## Description\n\nThis repository contains Kubernetes resource files for deploying the Tenable agent as a DaemonSet in a Kubernetes cluster. The Tenable agent runs on all nodes in the cluster and provides visibility into the security posture of your cluster.\n\n## Prerequisites\n\n- [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) must be implemented\n\n- [kubectl](https://kubernetes.io/docs/reference/kubectl/) must be installed and configured to access your cluster\n- A [Tenableio link key](https://cloud.tenable.com/tio/app.html#/settings/sensors/agents/agents-list/add) is required to link the agent with your Tenable.io Manager\n\n## Deployment\n\n\n1. Create a Sealed Secrets key inside your cluster. Replace `YOUR TENABLE KEY GOES HERE` with your tenable.io sync token and convert it to a base64 format:\n\n\n```\necho -n '{\"link\":{\"host\": \"cloud.tenable.com\",\"port\": 443,\"key\": \"YOUR TENABLE KEY GOES HERE\",\"name\": \"$NODE_NAME\", \"groups\": [\"agent-group\"]}}' | base64\n```\n\n2. Insert the base64 encoded string in the [secrets.yaml](https://github.com/RocketChat/tenable-agent-kubernetes-daemonset/blob/main/secrets.yaml) file and use kubeseal to encrypt it:\n\n```\ncat secret.yaml | kubeseal \\\n    --controller-namespace kube-system \\\n    --controller-name sealed-secrets \\\n    --format yaml \\\n    > sealed-secret.yaml\n```\n\n3. Apply the sealed secrets to your cluster:\n\n\n```\nkubectl apply -f sealed-secret.yaml\n```\n\n4. Deploy the DaemonSet with the following command:\n\n\n```\nkubectl apply -f manifest/tenable-pod.yaml\n```\n\nAfter a few minutes, you should see your node information in your [tenable.io sensors list](https://cloud.tenable.com/tio/app.html#/settings/sensors/agents/agents-list)\n\n\nIf you want to build the image in another registry, you can use the following command:\n\n```\ncd Dockerfile\ndocker build -t tenable-agent-image . \n```\n\n**Important: Remember to change the reference of the image in `tenable-pod.yaml` if you build the dockerfile locally**\n\n## Testing\n\nTo verify that the Tenable agent is running on all nodes in the cluster, run:\n\n\n```\nkubectl get pods -n tenable\n```\n\nYou should see one pod for each node in the cluster, with a status of `Running`.\n\nIf you encounter any issues, you can check the logs for the Tenable agent pods using:\n\n```\nkubectl logs -n tenable <pod-name>\n```\n\n## Maintenance\n\nTo update the Tenable agent `image`, modify the image field in the `tenable-pod.yaml` file and apply the changes using `kubectl apply -f tenable-pod.yaml`.\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "78bfce38b95e16978edfb7df5725370f599e968ea7c7c96ce26d24057382365b",
+      "score": 85,
+      "content": "FROM bitnami/minideb:latest\n\nARG NESSUS_SHA256=\"3e3287344dd133db0402c9ea313b75ce5de86b7128292d22c427ff57f5a5bc61  NessusAgent-10.3.1-ubuntu1404_amd64.deb\"\nARG NESSUS_URL=\"https://d2530cnixqlh3k.cloudfront.net/nessus-agent/NessusAgent-10.3.1-ubuntu1404_amd64.deb\"\n\nLABEL maintainer=\"security@rocket.chat\"\n\n#Download updates and Nessus Agent\nRUN apt update -y && apt install -y --no-install-recommends gettext-base curl \nRUN curl -s -k $NESSUS_URL -o NessusAgent-10.3.1-ubuntu1404_amd64.deb\n\n#Check if the downloaded file have the same SHA256 hash provided by tenable in https://www.tenable.com/downloads/nessus-agents?loginAttempted=true\n#Aborts if failed\n\nRUN echo -n $NESSUS_SHA256 > sha256_signature.txt\nRUN sha256sum -c sha256_signature.txt\n\n#Install Nessus\n\nRUN dpkg -i NessusAgent-10.3.1-ubuntu1404_amd64.deb && rm -rf NessusAgent-10.3.1-ubuntu1404_amd64.deb"
+    },
+    {
+      "path": "Manifest/tenable-pod.yaml",
+      "sha": null,
+      "content_sha256": "a1f3ce8022c0a9958f7bb60b50beedb220d25214414faf31fef6be82429ceaaf",
+      "score": 33,
+      "content": "apiVersion: v1 \nkind: Namespace\nmetadata:\n  name: tenable\n---\napiVersion: apps/v1\nkind: DaemonSet\nmetadata:\n  name: tenable-agent-daemonset\n  namespace: tenable\nspec:\n  selector:\n    matchLabels:\n      name: tenable-agent-pod\n  template:\n    metadata:\n      name: tenable-agent-pod\n      labels:\n        name: tenable-agent-pod\n    spec:\n      volumes:\n        - name: access-to-node-files\n          hostPath:\n            path: /\n        - name: tenable-config-json-with-key\n          secret: \n            secretName: tenable-config-json-with-key\n        - name: nessus-files-in-host\n          emptyDir: {}\n      initContainers:\n      - name: mount-volumes\n        image: rocketchat/darwiny:latest\n        resources:\n          limits:\n            memory: \"1000Mi\"\n            cpu: 1\n          requests:\n            memory: \"1000Mi\"\n            cpu: 1\n        env:\n          - name: NODE_NAME\n            valueFrom:\n              fieldRef:\n                fieldPath: spec.nodeName\n        volumeMounts:\n           - name: nessus-files-in-host\n             mountPath: /mnt/nessus_files\n           - name: tenable-config-json-with-key\n             mountPath: /opt/config.json\n             subPath: tenable-config-json-with-key\n        command: [\"sh\", \"-c\"]\n        args: \n        - |\n          envsubst < /opt/config.json > /opt/nessus_agent/var/nessus/config.json\n          cp -r /opt/nessus_agent/* /mnt/nessus_files/\n      containers:\n        - name: tenable-agent\n          image: rocketchat/darwiny:latest\n          resources:\n            limits:\n              memory: \"1000Mi\"\n              cpu: 1\n            requests:\n              memory: \"500Mi\"\n          volumeMounts:\n             - name: access-to-node-files\n               mountPath: /mnt/host_files\n             - name: nessus-files-in-host\n               mountPath: /mnt/host_files/opt/nessus_agent\n          command: [\"sh\", \"-c\"]\n          args:\n          - |\n            chroot /mnt/host_files /opt/nessus_agent/sbin/nessus-service"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": "secrets.yaml",
+      "sha": "6e17505e11393c28b24fcf06323a74d52a4f68ea",
+      "size": 342,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:19:56.623068+00:00"
+}
