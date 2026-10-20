@@ -10,6 +10,8 @@ else remains REVIEW until semantic dedupe + validation evidence exists.
 import json,re,urllib.request
 from pathlib import Path
 
+from process_collection import atomic_json_write
+
 QUEUE=Path("COLLECTION/MASTER/PROMOTION-QUEUE.json")
 DECISIONS=Path("COLLECTION/MASTER/CANONICAL-DECISIONS.json")
 OUT=Path("COLLECTION/MASTER/CANONICAL-PROMOTION-PLAN.json")
@@ -48,7 +50,7 @@ def main():
         plan.append({**item,"terminal_decision":decision,"canonical_skill":best[1],"reason":reason,"decision_source":"reconciler"})
     summary={}
     for p in plan: summary[p["terminal_decision"]]=summary.get(p["terminal_decision"],0)+1
-    OUT.write_text(json.dumps({"schema_version":"canonical-promotion-plan/v1","canonical_repo":"salamou1944/agent-skills","source_queue_generated_at":queue.get("generated_at"),"skill_count":len(skills),"summary":summary,"items":plan},ensure_ascii=False,indent=2)+"\n")
+    atomic_json_write(OUT, {"schema_version":"canonical-promotion-plan/v1","canonical_repo":"salamou1944/agent-skills","source_queue_generated_at":queue.get("generated_at"),"skill_count":len(skills),"summary":summary,"items":plan}, compact_array_keys={"items"})
     print(json.dumps({"skills":len(skills),"items":len(plan),"summary":summary},sort_keys=True))
 
 if __name__=="__main__": main()
