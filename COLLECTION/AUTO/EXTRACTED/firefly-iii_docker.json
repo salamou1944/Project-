@@ -1,0 +1,136 @@
+{
+  "canonical_source": "github:firefly-iii/docker",
+  "repo": "firefly-iii/docker",
+  "revision_sha": "841e328345ce10ca8eaebbda4d3a42c628bc0dc2",
+  "default_branch": "main",
+  "pushed_at": "2026-05-05T17:48:57Z",
+  "repo_updated_at": "2026-10-19T21:10:28Z",
+  "license": "AGPL-3.0",
+  "topics": [
+    "docker",
+    "firefly-iii",
+    "personal-finances",
+    "support",
+    "virtual-machine",
+    "vm"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/transfer.yml",
+      "sha": null,
+      "content_sha256": "304360aa9d51f2c6cfef7fbd2931834f6b6103af71cb28218a03eeb6100aabb8",
+      "score": 126,
+      "content": "name: Issues - Transfer issues\non:\n  issues:\n    types:\n      - labeled\njobs:\n  transfer:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Transfer\n        uses: lando/transfer-issue-action@v2\n        with:\n          token: ${{ secrets.TRANSFER_ISSUE_TOKEN }}\n          router: move:firefly-iii\n          create_stub: false\n"
+    },
+    {
+      "path": ".github/workflows/cleanup.yml",
+      "sha": null,
+      "content_sha256": "5a07fec430d3fc17460197aea82737be2479f337b337c51392ab35d97fb9601d",
+      "score": 126,
+      "content": "# This workflow prunes old workflow runs for an entire repository.\n\nname: \"Chore - Prune old builds\"\n\npermissions:\n  actions: write\n\non:\n  schedule:\n    - cron: '0 1 * * *'\n  workflow_dispatch:\njobs:\n  prune:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    steps:\n      - name: Prune cancelled/skipped runs\n        uses: actions/github-script@v7\n        with:\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n          script: |\n            const cancelled = await github.rest.actions.listWorkflowRunsForRepo({\n              owner: context.repo.owner,\n              per_page: 100,\n              repo: context.repo.repo,\n              status: 'cancelled',\n            });\n\n            const skipped = await github.rest.actions.listWorkflowRunsForRepo({\n              owner: context.repo.owner,\n              per_page: 100,\n              repo: context.repo.repo,\n              status: 'skipped',\n            });\n\n            for (const response of [cancelled, skipped]) {\n              for (const run of response.data.workflow_runs) {\n                console.log(`Run id ${run.id} of '${run.name}' is a cancelled/skipped run. Deleting...`);\n                await github.rest.actions.deleteWorkflowRun({\n                  owner: context.repo.owner,\n                  repo: context.repo.repo,\n                  run_id: run.id\n                });\n              }\n            }\n\n      - name: Prune runs older than 3 days\n        uses: actions/github-script@v7\n        with:\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n          script: |\n            const days_to_expiration = 3;\n            const ms_in_day = 86400000;\n            const now = Date.now();\n            const pages = 5;\n\n            // we don't want to prune old runs from test.yml\n            // because we track the duration of runs over time\n\n            const workflows = [\n              'cleanup.yml',\n              'label.yml',\n              'transfer.yml'\n            ]\n\n            let runs_to_delete = [];\n\n            for (const workflow of workflows) {\n              for (let page = 0; page < pages; page += 1) {\n                let response = await github.rest.actions.listWorkflowRuns({\n                  owner: context.repo.owner,\n                  page: page,\n                  per_page: 100,\n                  repo: context.repo.repo,\n                  workflow_id: workflow\n                });\n\n                if (response.data.workflow_runs.length > 0) {\n                  for (const run of response.data.workflow_runs) {\n                    if (now - Date.parse(run.created_at) > ms_in_day * days_to_expiration) {\n                      runs_to_delete.push([run.id, run.name]);\n                    }\n                  }\n                }\n              }\n            }\n\n            for (const run of runs_to_delete) {\n              console.log(`Run id ${run[0]} of '${run[1]}' is older than ${days_to_expiration} days. Deleting...`);\n              try {\n                await github.rest.actions.deleteWorkflowRun({\n                  owner: context.repo.owner,\n                  repo: context.repo.repo,\n                  run_id: run[0]\n                });\n              } catch (error) {\n                // ignore errors\n              }\n            }\n"
+    },
+    {
+      "path": ".github/workflows/label.yml",
+      "sha": null,
+      "content_sha256": "0fe72ec7657ec442d6838f756099ee90adcc5800051c7591990587aa269d3e75",
+      "score": 126,
+      "content": "name: \"Issues - Label issues to transfer\"\non:\n  issues:\n    types: [opened, edited]\n\npermissions:\n  issues: write\n  contents: read\n\njobs:\n  triage:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: github/issue-labeler@v3.4 #May not be the latest version\n      with:\n        configuration-path: .github/labeler.yml\n        enable-versioned-regex: 0\n        repo-token: ${{ secrets.TRANSFER_ISSUE_TOKEN }}\n"
+    },
+    {
+      "path": "docker-compose-importer.yml",
+      "sha": null,
+      "content_sha256": "233e0235f00ae193b70652f29d5ced5748c327216d237f333ee6f17b0e526df7",
+      "score": 120,
+      "content": "#\n# The Firefly III Data Importer will ask you for the Firefly III URL and a \"Client ID\".\n# You can generate the Client ID at http://localhost/profile (after registering)\n# The Firefly III URL is: http://app:8080\n#\n# Other URL's will give 500 | Server Error\n#\n\nservices:\n  app:\n    image: fireflyiii/core:latest\n    hostname: app\n    container_name: firefly_iii_core\n    networks:\n      - firefly_iii\n    restart: always\n    volumes:\n      - firefly_iii_upload:/var/www/html/storage/upload\n    env_file: .env\n    ports:\n      - '80:8080'\n    depends_on:\n      - db\n  db:\n    image: mariadb:lts\n    hostname: db\n    container_name: firefly_iii_db\n    networks:\n      - firefly_iii\n    restart: always\n    env_file: .db.env\n    volumes:\n      - firefly_iii_db:/var/lib/mysql\n\n  importer:\n    image: fireflyiii/data-importer:latest\n    hostname: importer\n    restart: always\n    container_name: firefly_iii_importer\n    networks:\n      - firefly_iii\n#\n# Remove this comment, and add the \"volumes\" entry to map a folder (\"volume\") to the /import directory inside the container.\n# This can be used to import from a directory.\n#\n#    volumes:\n#      - /your-path-here/to/import:/import\n    ports:\n      - '81:8080'\n    depends_on:\n      - app\n    env_file: .importer.env\n\n  cron:\n    #\n    # To make this work, set STATIC_CRON_TOKEN in your .env file or as an environment variable\n    # The STATIC_CRON_TOKEN must be *exactly* 32 characters long\n    # Use this URL for inspiration: https://www.random.org/strings/?num=1&len=32&digits=on&upperalpha=on&loweralpha=on&unique=on&format=html&rnd=new\n    #\n    image: alpine\n    container_name: firefly_iii_cron\n    restart: always\n    env_file: .env\n    command: [\"sh\", \"-c\", \"apk add tzdata && \\\n      (ln -s /usr/share/zoneinfo/$$TZ /etc/localtime || true) && \\\n      echo \\\"0 3 * * * wget -qO- http://app:8080/api/v1/cron/$$STATIC_CRON_TOKEN;echo\\\" \\\n      | crontab - && \\\n      crond -f -L /dev/stdout\"]\n    networks:\n      - firefly_iii\n    depends_on:\n      - app\nvolumes:\n   firefly_iii_upload:\n   firefly_iii_db:\n\nnetworks:\n  firefly_iii:\n    driver: bridge\n"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha": null,
+      "content_sha256": "d7a0e4351bbb66fa014e99e8fb8db16aef265e468d2b2a1205b1e1c18d94e9e3",
+      "score": 120,
+      "content": "services:\n  app:\n    image: fireflyiii/core:latest\n    hostname: app\n    container_name: firefly_iii_core\n    restart: always\n    volumes:\n      - firefly_iii_upload:/var/www/html/storage/upload\n    env_file: .env\n    networks:\n      - firefly_iii\n    ports:\n      - 80:8080\n    depends_on:\n      - db\n  db:\n    image: mariadb:lts\n    hostname: db\n    container_name: firefly_iii_db\n    restart: always\n    env_file: .db.env\n    networks:\n      - firefly_iii\n    volumes:\n      - firefly_iii_db:/var/lib/mysql\n  cron:\n    #\n    # To make this work, set STATIC_CRON_TOKEN in your .env file or as an environment variable\n    # The STATIC_CRON_TOKEN must be *exactly* 32 characters long\n    # Use this URL for inspiration: https://www.random.org/strings/?num=1&len=32&digits=on&upperalpha=on&loweralpha=on&unique=on&format=html&rnd=new\n    #\n    image: alpine\n    restart: always\n    container_name: firefly_iii_cron\n    env_file: .env\n    command: [\"sh\", \"-c\", \"apk add tzdata && \\\n      (ln -s /usr/share/zoneinfo/$$TZ /etc/localtime || true) && \\\n      echo \\\"0 3 * * * wget -qO- http://app:8080/api/v1/cron/$$STATIC_CRON_TOKEN;echo\\\" \\\n      | crontab - && \\\n      crond -f -L /dev/stdout\"]\n    networks:\n      - firefly_iii\n    depends_on:\n      - app\n\nvolumes:\n   firefly_iii_upload:\n   firefly_iii_db:\n\nnetworks:\n  firefly_iii:\n    driver: bridge\n"
+    },
+    {
+      "path": "readme.md",
+      "sha": null,
+      "content_sha256": "68806f70b80babb27b6b6294dab86907a4b3bbce559e10fc723609a228637703",
+      "score": 100,
+      "content": "# Firefly III Docker image\n\n[![Packagist](https://img.shields.io/packagist/v/grumpydictator/firefly-iii.svg?style=flat-square)](https://packagist.org/packages/grumpydictator/firefly-iii) \n[![License](https://img.shields.io/github/license/firefly-iii/firefly-iii.svg?style=flat-square])](https://www.gnu.org/licenses/agpl-3.0.html) \n[![Donate using GitHub](https://img.shields.io/badge/donate-GitHub-green?logo=github&style=flat-square)](https://github.com/sponsors/JC5)\n[![Docker Stars](https://img.shields.io/docker/stars/fireflyiii/core?style=flat-square)](https://hub.docker.com/r/fireflyiii/core)\n[![Docker Pulls](https://img.shields.io/docker/pulls/fireflyiii/core?style=flat-square)](https://hub.docker.com/r/fireflyiii/core)\n\n<!-- PROJECT LOGO -->\n<br />\n<p align=\"center\">\n  <a href=\"https://firefly-iii.org/\">\n    <img src=\"https://raw.githubusercontent.com/firefly-iii/firefly-iii/develop/.github/assets/img/logo-small.png\" alt=\"Firefly III\" width=\"120\" height=\"178\">\n  </a>\n</p>\n  <h1 align=\"center\">Firefly III</h1>\n\n  <p align=\"center\">\n    A free and open source personal finance manager\n    <br />\n  </p>\n<!--- END PROJECT LOGO -->\n\nThis repository contains some of the helper scripts you may need when setting up Firefly III using Docker.\n\n## Docker image for Firefly III\n\nThe Firefly III Docker image is built [on Azure](https://dev.azure.com/Firefly-III/MainImage/_wiki/wikis/MainImage.wiki/3/Home) and published [on Docker Hub](https://hub.docker.com/r/fireflyiii/core). You can find the [Dockerfile](https://dev.azure.com/Firefly-III/_git/MainImage?path=/Dockerfile) on Azure as well. There are several tags available on Docker Hub:\n\n* `fireflyiii/core:latest`  \n  The latest version. Will be stable.\n* `fireflyiii/core:version-x.x.x`  \n  A version tag, frozen to a specific patch version. Old version tags will be removed after about 6 months.\n* `fireflyiii/core:version-x.x`  \n  A version tag, frozen to a specific minor version. Old version tags will be removed after about 6 months.\n* `fireflyiii/core:version-x`  \n  A version tag, frozen to a specific major version. Old version tags will be removed after about 6 months.\n\nFor daredevils, the following tags are available:\n\n* `fireflyiii/core:develop`  \n  The latest development build. May not even boot.\n* `fireflyiii/core:alpha`  \n  The latest alpha release, if available.\n* `fireflyiii/core:beta`.  \n  The latest beta release, if available.\n\n## Docker image for the Firefly III Data Importer\n\nThe Firefly III Data Importer Docker image is built [on Azure](https://dev.azure.com/Firefly-III/ImportToolImage/_wiki/wikis/ImportToolImage.wiki/4/Home) and published [on Docker Hub](https://hub.docker.com/r/fireflyiii/data-importer). You can find the [Dockerfile](https://dev.azure.com/Firefly-III/_git/ImportToolImage?path=/Dockerfile) on Azure. There are several tags available:\n\n* `fireflyiii/data-importer:latest`  \n  The latest version. Will be stable.\n* `fireflyiii/data-importer:version-x.x.x`  \n  A version tag, frozen to a specific patch version. Old version tags will be removed after about 6 months.\n* `fireflyiii/data-importer:version-x.x`  \n  A version tag, frozen to a specific minor version. Old version tags will be removed after about 6 months.\n* `fireflyiii/data-importer:version-x`  \n  A version tag, frozen to a specific major version. Old version tags will be removed after about 6 months.\n\n\n## docker-compose.yml and docker-compose-importer.yml\n\nThis repository also contains the [docker-compose.yml](docker-compose.yml) file which you can use to instantly run a version of Firefly III with a MariaDB (aka MySQL) database.\n\nThe alternative, [docker-compose-importer.yml](docker-compose-importer.yml) also contains the [Data Importer](https://docs.firefly-iii.org/how-to/data-importer/installation/docker/).\n\nSome people use another database image instead of the provided database. This is entirely up to you of course, but make sure you change the environment variables if you switch away from MySQL or MariaDB.\n\n### Docker and system architectures\n\nThe [database image](https://hub.docker.com/_/mariadb) provided by [docker-compose.yml](docker-compose.yml) may not provide the same system architectures as the [Firefly III image](https://hub.docker.com/r/fireflyiii/core/tags?page=1&ordering=last_updated&name=latest) does. On system with a i386-architecture for example this means that Firefly III will run fine, but the provided database will not. Be aware that this may happen to you, although it's a rare occurrence.\n\n## Dockerfile\n\nThe Dockerfile no longer resides in this repository. The Dockerfile and the associated build script can be found on Azure:\n\n- [Firefly III Dockerfile](https://dev.azure.com/Firefly-III/_git/MainImage?path=/Dockerfile)\n- [Data Importer Dockerfile](https://dev.azure.com/Firefly-III/_git/ImportToolImage?path=/Dockerfile)\n- [Base image repository](https://github.com/firefly-iii/base-image/)\n\nHere are some links for your reading pleasure.\n\n- [Firefly III on GitHub](https://github.com/firefly-iii/firefly-iii)\n- [Firefly III Documentation](https://docs.firefly-iii.org/)\n- [Firefly III on Docker Hub](https://hub.docker.com/r/fireflyiii/core)\n- [Firefly III Docker on Azure](https://dev.azure.com/Firefly-III/MainImage)\n\nPlease open any issues you have [in the main repository](https://github.com/firefly-iii/firefly-iii).\n\n<!-- HELP TEXT -->\n\n## Do you need help, or do you want to get in touch?\n\nDo you want to contact me? You can email me at [james@firefly-iii.org](mailto:james@firefly-iii.org) or get in touch through one of the following support channels:\n\n- [GitHub Discussions](https://github.com/firefly-iii/firefly-iii/discussions/) for questions and support\n- [Gitter.im](https://gitter.im/firefly-iii/firefly-iii) for a good chat and a quick answer\n- [GitHub Issues](https://github.com/firefly-iii/firefly-iii/issues) for bugs and issues\n- <a rel=\"me\" href=\"https://fosstodon.org/@ff3\">Mastodon</a> for news and updates\n\n<!-- END OF HELP TEXT -->\n\n<!-- SPONSOR TEXT -->\n\n## Support the development of Firefly III\n\nIf you like Firefly III and if it helps you save lots of money, why not send me a dime for every dollar saved! 🥳\n\nOK that was a joke. If you feel Firefly III made your life better, please consider contributing as a sponsor. Please check out my [Patreon](https://www.patreon.com/jc5) and [GitHub Sponsors](https://github.com/sponsors/JC5) page for more information. You can also [buy me a ☕️ coffee at ko-fi.com](https://ko-fi.com/Q5Q5R4SH1). Thank you for your consideration.\n\n<!-- END OF SPONSOR TEXT -->\n\n"
+    },
+    {
+      "path": ".github/security.md",
+      "sha": null,
+      "content_sha256": "d684a46f2756bef1e52abb754677d1b8361cb7295d41657cef2abdab6b26fcfd",
+      "score": 78,
+      "content": "# Security Policy\n\nThe Security Policy for the software and/or documentation in this repository is equal to the [Security Policy](https://github.com/firefly-iii/firefly-iii/security/policy) of [Firefly III](https://github.com/firefly-iii/firefly-iii) itself.\n\n* https://github.com/firefly-iii/firefly-iii/security/policy\n"
+    },
+    {
+      "path": "database.env",
+      "sha": null,
+      "content_sha256": "582a1d23bfcccc527a2e0dd2b62f79d7d57515c8b5a5a40949132db515730c2d",
+      "score": 60,
+      "content": "MYSQL_RANDOM_ROOT_PASSWORD=yes\nMYSQL_USER=firefly\nMYSQL_PASSWORD=[REDACTED]\nMYSQL_DATABASE=firefly\n\n#\n# Remove the environment variables above, and replace them with the following if your using PostgreSQL\n#\n# \n# POSTGRES_USER=firefly\n# POSTGRES_DB=firefly\n# POSTGRES_PASSWORD=[REDACTED]\n# POSTGRES_PASSWORD=[REDACTED]\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".github/support.md",
+      "sha": null,
+      "content_sha256": "b576e88082fe73f07c0e73c93645cd1cec1dcc309445ee150d7472ad03ed1ac6",
+      "score": 58,
+      "content": "# Welcome to Firefly III's Docker image on Github!\n\n:+1::tada: Thank you for taking the time to contribute something to Firefly III's Docker image!\n\n## Bugs\n\nFirst of all: thank you for reporting a bug instead of ditching the tool altogether. If you find a bug, please take the time and see if the [demo site](https://demo.firefly-iii.org/) is also suffering from this bug. Include as many log files and details as you think are necessary. Bugs have a lot of priority! \n\n## Installation problems\n\nPlease take the time to read the [documentation](https://docs.firefly-iii.org/) and make sure you search through closed issues for the problems other people have had. Your problem may be among them! If not, open an issue and I will help where I can."
+    },
+    {
+      "path": ".github/labeler.yml",
+      "sha": null,
+      "content_sha256": "71f4044eaec3b843d1fc2c77fbe4e4e019a37fac414b30de4d2bd29a823e0b66",
+      "score": 33,
+      "content": "# Add 'move' label to any issue that gets opened\nmove:\n    - '/.*/'\n"
+    },
+    {
+      "path": ".github/funding.yml",
+      "sha": null,
+      "content_sha256": "0541e08f56cf42aa102d2f1b485f7909eb8fe4cf86ce36c17ab375b4fa26f58a",
+      "score": 33,
+      "content": "# Firefly III sponsor options\n\ngithub: jc5\npatreon: JC5\nko_fi: jamesc5\nliberapay: JC5\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "sha": null,
+      "content_sha256": "f3e3c94d70ddf2f7f24f780cef2ef46ae69d5283504613a39d21ff66cafba887",
+      "score": 31,
+      "content": "blank_issues_enabled: false\ncontact_links:\n  - name: Ask a question\n    url: https://github.com/firefly-iii/firefly-iii/discussions\n    about: Please ask and answer questions here.\n  - name: I need support! \n    url: https://github.com/firefly-iii/firefly-iii/discussions\n    about: I think I broke something...\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/fr.yml",
+      "sha": null,
+      "content_sha256": "1d73fea843edcb92a5c8729e467b16740e640b60d06b438536524560afa900a0",
+      "score": 31,
+      "content": "name: Feature request\ndescription: Request a feature or enhancement in Firefly III Docker-related stuff\nbody:\n  - type: checkboxes\n    attributes:\n      label: Support guidelines\n      description: Please read the support guidelines before proceeding.\n      options:\n        - label: I've read the [support guidelines](https://github.com/firefly-iii/firefly-iii/blob/main/.github/support.md)\n          required: true\n        - label: My request is not listed as [a very good idea, but unfortunately...](https://docs.firefly-iii.org/explanation/more-information/what-its-not/)\n          required: true\n        - label: I've used [the search](https://github.com/firefly-iii/firefly-iii/issues?q=is%3Aissue) and this has not been requested before.\n          required: true\n\n  - type: textarea\n    attributes:\n      label: Description\n      description: Please describe your feature request\n      placeholder: |\n        - I would like Firefly III to do (thing).\n        - What if you would add feature (feature here)?\n        - Firefly III doesn't do (thing).\n    validations:\n      required: true\n\n  - type: textarea\n    attributes:\n      label: Additional context\n      description: Add any other context or screenshots about the feature request here.\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug.yml",
+      "sha": null,
+      "content_sha256": "0115bfe9e97fcd5600c9004ebc9079d3b605c975d74c08493ae494f0256f8f1e",
+      "score": 31,
+      "content": "name: Bug report\ndescription: Report a bug in Firefly III Docker container (or associated tools)\nbody:\n  - type: checkboxes\n    attributes:\n      label: Support guidelines\n      description: Please read the support guidelines before proceeding.\n      options:\n        - label: I've read the [support guidelines](https://github.com/firefly-iii/firefly-iii/blob/main/.github/support.md)\n          required: true\n\n  - type: checkboxes\n    attributes:\n      label: I've found a bug and checked that ...\n      description: Make sure that your request fulfills all of the following requirements. If one requirement cannot be satisfied, please explain why.\n      options:\n        - label: ... [the documentation](https://docs.firefly-iii.org/) does not mention anything about my problem\n        - label: ... there are no open or closed issues that are related to my problem\n        - label: ... it's [definitely a Firefly III issue, not me](https://github.com/firefly-iii/firefly-iii/blob/main/.github/its_you_not_me.md)\n\n  - type: textarea\n    attributes:\n      label: Description\n      description: Please provide a brief description of the bug in 1-2 sentences.\n      placeholder: Please DO NOT use AI / LLM to write the description for you.\n    validations:\n      required: true\n\n  - type: textarea\n    attributes:\n      label: Debug information\n      description: Please provide the table from the /debug page. Do not add backticks or quotes.\n      placeholder: The output from the /debug page\n    validations:\n      required: true\n\n  - type: textarea\n    attributes:\n      label: Additional info\n      description: Please provide any additional information that seems useful.\n      placeholder: Please DO NOT use AI / LLM to write the additional info for you.\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:06:54.038141+00:00"
+}

@@ -1,0 +1,69 @@
+{
+  "canonical_source": "github:ai-forever/mcp_kandinsky",
+  "repo": "ai-forever/mcp_kandinsky",
+  "revision_sha": "6c54bb4516d50b96d01c7d98c963b6b2c310d980",
+  "default_branch": "main",
+  "pushed_at": "2025-07-14T14:05:46Z",
+  "repo_updated_at": "2026-07-12T23:31:07Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "90bcfded426d94fa7f5f96668e15557d43be2bf26b1c69977ba062c6259652b7",
+      "score": 120,
+      "content": "[project]\nname = \"mcp_kandinsky\"\nversion = \"0.2.0\"\ndescription = \"MCP сервер для генерации изображений через Kandinsky API\"\nreadme = \"README.md\"\nrequires-python = \">=3.9\"\nlicense = { text = \"MIT\" }\nauthors = [\n    { name = \"Sergei Trashchenkov\", email = \"trashchenkov@gmail.com\" }\n]\ndependencies = [\n    \"httpx>=0.28.1\",\n    \"mcp[cli]>=1.6.0\",\n    \"numpy>=1.26.0\"\n]\n\n[project.scripts]\nmcp-kandinsky = \"mcp_kandinsky.server:run\"\n\n[project.urls]\nHomepage = \"https://github.com/ai-forever/mcp_kandinsky\"\nRepository = \"https://github.com/ai-forever/mcp_kandinsky\"\n\n[build-system]\nrequires = [\"setuptools>=61.0\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools]\npackages = [\"mcp_kandinsky\"] "
+    },
+    {
+      "path": "mcp_kandinsky/__main__.py",
+      "sha": null,
+      "content_sha256": "4e057fa6e4dda7220419806ec7091d9d8698a840bb70c849ede9f00ec2df0c66",
+      "score": 108,
+      "content": "from .server import run\n\nif __name__ == \"__main__\":\n    run() "
+    },
+    {
+      "path": "mcp_kandinsky/kandinsky_api.py",
+      "sha": null,
+      "content_sha256": "faff9735c8c87f0c9362b299ea45dd227f8ac5a3aa94426fcea3ba19f19c11d7",
+      "score": 108,
+      "content": "import os\nimport json\nimport time\nimport httpx\n\nclass KandinskyAPI:\n    def __init__(self):\n        self.URL = \"https://api-key.fusionbrain.ai/\"\n        self.api_key = os.getenv(\"KANDINSKY_API_KEY\")\n        self.secret_key = os.getenv(\"KANDINSKY_SECRET_KEY\")\n        if not self.api_key or not self.secret_key:\n            raise ValueError(\"KANDINSKY_API_KEY и/или KANDINSKY_SECRET_KEY не заданы в окружении\")\n        self.AUTH_HEADERS = {\n            'X-Key': f'Key {self.api_key}',\n            'X-Secret': f'Secret {self.secret_key}',\n        }\n        self._pipeline_id = None\n\n    def get_pipeline(self):\n        if self._pipeline_id:\n            return self._pipeline_id\n        resp = httpx.get(self.URL + 'key/api/v1/pipelines', headers=self.AUTH_HEADERS)\n        resp.raise_for_status()\n        data = resp.json()\n        self._pipeline_id = data[0]['id']\n        return self._pipeline_id\n\n    def generate(self, prompt, width=1024, height=1024, style=\"DEFAULT\", negative_prompt=\"\"):\n        pipeline = self.get_pipeline()\n        params = {\n            \"type\": \"GENERATE\",\n            \"style\": style,\n            \"width\": width,\n            \"height\": height,\n            \"numImages\": 1,\n            \"generateParams\": {\n                \"query\": prompt\n            }\n        }\n        if negative_prompt:\n            params[\"negativePromptDecoder\"] = negative_prompt\n        data = {\n            'pipeline_id': (None, pipeline),\n            'params': (None, json.dumps(params), 'application/json')\n        }\n        resp = httpx.post(self.URL + 'key/api/v1/pipeline/run', headers=self.AUTH_HEADERS, files=data)\n        resp.raise_for_status()\n        uuid = resp.json()['uuid']\n        return uuid\n\n    def check_generation(self, request_id, attempts=10, delay=5):\n        while attempts > 0:\n            resp = httpx.get(self.URL + f'key/api/v1/pipeline/status/{request_id}', headers=self.AUTH_HEADERS)\n            resp.raise_for_status()\n            data = resp.json()\n            if data['status'] == 'DONE':\n                return data['result']['files']\n            elif data['status'] == 'FAIL':\n                raise RuntimeError(f\"Kandinsky generation failed: {data.get('errorDescription', 'Unknown error')}\")\n            attempts -= 1\n            time.sleep(delay)\n        raise TimeoutError(\"Kandinsky generation timed out\")\n\n    def generate_and_get_image(self, prompt, width=1024, height=1024, style=\"DEFAULT\", negative_prompt=\"\"):\n        uuid = self.generate(prompt, width, height, style, negative_prompt)\n        files = self.check_generation(uuid)\n        return files "
+    },
+    {
+      "path": "mcp_kandinsky/server.py",
+      "sha": null,
+      "content_sha256": "e83c069ff12cf345224fda3aef092c4d6755740170bd9086a5c8f877051a0c3a",
+      "score": 108,
+      "content": "from mcp.server.fastmcp import FastMCP\nimport asyncio\nfrom .kandinsky_api import KandinskyAPI\nimport os\nimport base64\n\nmcp = FastMCP(\"mcp_kandinsky\")\napi = KandinskyAPI()\n\n@mcp.tool()\nasync def kandinsky_generate_image(\n    prompt: str,\n    filename: str,\n    project_dir: str,\n    width: int = 1024,\n    height: int = 1024,\n    style: str = \"DEFAULT\",\n    negative_prompt: str = \"\",\n    overwrite: bool = False\n) -> str:\n    \"\"\"\n    Генерирует изображение по текстовому описанию через Kandinsky API и сохраняет его в папку kandinsky внутри project_dir.\n    Параметры:\n      - prompt: текстовый запрос\n      - filename: имя файла для сохранения (например, cat.png)\n      - project_dir: абсолютный путь к папке проекта\n      - width, height: размеры изображения\n      - style: стиль генерации (DEFAULT, KANDINSKY, UHD, ANIME)\n      - negative_prompt: негативный промпт (опционально)\n      - overwrite: перезаписывать ли файл, если он уже существует\n    Возвращает сообщение об успехе или причине отказа.\n    \"\"\"\n    if not os.path.isabs(project_dir):\n        return \"project_dir должен быть абсолютным путём.\"\n    folder = os.path.join(project_dir, \"kandinsky\")\n    os.makedirs(folder, exist_ok=True)\n    filepath = os.path.join(folder, filename)\n    if os.path.exists(filepath) and not overwrite:\n        return f\"Файл {os.path.relpath(filepath, project_dir)} уже существует. Установите overwrite=True для перезаписи.\"\n    # Генерируем изображение\n    files = await asyncio.to_thread(\n        api.generate_and_get_image,\n        prompt, width, height, style, negative_prompt\n    )\n    if not files or not files[0]:\n        return \"Ошибка генерации изображения.\"\n    # Сохраняем файл\n    try:\n        with open(filepath, \"wb\") as f:\n            f.write(base64.b64decode(files[0]))\n    except Exception as e:\n        return f\"Ошибка сохранения файла: {e}\"\n    return f\"Изображение успешно сгенерировано и сохранено в {os.path.relpath(filepath, project_dir)}.\"\n\ndef run():\n    mcp.run(transport=\"stdio\") "
+    },
+    {
+      "path": "mcp_kandinsky/__init__.py",
+      "sha": null,
+      "content_sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+      "score": 108,
+      "content": " "
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "ee667a94d823efdf42891b588fbf4a4548d57bc0bd72a0ba414b83417ece0d96",
+      "score": 100,
+      "content": "# MCP Kandinsky\n\nMCP Kandinsky — это MCP (Model Context Protocol) сервер, предоставляющий инструмент для генерации изображений с помощью нейросети [Kandinsky](https://www.sberbank.com/promo/kandinsky/) через официальный API. В настоящее время по API доступна версия Kandinsky 3.1.\n\n## Возможности\n- Генерация изображений по текстовому описанию (prompt)\n- Поддержка выбора стиля (DEFAULT, KANDINSKY, UHD, ANIME)\n- Поддержка негативных промптов\n- Настройка размера изображения (width, height)\n- Сохранение результата в файл с контролем перезаписи\n- Явное указание папки проекта для сохранения (project_dir)\n\n## Переменные окружения\nДля работы с MCP Kandinsky вам понадобятся данные для авторизации, которые нужно сохранить в переменных окружения.\n\n- `KANDINSKY_API_KEY` — ваш API-ключ\n- `KANDINSKY_SECRET_KEY` — ваш Secret-ключ\n\nПолучить авторизационные данные можно после регистрации на сайте [FUSION BRAIN](https://fusionbrain.ai/), перейдя в раздел API.\n\n### Тарифы\nKandinsky API предоставляет бесплатный тариф с лимитом **100 запросов в месяц**. Подробнее о тарифах и возможностях можно узнать на [странице для разработчиков](https://fusionbrain.ai/developers/).\n\n## Как подключить MCP Kandinsky к агенту (Cursor, Windsurf и др.)\nДобавьте MCP-сервер в конфиг агента, например, в файл `.cursor/mcp.json` или аналогичный для вашей IDE:\n\n```json\n\"mcpServers\": {\n    \"mcp-kandinsky\": {\n        \"command\": \"uvx\",\n        \"args\": [\n            \"--from\", \"mcp_kandinsky\", \"mcp-kandinsky\"\n        ],\n        \"enabled\": true,\n        \"env\": {\n            \"KANDINSKY_API_KEY\": \"ВАШ_API_KEY\",\n            \"KANDINSKY_SECRET_KEY\": \"ВАШ_SECRET_KEY\"\n        }\n    }\n}\n```\n\n## Пример использования инструмента агентом\n\n**Вызов инструмента из агента (например, через Cursor):**\n\n```\nmcp-kandinsky/kandinsky_generate_image\nArguments\n{\n  \"prompt\": \"Весенняя Москва в мае, сирень, дождь и солнце, в стиле акварельной живописи\",\n  \"filename\": \"moskva_v_mae.png\",\n  \"project_dir\": \"/Users/you/myproject\",\n  \"width\": 1024,\n  \"height\": 1024,\n  \"style\": \"DEFAULT\",\n  \"negative_prompt\": \"\",\n  \"overwrite\": false\n}\nResponse\nИзображение успешно сгенерировано и сохранено в kandinsky/moskva_v_mae.png.\n```\n\n**Пояснения:**\n- Все параметры передаются через интерфейс агента.\n- `project_dir` — абсолютный путь к папке проекта, в которой работает агент в настоящий момент. Папка `kandinsky` будет создана внутри неё.\n- Ответ — строка с результатом (успех или причина отказа).\n- Файл сохраняется в папку `kandinsky` в рабочей директории проекта.\n\n## Описание инструмента\n\n**kandinsky_generate_image**\n\n| Параметр         | Тип    | Описание                                                        |\n|------------------|--------|-----------------------------------------------------------------|\n| prompt           | str    | Описание изображения                                            |\n| filename         | str    | Имя файла для сохранения (например, cat.png)                    |\n| project_dir      | str    | Абсолютный путь к папке проекта                                 |\n| width            | int    | Ширина (по умолчанию 1024)                                      |\n| height           | int    | Высота (по умолчанию 1024)                                      |\n| style            | str    | Стиль (DEFAULT, KANDINSKY, UHD, ANIME; по умолчанию DEFAULT)    |\n| negative_prompt  | str    | Негативный промпт (опционально)                                 |\n| overwrite        | bool   | Перезаписывать файл, если он уже существует (по умолчанию False)|\n\n**Возвращает:** строку-результат с сообщением об успехе или причине отказа.\n\n## Логика работы\n- Проверяется наличие папки `kandinsky` внутри `project_dir`, при необходимости создаётся.\n- Если файл с таким именем уже есть и `overwrite=False`, генерация не происходит, возвращается сообщение о наличии файла.\n- Если файла нет или `overwrite=True`, происходит генерация, файл сохраняется (или перезаписывается).\n- Возвращается сообщение об успешном сохранении или причине отказа.\n\n---\nДокументация API: https://fusionbrain.ai/docs/doc/api-dokumentaciya/\n\n## Лицензия\n\nЭтот проект распространяется под лицензией MIT. См. файл LICENSE для подробностей.\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:06:52.202709+00:00"
+}

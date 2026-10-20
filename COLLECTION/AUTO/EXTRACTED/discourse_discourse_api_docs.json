@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:discourse/discourse_api_docs",
+  "repo": "discourse/discourse_api_docs",
+  "revision_sha": "ed08a8b0218cf9f4c25830f5224d5e3686b56664",
+  "default_branch": "main",
+  "pushed_at": "2026-10-18T13:10:27Z",
+  "repo_updated_at": "2026-10-14T22:25:26Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/update_docs.yml",
+      "sha": null,
+      "content_sha256": "1061d2af9bbf6a1c70766d2cb2b05883b810aa4921bd61283d290468b052692d",
+      "score": 126,
+      "content": "name: Update Docs\n\non:\n  workflow_dispatch:\n  schedule:\n    - cron: \"0 0 * * *\"\n\njobs:\n  update-docs:\n    runs-on: ubuntu-latest\n    container: discourse/discourse_test:slim\n    timeout-minutes: 30\n\n    env:\n      DISCOURSE_HOSTNAME: www.example.com\n      RUBY_GLOBAL_METHOD_CACHE_SIZE: 131072\n      RAILS_ENV: test\n      PGUSER: discourse\n      PGPASSWORD: discourse\n\n    steps:\n      - uses: actions/checkout@v3\n        with:\n          repository: discourse/discourse\n          fetch-depth: 1\n\n      - name: checkout documentation\n        uses: actions/checkout@v3\n        with:\n          path: discourse_api_docs\n\n      - name: setup git\n        run: |\n          git config --global user.name discoursebuild\n          git config --global user.email build@discourse.org\n\n      - name: Start redis\n        run: |\n          redis-server /etc/redis/redis.conf &\n\n      - name: Start Postgres\n        run: |\n          chown -R postgres /var/run/postgresql\n          sudo -E -u postgres script/start_test_db.rb\n          sudo -u postgres psql -c \"CREATE ROLE $PGUSER LOGIN SUPERUSER PASSWORD '$PGPASSWORD';\"\n\n      - name: Bundler cache\n        uses: actions/cache@v3\n        with:\n          path: vendor/bundle\n          key: ${{ runner.os }}-gem-${{ hashFiles('**/Gemfile.lock') }}\n          restore-keys: |\n            ${{ runner.os }}-gem-\n\n      - name: Setup gems\n        run: |\n          bundle config --local path vendor/bundle\n          bundle config --local deployment true\n          bundle config --local without development\n          bundle install --jobs 4\n          bundle clean\n\n      - name: pnpm install\n        run: pnpm install\n\n      - name: Create and migrate database\n        run: |\n          bin/rake db:create\n          bin/rake db:migrate\n\n      - name: Generate swagger\n        run: bin/rake rswag:specs:swaggerize\n\n      - name: Move definition to discourse_api_docs\n        run: mv openapi/openapi.yaml discourse_api_docs/openapi.yml\n\n      - name: Convert to json\n        working-directory: discourse_api_docs\n        run: |\n          npm install && npm run tojson\n\n      - name: Generate Bruno collection\n        working-directory: discourse_api_docs\n        run: |\n          if ! git diff --quiet openapi.json 2>/dev/null; then\n            npm run tobruno\n          fi\n\n      - name: Create PR\n        id: create-pr\n        uses: peter-evans/create-pull-request@v5\n        with:\n          token: ${{ secrets.ACTIONS_BOT_TOKEN }}\n          path: discourse_api_docs\n          add-paths: \"openapi.yml,openapi.json,bruno-collection.json\"\n          branch: update-documentation\n          commit-message: \"Update Documentation with core changes\"\n          title: \"Update documentation\"\n          author: discoursebuild <build@discourse.org>\n          body: |\n            Updates Documentation with changes from Discourse core\n"
+    },
+    {
+      "path": ".github/workflows/validate_pr.yml",
+      "sha": null,
+      "content_sha256": "605109d2226e89f296196f217e5f5e2be2b141bca79e7eecd63a8d88be98ec64",
+      "score": 126,
+      "content": "name: Validate PR Documentation\n\non:\n  pull_request:\n    types: [opened, synchronize, reopened]\n\njobs:\n  validate-openapi:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n\n    steps:\n      - name: Checkout PR Code\n        uses: actions/checkout@v4\n        with:\n          # This is critical for pull_request_target. It ensures we checkout\n          # the code from the PR, not the base branch.\n          ref: ${{ github.event.pull_request.head.sha }}\n          # fetch-depth: 0 is not strictly needed for validation, but kept it\n          # in case your validation scripts need the full git history.\n          fetch-depth: 0\n\n      - name: Start Swagger Validator\n        run: |\n          # Pull the Swagger validator image\n          docker pull swaggerapi/swagger-validator-v2\n          # Start the validator container\n          docker run --detach --name swagger-validator --publish 8080:8080 swaggerapi/swagger-validator-v2\n          # Wait for the validator to be ready\n          timeout 30 bash -c 'until curl -s http://localhost:8080/ >/dev/null 2>&1; do sleep 1; done'\n\n      - name: Validate OpenAPI JSON\n        run: |\n          echo \"Validating openapi.json...\"\n          response=$(curl --silent --request POST http://localhost:8080/validator/debug \\\n               --header \"Content-Type: application/json\" \\\n               --data-binary @openapi.json)\n          \n          echo \"Validation response: $response\"\n          \n          # Check if response contains validation errors\n          if echo \"$response\" | grep -q '\"messages\"'; then\n            echo \"❌ OpenAPI validation failed with errors:\"\n            echo \"$response\" | python3 -m json.tool\n            exit 1\n          else\n            echo \"✅ openapi.json validation passed\"\n          fi\n\n      - name: Cleanup\n        if: always()\n        run: |\n          docker stop swagger-validator || true\n          docker rm swagger-validator || true\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "b8e36604a76b753f3e57d8e3eeb79ae5bd6e57db3d7483351e27e688d25e1aea",
+      "score": 120,
+      "content": "{\n  \"name\": \"discourse_api_docs\",\n  \"version\": \"1.0.0\",\n  \"description\": \"\",\n  \"main\": \"server.js\",\n  \"scripts\": {\n    \"test\": \"echo \\\"Error: no test specified\\\" && exit 1\",\n    \"start\": \"node server.js\",\n    \"tojson\": \"node tojson.js\",\n    \"tobruno\": \"node tobruno.js\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/discourse/discourse_api_docs.git\"\n  },\n  \"author\": \"\",\n  \"license\": \"MIT\",\n  \"bugs\": {\n    \"url\": \"https://meta.discourse.org\"\n  },\n  \"homepage\": \"https://github.com/discourse/discourse_api_docs#readme\",\n  \"dependencies\": {\n    \"express\": \"^4.22.2\",\n    \"json-schema-ref-parser\": \"^9.0.9\",\n    \"yamljs\": \"^0.3.0\",\n    \"@usebruno/converters\": \"^0.12.0\"\n  },\n  \"devDependencies\": {\n    \"@arkweid/lefthook\": \"^0.7.6\"\n  }\n}\n"
+    },
+    {
+      "path": "openapi_changed.sh",
+      "sha": null,
+      "content_sha256": "39ecd4c8ddc68c66b55a6e6b2466b19cb52b1ffc6e7304dca6d31473633797f7",
+      "score": 110,
+      "content": "#!/bin/sh\n\nnode tojson.js\necho \"JSON regenerated from openapi.yml!\"\n"
+    },
+    {
+      "path": "responses/admin/generate_api_key.json",
+      "sha": null,
+      "content_sha256": "a146a55e43078d084c4cceca28aa716d403646ec7fd1b034bc642e3a62cb0df7",
+      "score": 106,
+      "content": "{\n  \"api_key\": {\n    \"id\": 2,\n    \"key\": \"342397cb620049d4f5b5f66ce9a26cd674de757e3c982cc41125bc47dac29a37\",\n    \"user\": {\n      \"id\": 4,\n      \"username\": \"discourse2\",\n      \"avatar_template\": \"/letter_avatar_proxy/v2/letter/d/4af34b/{size}.png\"\n    }\n  }\n}\n"
+    },
+    {
+      "path": "definitions/search/query_response.yml",
+      "sha": null,
+      "content_sha256": "b9a9fa4e1c07a5f28c50ae9313311129d4c0521cb08fe6e4b1b0a4188ec2880b",
+      "score": 106,
+      "content": "description: \"\"\ntype: object\nproperties:\n  posts:\n    type: array\n    uniqueItems: true\n    minItems: 1\n    items:\n      required:\n        - id\n        - username\n        - avatar_template\n        - created_at\n        - cooked\n        - like_count\n        - blurb\n        - post_number\n        - topic_id\n      type: object\n      properties:\n        id:\n          type: number\n        name:\n          type: object\n        username:\n          type: string\n          minLength: 1\n        avatar_template:\n          type: string\n          minLength: 1\n        created_at:\n          type: string\n          minLength: 1\n        cooked:\n          type: string\n          minLength: 1\n        like_count:\n          type: number\n        blurb:\n          type: string\n          minLength: 1\n        post_number:\n          type: number\n        topic_id:\n          type: number\n  topics:\n    type: array\n    uniqueItems: true\n    minItems: 1\n    items:\n      required:\n        - id\n        - title\n        - fancy_title\n        - slug\n        - posts_count\n        - reply_count\n        - highest_post_number\n        - created_at\n        - last_posted_at\n        - bumped\n        - bumped_at\n        - unseen\n        - pinned\n        - visible\n        - closed\n        - archived\n        - views\n        - like_count\n        - has_summary\n        - archetype\n        - category_id\n        - pinned_globally\n      type: object\n      properties:\n        id:\n          type: number\n        title:\n          type: string\n          minLength: 1\n        fancy_title:\n          type: string\n          minLength: 1\n        slug:\n          type: string\n          minLength: 1\n        posts_count:\n          type: number\n        reply_count:\n          type: number\n        highest_post_number:\n          type: number\n        image_url:\n          type: object\n        created_at:\n          type: string\n          minLength: 1\n        last_posted_at:\n          type: string\n          minLength: 1\n        bumped:\n          type: boolean\n        bumped_at:\n          type: string\n          minLength: 1\n        unseen:\n          type: boolean\n        pinned:\n          type: boolean\n        unpinned:\n          type: object\n        visible:\n          type: boolean\n        closed:\n          type: boolean\n        archived:\n          type: boolean\n        bookmarked:\n          type: object\n        liked:\n          type: object\n        views:\n          type: number\n        like_count:\n          type: number\n        has_summary:\n          type: boolean\n        archetype:\n          type: string\n          minLength: 1\n        last_poster_username:\n          type: object\n        category_id:\n          type: number\n        pinned_globally:\n          type: boolean\n        posters:\n          type: array\n          uniqueItems: null\n          minItems: null\n          items:\n            type: object\n  users:\n    type: array\n    uniqueItems: null\n    minItems: null\n    items:\n      type: object\n  categories:\n    type: array\n    uniqueItems: null\n    minItems: null\n    items:\n      type: object\n  grouped_search_result:\n    type: object\n    properties:\n      more_posts:\n        type: object\n      more_users:\n        type: object\n      more_categories:\n        type: object\n      post_ids:\n        type: array\n        uniqueItems: null\n        minItems: null\n        items:\n          type: object\n      user_ids:\n        type: array\n        uniqueItems: null\n        minItems: null\n        items:\n          type: object\n      category_ids:\n        type: array\n        uniqueItems: null\n        minItems: null\n        items:\n          type: object\n    required:\n      - post_ids\n      - user_ids\n      - category_ids\n"
+    },
+    {
+      "path": "definitions/admin/generate_api_key.yml",
+      "sha": null,
+      "content_sha256": "5adf29247a4256c071ddce47121b7e67b662ce213d1d4957e02a8ffdc4595959",
+      "score": 106,
+      "content": "description: \"\"\ntype: object\nproperties:\n  api_key:\n    type: object\n    properties:\n      id:\n        type: number\n      key:\n        type: string\n        minLength: 1\n      user:\n        type: object\n        properties:\n          id:\n            type: number\n          username:\n            type: string\n            minLength: 1\n          avatar_template:\n            type: string\n            minLength: 1\n        required:\n          - id\n          - username\n          - avatar_template\n    required:\n      - id\n      - key\n      - user\n"
+    },
+    {
+      "path": "responses/search/query_response.json",
+      "sha": null,
+      "content_sha256": "c11633a4d0212af163e0a1baacf8434fe39d365128eecc834d093fd0b62a356c",
+      "score": 106,
+      "content": "{\n  \"posts\": [\n    {\n      \"id\": 16,\n      \"name\": null,\n      \"username\": \"discourse1\",\n      \"avatar_template\": \"/letter_avatar_proxy/v2/letter/d/da6949/{size}.png\",\n      \"created_at\": \"2016-10-29T14:14:20.516Z\",\n      \"cooked\": \"<p>ecf65fcd-1e16-7c4c-4244-a467b46c610becf65fcd-1e16-7c4c-4244-a467b46c610b ecf65fcd-1e16-7c4c-4244-a467b46c610b ecf65fcd-1e16-7c4c-4244-a467b46c610b ecf65fcd-1e16-7c4c-4244-a467b46c610becf65fcd-1e16-7c4c-4244-a467b46c610b ecf65fcd-1e16-7c4c-4244-a467b46c610becf65fcd-1e16-7c4c-4244-a467b46c610b</p>\",\n      \"like_count\": 0,\n      \"blurb\": \"ecf65fcd-1e16-7c4c-4244-a467b46c610becf65fcd-1e16-7c4c-4244-a467b46c610b ecf65fcd-1e16-7c4c-4244-a467b4...\",\n      \"post_number\": 1,\n      \"topic_id\": 13\n    }\n  ],\n  \"topics\": [\n    {\n      \"id\": 13,\n      \"title\": \"2a6aa74e-e341-5e3c-1eaa-78c6331f305f\",\n      \"fancy_title\": \"2a6aa74e-e341-5e3c-1eaa-78c6331f305f\",\n      \"slug\": \"2a6aa74e-e341-5e3c-1eaa-78c6331f305f\",\n      \"posts_count\": 1,\n      \"reply_count\": 0,\n      \"highest_post_number\": 1,\n      \"image_url\": null,\n      \"created_at\": \"2016-10-29T14:14:20.321Z\",\n      \"last_posted_at\": \"2016-10-29T14:14:20.516Z\",\n      \"bumped\": true,\n      \"bumped_at\": \"2016-10-29T14:14:20.516Z\",\n      \"unseen\": false,\n      \"pinned\": false,\n      \"unpinned\": null,\n      \"visible\": true,\n      \"closed\": false,\n      \"archived\": false,\n      \"bookmarked\": null,\n      \"liked\": null,\n      \"views\": 1,\n      \"like_count\": 0,\n      \"has_summary\": false,\n      \"archetype\": \"regular\",\n      \"last_poster_username\": null,\n      \"category_id\": 1,\n      \"pinned_globally\": false,\n      \"posters\": []\n    }\n  ],\n  \"users\": [],\n  \"categories\": [],\n  \"grouped_search_result\": {\n    \"more_posts\": null,\n    \"more_users\": null,\n    \"more_categories\": null,\n    \"post_ids\": [\n      16\n    ],\n    \"user_ids\": [],\n    \"category_ids\": []\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "ffd6c456bb359596f8ecac858ba69e3dde76463a2324938974e9b1bd210a4c3d",
+      "score": 100,
+      "content": "# Discourse API Documentation\n\n![automatic updates](https://github.com/discourse/discourse_api_docs/actions/workflows/update_docs.yml/badge.svg)\n\nTo view the the Discourse API Documentation you can visit:\n\n  https://docs.discourse.org/\n\n### Contributing\n\nContributions are welcome! Start by cloning this repo as well as the\n[discourse](https://github.com/discourse/discourse) repo.\n\n\nThe API docs are automatically generated from the discourse repo using a tool\ncalled rswag.\n\nYou can generate the openapi.yml file that is located in this repo by running\nthis command from inside of your discourse repo directory:\n\n\n```\nrake rswag:specs:swaggerize && cp openapi/openapi.yaml ~/code/discourse_api_docs/openapi.yml\n```\n\nPlease do not manually edit the openapi.yml or openapi.json files located in\nthis repo. These files must be edited from the rswag files located in\n\nhttps://github.com/discourse/discourse/tree/main/spec/requests/api\n\nTo view your changes locally, run:\n\n```\nnpm install\nnode server.js\n```\n\nBrowse to http://localhost:3001 to see the pretty docs.\n\nBefore you push your changes or create a PR convert the yml file to json:\n\n```\nnode tojson.js\n```\n\nTo verify converting to json worked correctly, please run:\n\n```\nnode server.js json\n```\n\nwhich will load the json file directly instead of live converting the yml file\nto json. Now browse to http://localhost:3001 and verify your changes still look\nokay.\n\nThen you can commit your changes and create a PR. This is because we are using\ngithub pages to host the static doc website.\n\n### Automatic openapi.yml generation\n\nIf you are changing multiple API specs in the core Discourse repo, then you can use the `bundle exec rake autospec:swagger` rake task to watch for changes to files in the `spec/requests/api` directory. When a change is detected the swaggerize rake task command is run, the openapi.yml file is generated, and node tojson.js is run.\n\nThis can all be done while the local API docs server is running for live updates every time API spec files are changed.\n\n### Schema Generator\n\nTo aid in writing the yml responses in the swagger.yml file use this command to\nconvert actual json responses to a yml schema file:\n\n```\nnode toschema.js <input file> <output file>\n```\n\nExample:\n\n```\nnode toschema.js responses/topics/topic_respones.json definitions/topics/topic_response.yml\n```\n\nThis will convert a json response into json schema and then convert the schema\nto yml.\n\n"
+    },
+    {
+      "path": "responses/topics/latest_topics_response.json",
+      "sha": null,
+      "content_sha256": "92c639b91f384fecd6c97b59920af5c0a2650e3fb84c6b39322ea26601309f34",
+      "score": 91,
+      "content": "{\n  \"users\": [\n    {\n      \"id\": 1,\n      \"username\": \"discourse1\",\n      \"avatar_template\": \"/letter_avatar_proxy/v2/letter/d/da6949/{size}.png\"\n    },\n    {\n      \"id\": -1,\n      \"username\": \"system\",\n      \"avatar_template\": \"/letter_avatar_proxy/v2/letter/s/bcef8e/{size}.png\"\n    }\n  ],\n  \"topic_list\": {\n    \"can_create_topic\": false,\n    \"draft\": null,\n    \"draft_key\": \"new_topic\",\n    \"draft_sequence\": null,\n    \"per_page\": 30,\n    \"topics\": [\n      {\n        \"id\": 13,\n        \"title\": \"2a6aa74e-e341-5e3c-1eaa-78c6331f305f\",\n        \"fancy_title\": \"2a6aa74e-e341-5e3c-1eaa-78c6331f305f\",\n        \"slug\": \"2a6aa74e-e341-5e3c-1eaa-78c6331f305f\",\n        \"posts_count\": 1,\n        \"reply_count\": 0,\n        \"highest_post_number\": 1,\n        \"image_url\": null,\n        \"created_at\": \"2016-10-29T14:14:20.321Z\",\n        \"last_posted_at\": \"2016-10-29T14:14:20.516Z\",\n        \"bumped\": true,\n        \"bumped_at\": \"2016-10-29T14:14:20.516Z\",\n        \"unseen\": false,\n        \"pinned\": false,\n        \"unpinned\": null,\n        \"visible\": true,\n        \"closed\": false,\n        \"archived\": false,\n        \"bookmarked\": null,\n        \"liked\": null,\n        \"views\": 1,\n        \"like_count\": 0,\n        \"has_summary\": false,\n        \"archetype\": \"regular\",\n        \"last_poster_username\": \"discourse1\",\n        \"category_id\": 1,\n        \"pinned_globally\": false,\n        \"posters\": [\n          {\n            \"extras\": \"latest single\",\n            \"description\": \"Original Poster, Most Recent Poster\",\n            \"user_id\": 1\n          }\n        ]\n      },\n      {\n        \"id\": 12,\n        \"title\": \"E45937e6-b689-b938-f7d1-13f64906b04a\",\n        \"fancy_title\": \"E45937e6-b689-b938-f7d1-13f64906b04a\",\n        \"slug\": \"e45937e6-b689-b938-f7d1-13f64906b04a\",\n        \"posts_count\": 7,\n        \"reply_count\": 0,\n        \"highest_post_number\": 7,\n        \"image_url\": null,\n        \"created_at\": \"2016-10-29T14:13:49.614Z\",\n        \"last_posted_at\": \"2016-10-29T14:15:16.236Z\",\n        \"bumped\": true,\n        \"bumped_at\": \"2016-10-29T14:15:16.236Z\",\n        \"unseen\": false,\n        \"pinned\": false,\n        \"unpinned\": null,\n        \"visible\": true,\n        \"closed\": false,\n        \"archived\": false,\n        \"bookmarked\": null,\n        \"liked\": null,\n        \"views\": 1,\n        \"like_count\": 0,\n        \"has_summary\": false,\n        \"archetype\": \"regular\",\n        \"last_poster_username\": \"discourse1\",\n        \"category_id\": 1,\n        \"pinned_globally\": false,\n        \"posters\": [\n          {\n            \"extras\": \"latest single\",\n            \"description\": \"Original Poster, Most Recent Poster\",\n            \"user_id\": 1\n          }\n        ]\n      },\n      {\n        \"id\": 8,\n        \"title\": \"Welcome to Discourse\",\n        \"fancy_title\": \"Welcome to Discourse\",\n        \"slug\": \"welcome-to-discourse\",\n        \"posts_count\": 1,\n        \"reply_count\": 0,\n        \"highest_post_number\": 1,\n        \"image_url\": null,\n        \"created_at\": \"2016-10-21T02:29:17.537Z\",\n        \"last_posted_at\": \"2016-10-21T02:29:17.587Z\",\n        \"bumped\": true,\n        \"bumped_at\": \"2016-10-21T02:29:17.587Z\",\n        \"unseen\": false,\n        \"pinned\": true,\n        \"unpinned\": null,\n        \"excerpt\": \"The first paragraph of this pinned topic will be visible as a welcome message to all new visitors on your homepage. It&#39;s important! \\n\\nEdit this into a brief description of your community: \\n\\n\\nWho is it for?\\nWhat can they &hellip;\",\n        \"visible\": true,\n        \"closed\": false,\n        \"archived\": false,\n        \"bookmarked\": null,\n        \"liked\": null,\n        \"views\": 0,\n        \"like_count\": 0,\n        \"has_summary\": false,\n        \"archetype\": \"regular\",\n        \"last_poster_username\": \"system\",\n        \"category_id\": 1,\n        \"pinned_globally\": true,\n        \"posters\": [\n          {\n            \"extras\": \"latest single\",\n            \"description\": \"Original Poster, Most Recent Poster\",\n            \"user_id\": -1\n          }\n        ]\n      }\n    ]\n  }\n}\n"
+    },
+    {
+      "path": "definitions/topics/latest_topics_response.yml",
+      "sha": null,
+      "content_sha256": "f4d7dcbf3115ac086e15d1b68f4beb1f1a921ecbff9cf9969ecc8e98ff9abf60",
+      "score": 91,
+      "content": "description: \"\"\ntype: object\nproperties:\n  users:\n    type: array\n    items:\n      type: object\n      properties:\n        id:\n          type: integer\n        username:\n          type: string\n        avatar_template:\n          type: string\n  topic_list:\n    type: object\n    properties:\n      can_create_topic:\n        type: boolean\n      draft:\n        type: object\n      draft_key:\n        type: string\n        minLength: 1\n      draft_sequence:\n        type: object\n      per_page:\n        type: integer\n      topics:\n        type: array\n        uniqueItems: true\n        minItems: 1\n        items:\n          required:\n            - id\n            - title\n            - fancy_title\n            - slug\n            - posts_count\n            - reply_count\n            - highest_post_number\n            - created_at\n            - last_posted_at\n            - bumped\n            - bumped_at\n            - unseen\n            - pinned\n            - excerpt\n            - visible\n            - closed\n            - archived\n            - views\n            - like_count\n            - has_summary\n            - archetype\n            - last_poster_username\n            - category_id\n            - pinned_globally\n          type: object\n          properties:\n            id:\n              type: integer\n            title:\n              type: string\n              minLength: 1\n            fancy_title:\n              type: string\n              minLength: 1\n            slug:\n              type: string\n              minLength: 1\n            posts_count:\n              type: integer\n            reply_count:\n              type: integer\n            highest_post_number:\n              type: integer\n            image_url:\n              type: object\n            created_at:\n              type: string\n              minLength: 1\n            last_posted_at:\n              type: string\n              minLength: 1\n            bumped:\n              type: boolean\n            bumped_at:\n              type: string\n              minLength: 1\n            unseen:\n              type: boolean\n            pinned:\n              type: boolean\n            unpinned:\n              type: object\n            excerpt:\n              type: string\n              minLength: 1\n            visible:\n              type: boolean\n            closed:\n              type: boolean\n            archived:\n              type: boolean\n            bookmarked:\n              type: object\n            liked:\n              type: object\n            views:\n              type: integer\n            like_count:\n              type: integer\n            has_summary:\n              type: boolean\n            archetype:\n              type: string\n              minLength: 1\n            last_poster_username:\n              type: string\n              minLength: 1\n            category_id:\n              type: integer\n            pinned_globally:\n              type: boolean\n            posters:\n              type: array\n              uniqueItems: true\n              minItems: 1\n              items:\n                required:\n                  - extras\n                  - description\n                  - user_id\n                type: object\n                properties:\n                  extras:\n                    type: string\n                    minLength: 1\n                  description:\n                    type: string\n                    minLength: 1\n                  user_id:\n                    type: integer\n    required:\n      - can_create_topic\n      - draft_key\n      - per_page\n      - topics\n"
+    },
+    {
+      "path": "to_json.rb",
+      "sha": null,
+      "content_sha256": "0a0d95324cb75f3d79801f4f5cd019ca0b3a8be4c45be86b8ae245eadb8c338d",
+      "score": 35,
+      "content": "require 'json'\nrequire 'json_schema_ref_parser'\n\ndef read_yml_file(file)\n  #yml_file = File.open(file, 'r')\n  #yml = yml_file.read\n  #yml_file.close\n  #YAML::load(yml)\n  YAML.load_file(file)\nend\n\ndef write_json_file(json)\n  File.open('openapi.json', 'w') { |file| file.write(json) }\nend\n\nschema = read_yml_file('openapi.yml')\nresult = JsonSchemaRefParser::RefParser.dereference(schema)\nwrite_json_file(JSON.pretty_generate(result))\n"
+    },
+    {
+      "path": "tojson.js",
+      "sha": null,
+      "content_sha256": "ac2cd9de8f3475caae2e462bed44df49f37423728ab5a4924b79019087b3032c",
+      "score": 35,
+      "content": "var yaml = require('yamljs');\nvar fs = require('fs');\nvar refParser = require('json-schema-ref-parser');\n\nvar ymlFile;\nfs.readFile('openapi.yml', 'utf8', function(err, data) {\n  if (err) throw err;\n  var json = yaml.parse(data);\n  refParser.dereference(json, function(err, schema) {\n    if (err) {\n      console.error(err);\n    } else {\n      fs.writeFile('openapi.json', JSON.stringify(schema, null, 2).concat('\\n'), function(err) {\n        if (err) return console.log(err);\n        console.log('yml converted to json');\n      });\n    }\n  });\n});\n"
+    },
+    {
+      "path": "tobruno.js",
+      "sha": null,
+      "content_sha256": "d1e9c572c5975f67986c90ed46fd61de4ab0c6bb3e821f38876d8c3c8cfc2299",
+      "score": 35,
+      "content": "const { openApiToBruno } = require(\"@usebruno/converters\");\nconst { readFile, writeFile } = require(\"fs/promises\");\n\nasync function convertOpenApiToBruno(inputFile, outputFile) {\n  try {\n    const jsonContent = await readFile(inputFile, \"utf8\");\n\n    const openApiSpec = JSON.parse(jsonContent);\n\n    const brunoCollection = openApiToBruno(openApiSpec);\n\n    await writeFile(outputFile, JSON.stringify(brunoCollection, null, 2));\n    console.log(\"OpenAPI JSON conversion successful!\");\n  } catch (error) {\n    console.error(\"Error during OpenAPI JSON conversion:\", error);\n  }\n}\n\nconvertOpenApiToBruno(\"openapi.json\", \"bruno-collection.json\");\n"
+    },
+    {
+      "path": "categories.yml",
+      "sha": null,
+      "content_sha256": "a19dbd851a3e95a3094d58c1d8cfac155b06e4d0ef46f371eca143955eb14b2b",
+      "score": 35,
+      "content": "  categories:\n    type: object\n    properties:\n      category_list:\n        type: object\n        properties:\n          can_create_category:\n            type: boolean\n            description:\n          can_create_topic:\n            type: boolean\n            description:\n          draft:\n            type: boolean\n            description:\n          draft_key:\n            type: string\n            description:\n          draft_sequence:\n            type: integer\n            description:\n          categories:\n            type: array\n            description:\n            items:\n              $ref: '#/definitions/category'\n  category:\n    type: object\n    properties:\n      id:\n        type: integer\n        description: \"The id for the category\"\n      name:\n        type: string\n        description:\n      color:\n        type: string\n        description:\n      text_color:\n        type: string\n        description:\n      slug:\n        type: string\n        description:\n      topic_count:\n        type: integer\n        description:\n      post_count:\n        type: integer\n        description:\n      position:\n        type: integer\n        description:\n      description:\n        type: string\n        description:\n      description_text:\n        type: string\n        description:\n      topic_url:\n        type: string\n        description:\n      logo_url:\n        type: string\n        description:\n      background_url:\n        type: string\n        description:\n      read_restricted:\n        type: boolean\n        description:\n      permission:\n        type: integer\n        description:\n      notification_level:\n        type: string\n        description:\n      can_edit:\n        type: boolean\n        description:\n      topic_template:\n        type: string\n        description:\n      has_children:\n        type: boolean\n        description:\n      topics_day:\n        type: integer\n        description:\n      topics_week:\n        type: integer\n        description:\n      topics_month:\n        type: integer\n        description:\n      topics_year:\n        type: integer\n        description:\n      topics_all_time:\n        type: integer\n        description:\n      description_excerpt:\n        type: string\n        description:\n\n"
+    },
+    {
+      "path": "toschema.js",
+      "sha": null,
+      "content_sha256": "8c878a381248318c23f9ea236ad9292b463ad61269ed371ffb6dcf9ef7ceb054",
+      "score": 35,
+      "content": "var yaml = require('yamljs');\nvar fs = require('fs');\nvar inputFile = '';\nvar outputFile = '';\n\nif (process.argv.length > 3) {\n  inputFile = process.argv[2];\n  outputFile = process.argv[3];\n} else {\n  console.log('Please specify input and output files!');\n  console.log('node schema.js input.json output.yml');\n}\n\n// Simple JSON schema generator replacement\nfunction generateSchema(obj) {\n  if (obj === null) {\n    return { type: \"null\" };\n  }\n\n  if (Array.isArray(obj)) {\n    if (obj.length === 0) {\n      return { type: \"array\", items: {} };\n    }\n    return {\n      type: \"array\",\n      items: generateSchema(obj[0])\n    };\n  }\n\n  if (typeof obj === \"object\") {\n    var schema = { type: \"object\", properties: {} };\n    for (var key in obj) {\n      if (obj.hasOwnProperty(key)) {\n        schema.properties[key] = generateSchema(obj[key]);\n      }\n    }\n    return schema;\n  }\n\n  if (typeof obj === \"string\") {\n    return { type: \"string\" };\n  }\n\n  if (typeof obj === \"number\") {\n    return { type: \"number\" };\n  }\n\n  if (typeof obj === \"boolean\") {\n    return { type: \"boolean\" };\n  }\n\n  return { type: \"string\" }; // fallback\n}\n\nvar addTypeIfEmptyObject = function(obj) {\n  for(var i in obj) {\n    if (typeof obj[i] === \"object\") {\n      if (Object.keys(obj[i]).length === 0) {\n        obj[i] = {type: \"object\"};\n      } else {\n        addTypeIfEmptyObject(obj[i]);\n      }\n    }\n  }\n  return null;\n}\n\nfs.readFile(inputFile, 'utf8', function(err, data) {\n  if (err) throw err;\n  var json = JSON.parse(data);\n  var schema = generateSchema(json);\n  delete schema.required;\n\n\n  //there are some properties without types on them(they should just be set to `null`)\n  addTypeIfEmptyObject(schema.properties);\n\n  var yml = yaml.stringify(schema, 16, 2);\n\n  fs.writeFile(outputFile, yml, function(err) {\n    if (err) return console.log(err);\n    console.log('converted json response to yml schema');\n  });\n\n});\n\n"
+    },
+    {
+      "path": "lefthook.yml",
+      "sha": null,
+      "content_sha256": "25c1f890d1d1c78c532c05557e9fef03f873fa5fcdce80d8e35d426f3287d992",
+      "score": 35,
+      "content": "# EXAMPLE USAGE\n# Refer for explanation to following link:\n# https://github.com/evilmartians/lefthook/blob/master/docs/full_guide.md\n#\n# pre-push:\n#   commands:\n#     packages-audit:\n#       tags: frontend security\n#       run: yarn audit\n#     gems-audit:\n#       tags: backend security\n#       run: bundle audit\n#\n# pre-commit:\n#   parallel: true\n#   commands:\n#     eslint:\n#       glob: \"*.{js,ts}\"\n#       run: yarn eslint {staged_files}\n#     rubocop:\n#       tags: backend style\n#       glob: \"*.rb\"\n#       exclude: \"application.rb|routes.rb\"\n#       run: bundle exec rubocop --force-exclusion {all_files}\n#     govet:\n#       tags: backend style\n#       files: git ls-files -m\n#       glob: \"*.go\"\n#       run: go vet {files}\n#   scripts:\n#     \"hello.js\":\n#       runner: node\n#     \"any.go\":\n#       runner: go run\n"
+    },
+    {
+      "path": "server.js",
+      "sha": null,
+      "content_sha256": "cb6fe70f88e519f2dbf24288b19cb340b4a71d83ad61febb82a624fded80bad0",
+      "score": 35,
+      "content": "var express = require(\"express\");\nvar app = express();\nvar yaml = require(\"yamljs\");\nvar fs = require(\"fs\");\nvar refParser = require(\"json-schema-ref-parser\");\nvar args = process.argv.slice(2);\n\napp.get(\"/\", function (req, res) {\n  res.sendFile(__dirname + \"/local.html\");\n});\n\napp.get(\"/openapifile\", function (req, res) {\n  if (args[0] == \"json\") {\n    fs.readFile(\"openapi.json\", \"utf8\", function (err, data) {\n      var json = JSON.parse(data);\n      if (err) throw err;\n      refParser.dereference(json, function (err, schema) {\n        if (err) {\n          console.error(err);\n        } else {\n          res.send(schema);\n        }\n      });\n    });\n  } else {\n    fs.readFile(\"openapi.yml\", \"utf8\", function (err, data) {\n      if (err) throw err;\n      var json = yaml.parse(data);\n      refParser.dereference(json, function (err, schema) {\n        if (err) {\n          console.error(err);\n        } else {\n          res.send(schema);\n        }\n      });\n    });\n  }\n});\n\napp.listen(3001, function () {\n  console.log(\"listening on http://localhost:3001\");\n});\n"
+    },
+    {
+      "path": "postman/discourse_local.postman_environment.json",
+      "sha": null,
+      "content_sha256": "5725907d1c9d0f6a14cf75369f17e8b7238efec5735f2783aa54b7b969c8f327",
+      "score": 33,
+      "content": "{\n  \"id\": \"84658f2a-e4c4-a286-175f-53c4397e6f94\",\n  \"name\": \"discourse_local\",\n  \"values\": [\n    {\n      \"key\": \"base_url\",\n      \"value\": \"http://192.241.255.58\",\n      \"type\": \"text\",\n      \"enabled\": true\n    },\n    {\n      \"key\": \"api_key\",\n      \"value\": \"b20187086011a04bd48975c5f2d003591e92d1e44ba78da7a3606f6a118a4d0c\",\n      \"type\": \"text\",\n      \"enabled\": true\n    },\n    {\n      \"key\": \"api_username\",\n      \"value\": \"discourse1\",\n      \"type\": \"text\",\n      \"enabled\": true\n    }\n  ],\n  \"timestamp\": 1474811514559,\n  \"_postman_variable_scope\": \"environment\",\n  \"_postman_exported_at\": \"2016-09-25T13:59:23.091Z\",\n  \"_postman_exported_using\": \"Postman/4.7.2\"\n}\n"
+    },
+    {
+      "path": "definitions/topics/update_topic.yml",
+      "sha": null,
+      "content_sha256": "65b3af8bab60d20359f4c095447406754405afd7cd6b70e43bbed6b179db4bbd",
+      "score": 31,
+      "content": "# update_topic\ntype: object\nproperties:\n  title:\n    type: string\n  category_id:\n    type: integer\n"
+    },
+    {
+      "path": "responses/topics/invite.json",
+      "sha": null,
+      "content_sha256": "34e91d5e077521de84b1cd16a1683b4d1323326c1e9fe922c85b4bbf84512db8",
+      "score": 31,
+      "content": "{\n  \"user\": {\n    \"id\": 3,\n    \"username\": \"5crsw24c3pggqf\",\n    \"avatar_template\": \"/letter_avatar_proxy/v2/letter/5/b487fb/{size}.png\"\n  }\n}\n"
+    },
+    {
+      "path": "definitions/categories/new_category.yml",
+      "sha": null,
+      "content_sha256": "22f12b3cd23b60b7d23ee30398ae50244aa5e69e50066c0d994d783ded633bc4",
+      "score": 31,
+      "content": "# new_category\ntype: object\nrequired:\n  - name\n  - color\n  - text_color\nproperties:\n  name:\n    type: string\n  color:\n    type: string\n  text_color:\n    type: string\n"
+    },
+    {
+      "path": "definitions/topics/new_topic.yml",
+      "sha": null,
+      "content_sha256": "e8156223756851a9e600de7c9a21a3904c5cde91852958eca205ce49a3f76acc",
+      "score": 31,
+      "content": "# new_topic\ntype: object\nrequired:\n  - title\n  - raw\nproperties:\n  title:\n    type: string\n  raw:\n    type: string\n"
+    },
+    {
+      "path": "definitions/categories/update_category.yml",
+      "sha": null,
+      "content_sha256": "22f12b3cd23b60b7d23ee30398ae50244aa5e69e50066c0d994d783ded633bc4",
+      "score": 31,
+      "content": "# new_category\ntype: object\nrequired:\n  - name\n  - color\n  - text_color\nproperties:\n  name:\n    type: string\n  color:\n    type: string\n  text_color:\n    type: string\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:06:50.166366+00:00"
+}
