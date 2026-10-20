@@ -1,7 +1,16 @@
 # COLLECTION — Research Index
 
 Status: INCREMENTAL_COLLECTION
-Updated: 2026-10-19
+Updated: 2026-10-20
+
+
+## 2026-10-20 operator update
+
+- **COLLECTION path repair:** `COLLECTION/AUTO/process_collection.py` now anchors `EXTRACTED`, `MASTER`, `VERIFY` and relative manifest artifact paths to `REPO_ROOT = Path(__file__).resolve().parents[2]`, not the invoking shell's working directory. Commit: `909f8781c77143e950600fdbb54a8e6c0666fb72`.
+- **Path/quarantine regression:** [run 39360671001](https://github.com/salamou1944/Project-/actions/runs/39360671001) passed: Python compilation plus 3 tests covering cwd-independent paths, manifest-relative paths, and preservation of the existing quarantine lock. The previously failing full policy check is being rerun in [run 39360757036](https://github.com/salamou1944/Project-/actions/runs/39360757036); do not mark that broader gate passed until its result is final.
+- **API Factory / Render:** service `salamou-31-api-factory` has auto-deploy enabled on `main`, but its last observed live deploy is `dep-db9rn2aog99s738vco50` at source commit `172328b929513d4a5909a22da4954cd988aa2343` (2026-10-17). The three commits on current `Salamou-31/main` after that point change only `.github/workflows/soat-runtime-integration.yml` and the API Factory verification note, outside the configured Docker context `AI-API-HUB/api-factory`; therefore no missing API application-code change was identified in that range. This does **not** prove external health or production readiness.
+- **Render proof gap:** configured `healthCheckPath` is empty; Render logs contain no observed `/health` or `/ready` request in the queried period, and external browser checks did not return a verifiable response. README contract requires durable registry and artifact storage for `/ready`; those production storage settings remain unproven. The only connected Supabase project is EASY's `easy-platform-db`; do not reuse it. No new database or paid resource was created.
+- **agent-skills PRs:** [PR #181](https://github.com/salamou1944/agent-skills/pull/181) and [PR #183](https://github.com/salamou1944/agent-skills/pull/183) remain open. Their current head commits each have zero Check Runs and no status contexts (combined status `pending`); no merge or successful verification is claimed.
 
 
 ## 2026-10-19 operating update
