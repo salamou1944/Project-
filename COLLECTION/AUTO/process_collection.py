@@ -5,6 +5,9 @@ Route:
 normalize -> classify -> dedupe -> promotion decision -> verification queue
 -> explicit readiness state.
 
+All repository data paths are anchored to this file, so invocation from a
+different current working directory does not redirect reads or writes.
+
 Readiness is deliberately NOT inferred from collection evidence. Collection
 evidence can place an item ON_SHELF or QUARANTINED; READY_ON_DEMAND and
 READY_TO_USE require a separate readiness declaration with activation and
