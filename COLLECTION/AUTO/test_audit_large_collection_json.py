@@ -18,6 +18,7 @@ class LargeJsonAuditTests(unittest.TestCase):
             result = audit(path)
             self.assertEqual(result["status"], "PASS")
             self.assertEqual(result["items_count"], 2)
+            self.assertEqual(result["size_status"], "OK")
             self.assertEqual(path.read_bytes(), before)
 
     def test_reports_invalid_json_without_mutating_file(self):
@@ -27,6 +28,7 @@ class LargeJsonAuditTests(unittest.TestCase):
             before = path.read_bytes()
             result = audit(path)
             self.assertEqual(result["status"], "INVALID_JSON")
+            self.assertEqual(result["size_status"], "OK")
             self.assertEqual(path.read_bytes(), before)
 
 
