@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:metorial/server-build-images",
+  "repo": "metorial/server-build-images",
+  "revision_sha": "718ba7c780b127ac645c7d1aaba67e81cd76d25b",
+  "default_branch": "main",
+  "pushed_at": "2025-11-14T15:08:36Z",
+  "repo_updated_at": "2026-01-04T01:18:18Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/python-lambda-build.yml",
+      "sha": null,
+      "content_sha256": "1937288164234eb3378e0ac15540112b326a6cf59e36ba51d65d8179ea960682",
+      "score": 126,
+      "content": "name: 'Build and Push Python Lambda Image'\n\non:\n  workflow_dispatch:\n\n  push:\n    branches:\n      - main\n\njobs:\n  build-and-push:\n    name: 'Build and Push'\n    runs-on: ubuntu-latest\n\n    permissions:\n      contents: read\n      packages: write\n      attestations: write\n      id-token: write\n\n    env:\n      SERVICE_NAME: python-lambda-build-image-v1\n      IMAGE_NAME: metorial/python-lambda-build-image-v1\n      BUILD_DIR: ./python-lambda-build-image\n      GHCR_REGISTRY: ghcr.io\n      ECR_REGISTRY: public.ecr.aws/z8i8n6f7\n      CONTAINER_TAG: mtbld-${{ github.ref_name }}-${{ github.sha }}\n      AWS_REGION: us-east-1\n\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n\n      - name: Set up QEMU\n        uses: docker/setup-qemu-action@v3\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v3\n\n      - name: Log in to GitHub Container Registry\n        uses: docker/login-action@v3\n        with:\n          registry: ${{ env.GHCR_REGISTRY }}\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Configure AWS credentials\n        uses: aws-actions/configure-aws-credentials@v4\n        with:\n          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}\n          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}\n          aws-region: ${{ env.AWS_REGION }}\n\n      - name: Log in to AWS Public ECR\n        run: |\n          aws ecr-public get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}\n\n      - name: Extract metadata (tags, labels) for Docker\n        id: meta\n        uses: docker/metadata-action@v5\n        with:\n          images: |\n            ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}\n            ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}\n          labels: |\n            org.opencontainers.image.title=${{ env.SERVICE_NAME }}\n            org.opencontainers.image.vendor=Metorial\n          tags: |\n            type=sha\n            type=sha,format=long\n            type=ref,event=branch\n            type=ref,event=tag,prefix=tag-\n            type=ref,event=pr,prefix=pr-\n            type=raw,value=${{ env.CONTAINER_TAG }}\n            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}\n\n      - name: Build and push Docker image to GHCR + AWS Public ECR\n        id: push\n        uses: docker/build-push-action@v6\n        with:\n          context: ${{ env.BUILD_DIR }}\n          push: true\n          file: ${{ env.BUILD_DIR }}/Dockerfile\n          platforms: linux/amd64,linux/arm64\n          tags: ${{ steps.meta.outputs.tags }}\n          labels: ${{ steps.meta.outputs.labels }}\n"
+    },
+    {
+      "path": ".github/workflows/legal.yml",
+      "sha": null,
+      "content_sha256": "d881efed9075bdac00add0b7065c090ad0736787217fdde1802708394f0bb005",
+      "score": 126,
+      "content": "name: Check Legal Boilerplate\n\non:\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\n\njobs:\n  check-legal-boilerplate:\n    runs-on: ubuntu-latest\n    permissions:\n      pull-requests: write\n      contents: read\n\n    steps:\n      - name: Check for legal boilerplate\n        id: check\n        uses: actions/github-script@v7\n        with:\n          script: |\n            let staffContributors = ['herber', 'RahmeKarim'];\n            let prAuthor = context.payload.pull_request.user.login;\n\n            if (staffContributors.includes(prAuthor)) {\n              console.log(`Skipping legal check: ${prAuthor} is in staff list.`);\n              return;\n            }\n\n            let requiredText = `By submitting this pull request, I'm saying I wrote these changes (or have the right to submit them), and that Metorial can use them however they like - including in their open source projects or any proprietary versions they offer. I still keep the rights to my code, but Metorial can use, modify, and relicense it however they like.`;\n\n            let body = context.payload.pull_request.body || \"\";\n\n            if (body.includes(requiredText)) {\n              core.setOutput(\"legal_check_passed\", \"true\");\n            } else {\n              let issue_number = context.payload.pull_request.number;\n              let repo = context.repo.repo;\n              let owner = context.repo.owner;\n\n              await github.rest.issues.createComment({\n                owner,\n                repo,\n                issue_number,\n                body: `👋 Hi! Your pull request is missing the required legal boilerplate.\\nPlease copy and paste the following text into the PR description:\\n\\n\\`\\`\\`\\n${requiredText}\\n\\`\\`\\`\\n\\nThanks for contributing to Metorial!`\n              });\n\n              core.setFailed(\"Missing required legal boilerplate in PR description.\");\n            }\n"
+    },
+    {
+      "path": ".github/workflows/js-lambda-build.yml",
+      "sha": null,
+      "content_sha256": "17ad534c216a20cc5426ecb27859770316e8d84271e536e77da8f63bd9c1bc68",
+      "score": 126,
+      "content": "name: 'Build and Push JS Lambda Image'\n\non:\n  workflow_dispatch:\n\n  push:\n    branches:\n      - main\n\njobs:\n  build-and-push:\n    name: 'Build and Push'\n    runs-on: ubuntu-latest\n\n    permissions:\n      contents: read\n      packages: write\n      attestations: write\n      id-token: write\n\n    env:\n      SERVICE_NAME: js-lambda-build-image-v1\n      IMAGE_NAME: metorial/js-lambda-build-image-v1\n      BUILD_DIR: ./js-lambda-build-image\n      GHCR_REGISTRY: ghcr.io\n      ECR_REGISTRY: public.ecr.aws/z8i8n6f7\n      CONTAINER_TAG: mtbld-${{ github.ref_name }}-${{ github.sha }}\n      AWS_REGION: us-east-1\n\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n\n      - name: Set up QEMU\n        uses: docker/setup-qemu-action@v3\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v3\n\n      - name: Log in to GitHub Container Registry\n        uses: docker/login-action@v3\n        with:\n          registry: ${{ env.GHCR_REGISTRY }}\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Configure AWS credentials\n        uses: aws-actions/configure-aws-credentials@v4\n        with:\n          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}\n          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}\n          aws-region: ${{ env.AWS_REGION }}\n\n      - name: Log in to AWS Public ECR\n        run: |\n          aws ecr-public get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}\n\n      - name: Extract metadata (tags, labels) for Docker\n        id: meta\n        uses: docker/metadata-action@v5\n        with:\n          images: |\n            ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}\n            ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}\n          labels: |\n            org.opencontainers.image.title=${{ env.SERVICE_NAME }}\n            org.opencontainers.image.vendor=Metorial\n          tags: |\n            type=sha\n            type=sha,format=long\n            type=ref,event=branch\n            type=ref,event=tag,prefix=tag-\n            type=ref,event=pr,prefix=pr-\n            type=raw,value=${{ env.CONTAINER_TAG }}\n            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'main') }}\n\n      - name: Build and push Docker image to GHCR + AWS Public ECR\n        id: push\n        uses: docker/build-push-action@v6\n        with:\n          context: ${{ env.BUILD_DIR }}\n          push: true\n          file: ${{ env.BUILD_DIR }}/Dockerfile\n          platforms: linux/amd64,linux/arm64\n          tags: ${{ steps.meta.outputs.tags }}\n          labels: ${{ steps.meta.outputs.labels }}\n"
+    },
+    {
+      "path": "js-lambda-build-image/package.json",
+      "sha": null,
+      "content_sha256": "279cc243b8721a62a22214617b658ed988ecb9907059f7a392c0f8a010c05cb0",
+      "score": 118,
+      "content": "{\n  \"name\": \"js-lambda-build-image\",\n  \"module\": \"index.ts\",\n  \"type\": \"module\",\n  \"private\": true,\n  \"devDependencies\": {\n    \"@types/bun\": \"latest\"\n  },\n  \"peerDependencies\": {\n    \"typescript\": \"^5\"\n  },\n  \"dependencies\": {\n    \"@modelcontextprotocol/sdk\": \"^1.20.2\",\n    \"jose\": \"^6.1.0\",\n    \"zod\": \"3\"\n  }\n}\n"
+    },
+    {
+      "path": "js-lambda-build-image/boot/oauth.ts",
+      "sha": null,
+      "content_sha256": "16ad50801458beaa1e4b1da0ae2baff3a4f950126e5780c45b2b5658042d8153",
+      "score": 111,
+      "content": "import { delay } from './delay';\n\nlet getOauth = async () => {\n  let prom = globalThis.__metorial_getMcpAuth__();\n  return await Promise.race([prom, delay(500)]);\n};\n\nexport let oauth = {\n  get: getOauth\n};\n"
+    },
+    {
+      "path": "python-lambda-build-image/boot/oauth.py",
+      "sha": null,
+      "content_sha256": "47e445336b07c4ad1393aac82bef10a3cf52b455fc712fd9bec3a84094c33eae",
+      "score": 111,
+      "content": "\"\"\"OAuth handling for Metorial MCP servers.\"\"\"\nfrom typing import Any, Dict, Optional, Callable\nimport inspect\n\nfrom . import config\n\nasync def _call_handler(handler: Callable, *args, **kwargs):\n    \"\"\"Call handler supporting both sync and async functions.\"\"\"\n    if inspect.iscoroutinefunction(handler):\n        return await handler(*args, **kwargs)\n    else:\n        result = handler(*args, **kwargs)\n        # If result is a coroutine, await it\n        if inspect.iscoroutine(result):\n            return await result\n        return result\n\nclass OAuthHandler:\n    \"\"\"OAuth handler interface.\"\"\"\n    \n    def __init__(self,\n                 get_authorization_url: Callable,\n                 handle_callback: Callable,\n                 get_auth_form: Optional[Callable] = None,\n                 refresh_access_token: [REDACTED]] = None):\n        self.get_authorization_url = get_authorization_url\n        self.handle_callback = handle_callback\n        self.get_auth_form = get_auth_form\n        self.refresh_access_token = [REDACTED]\n\ndef set_oauth(handler: OAuthHandler):\n    \"\"\"Register the OAuth handler.\"\"\"\n    config.set_mcp_auth(handler)\n\ndef get_oauth() -> Optional[OAuthHandler]:\n    \"\"\"Get the registered OAuth handler.\"\"\"\n    return config.get_mcp_auth()\n\nasync def handle_oauth_get() -> Dict[str, Any]:\n    \"\"\"Handle OAuth get request.\"\"\"\n    oauth = get_oauth()\n    if not oauth:\n        return {\"enabled\": False, \"hasForm\": False}\n    return {\"enabled\": True, \"hasForm\": oauth.get_auth_form is not None}\n\nasync def handle_oauth_authorization_url(input_data: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Handle OAuth authorization URL request.\"\"\"\n    oauth = get_oauth()\n    if not oauth:\n        raise ValueError(\"OAuth not configured\")\n    \n    result = await _call_handler(oauth.get_authorization_url, input_data)\n    if isinstance(result, str):\n        return {\"authorizationUrl\": result, \"codeVerifier\": \"\"}\n    return result\n\nasync def handle_oauth_authorization_form(input_data: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Handle OAuth authorization form request.\"\"\"\n    oauth = get_oauth()\n    if not oauth or not oauth.get_auth_form:\n        raise ValueError(\"OAuth form not available\")\n    \n    form = await _call_handler(oauth.get_auth_form, input_data)\n    return {\"authForm\": form}\n\nasync def handle_oauth_callback(input_data: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Handle OAuth callback request.\"\"\"\n    oauth = get_oauth()\n    if not oauth:\n        raise ValueError(\"OAuth not configured\")\n    \n    auth_data = await _call_handler(oauth.handle_callback, input_data)\n    return {\"authData\": auth_data}\n\nasync def handle_oauth_refresh(input_data: Dict[str, Any]) -> Dict[str, Any]:\n    \"\"\"Handle OAuth token refresh request.\"\"\"\n    oauth = get_oauth()\n    if not oauth or not oauth.refresh_access_token:\n        raise ValueError(\"OAuth refresh not supported\")\n    \n    auth_data = await _call_handler(oauth.refresh_access_token, input_data)\n    return {\"authData\": auth_data}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "python-lambda-build-image/README.md",
+      "sha": null,
+      "content_sha256": "6c570afe847fbb6388ac6d20d1f5b35ca642b33cf75a73b43845321beb2e4192",
+      "score": 98,
+      "content": "# Python Lambda Build Image\n\nA Docker-based build system for packaging Python MCP servers as AWS Lambda functions with the Metorial runtime.\n\n## Overview\n\nThis build image downloads user Python code, bundles it with Metorial boot scripts, and creates a deployment package ready for AWS Lambda.\n\n## Structure\n\n```\npython-lambda-build-image/\n├── boot/                    # Metorial runtime files\n│   ├── __init__.py\n│   ├── bootstrap.py         # Main Lambda orchestration\n│   ├── config.py           # Configuration management\n│   ├── oauth.py            # OAuth handling\n│   ├── callbacks.py        # Callbacks handling\n│   ├── metorial.py         # User-facing API\n│   └── lib/\n│       ├── __init__.py\n│       └── utils.py        # Utility functions\n├── index.py                # Lambda handler entry point\n├── Dockerfile              # Build environment\n├── entrypoint.sh           # Build script\n└── requirements.txt        # Boot dependencies (mcp>=1.0.0)\n```\n\n## Build Process\n\n1. **Download**: Fetches source code ZIP from `ZIP_URL`\n2. **Extract**: Unzips to `/workspace/src`\n3. **Detect**: Finds entrypoint (server.py, main.py, index.py, app.py)\n4. **Install**: Installs user dependencies from requirements.txt\n5. **Bundle**: Copies boot scripts to `__metorial__/` directory\n6. **Package**: Creates deployment ZIP with all files\n7. **Upload**: Uploads artifact to S3\n\n## Environment Variables\n\nRequired:\n- `ZIP_URL` - URL to download source code ZIP\n- `S3_BUCKET` - Target S3 bucket for deployment\n- `S3_KEY` - S3 object key for the artifact\n\n## Usage\n\n```bash\ndocker build -t python-lambda-build .\n\ndocker run \\\n  -e ZIP_URL=\"https://example.com/source.zip\" \\\n  -e S3_BUCKET=\"my-bucket\" \\\n  -e S3_KEY=\"builds/lambda.zip\" \\\n  python-lambda-build\n```\n\n## Entrypoint Detection\n\nThe build script searches for these files in order:\n1. server.py\n2. main.py\n3. index.py\n4. app.py\n5. handler.py\n6. lambda.py\n7. mcp.py\n\n## User Code Requirements\n\nUser Python code should:\n1. Import `metorial` from the boot module\n2. Create a server with `metorial.create_server()`\n3. Register tools, resources, and prompts using decorators\n4. Optionally configure OAuth and callbacks\n\nExample:\n```python\nfrom boot import metorial\n\n# Create server\nserver = metorial.create_server({\n    \"name\": \"calculator-server\",\n    \"version\": \"1.0.0\"\n})\n\n# Register a tool using decorator syntax\n@server.register_tool(\n    \"add\",\n    {\n        \"title\": \"Addition Tool\",\n        \"description\": \"Add two numbers\",\n        \"inputSchema\": {\n            \"type\": \"object\",\n            \"properties\": {\n                \"a\": {\"type\": \"number\", \"description\": \"First number\"},\n                \"b\": {\"type\": \"number\", \"description\": \"Second number\"}\n            },\n            \"required\": [\"a\", \"b\"]\n        }\n    }\n)\nasync def add_handler(arguments):\n    result = arguments[\"a\"] + arguments[\"b\"]\n    return {\n        \"content\": [{\n            \"type\": \"text\",\n            \"text\": f\"Result: {result}\"\n        }]\n    }\n\n# Register a resource using decorator syntax\n@server.register_resource(\n    \"greeting\",\n    \"greeting://{name}\",\n    {\n        \"title\": \"Greeting Resource\",\n        \"description\": \"Dynamic greeting generator\"\n    }\n)\nasync def greeting_handler(uri):\n    # Extract name from URI\n    name = uri.split(\"/\")[-1]\n    return {\n        \"contents\": [{\n            \"uri\": uri,\n            \"mimeType\": \"text/plain\",\n            \"text\": f\"Hello, {name}!\"\n        }]\n    }\n```\n\n"
+    },
+    {
+      "path": "js-lambda-build-image/Dockerfile",
+      "sha": null,
+      "content_sha256": "4689d9b8bbf337ab15fcdbba875675e166333b5d6b96b0003877f156a2b249ba",
+      "score": 83,
+      "content": "# Use Node.js base image\nFROM node:24-slim\n\n# Install system dependencies\nRUN apt-get update && apt-get install -y \\\n  curl \\\n  zip \\\n  unzip \\\n  file \\\n  awscli \\\n  && rm -rf /var/lib/apt/lists/*\n\n# Install ncc globally\nRUN npm install -g @vercel/ncc typescript\n\n# Create working directories\nRUN mkdir -p /workspace /boot\n\n# Copy the boot scripts into the image\nCOPY boot /boot\n\n# Copy the entrypoint script\nCOPY entrypoint.sh /entrypoint.sh\nCOPY tsconfig.json /tsconfig.json\n\nRUN chmod +x /entrypoint.sh\n\n# Set working directory\nWORKDIR /workspace\n\n# Set the entrypoint\nENTRYPOINT [\"/entrypoint.sh\"]"
+    },
+    {
+      "path": "python-lambda-build-image/requirements.txt",
+      "sha": null,
+      "content_sha256": "0220c4b88a1bedc4a9995faf37a15352a03f2950fbf611388e795fcee31761e0",
+      "score": 83,
+      "content": "mcp>=1.0.0\n\n"
+    },
+    {
+      "path": "python-lambda-build-image/Dockerfile",
+      "sha": null,
+      "content_sha256": "b185bd51274b4127f6950c8181d3b462dae1325cdd10b601138ffda416ab51d7",
+      "score": 83,
+      "content": "# Use Python base image\nFROM python:3.12-slim\n\n# Install system dependencies\nRUN apt-get update && apt-get install -y \\\n  curl \\\n  zip \\\n  unzip \\\n  file \\\n  && pip install --no-cache-dir awscli \\\n  && rm -rf /var/lib/apt/lists/*\n\n# Create working directories\nRUN mkdir -p /workspace /boot\n\n# Copy the boot scripts into the image\nCOPY boot /boot\n\n# Copy the index.py entry point\nCOPY index.py /index.py\n\n# Copy the entrypoint script\nCOPY entrypoint.sh /entrypoint.sh\n\nRUN chmod +x /entrypoint.sh\n\n# Set working directory\nWORKDIR /workspace\n\n# Set the entrypoint\nENTRYPOINT [\"/entrypoint.sh\"]\n\n"
+    },
+    {
+      "path": "python-lambda-build-image/index.py",
+      "sha": null,
+      "content_sha256": "2a77003c3ad3177f1401fd0d5877aa9b9b0d59dba503e6e103274421b680ff4b",
+      "score": 33,
+      "content": "import json\nimport asyncio\nfrom typing import Any, Dict\n\nfrom boot import boot\n\ndef handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:\n  action = event.get('action')\n  \n  try:\n    loop = asyncio.get_event_loop()\n    if loop.is_running():\n      loop = asyncio.new_event_loop()\n      asyncio.set_event_loop(loop)\n    \n    if action == 'discover':\n      result = loop.run_until_complete(boot.handle_discover(event))\n    elif action == 'mcp.request' or action == 'mcp.batch':\n      result = loop.run_until_complete(boot.handle_mcp_request(event))\n    elif action == 'oauth':\n      result = loop.run_until_complete(boot.handle_oauth_action(event))\n    elif action == 'callbacks':\n      result = loop.run_until_complete(boot.handle_callbacks_action(event))\n    else:\n      result = {\n        \"success\": False,\n        \"error\": {\n          \"code\": \"unknown_action\",\n          \"message\": f\"Unknown action: {action}\"\n        }\n      }\n      \n    return result\n  except Exception as e:\n    import traceback\n    return {\n      \"success\": False,\n      \"error\": {\n        \"code\": \"handler_error\",\n        \"message\": str(e) + \"\\n\" + traceback.format_exc()\n      }\n    }\n\nif __name__ == \"__main__\":\n  test_event = {\n    \"action\": \"discover\",\n    \"args\": {}\n  }\n  result = handler(test_event, None)\n  print(json.dumps(result, indent=2))\n"
+    },
+    {
+      "path": "js-lambda-build-image/tsconfig.json",
+      "sha": null,
+      "content_sha256": "11a68339a9c6a0c04a67b95dff9eefd9a92c42fa35161411048405272ab192c8",
+      "score": 33,
+      "content": "{\n  \"compilerOptions\": {\n    // Environment setup & latest features\n    \"lib\": [\"ESNext\"],\n    \"target\": \"ESNext\",\n    \"module\": \"Preserve\",\n    \"moduleDetection\": \"force\",\n    \"jsx\": \"react-jsx\",\n    \"allowJs\": true,\n\n    // Bundler mode\n    \"moduleResolution\": \"bundler\",\n    \"allowImportingTsExtensions\": true,\n    \"verbatimModuleSyntax\": true,\n    \"noEmit\": true,\n\n    // Best practices\n    \"strict\": true,\n    \"skipLibCheck\": true,\n    \"noFallthroughCasesInSwitch\": true,\n    \"noUncheckedIndexedAccess\": true,\n    \"noImplicitOverride\": true,\n\n    // Some stricter flags (disabled by default)\n    \"noUnusedLocals\": false,\n    \"noUnusedParameters\": false,\n    \"noPropertyAccessFromIndexSignature\": false\n  }\n}\n"
+    },
+    {
+      "path": "python-lambda-build-image/entrypoint.sh",
+      "sha": null,
+      "content_sha256": "be1003b58f7d43829e6f41c7fbf0462d16653a6526adcc134b360436df0f1cca",
+      "score": 33,
+      "content": "#!/bin/bash\nset -euo pipefail\n\n# Environment variables expected:\n# ZIP_URL, S3_BUCKET, S3_KEY\n\nif [ -z \"${ZIP_URL:-}\" ] || [ -z \"${S3_BUCKET:-}\" ] || [ -z \"${S3_KEY:-}\" ]; then\n  echo \"Missing required environment variables: ZIP_URL, S3_BUCKET, S3_KEY\"\n  exit 1\nfi\n\necho \"Starting Metorial Python Build Process\"\n\necho \"Downloading source code...\"\n\n# Download with error handling\nHTTP_CODE=$(curl -L \"$ZIP_URL\" -o /tmp/source.zip -w \"%{http_code}\" -s)\n\nif [ \"$HTTP_CODE\" != \"200\" ]; then\n  echo \"Download failed with HTTP status: $HTTP_CODE\"\n  echo \"Response content:\"\n  cat /tmp/source.zip\n  exit 1\nfi\n\n# Verify it's a valid zip file\nif ! file /tmp/source.zip | grep -q \"Zip archive\"; then\n  echo \"Downloaded file is not a valid ZIP archive:\"\n  file /tmp/source.zip\n  echo \"First 500 bytes:\"\n  head -c 500 /tmp/source.zip\n  exit 1\nfi\n\nmkdir -p /workspace/src\nunzip -q /tmp/source.zip -d /workspace/src\n\ncd /workspace/src\n\n# Detect entrypoint\nENTRYPOINTS=(\n  \"server.py\" \"main.py\" \"index.py\" \"app.py\"\n  \"handler.py\" \"lambda.py\" \"mcp.py\"\n)\n\nENTRY=\"\"\nfor f in \"${ENTRYPOINTS[@]}\"; do\n  if [ -f \"$f\" ]; then\n    ENTRY=\"$f\"\n    break\n  fi\ndone\n\nif [ -z \"$ENTRY\" ]; then\n  echo \"ERROR: No valid entrypoint found.\"\n  echo \"Searched for: ${ENTRYPOINTS[*]}\"\n  exit 1\nfi\n\necho \"Detected entrypoint: $ENTRY\"\n\n# Handle requirements.txt\nHAS_REQUIREMENTS=false\nif [ -f \"requirements.txt\" ]; then\n  HAS_REQUIREMENTS=true\n  echo \"Installing user dependencies from requirements.txt...\"\n  pip install --no-cache-dir -r requirements.txt -t .\nelse\n  echo \"No requirements.txt found. Will create minimal one.\"\nfi\n\n# Always install mcp dependency\necho \"Installing MCP SDK...\"\npip install --no-cache-dir \"mcp>=1.0.0\" -t .\n\n# Copy boot scripts to root level\necho \"Copying Metorial boot scripts...\"\ncp -r /boot /workspace/src/boot\n\n# Copy the Lambda handler entry point\ncp /index.py /workspace/src/index.py\n\n# Clean up Python cache and build artifacts\necho \"Cleaning up build artifacts...\"\nfind /workspace/src -type d -name \"__pycache__\" -exec rm -rf {} + 2>/dev/null || true\nfind /workspace/src -type d -name \"*.egg-info\" -exec rm -rf {} + 2>/dev/null || true\nfind /workspace/src -type f -name \"*.pyc\" -delete 2>/dev/null || true\nfind /workspace/src -type f -name \"*.pyo\" -delete 2>/dev/null || true\n\n# Zip the Lambda package\necho \"Creating deployment package...\"\ncd /workspace/src\nzip -qr /workspace/artifact.zip .\n\necho \"Deployment package contents:\"\nunzip -l /workspace/artifact.zip\n\n# Upload to S3\necho \"Uploading to S3...\"\naws s3 cp /workspace/artifact.zip \"s3://${S3_BUCKET}/${S3_KEY}\"\n\necho \"Build completed successfully\"\necho \"Entrypoint: $ENTRY\"\necho \"S3 Location: s3://${S3_BUCKET}/${S3_KEY}\"\n\n"
+    },
+    {
+      "path": "js-lambda-build-image/entrypoint.sh",
+      "sha": null,
+      "content_sha256": "5ed584637458852908960aa279a0ef231624e3b01033048f3d4e92df6bb5b728",
+      "score": 33,
+      "content": "#!/bin/bash\nset -euo pipefail\n\n# Environment variables expected:\n# ZIP_URL, S3_BUCKET, S3_KEY\n\nif [ -z \"${ZIP_URL:-}\" ] || [ -z \"${S3_BUCKET:-}\" ] || [ -z \"${S3_KEY:-}\" ]; then\n  echo \"Missing required environment variables: ZIP_URL, S3_BUCKET, S3_KEY\"\n  exit 1\nfi\n\necho \"Starting Metorial Node Build Process\"\n\necho \"Downloading source code...\"\n\n# Download with error handling\nHTTP_CODE=$(curl -L \"$ZIP_URL\" -o /tmp/source.zip -w \"%{http_code}\" -s)\n\nif [ \"$HTTP_CODE\" != \"200\" ]; then\n  echo \"Download failed with HTTP status: $HTTP_CODE\"\n  echo \"Response content:\"\n  cat /tmp/source.zip\n  exit 1\nfi\n\n# Verify it's a valid zip file\nif ! file /tmp/source.zip | grep -q \"Zip archive\"; then\n  echo \"Downloaded file is not a valid ZIP archive:\"\n  file /tmp/source.zip\n  echo \"First 500 bytes:\"\n  head -c 500 /tmp/source.zip\n  exit 1\nfi\n\nmkdir -p /workspace/src\nunzip -q /tmp/source.zip -d /workspace/src\n\ncd /workspace/src\n\n# Detect entrypoint\nENTRYPOINTS=(\n  \"index.ts\" \"index.js\" \"index.cjs\" \"index.mjs\"\n  \"app.ts\" \"app.js\" \"app.cjs\" \"app.mjs\"\n  \"main.ts\" \"main.js\" \"main.cjs\" \"main.mjs\"\n  \"server.ts\" \"server.js\" \"server.cjs\" \"server.mjs\"\n  \"handler.ts\" \"handler.js\" \"handler.cjs\" \"handler.mjs\"\n  \"lambda.ts\" \"lambda.js\" \"lambda.cjs\" \"lambda.mjs\"\n  \"mcp.ts\" \"mcp.js\" \"mcp.cjs\" \"mcp.mjs\"\n)\n\nENTRY=\"\"\nfor f in \"${ENTRYPOINTS[@]}\"; do\n  if [ -f \"$f\" ]; then\n    ENTRY=\"$f\"\n    break\n  fi\ndone\n\nif [ -z \"$ENTRY\" ]; then\n  echo \"ERROR: No valid entrypoint found.\"\n  echo \"Searched for: ${ENTRYPOINTS[*]}\"\n  exit 1\nfi\n\necho \"Detected entrypoint: $ENTRY\"\n\nHAS_PACKAGE_JSON=false\nif [ -f \"package.json\" ]; then\n  HAS_PACKAGE_JSON=true\nfi\n\nif [ \"$HAS_PACKAGE_JSON\" = true ]; then\n  echo \"Installing dependencies from package.json...\"\n  npm install\nelse\n  echo \"No package.json found. Initializing npm project...\"\n  npm init -y\nfi\n\nnpm install typescript > /dev/null\n\n# Get absolute path to the entry point\nENTRY_ABSOLUTE=\"/workspace/src/$ENTRY\"\n\necho \"Entry point absolute path: $ENTRY_ABSOLUTE\"\n\n# Copy boot script and replace placeholder with actual entry point\nmkdir -p /workspace/src/boot\ncp -r /boot/* /workspace/src/boot/\n\n# Replace the $ENTRY_POINT$ placeholder with the actual path\nsed -i 's|await import('\\''\\$\\$ENTRY_POINT\\$\\$'\\'')|await import('\"'\"$ENTRY_ABSOLUTE\"'\"')|g' /workspace/src/boot/boot.ts\n\ncp /tsconfig.json /workspace/src/boot/tsconfig.json\ncp /tsconfig.json /workspace/tsconfig.json\n\n# Build the boot script with ncc (this will bundle everything together)\necho \"Building code for Metorial...\"\ncat > /workspace/src/__metorial_index.ts << 'EOF'\nexport * from './boot/boot';\nEOF\n\nmkdir -p /workspace/dist\nncc build /workspace/src/__metorial_index.ts -o /workspace/dist --minify --source-map > /dev/null\n\n# Create package.json for Lambda runtime\ncat > /workspace/package.json << 'EOF'\n{\n  \"name\": \"lambda-function\",\n  \"version\": \"1.0.0\",\n  \"main\": \"dist/index.js\",\n  \"type\": \"commonjs\"\n}\nEOF\n\n# Zip the Lambda package\ncd /workspace\nzip -qr artifact.zip dist package.json\n\nunzip -l artifact.zip\n\n# Upload to S3\naws s3 cp artifact.zip \"s3://${S3_BUCKET}/${S3_KEY}\"\n\necho \"Build completed\""
+    },
+    {
+      "path": "python-lambda-build-image/boot/__init__.py",
+      "sha": null,
+      "content_sha256": "fdd1c10818eccb46a1fb8a7cf762f792323959b123d89bb0300af4981787bc02",
+      "score": 31,
+      "content": "# Metorial Python Lambda Boot Module (__metorial__ in deployment)\n"
+    },
+    {
+      "path": "js-lambda-build-image/boot/delay.ts",
+      "sha": null,
+      "content_sha256": "3f1ae0a17d6b077dade1dc875e18f9da30fdb885de816f5fea8460a609a3fb17",
+      "score": 31,
+      "content": "export let delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));\n"
+    },
+    {
+      "path": "js-lambda-build-image/boot/error.ts",
+      "sha": null,
+      "content_sha256": "86f9cf7faa64e3de5d79226412e893f1e3fa60d8297bec9be7f3a7a39f0a7140",
+      "score": 31,
+      "content": "export class DeploymentError extends Error {\n  constructor(\n    private readonly data: {\n      code: string;\n      message: string;\n      publicMessage?: string;\n      details?: any;\n    }\n  ) {\n    super(data.message);\n    this.name = 'DeploymentError';\n  }\n\n  get code() {\n    return this.data.code;\n  }\n\n  get publicMessage() {\n    return this.data.publicMessage;\n  }\n\n  get details() {\n    return this.data.details;\n  }\n}\n"
+    },
+    {
+      "path": "js-lambda-build-image/boot/promise.ts",
+      "sha": null,
+      "content_sha256": "79ad2fe2d2133a35b141e8fffff1122af06ac8d2aca49c3ae03ff699111d85a6",
+      "score": 31,
+      "content": "export class ProgrammablePromise<T> {\n  private _resolve!: (value: T | PromiseLike<T>) => void;\n  private _reject!: (reason?: any) => void;\n  private _promise: Promise<T>;\n  private _value!: T;\n\n  constructor() {\n    this._promise = new Promise<T>((resolve, reject) => {\n      this._resolve = resolve;\n      this._reject = reject;\n    });\n  }\n\n  get promise() {\n    return this._promise;\n  }\n\n  resolve(value: T | PromiseLike<T>) {\n    this._resolve(value);\n    this._value = value as T;\n  }\n\n  get reject() {\n    return this._reject;\n  }\n\n  get value() {\n    return this._value;\n  }\n}\n"
+    },
+    {
+      "path": "python-lambda-build-image/boot/promise.py",
+      "sha": null,
+      "content_sha256": "1d6120cbc18f708050b8b67e2ecb2de45e1e5551d7599c3c68438a028848465e",
+      "score": 31,
+      "content": "\"\"\"Programmable Promise implementation for Python.\"\"\"\nfrom typing import Generic, TypeVar, Optional\n\nT = TypeVar('T')\n\nclass ProgrammablePromise(Generic[T]):\n    \"\"\"A promise-like container that can be resolved programmatically.\"\"\"\n    \n    def __init__(self):\n        self._value: Optional[T] = None\n        self._resolved: bool = False\n    \n    @property\n    def promise(self) -> 'ProgrammablePromise[T]':\n        \"\"\"Get the promise itself.\"\"\"\n        return self\n    \n    def resolve(self, value: T) -> None:\n        \"\"\"Resolve the promise with a value.\"\"\"\n        self._value = value\n        self._resolved = True\n    \n    def reject(self, reason: Exception) -> None:\n        \"\"\"Reject the promise with an exception.\"\"\"\n        self._resolved = False\n    \n    @property\n    def value(self) -> Optional[T]:\n        \"\"\"Get the resolved value (if available).\"\"\"\n        return self._value\n    \n    @property\n    def resolved(self) -> bool:\n        \"\"\"Check if the promise has been resolved.\"\"\"\n        return self._resolved\n"
+    },
+    {
+      "path": "js-lambda-build-image/boot/config.ts",
+      "sha": null,
+      "content_sha256": "a0b7a5d6baf6bab54a3ceec42c83c0d69ba9e635b3962271529e6e16f3a72f22",
+      "score": 31,
+      "content": "import { ProgrammablePromise } from './promise';\n\nexport let currentOauth = new ProgrammablePromise();\nglobalThis.__metorial_setMcpAuth__ = (v: any) => currentOauth.resolve(v);\nglobalThis.__metorial_getMcpAuth__ = () => currentOauth.promise;\n\nexport let currentServer = new ProgrammablePromise();\nglobalThis.__metorial_setServer__ = (v: any) => currentServer.resolve(v);\nglobalThis.__metorial_getServer__ = () => currentServer.promise;\n\nexport let currentHook = new ProgrammablePromise();\nglobalThis.__metorial_setCallbackHandler__ = (v: any) => currentHook.resolve(v);\nglobalThis.__metorial_getCallbackHandler__ = () => currentHook.promise;\n\ndeclare global {\n  // Define the global properties and their types\n  var __metorial_setMcpAuth__: (v: any) => void;\n  var __metorial_getMcpAuth__: () => Promise<any>;\n\n  var __metorial_setServer__: (v: any) => void;\n  var __metorial_getServer__: () => Promise<any>;\n\n  var __metorial_setCallbackHandler__: (v: any) => void;\n  var __metorial_getCallbackHandler__: () => Promise<any>;\n}\n\nexport {};\n"
+    },
+    {
+      "path": "python-lambda-build-image/boot/config.py",
+      "sha": null,
+      "content_sha256": "9130f3ecad9dbca95a9fbde93ace1dceb0e00ff77e97de035133b387e0f2c0c4",
+      "score": 31,
+      "content": "\"\"\"Configuration management for Metorial MCP servers.\"\"\"\nfrom .promise import ProgrammablePromise\nfrom typing import Any, Dict\n\ncurrent_oauth = ProgrammablePromise()\ncurrent_server = ProgrammablePromise()\ncurrent_hook = ProgrammablePromise()\n\ncurrent_args = ProgrammablePromise()\n\ndef set_mcp_auth(value: Any) -> None:\n    \"\"\"Set the OAuth authentication handler.\"\"\"\n    current_oauth.resolve(value)\n\ndef get_mcp_auth() -> Any:\n    \"\"\"Get the OAuth authentication handler.\"\"\"\n    return current_oauth.value\n\ndef set_server(value: Any) -> None:\n    \"\"\"Set the MCP server instance.\"\"\"\n    current_server.resolve(value)\n\ndef get_server() -> Any:\n    \"\"\"Get the MCP server instance.\"\"\"\n    return current_server.value\n\ndef set_callback_handler(value: Any) -> None:\n    \"\"\"Set the callback handler.\"\"\"\n    current_hook.resolve(value)\n\ndef get_callback_handler() -> Any:\n    \"\"\"Get the callback handler.\"\"\"\n    return current_hook.value\n\ndef set_args(args: Dict[str, Any]) -> None:\n    \"\"\"Set the configuration arguments.\"\"\"\n    current_args.resolve(args)\n\ndef get_args() -> Dict[str, Any]:\n    \"\"\"Get the configuration arguments.\"\"\"\n    return current_args.value if current_args.value is not None else {}\n\ndef reset_request_state() -> None:\n    global current_args\n    current_args = ProgrammablePromise()\n"
+    },
+    {
+      "path": "js-lambda-build-image/boot/server.ts",
+      "sha": null,
+      "content_sha256": "571badcda7db6691e2ce2c7512df854fb4552e37e5ddbfa5336d699a9d495c08",
+      "score": 31,
+      "content": "import { Client } from '@modelcontextprotocol/sdk/client/index.js';\nimport type { ClientCapabilities, Notification } from '@modelcontextprotocol/sdk/types.js';\nimport { delay } from './delay';\nimport { DeploymentError } from './error';\nimport { createInProcessTransport } from './transport';\n\ninterface BootOptions {\n  client: {\n    name: string;\n    version: string;\n  };\n  capabilities: ClientCapabilities;\n  notificationListener: (notification: Notification) => Promise<void>;\n}\n\nexport let getClient = async (args: any, opts: BootOptions) => {\n  let server = await Promise.race([\n    globalThis.__metorial_getServer__(),\n    delay(100).then(() => {\n      throw new DeploymentError({\n        code: 'server_start_timeout',\n        message: 'MCP server did not start within 100ms',\n        publicMessage: 'MCP server did not start within 100ms'\n      });\n    })\n  ]);\n\n  if (server.type == 'metorial.server::v1') {\n    server = await server.start(args);\n  }\n\n  let transport = createInProcessTransport();\n  await server.connect(transport.server);\n\n  let client = new Client({\n    name: opts.client.name,\n    version: opts.client.version\n  });\n\n  client.registerCapabilities(opts.capabilities);\n  client.fallbackNotificationHandler = opts.notificationListener;\n\n  await client.connect(transport.client);\n\n  return client;\n};\n"
+    },
+    {
+      "path": "python-lambda-build-image/boot/index.py",
+      "sha": null,
+      "content_sha256": "b438bfe0d8697bb4c6eb35d0541b533437bba4ec1ce4c6c9f16ef25b3f319a72",
+      "score": 31,
+      "content": "\"\"\"Metorial Python Lambda Boot Module Central exports.\"\"\"\n\nfrom .metorial import (\n  create_server,\n  start_server,\n  get_args,\n  set_oauth_handler,\n  set_callback_handler\n)\n\nfrom .boot import (\n  handle_discover,\n  handle_mcp_request,\n  handle_oauth_action,\n  handle_callbacks_action,\n  load_user_server\n)\n\nfrom .config import (\n  set_args,\n  get_args as get_config_args\n)\n\nfrom .oauth import (\n  OAuthHandler,\n  set_oauth,\n  get_oauth\n)\n\nfrom .callbacks import (\n  CallbackHandler,\n  set_callbacks,\n  get_callbacks\n)\n\n__all__ = [\n  # Metorial SDK API\n  'create_server',\n  'start_server',\n  'get_args',\n  'set_oauth_handler',\n  'set_callback_handler',\n  \n  # Bootstrap handlers\n  'handle_discover',\n  'handle_mcp_request',\n  'handle_oauth_action',\n  'handle_callbacks_action',\n  'load_user_server',\n  \n  # Configuration\n  'set_args',\n  'get_config_args',\n  \n  # OAuth\n  'OAuthHandler',\n  'set_oauth',\n  'get_oauth',\n  \n  # Callbacks\n  'CallbackHandler',\n  'set_callbacks',\n  'get_callbacks',\n]\n\n"
+    },
+    {
+      "path": "js-lambda-build-image/boot/callbacks.ts",
+      "sha": null,
+      "content_sha256": "47a910f88f1a5753fcead72c112963157b327235120cf78c06ee2f60ab31c03e",
+      "score": 31,
+      "content": "import { delay } from './delay';\n\nlet getCallbacks = async () => {\n  let prom = globalThis.__metorial_getCallbackHandler__();\n  return await Promise.race([prom, delay(500)]);\n};\n\nexport let callbacks = {\n  get: getCallbacks\n};\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:16:25.884670+00:00"
+}

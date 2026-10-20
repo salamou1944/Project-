@@ -1,0 +1,280 @@
+{
+  "canonical_source": "github:MariaDB/galera",
+  "repo": "MariaDB/galera",
+  "revision_sha": "4e767fc730996e6c7ebee4b6506ee34eba2cec9e",
+  "default_branch": "mariadb-4.x",
+  "pushed_at": "2026-09-25T04:51:37Z",
+  "repo_updated_at": "2026-09-20T19:27:46Z",
+  "license": "GPL-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "tests/scripts/action.sh",
+      "sha": null,
+      "content_sha256": "c78084a5f7b1405658bf804d46396de915d6e3fcdba975097244208fc71385b7",
+      "score": 173,
+      "content": "# Helper to get status variable value\n\nmysql_command()\n{\n    local node=$1\n    if [ \"${NODE_LOCATION[$node]}\" = \"local\" ]\n    then\n        echo \"${NODE_TEST_DIR[$node]}/mysql/bin/mysql\"\n    else\n        echo \"mysql\"\n    fi\n}\n\ncluster_status()\n{\n    local node=$1\n    case \"$DBMS\" in\n        \"MYSQL\")\n            local command=$(mysql_command $node)\n            local res=$($command -u$DBMS_ROOT_USER -p$DBMS_ROOT_PSWD \\\n                -h${NODE_INCOMING_HOST[$node]} -P${NODE_INCOMING_PORT[$node]} \\\n                --skip-column-names -ss \\\n                -e \"SET wsrep_on=0;\n                    SHOW STATUS WHERE Variable_name LIKE 'wsrep_cluster_status'\n                    OR Variable_name LIKE 'wsrep_cluster_size'\" 2>/dev/null)\n            echo -n $res | awk '{ print $4 \":\" $2; }'\n            ;;\n        \"PGSQL\"|*)\n            return -1\n    esac\n}\n\nmysql_query()\n{\n    local node=$1\n    local query=$2\n    local command=$(mysql_command $node)\n\n    $command -u$DBMS_ROOT_USER -p$DBMS_ROOT_PSWD \\\n          -h${NODE_INCOMING_HOST[$node]} -P${NODE_INCOMING_PORT[$node]} \\\n          --skip-column-names -ss -e \"$query\"\n}\n\nwait_node_state()\n{\n    local node=$1\n    local state=$2\n\n    while true\n    do\n        local res=\"-1\"\n\n        case \"$DBMS\" in\n        \"MYSQL\")\n            res=$(mysql_query $node \"SHOW STATUS LIKE 'wsrep_local_state'\" \\\n                  | awk '{ print $2 }')\n            ;;\n        \"PGSQL\"|*)\n            return -1\n        esac\n\n        if [ \"$res\" = \"$state\" ]; then break; fi\n        sleep 1\n    done\n}\n\n#\n# Routines to start|stop|check cluster nodes\n#\n\naction_cmd()\n{\n    local cmd=$1\n    local node=${@:$#}\n    local nargs=$(( $# - 2 ))  # minus cmd and node\n    local args=\"${@:2:$nargs}\" # arguments range from 2 to n-1\n    local dir=\"${NODE_TEST_DIR[$node]}\"\n\n    case \"$DBMS\" in\n    \"MYSQL\")\n        echo -n \"MYSQL_PORT=${NODE_INCOMING_PORT[$node]} \"\\\n                \"\\\"$dir/mysql-galera\\\" $args $cmd\"\n        ;;\n    \"PGSQL\"|*)\n        return -1\n        ;;\n    esac\n}\n\n# By convention node index is the last in the arguments list.\n# So we prepend command to the argument list otherwise it'll go after node\n# index here.\nstart_cmd()\n{\n    action_cmd \"start\" \"$@\"\n}\n\nstop_cmd()\n{\n    action_cmd \"stop\" \"$@\"\n}\n\nrestart_cmd()\n{\n    action_cmd \"restart\" \"$@\"\n}\n\ncheck_cmd()\n{\n    action_cmd \"check\" \"$@\"\n}\n\ndump_cmd()\n{\n    action_cmd \"dump\" \"$@\"\n}\n\naction()\n{\n    start_jobs \"$@\"\n    wait_jobs\n}\n\ndump()\n{\n    action \"dump_cmd\" \"$@\"\n}\n\ncheck()\n{\n    wait_sync $NODE_LIST || true\n\n\n    cmd=\"check_cmd\"\n    ! action \"$cmd\" \"$@\" # ! - to ignore possible connection error\n\n    local -r prefix=\"$BASE_OUT/$cmd\"\n    local node\n    local prev=\"\"\n    local fail=\"\"\n\n    for node in $NODE_LIST\n    do\n        local node_id=\"${NODE_ID[$node]}\"\n        local out=\"${prefix}_${node_id}.out\"\n\n        chk=$(cat \"$out\") # no need to check if file exists:\n                          # should be created even if command fails\n#        echo \"$node_id: ${chk%% -}\"\n\n        if [ -n \"$chk\" ]  # skip 0-length checksum: the node was down\n        then\n            echo \"$chk\" | sed s/-/${node_id}/\n            if [ -z \"$prev\" ]\n            then\n                prev=\"$chk\"\n            else\n                if [ \"$prev\" != \"$chk\" ]\n                then\n                    fail=\"yes\"\n                fi\n            fi\n        fi\n    done\n\n    if [ -z \"$fail\" ] && [ -n \"$prev\" ]; then return 0; fi\n\n    echo \"Checksum failed.\"\n#    for node in $NODE_LIST\n#    do\n#        local node_id=\"${NODE_ID[$node]}\"\n#        echo -n \"$node_id: \"\n#        cat \"${prefix}_$node_id.out\"\n#    done\n\n    return 1\n}\n\n# Query each node with causal reads on to make sure that slave\n# queue has been fully processed.\n# Arguments: list of nodes\nwait_sync()\n{\n    local nodes=${@:-$NODE_LIST}\n\n    local node\n    for node in $nodes\n    do\n        mysql_query \"$node\" \"SET SESSION wsrep_sync_wait=1; select 0;\" 1>/dev/null\n    done\n}\n\n\nstart_node()\n{\n    node_job \"start_cmd\" \"$@\"\n}\n\nstop_node()\n{\n    node_job \"stop_cmd\" \"$@\"\n}\n\nrestart_node()\n{\n    node_job \"restart_cmd\" \"$@\"\n}\n\ndump_node()\n{\n    node_job \"dump_cmd\" \"$@\"\n}\n\n# unlike bulk check this one returns error when the node could not be checked\ncheck_node()\n{\n    local cmd=\"check_cmd\"\n    node_job \"$cmd\" \"$@\"\n\n    local node_id=\"${NODE_ID[$1]}\"\n    cat \"${BASE_OUT}/${cmd}_${node_id}.out\" | sed s/-/${node_id}/\n    return $(cat $BASE_RUN/check_cmd_$node_id.ret)\n}\n\nextra_params()\n{\n    local node=$1\n    local extra_params\n    [ -z \"$GCOMM_EXTRA_PARAMS\" ] && extra_params=\"?\" || extra_params=\"?${GCOMM_EXTRA_PARAMS}&\"\n#    echo \"${extra_params}gmcast.listen_addr=tcp://${NODE_GCS_HOST[$node]}:${NODE_GCS_PORT[$node]}\"\n    echo \"${extra_params}gmcast.listen_addr=tcp://0.0.0.0:${NODE_GCS_PORT[$node]}\"\n}\n\n# return GCS address at which node N should connect to group\ngcs_address()\n{\n    local node=$1\n\n    case \"$GCS_TYPE\" in\n    \"gcomm\")\n        local peer=$(( $node - 1 )) # select previous node as connection peer\n#        local peer=0 # use the first node as a connection handle\n\n        if [ $peer -lt 0 ]; then peer=$NODE_MAX; fi # rollover\n\n        echo \"'gcomm://${NODE_GCS_HOST[$peer]}:${NODE_GCS_PORT[$peer]}$(extra_params $node)'\"\n        ;;\n    \"vsbes\")\n        echo \"'vsbes://$VSBES_ADDRESS'\"\n        ;;\n    *)\n        return 1\n        ;;\n    esac\n}\n\n# start/restart nodes in group mode.\n_cluster_up()\n{\n    local -r cmd=$1\n    shift\n\n    SECONDS=0 # for wait_jobs\n\n    for node in $NODE_LIST\n    do\n        echo \"Starting ${NODE_ID[$node]}\"\n        if [ $node -eq 0 ]\n        then\n            # must make sure 1st node completely operational\n            case \"$GCS_TYPE\" in\n#            \"gcomm\") $cmd \"-g 'gcomm://:${NODE_GCS_PORT[$node]}$(extra_params $node)'\" \"$@\" 0 ;;\n            \"gcomm\") $cmd \"-g $(gcs_address $node) --mysql-opt --wsrep-new-cluster\" \"$@\" 0 ;;\n            \"vsbes\") $cmd \"-g 'vsbes://$VSBES_ADDRESS'\" \"$@\" 0 ;;\n            esac\n        else\n            $cmd \"-g $(gcs_address $node)\" \"$@\" $node &\n        fi\n    done\n    wait_jobs\n}\n\n\n# start/restart nodes in group mode.\nbootstrap()\n{\n    SECONDS=0 # for wait_jobs\n\n    local cnt=0\n    for node in $NODE_LIST\n    do\n        echo \"Starting ${NODE_ID[$node]}\"\n        start_node \"-g $(gcs_address $node)\" \"$@\" $node &\n        cnt=$(($cnt + 1))\n    done\n\n    # TODO: Poll until all have reached non-prim\n    for node in 0 # only one node is sufficient\n    do\n        while true\n        do\n            st=$(cluster_status $node)\n            if test \"x$st\" = \"xnon-Primary:$cnt\"\n            then\n                break;\n            fi\n            sleep 1\n        done\n    done\n\n    # TODO: Figure out how to do this in DBMS indepent way\n    case \"$DBMS\" in\n        \"MYSQL\")\n            mysql -u$DBMS_ROOT_USER -p$DBMS_ROOT_PSWD \\\n                -h${NODE_INCOMING_HOST[0]} \\\n                -P${NODE_INCOMING_PORT[0]} \\\n                -e \"SET GLOBAL wsrep_provider_options='pc.bootstrap=1'\"\n            ;;\n        \"PGSQL\"|*)\n            return -1\n            ;;\n    esac\n\n    # Jobs will finish when nodes reach primary\n    wait_jobs\n}\n\nstart()\n{\n    _cluster_up start_node \"$@\"\n}\n\n_get_status_var()\n{\n# INFORMATION_SCHEMA.GLOBAL_STATUS is deprecated in MySQL >= 5.7\n# SHOW GLOBAL STATUS seems to be more compatible between the versions.\n#    mysql_query \"$1\" \"SELECT VARIABLE_VALUE FROM INFORMATION_SCHEMA.GLOBAL_STATUS WHERE VARIABLE_NAME = '$2'\" 2>/dev/null || echo -1\n    mysql_query \"$1\" \"SHOW GLOBAL STATUS LIKE '$2'\" | tail -n1 | cut -f 2-\n    [ 0 = ${PIPESTATUS[0]} ] || echo -1\n}\n\nstop()\n{\n    SECONDS=0\n\n    local node\n\n    # stop all nodes but the first one (nearly) simultaneously\n    for node in $(seq $NODE_MAX -1 1)\n    do\n        echo \"Stopping ${NODE_ID[$node]}\"\n        stop_node \"$@ $node\" &\n        sleep 1\n    done\n\n    node=0\n\n    # Here we don't care if the node lost PC (it should not but it may)\n    # If it did there is little we can do short of bootstrapping it\n    while [ $(_get_status_var \"$node\" \"wsrep_cluster_size\") -gt 1 ]\n    do\n        sleep 0.2\n    done\n\n    if [ $(_get_status_var \"$node\" \"wsrep_cluster_status\") = \"non-Primary\" ]\n    then\n        mysql_query \"$node\" \"SET GLOBAL wsrep_provider_options='pc.bootstrap=1'\"\n        while [ $(_get_status_var \"$node\" \"wsrep_cluster_status\") = \"non-Primary\" ]\n        do\n            sleep 0.2\n        done\n    fi\n\n    echo \"Stopping ${NODE_ID[$node]}\"\n    stop_node \"$@ $node\" &\n    wait_jobs\n}\n\nrestart()\n{\n    stop\n    _cluster_up start_node \"$@\"\n}\n\n"
+    },
+    {
+      "path": "gcache/bootstrap.sh",
+      "sha": null,
+      "content_sha256": "a54e6e1d8a5381fb612ae7724cf405b00ef3ed1d347124daf13545d6e5f0a978",
+      "score": 173,
+      "content": "#!/bin/sh\n\n# This script bootraps the build process for the freshly checked\n# working copy\n\nLOG=$0.log\n\nrun_prog()\n{\n    echo -n \"Running $1... \"\n    $* 1>$LOG 2>&1 && echo \"Ok\" && rm -f $LOG || \\\n    (echo \"Failed. See $LOG\"; return 1)\n}\nset -e\n# Make aclocal to search for m4 macros in /usr/local\nif test -d /usr/local/share/aclocal\nthen\n    ACLOCAL_OPTS=\" -I /usr/local/share/aclocal \"\nfi\n\nif test -x \"$(which autoreconf)\"\nthen\n    export ACLOCAL=\"aclocal $ACLOCAL_OPTS\"\n    run_prog autoreconf -fisv\nelse\n    run_prog libtoolize && \\\n    run_prog aclocal $ACLOCAL_OPTS && \\\n    run_prog autoheader configure.ac && \\\n    run_prog automake -af && \\\n    run_prog autoconf\nfi\n\n#\n\n"
+    },
+    {
+      "path": "tests/scripts/install.sh",
+      "sha": null,
+      "content_sha256": "819f28df26b1728decd5e7a9f1ddfe04130dae56e9664030e83b68afd8f62953",
+      "score": 173,
+      "content": "#\n# Routines to install distribution on nodes\n#\n\nuntar_cmd()\n{\n    local node=${@:$#}\n    local path=\"${NODE_TEST_DIR[$node]}\"\n    local base=$path/mysql\n    local data=$base/var\n    local hst=$(hostname -s)\n    local SAVE=\"([ -d \\\"$data\\\" ] && rm -rf \\\"$data\\\".saved && mv \\\"$data\\\" \\\"$data\\\".saved || :) && \"\n    local UNTAR=\"mkdir -p \\\"$path\\\" && tar --strip 1 -C \\\"$path\\\" -xzf - && \"\n    local INIT=\"\\\"$base\\\"/bin/init_db.sh \\\"$base\\\" \\\"$DBMS_ROOT_PSWD\\\" \\\"$DBMS_TEST_PSWD\\\" || : && \"\n    local RESTORE=\"([ -d \\\"$data\\\".saved ] && rm -rf \\\"$data\\\" && mv \\\"$data\\\".saved \\\"$data\\\" || :) \"\n    echo -n \"$SAVE $UNTAR $INIT $RESTORE\"\n}\n\ncopy_config()\n{\n    local -r node=$1\n    local cnf\n    local cnf_dir\n    local ca_src=\"$BASE_CONF/galera_ca.pem\"\n    local ca_dst\n    local key_src=\"$BASE_CONF/galera_key.pem\"\n    local key_dst\n    local cert_src=\"$BASE_CONF/galera_cert.pem\"\n    local cert_dst\n\n    case $DBMS in\n    MYSQL)\n        common_cnf=\"$COMMON_MY_CNF\"\n        cnf_src=\"${NODE_MY_CNF[$node]}\"\n        cnf_dst=\"${NODE_TEST_DIR[$node]}/mysql/etc/my.cnf\"\n        ca_dst=\"${NODE_TEST_DIR[$node]}/mysql/var/galera_ca.pem\"\n        key_dst=\"${NODE_TEST_DIR[$node]}/mysql/var/galera_key.pem\"\n        cert_dst=\"${NODE_TEST_DIR[$node]}/mysql/var/galera_cert.pem\"\n        ;;\n    PGSQL|*)\n        echo \"Unsupported DBMS: '$DBMS'\" >&2\n        return 1\n        ;;\n    esac\n\n    if [ -n \"$common_cnf\" ] || [ -n \"$cnf_src\" ]\n    then\n        if [ \"${NODE_LOCATION[$node]}\" = \"local\" ]\n        then\n            ([ -n \"$common_cnf\" ] && cat \"$common_cnf\" && \\\n             [ -n \"$cnf_src\" ]    && cat \"$cnf_src\") > \"$cnf_dst\"\n\n            cat \"$ca_src\"  >  \"$ca_dst\"\n            cat \"$key_src\"  > \"$key_dst\"\n            cat \"$cert_src\" > \"$cert_dst\"\n        else\n            local remote=\"${NODE_LOCATION[$node]}\"\n            ([ -n \"$common_cnf\" ] && cat \"$common_cnf\" && \\\n             [ -n \"$cnf_src\" ]    && cat \"$cnf_src\")    | \\\n            ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \"$remote\" \"cat > $cnf_dst\"\n\n            cat \"$ca_src\"   | ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \"$remote\" \"cat > $ca_dst\"\n            cat \"$key_src\"  | ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \"$remote\" \"cat > $key_dst\"\n            cat \"$cert_src\" | ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \"$remote\" \"cat > $cert_dst\"\n        fi\n    fi\n}\n\ncopy_file_node()\n{\n    set -x\n    local -r src_file=\"$1\"\n    local -r dst_file=\"$2\"\n    local -r node=\"$3\"\n\n    cat \"$src_file\" | ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no \"${NODE_LOCATION[$node]}\" \"cat - > ${NODE_TEST_DIR[$node]}/$dst_file\"\n\n}\n\ncopy_file()\n{\n    local -r src_file=\"$1\"\n    local -r dst_file=\"$2\"\n    start_jobs copy_file_node \"$src_file\" \"$dst_file\"\n}\n\ninstall_node()\n{\n    local dist=$1\n\n    node_job untar_cmd \"$@\"\n}\n\ninstall()\n{\n    local dist=$1\n\n    start_jobs untar_cmd $dist\n\n    wait_jobs\n}\n"
+    },
+    {
+      "path": "docs/README",
+      "sha": null,
+      "content_sha256": "cf6e82e96771c9918167d60fee2a4c3a856a2add2e496e23e3b840880dbfe680",
+      "score": 168,
+      "content": "Documentation moved to https://github.com/codership/documentation\n"
+    },
+    {
+      "path": "tests/scripts/README",
+      "sha": null,
+      "content_sha256": "0b0cd0102175345deb9d77d90644c4c4410dffa702ec4450a0f814ac0cc4806e",
+      "score": 156,
+      "content": "THIS DIRECTORY\n\nThis directory contains a library of cluster manipulation scripts.\n\nThe main idea is facilitation of parallel operations and minimizaiton\nof code duplicaiton.\n\nExecutable file is command.sh. It sources the configuration and the rest of\nthe scripts which implement various functions:\n\njobs.sh - the main file which defines generic command execution framework.\n          It implements parallel and per-node command execution routines and\n\t  enables unified logging behaviour. Other scripts just have to define\n\t  the actual command functions following certain conventions, so far\n\t  there is only one: node index is appended to the list of command line\n\t  parameters, then everything is passed to the function.\n\ninstall.sh - implements a cluster-wide 'install' command which takes a name\n             of the distribution file as the first argument\n\nremove.sh  - implements a cluster-wide \"remove\" command.\n\naction.sh  - usual start/stop/restart/check commands, both cluster-wide and\n             per node.\n\nkill.sh    - a per-node kill -9 command\n\nAssumed convention: cluster-wide commands are just commnads, per-node commands\nhave _node suffix. E.g.\n\n./command.sh start\n\nstarts all nodes,\n\n./command.sh stop_node 1\n\nstops only node number 1. Numbering is 0-based.\n\nIt is intended that each command should implement its own help.\n\n\nSPECIAL FILES AND DIRECTORIES:\n\n../conf directory contains configuration files.\n\nEach command creates at least 4 files named <command>_<node_id>.<ext> where\n<ext> is:\n\nout - standard output of the command\nerr - standard error of the command\npid - pid of the porcess executing command\nret - return code of the command\n\n\"out\" files are placed into $BASE_OUT directory, other files are placed in\n$BASE_RUN. The reason to separate is unclear.\n\n"
+    },
+    {
+      "path": "tests/test_pc_recovery/README",
+      "sha": null,
+      "content_sha256": "b82ae7913c7e9ac8ddf95045f2d1e46042494074095d364a5fde1e00096231f4",
+      "score": 156,
+      "content": "The test runs sqlgen load aganist the cluster, and kills all nodes with -9 to\nsimulate cluster outage. Then restarts nodes and expects them to form PC,\nand then checks consistency.\n\nUsage:\n\n./run.sh [N]\n\nwhere N is the number of simulations. If N is omitted it goes forever.\n"
+    },
+    {
+      "path": "gcache/README",
+      "sha": null,
+      "content_sha256": "6435660b23df6e331dbffc86c35b1ccbcc113d3ec5520b574671b7c302c784ba",
+      "score": 156,
+      "content": "GCache is a library to provide transparent on-disk memory buffer cache.\nThe purpose is to allow (almost) arbitrarily big action cache\nwithout RAM consumption.\n\nIt provides the usual malloc(), realloc(), free() calls plus:\n\nvoid    seqno_assign(void*, int64_t) - assign GCS seqno to a buffer pointed to.\nint64_t seqno_lock_min()             - get the lowest seqno present in cache,\n                                       return its value.\nvoid*   seqno_get_buf(int64_t)       - get a pointer to buffer with a given\n                                       seqno, unlock previously locked seqno\n\t\t\t\t       and lock the current one.\nvoid    seqno_release()              - release currently locked seqno.\n\nDetails will be determined during development.\n\nIt exploits the fact that action buffers are allocated and discarded in order\nclose to their TO.\n"
+    },
+    {
+      "path": "tests/tap/README",
+      "sha": null,
+      "content_sha256": "875fe907262ac4fe2af253ba38749a599de38df4dae0380044cedab53c346dbf",
+      "score": 156,
+      "content": "\nRequired packages to run run_test_set.pl\n\n- TAP::Parser perl module\n  + \n  + Ubuntu package: libtap-parser-perl \n  + CentOS: ?\n  + Directly from CPAN: http://search.cpan.org/dist/TAP-Parser/"
+    },
+    {
+      "path": "tests/test_upgrade/README",
+      "sha": null,
+      "content_sha256": "b1c24fed0b2b089202fb372d35e055ee502988e3e8cdb45d4f6f1990a257dba2",
+      "score": 156,
+      "content": "The test\n - installs demo package pointed to by OLD,\n - starts sqlgen load,\n - checks consistency,\n - upgrades the nodes one by one to distribution pointed to by NEW,\n - checks consistency\n\nUsage:\n\nOLD=<old>.tgz NEW=<new>.tgz ./run.sh\n\nUsage with vsbes backend:\n"
+    },
+    {
+      "path": "tests/test_seesaw/README",
+      "sha": null,
+      "content_sha256": "0feeaf1a874b0d86f4629042dbdc2db9d67bebecef5bef4d332cef0b91417a45",
+      "score": 156,
+      "content": "The test runs sqlgen load against the cluster and in round robin order kills\nand restarts nodes. After each transition consistency check is done. This\nfacilitates testing configration changes under highly concurrent load with lots\nof certification conflicts.\n\nSometimes the first consistency check fails, perhaps due to some race\ncondition. In that case a second consistency check is attempted and if that\nfails the script exits with error code.\n\nUsage with gcomm backend:\n\n./run.sh [N]\n\nUsage with vsbes backend:\n\nGCS_TYPE=vsbes VSBES_ADDRESS=192.168.0.1:5678 ./run.sh [N]\n\nwhere N is the number of off/on transitions. I.e. N=1 means that 1 node will\nbe killed and restarted. If N is omitted it goes forever.\n"
+    },
+    {
+      "path": "tests/test_stopcont/README",
+      "sha": null,
+      "content_sha256": "b74a220addefd75d15122082c8aae4b0b7f67117dfcda11c9ad92546e5a6b4b8",
+      "score": 156,
+      "content": "The test runs sqlgen load against the cluster and in round robin order makes\nnodes stop and continue. After each transition consistency check is done. This\nfacilitates testing crawling nodes.\n\nUsage with gcomm backend:\n\n./run.sh [N]\n\nUsage with vsbes backend:\n\nGCS_TYPE=vsbes VSBES_ADDRESS=192.168.0.1:5678 ./run.sh [N]\n\nwhere N is the number of stop/cont transitions. I.e. N=1 means that 1 node will\nbe killed and restarted. If N is omitted it goes forever.\n"
+    },
+    {
+      "path": "tests/conf/README.md",
+      "sha": null,
+      "content_sha256": "683d763423eac441724a2ae4940fbdf8cc3cae874cb7ee44f1cd3069dbf1eb98",
+      "score": 156,
+      "content": "Certificates\n============\n\nNote: These certificates should be used for testing purposes only.\n\nCertificate and key files in this directory:\n\nSimple key and certificate\n--------------------------\n\nThis key and certificate must be identical on each node:\n- galera_key.pem/galera_cert.pem - standalone key/certificate which\n  can be used for testing in symmetric setups\n\n\nCertificate Chain\n-----------------\n\nKeys and certificates below have been created by using easy-rsa 3 CLI\nutility: https://github.com/OpenVPN/easy-rsa\n\n- galera-ca.pem - Root CA certificate for testing\n- galera-int.pem - Intermediate certificate for testing\n- galera-server-n.key Server private key for node n\n- galera-server-n.pem - Server certificate for node n\n- bundle-galera-server-n.pem File containing both server and intermediate\n                             certificate for node n\n\nSee script gen-cert-chain.sh in this same directory for chain generation."
+    },
+    {
+      "path": "tests/test_drupal/README",
+      "sha": null,
+      "content_sha256": "0d236612a82cb9d4bf238ffe509771eaed2e7351716071afcc036e680320563d",
+      "score": 156,
+      "content": "FILES IN THIS DIRECTORY:\n\nDrupal 5 files (obsolete):\n\ndrupaldb.sql.gz  -- dump of drupal 5 MySQL database\ndrupal.jmx       -- jmeter configuration file\ndrupal5.diff     -- patch to make drupal replay transactions\n\nDrupal 6 files:\n\ndrupal6.10.tgz   -- Drupal 6 installation configured for drupal:password login.\n                    Unpack it into webserver root (/var/www)\ndrupal6.sql.gz   -- dump of drupal 6 MySQL database\ndrupal6_8080.jmx -- jmeter test file for drupal6, verified to work with\n                    127.0.0.1:8080 address\ndrupal6.jmx      -- attempt to make universal test file out of drupal6_8080.jmx\n                    work in progress\n\nloaddb.sh        -- script to create drupal databases and grant permissions.\n\n\nSETTING UP THE NODES:\n\nFirst, running the test requires nodes to be set up: Drupal installed and\nApache configured. This script cannot do it automatically. How to do it is\ndescribed below. It needs to be done only once.\n\nSecond, the address of Drupal site is hardcoded into the Jmeter test\nscript: http://127.0.0.8080/drupal6. This requires glbd be listening on the\nclient host at port 8080, and Drupal files be installed under\n<webserver root>/drupal6 (e.g. /var/www/drupal6 on Ubuntu)\n\n1. Install Drupal 6 in each cluster node so that it can be found at\n   http://<address>/drupal6 path. Configure it to use user 'drupal'\n   and password 'password' to connect to 'drupal6' database. For that edit\n   $db_url setting in sites/default/settings.php\n   \n   Alternatively you can just unpack the provided drupal6.10.tgz package in\n   the webserver root directory and grant webserver rw permissions to it\n\n2. Fix Apache to use clean URLs by adding the following to Apache config\n   (in Ubuntu it is normally /etc/apache2/sites-enabled/000-default):\n\n   <Directory /var/www/drupal6>\n      Options -Indexes FollowSymLinks MultiViews\n      AllowOverride All\n      Order allow,deny\n      allow from all\n   </Directory>\n\nRUNNING THE TEST:\n\n1. Initialize drupal database by running loaddb.sh. See the script for the\n   configuration options. Galera distribution does not come prepared with \n   Drupal user privileges, and currently does not support GRANT command\n   replication. That means that GRANT command must be manually repeated on\n   every node to create drupal user privileges.\n   \n   Alternatively you can run loaddb.sh against each node in turn. After that\n   you need to run it olny one when you want to reset the test.\n   \n2. After database initialization, Drupal needs yet another action to run\n   properly:\n\n   You need to login to your Drupal site as root:rootpass, say, using links,\n   and then go to the following link:\n   \n   Administration->Reports->Status Report->run manually (cron jobs)\n\n   Without doing that, some of the pages for some reason become inaccessible\n   (no idea why) and you'll get false error positives. This procedure needs\n   to be performed every time drupal databse is reloaded. I don't know how to\n   fix that or how to make it automatic.\n\n3. Start glbd on a client machine like that:\n   \n   ./glbd -t 2 8080 node1:80 node2:80 node3:80\n   \n4. Start jmeter:\n\n   $ jmeter --testfile drupal6_8080.jmx\n   \n   Hit Ctrl-R to start the test.\n   \nNOTE1:\nDuring the first few runs it will stop with error about unable to find\nrequested JavaScript file. But after 2-3 runs this file will mysteriously\nappear on all cluster nodes and it won't be a problem after that. One solution\nwould be to keep Drupal files directory on a shared disk.\n\nNOTE2:\nIt is essential to run jmeter in GUI mode to be able to catch and analyze\nerrors.\n"
+    },
+    {
+      "path": "gcache/Makefile.am",
+      "sha": null,
+      "content_sha256": "cd2968f88e306c628b3746abffc503f12a0f907ff3b765d0a3e8c49391ca94aa",
+      "score": 141,
+      "content": "# Copyright (C) 2009 Codership Oy <info@codership.com>\n#  \n# This file is free software; as a special exception the author gives\n# unlimited permission to copy and/or distribute it, with or without \n# modifications, as long as this notice is preserved.\n# \n# This program is distributed in the hope that it will be useful, but\n# WITHOUT ANY WARRANTY, to the extent permitted by law; without even the\n# implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n#\n#EXTRA_DIST = reconf configure\nSUBDIRS = src\n"
+    },
+    {
+      "path": "gcache/src/Makefile.am",
+      "sha": null,
+      "content_sha256": "8488329e25d92278a786ac68ca6835805604a732a8ca81c995c4710cda675d92",
+      "score": 139,
+      "content": "# Copyright (C) 2009 Codership Oy <info@codership.com>\n#\n\nGCACHE_SRCS =               \\\n\tFileDescriptor.cpp  \\\n\tMMap.cpp            \\\n\tGCache.cpp          \\\n\tGCache_header.cpp   \\\n\tGCache_memops.cpp   \\\n\tGCache_seqno.cpp\n\n# Describe libGCACHE library target\n#include_HEADERS   = GCache.hpp\nlib_LTLIBRARIES      = libgcache.la\nlibgcache_la_SOURCES = $(GCACHE_SRCS) $(GCACHE_INCS)\nINTERFACE = 1\nREVISION  = 0\nAGE       = 0\nlibgcache_la_LDFLAGS = \\\n\t@AM_LDFLAGS@ -version-info $(INTERFACE):$(REVISION):$(AGE)\n\n# Desclibe GCACHE_test binary target\nnoinst_PROGRAMS  = test\ntest_SOURCES     = test.cpp\ntest_LDADD       = $(lib_LTLIBRARIES)\ntest_LDFLAGS     = @AM_LDFLAGS@ -static\n\n.PHONY: lib test tags\n\nlib:  $(lib_LTLIBRARIES)\n\n#test: GCACHE_test\n\ntags: TAGS\n\n#SUBDIRS = unit_tests\n#\n"
+    },
+    {
+      "path": "gcache/AUTHORS",
+      "sha": null,
+      "content_sha256": "32872617d6c9fbdd3fd6365ef2e42d152281afe1aad3f2b64e93cd1c5e220e21",
+      "score": 136,
+      "content": "Codership Oy <info@codership.com>\n"
+    },
+    {
+      "path": "gcache/tests/gcache_rb_test.hpp",
+      "sha": null,
+      "content_sha256": "d8b864fef1c5ff702f53025cc3afea48cefc6c0773f5799f56a2d9e907c5245f",
+      "score": 114,
+      "content": "/*\n * Copyright (C) 2011 Codership Oy <info@codership.com>\n *\n * $Id$\n */\n#ifndef __gcache_rb_test_hpp__\n#define __gcache_rb_test_hpp__\n\nextern \"C\" {\n#include <check.h>\n}\n\nextern Suite* gcache_rb_suite();\n\n#endif // __gcache_rb_test_hpp__\n"
+    },
+    {
+      "path": "gcache/tests/gcache_enc_test.hpp",
+      "sha": null,
+      "content_sha256": "f56289f542a5eb19499f4b3025588408d97a1269983f284cd9c0bdad4b94f6d7",
+      "score": 114,
+      "content": "/*\n * Copyright (C) 2019 Codership Oy <info@codership.com>\n *\n * $Id$\n */\n#ifndef __gcache_enc_test_hpp__\n#define __gcache_enc_test_hpp__\n\nextern \"C\" {\n#include <check.h>\n}\n\nextern Suite* gcache_enc_suite();\n\n#endif // __gcache_enc_test_hpp__\n"
+    },
+    {
+      "path": "gcache/tests/gcache_mem_test.hpp",
+      "sha": null,
+      "content_sha256": "4de0061b133f3b3bf05fc8bef2c83bfc5f43898c4d6bb66be9f51e044d40e768",
+      "score": 114,
+      "content": "/*\n * Copyright (C) 2011 Codership Oy <info@codership.com>\n *\n * $Id$\n */\n#ifndef __gcache_mem_test_hpp__\n#define __gcache_mem_test_hpp__\n\nextern \"C\" {\n#include <check.h>\n}\n\nextern Suite* gcache_mem_suite();\n\n#endif // __gcache_mem_test_hpp__\n"
+    },
+    {
+      "path": "gcache/tests/gcache_page_test.hpp",
+      "sha": null,
+      "content_sha256": "2669bc72a29808de278543b3ad005e0b47ca6cbb0dfa31a0f63a283408c81485",
+      "score": 114,
+      "content": "/*\n * Copyright (C) 2010 Codership Oy <info@codership.com>\n *\n * $Id$\n */\n#ifndef __gcache_page_test_hpp__\n#define __gcache_page_test_hpp__\n\nextern \"C\" {\n#include <check.h>\n}\n\nextern Suite* gcache_page_suite();\n\n#endif // __gcache_page_test_hpp__\n"
+    },
+    {
+      "path": "gcache/tests/gcache_top_test.hpp",
+      "sha": null,
+      "content_sha256": "e2418b5d45190b9ee28b936e6e31aa33bf4c014aa6863e58e5e20cf9bfdcb9f6",
+      "score": 114,
+      "content": "/*\n * Copyright (C) 2025 Codership Oy <info@codership.com>\n *\n * $Id$\n */\n#ifndef __gcache_top_test_hpp__\n#define __gcache_top_test_hpp__\n\nextern \"C\" {\n#include <check.h>\n}\n\nextern Suite* gcache_top_suite();\n\n#endif // __gcache_top_test_hpp__\n"
+    },
+    {
+      "path": "gcache/tests/CMakeLists.txt",
+      "sha": null,
+      "content_sha256": "e2d36b315950e84d30bc9a605b4515b0cddc05f99813142bac82cda5f2478804",
+      "score": 114,
+      "content": "#\n# Copyright (C) 2020-2025 Codership Oy <info@codership.com>\n#\n\nadd_executable(gcache_tests\n  gcache_enc_test.cpp\n  gcache_mem_test.cpp\n  gcache_page_test.cpp\n  gcache_rb_test.cpp\n  gcache_top_test.cpp\n  gcache_tests.cpp\n  )\n\n# TODO: Fix\ntarget_compile_options(gcache_tests\n  PRIVATE\n  -Wno-conversion\n  -Wno-unused-parameter\n  )\n\ntarget_link_libraries(gcache_tests gcache ${GALERA_UNIT_TEST_LIBS})\n\nadd_test(\n  NAME gcache_tests\n  COMMAND gcache_tests\n  )\n"
+    },
+    {
+      "path": "gcache/src/gcache_test_encryption.hpp",
+      "sha": null,
+      "content_sha256": "75aa677d6e33e9e51292076dfd599ac8d582f5b23d0ab6aaa242c122ab28da96",
+      "score": 114,
+      "content": "/*\n * Copyright (C) 2019 Codership Oy <info@codership.com>\n */\n\n#ifndef _gcache_test_encryption_hpp_\n#define _gcache_test_encryption_hpp_\n\n#include <wsrep_api.h>\n\nextern \"C\"\nint gcache_test_encrypt_cb(\n    void*                 app_ctx,\n    wsrep_enc_ctx_t*      enc_ctx,\n    const wsrep_buf_t*    input,\n    void*                 output,\n    wsrep_enc_direction_t direction,\n    bool                  fin\n    );\n\n#endif /* _gcache_test_encryption_hpp_ */\n"
+    },
+    {
+      "path": "gcache/tests/gcache_tests.hpp",
+      "sha": null,
+      "content_sha256": "4f760187dff5238915eda241c17e66f6aeb3d4c287c5bfbe0e13e3d6b705d436",
+      "score": 114,
+      "content": "// Copyright (C) 2010-2025 Codership Oy <info@codership.com>\n\n// $Id$\n\n/*!\n * @file: package specific part of the main test file.\n */\n#ifndef __gcache_tests_hpp__\n#define __gcache_tests_hpp__\n\n#include \"gcache_enc_test.hpp\"\n#include \"gcache_mem_test.hpp\"\n#include \"gcache_rb_test.hpp\"\n#include \"gcache_page_test.hpp\"\n#include \"gcache_top_test.hpp\"\n\nextern \"C\" {\n#include <check.h>\n}\n\ntypedef Suite *(*suite_creator_t)(void);\n\nstatic suite_creator_t suites[] =\n{\n    gcache_enc_suite,\n    gcache_mem_suite,\n    gcache_rb_suite,\n    gcache_page_suite,\n    gcache_top_suite,\n    0\n};\n\n#endif /* __gcache_tests_hpp__ */\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 14,
+  "sensitive_files_skipped": [
+    {
+      "path": "tests/conf/bundle-galera-server-1.pem",
+      "sha": "f559d4c8ce37f38f3fad779f7f8f9c03bdb6cd22",
+      "size": 3574,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/bundle-galera-server-2.pem",
+      "sha": "ad4bbaf8b2a986f9b21a4f142265aa918bf66321",
+      "size": 3574,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/bundle-galera-server-3.pem",
+      "sha": "8b343c172128d79a5f5e470ae895504ab089f472",
+      "size": 3574,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-ca.pem",
+      "sha": "a4a410cbbd63fc960815dc28cf0c8c0764aa9ed0",
+      "size": 1781,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-int.pem",
+      "sha": "268ffdbdd4f98129498e0c42df2bc989f88db9d5",
+      "size": 5276,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-server-1.key",
+      "sha": "f00b7a8c0af1368089bbc5ec70813a1f7016d105",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-server-1.pem",
+      "sha": "0009c62f17060fac4ef4b633a95b2a4edbfe975f",
+      "size": 5385,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-server-2.key",
+      "sha": "f2df594d3ebb118b2175f487cd9c521b52d59b2b",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-server-2.pem",
+      "sha": "8a1e1d8b84c4a46e2178365f5c080342ce129738",
+      "size": 5385,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-server-3.key",
+      "sha": "cf32bb77d6725a8ec7c7f099745b207f8942628f",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera-server-3.pem",
+      "sha": "07a83b68e7b91086579f62196980ffba04dbff4b",
+      "size": 5385,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera_ca.pem",
+      "sha": "278bd461b7a101c17f8738f623101bb4ff628560",
+      "size": 1310,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera_cert.pem",
+      "sha": "c284668b5b8837a73d489c4fc871edb2b80494cc",
+      "size": 1164,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/conf/galera_key.pem",
+      "sha": "be1f137b4b3d78b7d26c6d6334e602a22458b927",
+      "size": 1704,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:16:23.276632+00:00"
+}
