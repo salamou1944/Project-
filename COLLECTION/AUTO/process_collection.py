@@ -14,9 +14,12 @@ import datetime, hashlib, json, re, os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-EXTRACTED=Path("COLLECTION/AUTO/EXTRACTED")
-MASTER=Path("COLLECTION/MASTER")
-VERIFY=Path("COLLECTION/VERIFICATION")
+# Resolve every collection path from this file, not the caller's working directory.
+# process_collection.py lives at <repo>/COLLECTION/AUTO/process_collection.py.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+EXTRACTED = REPO_ROOT / "COLLECTION/AUTO/EXTRACTED"
+MASTER = REPO_ROOT / "COLLECTION/MASTER"
+VERIFY = REPO_ROOT / "COLLECTION/VERIFICATION"
 MAX_WORKERS=16
 QUARANTINE_LOCKS=MASTER/"QUARANTINE-LOCKS.json"
 
@@ -171,7 +174,7 @@ def source_files_from_manifest():
             raise SystemExit(f"extracted source has no artifact path: {item.get('canonical_source')}")
         path = Path(raw_path)
         if not path.is_absolute():
-            path = Path.cwd() / path
+            path = REPO_ROOT / path
         path = path.resolve()
         root = EXTRACTED.resolve()
         if root not in path.parents or path.name == "MANIFEST.json" or path.suffix != ".json":
