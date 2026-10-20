@@ -1,0 +1,212 @@
+{
+  "canonical_source": "github:typesense/showcase-ai-image-search",
+  "repo": "typesense/showcase-ai-image-search",
+  "revision_sha": "1827faff2bbb6a643b62d4bf7fec76e50c0fb9f6",
+  "default_branch": "master",
+  "pushed_at": "2025-12-08T03:25:41Z",
+  "repo_updated_at": "2026-04-27T20:25:45Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "clip-model",
+    "clip-vit",
+    "image-search",
+    "similarity-search",
+    "text-to-image-search",
+    "typesense",
+    "typesense-showcase",
+    "vector-search"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "compose.yml",
+      "sha": null,
+      "content_sha256": "c1f13675da92381a6b235592da0bf1f8589c753601bb8da3c90fa362139dd652",
+      "score": 120,
+      "content": "services:\n  typesense:\n    image: typesense/typesense:27.1\n    restart: on-failure\n    ports:\n      - '8108:8108'\n    volumes:\n      - ./typesense-data:/data\n    command: '--data-dir /data --api-key=xyz --enable-cors'\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "af7ddde90837429e9f30f5f81f0df28e4bd495876316a08fc60efc105a19764a",
+      "score": 120,
+      "content": "{\n  \"name\": \"text-to-image-prompts-search\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"next dev\",\n    \"build\": \"next build\",\n    \"start\": \"next start\",\n    \"lint\": \"next lint\",\n    \"start:typesense\": \"docker compose up\",\n    \"index:typesense\": \"npx tsx ./scripts/indexTypesense.ts\"\n  },\n  \"dependencies\": {\n    \"next\": \"^15.1.9\",\n    \"react\": \"^18\",\n    \"react-dom\": \"^18\",\n    \"react-intersection-observer\": \"^9.15.0\",\n    \"react-plock\": \"^3.4.0\",\n    \"typesense\": \"^2.0.0-0\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20\",\n    \"@types/react\": \"^18\",\n    \"@types/react-dom\": \"^18\",\n    \"autoprefixer\": \"^10.4.20\",\n    \"dotenv\": \"^16.4.7\",\n    \"postcss\": \"^8\",\n    \"prettier\": \"^3.4.2\",\n    \"prettier-plugin-tailwindcss\": \"^0.6.9\",\n    \"tailwindcss\": \"^3.4.17\",\n    \"typescript\": \"^5\"\n  }\n}\n"
+    },
+    {
+      "path": "src/components/ImageSearch.tsx",
+      "sha": null,
+      "content_sha256": "3b9464644e324fe4f60875a948ccb99fa18250a9cfaae3da6c0a55e0a1212501",
+      "score": 106,
+      "content": "'use client';\nimport useImageSearch from '@/hooks/useImageSearch';\nimport { useEffect } from 'react';\nimport { useInView } from 'react-intersection-observer';\nimport { SearchParams } from 'typesense/lib/Typesense/Documents';\nimport InfiniteHits from './InfiniteHits';\n\n/*\n * This component make queries to typesense using the props `searchParameters` and render the InfiniteHits\n */\nexport default function ImageSearch({\n  searchParameters,\n}: {\n  searchParameters: SearchParams;\n}) {\n  const { hits, fetchNextPage, isLoading, isLastPage, isNoResults } =\n    useImageSearch(searchParameters);\n  const { ref, inView } = useInView({ threshold: 0.001 });\n\n  // when the div is in view (which mean the user has reached the bottom of the page) -> fetchNextPage\n  useEffect(() => {\n    if (!inView || isLastPage) return;\n    fetchNextPage();\n  }, [inView]);\n\n  const render = () => {\n    if (isLoading) {\n      return <div className='mt-10'>Loading...</div>;\n    } else if (isNoResults) {\n      return <div>No results were found.</div>;\n    } else if (isLastPage) {\n      return <div className='mt-20'>That's all!</div>;\n    } else\n      return <div ref={ref} className='pointer-events-none mt-[-5vmax]'></div>;\n  };\n  return (\n    <section className='flex flex-col items-center'>\n      <div className='w-full overflow-hidden rounded-xl'>\n        <InfiniteHits hits={hits} />\n      </div>\n      <div className='font-mono text-sm'>{render()}</div>\n    </section>\n  );\n}\n"
+    },
+    {
+      "path": "src/utils/capitalizeFirstLetter.ts",
+      "sha": null,
+      "content_sha256": "b17fb29bb8f206a42cf72981c3d082cce8655bc6339147a7ea8fe51a794a98c7",
+      "score": 106,
+      "content": "export function capitalizeFirstLetter(string: string) {\n  return string.charAt(0).toUpperCase() + string.slice(1);\n}\n"
+    },
+    {
+      "path": "src/hooks/useImageSearch.ts",
+      "sha": null,
+      "content_sha256": "66fd9d51667f5941bdc056822f8604541e35a375ed218e8afe1b016a9815cbd8",
+      "score": 106,
+      "content": "import { typesense } from '@/lib/typesense';\nimport { _hit } from '@/types/typesenseResponse';\nimport { useEffect, useRef, useState } from 'react';\nimport { SearchParams } from 'typesense/lib/Typesense/Documents';\n\n/*\n * Search logic for <ImageSearch/>\n */\nexport default function useImageSearch(searchParameters: SearchParams) {\n  const page = useRef(0);\n  const [hits, setHits] = useState<any>([]);\n  const [isLoading, setIsLoading] = useState(false);\n  const [isLastPage, setIsLastPage] = useState(false);\n  const [isNoResults, setIsNoResults] = useState(false);\n\n  useEffect(() => {\n    fetchNextPage();\n  }, []);\n\n  const fetchNextPage = async () => {\n    setIsLoading(true);\n    page.current++;\n    try {\n      const res = await typesense\n        .collections('DiffusionDB')\n        .documents()\n        .search({\n          ...searchParameters,\n          page: page.current,\n        });\n      const isNoHitsReturned = res.hits?.length ? false : true;\n      setIsLastPage(isNoHitsReturned);\n      setHits((prev: _hit[]) => {\n        setIsNoResults(isNoHitsReturned && prev.length === 0 ? true : false);\n        return [...prev, ...(res.hits || [])];\n      });\n    } catch (error) {\n      alert('Sorry, there is an error fetching data!');\n    } finally {\n      setIsLoading(false);\n    }\n  };\n\n  return { hits, fetchNextPage, isLoading, isLastPage, isNoResults };\n}\n"
+    },
+    {
+      "path": "src/components/ImageSimilaritySearch.tsx",
+      "sha": null,
+      "content_sha256": "f2e4cbf1c25ea66d3703ff767137823b01b12baffdf935f2a5eb2b3108546b8e",
+      "score": 106,
+      "content": "'use client';\nimport { _documentSchema } from '@/types/typesenseResponse';\nimport Image from 'next/image';\nimport ImageSearch from './ImageSearch';\nimport { useEffect, useState } from 'react';\nimport Modal from './Modal';\n\n/*\n * This component searches for images using typesense document id\n */\nexport default function ImageSimilaritySearch({\n  imageData,\n}: {\n  imageData: _documentSchema;\n}) {\n  const [modalData, setModalData] = useState<_documentSchema | null>(null);\n\n  // prevent scrolling when showing the modal\n  useEffect(() => {\n    document.body.style.overflowY = modalData ? 'hidden' : 'auto';\n  }, [modalData]);\n\n  return (\n    <>\n      <h3 className=' m-auto my-6 w-max font-mono text-xs font-medium text-white-400'>\n        Showing images similar to...\n      </h3>\n\n      <div\n        className='group relative mb-12 h-[calc(18vh+12vmax)] w-full cursor-pointer'\n        onClick={() => setModalData(imageData)}\n      >\n        <Image\n          className='h-full w-full object-contain'\n          src={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL ?? 'https://ai-image-search-images.typesense.org'}/${imageData.image_name}`}\n          width={0}\n          height={0}\n          sizes='80vw'\n          alt={imageData.prompt}\n          unoptimized\n        />\n        <div className='pointer-events-none absolute inset-0 flex items-end justify-center bg-dark-900 bg-opacity-40 opacity-0 transition group-hover:opacity-100'>\n          <div className='mb-4 font-mono text-xs font-medium'>View more</div>\n        </div>\n      </div>\n\n      <ImageSearch\n        searchParameters={{\n          q: '*',\n          per_page: 25,\n          vector_query: `embedding:([], id:${imageData.id}, distance_threshold: 0.8, k: 100)`,\n          exclude_fields: ['embedding', 'out_of'], // reduce ~98.5% of bytes transferred over network\n        }}\n      />\n      {modalData && (\n        <Modal imageData={modalData} handleClose={() => setModalData(null)} />\n      )}\n    </>\n  );\n}\n"
+    },
+    {
+      "path": "src/components/ImageSearchUsingTextDescriptions.tsx",
+      "sha": null,
+      "content_sha256": "4dcd076daa3907078b7d8dede1e2c0c6b54654a1991f4937060b88ddddcc7c36",
+      "score": 106,
+      "content": "// Thís file is a wrapper to use 'use client' directive\n'use client';\nimport { random } from '@/utils/random';\nimport { useSearchParams } from 'next/navigation';\nimport ImageSearch from '@/components/ImageSearch';\nimport { POPULAR_KEYWORDS } from '@/utils/CONSTANTS';\n\nconst idx = random(0, POPULAR_KEYWORDS.length - 1);\n/*\n * This component make image searches with the URL query param `?q=`\n */\n\nexport default function ImageSearchUsingTextDescriptions() {\n  const searchParams = useSearchParams();\n  const query = searchParams.get('q') || POPULAR_KEYWORDS[idx];\n  return (\n    <ImageSearch\n      searchParameters={{\n        q: query,\n        query_by: 'embedding',\n        per_page: 25,\n        vector_query: `embedding:([], distance_threshold: 0.8, k: 100)`,\n        exclude_fields: ['embedding', 'out_of'], // reduce ~98.5% of bytes transferred over network\n      }}\n      key={query} // unmount the old instance and mount new one when query changes\n    />\n  );\n}\n"
+    },
+    {
+      "path": "src/components/SearchBox.tsx",
+      "sha": null,
+      "content_sha256": "a6d03de78ed6ee3aa67f4943dd362dbecd52e5204d85ecbcd673d1eb5eb90f91",
+      "score": 106,
+      "content": "'use client';\nimport { useRouter, useSearchParams } from 'next/navigation';\nimport { useEffect, useState } from 'react';\nimport Link from 'next/link';\nimport { EXAMPLE_SEARCH_TERMS } from '@/utils/CONSTANTS';\nimport { SearchIcon } from './icons';\n\n/*\n * This component contain a search box and a form that when submitted will push the route to /?q={searchBoxValue}\n */\nexport default function SearchBox({\n  showExampleSearchTerms,\n}: {\n  showExampleSearchTerms?: boolean;\n}) {\n  const router = useRouter();\n  const searchParams = useSearchParams();\n  const q = searchParams.get('q') || '';\n  const [query, setQuery] = useState(q);\n\n  useEffect(() => {\n    setQuery(q);\n  }, [q]);\n\n  return (\n    <>\n      <form\n        className='sticky left-0 right-0 top-1 z-10 flex flex-col items-center'\n        onSubmit={(e) => {\n          e.preventDefault();\n          router.push(`/?q=${query}`);\n        }}\n      >\n        <div className='relative'>\n          <SearchIcon className='absolute top-[50%] ml-4 translate-y-[-50%] fill-white-400' />\n          <input\n            className='h-[5vmax] max-h-12 min-h-10 w-[max(calc(41vw+10rem),350px)] max-w-[95vw] rounded-xl border-2 border-dark-500 bg-dark-500 py-2 pl-10 pr-4 text-sm shadow-2xl shadow-[black] placeholder:text-white-400 placeholder:opacity-50 focus:border-accent focus:border-opacity-40 focus:outline-none md:max-lg:w-[max(calc(35vw+16rem),350px)]'\n            type='text'\n            placeholder='Search for images...'\n            value={query}\n            onChange={(e) => setQuery(e.target.value)}\n          />\n        </div>\n      </form>\n      {showExampleSearchTerms && (\n        <div className='scrollbar-style m-auto mt-2 flex w-[max(calc(41vw+10rem),350px)] max-w-[95vw] gap-1 overflow-x-auto text-nowrap font-mono text-xs text-white-400 md:max-lg:w-[max(calc(35vw+16rem),350px)]'>\n          <span>Select an image below for Similarity Search or </span>\n          <span>try typing:</span>{' '}\n          {EXAMPLE_SEARCH_TERMS.map((item, idx) => (\n            <Link\n              className='group'\n              href={`/?q=${item}`}\n              type='submit'\n              key={item}\n            >\n              <span className='underline underline-offset-2 transition duration-200 group-hover:text-white-300'>\n                {item}\n              </span>\n              {idx < EXAMPLE_SEARCH_TERMS.length - 1 && ','}\n            </Link>\n          ))}{' '}\n        </div>\n      )}\n    </>\n  );\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "78309a911fade209cd99e88ca8f3fa079d4bbdd89711b42bd37ad7994ac58c0d",
+      "score": 100,
+      "content": "<h1>\n 🤖 AI Image Search, powered by Typesense\n</h1>\nThis is a demo that showcase <a href=\"https://typesense.org/docs/26.0/api/image-search.html\" target=\"_blank\">Typesense's Image Search feature</a> which includes:\n\n<br />\n<br />\n\n- Search images using text descriptions of their contents\n- Image Similarity search\n\n🌇 🔍 Live Demo: [ai-image-search.typesense.org](https://ai-image-search.typesense.org)\n\n## Tech Stack\n\n- <a href=\"https://github.com/typesense/typesense\" target=\"_blank\">Typesense</a>\n- <a href=\"https://nextjs.org/\" target=\"_blank\">NextJS</a>\n- Typescript\n- Tailwind\n\nThe data contains 1265 best images out of the first 5000 image-prompt pairs which were taken from <a href=\"https://github.com/poloclub/diffusiondb\" target=\"_blank\">DiffusionDB</a> and then filtered based on aesthetics using <a href=\"https://github.com/kenjiqq/aesthetics-scorer\" target=\"_blank\">aesthetics-scorer</a>.\n\n## Project Structure\n\n```bash\n├── scripts/\n│   ├── data/\n│   │   └── 20-images.json\n│   └── indexTypesense.ts # script that index data from 20-images.json into typesense server\n└── src/\n    ├── app/\n    │   ├── [slug]/\n    │   │   └── page.tsx # explore similar style (search similar images with image)\n    │   └── page.tsx # search images using text descriptions\n    ├── components/\n    │   └── UI components...\n    ├── hooks/\n    │   └── useImageSearch.ts\n    └── lib/\n        └── typesense.ts # typesense client config\n```\n\n## Development\n\nTo run this project locally, make sure you have docker and nodejs, install dependencies and start the dev server:\n\nInstallation\n\n```shell\ngit clone https://github.com/typesense/showcase-ai-image-search.git\n\ncd showcase-ai-image-search\n\nnpm i\n```\n\nStart typesense server\n\n```shell\nnpm run start:typesense # or: docker compose up\n```\n\nDownload sample data:\n\n```shell\n# From the root of the repo:\n\ncurl -o ./scripts/data/20-images.jsonl https://ai-image-search-images.typesense.org/20-images.jsonl\n```\n\nIndex data into typesense\n\n```shell\nnpm run index:typesense\n```\n\nStart the dev server\n\n```shell\nnpm run dev\n```\n\nOpen http://localhost:3000 to see the app ✌️\n\n## Environment\n\nSet env variables in `.env` file to point the app to the Typesense Cluster\n\n```env\nNEXT_PUBLIC_TYPESENSE_SEARCH_ONLY_API_KEY=xxx\nNEXT_PUBLIC_TYPESENSE_HOST=xxx.typesense.net\nNEXT_PUBLIC_TYPESENSE_PORT=443\nNEXT_PUBLIC_TYPESENSE_PROTOCOL=https\nNEXT_PUBLIC_IMAGE_BASE_URL=...\n```\n\nOnly for indexing:\n\n```env\nDIFFUSION_DB_JSONL_FILE=...\nTYPESENSE_ADMIN_API_KEY=...\nINDEXING_BATCH_SIZE=100\n```\n"
+    },
+    {
+      "path": "scripts/data/README.md",
+      "sha": null,
+      "content_sha256": "4d1cb576635df5a425b3d145c4bbe52db6cabe7f6a3499ae07550ce2ca7c8559",
+      "score": 96,
+      "content": "Download sample data by running the following from the scripts/data directory:\n\ncurl -O https://ai-image-search-images.typesense.org/20-images.jsonl"
+    },
+    {
+      "path": "postcss.config.js",
+      "sha": null,
+      "content_sha256": "fa650b380adfabb151a0b352f7135e107e6352345f899060f1c5c231228f94bf",
+      "score": 35,
+      "content": "module.exports = {\n  plugins: {\n    tailwindcss: {},\n    autoprefixer: {},\n  },\n};\n"
+    },
+    {
+      "path": "tsconfig.build.json",
+      "sha": null,
+      "content_sha256": "24df7bc0ceabefcce886557cd7c1735305886e47b2ab2fd98879dc50bc890321",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"allowJs\": true,\n    \"skipLibCheck\": true,\n    \"strict\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"preserve\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ],\n    \"paths\": {\n      \"@/*\": [\"./src/*\"]\n    },\n    \"target\": \"ES2017\"\n  },\n  \"include\": [\"next-env.d.ts\", \"**/*.ts\", \"**/*.tsx\", \".next/types/**/*.ts\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
+    },
+    {
+      "path": "tailwind.config.ts",
+      "sha": null,
+      "content_sha256": "373f1649ff8fc9cd5710b07c554db61a14b66a1aac6a662a5ab9597823dcb1f8",
+      "score": 35,
+      "content": "import type { Config } from 'tailwindcss';\n\nconst config: Config = {\n  content: [\n    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',\n    './src/components/**/*.{js,ts,jsx,tsx,mdx}',\n    './src/app/**/*.{js,ts,jsx,tsx,mdx}',\n  ],\n  theme: {\n    extend: {\n      backgroundImage: {\n        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',\n        'gradient-conic':\n          'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',\n      },\n    },\n    fontFamily: {\n      sans: 'var(--font-inter)',\n      serif: ['ui-serif', 'Georgia'],\n      mono: 'var(--font-roboto-mono)',\n    },\n    colors: {\n      current: 'currentColor',\n      accent: '#d90368',\n      'dark-500': '#232526',\n      'dark-900': '#0f0c0d',\n      'dark-950': '#060606',\n      'white-100': '#F9F9F9',\n      'white-200': '#F5F5F5',\n      'white-300': '#8d7883',\n      'white-400': '#A1A1A1',\n    },\n    fontSize: {\n      xs: ['var(--step--2)', '1rem'],\n      sm: ['var(--step--1)', '1.25rem'],\n      base: 'var(--step-0)',\n      xl: 'var(--step-1)',\n      '2xl': 'var(--step-2)',\n      '3xl': 'var(--step-3)',\n      '4xl': 'var(--step-4)',\n      '5xl': 'var(--step-5)',\n    },\n    keyframes: {\n      fadeIn: {\n        '0%': {\n          opacity: '0',\n        },\n        '100%': {\n          opacity: '1',\n        },\n      },\n    },\n  },\n  plugins: [],\n};\nexport default config;\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "24df7bc0ceabefcce886557cd7c1735305886e47b2ab2fd98879dc50bc890321",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"allowJs\": true,\n    \"skipLibCheck\": true,\n    \"strict\": true,\n    \"noEmit\": true,\n    \"esModuleInterop\": true,\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"preserve\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ],\n    \"paths\": {\n      \"@/*\": [\"./src/*\"]\n    },\n    \"target\": \"ES2017\"\n  },\n  \"include\": [\"next-env.d.ts\", \"**/*.ts\", \"**/*.tsx\", \".next/types/**/*.ts\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
+    },
+    {
+      "path": "scripts/indexTypesense.ts",
+      "sha": null,
+      "content_sha256": "769cdb8bd40d3c888bb9679fb953e8df813ed665ca3b859531d386c056e8db38",
+      "score": 33,
+      "content": "import Typesense from 'typesense';\nimport 'dotenv/config';\nimport fs from 'fs';\nimport readline from 'readline';\nimport { resolve } from 'path';\n\n(async () => {\n  console.log('Connecting to typesense server...');\n\n  const typesense = new Typesense.Client({\n    apiKey: [REDACTED] || 'xyz',\n    nodes: [\n      {\n        host: process.env.NEXT_PUBLIC_TYPESENSE_HOST || 'localhost',\n        port: parseInt(process.env.NEXT_PUBLIC_TYPESENSE_PORT || '8108'),\n        protocol: process.env.NEXT_PUBLIC_TYPESENSE_PROTOCOL || 'http',\n      },\n    ],\n    connectionTimeoutSeconds: 60 * 60,\n  });\n\n  try {\n    await typesense.collections('DiffusionDB').retrieve();\n    console.log('Found existing collection of DiffusionDB');\n\n    if (process.env.FORCE_REINDEX !== 'true')\n      return console.log('FORCE_REINDEX = false. Canceling operation...');\n\n    console.log('Deleting collection');\n    await typesense.collections('DiffusionDB').delete();\n  } catch (err) {\n    console.error(err);\n  }\n\n  console.log('Creating schema...');\n\n  await typesense.collections().create({\n    name: 'DiffusionDB',\n    // there are additional fields in the data but they are display-only so we don't need to specify them\n    fields: [\n      {\n        name: 'image',\n        type: 'image',\n        store: false,\n      },\n      {\n        name: 'embedding',\n        type: 'float[]',\n        embed: {\n          from: ['image'],\n          model_config: {\n            model_name: 'ts/clip-vit-b-p32',\n          },\n        },\n      },\n    ],\n  });\n\n  console.log('Indexing diffusionDB images');\n  await indexData(\n    resolve(\n      __dirname,\n      process.env.DIFFUSION_DB_JSONL_FILE || './data/20-images.jsonl',\n    ),\n  );\n\n  async function indexData(filename: string) {\n    const fileStream = fs.createReadStream(filename);\n    const rl = readline.createInterface({\n      input: fileStream,\n      crlfDelay: Infinity,\n    });\n\n    let batch = [];\n    let batchNumber = 0;\n\n    for await (const line of rl) {\n      if (line.trim()) {\n        batch.push(JSON.parse(line));\n        if (\n          batch.length >= parseInt(process.env.INDEXING_BATCH_SIZE || '100')\n        ) {\n          console.log(`Indexing batch ${++batchNumber}`);\n          await indexBatch(batch);\n          batch = []; // Reset the batch after processing\n        }\n      }\n    }\n    if (batch.length > 0) {\n      console.log(`Indexing batch ${++batchNumber}`);\n      await indexBatch(batch);\n    }\n  }\n\n  async function indexBatch(batch: any[]) {\n    try {\n      const returnData = await typesense\n        .collections('DiffusionDB')\n        .documents()\n        .import(batch);\n      console.log('Return data: ', returnData);\n    } catch (error) {\n      console.error('Batch import error:', error);\n    }\n  }\n})();\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/types/typesenseResponse.ts",
+      "sha": null,
+      "content_sha256": "ab1398cc325a25fb21b72371d4515d246e13acc906a12c84bd0d0cc80b7fe2c6",
+      "score": 31,
+      "content": "import { SearchResponseHit } from 'typesense/lib/Typesense/Documents';\n\nexport type _documentSchema = {\n  id: string;\n  cfg: number;\n  image_name: string;\n  prompt: string;\n  sampler: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;\n  seed: string;\n  step: string;\n};\n\nexport type _hit = SearchResponseHit<_documentSchema>;\n"
+    },
+    {
+      "path": "src/utils/CONSTANTS.ts",
+      "sha": null,
+      "content_sha256": "0c5412301b99ba19259f4794dfe02ef5fed5977732b8c8d4f2c3880391b726c5",
+      "score": 31,
+      "content": "export const SAMPLER = {\n  1: 'ddim',\n  2: 'plms',\n  3: 'k_euler',\n  4: 'k_euler_ancestral',\n  5: 'k_heun',\n  6: 'k_dpm_2',\n  7: 'k_dpm_2_ancestral',\n  8: 'k_lms',\n  9: 'others',\n};\n\nexport const POPULAR_KEYWORDS = [\n  'cat',\n  'fire',\n  'ice',\n  'people',\n  'ocean',\n  'orange',\n  'winter',\n  'drawing',\n  'art',\n  'spaceship',\n  'galaxy',\n  'moon',\n  'neon',\n  'lake landscape',\n  'astronaut',\n  'house',\n];\n\nexport const EXAMPLE_SEARCH_TERMS = [\n  'Green',\n  'Autumn',\n  'City',\n  'Portrait',\n  'Space',\n  'Robot',\n  'Lion'\n];\n"
+    },
+    {
+      "path": "src/components/Heading.tsx",
+      "sha": null,
+      "content_sha256": "96afecd8e6e4388741a5d4f69da739bafda4ea52c724e01ae0d20feb162f9bfa",
+      "score": 31,
+      "content": "import Link from 'next/link';\nexport default function Heading() {\n  return (\n    <div>\n      <Link href={'/'}>\n        <h1 className='m-auto w-max text-3xl font-medium max-sm:text-2xl'>\n          Text to Image and Similarity Search\n        </h1>\n      </Link>\n      <h2 className='m-auto w-max text-sm'>\n        powered by{' '}\n        <a\n          href='https://typesense.org/'\n          target='_blank'\n          rel='noopener noreferrer'\n          className=' text-accent'\n        >\n          type<b>sense|</b>\n        </a>\n      </h2>\n    </div>\n  );\n}\n"
+    },
+    {
+      "path": "src/lib/typesense.ts",
+      "sha": null,
+      "content_sha256": "dd32ede74faa50e4e627d2480673b801d6163b198eb675d1ba69bacd7256ddbb",
+      "score": 31,
+      "content": "import Typesense from 'typesense';\n\nexport const typesense = new Typesense.Client({\n  apiKey: [REDACTED] || 'xyz',\n  nodes: [\n    {\n      host: process.env.NEXT_PUBLIC_TYPESENSE_HOST || 'localhost',\n      port: parseInt(process.env.NEXT_PUBLIC_TYPESENSE_PORT || '8108'),\n      protocol: process.env.NEXT_PUBLIC_TYPESENSE_PROTOCOL || 'http',\n    },\n  ],\n  connectionTimeoutSeconds: 60 * 60,\n});\n\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/components/InfiniteHits.tsx",
+      "sha": null,
+      "content_sha256": "f917c56e2a4d2c93b643308706e369eebb2200d803824a98d6d0c7af11a2d0a8",
+      "score": 31,
+      "content": "import { Masonry } from 'react-plock';\nimport Image from 'next/image';\nimport { capitalizeFirstLetter } from '@/utils/capitalizeFirstLetter';\nimport Link from 'next/link';\nimport { _hit } from '@/types/typesenseResponse';\n\n/*\n * This component render a masonry layout of hits returned by typesense\n */\nexport default function InfiniteHits({ hits }: { hits: _hit[] }) {\n  return (\n    <Masonry\n      items={hits}\n      config={{\n        columns: [2, 4, 5, 6],\n        gap: [3, 3, 3, 3],\n        media: [640, 800, 900, 1024],\n      }}\n      render={({ document }, idx) => {\n        document.prompt = capitalizeFirstLetter(document.prompt);\n        return (\n          <li\n            className='group relative animate-[fadeIn_1s_ease-out_forwards] cursor-pointer list-none overflow-hidden rounded-sm' // react-plock sometimes render one item multiple times\n            title='View similar images'\n            key={document.id + idx}\n          >\n            <Link href={`/${document.id}`}>\n              <Image\n                src={`${process.env.NEXT_PUBLIC_IMAGE_BASE_URL ?? 'https://ai-image-search-images.typesense.org'}/${document.image_name}`}\n                width={0}\n                height={0}\n                sizes='20vw'\n                style={{ width: '100%', height: 'auto' }}\n                alt={document.prompt}\n                unoptimized\n              />\n              <div className='absolute inset-0 flex items-end bg-gradient-to-b  from-[#fff0] to-[black] p-2 opacity-0 transition group-hover:opacity-100'>\n                <span className='line-clamp-3 font-mono text-xs font-medium'>\n                  {document.prompt}\n                </span>\n              </div>\n            </Link>\n          </li>\n        );\n      }}\n    />\n  );\n}\n"
+    },
+    {
+      "path": "src/components/WithSuspense.tsx",
+      "sha": null,
+      "content_sha256": "4e8b47576624a6d7777e76e7e718d8acab6b95e8f1038f71070ea3297e3e2620",
+      "score": 31,
+      "content": "import { Suspense } from 'react';\n\nexport default function WithSuspense({\n  children,\n}: {\n  children: React.ReactNode;\n}) {\n  return (\n    <Suspense\n      fallback={\n        <div className='w-full text-center font-mono text-sm'>Loading...</div>\n      }\n    >\n      {children}\n    </Suspense>\n  );\n}\n"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "sha": null,
+      "content_sha256": "0af85c7759716f5685ebc3dc3f0a23d5d5c6e89e79701d080b3b9339e2ee15da",
+      "score": 31,
+      "content": "import type { Metadata } from 'next';\nimport ImageSearchUsingTextDescriptions from '@/components/ImageSearchUsingTextDescriptions';\nimport SearchBox from '@/components/SearchBox';\nimport Heading from '@/components/Heading';\nimport WithSuspense from '../components/WithSuspense';\n\nexport const metadata: Metadata = {\n  title: 'AI Image Search | Typesense',\n  description: 'Search for images using text descriptions of their content.',\n};\n\nexport default function Home() {\n  return (\n    <>\n      <section className='mb-6'>\n        <Heading />\n      </section>\n\n      <WithSuspense>\n        <SearchBox showExampleSearchTerms />\n      </WithSuspense>\n\n      <section className='mt-[6vmax]'>\n        <WithSuspense>\n          <ImageSearchUsingTextDescriptions />\n        </WithSuspense>\n      </section>\n    </>\n  );\n}\n"
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "sha": null,
+      "content_sha256": "d3be8bef8f1645830ea2c5288e9cb05c2715d2696069be83c85892dab901e1b1",
+      "score": 31,
+      "content": "import type { Metadata } from 'next';\nimport { Inter, Roboto_Mono } from 'next/font/google';\nimport './globals.css';\nimport { GithubIcon } from '@/components/icons';\n\nconst inter = Inter({ subsets: ['latin'], variable: '--font-inter' });\n\nconst robotoMono = Roboto_Mono({\n  weight: '400',\n  subsets: ['latin'],\n  variable: '--font-roboto-mono',\n});\n\nexport const metadata: Metadata = {\n  title: 'Image Similarity Search | Typesense',\n  description:\n    \"Explore similar images, using Typesense's image similarity search.\",\n};\n\nexport default function RootLayout({\n  children,\n}: Readonly<{\n  children: React.ReactNode;\n}>) {\n  return (\n    <html lang='en'>\n      <body\n        className={`${inter.variable} ${robotoMono.variable} px-[4vw] font-sans`}\n      >\n        <header className='flex items-center justify-end py-[4vh]'>\n          <a\n            href='https://github.com/typesense/showcase-ai-image-search'\n            target='_blank'\n            rel='noopener noreferrer'\n            id='typesense'\n            title='Source code'\n          >\n            <GithubIcon className='size-6' />\n          </a>\n        </header>\n        <main className='flex flex-col pb-10'>{children}</main>\n      </body>\n    </html>\n  );\n}\n"
+    },
+    {
+      "path": "src/utils/random.ts",
+      "sha": null,
+      "content_sha256": "b3229c142d59f4980b669630268d2703ac5eb683841a3507fd07acaf8781104c",
+      "score": 31,
+      "content": "export function random(min: number, max: number) {\n  return (\n    (Math.floor(Math.pow(10, 14) * Math.random() * Math.random()) %\n      (max - min + 1)) +\n    min\n  );\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T02:48:27.524625+00:00"
+}

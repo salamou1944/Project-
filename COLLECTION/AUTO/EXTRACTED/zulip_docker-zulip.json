@@ -1,0 +1,211 @@
+{
+  "canonical_source": "github:zulip/docker-zulip",
+  "repo": "zulip/docker-zulip",
+  "revision_sha": "916aeb2348c9648ad2271225f54560ae4c31b655",
+  "default_branch": "main",
+  "pushed_at": "2026-10-01T23:27:02Z",
+  "repo_updated_at": "2026-10-17T22:33:46Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "docker",
+    "helm",
+    "kubernetes",
+    "zulip"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "ci/backup-restore-volume/compose.yaml",
+      "sha": null,
+      "content_sha256": "9043d86bf00ef4215bfff5a0037ab41f9606807ed8818cbb917c44c5b799ad33",
+      "score": 248,
+      "content": "---\nservices:\n  zulip: {}\n"
+    },
+    {
+      "path": "ci/backup-restore/compose.yaml",
+      "sha": null,
+      "content_sha256": "9043d86bf00ef4215bfff5a0037ab41f9606807ed8818cbb917c44c5b799ad33",
+      "score": 248,
+      "content": "---\nservices:\n  zulip: {}\n"
+    },
+    {
+      "path": "docs/how-to/compose-authentication.md",
+      "sha": null,
+      "content_sha256": "d7311fbbdd5a6bbd28836789725f0e1d13ba45b1824418b936f5eaff705bc7d4",
+      "score": 231,
+      "content": "# Compose: Configuring authentication methods\n\nSet `ZULIP_AUTH_BACKENDS` to a comma-separated list of the backend names (e.g.,\n`\"EmailAuthBackend,GoogleAuthBackend\"`). This takes the place of\n`SETTING_AUTHENTICATION_BACKENDS`.\n\n## See also\n\n- {doc}`zulip:production/authentication-methods`\n- {doc}`/reference/environment-vars`\n"
+    },
+    {
+      "path": "ci/backup-restore-volume/test.sh",
+      "sha": null,
+      "content_sha256": "361b6e27e89ac8855495ebe5c1bd8a60590679ba3f21cea83c979a0f092a6d53",
+      "score": 223,
+      "content": "#!/bin/bash\n\nset -eux\nset -o pipefail\n\n# Disaster-recovery restore from a volume tarball onto a clean-slate\n# deployment.  Use case: the host died and we're rebuilding from a\n# tarball that has the full /data contents and the `app:backup` dump\n# file inside it.  Matches docs/how-to/compose-backups.md.\n#\n# See ci/backup-restore/ for the simpler in-place flow.\n\n# Set up state and take a backup; then create more state that the\n# restore should discard.\n\"${manage[@]:?}\" create_realm 'Testing Realm' admin@example.com 'Test Admin' --password very-secret\n\"${docker[@]:?}\" exec zulip /sbin/entrypoint.sh app:backup\n\"${manage[@]}\" create_realm 'Other Realm' admin@example.com 'Test Admin' --password very-secret --string-id other\n\n# Tar the volume contents out.\n\"${docker[@]}\" run --rm -v zulip:/data -v \"$(pwd)\":/backup zulip \\\n    tar czf /backup/zulip-volume.tar.gz -C /data .\n\n# Wipe everything, including all named volumes -- the disaster.\n\"${docker[@]}\" down -v\n\n# Restore the volume contents into a fresh `zulip` volume; the\n# `run --rm` creates the named volume implicitly.\n\"${docker[@]}\" run --rm --no-deps -v zulip:/data -v \"$(pwd)\":/backup zulip \\\n    tar xzf /backup/zulip-volume.tar.gz -C /data\n\n# Restore the database from the dump in the restored `/data/backups/`.\nbackup_file=$(\"${docker[@]}\" run --rm --no-deps zulip ls /data/backups/ | sort | head -n1)\n\"${docker[@]}\" run --rm zulip app:restore \"$backup_file\"\n\n\"${docker[@]}\" up -d --wait\n\n# Verify the data made the round trip: \"Testing Realm\" is back,\n# \"Other Realm\" (which existed only after the backup) is gone.\n\"${manage[@]}\" list_realms | grep \"Testing Realm\"\nif \"${manage[@]}\" list_realms | grep \"Other Realm\"; then\n    exit 1\nfi\n"
+    },
+    {
+      "path": "ci/backup-restore/test.sh",
+      "sha": null,
+      "content_sha256": "16b0597684de1b1457dc4931f72ec1c165e3c4761538be9285fa905161f4b7cd",
+      "score": 223,
+      "content": "#!/bin/bash\n\nset -eux\nset -o pipefail\n\n# In-place restore against an already-configured, running deployment.\n# Use case: undo an \"oops\" -- a bad upgrade, a mistaken migration, or\n# anything else where the volume and surrounding services are healthy\n# and the only thing wrong is the database state.  See\n# ci/backup-restore-volume/ for the disaster-recovery flow.\n\n# One realm, one backup\n\"${manage[@]:?}\" create_realm 'Testing Realm' admin@example.com 'Test Admin' --password very-secret\n\"${docker[@]:?}\" exec zulip /sbin/entrypoint.sh app:backup\n\nif [ \"$(\"${docker[@]}\" exec zulip ls /data/backups/ | wc -l)\" != \"1\" ]; then\n    exit 1\nfi\n\n# Another realm, another backup\n\"${manage[@]}\" create_realm 'Other Realm' admin@example.com 'Test Admin' --password very-secret --string-id other\n\"${docker[@]}\" exec zulip /sbin/entrypoint.sh app:backup\n\nif [ \"$(\"${docker[@]}\" exec zulip ls /data/backups/ | wc -l)\" != \"2\" ]; then\n    exit 1\nfi\n\n\"${manage[@]}\" list_realms | grep \"System bot realm\"\n\"${manage[@]}\" list_realms | grep \"Testing Realm\"\n\"${manage[@]}\" list_realms | grep \"Other Realm\"\n\n# Restoring the original backup gets us back to one realm\nfirst_backup=$(\"${docker[@]}\" exec zulip ls /data/backups/ | sort | head -n1)\n\"${docker[@]}\" exec zulip /sbin/entrypoint.sh app:restore \"$first_backup\"\n\n\"${manage[@]}\" list_realms | grep \"System bot realm\"\n\"${manage[@]}\" list_realms | grep \"Testing Realm\"\nif \"${manage[@]}\" list_realms | grep \"Other Realm\"; then\n    exit 1\nfi\n\n# `run --rm app:restore` against the running stack should refuse,\n# since the live workers are holding persistent DB connections.\nif \"${docker[@]}\" run --rm zulip app:restore \"$first_backup\"; then\n    echo \"FAIL: run --rm app:restore did not refuse against live stack\"\n    exit 1\nfi\n"
+    },
+    {
+      "path": "docs/how-to/compose-incoming-email.md",
+      "sha": null,
+      "content_sha256": "8f4053ed73f1a8c76a4747c3aa473ac09e04c13c9a74620178fadd62431a51fa",
+      "score": 211,
+      "content": "# Compose: Incoming email\n\nThe Docker image exposes port 25, which is already configured with Zulip's\nincoming email server; the Docker Compose configuration defaults to publishing\nthat on port 25.\n\n1. Determine the publicly-accessible hostname where that port 25 is exposed; in\n   this example, we will use `hostname.example.com`. This may or may not be the\n   same as `SETTING_EXTERNAL_HOST`.\n\n1. Decide what email domain to use for the gateway; for this example, we will\n   use `emaildomain.example.com`.\n\n1. Using your DNS provider, create a DNS `MX` (mail exchange) record configuring\n   email for `emaildomain.example.com` to be processed by the\n   publicly-accessible hostname of the Docker host publishing port 25. You can\n   check your work using this command:\n\n   ```console\n   $ dig +short emaildomain.example.com -t MX\n   1 hostname.example.com\n   ```\n\n1. Edit `compose.override.yaml`, and set `SETTING_EMAIL_GATEWAY_PATTERN` to\n   `%s@emaildomain.example.com`:\n\n   ```yaml\n   services:\n     zulip:\n       environment:\n         SETTING_EMAIL_GATEWAY_PATTERN: \"%s@emaildomain.example.com\"\n   ```\n\n1. Start the container deployment with `docker compose up`.\n\n## See also\n\n- {doc}`zulip:production/email-gateway`\n- {doc}`/reference/ports`\n"
+    },
+    {
+      "path": ".github/workflows/dockerfile.yaml",
+      "sha": null,
+      "content_sha256": "a90f34d35a29a68ec8808dcd0aa555c8dec15e3412a799d2250059b9501d5499",
+      "score": 211,
+      "content": "---\nname: Dockerfile lint and build\n\non:\n  pull_request:\n    branches:\n      - main\n\npermissions: {}\n\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - uses: hadolint/hadolint-action@2332a7b74a6de0dda2e2221d575162eba76ba5e5 # v3.3.0\n\n  build:\n    runs-on: ubuntu-latest\n    needs: lint\n    permissions:\n      contents: read\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0\n\n      - name: Get commit SHA for current 12.x tip\n        id: get-sha\n        run: |\n          COMMIT=$(git ls-remote https://github.com/zulip/zulip.git refs/heads/12.x | cut -f1)\n          echo \"commit_sha=$COMMIT\" >> $GITHUB_OUTPUT\n\n      - name: Build\n        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0\n        with:\n          context: .\n          tags: zulip/zulip-server:pr-${{ github.event.pull_request.number }}\n          outputs: type=docker,dest=/tmp/image.tar\n          build-args: |\n            ZULIP_GIT_REF=${{ steps.get-sha.outputs.commit_sha }}\n          cache-from: type=registry,ref=ghcr.io/zulip/zulip-server:buildcache-linux-amd64\n\n      - name: Upload image\n        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1\n        with:\n          name: docker-image\n          path: /tmp/image.tar\n          retention-days: 1\n\n  helm-docs:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Run helm-docs\n        uses: losisin/helm-docs-github-action@3a4528e97c49a5e83de6b78c50c61c8ee5c9f944 # v2.0.0\n\n      - name: Run prettier over the re-generated docs\n        run: npm install && npx prettier --write helm/zulip/README.md\n\n      - name: Check for any diff\n        run: |\n          if ! git diff HEAD --exit-code; then\n            echo \"Changes found!\"\n            git status\n            git diff HEAD\n            exit 1\n          fi\n\n  helm-lint:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Set up Helm\n        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1\n        with:\n          version: v3.20.0\n\n      - name: Build chart dependencies\n        run: helm dependency build helm/zulip/\n\n      - name: Install kubeconform\n        run: |\n          curl -sSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \\\n            | tar xz -C /usr/local/bin\n\n      - name: Helm lint and kubeconform\n        run: |\n          for f in helm/zulip/ci/*-values.yaml; do\n            helm lint helm/zulip/ --strict -f \"$f\"\n\n            helm template test-release helm/zulip/ -f \"$f\" \\\n              | kubeconform -strict -summary \\\n                  -kubernetes-version 1.32.0 \\\n                  -ignore-missing-schemas\n          done\n\n      - name: Install helm-unittest\n        run: helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.0.3\n\n      - name: Run unit tests\n        run: helm unittest helm/zulip/\n\n  helm-test:\n    runs-on: ubuntu-latest\n    needs:\n      - build\n      - helm-lint\n    strategy:\n      fail-fast: false\n      matrix:\n        values:\n          - simple-values.yaml\n          - persistence-values.yaml\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Set up Helm\n        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1\n        with:\n          version: v3.20.0\n\n      - name: Build chart dependencies\n        run: helm dependency build helm/zulip/\n\n      - name: Create kind cluster\n        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0\n        with:\n          cluster_name: helm-test\n\n      - name: Download image\n        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1\n        with:\n          name: docker-image\n          path: /tmp\n\n      - name: Load image into kind\n        run: |\n          docker load --input /tmp/image.tar\n          kind load docker-image zulip/zulip-server:pr-${{ github.event.pull_request.number }} --name helm-test\n\n      - name: Install chart\n        run: |\n          helm install zulip helm/zulip/ \\\n            -f \"helm/zulip/ci/${{ matrix.values }}\" \\\n            --set image.tag=pr-${{ github.event.pull_request.number }} \\\n            --wait --timeout 10m\n\n      - name: Run functional tests\n        timeout-minutes: 5\n        run: |\n          pod=$(kubectl get pods -l app.kubernetes.io/name=zulip -o jsonpath='{.items[0].metadata.name}')\n          kubectl port-forward svc/zulip 8080:80 &\n          PF_PID=$!\n          # Wait for port-forward to be ready\n          for i in $(seq 1 30); do\n            if curl -sf http://localhost:8080/health \\\n                 -H \"Host: zulip.example.net\"; then\n              break\n            fi\n            sleep 2\n          done\n          helm/zulip/ci/test.sh \"$pod\" 8080\n          kill $PF_PID || true\n\n      - name: Fetch logs\n        if: success() || failure()\n        continue-on-error: true\n        run: |\n          kubectl get pods\n          for pod in $(kubectl get pods -o name); do\n              kubectl describe \"$pod\"\n          done\n          pod=$(kubectl get pods -l app.kubernetes.io/name=zulip --output name)\n          kubectl logs \"$pod\"\n          kubectl exec \"$pod\" -c zulip -- cat /var/log/zulip/errors.log\n\n  docker-compose-collect:\n    runs-on: ubuntu-latest\n    outputs:\n      dirs: ${{ steps.dirs.outputs.dirs }}\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - id: dirs\n        run: echo \"dirs=$(ls -d ci/*/ | jq -Rnc '[inputs]')\" >> ${GITHUB_OUTPUT}\n\n  docker-compose-test:\n    runs-on: ubuntu-latest\n    needs:\n      - build\n      - docker-compose-collect\n    env:\n      GITHUB_CI_IMAGE: zulip/zulip-server:pr-${{ github.event.pull_request.number }}\n      # Applied to every `docker compose` invocation that doesn't\n      # pass its own -f flags. The \"Run tests\" step builds an\n      # explicit chain because some per-scenario test scripts extend\n      # it with additional -f arguments, and command-line -f\n      # replaces COMPOSE_FILE rather than extending it.\n      # matrix.dir already ends with a slash from `ls -d ci/*/`.\n      COMPOSE_FILE: compose.yaml:ci/base.yaml:${{ matrix.dir }}compose.yaml\n      COMPOSE_ENV_FILES: ci/base.env\n    strategy:\n      fail-fast: false\n      matrix:\n        dir: ${{ fromJson(needs.docker-compose-collect.outputs.dirs) }}\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0\n\n      - name: Download image\n        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1\n        with:\n          name: docker-image\n          path: /tmp\n\n      - name: Load image\n        run: docker load --input /tmp/image.tar\n\n      - name: Verify Docker Compose config\n        run: docker compose config\n\n      - name: Start Docker Compose services\n        run: docker compose up -d --no-build\n\n      - name: Wait for services to be healthy\n        timeout-minutes: 5\n        run: |\n          echo \"Waiting for zulip service to be healthy...\"\n          until docker inspect --format \"{{.State.Health.Status}}\" $(docker compose ps -q zulip) | grep -q healthy; do sleep 5; done\n\n      - name: Verify all services are running\n        run: |\n          docker compose logs zulip\n          docker compose ps\n          # Check that no services are in a failed state\n          if docker compose ps | grep -E \"(Exit|Restarting)\"; then\n            exit 1\n          fi\n\n      - name: Run tests\n        timeout-minutes: 15\n        run: |\n          docker=(\"docker\" \"compose\" \\\n                  \"-f\" \"compose.yaml\" \\\n                  \"-f\" \"ci/base.yaml\" \\\n                  \"--env-file\" \"ci/base.env\" \\\n                  \"-f\" \"$DIR/compose.yaml\")\n          manage=(\"${docker[@]}\" \"exec\" \"-u\" \"zulip\" \"zulip\"\n                  \"/home/zulip/deployments/current/manage.py\")\n          hostname=\"localhost\"\n          source \"$DIR/test.sh\"\n        env:\n          DIR: ${{ matrix.dir }}\n\n      - name: Check service logs for critical errors\n        if: success() || failure()\n        continue-on-error: true\n        run: |\n          docker compose ps\n          docker compose logs zulip\n"
+    },
+    {
+      "path": "docs/how-to/compose-backups.md",
+      "sha": null,
+      "content_sha256": "cca23cdc85557654c017a7a4b8e63a913c2e0bbc801bc42903b09101a2d1af2f",
+      "score": 211,
+      "content": "# Compose: Backups\n\nZulip's persistent state in a Compose deployment lives under the\n`zulip` named Docker volume mounted at `/data`. A snapshot of that\nvolume captures everything Zulip needs to restore the deployment —\nuploads, configuration, certificates, secrets, and a recent\n`pg_dump` written into `/data/backups/` by the `app:backup` command.\nSee {doc}`/reference/data-volume` for the layout and the full backup\nmodel.\n\n(compose-volume-snapshot)=\n\n## Take a backup\n\nRefresh the database dump and snapshot the volume, using\n[Docker's recommended pattern for backing up data volumes](https://docs.docker.com/engine/storage/volumes/#back-up-restore-or-migrate-data-volumes):\n\n```bash\ndocker compose exec zulip /sbin/entrypoint.sh app:backup\ndocker compose run --rm -v zulip:/data -v $(pwd):/backup zulip \\\n  tar czf /backup/backup.tar.gz -C /data .\n```\n\nThe first command writes a fresh `pg_dump` into `/data/backups/`; the\nsecond mounts the named volume into an ephemeral container and tars\nits contents out to `backup.tar.gz` in the host's current directory.\n\n`app:backup` also runs on a daily schedule by default (see\n{ref}`auto-backup-enabled` and {ref}`auto-backup-interval`), so the\nvolume already holds a reasonably fresh dump for on-demand snapshots;\nthe explicit `app:backup` call above just guarantees the dump is as\ncurrent as possible.\n\n## Get just the database dump off-box\n\nIf you only need to ship the database dumps off-box, copy them out\ndirectly:\n\n```bash\ndocker compose cp zulip:/data/backups/ ./backups/\n```\n\n## Restore from a backup\n\nWith the stack stopped (or before bringing it up for the first time\non this host), untar the backup volume into a fresh `zulip` named\nvolume and restore the database from the dump inside it:\n\n```bash\ndocker compose down -v               # wipe any existing state on this host\ndocker compose run --rm --no-deps -v zulip:/data -v $(pwd):/backup zulip \\\n  tar xzf /backup/backup.tar.gz -C /data\ndocker compose run --rm zulip app:restore <filename>\ndocker compose up -d --wait\n```\n\n`<filename>` is one of the `backup-*.sql` files in the restored\n`/data/backups/` directory. See {ref}`app:restore <app-restore>`.\n\nTo restore in-place against a running stack (e.g. to undo a bad\nmigration), skip the volume restore and use `exec` against the\nrunning container instead:\n\n```bash\ndocker compose exec zulip /sbin/entrypoint.sh app:restore <filename>\n```\n\nThe container will report unhealthy briefly while the in-place\nrestore is in progress, and returns to healthy when it completes.\n\n## Off-site database backups\n\nFor continuous off-site database backups independent of the\nvolume-snapshot path, Zulip supports\n{ref}`WAL-based archiving via wal-g <zulip:wal-g>`, which streams\nwrite-ahead logs to S3 for point-in-time recovery.\n\n## See also\n\n- {doc}`/reference/data-volume`\n- {doc}`/reference/app-commands`\n- {doc}`compose-upgrading`\n"
+    },
+    {
+      "path": ".github/workflows/dockerfile-build.yaml",
+      "sha": null,
+      "content_sha256": "448c125adaefa698bf9e08f5691eb262050e21efeb1ce888cd63de4dcaee282b",
+      "score": 211,
+      "content": "---\nname: Build and push images to ghcr.io/zulip/zulip-server\n\non:\n  push:\n    branches:\n      - main\n    tags:\n      # Image-release tags are bare-numeric: <zulip-version>-<docker-revision>.\n      # This pattern also matches existing legacy tags (e.g. 9.4-0,\n      # 11.6-0); tag pushes only fire on creation, so existing legacy\n      # tags do not re-trigger the workflow as long as they are not\n      # force-pushed.\n      - \"[0-9]*.[0-9]*-[0-9]*\"\n\npermissions: {}\n\nenv:\n  PACKAGE_NAME: ghcr.io/zulip/zulip-server\n\njobs:\n  build:\n    if: github.repository_owner == 'zulip'\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - platform: linux/amd64\n            runner: ubuntu-latest\n          - platform: linux/arm64\n            runner: ubuntu-24.04-arm\n    runs-on: ${{ matrix.runner }}\n    permissions:\n      contents: read\n      packages: write\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Prepare\n        run: |\n          platform=${{ matrix.platform }}\n          echo \"PLATFORM_PAIR=${platform//\\//-}\" >> $GITHUB_ENV\n\n      - name: Docker meta\n        id: meta\n        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0\n        with:\n          images: ${{ env.PACKAGE_NAME }}\n          tags: |\n            type=ref,event=branch\n            type=match,pattern=(\\d+\\.\\d+-\\d+),group=1\n          labels: |\n            org.opencontainers.image.description=Zulip Server\n            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/zulip/docker-zulip/${{ github.sha }}/README.md\n          annotations: |\n            org.opencontainers.image.description=Zulip Server\n        env:\n          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0\n\n      - name: Log in to GHCR\n        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Get commit SHA for current 12.x tip\n        id: tip-sha\n        if: github.ref_type == 'branch'\n        run: |\n          COMMIT=$(git ls-remote https://github.com/zulip/zulip.git refs/heads/12.x | cut -f1)\n          echo \"override=ZULIP_GIT_REF=$COMMIT\" >> $GITHUB_OUTPUT\n\n      - name: Build and push Docker image\n        id: build\n        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0\n        with:\n          context: .\n          platforms: ${{ matrix.platform }}\n          pull: true\n          tags: ${{ env.PACKAGE_NAME }}\n          labels: ${{ steps.meta.outputs.labels }}\n          annotations: ${{ steps.meta.outputs.annotations }}\n          build-args: |\n            ${{ steps.tip-sha.outputs.override }}\n          cache-from: type=registry,ref=ghcr.io/zulip/zulip-server:buildcache-${{ env.PLATFORM_PAIR }}\n          cache-to: type=registry,ref=ghcr.io/zulip/zulip-server:buildcache-${{ env.PLATFORM_PAIR }},mode=max\n          outputs: type=image,push-by-digest=true,name-canonical=true,push=true\n\n      - name: Export digest\n        run: |\n          mkdir -p ${{ runner.temp }}/digests\n          digest=\"$DIGEST\"\n          touch \"${{ runner.temp }}/digests/${digest#sha256:}\"\n        env:\n          DIGEST: ${{ steps.build.outputs.digest }}\n\n      - name: Upload digest\n        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1\n        with:\n          name: digests-${{ env.PLATFORM_PAIR }}\n          path: ${{ runner.temp }}/digests/*\n          if-no-files-found: error\n          retention-days: 1\n\n  merge:\n    runs-on: ubuntu-latest\n    needs:\n      - build\n    permissions:\n      packages: write\n    steps:\n      - name: Download digests\n        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1\n        with:\n          path: ${{ runner.temp }}/digests\n          pattern: digests-*\n          merge-multiple: true\n\n      - name: Docker meta\n        id: meta\n        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0\n        with:\n          images: ${{ env.PACKAGE_NAME }}\n          tags: |\n            type=ref,event=branch\n            type=match,pattern=(\\d+\\.\\d+-\\d+),group=1\n          annotations: |\n            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/zulip/docker-zulip/${{ github.sha }}/README.md\n            org.opencontainers.image.description=Zulip Server\n        env:\n          DOCKER_METADATA_ANNOTATIONS_LEVELS: index\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0\n\n      - name: Log in to GHCR\n        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Create manifest list and push\n        working-directory: ${{ runner.temp }}/digests\n        run: |\n          set -x\n          IFS=$'\\n'\n          ANNOTATIONS_LIST=($DOCKER_METADATA_OUTPUT_ANNOTATIONS)\n          TAGS_LIST=($DOCKER_METADATA_OUTPUT_TAGS)\n          docker buildx imagetools create \\\n            $(for tag in \"${TAGS_LIST[@]}\"; do echo \"--tag\"; echo \"$tag\"; done) \\\n            $(for annotation in \"${ANNOTATIONS_LIST[@]}\"; do echo \"--annotation\"; echo \"$annotation\"; done) \\\n            $(for reference in *; do printf \"${PACKAGE_NAME}@sha256:%s\\n\" $reference; done)\n\n      - name: Inspect image\n        run: |\n          docker buildx imagetools inspect ${PACKAGE_NAME}:${STEPS_META_OUTPUTS_VERSION}\n        env:\n          STEPS_META_OUTPUTS_VERSION: ${{ steps.meta.outputs.version }}\n\n  release:\n    if: github.ref_type == 'tag' && github.repository_owner == 'zulip'\n    runs-on: ubuntu-latest\n    needs:\n      - merge\n    permissions:\n      contents: write\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Extract changelog section\n        env:\n          TAG: ${{ github.ref_name }}\n        run: .github/scripts/extract-changelog.py\n\n      - name: Create or update GitHub release\n        env:\n          TAG: ${{ github.ref_name }}\n          GH_TOKEN: ${{ github.token }}\n          GH_REPO: ${{ github.repository }}\n        run: |\n          title=\"Zulip Server $TAG\"\n          if gh release view \"$TAG\" >/dev/null 2>&1; then\n            gh release edit \"$TAG\" --title \"$title\" --notes-file release-notes.md\n          else\n            gh release create \"$TAG\" \\\n              --title \"$title\" \\\n              --notes-file release-notes.md \\\n              --verify-tag\n          fi\n"
+    },
+    {
+      "path": ".github/workflows/helm-push.yaml",
+      "sha": null,
+      "content_sha256": "7927984636f37bf14f4381f0d9d5dfd170bab74d0b277b0b2b5170df1384ba5f",
+      "score": 198,
+      "content": "---\nname: Push Helm chart to ghcr.io/zulip/helm-charts/zulip\n\non:\n  push:\n    tags:\n      - \"helm-*\"\n\npermissions: {}\n\njobs:\n  push:\n    if: github.repository_owner == 'zulip'\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      packages: write\n    steps:\n      - name: Checkout\n        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n\n      - name: Validate tag matches Chart.yaml version\n        run: |\n          set -eu\n          tag_version=\"${GITHUB_REF_NAME#helm-}\"\n          chart_version=\"$(yq '.version' helm/zulip/Chart.yaml)\"\n          if [ \"$tag_version\" != \"$chart_version\" ]; then\n            echo \"::error::Tag version ($tag_version) does not match Chart.yaml version ($chart_version)\"\n            exit 1\n          fi\n          echo \"version=$chart_version\" >> \"$GITHUB_OUTPUT\"\n        id: version\n\n      - name: Log in to GHCR\n        run: echo \"$GITHUB_TOKEN\" | helm registry login ghcr.io --username \"$GITHUB_ACTOR\" --password-stdin\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          GITHUB_ACTOR: ${{ github.actor }}\n\n      - name: Build chart dependencies\n        run: helm dependency build helm/zulip\n\n      - name: Package and push chart\n        run: |\n          set -eu\n          helm package helm/zulip\n          helm push \"zulip-${VERSION}.tgz\" oci://ghcr.io/zulip/helm-charts\n        env:\n          VERSION: ${{ steps.version.outputs.version }}\n"
+    },
+    {
+      "path": "ci/legacy-env/compose.yaml",
+      "sha": null,
+      "content_sha256": "e89b5ad8663ada1554875be82fc4629ea68a9f3bc245211c536d61efe288eef3",
+      "score": 188,
+      "content": "---\n# No overrides: the bare base config must come up healthy. The test\n# below then spawns ephemeral containers with legacy env vars set, and\n# verifies the entrypoint rejects each with a helpful message.\nservices:\n  zulip: {}\n"
+    },
+    {
+      "path": "ci/memory/compose.yaml",
+      "sha": null,
+      "content_sha256": "c08bfac402cd61b675844f1267beb0b07a91af8272020cfe5d18e2a688b8da44",
+      "score": 188,
+      "content": "---\nservices:\n  zulip:\n    deploy:\n      resources:\n        limits:\n          # This is enough to trip into multi-process queue workers\n          memory: 4000m\n"
+    },
+    {
+      "path": "ci/basic/compose.yaml",
+      "sha": null,
+      "content_sha256": "0d6590591a0fbf7cb1a51cd161ce10f9f5f54160c4ecc0f8dfaa87e000c4002b",
+      "score": 188,
+      "content": "---\nservices:\n  zulip:\n    environment:\n      CERTIFICATES: self-signed\n"
+    },
+    {
+      "path": "ci/manual_configuration/compose.yaml",
+      "sha": null,
+      "content_sha256": "9adca5c4eab606467d68918b13d94f08a51031053d0ac637976555b306d43b6f",
+      "score": 188,
+      "content": "---\nservices:\n  zulip:\n    environment:\n      MANUAL_CONFIGURATION: True\n"
+    },
+    {
+      "path": "docs/pyproject.toml",
+      "sha": null,
+      "content_sha256": "5b5ffcf624493fbd3000b7becb02e391d2dd0c2536f179c7c87d59209aa38ba7",
+      "score": 188,
+      "content": "[project]\n# This version information exists purely for the docs.\nname = \"docker-zulip\"\nversion = \"0.1.0\"\ndescription = \"Add your description here\"\nreadme = \"README.md\"\nrequires-python = \">=3.14\"\ndependencies = [\n    \"myst-parser\",\n    \"pyyaml>=6.0.3\",\n    \"sphinx\",\n    \"sphinx-autobuild>=2025.8.25\",\n    \"sphinx-copybutton\",\n    \"sphinx-rtd-theme\",\n]\n"
+    },
+    {
+      "path": "ci/config/compose.yaml",
+      "sha": null,
+      "content_sha256": "ce6e150f874899067fb6d8e6f4e93d0f03b1417b081e91a6c74b5fd0830c19fb",
+      "score": 188,
+      "content": "---\nservices:\n  zulip:\n    environment:\n      SETTING_FOO_BAR: 1\n      CONFIG_application_server__katex_server: false\n      CONFIG_http_proxy__allow_ranges: 10.0.0.0/8\n"
+    },
+    {
+      "path": "ci/settings/compose.yaml",
+      "sha": null,
+      "content_sha256": "986ffe2ea1ec02a0a3c78be4cc28df90c471adb9d412b98ed2d86778e853fb15",
+      "score": 188,
+      "content": "---\nservices:\n  zulip:\n    environment:\n      ZULIP_AUTH_BACKENDS: EmailAuthBackend,ZulipLDAPAuthBackend\n      ZULIP_CUSTOM_SETTINGS: |\n        # Custom settings start here\n        from django_auth_ldap.config import GroupOfUniqueNamesType\n      SETTING_EXTERNAL_HOST: 4-you.example.com\n      SETTING_INSTALLATION_NAME: \"We love Apos'trophes and Back\\\\slashes\"\n      SETTING_AUTH_LDAP_SERVER_URI: ldaps://ldap.example.com\n      SETTING_AUTH_LDAP_GROUP_TYPE: GroupOfUniqueNamesType()\n      SETTING_AUTH_LDAP_USER_SEARCH: |\n        LDAPSearch(\n            \"ou=users,dc=example,dc=com\", ldap.SCOPE_SUBTREE, \"(sAMAccountName=%(user)s)\"\n        )\n      SETTING_AUTH_LDAP_USER_ATTR_MAP: '{\"full_name\": \"cn\", \"unique_account_id\": \"dn\"}'\n      SETTING_LDAP_SYNCHRONIZED_GROUPS_BY_REALM: |\n        {\n          \"subdomain1\": [\n              \"group1\",\n              \"group2\",\n          ]\n        }\n      SETTING_LDAP_DEACTIVATE_NON_MATCHING_USERS: TRUE\n      SETTING_LDAP_APPEND_DOMAIN: none\n      SETTING_LDAP_EMAIL_ATTR: None\n      SETTING_ALLOWED_HOSTS: '[\"somehost.example.com\", \"otherhost.example.com\"]'\n      SETTING_OUTGOING_WEBHOOK_TIMEOUT_SECONDS: 30\n"
+    },
+    {
+      "path": "ci/http-only/compose.yaml",
+      "sha": null,
+      "content_sha256": "a8de2d2adec0c6b5ea1289cc6530a0030201a3f6f7f45c42d6e4558a0a002e0f",
+      "score": 188,
+      "content": "---\nservices:\n  zulip:\n    networks: [zulip-backend]\n\n  database:\n    networks: [zulip-backend]\n  memcached:\n    networks: [zulip-backend]\n  rabbitmq:\n    networks: [zulip-backend]\n  redis:\n    networks: [zulip-backend]\n\nnetworks:\n  zulip-backend:\n    driver: bridge\n    ipam:\n      driver: default\n      config:\n        - subnet: 172.28.0.0/16\n          ip_range: 172.28.5.0/24\n          gateway: 172.28.5.254\n"
+    },
+    {
+      "path": "ci/certbot/compose.yaml",
+      "sha": null,
+      "content_sha256": "511525b8b424258aeaf5cfeb2dd00b25fc4e49b10e9a879970adc5322f38a7d7",
+      "score": 188,
+      "content": "---\nservices:\n  zulip:\n    environment:\n      CERTIFICATES: certbot\n      # This is purely to make the logs easier to skim -- certbot logs this\n      # warning about the connection to pebble.\n      PYTHONWARNINGS: \"ignore:Unverified HTTPS request\"\n    networks:\n      zulip-backend:\n        ipv4_address: 172.28.5.100\n    depends_on:\n      - pebble\n    volumes: !override\n      - ./ci/certbot/post-setup.d/:/data/post-setup.d/\n    extra_hosts:\n      - \"zulip.example.net:172.28.5.100\"\n\n  database:\n    networks: [zulip-backend]\n  memcached:\n    networks: [zulip-backend]\n  rabbitmq:\n    networks: [zulip-backend]\n  redis:\n    networks: [zulip-backend]\n\n  pebble:\n    image: ghcr.io/letsencrypt/pebble:latest\n    volumes:\n      - ./ci/certbot/pebble-config/:/config/\n    command: -config /config/pebble-config.json -strict\n    ports:\n      - 14000:14000 # HTTPS ACME API\n      - 15000:15000 # HTTPS Management API\n    networks: [zulip-backend]\n    environment:\n      PEBBLE_VA_NOSLEEP: \"1\"\n    extra_hosts:\n      - \"zulip.example.net:172.28.5.100\"\n\nnetworks:\n  zulip-backend:\n    driver: bridge\n    ipam:\n      driver: default\n      config:\n        - subnet: 172.28.0.0/16\n          ip_range: 172.28.5.0/24\n          gateway: 172.28.5.254\n"
+    },
+    {
+      "path": ".github/workflows/shell-test.yaml",
+      "sha": null,
+      "content_sha256": "5810a7431f8532f4d09bf5ba47c145fc2b7c8dc05467713f3cea82d575b37080",
+      "score": 186,
+      "content": "---\nname: Shell check and lint\n\non:\n  pull_request:\n    branches:\n      - main\n\npermissions: {}\n\njobs:\n  shellcheck:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0\n        with:\n          persist-credentials: false\n      - uses: luizm/action-sh-checker@883217215b11c1fabbf00eb1a9a041f62d74c744 # master\n"
+    },
+    {
+      "path": "helm/zulip/templates/cm-post-setup-scripts.yaml",
+      "sha": null,
+      "content_sha256": "deb2ec8a71724e24d05368f42746ea3455746ecab9e7800db69d41dbb6851224",
+      "score": 183,
+      "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: \"{{ include \"zulip.fullname\" . }}-post-setup-scripts\"\n  labels:\n    {{- include \"zulip.labels\" . | nindent 4 }}\ndata:\n  {{- range $scriptName, $scriptContents := .Values.postSetup.scripts }}\n  {{ $scriptName }}: |\n    {{- $scriptContents | nindent 4 }}\n  {{- end }}\n\n"
+    },
+    {
+      "path": "ci/certbot/post-setup.d/setup-pebble.sh",
+      "sha": null,
+      "content_sha256": "ec724af3bd6f60be79bda88685335b1b5e4313f6328afe6979bc784cf27d3224",
+      "score": 183,
+      "content": "#!/bin/bash\n\n# This configures certbot to talk to the Pebble instance we started\necho \"server=https://pebble:14000/dir\" >>/etc/letsencrypt/cli.ini\necho \"no-verify-ssl=true\" >>/etc/letsencrypt/cli.ini\n"
+    },
+    {
+      "path": "helm/zulip/ci/post-setup-values.yaml",
+      "sha": null,
+      "content_sha256": "bebf368d7472774d208a838fdf84da08f5fe921b9c29c6e16c3a671aef35b10c",
+      "score": 183,
+      "content": "---\n# Test: Post-setup scripts ConfigMap is populated correctly.\nzulip:\n  environment:\n    SECRETS_secret_key: test-secret-key\n    SETTING_ZULIP_ADMINISTRATOR: \"admin@example.com\"\n    SETTING_EXTERNAL_HOST: zulip.example.com\n\npostSetup:\n  scripts:\n    my-setup.sh: |\n      #!/bin/bash\n      echo \"post-setup ran\" > /data/post-setup-marker\n\nmemcached:\n  auth:\n    password: [REDACTED]\nrabbitmq:\n  auth:\n    password: [REDACTED]\n    erlangCookie: test-cookie\nredis:\n  auth:\n    password: test-redis\npostgresql:\n  auth:\n    postgresPassword: [REDACTED]\n    password: [REDACTED]\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "helm/zulip/README.md.gotmpl",
+      "sha": null,
+      "content_sha256": "514726442a0f4a70e7fa7f96238ab146712346e4215f10a63abb83152235f9d3",
+      "score": 168,
+      "content": "# Zulip\n\n{{ template \"chart.versionBadge\" . }}{{ template \"chart.typeBadge\" . }}{{ template \"chart.appVersionBadge\" . }}\n\n[Zulip](https://zulip.com/) is an open source threaded team chat that helps teams stay productive and focused.\n\nHelm chart based on https://github.com/zulip/docker-zulip\n\n> **Full documentation:**\n> https://zulip.readthedocs.io/projects/docker/en/latest/how-to/helm-index.html\n\n## Quick start\n\n```bash\nhelm install zulip oci://ghcr.io/zulip/helm-charts/zulip -f values-local.yaml\n```\n\nSee the\n[getting-started guide](https://zulip.readthedocs.io/projects/docker/en/latest/how-to/helm-getting-started.html)\nfor detailed installation instructions, including required settings\nand creating your first organization.\n\n## Trust and reverse-proxy configuration\n\nIf browsers see a \"configure your reverse proxy\" error page, or pods\nfail their liveness probe, set `zulip.environment.LOADBALANCER_IPS`\nto your Ingress controller's pod IP or CIDR. See the\n[proxy-trust guide](https://zulip.readthedocs.io/projects/docker/en/latest/how-to/helm-proxy-trust.html)\nfor details.\n\n{{ template \"chart.valuesSection\" . }}\n\nEnvironment values can be plain scalars or\n[`valueFrom` references](https://zulip.readthedocs.io/projects/docker/en/latest/how-to/helm-settings.html#referencing-kubernetes-secrets-with-valuefrom)\nto Kubernetes Secrets; see the\n[settings guide](https://zulip.readthedocs.io/projects/docker/en/latest/how-to/helm-settings.html)\nfor details.\n\n### Dependencies\n\nThe chart uses Memcached, RabbitMQ and Redis helm charts defined in\nthe Bitnami Helm repository. Most of these are configured following their\ndefault settings, but you can check\nhttps://github.com/bitnami/charts/tree/master/bitnami/ for more configuration\noptions of the subcharts.\n\nFor PostgreSQL the chart also uses the Bitnami chart to install it on the\nKubernetes cluster. However, in this case we use Zulip's\n[zulip-postgresql](https://hub.docker.com/r/zulip/zulip-postgresql) docker\nimage, because it contains the Postgresql plugins that are needed to run Zulip.\n\n{{ template \"chart.requirementsSection\" . }}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": "helm/zulip/ci/existing-secrets-values.yaml",
+      "sha": "7ad0de013dde6d22a1b44abba4ee82f34b450e22",
+      "size": 498,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T02:48:25.323246+00:00"
+}
