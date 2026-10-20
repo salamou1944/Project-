@@ -1,0 +1,462 @@
+{
+  "canonical_source": "github:Infisical/kubernetes-operator",
+  "repo": "Infisical/kubernetes-operator",
+  "revision_sha": "328cb9cfacded1d53e8ae7518a16f98e574232dc",
+  "default_branch": "main",
+  "pushed_at": "2026-10-20T18:39:56Z",
+  "repo_updated_at": "2026-10-20T13:31:18Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "internal/auth/kubernetes_test.go",
+      "sha": null,
+      "content_sha256": "402c531ed0eec208e809da8276c0ea3de311b67c29014b05a9fc2f4fa12d82ad",
+      "score": 243,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n)\n\nvar _ = Describe(\"Kubernetes Auth\", func() {\n\tconst (\n\t\tidentityIDSecretName = \"k8s-identity-id\"\n\t\tnamespace            = \"default\"\n\t\tsecretKey            = \"value\"\n\t)\n\n\tIt(\"should fail when .spec.kubernetes is nil\", func() {\n\t\tprovider := auth.NewKubernetesAuth(k8sClient, false)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.KubernetesAuth)\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.kubernetes is not set\"))\n\t})\n\n\tIt(\"should fail when serviceAccountRef.name is empty\", func() {\n\t\tprovider := auth.NewKubernetesAuth(k8sClient, false)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.KubernetesAuth)\n\t\tauthCR.Spec.Kubernetes = &secretsv1beta1.KubernetesAuthConfig{\n\t\t\tServiceAccountRef: secretsv1beta1.NamespacedName{Name: \"\", Namespace: namespace},\n\t\t}\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"serviceAccountRef.name\"))\n\t})\n\n\tIt(\"should fail when serviceAccountRef.namespace is empty\", func() {\n\t\tprovider := auth.NewKubernetesAuth(k8sClient, false)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.KubernetesAuth)\n\t\tauthCR.Spec.Kubernetes = &secretsv1beta1.KubernetesAuthConfig{\n\t\t\tServiceAccountRef: secretsv1beta1.NamespacedName{Name: \"my-sa\", Namespace: \"\"},\n\t\t}\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"serviceAccountRef.namespace\"))\n\t})\n\n\tIt(\"should succeed when serviceAccountRef name and namespace are set\", func() {\n\t\tprovider := auth.NewKubernetesAuth(k8sClient, false)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.KubernetesAuth)\n\t\tauthCR.Spec.Kubernetes = &secretsv1beta1.KubernetesAuthConfig{\n\t\t\tServiceAccountRef: secretsv1beta1.NamespacedName{Name: \"my-sa\", Namespace: namespace},\n\t\t}\n\n\t\tExpect(provider.Validate(ctx, authCR)).To(Succeed())\n\t})\n})\n"
+    },
+    {
+      "path": "internal/cache/auth_cache_test.go",
+      "sha": null,
+      "content_sha256": "8dd26a2eb29e74a389a5292a1a04e6c15ba33fb985f5e408820a6b992edd492a",
+      "score": 229,
+      "content": "package cache_test\n\nimport (\n\t\"testing\"\n\t\"time\"\n\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\t\"github.com/Infisical/infisical/k8-operator/internal/cache\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/model\"\n\tinfisicalSdk \"github.com/infisical/go-sdk\"\n)\n\nfunc TestCache(t *testing.T) {\n\tRegisterFailHandler(Fail)\n\tRunSpecs(t, \"Cache Suite\")\n}\n\nfunc newAuthResult(token string) *model.AuthenticationResult {\n\treturn &model.AuthenticationResult{\n\t\tMachineIdentity: infisicalSdk.MachineIdentityCredential{\n\t\t\tAccessToken: token,\n\t\t},\n\t}\n}\n\nvar _ = Describe(\"AuthCache\", func() {\n\tvar (\n\t\tauthCache *cache.AuthCache\n\t\tkey       cache.ClientCacheKey\n\t)\n\n\tBeforeEach(func() {\n\t\tkey = cache.ClientCacheKey{Name: \"test-auth\", Namespace: \"default\"}\n\t})\n\n\tAfterEach(func() {\n\t\tif authCache != nil {\n\t\t\tauthCache.Cleanup()\n\t\t}\n\t})\n\n\tDescribe(\"happy path\", func() {\n\t\tBeforeEach(func() {\n\t\t\tvar err error\n\t\t\tauthCache, err = cache.NewAuthCache()\n\t\t\tExpect(err).NotTo(HaveOccurred())\n\t\t})\n\n\t\tIt(\"should store and retrieve a value\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"token-1\"), 30*time.Second)\n\n\t\t\tresult, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeTrue())\n\t\t\tExpect(result.MachineIdentity.AccessToken).To(Equal(\"token-1\"))\n\t\t})\n\n\t\tIt(\"should return false for a key that was never set\", func() {\n\t\t\t_, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\n\t\tIt(\"should delete a cached entry\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"token-1\"), 30*time.Second)\n\n\t\t\tauthCache.Delete(key)\n\n\t\t\t_, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\t})\n\n\tDescribe(\"TTL expiration\", func() {\n\t\tBeforeEach(func() {\n\t\t\tvar err error\n\t\t\tauthCache, err = cache.NewAuthCache()\n\t\t\tExpect(err).NotTo(HaveOccurred())\n\t\t})\n\n\t\tIt(\"should not find a key after its TTL expires\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"short-lived\"), 2*time.Second)\n\n\t\t\tresult, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeTrue())\n\t\t\tExpect(result.MachineIdentity.AccessToken).To(Equal(\"short-lived\"))\n\n\t\t\ttime.Sleep(3 * time.Second)\n\n\t\t\t_, found = authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\t})\n\n\tDescribe(\"minTTLThreshold\", func() {\n\t\tBeforeEach(func() {\n\t\t\tvar err error\n\t\t\tauthCache, err = cache.NewAuthCache(cache.WithMinTTLThreshold(5 * time.Second))\n\t\t\tExpect(err).NotTo(HaveOccurred())\n\t\t})\n\n\t\tIt(\"should not cache a value when TTL is below the threshold\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"below-threshold\"), 2*time.Second)\n\n\t\t\t_, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\n\t\tIt(\"should cache a value when TTL meets the threshold\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"above-threshold\"), 10*time.Second)\n\n\t\t\tresult, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeTrue())\n\t\t\tExpect(result.MachineIdentity.AccessToken).To(Equal(\"above-threshold\"))\n\t\t})\n\t})\n})\n"
+    },
+    {
+      "path": ".github/workflows/validate-k8-operator-helm.yml",
+      "sha": null,
+      "content_sha256": "e566b5ba71d1b59d4d7445499cfc32baf766ecbe7b843f6e7bcf42cc1bbcadb9",
+      "score": 198,
+      "content": "name: Validate K8 Operator Helm Chart\non:\n    pull_request:\n        types: [opened, synchronize]\n        paths:\n            - \"api/**\"\n            - \"config/**\"\n            - \"helm-charts/**\"\n            - \"scripts/generate-helm.sh\"\n            - \"Makefile\"\n\njobs:\n    validate-helm:\n        name: Validate Helm Chart is up to date\n        runs-on: ubuntu-latest\n        steps:\n            - name: Checkout\n              uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0 Aug 24, 2023\n              with:\n                  fetch-depth: 0\n\n            - name: Install Helm\n              uses: azure/setup-helm@5119fcb9089d432beecbf79bb2c7915207344b78 # v3.5 Dec 12, 2022\n              with:\n                  version: v3.10.0\n\n            - name: Install Go\n              uses: actions/setup-go@7b8cf10d4e4a01d4992d18a89f4d7dc5a3e6d6f4 # v4.3.0 Dec 15, 2015\n              with:\n                  go-version: 1.21\n\n            - name: Install dependencies\n              run: |\n                  make helmify\n                  make kustomize\n                  make controller-gen\n\n            - name: Validate Chart.yaml version\n              id: chart_version\n              run: |\n                  CHART_FILE=helm-charts/secrets-operator/Chart.yaml\n                  VERSION=$(grep '^version:' \"$CHART_FILE\" | awk '{print $2}' | tr -d '\"')\n                  APP_VERSION=$(grep '^appVersion:' \"$CHART_FILE\" | awk '{print $2}' | tr -d '\"')\n\n                  if [ -z \"$VERSION\" ]; then\n                    echo \"Failed to read version from $CHART_FILE\"\n                    exit 1\n                  fi\n\n                  if [ -z \"$APP_VERSION\" ]; then\n                    echo \"Failed to read appVersion from $CHART_FILE\"\n                    exit 1\n                  fi\n\n                  if [ \"$VERSION\" != \"$APP_VERSION\" ]; then\n                    echo \"Chart.yaml version ($VERSION) and appVersion ($APP_VERSION) must be identical.\"\n                    exit 1\n                  fi\n\n                  if ! [[ \"$VERSION\" =~ ^v[0-9]+\\.[0-9]+\\.[0-9]+$ ]]; then\n                    echo \"Chart.yaml version ($VERSION) must follow semantic versioning prefixed with 'v' (e.g. v1.2.3).\"\n                    exit 1\n                  fi\n\n                  git fetch origin \"${{ github.base_ref }}\" --depth=1\n                  BASE_VERSION=$(git show \"origin/${{ github.base_ref }}:$CHART_FILE\" | grep '^version:' | awk '{print $2}' | tr -d '\"')\n                  if [ -z \"$BASE_VERSION\" ]; then\n                    echo \"Failed to read version from base branch (${{ github.base_ref }}).\"\n                    exit 1\n                  fi\n\n                  if git diff --exit-code --quiet \"origin/${{ github.base_ref }}\" -- helm-charts/secrets-operator; then\n                    echo \"Helm chart unchanged from ${{ github.base_ref }}; version bump not required (current $VERSION).\"\n                  else\n                    if [ \"$VERSION\" = \"$BASE_VERSION\" ]; then\n                      echo \"Helm chart changed but version has not been bumped (still $VERSION on ${{ github.base_ref }}).\"\n                      echo \"Bump both version and appVersion in $CHART_FILE before merging.\"\n                      exit 1\n                    fi\n\n                    HIGHEST=$(printf '%s\\n%s\\n' \"$BASE_VERSION\" \"$VERSION\" | sort -V | tail -n1)\n                    if [ \"$HIGHEST\" != \"$VERSION\" ]; then\n                      echo \"Chart.yaml version ($VERSION) must be greater than the ${{ github.base_ref }} version ($BASE_VERSION).\"\n                      exit 1\n                    fi\n\n                    echo \"Chart.yaml version $VERSION is valid and bumped from $BASE_VERSION.\"\n                  fi\n\n                  echo \"version=$VERSION\" >> \"$GITHUB_OUTPUT\"\n\n            - name: Regenerate Helm Chart\n              run: make helm VERSION=${{ steps.chart_version.outputs.version }}\n\n            - name: Check for Helm chart differences\n              run: |\n                  if ! git diff --exit-code --quiet helm-charts/secrets-operator; then\n                    echo \"Generated Helm chart differs from the committed Helm chart.\"\n                    echo \"Run 'make helm VERSION=${{ steps.chart_version.outputs.version }}' locally and commit the changes.\"\n                    git diff helm-charts/secrets-operator\n                    exit 1\n                  fi\n                  echo \"Helm chart is up to date.\"\n"
+    },
+    {
+      "path": "api/v1beta1/infisicalauth_types.go",
+      "sha": null,
+      "content_sha256": "efd5a998633f3dd8024ed4ec32d8a53f143c9201fe77b4fdbda7111c41b86cb2",
+      "score": 186,
+      "content": "/*\nMIT License\n\nCopyright (c) 2024 Infisical\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n*/\n\npackage v1beta1\n\nimport (\n\tmetav1 \"k8s.io/apimachinery/pkg/apis/meta/v1\"\n)\n\n// InfisicalAuth is the Schema for the InfisicalAuth API.\n// +kubebuilder:object:root=true\n// +kubebuilder:subresource:status\n// +kubebuilder:printcolumn:name=\"Connection\",type=string,JSONPath=`.spec.infisicalConnectionRef.name`\n// +kubebuilder:printcolumn:name=\"Method\",type=string,JSONPath=`.spec.method`\n// +kubebuilder:printcolumn:name=\"Age\",type=date,JSONPath=`.metadata.creationTimestamp`\n// +kubebuilder:printcolumn:name=\"Ready\",type=string,JSONPath=`.status.conditions[?(@.type==\"secrets.infisical.com/IsReady\")].status`\ntype InfisicalAuth struct {\n\tmetav1.TypeMeta   `json:\",inline\"`\n\tmetav1.ObjectMeta `json:\"metadata,omitempty\"`\n\n\tSpec   InfisicalAuthSpec   `json:\"spec,omitempty\"`\n\tStatus InfisicalAuthStatus `json:\"status,omitempty\"`\n}\n\ntype InfisicalAuthSpec struct {\n\t// +kubebuilder:validation:Optional\n\tInfisicalConnectionRef NamespacedName `json:\"infisicalConnectionRef,omitempty\"`\n\n\t// +kubebuilder:validation:Required\n\tMethod InfisicalAuthMethod `json:\"method\"`\n\n\t// +kubebuilder:validation:Optional\n\tUniversal *UniversalAuthConfig `json:\"universal,omitempty\"`\n\n\t// +kubebuilder:validation:Optional\n\tKubernetes *KubernetesAuthConfig `json:\"kubernetes,omitempty\"`\n\n\t// +kubebuilder:validation:Optional\n\tAWSIam *AWSIamAuthConfig `json:\"awsIam,omitempty\"`\n\n\t// +kubebuilder:validation:Optional\n\tAzure *AzureAuthConfig `json:\"azure,omitempty\"`\n\n\t// +kubebuilder:validation:Optional\n\tGCPIdToken *GCPIdTokenAuthConfig `json:\"gcpIdToken,omitempty\"`\n\n\t// +kubebuilder:validation:Optional\n\tGCPIam *GCPIamAuthConfig `json:\"gcpIam,omitempty\"`\n\n\t// +kubebuilder:validation:Optional\n\tLDAP *LDAPAuthConfig `json:\"ldap,omitempty\"`\n}\n\ntype UniversalAuthConfig struct {\n\t// +kubebuilder:validation:Required\n\tClientIdRef SecretReference `json:\"clientIdRef\"`\n\n\t// +kubebuilder:validation:Required\n\tClientSecretRef SecretReference `json:\"clientSecretRef\"`\n}\n\ntype KubernetesAuthConfig struct {\n\t// +kubebuilder:validation:Required\n\tIdentityIDRef SecretReference `json:\"identityIdRef\"`\n\n\t// +kubebuilder:validation:Required\n\tServiceAccountRef NamespacedName `json:\"serviceAccountRef\"`\n\n\t// The audiences to use for the service account token. This is only relevant if `autoCreateServiceAccountToken` is true.\n\t// +kubebuilder:validation:Optional\n\tServiceAccountTokenAudiences []string `json:\"serviceAccountTokenAudiences\"`\n}\n\ntype AWSIamAuthConfig struct {\n\t// +kubebuilder:validation:Required\n\tIdentityIDRef SecretReference `json:\"identityIdRef\"`\n}\n\ntype AzureAuthConfig struct {\n\t// +kubebuilder:validation:Required\n\tIdentityIDRef SecretReference `json:\"identityIdRef\"`\n\n\t// +kubebuilder:validation:Optional\n\tResource string `json:\"resource\"`\n}\n\ntype GCPIdTokenAuthConfig struct {\n\t// +kubebuilder:validation:Required\n\tIdentityIDRef SecretReference `json:\"identityIdRef\"`\n}\n\ntype GCPIamAuthConfig struct {\n\t// +kubebuilder:validation:Required\n\tIdentityIDRef SecretReference `json:\"identityIdRef\"`\n\n\t// +kubebuilder:validation:Required\n\tServiceAccountKeyFilePath string `json:\"serviceAccountKeyFilePath\"`\n}\n\ntype LDAPAuthConfig struct {\n\t// +kubebuilder:validation:Required\n\tUsernameRef SecretReference `json:\"usernameRef\"`\n\n\t// +kubebuilder:validation:Required\n\tPasswordRef SecretReference `json:\"passwordRef\"`\n\n\t// +kubebuilder:validation:Required\n\tIdentityIDRef SecretReference `json:\"identityIdRef\"`\n}\n\ntype NamespacedName struct {\n\t// +kubebuilder:validation:Required\n\tName string `json:\"name\"`\n\n\t// +kubebuilder:validation:Required\n\tNamespace string `json:\"namespace\"`\n}\n\n// InfisicalAuthStatus defines the observed state of InfisicalAuth\ntype InfisicalAuthStatus struct {\n\tConditions []metav1.Condition `json:\"conditions\"`\n}\n\n// +kubebuilder:validation:Enum=universal;kubernetes;aws-iam;azure;gcp-id-token;gcp-iam;ldap\ntype InfisicalAuthMethod string\n\nconst (\n\tAWSIamAuth     InfisicalAuthMethod = \"aws-iam\"\n\tAzureAuth      InfisicalAuthMethod = \"azure\"\n\tGCPIamAuth     InfisicalAuthMethod = \"gcp-iam\"\n\tGCPIdTokenAuth InfisicalAuthMethod = \"gcp-id-token\"\n\tKubernetesAuth InfisicalAuthMethod = \"kubernetes\"\n\tLDAPAuth       InfisicalAuthMethod = \"ldap\"\n\tUniversalAuth  InfisicalAuthMethod = \"universal\"\n)\n\n// InfisicalAuthList contains a list of InfisicalAuth.\n// +kubebuilder:object:root=true\ntype InfisicalAuthList struct {\n\tmetav1.TypeMeta `json:\",inline\"`\n\tmetav1.ListMeta `json:\"metadata,omitempty\"`\n\tItems           []InfisicalAuth `json:\"items\"`\n}\n\nfunc init() {\n\tSchemeBuilder.Register(&InfisicalAuth{}, &InfisicalAuthList{})\n}\n"
+    },
+    {
+      "path": "internal/auth/kubernetes.go",
+      "sha": null,
+      "content_sha256": "17e7820e1d1d00e7eb0f29bbf6f36b20287cbaa0f302fb44dcad2bf6d2addfd8",
+      "score": 183,
+      "content": "package auth\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/model\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/util\"\n\tinfisicalSdk \"github.com/infisical/go-sdk\"\n\tauthenticationv1 \"k8s.io/api/authentication/v1\"\n\tcorev1 \"k8s.io/api/core/v1\"\n\t\"k8s.io/utils/ptr\"\n\t\"sigs.k8s.io/controller-runtime/pkg/client\"\n)\n\ntype kubernetesAuth struct {\n\tclient          client.Client\n\tnamespaceScoped bool\n}\n\nfunc NewKubernetesAuth(c client.Client, namespaceScoped bool) InfisicalAuthStrategy {\n\treturn &kubernetesAuth{client: c, namespaceScoped: namespaceScoped}\n}\n\nfunc (k *kubernetesAuth) Validate(ctx context.Context, auth *v1beta1.InfisicalAuth) error {\n\tif auth == nil {\n\t\treturn model.ErrInvalidAuthObject\n\t}\n\n\tk8s := auth.Spec.Kubernetes\n\tif k8s == nil {\n\t\treturn fmt.Errorf(\"auth method is %q but .spec.kubernetes is not set\", v1beta1.KubernetesAuth)\n\t}\n\n\tif k8s.ServiceAccountRef.Name == \"\" || k8s.ServiceAccountRef.Namespace == \"\" {\n\t\treturn fmt.Errorf(`\"serviceAccountRef.name\" and \"serviceAccountRef.namespace\" are required when \"autoCreateServiceAccountToken\" is enabled`)\n\t}\n\n\treturn nil\n}\n\nfunc (k *kubernetesAuth) Authenticate(\n\tctx context.Context,\n\tconnection *model.InfisicalConnection,\n\tauth *v1beta1.InfisicalAuth,\n) (*model.AuthenticationResult, error) {\n\tif connection == nil {\n\t\treturn nil, model.ErrInvalidConnectionObject\n\t}\n\n\tif auth == nil {\n\t\treturn nil, model.ErrInvalidAuthObject\n\t}\n\n\tif auth.Spec.Kubernetes == nil {\n\t\treturn nil, fmt.Errorf(\"%w: spec.kubernetes is nil\", model.ErrInvalidAuthObject)\n\t}\n\n\tidentityID, err := util.ResolveSecretReference(ctx, k.client, auth.Spec.Kubernetes.IdentityIDRef, \".spec.kubernetes.identityIdRef\")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tserviceAccount, err := k.getServiceAccount(ctx, auth)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tsaToken, err := k.getServiceAccountToken(ctx, auth, serviceAccount)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tsdkClient := infisicalSdk.NewInfisicalClient(ctx, infisicalSdk.Config{\n\t\tSiteUrl:          connection.Host,\n\t\tCaCertificate:    connection.CaCertificate,\n\t\tAutoTokenRefresh: infisicalSdk.BoolPtr(false),\n\t})\n\n\tcred, err := sdkClient.Auth().KubernetesRawServiceAccountTokenLogin(string(identityID), saToken)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"unable to authenticate with Kubernetes: %w\", err)\n\t}\n\n\treturn &model.AuthenticationResult{MachineIdentity: cred, SdkClient: sdkClient}, nil\n}\n\nfunc (k *kubernetesAuth) getServiceAccount(ctx context.Context, auth *v1beta1.InfisicalAuth) (*corev1.ServiceAccount, error) {\n\tk8s := auth.Spec.Kubernetes\n\tkey := client.ObjectKey{\n\t\tNamespace: k8s.ServiceAccountRef.Namespace,\n\t\tName:      k8s.ServiceAccountRef.Name,\n\t}\n\n\tsa := &corev1.ServiceAccount{}\n\tif err := k.client.Get(ctx, key, sa); err != nil {\n\t\tif util.IsNamespaceScopedError(err, k.namespaceScoped) {\n\t\t\treturn nil, model.NewNamespaceScopedError(err, \"service account\")\n\t\t}\n\t\treturn nil, fmt.Errorf(\"unable to get service account: %w\", err)\n\t}\n\n\treturn sa, nil\n}\n\nfunc (k *kubernetesAuth) getServiceAccountToken(ctx context.Context, auth *v1beta1.InfisicalAuth, serviceAccount *corev1.ServiceAccount) (string, error) {\n\tk8s := auth.Spec.Kubernetes\n\n\trestClient, err := util.GetRestClientFromClient()\n\tif err != nil {\n\t\treturn \"\", fmt.Errorf(\"unable to get REST client: %w\", err)\n\t}\n\n\ttokenRequest := &authenticationv1.TokenRequest{\n\t\tSpec: authenticationv1.TokenRequestSpec{\n\t\t\tExpirationSeconds: ptr.To[int64](600),\n\t\t},\n\t}\n\n\tif len(k8s.ServiceAccountTokenAudiences) > 0 {\n\t\ttokenRequest.Spec.Audiences = k8s.ServiceAccountTokenAudiences\n\t}\n\n\tresult := &authenticationv1.TokenRequest{}\n\terr = restClient.\n\t\tPost().\n\t\tNamespace(serviceAccount.Namespace).\n\t\tResource(\"serviceaccounts\").\n\t\tName(serviceAccount.Name).\n\t\tSubResource(\"token\").\n\t\tBody(tokenRequest).\n\t\tDo(ctx).\n\t\tInto(result)\n\tif err != nil {\n\t\treturn \"\", fmt.Errorf(\"unable to create service account token: %w\", err)\n\t}\n\n\treturn result.Status.Token, nil\n}\n"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/leader-election-rbac.yaml",
+      "sha": null,
+      "content_sha256": "91b08bc7e8750923939706d124552173d4fa8ee4c443c2c590acf3c70b7d69e4",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-leader-election-role\n  labels:\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - \"\"\n  resources:\n  - configmaps\n  verbs:\n  - get\n  - list\n  - watch\n  - create\n  - update\n  - patch\n  - delete\n- apiGroups:\n  - coordination.k8s.io\n  resources:\n  - leases\n  verbs:\n  - get\n  - list\n  - watch\n  - create\n  - update\n  - patch\n  - delete\n- apiGroups:\n  - \"\"\n  resources:\n  - events\n  verbs:\n  - create\n  - patch\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-leader-election-rolebinding\n  labels:\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: '{{ include \"secrets-operator.fullname\" . }}-leader-election-role'\nsubjects:\n- kind: ServiceAccount\n  name: '{{ include \"secrets-operator.serviceAccountName\" . }}'\n  namespace: '{{ .Release.Namespace }}'\n"
+    },
+    {
+      "path": "internal/services/infisicalauth/reconciler.go",
+      "sha": null,
+      "content_sha256": "3933fe38cdc599274fb7bb309ebac2cea8804af199a32a0962f2e4e46fefc258",
+      "score": 181,
+      "content": "package infisicalauth\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/constants\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/model\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/util\"\n\t\"github.com/go-logr/logr\"\n\t\"k8s.io/apimachinery/pkg/api/meta\"\n\tmetav1 \"k8s.io/apimachinery/pkg/apis/meta/v1\"\n\t\"k8s.io/apimachinery/pkg/runtime\"\n\t\"k8s.io/apimachinery/pkg/types\"\n\t\"sigs.k8s.io/controller-runtime/pkg/client\"\n)\n\nconst (\n\tAutoReloadAnnotation       = \"secrets.infisical.com/auto-reload\"\n\tManagedSecretAnnotationFmt = \"secrets.infisical.com/managed-secret.%s\"\n)\n\ntype InfisicalAuthReconciler struct {\n\tclient.Client\n\tScheme            *runtime.Scheme\n\tIsNamespaceScoped bool\n\tauthResolver      *auth.AuthStrategyResolver\n}\n\nfunc (r *InfisicalAuthReconciler) resolveConnectionRef(connectionRef v1beta1.NamespacedName) v1beta1.NamespacedName {\n\tif connectionRef.Name != \"\" {\n\t\treturn connectionRef\n\t}\n\n\treturn v1beta1.NamespacedName{\n\t\tName:      constants.DEFAULT_INFISICAL_CONNECTION_NAME,\n\t\tNamespace: constants.GetOperatorNamespace(),\n\t}\n}\n\nfunc (r *InfisicalAuthReconciler) getInfisicalConnection(ctx context.Context, connectionRef v1beta1.NamespacedName) (*v1beta1.InfisicalConnection, error) {\n\tresolved := r.resolveConnectionRef(connectionRef)\n\n\tconn := v1beta1.InfisicalConnection{}\n\n\terr := r.Client.Get(ctx, types.NamespacedName{\n\t\tName:      resolved.Name,\n\t\tNamespace: resolved.Namespace,\n\t}, &conn)\n\tif err != nil {\n\t\tif util.IsNamespaceScopedError(err, r.IsNamespaceScoped) {\n\t\t\treturn nil, model.NewNamespaceScopedError(err, \"InfisicalConnection\")\n\t\t}\n\t\treturn nil, fmt.Errorf(\"Unable to fetch Infisical Connection CRD from cluster: %w\", err)\n\t}\n\n\treadyCond := meta.FindStatusCondition(conn.Status.Conditions, \"secrets.infisical.com/IsReady\")\n\tif readyCond == nil || readyCond.Status != metav1.ConditionTrue {\n\t\treturn nil, fmt.Errorf(\"InfisicalConnection is not ready\")\n\t}\n\n\treturn &conn, nil\n}\n\nfunc (r *InfisicalAuthReconciler) ValidateAndAuthenticate(ctx context.Context, logger logr.Logger, infisicalAuth *v1beta1.InfisicalAuth) error {\n\tif infisicalAuth == nil {\n\t\treturn model.ErrInvalidAuthObject\n\t}\n\n\tconn, err := r.getInfisicalConnection(ctx, infisicalAuth.Spec.InfisicalConnectionRef)\n\tif err != nil {\n\t\treturn err\n\t}\n\n\tif err := r.authResolver.Validate(ctx, infisicalAuth); err != nil {\n\t\treturn err\n\t}\n\n\t_, err = r.authResolver.Authenticate(ctx, conn, infisicalAuth)\n\treturn err\n}\n"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/metrics-reader-rbac.yaml",
+      "sha": null,
+      "content_sha256": "3482caf63d0ebe94637a989751d5315fdb20f728212d861ef045ca3101fda82b",
+      "score": 181,
+      "content": "{{- if not .Values.scopedNamespace }}\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-metrics-reader\n  labels:\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\nrules:\n- nonResourceURLs:\n  - /metrics\n  verbs:\n  - get\n\n{{- end }}\n"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/metrics-auth-rbac.yaml",
+      "sha": null,
+      "content_sha256": "fed5b5a267fce565e8c22170a5bd775377d52d3a023cfc4a926051d149e9f3e6",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\n{{- if and .Values.scopedNamespace .Values.scopedRBAC }}\nkind: Role\n{{- else }}\nkind: ClusterRole\n{{- end }}\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-metrics-auth-role\n  {{- if and .Values.scopedNamespace .Values.scopedRBAC }}\n  namespace: {{ .Values.scopedNamespace | quote }}\n  {{- end }}\n  labels:\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - authentication.k8s.io\n  resources:\n  - tokenreviews\n  verbs:\n  - create\n- apiGroups:\n  - authorization.k8s.io\n  resources:\n  - subjectaccessreviews\n  verbs:\n  - create\n---\napiVersion: rbac.authorization.k8s.io/v1\n{{- if and .Values.scopedNamespace .Values.scopedRBAC }}\nkind: RoleBinding\n{{- else }}\nkind: ClusterRoleBinding\n{{- end }}\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-metrics-auth-rolebinding\n  {{- if and .Values.scopedNamespace .Values.scopedRBAC }}\n  namespace: {{ .Values.scopedNamespace | quote }}\n  {{- end }}\n  labels:\n\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  {{- if and .Values.scopedNamespace .Values.scopedRBAC }}\n  kind: Role\n  {{- else }}\n  kind: ClusterRole\n  {{- end }}\n  name: '{{ include \"secrets-operator.fullname\" . }}-metrics-auth-role'\nsubjects:\n- kind: ServiceAccount\n  name: '{{ include \"secrets-operator.serviceAccountName\" . }}'\n  namespace: '{{ .Release.Namespace }}'\n"
+    },
+    {
+      "path": "helm-charts/secrets-operator/ci/minimal-rbac.yaml",
+      "sha": null,
+      "content_sha256": "89d6536d9f46ec5fa29d215d4835137e2d5b17f55acca17a8933c0e13e40ca07",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: minimal-operator-permissions\nrules:\n  - apiGroups:\n      - \"\"\n    resources:\n      - configmaps\n      - secrets\n    verbs:\n      - create\n      - delete\n      - get\n      - list\n      - update\n      - watch\n  - apiGroups:\n      - \"\"\n    resources:\n      - pods\n    verbs:\n      - get\n      - list\n  - apiGroups:\n      - \"\"\n    resources:\n      - pods/log\n    verbs:\n      - get\n  - apiGroups:\n      - \"\"\n    resources:\n      - serviceaccounts\n    verbs:\n      - get\n      - list\n      - watch\n  - apiGroups:\n      - \"\"\n    resources:\n      - serviceaccounts/token\n    verbs:\n      - create\n  - apiGroups:\n      - apps\n    resources:\n      - daemonsets\n      - deployments\n      - statefulsets\n      - replicasets\n    verbs:\n      - get\n      - list\n      - update\n      - watch\n  - apiGroups:\n      - authentication.k8s.io\n    resources:\n      - tokenreviews\n    verbs:\n      - create\n  - apiGroups:\n      - secrets.infisical.com\n    resources:\n      - clustergenerators\n      - infisicalauths\n      - infisicalconnections\n      - infisicaldynamicsecrets\n      - infisicalpushsecrets\n      - infisicalsecrets\n      - infisicalstaticsecrets\n    verbs:\n      - create\n      - delete\n      - get\n      - list\n      - patch\n      - update\n      - watch\n  - apiGroups:\n      - secrets.infisical.com\n    resources:\n      - infisicaldynamicsecrets/finalizers\n      - infisicalpushsecrets/finalizers\n      - infisicalsecrets/finalizers\n      - infisicalstaticsecrets/finalizers\n    verbs:\n      - update\n  - apiGroups:\n      - secrets.infisical.com\n    resources:\n      - infisicalauths/status\n      - infisicalconnections/status\n      - infisicaldynamicsecrets/status\n      - infisicalpushsecrets/status\n      - infisicalsecrets/status\n      - infisicalstaticsecrets/status\n    verbs:\n      - get\n      - patch\n      - update\n  - apiGroups:\n      - \"\"\n    resources:\n      - configmaps\n    verbs:\n      - get\n      - list\n      - watch\n      - create\n      - update\n      - patch\n      - delete\n  - apiGroups:\n      - coordination.k8s.io\n    resources:\n      - leases\n    verbs:\n      - get\n      - list\n      - watch\n      - create\n      - update\n      - patch\n      - delete\n  - apiGroups:\n      - \"\"\n    resources:\n      - events\n    verbs:\n      - create\n      - patch\n      - get\n      - list\n      - watch\n  - apiGroups:\n      - authentication.k8s.io\n    resources:\n      - tokenreviews\n    verbs:\n      - create\n  - apiGroups:\n      - authorization.k8s.io\n    resources:\n      - subjectaccessreviews\n    verbs:\n      - create\n  - apiGroups:\n      - \"\"\n    resources:\n      - namespaces\n    verbs:\n      - get\n      - list\n      - create\n      - delete\n  - apiGroups:\n      - rbac.authorization.k8s.io\n    resources:\n      - roles\n      - rolebindings\n      - clusterroles\n      - clusterrolebindings\n    verbs:\n      - get\n      - list\n      - create\n      - delete\n      - update\n      - patch\n  - apiGroups:\n      - \"\"\n    resources:\n      - serviceaccounts\n    verbs:\n      - get\n      - list\n      - watch\n      - create\n      - delete\n      - update\n      - patch\n  - apiGroups:\n      - apps\n    resources:\n      - deployments\n    verbs:\n      - create\n      - delete\n      - patch\n  - apiGroups:\n      - \"\"\n    resources:\n      - services\n    verbs:\n      - get\n      - list\n      - create\n      - delete\n      - update\n      - patch\n  - nonResourceURLs:\n      - /metrics\n    verbs:\n      - get\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: minimal-operator-binding\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: minimal-operator-permissions\nsubjects:\n  - kind: ServiceAccount\n    name: minimal-test-user\n    namespace: kube-system\n"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/user-rbac.yaml",
+      "sha": null,
+      "content_sha256": "5f76058c53a647ed211aa393a37f7ac409f9ca8c4c4a12965f265f08a9465e3b",
+      "score": 181,
+      "content": "{{- if .Values.enableUserRBAC }}\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-user-admin\n  labels:\n    {{- include \"secrets-operator.labels\" . | nindent 4 }}\n    rbac.authorization.k8s.io/aggregate-to-admin: \"true\"\n    rbac.authorization.k8s.io/aggregate-to-edit: \"true\"\nrules:\n- apiGroups: [\"secrets.infisical.com\"]\n  resources: [\"infisicalsecrets\", \"infisicalpushsecrets\", \"infisicaldynamicsecrets\", \"infisicalstaticsecrets\", \"clustergenerators\"]\n  verbs: [\"get\", \"list\", \"watch\", \"create\", \"update\", \"patch\", \"delete\", \"deletecollection\"]\n- apiGroups: [\"secrets.infisical.com\"]\n  resources: [\"infisicalsecrets/status\", \"infisicalpushsecrets/status\", \"infisicaldynamicsecrets/status\", \"infisicalstaticsecrets/status\"]\n  verbs: [\"get\", \"list\", \"watch\"]\n\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-user-view\n  labels:\n    {{- include \"secrets-operator.labels\" . | nindent 4 }}\n    rbac.authorization.k8s.io/aggregate-to-view: \"true\"\n    rbac.authorization.k8s.io/aggregate-to-cluster-reader: \"true\"\nrules:\n- apiGroups: [\"secrets.infisical.com\"]\n  resources: [\"infisicalsecrets\", \"infisicalpushsecrets\", \"infisicaldynamicsecrets\", \"infisicalstaticsecrets\", \"clustergenerators\"]\n  verbs: [\"get\", \"list\", \"watch\"]\n- apiGroups: [\"secrets.infisical.com\"]\n  resources: [\"infisicalsecrets/status\", \"infisicalpushsecrets/status\", \"infisicaldynamicsecrets/status\", \"infisicalstaticsecrets/status\"]\n  verbs: [\"get\", \"list\", \"watch\"]\n{{- end }}"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/manager-rbac.yaml",
+      "sha": null,
+      "content_sha256": "6d57061ff7878b6713df037764c1fd3d0fd7de3487f24f4476b3e97ebfda0246",
+      "score": 181,
+      "content": "{{- $namespaces := (include \"secrets-operator.scopedNamespaces\" . | fromJson).list }}\n{{- $isScopedMode := and $namespaces .Values.scopedRBAC }}\n\n{{- /* Define the rules once to avoid repetition */ -}}\n{{- define \"secrets-operator.managerRules\" }}\nrules:\n- apiGroups:\n  - \"\"\n  resources:\n  - configmaps\n  - secrets\n  verbs:\n  - create\n  - delete\n  - get\n  - list\n  - update\n  - watch\n- apiGroups:\n  - \"\"\n  resources:\n  - pods\n  verbs:\n  - get\n  - list\n- apiGroups:\n  - \"\"\n  resources:\n  - serviceaccounts\n  verbs:\n  - get\n  - list\n  - watch\n- apiGroups:\n  - \"\"\n  resources:\n  - serviceaccounts/token\n  verbs:\n  - create\n- apiGroups:\n  - apps\n  resources:\n  - daemonsets\n  - deployments\n  - statefulsets\n  verbs:\n  - get\n  - list\n  - update\n  - watch\n- apiGroups:\n  - authentication.k8s.io\n  resources:\n  - tokenreviews\n  verbs:\n  - create\n- apiGroups:\n  - secrets.infisical.com\n  resources:\n  - clustergenerators\n  - infisicalauths\n  - infisicalconnections\n  - infisicaldynamicsecrets\n  - infisicalpushsecrets\n  - infisicalsecrets\n  - infisicalstaticsecrets\n  verbs:\n  - create\n  - delete\n  - get\n  - list\n  - patch\n  - update\n  - watch\n- apiGroups:\n  - secrets.infisical.com\n  resources:\n  - infisicalauths/status\n  - infisicalconnections/status\n  - infisicaldynamicsecrets/status\n  - infisicalpushsecrets/status\n  - infisicalsecrets/status\n  - infisicalstaticsecrets/status\n  verbs:\n  - get\n  - patch\n  - update\n- apiGroups:\n  - secrets.infisical.com\n  resources:\n  - infisicaldynamicsecrets/finalizers\n  - infisicalpushsecrets/finalizers\n  - infisicalsecrets/finalizers\n  - infisicalstaticsecrets/finalizers\n  verbs:\n  - update\n{{- end }}\n\n{{- if $isScopedMode }}\n{{- /* Scoped mode: Create a Role and RoleBinding in each namespace */ -}}\n{{- range $ns := $namespaces }}\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" $ }}-manager-role\n  namespace: {{ $ns | quote }}\n  labels:\n  {{- include \"secrets-operator.labels\" $ | nindent 4 }}\n{{- include \"secrets-operator.managerRules\" $ }}\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" $ }}-manager-rolebinding\n  namespace: {{ $ns | quote }}\n  labels:\n  {{- include \"secrets-operator.labels\" $ | nindent 4 }}\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: {{ include \"secrets-operator.fullname\" $ }}-manager-role\nsubjects:\n- kind: ServiceAccount\n  name: {{ include \"secrets-operator.serviceAccountName\" $ }}\n  namespace: {{ $.Release.Namespace }}\n{{- end }}\n{{- else }}\n{{- /* Cluster-scoped mode: Create a ClusterRole and ClusterRoleBinding */ -}}\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-manager-role\n  labels:\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\n{{- include \"secrets-operator.managerRules\" . }}\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: {{ include \"secrets-operator.fullname\" . }}-manager-rolebinding\n  labels:\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: {{ include \"secrets-operator.fullname\" . }}-manager-role\nsubjects:\n- kind: ServiceAccount\n  name: {{ include \"secrets-operator.serviceAccountName\" . }}\n  namespace: {{ .Release.Namespace }}\n{{- end }}\n"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/infisicalauth-crd.yaml",
+      "sha": null,
+      "content_sha256": "8cabfab46f385bc4dedd3ea923ba90050019ad576c35c53f3ff9cbcf7a531d4a",
+      "score": 181,
+      "content": "{{- if .Values.installCRDs }}\napiVersion: apiextensions.k8s.io/v1\nkind: CustomResourceDefinition\nmetadata:\n  name: infisicalauths.secrets.infisical.com\n  annotations:\n    controller-gen.kubebuilder.io/version: v0.18.0\n  labels:\n  {{- include \"secrets-operator.labels\" . | nindent 4 }}\nspec:\n  group: secrets.infisical.com\n  names:\n    kind: InfisicalAuth\n    listKind: InfisicalAuthList\n    plural: infisicalauths\n    singular: infisicalauth\n  scope: Namespaced\n  versions:\n  - additionalPrinterColumns:\n    - jsonPath: .spec.infisicalConnectionRef.name\n      name: Connection\n      type: string\n    - jsonPath: .spec.method\n      name: Method\n      type: string\n    - jsonPath: .metadata.creationTimestamp\n      name: Age\n      type: date\n    - jsonPath: .status.conditions[?(@.type==\"secrets.infisical.com/IsReady\")].status\n      name: Ready\n      type: string\n    name: v1beta1\n    schema:\n      openAPIV3Schema:\n        description: InfisicalAuth is the Schema for the InfisicalAuth API.\n        properties:\n          apiVersion:\n            description: |-\n              APIVersion defines the versioned schema of this representation of an object.\n              Servers should convert recognized schemas to the latest internal value, and\n              may reject unrecognized values.\n              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources\n            type: string\n          kind:\n            description: |-\n              Kind is a string value representing the REST resource this object represents.\n              Servers may infer this from the endpoint the client submits requests to.\n              Cannot be updated.\n              In CamelCase.\n              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds\n            type: string\n          metadata:\n            type: object\n          spec:\n            properties:\n              awsIam:\n                properties:\n                  identityIdRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                required:\n                - identityIdRef\n                type: object\n              azure:\n                properties:\n                  identityIdRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                  resource:\n                    type: string\n                required:\n                - identityIdRef\n                type: object\n              gcpIam:\n                properties:\n                  identityIdRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                  serviceAccountKeyFilePath:\n                    type: string\n                required:\n                - identityIdRef\n                - serviceAccountKeyFilePath\n                type: object\n              gcpIdToken:\n                properties:\n                  identityIdRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                required:\n                - identityIdRef\n                type: object\n              infisicalConnectionRef:\n                properties:\n                  name:\n                    type: string\n                  namespace:\n                    type: string\n                required:\n                - name\n                - namespace\n                type: object\n              kubernetes:\n                properties:\n                  identityIdRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                  serviceAccountRef:\n                    properties:\n                      name:\n                        type: string\n                      namespace:\n                        type: string\n                    required:\n                    - name\n                    - namespace\n                    type: object\n                  serviceAccountTokenAudiences:\n                    description: The audiences to use for the service account token.\n                      This is only relevant if `autoCreateServiceAccountToken` is true.\n                    items:\n                      type: string\n                    type: array\n                required:\n                - identityIdRef\n                - serviceAccountRef\n                type: object\n              ldap:\n                properties:\n                  identityIdRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                  passwordRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                  usernameRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                required:\n                - identityIdRef\n                - passwordRef\n                - usernameRef\n                type: object\n              method:\n                enum:\n                - universal\n                - kubernetes\n                - aws-iam\n                - azure\n                - gcp-id-token\n                - gcp-iam\n                - ldap\n                type: string\n              universal:\n                properties:\n                  clientIdRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                  clientSecretRef:\n                    properties:\n                      key:\n                        description: The name of the secret property with the value\n                        type: string\n                      name:\n                        description: The name of the Kubernetes Secret\n                        type: string\n                      namespace:\n                        description: The namespace where the Kubernetes Secret is located\n                        type: string\n                    required:\n                    - key\n                    - name\n                    - namespace\n                    type: object\n                required:\n                - clientIdRef\n                - clientSecretRef\n                type: object\n            required:\n            - method\n            type: object\n          status:\n            description: InfisicalAuthStatus defines the observed state of InfisicalAuth\n            properties:\n              conditions:\n                items:\n                  description: Condition contains details for one aspect of the current\n                    state of this API Resource.\n                  properties:\n                    lastTransitionTime:\n                      description: |-\n                        lastTransitionTime is the last time the condition transitioned from one status to another.\n                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.\n                      format: date-time\n                      type: string\n                    message:\n                      description: |-\n                        message is a human readable message indicating details about the transition.\n                        This may be an empty string.\n                      maxLength: 32768\n                      type: string\n                    observedGeneration:\n                      description: |-\n                        observedGeneration represents the .metadata.generation that the condition was set based upon.\n                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date\n                        with respect to the current state of the instance.\n                      format: int64\n                      minimum: 0\n                      type: integer\n                    reason:\n                      description: |-\n                        reason contains a programmatic identifier indicating the reason for the condition's last transition.\n                        Producers of specific condition types may define expected values and meanings for this field,\n                        and whether the values are considered a guaranteed API.\n                        The value should be a CamelCase string.\n                        This field may not be empty.\n                      maxLength: 1024\n                      minLength: 1\n                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$\n                      type: string\n                    status:\n                      description: status of the condition, one of True, False, Unknown.\n                      enum:\n                      - \"True\"\n                      - \"False\"\n                      - Unknown\n                      type: string\n                    type:\n                      description: type of condition in CamelCase or in foo.example.com/CamelCase.\n                      maxLength: 316\n                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$\n                      type: string\n                  required:\n                  - lastTransitionTime\n                  - message\n                  - reason\n                  - status\n                  - type\n                  type: object\n                type: array\n            required:\n            - conditions\n            type: object\n        type: object\n    served: true\n    storage: true\n    subresources:\n      status: {}\nstatus:\n  acceptedNames:\n    kind: \"\"\n    plural: \"\"\n  conditions: []\n  storedVersions: []\n{{- end }}\n"
+    },
+    {
+      "path": "config/samples/crd/infisicalauth/kubernetes-auth.yaml",
+      "sha": null,
+      "content_sha256": "78bd795c83a1fc401171b72c601ca30e4e2032984e419a5dd88157000afed3de",
+      "score": 179,
+      "content": "apiVersion: secrets.infisical.com/v1beta1\nkind: InfisicalAuth\nmetadata:\n  name: infisicalauth-kubernetes-demo\nspec:\n  infisicalConnectionRef:\n    name: infisicalconnection-demo\n    namespace: default\n  method: kubernetes\n  kubernetes:\n    identityIdRef:\n      name: kubernetes-credentials\n      namespace: default\n      key: identityId\n    serviceAccountRef:\n      name: default\n      namespace: default\n"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/gcp-iam-auth/README.md",
+      "sha": null,
+      "content_sha256": "b5467987306a36b5d15979bbdb680c0ed7fef695ae1d53836fa77696a9bd581b",
+      "score": 172,
+      "content": "# GCP IAM Auth - Additional Setup\n\nFor details on setting up GCP IAM auth on the Infisical side, see the [GCP IAM Auth guide](https://infisical.com/docs/documentation/platform/identities/gcp-auth#gcp-iam-auth).\n\nGCP IAM auth requires a service account key JSON file to be available inside the operator pod. This means you need to:\n\n1. Create a Kubernetes Secret with your GCP service account key\n2. Mount it into the operator pod via Helm values\n\n## 1. Create the Secret\n\nDownload your GCP service account key JSON file from the GCP Console, then run the following command from the same directory where the file was downloaded. Replace the namespace with the one where the operator Helm chart is installed:\n\n```bash\nkubectl create secret generic gcp-sa-key \\\n  --from-file=service-account-key.json=./service-account-key.json \\\n  -n <operator-namespace>\n```\n\n## 2. Mount it into the operator pod\n\nAdd the following to your Helm values:\n\n```yaml\ncontrollerManager:\n  extraVolumes:\n    - name: gcp-sa-key\n      secret:\n        secretName: gcp-sa-key\n  manager:\n    extraVolumeMounts:\n      - name: gcp-sa-key\n        mountPath: /etc/gcp\n        readOnly: true\n```\n\nThen upgrade the release:\n\n```bash\nhelm upgrade <release-name> infisical/secrets-operator -f values.yaml -n <operator-namespace>\n```\n\n## 3. Apply the example\n\nThe `serviceAccountKeyFilePath` in `infisicalstaticsecret.yaml` is set to `/etc/gcp/service-account-key.json` to match the mount above. If you used a different mount path or file name, update it accordingly.\n\n```bash\nkubectl apply -f infisicalstaticsecret.yaml\n```\n"
+    },
+    {
+      "path": "internal/auth/azure_test.go",
+      "sha": null,
+      "content_sha256": "2d6bdc9c4508dcb9c85b053f7de9634b8c2f590c4dc43d4ee055bf4f9411bc00",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n)\n\nvar _ = Describe(\"Azure Auth\", func() {\n\tIt(\"should fail when .spec.azure is nil\", func() {\n\t\tprovider := auth.NewAzureAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.AzureAuth)\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.azure is not set\"))\n\t})\n\n\tIt(\"should succeed when .spec.azure is set\", func() {\n\t\tprovider := auth.NewAzureAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.AzureAuth)\n\t\tauthCR.Spec.Azure = &secretsv1beta1.AzureAuthConfig{\n\t\t\tIdentityIDRef: secretsv1beta1.SecretReference{Name: \"azure-identity-id\", Namespace: \"default\", Key: \"value\"},\n\t\t}\n\n\t\tExpect(provider.Validate(ctx, authCR)).To(Succeed())\n\t})\n})\n"
+    },
+    {
+      "path": "internal/auth/gcp_iam_test.go",
+      "sha": null,
+      "content_sha256": "02fb500e41a767aed21baf43c84f7495526cb58473f650bb481979800a14b558",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n)\n\nvar _ = Describe(\"GCP IAM Auth\", func() {\n\tIt(\"should fail when .spec.gcpIam is nil\", func() {\n\t\tprovider := auth.NewGCPIamAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.GCPIamAuth)\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.gcpIam is not set\"))\n\t})\n\n\tIt(\"should succeed when .spec.gcpIam is set\", func() {\n\t\tprovider := auth.NewGCPIamAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.GCPIamAuth)\n\t\tauthCR.Spec.GCPIam = &secretsv1beta1.GCPIamAuthConfig{\n\t\t\tIdentityIDRef:             secretsv1beta1.SecretReference{Name: \"gcp-iam-identity-id\", Namespace: \"default\", Key: \"value\"},\n\t\t\tServiceAccountKeyFilePath: \"/var/run/secrets/gcp/key.json\",\n\t\t}\n\n\t\tExpect(provider.Validate(ctx, authCR)).To(Succeed())\n\t})\n})\n"
+    },
+    {
+      "path": "internal/auth/aws_iam_test.go",
+      "sha": null,
+      "content_sha256": "37c31a3796a9eb04d6384426122e8c55832ba8e3495ec5879a456e973ea3353d",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n)\n\nvar _ = Describe(\"AWS IAM Auth\", func() {\n\tIt(\"should fail when .spec.awsIam is nil\", func() {\n\t\tprovider := auth.NewAWSIamAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.AWSIamAuth)\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.awsIam is not set\"))\n\t})\n\n\tIt(\"should succeed when .spec.awsIam is set\", func() {\n\t\tprovider := auth.NewAWSIamAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.AWSIamAuth)\n\t\tauthCR.Spec.AWSIam = &secretsv1beta1.AWSIamAuthConfig{\n\t\t\tIdentityIDRef: secretsv1beta1.SecretReference{Name: \"aws-identity-id\", Namespace: \"default\", Key: \"value\"},\n\t\t}\n\n\t\tExpect(provider.Validate(ctx, authCR)).To(Succeed())\n\t})\n})\n"
+    },
+    {
+      "path": "internal/auth/ldap_test.go",
+      "sha": null,
+      "content_sha256": "08b4e110bc0ac40a71f56b2daeec05f56a1cb3a37c1027d2538ccf2bf58831bd",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n)\n\nvar _ = Describe(\"LDAP Auth\", func() {\n\tconst (\n\t\tusernameSecretName   = \"ldap-username\"\n\t\tpasswordSecretName   = \"ldap-password\"\n\t\tidentityIDSecretName = \"ldap-identity-id\"\n\t\tnamespace            = \"default\"\n\t\tsecretKey            = \"value\"\n\t)\n\n\tIt(\"should fail when .spec.ldap is nil\", func() {\n\t\tprovider := auth.NewLDAPAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.LDAPAuth)\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.ldap is not set\"))\n\t})\n\n\tIt(\"should fail when the referenced secrets do not exist\", func() {\n\t\tprovider := auth.NewLDAPAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.LDAPAuth)\n\t\tauthCR.Spec.LDAP = &secretsv1beta1.LDAPAuthConfig{\n\t\t\tUsernameRef:   secretsv1beta1.SecretReference{Name: usernameSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tPasswordRef:   secretsv1beta1.SecretReference{Name: passwordSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tIdentityIDRef: secretsv1beta1.SecretReference{Name: identityIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unable to fetch secret\"))\n\t})\n\n\tIt(\"should succeed when secrets exist, then fail after deletion\", func() {\n\t\tBy(\"creating the required secrets\")\n\t\tcreateSecret(usernameSecretName, namespace, map[string][]byte{secretKey: []byte(\"admin\")})\n\t\tcreateSecret(passwordSecretName, namespace, map[string][]byte{secretKey: []byte(\"password123\")})\n\t\tcreateSecret(identityIDSecretName, namespace, map[string][]byte{secretKey: []byte(\"identity-abc\")})\n\n\t\tprovider := auth.NewLDAPAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.LDAPAuth)\n\t\tauthCR.Spec.LDAP = &secretsv1beta1.LDAPAuthConfig{\n\t\t\tUsernameRef:   secretsv1beta1.SecretReference{Name: usernameSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tPasswordRef:   secretsv1beta1.SecretReference{Name: passwordSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tIdentityIDRef: secretsv1beta1.SecretReference{Name: identityIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\tBy(\"validating — should succeed\")\n\t\tExpect(provider.Validate(ctx, authCR)).To(Succeed())\n\n\t\tBy(\"deleting the secrets\")\n\t\tdeleteSecret(usernameSecretName, namespace)\n\t\tdeleteSecret(passwordSecretName, namespace)\n\t\tdeleteSecret(identityIDSecretName, namespace)\n\n\t\tBy(\"validating again — should fail\")\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unable to fetch secret\"))\n\t})\n\n\tIt(\"should fail when the secret exists but the key is missing\", func() {\n\t\tsecretName := \"ldap-wrong-key\"\n\t\tcreateSecret(secretName, namespace, map[string][]byte{\"wrong-key\": []byte(\"data\")})\n\t\tDeferCleanup(func() { deleteSecret(secretName, namespace) })\n\n\t\tprovider := auth.NewLDAPAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.LDAPAuth)\n\t\tauthCR.Spec.LDAP = &secretsv1beta1.LDAPAuthConfig{\n\t\t\tUsernameRef:   secretsv1beta1.SecretReference{Name: secretName, Namespace: namespace, Key: secretKey},\n\t\t\tPasswordRef:   secretsv1beta1.SecretReference{Name: secretName, Namespace: namespace, Key: secretKey},\n\t\t\tIdentityIDRef: secretsv1beta1.SecretReference{Name: secretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"has no value for key\"))\n\t})\n})\n"
+    },
+    {
+      "path": "internal/auth/suite_test.go",
+      "sha": null,
+      "content_sha256": "21d27b3ffa85540285f629312383cca6621ad3514765a4e6ad4d7ea21b2b5701",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t\"context\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\t\"k8s.io/client-go/kubernetes/scheme\"\n\t\"sigs.k8s.io/controller-runtime/pkg/client\"\n\t\"sigs.k8s.io/controller-runtime/pkg/envtest\"\n\tlogf \"sigs.k8s.io/controller-runtime/pkg/log\"\n\t\"sigs.k8s.io/controller-runtime/pkg/log/zap\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n)\n\nvar (\n\tctx       context.Context\n\tcancel    context.CancelFunc\n\ttestEnv   *envtest.Environment\n\tk8sClient client.Client\n)\n\nfunc TestAuth(t *testing.T) {\n\tRegisterFailHandler(Fail)\n\tRunSpecs(t, \"Auth Suite\")\n}\n\nvar _ = BeforeSuite(func() {\n\tlogf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))\n\n\tctx, cancel = context.WithCancel(context.TODO())\n\n\terr := secretsv1beta1.AddToScheme(scheme.Scheme)\n\tExpect(err).NotTo(HaveOccurred())\n\n\tBy(\"bootstrapping test environment\")\n\ttestEnv = &envtest.Environment{\n\t\tCRDDirectoryPaths:     []string{filepath.Join(\"..\", \"..\", \"config\", \"crd\", \"bases\")},\n\t\tErrorIfCRDPathMissing: true,\n\t}\n\n\tif dir := getFirstFoundEnvTestBinaryDir(); dir != \"\" {\n\t\ttestEnv.BinaryAssetsDirectory = dir\n\t}\n\n\tcfg, err := testEnv.Start()\n\tExpect(err).NotTo(HaveOccurred())\n\tExpect(cfg).NotTo(BeNil())\n\n\tk8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})\n\tExpect(err).NotTo(HaveOccurred())\n\tExpect(k8sClient).NotTo(BeNil())\n})\n\nvar _ = AfterSuite(func() {\n\tBy(\"tearing down the test environment\")\n\tcancel()\n\terr := testEnv.Stop()\n\tExpect(err).NotTo(HaveOccurred())\n})\n\nfunc getFirstFoundEnvTestBinaryDir() string {\n\tbasePath := filepath.Join(\"..\", \"..\", \"bin\", \"k8s\")\n\tentries, err := os.ReadDir(basePath)\n\tif err != nil {\n\t\tlogf.Log.Error(err, \"Failed to read directory\", \"path\", basePath)\n\t\treturn \"\"\n\t}\n\tfor _, entry := range entries {\n\t\tif entry.IsDir() {\n\t\t\treturn filepath.Join(basePath, entry.Name())\n\t\t}\n\t}\n\treturn \"\"\n}\n"
+    },
+    {
+      "path": "internal/auth/universal_test.go",
+      "sha": null,
+      "content_sha256": "90fb39b6934bcf16aa1a038c612f7df1a7479f72b22ad2b866227ba7b6264761",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n)\n\nvar _ = Describe(\"Universal Auth\", func() {\n\tconst (\n\t\tclientIDSecretName     = \"universal-client-id\"\n\t\tclientSecretSecretName = \"universal-client-secret\"\n\t\tnamespace              = \"default\"\n\t\tsecretKey              = \"value\"\n\t)\n\n\tIt(\"should fail when .spec.universal is nil\", func() {\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.UniversalAuth)\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.universal is not set\"))\n\t})\n\n\tIt(\"should fail when the referenced secrets do not exist\", func() {\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.UniversalAuth)\n\t\tauthCR.Spec.Universal = &secretsv1beta1.UniversalAuthConfig{\n\t\t\tClientIdRef:     secretsv1beta1.SecretReference{Name: clientIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tClientSecretRef: secretsv1beta1.SecretReference{Name: clientSecretSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unable to fetch secret\"))\n\t})\n\n\tIt(\"should succeed when secrets exist, then fail after deletion\", func() {\n\t\tBy(\"creating the required secrets\")\n\t\tcreateSecret(clientIDSecretName, namespace, map[string][]byte{secretKey: []byte(\"my-client-id\")})\n\t\tcreateSecret(clientSecretSecretName, namespace, map[string][]byte{secretKey: []byte(\"my-client-secret\")})\n\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.UniversalAuth)\n\t\tauthCR.Spec.Universal = &secretsv1beta1.UniversalAuthConfig{\n\t\t\tClientIdRef:     secretsv1beta1.SecretReference{Name: clientIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tClientSecretRef: secretsv1beta1.SecretReference{Name: clientSecretSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\tBy(\"validating — should succeed\")\n\t\tExpect(provider.Validate(ctx, authCR)).To(Succeed())\n\n\t\tBy(\"deleting the secrets\")\n\t\tdeleteSecret(clientIDSecretName, namespace)\n\t\tdeleteSecret(clientSecretSecretName, namespace)\n\n\t\tBy(\"validating again — should fail\")\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unable to fetch secret\"))\n\t})\n\n\tIt(\"should fail when the secret exists but the key is missing\", func() {\n\t\tsecretName := \"universal-wrong-key\"\n\t\tcreateSecret(secretName, namespace, map[string][]byte{\"wrong-key\": []byte(\"data\")})\n\t\tDeferCleanup(func() { deleteSecret(secretName, namespace) })\n\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.UniversalAuth)\n\t\tauthCR.Spec.Universal = &secretsv1beta1.UniversalAuthConfig{\n\t\t\tClientIdRef:     secretsv1beta1.SecretReference{Name: secretName, Namespace: namespace, Key: secretKey},\n\t\t\tClientSecretRef: secretsv1beta1.SecretReference{Name: secretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"has no value for key\"))\n\t})\n})\n"
+    },
+    {
+      "path": "internal/auth/gcp_id_token_test.go",
+      "sha": null,
+      "content_sha256": "c394f4fc8d84d7195abe0f41583c62c2ee8677834e4e2c507d07f7fe58988311",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n)\n\nvar _ = Describe(\"GCP ID Token Auth\", func() {\n\tIt(\"should fail when .spec.gcpIdToken is nil\", func() {\n\t\tprovider := auth.NewGCPIdTokenAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.GCPIdTokenAuth)\n\n\t\terr := provider.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.gcpIdToken is not set\"))\n\t})\n\n\tIt(\"should succeed when .spec.gcpIdToken is set\", func() {\n\t\tprovider := auth.NewGCPIdTokenAuth(k8sClient)\n\t\tauthCR := newInfisicalAuth(secretsv1beta1.GCPIdTokenAuth)\n\t\tauthCR.Spec.GCPIdToken = [REDACTED]\n\t\t\tIdentityIDRef: secretsv1beta1.SecretReference{Name: \"gcp-id-token-identity-id\", Namespace: \"default\", Key: \"value\"},\n\t\t}\n\n\t\tExpect(provider.Validate(ctx, authCR)).To(Succeed())\n\t})\n})\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "internal/auth/helpers_test.go",
+      "sha": null,
+      "content_sha256": "94d80a51860fc54d18eb07c4157dcb4b5dd5c1ac4287b4af2db4606956569860",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/gomega\"\n\tcorev1 \"k8s.io/api/core/v1\"\n\tmetav1 \"k8s.io/apimachinery/pkg/apis/meta/v1\"\n\t\"k8s.io/apimachinery/pkg/types\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n)\n\nfunc createSecret(name, namespace string, data map[string][]byte) {\n\tsecret := &corev1.Secret{\n\t\tObjectMeta: metav1.ObjectMeta{\n\t\t\tName:      name,\n\t\t\tNamespace: namespace,\n\t\t},\n\t\tData: data,\n\t}\n\tExpect(k8sClient.Create(ctx, secret)).To(Succeed())\n}\n\nfunc deleteSecret(name, namespace string) {\n\tsecret := &corev1.Secret{}\n\tExpect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, secret)).To(Succeed())\n\tExpect(k8sClient.Delete(ctx, secret)).To(Succeed())\n}\n\nfunc newInfisicalAuth(method secretsv1beta1.InfisicalAuthMethod) *secretsv1beta1.InfisicalAuth {\n\treturn &secretsv1beta1.InfisicalAuth{\n\t\tObjectMeta: metav1.ObjectMeta{\n\t\t\tName:      \"test-auth\",\n\t\t\tNamespace: \"default\",\n\t\t},\n\t\tSpec: secretsv1beta1.InfisicalAuthSpec{\n\t\t\tMethod: method,\n\t\t},\n\t}\n}\n"
+    },
+    {
+      "path": "internal/auth/strategy_resolver_test.go",
+      "sha": null,
+      "content_sha256": "4430a23e17c9dd43cae3f14d8f2d8b6ee541bd7a264e799c5798bfb904389770",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\t\"time\"\n\n\t\"github.com/go-logr/logr\"\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tinfisicalSdk \"github.com/infisical/go-sdk\"\n\n\tsecretsv1beta1 \"github.com/Infisical/infisical/k8-operator/api/v1beta1\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/auth\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/cache\"\n\t\"github.com/Infisical/infisical/k8-operator/internal/model\"\n)\n\ntype fakeAuthStrategy struct {\n\tcallCount int\n\tresult    *model.AuthenticationResult\n}\n\nfunc (f *fakeAuthStrategy) Validate(_ context.Context, _ *secretsv1beta1.InfisicalAuth) error {\n\treturn nil\n}\n\nfunc (f *fakeAuthStrategy) Authenticate(_ context.Context, _ *model.InfisicalConnection, _ *secretsv1beta1.InfisicalAuth) (*model.AuthenticationResult, error) {\n\tf.callCount++\n\treturn f.result, nil\n}\n\nvar _ = Describe(\"Registry\", func() {\n\tIt(\"should return an error for an unsupported auth method\", func() {\n\t\tauthCache, err := cache.NewAuthCache()\n\t\tExpect(err).ToNot(HaveOccurred())\n\n\t\tregistry := auth.NewAuthStrategyResolver(k8sClient, authCache, logr.New(nil), false)\n\t\tauthCR := newInfisicalAuth(\"unsupported-method\")\n\n\t\terr = registry.Validate(ctx, authCR)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unsupported auth method\"))\n\t})\n\n\tIt(\"should delegate to the correct provider via the registry\", func() {\n\t\tauthCache, err := cache.NewAuthCache()\n\t\tExpect(err).ToNot(HaveOccurred())\n\n\t\tregistry := auth.NewAuthStrategyResolver(k8sClient, authCache, logr.New(nil), false)\n\n\t\ttype registryTestCase struct {\n\t\t\tname   string\n\t\t\tmethod secretsv1beta1.InfisicalAuthMethod\n\t\t\tsetup  func(authCR *secretsv1beta1.InfisicalAuth)\n\t\t}\n\n\t\tentries := []registryTestCase{\n\t\t\t{\n\t\t\t\tname:   \"kubernetes\",\n\t\t\t\tmethod: secretsv1beta1.KubernetesAuth,\n\t\t\t\tsetup: func(authCR *secretsv1beta1.InfisicalAuth) {\n\t\t\t\t\tauthCR.Spec.Kubernetes = &secretsv1beta1.KubernetesAuthConfig{\n\t\t\t\t\t\tServiceAccountRef: secretsv1beta1.NamespacedName{Name: \"default\", Namespace: \"default\"},\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t},\n\t\t\t{\n\t\t\t\tname:   \"aws-iam\",\n\t\t\t\tmethod: secretsv1beta1.AWSIamAuth,\n\t\t\t\tsetup: func(authCR *secretsv1beta1.InfisicalAuth) {\n\t\t\t\t\tauthCR.Spec.AWSIam = &secretsv1beta1.AWSIamAuthConfig{\n\t\t\t\t\t\tIdentityIDRef: secretsv1beta1.SecretReference{Name: \"aws-id\", Namespace: \"default\", Key: \"value\"},\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t},\n\t\t\t{\n\t\t\t\tname:   \"azure\",\n\t\t\t\tmethod: secretsv1beta1.AzureAuth,\n\t\t\t\tsetup: func(authCR *secretsv1beta1.InfisicalAuth) {\n\t\t\t\t\tauthCR.Spec.Azure = &secretsv1beta1.AzureAuthConfig{IdentityIDRef: secretsv1beta1.SecretReference{Name: \"azure-id\", Namespace: \"default\", Key: \"value\"}}\n\t\t\t\t},\n\t\t\t},\n\t\t\t{\n\t\t\t\tname:   \"gcp-id-token\",\n\t\t\t\tmethod: secretsv1beta1.GCPIdTokenAuth,\n\t\t\t\tsetup: func(authCR *secretsv1beta1.InfisicalAuth) {\n\t\t\t\t\tauthCR.Spec.GCPIdToken = [REDACTED] secretsv1beta1.SecretReference{Name: \"gcp-id-token-id\", Namespace: \"default\", Key: \"value\"}}\n\t\t\t\t},\n\t\t\t},\n\t\t\t{\n\t\t\t\tname:   \"gcp-iam\",\n\t\t\t\tmethod: secretsv1beta1.GCPIamAuth,\n\t\t\t\tsetup: func(authCR *secretsv1beta1.InfisicalAuth) {\n\t\t\t\t\tauthCR.Spec.GCPIam = &secretsv1beta1.GCPIamAuthConfig{\n\t\t\t\t\t\tIdentityIDRef:             secretsv1beta1.SecretReference{Name: \"gcp-iam-id\", Namespace: \"default\", Key: \"value\"},\n\t\t\t\t\t\tServiceAccountKeyFilePath: \"/path\",\n\t\t\t\t\t}\n\t\t\t\t},\n\t\t\t},\n\t\t}\n\n\t\tfor _, tc := range entries {\n\t\t\tBy(fmt.Sprintf(\"validating %s via the registry\", tc.name))\n\t\t\tauthCR := newInfisicalAuth(tc.method)\n\t\t\ttc.setup(authCR)\n\t\t\tExpect(registry.Validate(ctx, authCR)).To(Succeed())\n\t\t}\n\t})\n})\n\nvar _ = Describe(\"Cache behavior\", func() {\n\tvar (\n\t\tauthCache *cache.AuthCache\n\t\tfake      *fakeAuthStrategy\n\t\tresolver  *auth.AuthStrategyResolver\n\t\tconn      *secretsv1beta1.InfisicalConnection\n\t\tauthCR    *secretsv1beta1.InfisicalAuth\n\t)\n\n\tBeforeEach(func() {\n\t\tvar err error\n\t\tauthCache, err = cache.NewAuthCache(cache.WithMinTTLThreshold(1 * time.Second))\n\t\tExpect(err).ToNot(HaveOccurred())\n\n\t\tfake = &fakeAuthStrategy{\n\t\t\tresult: &model.AuthenticationResult{\n\t\t\t\tMachineIdentity: infisicalSdk.MachineIdentityCredential{\n\t\t\t\t\tAccessToken:       \"fake-token\",\n\t\t\t\t\tExpiresIn:         600,\n\t\t\t\t\tAccessTokenMaxTTL: 300,\n\t\t\t\t},\n\t\t\t},\n\t\t}\n\n\t\tresolver = auth.NewAuthStrategyResolverForTesting(k8sClient, authCache, map[secretsv1beta1.InfisicalAuthMethod]auth.InfisicalAuthStrategy{\n\t\t\tsecretsv1beta1.UniversalAuth: fake,\n\t\t})\n\n\t\tconn = &secretsv1beta1.InfisicalConnection{\n\t\t\tSpec: secretsv1beta1.InfisicalConnectionSpec{\n\t\t\t\tAddress: \"https://app.infisical.com\",\n\t\t\t},\n\t\t}\n\n\t\tauthCR = newInfisicalAuth(secretsv1beta1.UniversalAuth)\n\t})\n\n\tAfterEach(func() {\n\t\tauthCache.Cleanup()\n\t})\n\n\tIt(\"should call the provider on the first request and return from cache on the second\", func() {\n\t\tresult1, err := resolver.Authenticate(ctx, conn, authCR)\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(result1.MachineIdentity.AccessToken).To(Equal(\"fake-token\"))\n\t\tExpect(fake.callCount).To(Equal(1))\n\n\t\tresult2, err := resolver.Authenticate(ctx, conn, authCR)\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(result2.MachineIdentity.AccessToken).To(Equal(\"fake-token\"))\n\t\tExpect(fake.callCount).To(Equal(1))\n\t})\n\n\tIt(\"should call the provider again after the cache entry is evicted\", func() {\n\t\tresult1, err := resolver.Authenticate(ctx, conn, authCR)\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(result1).NotTo(BeNil())\n\t\tExpect(fake.callCount).To(Equal(1))\n\n\t\tcacheKey := cache.ClientCacheKey{\n\t\t\tName:      authCR.GetName(),\n\t\t\tNamespace: authCR.GetNamespace(),\n\t\t}\n\t\tauthCache.Delete(cacheKey)\n\n\t\tresult2, err := resolver.Authenticate(ctx, conn, authCR)\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(result2).NotTo(BeNil())\n\t\tExpect(fake.callCount).To(Equal(2))\n\t})\n\n\tIt(\"should call the provider again after the cache TTL expires\", func() {\n\t\tfake.result.MachineIdentity.ExpiresIn = 3 // 70% = 2.1s TTL, above 1s threshold\n\n\t\tresult1, err := resolver.Authenticate(ctx, conn, authCR)\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(result1).NotTo(BeNil())\n\t\tExpect(fake.callCount).To(Equal(1))\n\n\t\tresult2, err := resolver.Authenticate(ctx, conn, authCR)\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(result2).NotTo(BeNil())\n\t\tExpect(fake.callCount).To(Equal(1))\n\n\t\ttime.Sleep(3 * time.Second)\n\n\t\tresult3, err := resolver.Authenticate(ctx, conn, authCR)\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(result3).NotTo(BeNil())\n\t\tExpect(fake.callCount).To(Equal(2))\n\t})\n})\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 43,
+  "sensitive_files_skipped": [
+    {
+      "path": ".github/workflows/run-helm-chart-tests-secret-operator.yml",
+      "sha": "a382bb01d41051d3f5bc96a8d5cdb3c79a359f86",
+      "size": 3576,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_clustergenerators.yaml",
+      "sha": "0681f26ecf852edfc3cf44a63b215440c0dd9d57",
+      "size": 3861,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_infisicalauths.yaml",
+      "sha": "bb5638f57171b313693a181c4c2c21631297dcdc",
+      "size": 14549,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_infisicalconnections.yaml",
+      "sha": "983c85bea5cad0400173630fe357beb50061d001",
+      "size": 6166,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_infisicaldynamicsecrets.yaml",
+      "sha": "35d022b6a9d0fb514217160a39ce53221bf47d70",
+      "size": 14747,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_infisicalpushsecrets.yaml",
+      "sha": "542a3a4f5df5b07a34256dcf1d594acaeea3ab80",
+      "size": 14587,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_infisicalsecrets.yaml",
+      "sha": "6972e6248e3abba1936c7d0da680443129b7a46a",
+      "size": 27115,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_infisicalstaticsecrets.yaml",
+      "sha": "edfaead88ed3a731d857ad200c6e3e78f8d4abd6",
+      "size": 9850,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_passwords.yaml",
+      "sha": "788e077a6e12e789d1a91f3e02ab037a25611b63",
+      "size": 3031,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/crd/bases/secrets.infisical.com_uuids.yaml",
+      "sha": "659dfc7ac105488265a908e3f6ca51048fe84929",
+      "size": 1610,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicaldynamicsecret_admin_role.yaml",
+      "sha": "8bcd0e68cfed3879115cc5238d1a4146b2f453bb",
+      "size": 796,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicaldynamicsecret_editor_role.yaml",
+      "sha": "4d3ffc985c72fee65836a98e8bd5f3aba2d716f2",
+      "size": 848,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicaldynamicsecret_viewer_role.yaml",
+      "sha": "d5cfc7be94c7d138c14e0a67b982f8a0e74194ba",
+      "size": 816,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicalpushsecretsecret_admin_role.yaml",
+      "sha": "e8674cc6f045163645c230599223f50d3c1443ab",
+      "size": 805,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicalpushsecretsecret_editor_role.yaml",
+      "sha": "97ab6dc66d137d01b3bd1587b439303905d1848b",
+      "size": 857,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicalpushsecretsecret_viewer_role.yaml",
+      "sha": "4a7ae8346f06bc86e8f157d050c2539b7bf65497",
+      "size": 825,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicalsecret_admin_role.yaml",
+      "sha": "1c5d88eed138dc5e48f4b0c9d74d376a3c1de6b6",
+      "size": 775,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicalsecret_editor_role.yaml",
+      "sha": "a70abf3c448fff18f72370169955b04fc9419e29",
+      "size": 827,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/rbac/infisicalsecret_viewer_role.yaml",
+      "sha": "a5a7249402e3227549b5e47ae29a135d8bc16a3c",
+      "size": 795,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/crd/infisicaldynamicsecret/dynamicSecret.yaml",
+      "sha": "98bb5486619d412dcfdae3777bba0615539a1490",
+      "size": 969,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/crd/infisicalsecret/infisical-secret-crd-with-template.yml",
+      "sha": "06086e93f8777c7b43fa291a17f1cb7eb043c3cb",
+      "size": 3834,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/crd/infisicalsecret/infisicalSecretCrd.yaml",
+      "sha": "572d058e01ae0ac18b645d4bade874e042136423",
+      "size": 3610,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/crd/pushsecret/push-secret-with-template.yaml",
+      "sha": "a81c2189da885c13ec2869e9c81b1633c727c62a",
+      "size": 4528,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/crd/pushsecret/push-secret.yaml",
+      "sha": "15302e6ccad639d191804f433e8d7cede9e89059",
+      "size": 1110,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/crd/pushsecret/source-secret-with-templating.yaml",
+      "sha": "79a12a4d4d8368e0798e61ca69c8e3c80a75741d",
+      "size": 12483,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/crd/pushsecret/source-secret.yaml",
+      "sha": "88fd3e0d26df6c66590a7b2bcafed48102863d8c",
+      "size": 200,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/k8s-auth/infisical-service-account.yaml",
+      "sha": "60c7f14fda45ed938f24bc1a18b2225f57d85ddd",
+      "size": 89,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/k8s-auth/service-account-token.yaml",
+      "sha": "894c98b06b7b678032f3cd439fa4cfe9de528bc2",
+      "size": 180,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/ldapAuthIdentitySecret.yaml",
+      "sha": "95e258caa49738ed2fd81ce1e548efee865f639f",
+      "size": 149,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/serviceTokenSecret.yaml",
+      "sha": "dc03abcc2c9bd9f44db9aa4ece5755685f9160d2",
+      "size": 140,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/universalAuthIdentitySecret.yaml",
+      "sha": "3dd2f7bf6ead13f966ce101b5cabce8262bde1da",
+      "size": 170,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/aws-iam-auth/infisicalstaticsecret.yaml",
+      "sha": "8a21687d6d5f77f15506aff9b83884f42a24261c",
+      "size": 1320,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/azure-auth/infisicalstaticsecret.yaml",
+      "sha": "9fb91736e7649714f4c3b1a1516f3742f439d465",
+      "size": 1328,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/gcp-iam-auth/infisicalstaticsecret.yaml",
+      "sha": "a07ff61f1dc6432a3c5cc3e7f89ccaa747195933",
+      "size": 1576,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/gcp-id-token-auth/infisicalstaticsecret.yaml",
+      "sha": "6d55124de1624eaf11b84a420d1eaf28eec7f8fc",
+      "size": 1346,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/kubernetes-auth/infisicalstaticsecret.yaml",
+      "sha": "f4fd418af0caed22ce2d09a9754087ae292db927",
+      "size": 2049,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/ldap-auth/infisicalstaticsecret.yaml",
+      "sha": "e8caf19c062f9ed390ca0b3cca7866b1276b919d",
+      "size": 1605,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "examples/v1beta1/infisicalstaticsecret/universal-auth/infisicalstaticsecret.yaml",
+      "sha": "4a07e9ddc0f8d92dbf90688e9b0374e887b818e8",
+      "size": 1520,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/infisicaldynamicsecret-crd.yaml",
+      "sha": "edbd016dc4ad94878c4424c789f58de242b1ab71",
+      "size": 14916,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/infisicalpushsecret-crd.yaml",
+      "sha": "4ab7c1c07c4a30523ac3ebbfff8e1ca655a5afb5",
+      "size": 14696,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/infisicalsecret-crd.yaml",
+      "sha": "367c5fe086731f45a3798e38ab0ba30fb6d75095",
+      "size": 27260,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "helm-charts/secrets-operator/templates/infisicalstaticsecret-crd.yaml",
+      "sha": "a9f5212eaf421dd6261b0769e66135fbb78a6a92",
+      "size": 10031,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "kubectl-install/install-secrets-operator.yaml",
+      "sha": "2956fe570be76ce2ecaddf4aadabe8c831835c10",
+      "size": 53564,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T19:26:13.344266+00:00"
+}
