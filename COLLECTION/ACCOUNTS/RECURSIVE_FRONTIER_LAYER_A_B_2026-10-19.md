@@ -24,19 +24,25 @@ This Markdown companion intentionally feeds the existing `COLLECTION/AUTO/deep_e
 - [public-clis](https://github.com/public-clis) — 4 rows observed.
 - [yt-dlp](https://github.com/yt-dlp) — 14 rows observed.
 
-## Layer B — discovered, repository rows not yet persisted
+## Layer B — repository identity snapshot persisted (2026-10-20)
 
-- [jackwener](https://github.com/jackwener) — 47 search results observed; inventory not committed.
-- [stickerdaniel](https://github.com/stickerdaniel) — 75 search results observed; inventory not committed.
-- [daytonaio](https://github.com/daytonaio) — 12 search results observed; inventory not committed.
-- [e2b-dev](https://github.com/e2b-dev) — 85 search results observed; inventory not committed.
-- [ChromeDevTools](https://github.com/ChromeDevTools) — 19 search results observed; inventory not committed.
-- [agentclientprotocol](https://github.com/agentclientprotocol) — 15 search results observed; inventory not committed.
-- [jina-ai](https://github.com/jina-ai) — 100 results on first page only; more pages may exist.
-- [nicobailon](https://github.com/nicobailon) — 100 results on first page only; more pages may exist.
-- [kurtmckee](https://github.com/kurtmckee) — 100 results on first page only; more pages may exist.
-- [xpzouying](https://github.com/xpzouying) — 100 results on first page only; more pages may exist.
-- [vercel-labs](https://github.com/vercel-labs) — 100 results on first page only; more pages may exist.
+The previously uncommitted Layer B repository identities are now persisted in [RECURSIVE_ACCOUNT_FRONTIER_LAYER_B_2026-10-20.json](./RECURSIVE_ACCOUNT_FRONTIER_LAYER_B_2026-10-20.json). The snapshot contains **1,523 public repository identity records across 11 owners**. Queries were paginated until the returned page contained fewer than 100 records for each owner.
+
+| Owner | Repository records | Pages | Search pagination |
+|---|---:|---:|---|
+| [jackwener](https://github.com/jackwener) | 47 | 1 | Complete by page size |
+| [stickerdaniel](https://github.com/stickerdaniel) | 76 | 1 | Complete by page size |
+| [daytonaio](https://github.com/daytonaio) | 12 | 1 | Complete by page size |
+| [e2b-dev](https://github.com/e2b-dev) | 85 | 1 | Complete by page size |
+| [ChromeDevTools](https://github.com/ChromeDevTools) | 19 | 1 | Complete by page size |
+| [agentclientprotocol](https://github.com/agentclientprotocol) | 15 | 1 | Complete by page size |
+| [jina-ai](https://github.com/jina-ai) | 267 | 3 | Complete by page size |
+| [nicobailon](https://github.com/nicobailon) | 134 | 2 | Complete by page size |
+| [kurtmckee](https://github.com/kurtmckee) | 227 | 3 | Complete by page size |
+| [xpzouying](https://github.com/xpzouying) | 252 | 3 | Complete by page size |
+| [vercel-labs](https://github.com/vercel-labs) | 389 | 4 | Complete by page size |
+
+**Authority boundary:** these are GitHub repository-search results scoped by `user:<owner>`, not authoritative owner API enumerations. Pagination reached a short final page for each owner, but repository search/indexing semantics can still omit results. Treat these records as discovery inventory; the deep-extraction workflow must independently enumerate and inspect source files. This snapshot does not claim that extraction has completed.
 
 ## Targeted repository references (not account-wide sweeps)
 
