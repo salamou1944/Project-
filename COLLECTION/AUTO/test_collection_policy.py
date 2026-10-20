@@ -1,4 +1,8 @@
-"""Deterministic Collection promotion/readiness-policy consistency checks."""
+"""Deterministic Collection promotion/readiness-policy consistency checks.
+
+This gate is expected to run from the repository root; its imported pipeline
+must resolve quarantine locks independently of the invoking working directory.
+"""
 from pathlib import Path
 import json
 from process_collection import is_quarantined, load_quarantine_locks
