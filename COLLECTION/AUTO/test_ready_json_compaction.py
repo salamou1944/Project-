@@ -44,8 +44,30 @@ def test_manifest_inventory_counts():
 
 
 
+def test_compact_array_keeps_one_record_per_line() -> None:
+    payload = {
+        "generated_at": "2026-10-10T00:00:00+00:00",
+        "counts": {"decisions": 3, "evidence_records": 4},
+        "decisions": [
+            {"capability_key": "first", "evidence": [{"source": "github:a/b", "sha": "abc"}]},
+            {"capability_key": "second", "evidence": [{"source": "github:c/d", "sha": "def"}, {"source": "github:e/f", "sha": "ghi"}]},
+            {"capability_key": "third", "evidence": []},
+        ],
+    }
+    with tempfile.TemporaryDirectory() as directory:
+        ready = Path(directory) / "READY.json"
+        atomic_json_write(ready, payload, compact_array_keys={"decisions"})
+        rendered = ready.read_text(encoding="utf-8")
+        assert json.loads(rendered) == payload
+        decision_lines = [line for line in rendered.splitlines() if line.startswith("    {")]
+        assert len(decision_lines) == len(payload["decisions"])
+        assert len(rendered.splitlines()) <= len(payload["decisions"]) + 6
+        assert rendered.endswith("\n")
+
+
 def main() -> None:
     test_manifest_inventory_counts()
+    test_compact_array_keeps_one_record_per_line()
     payload = {
         "generated_at": "2026-10-10T00:00:00+00:00",
         "decisions": [
