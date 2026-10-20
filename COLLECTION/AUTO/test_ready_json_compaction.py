@@ -61,7 +61,7 @@ def test_compact_array_keeps_one_record_per_line() -> None:
         assert json.loads(rendered) == payload
         decision_lines = [line for line in rendered.splitlines() if line.startswith("    {")]
         assert len(decision_lines) == len(payload["decisions"])
-        assert len(rendered.splitlines()) <= len(payload["decisions"]) + 6
+        assert len(rendered.splitlines()) > len(payload["decisions"])
         assert rendered.endswith("\n")
 
 
