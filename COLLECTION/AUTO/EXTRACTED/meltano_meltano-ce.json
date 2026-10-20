@@ -1,0 +1,171 @@
+{
+  "canonical_source": "github:meltano/meltano-ce",
+  "repo": "meltano/meltano-ce",
+  "revision_sha": "1650b848a75a3fff9157e316ccdf212c215d84f3",
+  "default_branch": "main",
+  "pushed_at": "2026-07-30T15:16:03Z",
+  "repo_updated_at": "2026-07-30T15:21:23Z",
+  "license": "AGPL-3.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "orchestrate/matatika/elastic-search/config/setup.sh",
+      "sha": null,
+      "content_sha256": "f200193a432c20158758c4c13200ff39928b0027441fb210bb35f7b5ffbc4a85",
+      "score": 184,
+      "content": "#!/bin/bash\n\n[[ -z \"$ES_PATH_CONF\" ]] && { echo \"Error: ES_PATH_CONF not found in env\"; exit 1; }\n[[ -z \"$MATATIKA_ES_BASE_URI\" ]] && { echo \"Error: MATATIKA_ES_BASE_URI not found in env\"; exit 1; }\n[[ -z \"$MATATIKA_ES_ELASTIC_PASSWORD\" ]] && { echo \"Error: MATATIKA_ES_ELASTIC_PASSWORD not found in env\"; exit 1; }\n\n# for some reason even when port 9200 is open Elasticsearch is unable to be accessed as authentication fails\n# a few seconds later it works\nuntil $(curl -sSf -XGET --cacert $ES_PATH_CONF/certs/ca.crt --user elastic:$MATATIKA_ES_ELASTIC_PASSWORD \"${MATATIKA_ES_BASE_URI}/_cluster/health?wait_for_status=yellow&timeout=1s\" > /dev/null); do\n    printf 'AUTHENTICATION ERROR DUE TO X-PACK, trying again in 5 seconds \\n'\n    sleep 5\ndone\n\n\necho Initiating Elasticsearch Custom Index ${MATATIKA_ES_BASE_URI}\n# move to the directory of this setup script\ncd \"$(dirname \"$0\")\"\n\n\necho \"-------------------\"\necho \"INDEX CONFIGURATION\"\necho \"-------------------\"\n#\n# create a new 'datasets' index\n#\nif curl -s --cacert $ES_PATH_CONF/certs/ca.crt --user elastic:$MATATIKA_ES_ELASTIC_PASSWORD --output /dev/null --silent --head --fail \"${MATATIKA_ES_BASE_URI}/datasets\"; then\n  echo \"datasets index already exists\"\nelse\n    echo \"Creating datasets index\"\n    cat es_datasets_index_config.json\n    #curl -v --cacert $ES_PATH_CONF/certs/ca.crt --user elastic:$MATATIKA_ES_ELASTIC_PASSWORD -XDELETE \"${MATATIKA_ES_BASE_URI}/datasets\"\n    curl -s --cacert $ES_PATH_CONF/certs/ca.crt --user elastic:$MATATIKA_ES_ELASTIC_PASSWORD -XPUT \"${MATATIKA_ES_BASE_URI}/datasets?pretty\" -H 'Content-Type: application/json' -d @es_datasets_index_config.json\nfi\n#\n# create a new 'profiles_datasets_likes' index\n#\nif curl -s --cacert $ES_PATH_CONF/certs/ca.crt --user elastic:$MATATIKA_ES_ELASTIC_PASSWORD --output /dev/null --silent --head --fail \"${MATATIKA_ES_BASE_URI}/profiles_datasets_likes\"; then\n  echo \"profiles_datasets_likes index already exists\"\nelse\n    echo \"Creating profiles_datasets_likes index\"\n    cat es_profiles_datasets_likes_index_config.json\n    #curl -v --cacert $ES_PATH_CONF/certs/ca.crt --user elastic:$MATATIKA_ES_ELASTIC_PASSWORD -XDELETE \"${MATATIKA_ES_BASE_URI}/profiles_datasets_likes\"\n    curl -s --cacert $ES_PATH_CONF/certs/ca.crt --user elastic:$MATATIKA_ES_ELASTIC_PASSWORD -XPUT \"${MATATIKA_ES_BASE_URI}/profiles_datasets_likes?pretty\" -H 'Content-Type: application/json' -d @es_profiles_datasets_likes_index_config.json\nfi\n"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha": null,
+      "content_sha256": "3566f8525bb82a16c91943e69846f01c4f2af4d1a4a2633d7f7c72ec4f8afa9f",
+      "score": 120,
+      "content": "services:\n  catalog:\n    user: $userID:$groupID\n    image: ${CATALOG_IMAGE:-matatika/catalog:v0.66.0}\n    ports:\n      - \"8080:8080\"\n      - \"8443:8443\"\n    deploy:\n      resources:\n        reservations:\n          memory: 1g\n        limits:\n          memory: 3g\n    tty: true\n    env_file: config/.env\n    environment:\n      # ==== CATALOG ====\n      - ACTIVE_PROFILES=default,distribution\n      - \"JAVA_OPTS=-XX:MaxDirectMemorySize=1G -XX:MaxMetaspaceSize=240234K -XX:ReservedCodeCacheSize=240M -Xss1M -Xms512m -Xmx1040584K\"\n      - SPRING_H2_CONSOLE_ENABLED=false\n      - PERSISTENCE_CATALOG_URL=jdbc:postgresql://db:5432/warehouse\n      - PERSISTENCE_CATALOG_USERNAME=warehouse\n      - PERSISTENCE_CATALOG_PASSWORD=warehouse\n      - PERSISTENCE_CATALOG_DRIVER_CLASS_NAME=org.postgresql.Driver\n      - ELASTICSEARCH_HOST=search\n      # Define OAUTH2_GOOGLE_CLIENT_ID and OAUTH2_GOOGLE_CLIENT_SECRET to enable Google OAuth plugin settings (see config/.env)\n      # - OAUTH2_GOOGLE_CLIENT_ID=\n      # - OAUTH2_GOOGLE_CLIENT_SECRET=\n      # Define OPENAI_API_KEY to enable OpenAI question answering (see config/.env)\n      # - OPENAI_API_KEY=\n      - MATATIKA_WORKSPACES_HOME=/workspaces\n      - MATATIKA_PLUGINS_HOME=/plugins,/plugins-staging,file:/local-plugins\n      # HTTPS config - generate a keystore in config/certs\n      # - SERVER_PORT=8443\n      # - SERVER_SSL_ENABLED=true\n      # - SERVER_SSL_KEY_STORE=/certs/keystore.p12\n      # - SERVER_SSL_KEY_STORE_PASSWORD=password\n      # - SERVER_SSL_KEY_STORE_TYPE=pkcs12\n      # - SERVER_SSL_KEY_ALIAS=springboot\n      # - SERVER_SSL_KEY_PASSWORD=  # leave commented out for no password\n\n      # ==== APP ====\n      - REACT_APP_ENV=distribution\n      #- APP_SERVER_URI=\n      #- APP_IDENTITY_CLIENT_ID=\n      # Define APP_OAUTH_GOOGLE_CLIENT_ID to enable Google OAuth plugin settings\n      # - APP_OAUTH_GOOGLE_CLIENT_ID=\n    depends_on:\n      search-setup:\n        condition: service_completed_successfully\n      search:\n        condition: service_healthy\n      db:\n        condition: service_healthy\n    healthcheck:\n      test: curl -fs http://localhost:8080/actuator/health | grep '^\\{\"status\":\"UP\"' > /dev/null\n      interval: 10s\n      timeout: 10s\n      start_period: 120s\n      retries: 5\n    volumes:\n      - certs:/certs\n      - workspaces:/workspaces\n      - plugins:/local-plugins\n\n  search:\n    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3\n    environment:\n      - ES_HOME=/usr/share/elasticsearch\n      - ELASTIC_PASSWORD=[REDACTED]}\n      - \"ES_JAVA_OPTS=-Xms512m -Xmx512m\"\n      - node.name=search\n      # 'discovery.seed_hosts' not required in single node cluster\n      #- discovery.seed_hosts=['search']\n      - cluster.initial_master_nodes=search\n      - xpack.security.http.ssl.key=/usr/share/elasticsearch/config/certs/search/search.key\n      - xpack.security.http.ssl.certificate=/usr/share/elasticsearch/config/certs/search/search.crt\n      - xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca.crt\n      - xpack.security.transport.ssl.key=/usr/share/elasticsearch/config/certs/search/search.key\n      - xpack.security.transport.ssl.certificate=/usr/share/elasticsearch/config/certs/search/search.crt\n      - xpack.security.transport.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca.crt\n    volumes:\n      - ./orchestrate/matatika/elastic-search/config/elasticsearch-docker.yml:/usr/share/elasticsearch/config/elasticsearch.yml\n      - es-certs:/usr/share/elasticsearch/config/certs\n      - es-data:/usr/share/elasticsearch/data\n    expose:\n      - \"9200\"\n    ports:\n      - \"9200:9200\"\n    healthcheck:\n      test: curl -fs -u elastic:\"$$ELASTIC_PASSWORD\" --cacert config/certs/ca.crt https://localhost:9200 > /dev/null\n      interval: 10s\n      timeout: 10s\n      start_period: 60s\n      retries: 5\n    depends_on:\n      search-createcerts:\n        condition: service_completed_successfully\n\n  # Short lived container that sets up elastic search\n  search-setup:\n    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3\n    environment:\n      - ES_HOME=/usr/share/elasticsearch\n      - ES_PATH_CONF=/usr/share/elasticsearch/config\n      - MATATIKA_ES_BASE_URI=https://search:9200\n      - MATATIKA_ES_ELASTIC_PASSWORD=[REDACTED]}\n    command: >\n      bash -c '\n        cp /usr/share/elasticsearch/config/setup.sh /tmp/setup.sh\n        cp /usr/share/elasticsearch/config/*.json /tmp/\n        chmod +x /tmp/setup.sh\n        # run setup to configure indexes\n        /tmp/setup.sh\n      '\n    user: \"0\"\n    working_dir: /usr/share/elasticsearch\n    volumes:\n      - ./orchestrate/matatika/elastic-search/config:/usr/share/elasticsearch/config/\n      - es-certs:/usr/share/elasticsearch/config/certs\n    depends_on:\n      search:\n        condition: service_healthy\n\n  # Short lived container that creates the certificates\n  search-createcerts:\n    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3\n    environment:\n      - ES_HOME=/usr/share/elasticsearch\n    command: >\n      bash -c '\n        #!/bin/bash\n        rm -fR /certs/*\n        # create CA and certs for clients\n        elasticsearch-certutil ca --silent --pem --pass \"\" --out /certs/ca.zip;\n        unzip -p /certs/ca.zip ca/ca.crt > /certs/ca.crt;\n        unzip -p /certs/ca.zip ca/ca.key > /certs/ca.key;\n        elasticsearch-certutil cert \\\n          --silent \\\n          --ca-cert /certs/ca.crt \\\n          --ca-key /certs/ca.key \\\n          --pem \\\n          --in config/instances.yml \\\n          --out /certs/bundle.zip;\n        unzip /certs/bundle.zip -d /certs;\n        chown -R 1000:0 /certs\n      '\n    user: \"0\"\n    working_dir: /usr/share/elasticsearch\n    volumes:\n      - ./orchestrate/matatika/elastic-search/config/instances-dev.yml:/usr/share/elasticsearch/config/instances.yml\n      - es-certs:/certs\n\n  db:\n    image: postgres:11\n    volumes:\n      - matatika-catalog_postgres:/var/lib/postgresql/data\n    environment:\n      POSTGRES_DB: warehouse\n      POSTGRES_PASSWORD: warehouse\n      POSTGRES_USER: warehouse\n    expose:\n      - \"5432\"\n    ports:\n      - \"5432:5432\"\n    healthcheck:\n      test: pg_isready -U warehouse\n      interval: 10s\n      timeout: 5s\n      retries: 5\n\nvolumes:\n  matatika-catalog_postgres:\n  es-data:\n    driver: local\n  es-certs:\n  certs:\n    driver: local\n    driver_opts:\n      type: none\n      device: ${PWD}/config/certs\n      o: bind\n  workspaces:\n    driver: local\n    driver_opts:\n      type: none\n      device: ${PWD}/workspaces\n      o: bind\n  plugins:\n    driver: local\n    driver_opts:\n      type: none\n      device: ${PWD}/plugins\n      o: bind\n\nnetworks:\n  default:\n    name: matatika\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "orchestrate/matatika/elastic-search/config/es_profiles_datasets_likes_index_config.json",
+      "sha": null,
+      "content_sha256": "9b94c36c4f09e79494add5aaaf12c15c9b35c12960a41fa05f99d9c2bb7906b1",
+      "score": 102,
+      "content": "{\n  \"settings\": {\n    \"number_of_shards\": 2,\n    \"number_of_replicas\": 1\n  },\n  \"mappings\": {\n    \"dynamic\": \"true\",\n    \"_source\": {\n      \"enabled\": \"true\"\n    },\n    \"properties\": {\n      \"id\": {\n        \"type\": \"text\"\n      },\n      \"likedDatasets\": {\n        \"type\": \"text\"\n      }\n    }\n  }\n}\n"
+    },
+    {
+      "path": "orchestrate/matatika/elastic-search/config/instances.yml",
+      "sha": null,
+      "content_sha256": "00dc6a3b50cafb7dd66f2a1c9593a9a9c224b8b617803f21ea9f0325b03415b8",
+      "score": 102,
+      "content": "# elastic search instances\ninstances:\n  - name: 'search'\n    dns: [ 'search', 'localhost' ]\n  - name: 'search02'\n    dns: [ 'search02', 'localhost' ]\n"
+    },
+    {
+      "path": "orchestrate/matatika/elastic-search/config/elasticsearch.yml",
+      "sha": null,
+      "content_sha256": "4497d59b21e4d8819c317f6b99e18ce5bca99457bf95185dc1fe872725a671cb",
+      "score": 102,
+      "content": "#\n# Staging / Prod kubernetes config\n#\nxpack.security.enabled: true\nxpack.security.http.ssl.enabled: true\nxpack.security.http.ssl.verification_mode: full\nxpack.security.http.ssl.keystore.path: /usr/share/elasticsearch/config/certs/keystore.p12\nxpack.security.http.ssl.truststore.path: /usr/share/elasticsearch/config/certs/keystore.p12\nxpack.security.transport.ssl.enabled: true\nxpack.security.transport.ssl.verification_mode: full\nxpack.security.transport.ssl.keystore.path: /usr/share/elasticsearch/config/certs/keystore.p12\nxpack.security.transport.ssl.truststore.path: /usr/share/elasticsearch/config/certs/keystore.p12\n"
+    },
+    {
+      "path": "orchestrate/matatika/elastic-search/config/instances-dev.yml",
+      "sha": null,
+      "content_sha256": "00dc6a3b50cafb7dd66f2a1c9593a9a9c224b8b617803f21ea9f0325b03415b8",
+      "score": 102,
+      "content": "# elastic search instances\ninstances:\n  - name: 'search'\n    dns: [ 'search', 'localhost' ]\n  - name: 'search02'\n    dns: [ 'search02', 'localhost' ]\n"
+    },
+    {
+      "path": "orchestrate/matatika/elastic-search/config/es_datasets_index_config.json",
+      "sha": null,
+      "content_sha256": "ad940a9e1a7f9b2fcfd387958c229de0b6ec10069408dc061bcfa27232219bd6",
+      "score": 102,
+      "content": "{\n  \"settings\": {\n    \"number_of_shards\": 2,\n    \"number_of_replicas\": 1\n  },\n  \"mappings\": {\n    \"dynamic\": \"true\",\n    \"_source\": {\n      \"enabled\": \"true\"\n    },\n    \"properties\": {\n      \"id\": {\n\t\t\"type\": \"text\",\n\t\t\t\"fields\": {\n\t\t\t\t\"keyword\": {\n\t\t\t\t\t\"type\": \"keyword\",\n\t\t\t\t\t\"ignore_above\": 256\n\t\t\t\t}\n\t\t\t}\n\t  },\n      \"title\": {\n        \"type\": \"text\"\n      },\n      \"description\": {\n        \"type\": \"text\"\n      },\n      \"lastModified\": {\n        \"type\": \"date\",\n        \"format\": \"strict_date_optional_time_nanos\"\n      },\n      \"lastModifiedMillisDay\": {\n        \"type\": \"integer\"\n      },\n      \"text_vector\": {\n        \"type\": \"dense_vector\",\n        \"dims\": 768\n      }\n    }\n  }\n}\n"
+    },
+    {
+      "path": "orchestrate/matatika/elastic-search/config/elasticsearch-docker.yml",
+      "sha": null,
+      "content_sha256": "12c867897b34a892a67f1695af10a1d6630bbaade00c5f4be808e1fbfb537097",
+      "score": 102,
+      "content": "cluster.name: \"docker-cluster\"\nnetwork.host: 0.0.0.0\n\nxpack.security.enabled: true\nxpack.security.http.ssl.enabled: true\nxpack.security.transport.ssl.enabled: true\nxpack.security.transport.ssl.verification_mode: certificate\n\n# match appbase only\n#http.cors.allow-origin: /https?:\\/\\/(.+)?.appbase\\.io(:[0-9]+)?/\n# match anything\nhttp.cors.allow-origin: /(.+)?/\nhttp.cors.enabled: true\nhttp.cors.allow-headers: x-search-filters,x-search-query,x-search-state,X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization\nhttp.cors.allow-credentials: true\n\n# By default the low water mark threshold will stop the node from starting\n# if your dev machine doesn't have at least 15% free. This is generally\n# less of a mission critical threshold when in Docker on a dev machine\ncluster.routing.allocation.disk.threshold_enabled: false\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "560fb70a9d8579c5af099155501bb0b13384e15e678a76cbeddab92d4128b7d7",
+      "score": 100,
+      "content": "# Community Edition of the Meltano Platform (Beta!)\n\nMaintained by: [Meltano](https://www.meltano.com/)\n\n[Documentation](https://www.meltano.com/docs/) and [API reference](https://www.meltano.com/docs/api/)\n\nWhere to get help: the [Community Slack](https://meltano.com/slack)\n\n\n## What is Meltano Community Edition?\n\n[Meltano](https://www.meltano.com/) is a cloud-native data platform with CLI, API, and UI access for all.  We have integrated dbt, Meltano, and other open source technologies into a ready-to-run modern data stack.  [Read more](https://www.meltano.com/docs/concepts). \n\nThis Community Edition is an all in one docker compose solution, and has been provided to help companies run their own solution where BOTH data engineers manage everything as code and data analysts manage data through a UI.\n\n***NB - this is a beta release!  This edition is currently ready for beta users and would love your feedback.***\n\n\n## How to get started\n\nBy installing this package you agree to the terms of our [community license](https://github.com/Matatika/matatika-docs/blob/master/CE-Licence.md).\n\n***NB - The beta release of the Community Edition is currently only developed to work with Linux and macOS***\n\n1. Install\n\n   ```\n   git clone https://github.com/Matatika/matatika-ce\n   cd matatika-ce\n   export userID=$(id -u); export groupID=$(id -g)\n   docker-compose up\n   ```\n   In order to persist the userID and groupID variables, please add those to your .bashrc profile.\n   To always be up to date with our latest changes, make sure that you run git pull to update your code from matatika-ce repository.\n\n\n2. Register, login and create your first workspace\n\n   https://localhost:3443\n\n   Your workspaces will be created in `./workspaces` by default.  Configure this with `MATATIKA_WORKSPACES_HOME` in your docker-compose.yml\n\n\n3. Configure your first pipeline\n\n   Install `analyze-github` plugin and supply mandatory settings.\n\n   Available plugins can be found in `./plugins` by default.  Configure this with `MATATIKA_PLUGINS_HOME` in your docker-compose.yml\n\n\n4. Running your pipelines\n\n   `analyze-github` is supplied with a default pipeline to import your data and some default datasets.\n\n\n5. Share your data with the App or API\n\n   Create new datasets in `[your-workspace]/analyze/datasets`\n\n## Running Meltano-CE in cloud\nCheckout our guide to running Meltano CE on a VM in your cloud [here](./cloud_config#readme).\n"
+    },
+    {
+      "path": "cloud_config/README.md",
+      "sha": null,
+      "content_sha256": "84560a2e967378698523eb2b219132f5b0c3ab63816f2469020d646c649c519e",
+      "score": 98,
+      "content": "## How to deploy Meltano CE to a VM in cloud with custom DNS names\n\nThis directory contains the extra files required to deploy Meltano CE into the cloud or as a server.  (i.e. where the application is accessible from outside the server deployment. Not in localhost)\n\n- `app_certificate/privkey.pem`  : the private key for your certificate. - for the application\n- `app_certificate/fullchain.pem`: the certificate file used in most server software.  - for the application\n- `catalog_certificate/privkey.pem`  : the private key for your certificate. - for the catalog\n- `catalog_certificate/fullchain.pem`: the certificate file used in most server software.  - for the catalog\n\nPresequisite: \n- NGINX is installed in the VM.\n\n## Steps to run the cloud version:\n\n1. Generate the SSL certificates for app and catalog:\n    Option 1 - generate 2 certificates, one for app and one for catalog (company-app.domain.com and company-catalog.domain.com). Copy required files into the appropriate folders\n    Option 2 - generate 1 certificate for both app and catalog (matatika.domain.com). In this case, please copy the required files into both locations (duplicate the files) - in this case, ports for the app and catalog can't be the same. Please change those in nginx.conf file included in this folder.  Here is the documentation link on how to generate SSL qualified certificates - https://certbot.eff.org/instructions?ws=nginx&os=ubuntufocal - copy the certificate files from certbot folder into *_certificates appropiate folder. If the automatic generate is not working, (VM does not have public IP or DNS not configured yet), please follow the certbot manual certificate creation with manual DNS verification. (https://ongkhaiwei.medium.com/generate-lets-encrypt-certificate-with-dns-challenge-and-namecheap-e5999a040708)\n2. Edit nginx.conf file and replace `<fullpath>` with the full path of the folders. Also, edit the `<app_dns_name>` and `<catalog_dns_name>` with your dns names for app and catalog. \n3. Edit the variables in **.env.app.cloud** file (see comments inside the file)\n4. Edit the variables in **.env.catalog.cloud** file (see comments inside the file)\n5. If you are using your own Auth0 Identity Provider please see the comments in file ../config/.env.catalog. Lines number 4 and 5 needs to be updated.\n6. Edit run.sh file `<fullpath>` for the nginx configuration file needs to be added. Nginx needs to point to this configuration file, and full path is required. This shell script will copy the cloud configuration files to be loaded by docker compose, start the Meltano CE and finally start the nginx.\n7. Run the run.sh file.\n\n## Quick guide\nThis is the same as above, but into more summary\n\n1. Generate and add certificate files into *_certificate folders.\n2. Change files **.env.app.cloud, .env.catalog.cloud, nginx.conf, run.sh**\n    - `<fullpath>` needs to be replaced with the linux full path\n    - `<app_dns_name>` to be replaced with application DNS name\n    - `<catalog_dns_name>` to be replaced with catalog DNS name\n    - `<auth0_client_id>` - Auth0 client id - Please refer to this: https://www.matatika.com/docs/getting-started/community-edition#specify-a-custom-auth0-identity-provider on how to configure auth0 with your organization, but instead **localhost:port** you should use https://`<app_dns_name>` and https://`<catalog_dns_name>`/api. Please see the comments in file ../config/.env.catalog. Lines number 4 and 5 needs to be updated.\n    - `<auth0_databse_connection>` - Auth0 database\n    - change `APP_IDENTITY_DOMAIN` value in **.env.app.cloud** file if you are not using Meltano Auth0 Identity Provider.\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "9f12541c3c31e0c9268b268dc2efc1aa8e3550a86ebc34c88514845d8064a354",
+      "score": 85,
+      "content": ".PHONY: help update full-update\n\nhelp:\n\t@echo AVAILABLE COMMANDS\n\t@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = \":.*?## \"}; {printf \"  \\033[36m%-23s\\033[0m%s\\n\", $$1, $$2}'\n\nupdate: ## Update catalog and app images in docker-compose.yml to specified version\nifndef VERSION\n\t$(error VERSION is not set)\nendif\n\n\t@sed -Ei -e 's/(matatika\\/catalog:)(\\w|\\.)*/\\1$(VERSION)/g' docker-compose.yml\n\nfull-update: update ## Update, commit changes and tag\n\t@git add docker-compose.yml; git diff-index --quiet HEAD -- docker-compose.yml || git commit -m 'Update image tags to `$(VERSION)`' docker-compose.yml\n\t@git rev-parse --verify --quiet 'refs/tags/$(VERSION)' > /dev/null || git tag '$(VERSION)'\n"
+    },
+    {
+      "path": "cloud_config/run.sh",
+      "sha": null,
+      "content_sha256": "83f5c7498db2d2f307db71e5298ba9b52a0610e4b17506d6b418e30911bcdcbb",
+      "score": 33,
+      "content": "#Concatenate the .cloud files, with the .env files required for docker compose\ncat .env.app.cloud >> ../config/.env.app\ncat .env.catalog.cloud >> ../config/.env.catalog\n\n#run docker compose command\necho Starting Meltano-CE in Docker...\nexport userID=$(id -u); export groupID=$(id -g)\ndocker compose -f ../docker-compose.yml up --detach\n\n#start nginx\necho Staring nginx...\nnginx -c <fullpath>/matatika-ce/cloud_config/nginx.conf\necho Everything is UP!"
+    },
+    {
+      "path": ".devcontainer/devcontainer.json",
+      "sha": null,
+      "content_sha256": "c93718df13529136cf3f346bdf573c9e4d332e393f02673f75369224ae2f3b20",
+      "score": 33,
+      "content": "// For format details, see https://aka.ms/devcontainer.json. For config options, see the\n// README at: https://github.com/devcontainers/templates/tree/main/src/docker-existing-docker-compose\n{\n\t\"name\": \"Existing Docker Compose (Extend)\",\n\n\t// Update the 'dockerComposeFile' list if you have more compose files or use different names.\n\t// The .devcontainer/docker-compose.yml file contains any overrides you need/want to make.\n\t\"dockerComposeFile\": \"../docker-compose.yml\",\n\n\t// The 'service' property is the name of the service for the container that VS Code should\n\t// use. Update this value and .devcontainer/docker-compose.yml to the real service name.\n\t\"service\": \"catalog\",\n\n\t// The optional 'workspaceFolder' property is the path VS Code should open by default when\n\t// connected. This is typically a file mount in .devcontainer/docker-compose.yml\n\t\"workspaceFolder\": \"/workspaces\",\n\n\t// Features to add to the dev container. More info: https://containers.dev/features.\n\t// \"features\": {},\n\n\t// Use 'forwardPorts' to make a list of ports inside the container available locally.\n\t// \"forwardPorts\": [],\n\n\t// Uncomment the next line if you want start specific services in your Docker Compose config.\n\t// \"runServices\": [],\n\n\t// Uncomment the next line if you want to keep your containers running after VS Code shuts down.\n\t// \"shutdownAction\": \"none\",\n\n\t// Uncomment the next line to run commands after the container is created.\n\t// \"postCreateCommand\": \"cat /etc/os-release\",\n\n\t// Configure tool-specific properties.\n\t\"customizations\": {\n\t\t\"vscode\": {\n\t\t\t\"settings\": {\n\t\t\t\t\"files.exclude\": {\n\t\t\t\t\t\".gitkeep\": true\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t}\n\n\t// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.\n\t// \"remoteUser\": \"devcontainer\"\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 8,
+  "sensitive_files_skipped": [
+    {
+      "path": "cloud_config/.env.app.cloud",
+      "sha": "ce62c100f60b1b3fc066d6033848fc29f92367f1",
+      "size": 296,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cloud_config/.env.catalog.cloud",
+      "sha": "9d9a7273bd8a1bcd7ff8aa4fb5b4bb3c9f110ca5",
+      "size": 476,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cloud_config/app_certificate/fullchain.pem",
+      "sha": "ad186ce6acb5bca49e89ce6a1417e25b473f8878",
+      "size": 93,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cloud_config/app_certificate/privkey.pem",
+      "sha": "e7e2606c9a12c8bd46844f1d1ed244d9c2a971fd",
+      "size": 53,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cloud_config/catalog_certificate/fullchain.pem",
+      "sha": "ad186ce6acb5bca49e89ce6a1417e25b473f8878",
+      "size": 93,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cloud_config/catalog_certificate/privkey.pem",
+      "sha": "e7e2606c9a12c8bd46844f1d1ed244d9c2a971fd",
+      "size": 53,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/.env",
+      "sha": "ce9dd2dc002741b59ad52fa4be202a6c15193350",
+      "size": 1465,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/certs/.gitkeep",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "size": 0,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:44:29.950078+00:00"
+}

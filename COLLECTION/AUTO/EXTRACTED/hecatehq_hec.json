@@ -1,0 +1,41 @@
+{
+  "canonical_source": "github:hecatehq/hec",
+  "repo": "hecatehq/hec",
+  "revision_sha": "c593f4070a1e6afbb3d14f2ec8ebb285fb1006bc",
+  "default_branch": "main",
+  "pushed_at": "2026-07-19T16:47:07Z",
+  "repo_updated_at": "2026-06-21T10:16:30Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "install.sh",
+      "sha": null,
+      "content_sha256": "74870a0f1f10d17c892c6c40c91587e4b75a54e2446148509c238df1b688237c",
+      "score": 117,
+      "content": "#!/usr/bin/env sh\nset -eu\n\nrepo=\"${HEC_INSTALL_REPO:-hecatehq/hec}\"\nversion=\"${HEC_VERSION:-latest}\"\ninstall_dir=\"${HEC_INSTALL_DIR:-${HOME:-.}/.local/bin}\"\n\ncase \"$(printf '%s' \"${HEC_UNINSTALL:-}\" | tr '[:upper:]' '[:lower:]')\" in\n  1 | true | yes | on)\n    rm -f \"${install_dir}/hec\"\n    echo \"hec removed from ${install_dir}/hec\"\n    exit 0\n    ;;\nesac\n\nneed() {\n  if ! command -v \"$1\" >/dev/null 2>&1; then\n    echo \"hec installer needs '$1' on PATH\" >&2\n    exit 2\n  fi\n}\n\ndownload() {\n  url=\"$1\"\n  output=\"$2\"\n  if command -v curl >/dev/null 2>&1; then\n    curl -fsSL \"$url\" -o \"$output\"\n    return\n  fi\n  if command -v wget >/dev/null 2>&1; then\n    wget -q \"$url\" -O \"$output\"\n    return\n  fi\n  echo \"hec installer needs curl or wget on PATH\" >&2\n  exit 2\n}\n\ncase \"$(uname -s)\" in\n  Darwin) os=\"darwin\" ;;\n  Linux) os=\"linux\" ;;\n  *)\n    echo \"Unsupported OS: $(uname -s)\" >&2\n    exit 2\n    ;;\nesac\n\ncase \"$(uname -m)\" in\n  x86_64 | amd64) arch=\"amd64\" ;;\n  arm64 | aarch64) arch=\"arm64\" ;;\n  *)\n    echo \"Unsupported architecture: $(uname -m)\" >&2\n    exit 2\n    ;;\nesac\n\nneed tar\nneed awk\nneed install\n\nasset=\"hec_${os}_${arch}.tar.gz\"\nchecksums=\"hec_checksums.txt\"\n\nif [ \"$version\" = \"latest\" ]; then\n  base_url=\"https://github.com/${repo}/releases/latest/download\"\nelse\n  base_url=\"https://github.com/${repo}/releases/download/${version}\"\nfi\n\ntmp_dir=\"$(mktemp -d)\"\ntrap 'rm -rf \"$tmp_dir\"' EXIT INT TERM\n\ndownload \"${base_url}/${asset}\" \"${tmp_dir}/${asset}\"\ndownload \"${base_url}/${checksums}\" \"${tmp_dir}/${checksums}\"\n\nexpected=\"$(awk -v asset=\"$asset\" '$2 == asset { print $1; exit }' \"${tmp_dir}/${checksums}\")\"\nif [ -z \"$expected\" ]; then\n  echo \"Checksum for ${asset} was not found in ${checksums}\" >&2\n  exit 2\nfi\n\nif command -v sha256sum >/dev/null 2>&1; then\n  actual=\"$(sha256sum \"${tmp_dir}/${asset}\" | awk '{print $1}')\"\nelse\n  need shasum\n  actual=\"$(shasum -a 256 \"${tmp_dir}/${asset}\" | awk '{print $1}')\"\nfi\n\nif [ \"$actual\" != \"$expected\" ]; then\n  echo \"Checksum mismatch for ${asset}\" >&2\n  exit 2\nfi\n\ntar -xzf \"${tmp_dir}/${asset}\" -C \"$tmp_dir\"\nmkdir -p \"$install_dir\"\ninstall -m 0755 \"${tmp_dir}/hec\" \"${install_dir}/hec\"\n\necho \"hec installed\"\necho \"Path: ${install_dir}/hec\"\necho \"Source: ${repo} (${version})\"\necho \"Next: hec --version\"\ncase \":$PATH:\" in\n  *\":${install_dir}:\"*) ;;\n  *) echo \"Add ${install_dir} to PATH if hec is not found by your shell.\" ;;\nesac\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "70fa27891a4d3790535f54b69c37ee2f1535ad14d986d1c7b45722e965ff77db",
+      "score": 100,
+      "content": "# hec\n\n`hec` is the command-line client for Hecate Cloud.\n\nThis repository is a binary distribution channel only. It does not contain the\n`hec` source code.\n\n## Install\n\n```sh\ncurl -fsSL https://raw.githubusercontent.com/hecatehq/hec/main/install.sh | sh\n```\n\nThe installer detects your OS and CPU architecture, downloads the latest\nrelease asset from this repository, verifies it against the published checksum,\nand installs `hec` into `~/.local/bin` by default.\n\nTo choose another install directory:\n\n```sh\ncurl -fsSL https://raw.githubusercontent.com/hecatehq/hec/main/install.sh | HEC_INSTALL_DIR=/usr/local/bin sh\n```\n\nTo install a specific version:\n\n```sh\ncurl -fsSL https://raw.githubusercontent.com/hecatehq/hec/main/install.sh | HEC_VERSION=v0.1.0 sh\n```\n\n## Usage\n\n```sh\nhec login\nhec deployments\nhec open\nhec update\nhec self update\n```\n\nRun bare `hec` for an interactive menu with arrow-key navigation, or\n`hec --help` for the current command list.\n\n## Update\n\n```sh\nhec self update\n```\n\nTo install a specific CLI version:\n\n```sh\nhec self update --version v0.1.0\n```\n\n## Uninstall\n\n```sh\nhec self uninstall\n```\n\nFor shell-only uninstall:\n\n```sh\ncurl -fsSL https://raw.githubusercontent.com/hecatehq/hec/main/install.sh | HEC_UNINSTALL=1 sh\n```\n\n## License\n\n`hec` is proprietary software. See [LICENSE](./LICENSE).\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:44:32.571226+00:00"
+}

@@ -1,0 +1,142 @@
+{
+  "canonical_source": "github:discourse/discourse-jwt",
+  "repo": "discourse/discourse-jwt",
+  "revision_sha": "d69e2a4cb013c948a109409a08cfd995f1c5811f",
+  "default_branch": "main",
+  "pushed_at": "2026-09-23T00:15:01Z",
+  "repo_updated_at": "2026-09-14T09:42:56Z",
+  "license": "MIT",
+  "topics": [
+    "discourse-plugin",
+    "jwt"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "spec/requests/jwt_auth_spec.rb",
+      "sha": null,
+      "content_sha256": "c94af2997e98c7ae9bd0a7f49d4674adeb0e528eba6cb153e532efb3ab25571f",
+      "score": 171,
+      "content": "# frozen_string_literal: true\n\nRSpec.describe \"JWT authentication\" do\n  let(:secret) { \"a-shared-secret\" }\n  let(:claims) { { \"id\" => \"user-42\", \"email\" => \"jwt@example.com\", \"name\" => \"JWT User\" } }\n\n  def token_for(payload, key: secret)\n    JWT.encode(payload, key, \"HS256\")\n  end\n\n  before do\n    enable_current_plugin\n    SiteSetting.jwt_secret = secret\n    SiteSetting.jwt_auth_url = \"https://sso.example.com/login\"\n    SiteSetting.jwt_enabled = true\n  end\n\n  it \"sends the user to the configured auth URL\" do\n    post \"/auth/jwt\"\n\n    expect(response.status).to eq(302)\n    expect(response.location).to eq(\"https://sso.example.com/login\")\n  end\n\n  it \"accepts a token signed with the site secret\" do\n    post \"/auth/jwt/callback\", params: { jwt: token_for(claims) }\n\n    expect(response.status).to eq(302)\n    expect(response.location).to eq(\"http://test.localhost/\")\n\n    data = JSON.parse(cookies[:authentication_data])\n    expect(data[\"auth_provider\"]).to eq(\"jwt\")\n    expect(data[\"email\"]).to eq(\"jwt@example.com\")\n    expect(data[\"name\"]).to eq(\"JWT User\")\n  end\n\n  it \"rejects a token signed with another secret\" do\n    post \"/auth/jwt/callback\", params: { jwt: token_for(claims, key: \"wrong\") }\n\n    expect(response.location).to eq(\"/auth/failure?message=bad_jwt&strategy=jwt\")\n  end\n\n  it \"rejects an expired token\" do\n    post \"/auth/jwt/callback\", params: { jwt: token_for(claims.merge(\"exp\" => 1.hour.ago.to_i)) }\n\n    expect(response.location).to eq(\"/auth/failure?message=bad_jwt&strategy=jwt\")\n  end\n\n  it \"rejects a token that is missing a required claim\" do\n    post \"/auth/jwt/callback\", params: { jwt: token_for(claims.except(\"email\")) }\n\n    expect(response.location).to eq(\"/auth/failure?message=claim_invalid&strategy=jwt\")\n  end\n\n  it \"rejects an unsigned token\" do\n    unsigned = JWT.encode(claims, nil, \"none\")\n\n    post \"/auth/jwt/callback\", params: { jwt: unsigned }\n\n    expect(response.location).to eq(\"/auth/failure?message=bad_jwt&strategy=jwt\")\n  end\nend\n"
+    },
+    {
+      "path": "spec/lib/jwt_authenticator_spec.rb",
+      "sha": null,
+      "content_sha256": "66a740f3b82a78ac033bf6d7fdebfed8b848853af15001f85f1d7e67b0e617cb",
+      "score": 171,
+      "content": "# frozen_string_literal: true\n\nRSpec.describe \"JWTAuthenticator\" do\n  subject(:authenticator) { Discourse.authenticators.find { it.name == \"jwt\" } }\n\n  before do\n    SiteSetting.jwt_secret = \"secret\"\n    SiteSetting.jwt_auth_url = \"https://sso.example.com/login\"\n  end\n\n  it \"requires the login toggle or a legacy global URL\" do\n    expect(authenticator.enabled?).to be_falsey\n\n    SiteSetting.jwt_enabled = true\n    expect(authenticator.enabled?).to be_truthy\n\n    SiteSetting.jwt_enabled = false\n    GlobalSetting.stubs(:jwt_auth_url).returns(\"https://sso.example.com/login\")\n    expect(authenticator.enabled?).to be_truthy\n  end\n\n  %i[jwt_secret jwt_auth_url].each do |setting|\n    it \"disables login when #{setting} is cleared\" do\n      SiteSetting.jwt_enabled = true\n      SiteSetting.public_send(\"#{setting}=\", \"\")\n\n      expect(authenticator.enabled?).to be_falsey\n    end\n\n    it \"rejects enabling login without #{setting}\" do\n      SiteSetting.public_send(\"#{setting}=\", \"\")\n\n      expect { SiteSetting.jwt_enabled = true }.to raise_error(Discourse::InvalidParameters)\n    end\n\n    it \"requires #{setting} with legacy global enablement\" do\n      GlobalSetting.stubs(:jwt_auth_url).returns(\"https://sso.example.com/login\")\n      SiteSetting.public_send(\"#{setting}=\", \"\")\n\n      expect(authenticator.enabled?).to be_falsey\n    end\n  end\nend\n"
+    },
+    {
+      "path": ".github/workflows/d-compat-branch.yml",
+      "sha": null,
+      "content_sha256": "e44ad567aa3ba1567e74557323456f1cdf80e2a7c7affae3f05d7fc1345d5627",
+      "score": 126,
+      "content": "name: Create new d-compat branch\n\non:\n  workflow_dispatch:\n  schedule:\n    - cron: \"0 0 * * *\"\n\njobs:\n  ci:\n    uses: discourse/.github/.github/workflows/create-d-compat-branch.yml@v1\n"
+    },
+    {
+      "path": ".github/workflows/discourse-plugin.yml",
+      "sha": null,
+      "content_sha256": "28902cf4eff0b3a9d0ea2e56fc058e7f2f4f1c8e94b74509c6febf58e353b420",
+      "score": 126,
+      "content": "name: Discourse Plugin\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n\njobs:\n  ci:\n    uses: discourse/.github/.github/workflows/discourse-plugin.yml@v1\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "860fd5e0cfcf5fcca9683e3a8e979401a6d4afe145d20b95fefd70327e102757",
+      "score": 120,
+      "content": "{\n  \"private\": true,\n  \"devDependencies\": {\n    \"@discourse/lint-configs\": \"2.44.1\",\n    \"@glint/ember-tsc\": \"1.1.1\",\n    \"concurrently\": \"^9.2.1\",\n    \"discourse\": \"npm:@discourse/types@2026.3.0-d02b2966\",\n    \"ember-template-lint\": \"7.9.3\",\n    \"eslint\": \"9.39.2\",\n    \"lint-to-the-future\": \"^2.6.4\",\n    \"lint-to-the-future-eslint\": \"^3.3.0\",\n    \"prettier\": \"3.8.1\",\n    \"stylelint\": \"17.5.0\"\n  },\n  \"scripts\": {\n    \"lint\": \"concurrently \\\"pnpm:lint:*(!fix)\\\" --names \\\"lint:\\\"\",\n    \"lint:fix\": \"concurrently \\\"pnpm:lint:*:fix\\\" --names \\\"fix:\\\"\",\n    \"lint:css\": \"pnpm stylelint 'assets/stylesheets/**/*.scss' --allow-empty-input\",\n    \"lint:css:fix\": \"pnpm stylelint 'assets/stylesheets/**/*.scss' --fix --allow-empty-input\",\n    \"lint:js\": \"eslint {assets,admin/assets,test}/javascripts --cache --no-error-on-unmatched-pattern\",\n    \"lint:js:fix\": \"eslint {assets,admin/assets,test}/javascripts --fix --no-error-on-unmatched-pattern\",\n    \"lint:hbs\": \"ember-template-lint '{assets,admin/assets,test}/javascripts/**/*.gjs' --no-error-on-unmatched-pattern\",\n    \"lint:hbs:fix\": \"ember-template-lint '{assets,admin/assets,test}/javascripts/**/*.gjs' --fix --no-error-on-unmatched-pattern\",\n    \"lint:prettier\": \"pnpm prettier 'assets/stylesheets/**/*.scss' '{assets,admin/assets,test}/javascripts/**/*.{js,gjs}' --check --no-error-on-unmatched-pattern\",\n    \"lint:prettier:fix\": \"pnpm prettier 'assets/stylesheets/**/*.scss' '{assets,admin/assets,test}/javascripts/**/*.{js,gjs}' -w --no-error-on-unmatched-pattern\",\n    \"lint:types\": \"ember-tsc -b\",\n    \"lttf:ignore\": \"lint-to-the-future ignore\"\n  },\n  \"engines\": {\n    \"node\": \">= 22\",\n    \"npm\": \"please-use-pnpm\",\n    \"yarn\": \"please-use-pnpm\",\n    \"pnpm\": \"^10\"\n  },\n  \"packageManager\": \"pnpm@10.28.0\"\n}\n"
+    },
+    {
+      "path": "migrate/20200131192600_move_jwt_to_managed_authenticator.rb",
+      "sha": null,
+      "content_sha256": "28996838bedcc48573e6318b5be359662b60bdfaf484d7556808579bdad3bec6",
+      "score": 113,
+      "content": "# frozen_string_literal: true\n\nclass MoveJwtToManagedAuthenticator < ActiveRecord::Migration[5.2]\n  def up\n    execute <<~SQL\n    INSERT INTO user_associated_accounts (\n      provider_name,\n      provider_uid,\n      user_id,\n      created_at,\n      updated_at\n    ) SELECT\n      'jwt',\n      replace(key, 'jwt_user_', ''),\n      (value::json->>'user_id')::integer,\n      CURRENT_TIMESTAMP,\n      CURRENT_TIMESTAMP\n    FROM plugin_store_rows\n    WHERE plugin_name = 'jwt'\n    AND value::json->>'user_id' ~ '^[0-9]+$'\n    ON CONFLICT (provider_name, user_id)\n    DO NOTHING\n    SQL\n  end\nend\n"
+    },
+    {
+      "path": "lib/omniauth/strategies/jwt.rb",
+      "sha": null,
+      "content_sha256": "c2eead9051d375f8471762a716b8c09a6970a20e9f1647450883766209c1edf6",
+      "score": 109,
+      "content": "# frozen_string_literal: true\n\nrequire \"jwt\"\n\nmodule OmniAuth\n  module Strategies\n    class JWT\n      class ClaimInvalid < StandardError\n      end\n\n      include OmniAuth::Strategy\n\n      option :secret, nil\n      option :auth_url, nil\n      option :algorithm, \"HS256\"\n      option :uid_claim, \"email\"\n      option :required_claims, %w[name email]\n      option :info_map, { name: \"name\", email: \"email\" }\n\n      def request_phase\n        redirect(options.auth_url)\n      end\n\n      def callback_phase\n        super\n      rescue ::JWT::DecodeError => e\n        fail!(:bad_jwt, e)\n      rescue ClaimInvalid => e\n        fail!(:claim_invalid, e)\n      end\n\n      def decoded\n        @decoded ||=\n          begin\n            claims =\n              ::JWT.decode(\n                request.params[\"jwt\"],\n                options.secret,\n                true,\n                algorithms: [options.algorithm],\n              ).first\n\n            Array(options.required_claims).each do |claim|\n              raise ClaimInvalid, \"Missing required '#{claim}' claim.\" if !claims.key?(claim.to_s)\n            end\n\n            claims\n          end\n      end\n\n      uid { decoded[options.uid_claim] }\n\n      info { options.info_map.to_h { |key, claim| [key.to_s, decoded[claim.to_s]] } }\n\n      extra { { raw_info: decoded } }\n    end\n  end\nend\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "29059795e1dac92ce3e6e3761d23693c6ea2a6bf7fae82483dffcaea14f4dd7e",
+      "score": 100,
+      "content": "### discourse-jwt\n\nA Discourse Plugin to enable authentication via JSON Web Tokens (JWT).\n\nIn the first instance, consider using Discourse's [OpenID Connect](https://meta.discourse.org/t/openid-connect-authentication-plugin/103632) or [OAuth2](https://meta.discourse.org/t/oauth2-basic-support/33879) plugins. These authentication standards are more mature, and include more security features.\n\n### Configuration\n\nThis plugin provides three site settings for configuration. You must provide all three in your admin panel for the authentication to work correctly:\n\n- `jwt_enabled`\n- `jwt_secret`\n- `jwt_auth_url`\n\nAlternatively, you can supply values for these settings via environment variables. Add the following settings to your `app.yml` file in the `env` section:\n\n- `DISCOURSE_JWT_SECRET`\n- `DISCOURSE_JWT_AUTH_URL`\n\n### License\n\nMIT\n\n"
+    },
+    {
+      "path": "spec/system/core_features_spec.rb",
+      "sha": null,
+      "content_sha256": "03180ff061cc7803f4f490e3366365d283ff9c2df3a7b79c2259e032f1adfdd3",
+      "score": 91,
+      "content": "# frozen_string_literal: true\n\nRSpec.describe \"Core features\" do\n  before { enable_current_plugin }\n\n  it_behaves_like \"having working core features\"\nend\n"
+    },
+    {
+      "path": ".rubocop.yml",
+      "sha": null,
+      "content_sha256": "ec10bb4a3ab7d38292bbf38de2cc9c6feef9de89f7472522ee730f43c1b7df04",
+      "score": 35,
+      "content": "inherit_gem:\n  rubocop-discourse: stree-compat.yml\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "e41435efe759e5a14bf5745224042e294352f48578c7d9fedf29f7d1cacfd090",
+      "score": 35,
+      "content": "{\n  \"extends\": \"discourse/tsconfig-plugin\",\n  \"include\": [\n    \"admin/assets/javascripts/**/*\",\n    \"assets/javascripts/**/*\",\n    \"test/javascripts/**/*\",\n    \"node_modules/discourse/declarations/**/*\"\n  ],\n  \"compilerOptions\": {\n    \"paths\": {\n      \"discourse/plugins/discourse-jwt/*\": [\n        \"./assets/javascripts/*\"\n      ],\n      \"discourse/plugins/discourse-jwt/admin/*\": [\n        \"./admin/assets/javascripts/admin/*\"\n      ],\n      \"admin/*\": [\"./node_modules/discourse/declarations/admin/*\"],\n      \"float-kit/*\": [\"./node_modules/discourse/declarations/float-kit/*\"],\n      \"select-kit/*\": [\"./node_modules/discourse/declarations/select-kit/*\"],\n      \"truth-helpers\": [\n        \"./node_modules/discourse/declarations/truth-helpers/index.d.ts\"\n      ],\n      \"truth-helpers/*\": [\n        \"./node_modules/discourse/declarations/truth-helpers/*\"\n      ]\n    }\n  }\n}\n"
+    },
+    {
+      "path": "plugin.rb",
+      "sha": null,
+      "content_sha256": "34bcc3132c9a44ea97f0c4508bd90688e88ea63a3621645671b06722a0c10e0c",
+      "score": 35,
+      "content": "# frozen_string_literal: true\n# name: discourse-jwt\n# about: JSON Web Tokens Auth Provider\n# version: 0.1\n# author: Robin Ward\n\nrequire_relative \"lib/omniauth/strategies/jwt\"\n\nclass JWTAuthenticator < Auth::ManagedAuthenticator\n  def name\n    \"jwt\"\n  end\n\n  def register_middleware(omniauth)\n    omniauth.provider OmniAuth::Strategies::JWT,\n                      name: \"jwt\",\n                      uid_claim: \"id\",\n                      required_claims: %w[id email name],\n                      setup:\n                        lambda { |env|\n                          opts = env[\"omniauth.strategy\"].options\n                          opts[:secret] = SiteSetting.jwt_secret\n                          opts[:auth_url] = SiteSetting.jwt_auth_url\n                        }\n  end\n\n  def enable_setting\n    :jwt_enabled\n  end\n\n  def required_settings\n    %i[jwt_secret jwt_auth_url]\n  end\n\n  def enabled?\n    # Check the global setting for backwards-compatibility.\n    # When this plugin used only global settings, there was no separate enable setting\n    (SiteSetting.jwt_enabled || GlobalSetting.try(:jwt_auth_url).present?) && configured?\n  end\nend\n\nauth_provider authenticator: JWTAuthenticator.new\n"
+    },
+    {
+      "path": "config/settings.yml",
+      "sha": null,
+      "content_sha256": "521cd1f5891d53e7eecb5c144ef1666380a86ef7b9ff88887a7944d6d93e26c0",
+      "score": 33,
+      "content": "plugins:\n  jwt_enabled:\n    default: false\n    validator: AuthProviderCredentialsValidator\n  jwt_secret: \"\"\n  jwt_auth_url: \"\"\n"
+    },
+    {
+      "path": "config/locales/server.en.yml",
+      "sha": null,
+      "content_sha256": "b51324294bb8d6360c4c6f0bc44cb78f4532d5affdc20426257f143cd954fed9",
+      "score": 31,
+      "content": "en:\n  site_settings:\n    jwt_enabled: Enable JWT authentication. Customize user interface text <a href='%{base_path}/admin/customize/site_texts?q=js.login.jwt'>here</a>\n    jwt_secret: JWT Secret\n    jwt_auth_url: URL which users will be redirected to for authentication"
+    },
+    {
+      "path": "config/locales/client.en.yml",
+      "sha": null,
+      "content_sha256": "132ea9d3c9669121c4e6803f6ede7b8ce8419b253a98a2f453fc3f0bbfbe2049",
+      "score": 31,
+      "content": "en:\n  js:\n    login:\n      jwt:\n        name: \"JWT\"\n        title: \"with JWT\"\n        message: \"Authenticating with JWT\""
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": ".npmrc",
+      "sha": "89ddd358b379a6a08b81e2fe7953d6424003f94b",
+      "size": 48,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:44:27.110559+00:00"
+}
