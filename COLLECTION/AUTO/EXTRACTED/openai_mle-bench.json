@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:openai/mle-bench",
+  "repo": "openai/mle-bench",
+  "revision_sha": "507f92e1138bb6e40dac5c6ee7a6758e6424bf97",
+  "default_branch": "main",
+  "pushed_at": "2026-04-24T17:33:44Z",
+  "repo_updated_at": "2026-10-20T16:52:18Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/grade.py",
+      "sha": null,
+      "content_sha256": "a483692acf08ec0cc7eedd176e27c37ece294cc9c8b37b50ce55b292453e9d63",
+      "score": 221,
+      "content": "import pandas as pd\nfrom sklearn.metrics import roc_auc_score\n\nfrom mlebench.competitions.utils import prepare_for_auroc_metric\n\n\ndef grade(submission: pd.DataFrame, answers: pd.DataFrame) -> float:\n    roc_auc_inputs = prepare_for_auroc_metric(\n        submission=submission, answers=answers, id_col=\"name\", target_col=\"invasive\"\n    )\n    return roc_auc_score(y_true=roc_auc_inputs[\"y_true\"], y_score=roc_auc_inputs[\"y_score\"])\n"
+    },
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/config.yaml",
+      "sha": null,
+      "content_sha256": "4a4e72d4083276b4eed420d6ad79de86ac935cb21f8e5e5125f1ff766e38beb3",
+      "score": 221,
+      "content": "id: invasive-species-monitoring\nname: Invasive Species Monitoring\ncompetition_type: simple\nawards_medals: false\nprizes: null\ndescription: mlebench/competitions/invasive-species-monitoring/description.md\n\ndataset:\n  answers: invasive-species-monitoring/prepared/private/answers.csv\n  sample_submission: invasive-species-monitoring/prepared/private/sample_submission.csv\n\ngrader:\n  name: auc-roc\n  grade_fn: mlebench.competitions.invasive-species-monitoring.grade:grade\n\npreparer: mlebench.competitions.invasive-species-monitoring.prepare:prepare\n"
+    },
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/checksums.yaml",
+      "sha": null,
+      "content_sha256": "8e56fdb4c3f03df638f26ee39662ee463db3e301588fdb22996261addbdf01bf",
+      "score": 221,
+      "content": "private:\n  answers.csv: 931c56b826f984b6e8e38de046240166\n  sample_submission.csv: 3fc85f5b579bbf85aa605899887df903\npublic: {}\nzip: 6e32b8c25b22dc4653540891871bc853\n"
+    },
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/prepare.py",
+      "sha": null,
+      "content_sha256": "60d434fcdfc80ff55c054f0f61c7785d91b0477fc80aa9c478d0a69636f012a6",
+      "score": 221,
+      "content": "import shutil\nfrom pathlib import Path\n\nimport py7zr\nfrom sklearn.model_selection import train_test_split\nfrom tqdm import tqdm\n\nfrom mlebench.utils import extract, read_csv\n\n\ndef prepare(raw: Path, public: Path, private: Path):\n    \"\"\"\n    Splits the data in raw into public and private datasets with appropriate test/train splits.\n    \"\"\"\n    # extract only what we need\n    extract(raw / \"train.7z\", raw)\n    extract(raw / \"train_labels.csv.zip\", raw)\n\n    # Create train, test from train split\n    # Original ratio is 1531/(1531+2295) = 0.4\n    test_ratio = 0.2\n    old_train = read_csv(raw / \"train_labels.csv\")\n    new_train, answers = train_test_split(old_train, test_size=test_ratio, random_state=0)\n\n    # Sample submission\n    sample_submission = answers.copy()\n    sample_submission[\"invasive\"] = 0.5\n\n    # Checks\n    assert new_train[\"name\"].is_unique, \"new_train should have unique names\"\n    assert answers[\"name\"].is_unique, \"answers should have unique names\"\n    assert set(new_train[\"name\"]).isdisjoint(\n        set(answers[\"name\"])\n    ), \"new_train and answers should be disjoint\"\n    assert len(new_train) + len(answers) == len(\n        old_train\n    ), \"new_train and answers together should have the same number of rows as old_train\"\n    assert (\n        new_train.columns.tolist() == old_train.columns.tolist()\n    ), \"new_train should have the same columns as old_train\"\n    assert (\n        answers.columns.tolist() == old_train.columns.tolist()\n    ), \"answers should have the same columns as old_train\"\n    assert (\n        sample_submission.columns.tolist() == old_train.columns.tolist()\n    ), \"sample_submission should have the same columns as old_train\"\n\n    # Write CSVs\n    answers.to_csv(private / \"answers.csv\", index=False)\n    new_train.to_csv(public / \"train_labels.csv\", index=False)\n    sample_submission.to_csv(private / \"sample_submission.csv\", index=False)\n    sample_submission.to_csv(public / \"sample_submission.csv\", index=False)\n\n    # Copy files\n    (public / \"train\").mkdir(exist_ok=True)\n    (public / \"test\").mkdir(exist_ok=True)\n\n    for file_id in tqdm(new_train[\"name\"], desc=\"Copying Train Images\"):\n        shutil.copyfile(\n            src=raw / \"train\" / f\"{file_id}.jpg\",\n            dst=public / \"train\" / f\"{file_id}.jpg\",\n        )\n\n    for file_id in tqdm(answers[\"name\"], desc=\"Copying Test Images\"):\n        shutil.copyfile(\n            src=raw / \"train\" / f\"{file_id}.jpg\",\n            dst=public / \"test\" / f\"{file_id}.jpg\",\n        )\n\n    # Checks\n    assert len(list((public / \"train\").glob(\"*.jpg\"))) == len(\n        new_train\n    ), \"public/train should have the same number of files as new_train\"\n    assert len(list((public / \"test\").glob(\"*.jpg\"))) == len(\n        answers\n    ), \"public/test should have the same number of files as answers\"\n\n    # Zip\n    shutil.make_archive(\n        str(public / \"sample_submission.csv\"),\n        \"zip\",\n        root_dir=public,\n        base_dir=\"sample_submission.csv\",\n    )\n    shutil.make_archive(\n        str(public / \"train_labels.csv\"), \"zip\", root_dir=public, base_dir=\"train_labels.csv\"\n    )\n    with py7zr.SevenZipFile(public / \"train.7z\", \"w\") as z:\n        z.write(public / \"train\")\n    with py7zr.SevenZipFile(public / \"test.7z\", \"w\") as z:\n        z.write(public / \"test\")\n\n    # Delete\n    shutil.rmtree(public / \"train\")\n    shutil.rmtree(public / \"test\")\n    (public / \"sample_submission.csv\").unlink()\n    (public / \"train_labels.csv\").unlink()\n"
+    },
+    {
+      "path": "agents/opendevin/setup.py",
+      "sha": null,
+      "content_sha256": "e83c4ba8196cf14a6612e416265e5fb2c0f0fe10403c3a7123a0eff59b6207f6",
+      "score": 188,
+      "content": "import argparse\nimport os\nfrom pathlib import Path\n\nfrom templates import additional_notes_template, config_template\nfrom utils import get_gpu_generation\n\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nCODE_DIR = Path(os.getenv(\"CODE_DIR\"))\nAGENT_DIR = Path(os.getenv(\"AGENT_DIR\"))\n\nparser = argparse.ArgumentParser()\nparser.add_argument(\"--agent\", type=str, required=True)\nparser.add_argument(\"--model\", type=str, required=True)\nparser.add_argument(\"--max_time_in_hours\", type=float, required=True)\nparser.add_argument(\"--max_steps\", type=int, required=True)\nparser.add_argument(\"--shm_size\", type=str, required=True)\nargs, other_args = parser.parse_known_args()\n\ngpu_generation = get_gpu_generation()\ntype_of_processor = gpu_generation if gpu_generation else \"CPU\"\n\nconfig = config_template.substitute(\n    workspace_base=\"/home\",\n    workspace_mount_path_in_sandbox=\"/home\",\n    max_steps=args.max_steps,\n    model=args.model,\n    api_key=[REDACTED],\n    agent=args.agent,\n    shm_size=args.shm_size,\n)\n\nadditional_notes = additional_notes_template.substitute(\n    type_of_processor=type_of_processor,\n    max_time_in_hours=args.max_time_in_hours,\n    max_steps=args.max_steps,\n    workspace=CODE_DIR,\n)\n\nwith open(AGENT_DIR / \"config.toml\", \"w\") as file:\n    file.write(config.strip())\n\nwith open(\"/home/instructions.txt\", \"r\") as file:\n    partial_instructions = file.read()\n\ninstructions = partial_instructions + additional_notes\n\nwith open(\"/home/full_instructions.txt\", \"w\") as file:\n    file.write(instructions.strip())\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/description.md",
+      "sha": null,
+      "content_sha256": "316981109dd2e81be94aa7606c7f8865b27da9a15bdfdf4789307e89261b17c6",
+      "score": 186,
+      "content": "# Overview\n\n## Description\n\nTangles of kudzu overwhelm trees in Georgia while cane toads threaten habitats in over a dozen countries worldwide. These are just two invasive species of many which can have damaging effects on the environment, the economy, and even human health. Despite widespread impact, efforts to track the location and spread of invasive species are so costly that they’re difficult to undertake at scale.\n\nCurrently, ecosystem and plant distribution monitoring depends on expert knowledge. Trained scientists visit designated areas and take note of the species inhabiting them. Using such a highly qualified workforce is expensive, time inefficient, and insufficient since humans cannot cover large areas when sampling.\n\n![invasive-species-monitoring.png](https://storage.googleapis.com/kaggle-media/competitions/kaggle/3333/media/invasive-species-monitoring.png)\n\nBecause scientists cannot sample a large quantity of areas, some machine learning algorithms are used in order to predict the presence or absence of invasive species in areas that have not been sampled. The accuracy of this approach is far from optimal, but still contributes to approaches to solving ecological problems.\n\nIn this playground competition, Kagglers are challenged to develop algorithms to more accurately identify whether images of forests and foliage contain invasive hydrangea or not. Techniques from computer vision alongside other current technologies like aerial imaging can make invasive species monitoring cheaper, faster, and more reliable.\n\n### Acknowledgments\n\nData providers: [Christian Requena Mesa](https://www.linkedin.com/in/requenac), Thore Engel, [Amrita Menon](https://www.linkedin.com/in/amrita-menon-12b58947/), Emma Bradley.\n\n## Evaluation\n\nSubmissions are evaluated on [area under the ROC curve](http://en.wikipedia.org/wiki/Receiver_operating_characteristic) between the predicted probability and the observed target.\n\n### Submission File\n\nFor each image in the test set, you must predict a probability for the target variable on whether the image contains invasive species or not. The file should contain a header and have the following format:\n\n```\nname,invasive\n2,0.5\n5,0\n6,0.2\netc.\n```\n\n## Citation\n\nCrequena, Thore Engel, Wendy Kan. (2017). Invasive Species Monitoring. Kaggle. https://kaggle.com/competitions/invasive-species-monitoring\n\n# Data\n\n## Dataset Description\n\nThe data set contains pictures taken in a Brazilian national forest. In some of the pictures there is *Hydrangea*, a beautiful invasive species original of Asia. Based on the training pictures and the labels provided, the participant should predict the presence of the invasive species in the testing set of pictures.\n\n## File descriptions\n\n- **train.7z** - the training set (contains 2295 images).\n- **train_labels.csv** - the correct labels for the training set.\n- **test.7z** - the testing set (contains 1531 images), ready to be labeled by your algorithm.\n- **sample_submission.csv** - a sample submission file in the correct format.\n\n## Data fields\n\n- **name** - name of the sample picture file (numbers)\n- **invasive** - probability of the picture containing an invasive species. A probability of 1 means the species is present."
+    },
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/leaderboard.csv",
+      "sha": null,
+      "content_sha256": "db47c48c125480905a9322a36b7fea3677a8bc5cc6515bc57aa85bd3f378e64b",
+      "score": 186,
+      "content": "version https://git-lfs.github.com/spec/v1\noid sha256:ab63e290502ba7de760d0800f2ffaeb8a583ef35ab90b44e05f669dddfc4c14c\nsize 27199\n"
+    },
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/kernels.txt",
+      "sha": null,
+      "content_sha256": "e40d4f9b5374c9ad1e05a81580e5d72c5addfba3d2aa908ce7a776e6ddd1fa7b",
+      "score": 186,
+      "content": "fujisan/use-keras-pre-trained-vgg16-acc-98\njamesrequa/keras-k-fold-inception-v3-1st-place-lb-0-99770\nogurtsov/0-99-with-r-and-keras-inception-v3-fine-tune\nievgenvp/keras-flow-from-directory-on-python\ncrequena/starter-s-pack-for-invasives-detection\nfinlay/naive-bagging-cnn-pb0-985\npaulorzp/xgboost-starter\nalgila/inception-v3-and-k-fold-in-python-0-98996\nchmaxx/finetune-vgg16-0-97-with-minimal-effort\nardiya/tensorflow-vgg-pretrained\nlbronchal/keras-pre-trained-vgg16-kaggle-runnable-version\nidv2005/pytorch-starter-lb-0-988\nshuyuan00/resnet50-with-0-985lb\npatilpramod2157/transfer-learning-using-inception-resnet-v2\njoelpires/pytorch-invasive-species\nambarish/invasive-species-monitoring-analysis\nmbeierling/retraining-inception-v3\namlacorp/keras-starter-fork\nsuhasmallya/keras-based-model-0-98lb\nnetzone/visualization-using-cv2-and-keras-starter\nvievie31/invasive-species-monitoring-lbp-descriptor\nshivamsarawagi/speciesimagedetection\nrajeevctrl/invasivespeciesmonitoring-cnn\nbhuvaneshwaran/invasive-species-monitoring-keras\ndarrellulm/keras-pretrained-vgg16-sample-test\ncrequena/notebook35d1a2a5e3\noysteijo/apriori-probabilities\nyahia21/ossmodel-1111\nleesangju92/ism-inceptionresnetv2\nanuragshas/invasive-species\nsahuja295/invasive-species-monitoring\njaredarcilla/invasive-species-inception\nharveywang/use-keras-pre-trained-vgg16-acc-98\ncristianpb/explore-the-pictures-how-invasive-looks-like\nfenggoahead/starter-for-cnn-keras-not-finished\ncanisindica/sd-keras-beginner\nhaoqingsong/invasive-species-monitoring-twin-score-0-99122\nafzal1232981/invasive-species-monitoring-lbp-descriptor\nshkim4738/cutmix-classification\ntefusha/notebook8cdadc77de\nsimpletonwang/dl-hw1\ncooldba/keras-pre-trained-vgg16-kaggle-runnable-version\nvijaypagi/invasive-species\njihyeseo/image-identify\ndavid26694/invasive-species-with-transfer-learning\nlipei13/keras-k-fold-inception-v3-1st-place-lb-0-99770\nalusravs/invasive-species-vgg16-starter-code-91-2\nmanojagr/need-help-with-plain-tensorflow-cnn\ndenespanta/custom-nn-with-keras\nmeikintom/finetune-vgg16-0-97-with-minimal-effort\n"
+    },
+    {
+      "path": "mlebench/competitions/invasive-species-monitoring/description_obfuscated.md",
+      "sha": null,
+      "content_sha256": "f9156bd46f83b44a7f3e756487a1156d13a32a995ac05e21bc3ea12ce248c4ca",
+      "score": 186,
+      "content": "# Task\n\nPredict the presence of an invasive hydrangea species in images of foliage.\n\n# Metric\n\nArea under the ROC curve.\n\n# Submission Format\n\nFor each image in the test set, you must predict a probability for the target variable on whether the image contains invasive species or not. The file should contain a header and have the following format:\n\n```\nname,invasive\n2,0.5\n5,0\n6,0.2\netc.\n```\n\n# Dataset\n\nThe data set contains pictures taken in a forest.\n\n- **train.7z** - the training set (contains 2295 images).\n- **train_labels.csv** - the correct labels for the training set.\n- **test.7z** - the testing set (contains 1531 images), ready to be labeled by your algorithm.\n- **sample_submission.csv** - a sample submission file in the correct format.\n\n## Data fields\n\n- **name** - name of the sample picture file (numbers)\n- **invasive** - probability of the picture containing an invasive species. A probability of 1 means the species is present."
+    },
+    {
+      "path": "agents/README.md",
+      "sha": null,
+      "content_sha256": "3fdb4d4d2fa51db94e9381c201f53631194721521f9957a39b2ab530af932238",
+      "score": 173,
+      "content": "# Agents\n\nWe evaluated three open-source agents. We slightly modified each agent to elicit better capabilities. We also developed a \"dummy\" agent, used to check that the environment is configured correctly. Each agent, alongside the link to our fork, is listed below. Each agent has an associated ID which we use to identify it within our repo.\n\nAgent | ID | Fork\n:-----:|:-----:|:-----:\ndummy | dummy | N/A\n[AIDE](https://www.weco.ai/blog/technical-report) | aide | https://github.com/thesofakillers/aideml\n[MLAgentBench](https://openreview.net/forum?id=1Fs1LvjYQW) | mlagentbench | https://github.com/JunShern/MLAgentBench\n[OpenHands](https://arxiv.org/abs/2407.16741) | opendevin | https://github.com/thesofakillers/OpenHands\n\n## Prerequisites\nIf you want to run these agents locally:\n- Install [Docker](https://docs.docker.com/engine/install/)\n- Install [Sysbox](https://github.com/nestybox/sysbox). See [Security](#Security) below for more information\n- (Optional) Install [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) to run agents with GPUs\n\nTo build an image for an agent with ID `<agent>`, run:\n\n```bash\nexport SUBMISSION_DIR=/home/submission\nexport LOGS_DIR=/home/logs\nexport CODE_DIR=/home/code\nexport AGENT_DIR=/home/agent\n\ndocker build --platform=linux/amd64 -t <agent> agents/<agent>/ --build-arg SUBMISSION_DIR=$SUBMISSION_DIR --build-arg LOGS_DIR=$LOGS_DIR --build-arg CODE_DIR=$CODE_DIR --build-arg AGENT_DIR=$AGENT_DIR\n```\n\n## Running agents\n\nOur `run_agent.py` script allows you to run agents locally on a given set of competitions. In the `experiments/splits/` directory, we have several files, each containing a set of competition IDs. The `experiments/splits/split75.txt` file contains all competitions. The `experiments/splits/spaceship-titanic.txt` split just contains the Spaceship Titanic competition, which is useful for testing. For example, to run the dummy agent on the Spaceship Titanic competition, you can run:\n\n```console\npython run_agent.py --agent-id dummy --competition-set experiments/splits/spaceship-titanic.txt\n```\n\nRunning `run_agent.py` will creates a \"run group\" directory in the `runs/` directory. The run group directory will contain a subdirectory for each competition that the agent was evaluated on, containing the agent's logs, code, and submission. A `metadata.json` file will be created on finish within the run group directory, summarizing the results of the runs. You can then grade this run using the `metadata.json` file. For example, to grade the run group `<run-group>`, you can first use `experiments/make_submission.py` to generate a submission JSONL file:\n\n```bash\npython experiments/make_submission.py --metadata runs/<run-group>/metadata.json --output runs/<run-group>/submission.jsonl\n```\n\nYou can then use the `mlebench grade` command to grade this submission:\n\n```bash\nmlebench grade --submission runs/<run-group>/submission.jsonl --output-dir runs/<run-group>\n```\n\nIf you'd like to update the configuration of the container, you can edit the default container config in `environment/config/container_configs/default.json`, or specify a custom container config JSON file when executing `run_agent.py`. If you'd like to run the agent with a GPU, you can set `\"gpus\": -1` in the container config JSON file.\n\n### dummy agent\nWe used the dummy agent to verify that our environment was configured correctly. It performs the following checks:\n\n1. Prints to stdout whether its python script `main.py` is running with root access\n2. Prints to stdout the Python interpreter the dummy agent is using\n3. Attempts to use the sample submission of the current competition as it's submission. Note, this sometimes fails as sample submissions are sometimes not in the expected format. For example, some competitions compress the sample submission along with the other data into a single file\n4. Checks that it can't read the \"private\" data; this includes the labels of the test set\n5. Checks it has read/write access to `/home`, it's working directory\n\n### Security\n\nBy default we run AIDE, MLAB, and the dummy agent using the [sysbox](https://github.com/nestybox/sysbox) runtime. We recommend users to use this runtime, or other runtimes with sufficient security guarantees, when running models on this benchmark. Since container runtimes like Docker can share host resources with containers, a malicious container could potentially compromise a host; sysbox is designed to mitigate this risk by providing enhanced isolation between containers and the host system\n\nOpenHands uses it's own docker containers during execution, resulting in docker-in-docker (DinD). The sysbox runtime does not yet support GPU-passthrough in DinD ([link](https://github.com/nestybox/sysbox/issues/50)). We were therefore required to run OpenHands in \"privileged\" mode, which we deemed acceptable given that our (internal) evaluation infrastructure does not rely on the Docker container-to-host isolation or the virtual machine boundary for security. We wish users to acknowledge this security risk, thus require users to set the `I_ACCEPT_RUNNING_PRIVILEGED_CONTAINERS` environment variable to `True` when running OpenHands through `run_agent.py`.\n"
+    },
+    {
+      "path": "agents/dummy/requirements.txt",
+      "sha": null,
+      "content_sha256": "57c79b50da0f54f8c83edf858311d0aedc69bd13877dbba7bea7047cb21ebc13",
+      "score": 156,
+      "content": "# Include any packages here that your agent requires, e.g.  \n# torch  \n"
+    },
+    {
+      "path": "agents/aide/requirements.txt",
+      "sha": null,
+      "content_sha256": "0af6f47febc28fdbba036ff3941654e6084e9aea18822ae005687c7ab64033dc",
+      "score": 156,
+      "content": "git+https://github.com/thesofakillers/aideml@v6.3.3\n"
+    },
+    {
+      "path": "agents/aide/Dockerfile",
+      "sha": null,
+      "content_sha256": "f8645460f03c040ecdc81e119acf7caf1b0ac3e12fe98054fa1afc6bed122942",
+      "score": 156,
+      "content": "FROM mlebench-env\n\n# where to put submission.csv, will be extracted\nARG SUBMISSION_DIR\nENV SUBMISSION_DIR=${SUBMISSION_DIR}\n# where to put any logs, will be extracted\nARG LOGS_DIR\nENV LOGS_DIR=${LOGS_DIR}\n# where to put any code, will be extracted\nARG CODE_DIR\nENV CODE_DIR=${CODE_DIR}\n# where to put any other agent-specific files, will not be necessarily extracted\nARG AGENT_DIR\nENV AGENT_DIR=${AGENT_DIR}\n\nRUN mkdir ${LOGS_DIR} ${CODE_DIR} ${AGENT_DIR}\n\nARG CONDA_ENV_NAME=agent\nARG REQUIREMENTS=${AGENT_DIR}/requirements.txt\n\n# copy just the requirements file, so that we can cache conda separately from the agent files\nCOPY requirements.txt ${AGENT_DIR}/requirements.txt\n\n# Requirements for opencv\nRUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y\n\n# create conda environment and install the requirements to it\nRUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \\\n    conda clean -afy\n\n# put all the agent files in the expected location\nCOPY . ${AGENT_DIR}\n"
+    },
+    {
+      "path": "agents/dummy/Dockerfile",
+      "sha": null,
+      "content_sha256": "ccc5a290e8056c1344896059656c317e3c1804114aa38c828870b4e9b04fcef8",
+      "score": 156,
+      "content": "FROM mlebench-env\n\n# where to put submission.csv, will be extracted\nARG SUBMISSION_DIR\nENV SUBMISSION_DIR=${SUBMISSION_DIR}\n# where to put any logs, will be extracted\nARG LOGS_DIR\nENV LOGS_DIR=${LOGS_DIR}\n# where to put any code, will be extracted\nARG CODE_DIR\nENV CODE_DIR=${CODE_DIR}\n# where to put any other agent-specific files, will not be necessarily extracted\nARG AGENT_DIR\nENV AGENT_DIR=${AGENT_DIR}\n\nRUN mkdir -p ${LOGS_DIR} ${CODE_DIR} ${AGENT_DIR}\n\nARG CONDA_ENV_NAME=agent\nARG REQUIREMENTS=${AGENT_DIR}/requirements.txt\n\n# copy just the requirements file, so that we can cache conda separately from the agent files\nCOPY requirements.txt ${AGENT_DIR}/requirements.txt\n\n# create conda environment and install the requirements to it\nRUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \\\n    conda clean -afy\n\n# put all the agent files in the expected location\nCOPY . ${AGENT_DIR}"
+    },
+    {
+      "path": "agents/opendevin/Dockerfile",
+      "sha": null,
+      "content_sha256": "7949734c50f531ce7371133ffc4102263d94340201bf2f46fc6303d2b916502f",
+      "score": 156,
+      "content": "FROM --platform=linux/amd64 mlebench-env\n\n# Do not modify the following block of arg-env pairs. The evaluation infrastructure will\n# periodically download the contents of these directories for logging purposes.\n\n# Where the agent should write its `submission.csv`\nARG SUBMISSION_DIR=/home/submission\nENV SUBMISSION_DIR=${SUBMISSION_DIR}\n\n# Where the agent's logs should be written\nARG LOGS_DIR=/home/logs\nENV LOGS_DIR=${LOGS_DIR}\n\n# Where the agent should write its code\nARG CODE_DIR=/home/code\nENV CODE_DIR=${CODE_DIR}\n\n# Where the agent code should exist\nARG AGENT_DIR=/home/agent\nENV AGENT_DIR=${AGENT_DIR}\n\nARG CONDA_ENV_NAME=agent\nARG PYTHON_VERSION=3.11\nARG OD_VERSION=v2.1.0\nENV DEBIAN_FRONTEND=noninteractive\n\nRUN mkdir -p ${LOGS_DIR} ${AGENT_DIR} ${CODE_DIR} ${SUBMISSION_DIR} && \\\n    curl -fsSL https://get.docker.com -o /tmp/get-docker.sh && \\\n    chmod 700 /tmp/get-docker.sh && \\\n    /tmp/get-docker.sh && \\\n    sudo usermod -aG docker nonroot && \\\n    git clone --branch ${OD_VERSION} --single-branch https://github.com/thesofakillers/OpenHands.git ${AGENT_DIR}\n\nWORKDIR ${AGENT_DIR}\n\n# Assumes that the `agent` conda env already exists, which is created in the `mlebench-env` base image.\nRUN conda install -y -n ${CONDA_ENV_NAME} -c conda-forge nodejs=18.17.1 && \\\n    conda run -n ${CONDA_ENV_NAME} pip install poetry>=1.8 && \\\n    conda run -n ${CONDA_ENV_NAME} poetry install && \\\n    conda run -n ${CONDA_ENV_NAME} poetry add build && \\\n    conda clean -afy\n\nCOPY setup.py start.py templates.py utils.py start.sh build.sh ${AGENT_DIR}/\nCOPY entrypoint.sh /agent_entrypoint.sh\n\nRUN chmod +x /agent_entrypoint.sh\n\n# Allow the agent to do `sudo /build.sh`, but restrict it from reading or editing the file.\nRUN echo \"ALL ALL=NOPASSWD: ${AGENT_DIR}/build.sh\" >> /etc/sudoers && \\\n    chmod 711 ${AGENT_DIR}/build.sh\n\n# run the agent's entrypoint script instead (which also runs root entrypoint)\nENTRYPOINT [\"/agent_entrypoint.sh\"]\n"
+    },
+    {
+      "path": "agents/mlagentbench/requirements.txt",
+      "sha": null,
+      "content_sha256": "02dd4123233da3f25b9681c8a6a14e2eae19819dbb41b073aae5d34b5a31c4a2",
+      "score": 156,
+      "content": "# Adapted from https://github.com/snap-stanford/MLAgentBench/blob/main/requirements.txt\n\n# # clrs benchmark dependecies\n# absl-py>=0.13.0\n# attrs>=21.4.0\n# chex>=0.0.8\n# dm-haiku>=0.0.4\n# jax>=0.2.18\n# jaxlib>=0.1.69\n# numpy>=1.21.1\n# opt-einsum>=3.3.0\n# optax>=0.0.9\n# six>=1.16.0\n# tensorflow>=2.9.0\n# tfds-nightly==4.5.2.dev202204190046\n# toolz>=0.11.1\n# torch>=2.0.0\n# torchvision>=0.15.1\n# transformers>=4.28.0\n# dm-clrs @ git+git://github.com/deepmind/clrs.git\n# # for gpu support https://github.com/deepmind/clrs/issues/98\n\n# images\npillow\n\n\n# common ml packages\ntorch==2.2.0\ntorchvision==0.17.0\ntransformers\nscikit-learn\nxgboost\nkeras\nscipy\nnumpy\npandas\nmatplotlib\nseaborn\ntqdm\nkaggle\n# tensorflow\nopencv-python\n# tensorrt\n\n# llm\nopenai==0.28\nanthropic\nlangchain==0.2.10\nlangchain_anthropic\nsentencepiece\nspacy\nnltk\nsacrebleu\nrouge-score\npeft\naccelerate\nevaluate\n# vertaxai\ntiktoken\n\n# graph\ntorch-geometric==2.3.1\nogb\nnetworkx\n\n\n#others\ncchardet\npytest\ndacite\ntenacity\nbson\nfastdtw\ntextblob\ngdcm\npylibjpeg\ngeopy"
+    },
+    {
+      "path": "agents/mlagentbench/Dockerfile",
+      "sha": null,
+      "content_sha256": "64e42412620aa8e7af9ce5d9f0a31b9b57be638b48b8f5ffb970b21cca26c057",
+      "score": 156,
+      "content": "FROM mlebench-env\n\n# where to put submission.csv, will be extracted\nARG SUBMISSION_DIR\nENV SUBMISSION_DIR=${SUBMISSION_DIR}\n# where to put any logs, will be extracted\nARG LOGS_DIR\nENV LOGS_DIR=${LOGS_DIR}\n# where to put any code, will be extracted\nARG CODE_DIR\nENV CODE_DIR=${CODE_DIR}\n# where to put any other agent-specific files, will not be necessarily extracted\nARG AGENT_DIR\nENV AGENT_DIR=${AGENT_DIR}\n\nRUN mkdir ${LOGS_DIR} ${CODE_DIR} ${AGENT_DIR}\n\nARG CONDA_ENV_NAME=agent\n\n# copy just the requirements file, so that we can cache conda separately from the agent files\nCOPY requirements.txt ${AGENT_DIR}/requirements.txt\n\n# Requirements for opencv\nRUN apt-get update && apt-get install ffmpeg libsm6 libxext6  -y\n\n# create conda environment and install the requirements to it\nRUN conda run -n ${CONDA_ENV_NAME} pip install -r ${AGENT_DIR}/requirements.txt && \\\n    conda clean -afy\n\n# clone git directory to the agent directory\nRUN git clone https://github.com/JunShern/MLAgentBench.git ${AGENT_DIR}/MLAgentBench && \\\n    cd ${AGENT_DIR}/MLAgentBench && \\\n    git checkout 328c713c02ea43e63f2d11cd7fd1293acb58f09f\nCOPY ./benchmark_dir ${AGENT_DIR}/MLAgentBench/MLAgentBench/benchmarks/mlebench\n\n# put remaining necessary agent files in the expected location\nCOPY additional_notes.txt /home/additional_notes.txt\nCOPY start.sh ${AGENT_DIR}\n\n# set working directory to MLAgentBench\nWORKDIR ${AGENT_DIR}/MLAgentBench\n"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "9806193ca10d6deb96be7d3e906f41be18684faa5b84e4c98858a64375579e1f",
+      "score": 120,
+      "content": "[build-system]\nrequires = [\"setuptools\", \"wheel\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[project]\nname = 'mlebench'\nreadme = \"README.md\"\nrequires-python = \">=3.11\"\nversion = \"1.0.0\"\ndependencies = [\n  \"appdirs>=1.4.4\",\n  \"docker>=7.1\",\n  \"fastparquet>=2024.5.0\",\n  \"kaggle>=1.6,<1.7\",\n  \"levenshtein>=0.25.1\",\n  \"openai>=1.10.0\",\n  \"pandas>=2.2\",\n  \"pyyaml>=6.0\",\n  \"py7zr>=0.21\",\n  \"scikit-learn>=1.5\",\n  \"tensorflow>=2.16\",\n  \"pillow>=10.3\",\n  \"python-dotenv>=1.0.1\",\n  \"aiohttp>=3.9.5\",\n  \"tenacity>=8.5.0\",\n  \"nbformat>=5.10.4\",\n  \"nbconvert>=7.16.4\",\n  \"ipython>=8.26.0\",\n  \"pymongo>=4.8.0\",\n  \"pycocotools>=2.0.8\",\n  \"diskcache>=5.6.3\",\n  \"pyquaternion>=0.9.9\",\n  \"shapely>=2.0.5\",\n]\n\n[tool.setuptools]\npackages = { find = { include = [\"mlebench\", \"mlebench.*\"] } }\n\n[project.scripts]\nmlebench = \"mlebench.cli:main\"\n\n[project.optional-dependencies]\nformatters = [\"black>=23.3\", \"isort>=5.13\"]\ndev = [\"pytest>=8.2\", \"mypy>=1.10\", \"pre-commit>=3.7\"]\n\n[tool.setuptools.package-data]\nmlebench = [\"competitions/**/*\"]\n\n[tool.black]\nline-length = 100 # match the precommit\n\n[tool.pytest.ini_options]\n# Pytest can take a long time to collect test cases\n# when many Kaggle competitions have been downloaded.\n# We avoid this up by telling Pytest where the\n# tests live ahead of time.\ntestpaths = [\"tests\"]\n\n"
+    },
+    {
+      "path": "extras/plagiarism_detector/package.json",
+      "sha": null,
+      "content_sha256": "55aa2e79607773034e53804a08b8d6af84b33147fc4950cd2051eaa10f457a9c",
+      "score": 116,
+      "content": "{\n  \"dependencies\": {\n    \"@dodona/dolos-lib\": \"^3.3.1\"\n  }\n}\n"
+    },
+    {
+      "path": "mlebench/competitions/tweet-sentiment-extraction/config.yaml",
+      "sha": null,
+      "content_sha256": "b22d486536b3327ac2e386e638cafa9beb38e286b8164ba883d54e17e80f8df3",
+      "score": 111,
+      "content": "id: tweet-sentiment-extraction\nname: Tweet Sentiment Extraction\ncompetition_type: code\nawards_medals: true\nprizes:\n  - position: 1\n    value: 7000\n  - position: 2\n    value: 5000\n  - position: 3\n    value: 3000\ndescription: mlebench/competitions/tweet-sentiment-extraction/description.md\n\ndataset:\n  answers: tweet-sentiment-extraction/prepared/private/test.csv\n  sample_submission: tweet-sentiment-extraction/prepared/public/sample_submission.csv\n\ngrader:\n  name: jaccard-similarity\n  grade_fn: mlebench.competitions.tweet-sentiment-extraction.grade:grade\n\npreparer: mlebench.competitions.tweet-sentiment-extraction.prepare:prepare\n"
+    },
+    {
+      "path": "mlebench/competitions/facebook-recruiting-iii-keyword-extraction/checksums.yaml",
+      "sha": null,
+      "content_sha256": "a8f50d120f766c8e2fd07468ff3a9aea3ee2e390bc32eebba40bdaae7296ee6d",
+      "score": 111,
+      "content": "private:\n  test.csv: 1aeaa15b5bce7088a7d5423c2c404eca\npublic:\n  sample_submission.csv: e4ea6ff928dff4bf2d2a5c3b0089402c\n  test.csv: 10335b0f34418bb6a523506290aff802\n  train.csv: 3e16dc3e4df1697f70c93cf6bb473eaf\nzip: 68ceda9a963e745ab4fe02d0939638f7\n"
+    },
+    {
+      "path": "mlebench/competitions/facebook-recruiting-iii-keyword-extraction/config.yaml",
+      "sha": null,
+      "content_sha256": "6df0ad262c872fc63c9a490b433f00d5e63e7a205aa80a63eb048f1dd047c95c",
+      "score": 111,
+      "content": "id: facebook-recruiting-iii-keyword-extraction\nname: Facebook Recruiting III - Keyword Extraction\ncompetition_type: simple\nawards_medals: true\nprizes: null\ndescription: mlebench/competitions/facebook-recruiting-iii-keyword-extraction/description.md\n\ndataset:\n  answers: facebook-recruiting-iii-keyword-extraction/prepared/private/test.csv\n  sample_submission: facebook-recruiting-iii-keyword-extraction/prepared/public/sample_submission.csv\n\ngrader:\n  name: micro-f1-score\n  grade_fn: mlebench.competitions.facebook-recruiting-iii-keyword-extraction.grade:grade\n\npreparer: mlebench.competitions.facebook-recruiting-iii-keyword-extraction.prepare:prepare\n"
+    },
+    {
+      "path": "mlebench/competitions/tweet-sentiment-extraction/checksums.yaml",
+      "sha": null,
+      "content_sha256": "09e2caaf5539740dbea222bde7e8bece483d026936fc74a3d6bfcfb1b0872194",
+      "score": 111,
+      "content": "private:\n  test.csv: f67a6c60b4b93ad6a7a248a0dfcae16c\npublic:\n  sample_submission.csv: 0341dc99c0063baba150e1e64d8b5000\n  test.csv: b52b4f32e127ea49f8f0d218527fa93f\n  train.csv: 4248531bac2a97518a553a38d05355ac\nzip: 561dfe47375e6fdd7b36cd507509f1c2\n"
+    },
+    {
+      "path": "mlebench/competitions/tweet-sentiment-extraction/prepare.py",
+      "sha": null,
+      "content_sha256": "941d0527962341f90c4ee856d72543019ad86ed4919abad5623d7690d6195775",
+      "score": 111,
+      "content": "from pathlib import Path\n\nfrom sklearn.model_selection import train_test_split\n\nfrom mlebench.utils import read_csv\n\n\ndef prepare(raw: Path, public: Path, private: Path):\n    \"\"\"\n    Splits the data in raw into public and private datasets with appropriate test/train splits.\n    \"\"\"\n\n    # Create train, test from train split\n    old_train = read_csv(raw / \"train.csv\")\n    new_train, new_test = train_test_split(old_train, test_size=0.1, random_state=0)\n    new_test_without_labels = new_test.drop(columns=[\"selected_text\"])\n\n    new_train.to_csv(public / \"train.csv\", index=False)\n    new_test.to_csv(private / \"test.csv\", index=False)\n    new_test_without_labels.to_csv(public / \"test.csv\", index=False)\n\n    assert len(new_test_without_labels) == len(\n        new_test\n    ), f\"Expected new_test_without_labels ({len(new_test_without_labels)}) == new_test ({len(new_test)})\"\n    assert len(new_train) + len(new_test) == len(\n        old_train\n    ), f\"Expected new_train ({len(new_train)}) + new_test ({len(new_test)}) == old_train ({len(old_train)})\"\n\n    # Create a sample submission file\n    submission_df = new_test.copy()[[\"textID\", \"selected_text\"]]\n    submission_df[\"selected_text\"] = \"\"\n\n    submission_df.to_csv(public / \"sample_submission.csv\", index=False)\n    assert len(submission_df) == len(\n        new_test\n    ), f\"Expected submission_df ({len(submission_df)}) == new_test ({len(new_test)})\"\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:30:55.302735+00:00"
+}
