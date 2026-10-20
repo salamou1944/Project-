@@ -1,0 +1,562 @@
+{
+  "canonical_source": "github:stickerdaniel/varlock",
+  "repo": "stickerdaniel/varlock",
+  "revision_sha": "872284197277cf35d65f8fbd5fcf112ddf3b89f4",
+  "default_branch": "main",
+  "pushed_at": "2026-07-13T12:41:45Z",
+  "repo_updated_at": "2026-07-11T05:57:02Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/deploy-tests.yaml",
+      "sha": null,
+      "content_sha256": "8b9cb1d32d5e7a74f97a9243d90db6494db8b0717bd582418b8338dc95b0b974",
+      "score": 258,
+      "content": "name: Real Deployment Tests\n\n# Deploys the nextjs smoke app to a throwaway Vercel project (remote build) and\n# asserts runtime behavior on real infrastructure: lambda SSR, the real Edge\n# runtime for middleware, runtime leak detection, and log redaction in Vercel's\n# log pipeline. Catches platform-side drift that local framework tests (which\n# emulate prod with `next start`) structurally cannot.\n#\n# Runs on a weekly schedule / manual dispatch — failures are informational and\n# never block PRs.\n#\n# Secrets: dogfoods varlock — the Vercel token is resolved from 1Password via\n# framework-tests/deploy/.env.schema, so the only GitHub secret needed is the\n# existing OP_CI_TOKEN (1Password service account). The `varlock run` wrapper\n# also redacts the token from CI logs. If this ever grows multiple steps that\n# need the Vercel auth, switch to dmno-dev/varlock-action (which exports the\n# resolved env to the job) instead of wrapping each step.\n\non:\n  schedule:\n    - cron: '47 6 * * 1' # weekly, monday morning UTC (after the nextjs canary run)\n  workflow_dispatch:\n    inputs:\n      use-published:\n        description: 'Test latest published packages instead of workspace code'\n        type: boolean\n        default: false\n\npermissions:\n  contents: read\n\njobs:\n  vercel:\n    name: Vercel Deployment Tests\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n\n      - name: Setup Node.js\n        uses: actions/setup-node@v6\n        with:\n          node-version: '24.x'\n\n      - name: Setup pnpm\n        uses: pnpm/action-setup@v6\n        with:\n          version: 10\n\n      - name: Install dependencies\n        run: bun install\n\n      - name: Enable turborepo build cache\n        uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14\n\n      # builds the packed tarballs under test AND the varlock CLI used below\n      - name: Build libraries\n        run: bun run build:libs\n\n      - name: Run Vercel deployment tests\n        # varlock resolves VERCEL_TOKEN (+ project scoping vars) from 1Password\n        # via deploy/.env.schema and injects them into the test process\n        run: |\n          cd framework-tests && bun install\n          node ../packages/varlock/dist/cli/cli-executable.js run --path ./deploy -- bun run test -- --reporter=verbose deploy/\n        timeout-minutes: 25\n        env:\n          OP_CI_TOKEN: ${{ secrets.OP_CI_TOKEN }}\n          VERCEL_DEPLOY_TESTS: '1'\n          DEPLOY_TESTS_PUBLISHED: ${{ github.event.inputs.use-published == 'true' && '1' || '' }}\n          NEXT_TELEMETRY_DISABLED: '1'\n          VERCEL_TELEMETRY_DISABLED: '1'\n"
+    },
+    {
+      "path": "packages/varlock-docs-mcp/package.json",
+      "sha": null,
+      "content_sha256": "fea3090439fb1906c4873a71519d1724e9d460c423496e5fd5780c9cb0581c1c",
+      "score": 191,
+      "content": "{\n  \"name\": \"varlock-docs-mcp\",\n  \"version\": \"0.0.1\",\n  \"private\": true,\n  \"scripts\": {\n    \"deploy\": \"wrangler deploy\",\n    \"dev\": \"wrangler dev\",\n    \"lint\": \"eslint .\",\n    \"lint:fix\": \"bun run lint --fix\",\n    \"start\": \"wrangler dev\",\n    \"cf-typegen\": \"wrangler types\",\n    \"inspector\": \"bunx @modelcontextprotocol/inspector@latest\",\n    \"typecheck\": \"tsc --noEmit\"\n  },\n  \"dependencies\": {\n    \"@modelcontextprotocol/sdk\": \"^1.29.0\",\n    \"agents\": \"^0.3.7\",\n    \"ai\": \"^5.0.0\",\n    \"zod\": \"^4.3.5\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"catalog:\",\n    \"typescript\": \"5.9.3\",\n    \"wrangler\": \"^4.93.0\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/ci-env-info/package.json",
+      "sha": null,
+      "content_sha256": "c8aa1c8737d6dfc7d03629aa0526ce39f42a592cc6983618db85c632798dad33",
+      "score": 188,
+      "content": "{\n  \"name\": \"@varlock/ci-env-info\",\n  \"description\": \"Detect CI environment and normalize other data like environment, repo, branch, PR, commit, etc.\",\n  \"version\": \"0.0.2\",\n  \"type\": \"module\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/dmno-dev/varlock.git\",\n    \"directory\": \"packages/ci-env-info\"\n  },\n  \"main\": \"dist/index.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"exports\": {\n    \".\": {\n      \"ts-src\": \"./src/index.ts\",\n      \"types\": \"./dist/index.d.ts\",\n      \"default\": \"./dist/index.js\"\n    }\n  },\n  \"files\": [\"dist\"],\n  \"scripts\": {\n    \"build\": \"tsup\",\n    \"dev\": \"tsup --watch\",\n    \"test\": \"vitest\",\n    \"test:ci\": \"vitest --run\",\n    \"typecheck\": \"tsc --noEmit\"\n  },\n  \"keywords\": [\n    \"ci\",\n    \"environment\",\n    \"detection\",\n    \"github-actions\",\n    \"vercel\",\n    \"netlify\",\n    \"env vars\"\n  ],\n  \"author\": \"dmno-dev\",\n  \"license\": \"MIT\",\n  \"engines\": {\n    \"node\": \">=22\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"catalog:\",\n    \"tsup\": \"catalog:\",\n    \"typescript\": \"catalog:\",\n    \"vitest\": \"catalog:\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/plugins/kubernetes/package.json",
+      "sha": null,
+      "content_sha256": "db98c72be3b3d6db42c95f585e8bcd498ae5f94f71596a8573e239664569ed81",
+      "score": 186,
+      "content": "{\n  \"name\": \"@varlock/kubernetes-plugin\",\n  \"description\": \"Varlock plugin to load values from Kubernetes Secrets and ConfigMaps\",\n  \"version\": \"1.0.0\",\n  \"type\": \"module\",\n  \"homepage\": \"https://varlock.dev/plugins/kubernetes/\",\n  \"bugs\": \"https://github.com/dmno-dev/varlock/issues\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/dmno-dev/varlock.git\",\n    \"directory\": \"packages/plugins/kubernetes\"\n  },\n  \"main\": \"dist/index.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"exports\": {\n    \"./plugin\": \"./dist/plugin.cjs\"\n  },\n  \"files\": [\"dist\"],\n  \"scripts\": {\n    \"dev\": \"tsup --watch\",\n    \"build\": \"tsup\",\n    \"test\": \"vitest\",\n    \"typecheck\": \"tsc --noEmit\"\n  },\n  \"keywords\": [\n    \"varlock\",\n    \"plugin\",\n    \"varlock-plugin\",\n    \"kubernetes\",\n    \"k8s\",\n    \"secrets\",\n    \"configmap\",\n    \"env\",\n    \".env\",\n    \"dotenv\",\n    \"environment variables\",\n    \"env vars\",\n    \"config\"\n  ],\n  \"author\": \"dmno-dev\",\n  \"license\": \"MIT\",\n  \"engines\": {\n    \"node\": \">=22\"\n  },\n  \"peerDependencies\": {\n    \"varlock\": \"workspace:^\"\n  },\n  \"devDependencies\": {\n    \"@kubernetes/client-node\": \"^1.4.0\",\n    \"@types/node\": \"catalog:\",\n    \"outdent\": \"catalog:\",\n    \"tsup\": \"catalog:\",\n    \"varlock\": \"workspace:^\",\n    \"vitest\": \"catalog:\"\n  }\n}\n"
+    },
+    {
+      "path": ".github/workflows/framework-tests.yaml",
+      "sha": null,
+      "content_sha256": "abc6b6907bd03a4f3e36499eef8c49436c6ef4220c9fec82d506db65d990d972",
+      "score": 186,
+      "content": "name: Framework Integration Tests\n\non:\n  pull_request:\n    types: [opened, synchronize, reopened, labeled]\n  workflow_dispatch:\n    inputs:\n      force-all:\n        description: 'Run all framework tests regardless of changes'\n        type: boolean\n        default: false\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}\n  cancel-in-progress: true\n\npermissions:\n  contents: read\n\njobs:\n  detect-integrations:\n    name: Detect Changed Integrations\n    runs-on: ubuntu-latest\n    permissions: {}\n    outputs:\n      any-changed: ${{ steps.detect.outputs.any-changed }}\n      integrations: ${{ steps.detect.outputs.integrations }}\n    steps:\n      - uses: actions/checkout@v7\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n\n      - name: Detect changed integrations\n        id: detect\n        run: |\n          ARGS=\"\"\n          if [[ \"${{ github.event.inputs.force-all }}\" == \"true\" ]] || [[ \"${{ contains(github.event.pull_request.labels.*.name, 'framework-tests') }}\" == \"true\" ]]; then\n            ARGS=\"--all\"\n          elif [[ \"${{ github.head_ref }}\" == \"bumpy/version-packages\" ]]; then\n            ARGS=\"--release-pr\"\n          fi\n          bun run scripts/detect-changed-integrations.ts $ARGS\n\n  build:\n    name: Build Libraries\n    needs: detect-integrations\n    if: needs.detect-integrations.outputs.any-changed == 'true'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n\n      - name: Setup Node.js\n        uses: actions/setup-node@v6\n        with:\n          node-version: '24.x'\n\n      - name: Install dependencies\n        run: bun install\n\n      - name: Enable turborepo build cache\n        uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14\n\n      - name: Build libraries\n        run: bun run build:libs\n\n      - name: Upload built repo for framework tests\n        uses: actions/upload-artifact@v7\n        with:\n          name: built-repo\n          path: |\n            packages/*/dist/\n            packages/integrations/*/dist/\n          retention-days: 1\n\n  test:\n    name: Framework Tests (${{ matrix.integration.name }})\n    needs: [detect-integrations, build]\n    if: needs.detect-integrations.outputs.any-changed == 'true'\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n      matrix:\n        integration: ${{ fromJson(needs.detect-integrations.outputs.integrations) }}\n    steps:\n      - uses: actions/checkout@v7\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n\n      - name: Setup Node.js\n        uses: actions/setup-node@v6\n        with:\n          node-version: '24.x'\n\n      - name: Setup pnpm\n        uses: pnpm/action-setup@v6\n        with:\n          version: 10\n\n      - name: Cache pnpm store\n        uses: actions/cache@v5\n        with:\n          path: ~/.local/share/pnpm/store/v3\n          key: pnpm-${{ runner.os }}-${{ matrix.integration.name }}-${{ hashFiles('framework-tests/**/package.json') }}\n          restore-keys: |\n            pnpm-${{ runner.os }}-${{ matrix.integration.name }}-\n            pnpm-${{ runner.os }}-\n\n      - name: Install dependencies\n        run: bun install\n\n      - name: Download built libraries\n        uses: actions/download-artifact@v8\n        with:\n          name: built-repo\n          path: packages/\n\n      - name: Run ${{ matrix.integration.name }} framework tests\n        run: cd framework-tests && bun install && bun run test -- --reporter=verbose frameworks/${{ matrix.integration.testPath }}\n        timeout-minutes: 15\n        env:\n          NEXTJS_TURBO_ONLY: ${{ contains(matrix.integration.name, '(quick)') && '1' || '' }}\n          NEXT_TELEMETRY_DISABLED: '1'\n"
+    },
+    {
+      "path": ".github/workflows/test.yaml",
+      "sha": null,
+      "content_sha256": "db1f6ce17354ec752b618c36ff77acfe0eaf889c77e7a488cd86e9f1efa969ac",
+      "score": 186,
+      "content": "name: CI test suite\non:\n  pull_request:\n  push:\n    branches: [main]\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n\npermissions:\n  contents: read\n\njobs:\n  build-and-test:\n    runs-on: ubuntu-latest\n    outputs:\n      includes-varlock: ${{ steps.check-release.outputs.includes-varlock }}\n      release-packages: ${{ steps.check-release.outputs.packages }}\n      swift-changed: ${{ steps.check-swift.outputs.changed }}\n      rust-changed: ${{ steps.check-rust.outputs.changed }}\n      swift-cache-hit: ${{ steps.swift-cache-check.outputs.cache-hit }}\n      rust-cache-hit: ${{ steps.rust-cache-final.outputs.cache-hit }}\n      rust-source-hash: ${{ steps.rust-hash.outputs.hash }}\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n\n      - name: Use Node.js 24.x\n        uses: actions/setup-node@v6\n        with:\n          node-version: \"24.x\"\n      - name: Install js deps (w/ bun)\n        run: bun install\n      - name: Audit dependencies\n        run: bun run audit:changed\n      - name: Enable turborepo build cache\n        uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14\n\n      # Note: the bumpy release-plan check + comment live in their own workflows\n      # (bumpy-check.yaml emits the comment on `pull_request`; bumpy-comment.yaml\n      # posts it on `workflow_run`) so it can post on fork PRs without running\n      # PR-defined code with write permissions.\n\n      # lint, build, tests  ---------------------------------\n      - name: ESLint\n        run: bun run lint\n      - name: TypeScript type check\n        run: bun run typecheck:all\n      - name: Build libraries\n        run: bun run build:libs\n      - name: Run tests\n        run: bun run test:ci\n\n      # Determine which packages will be preview-released (used to gate native builds)\n      - name: Check release packages\n        if: github.ref_name != 'main'\n        id: check-release\n        run: bun run scripts/check-release-packages.ts\n\n      # Check if native binary source changed (used to gate native builds)\n      - name: Check for Swift source changes\n        id: check-swift\n        if: steps.check-release.outputs.includes-varlock == 'true'\n        run: |\n          if git diff --name-only origin/main...HEAD | grep -qE '^(packages/encryption-binary-swift/|\\.github/workflows/build-native-macos\\.yaml)'; then\n            echo \"changed=true\" >> $GITHUB_OUTPUT\n          else\n            echo \"changed=false\" >> $GITHUB_OUTPUT\n          fi\n      - name: Check for Rust source changes\n        id: check-rust\n        if: steps.check-release.outputs.includes-varlock == 'true'\n        run: |\n          if git diff --name-only origin/main...HEAD | grep -qE '^(packages/encryption-binary-rust/|\\.github/workflows/build-native-rust\\.yaml)'; then\n            echo \"changed=true\" >> $GITHUB_OUTPUT\n          else\n            echo \"changed=false\" >> $GITHUB_OUTPUT\n          fi\n\n      # Check if native binary caches exist (lookup-only, no download)\n      - name: Check Swift binary cache\n        id: swift-cache-check\n        if: steps.check-release.outputs.includes-varlock == 'true' && steps.check-swift.outputs.changed != 'true'\n        uses: actions/cache/restore@v5\n        with:\n          path: packages/varlock/native-bins/darwin/VarlockEnclave.app\n          key: native-bin-macos-signed-${{ hashFiles('packages/encryption-binary-swift/swift/Package.swift', 'packages/encryption-binary-swift/swift/Sources/**') }}\n          lookup-only: true\n      # Compute Rust source hash once on Ubuntu — used for cache keys everywhere\n      # (hashFiles can differ across OSes, so we normalize it here)\n      - name: Compute Rust source hash\n        id: rust-hash\n        if: steps.check-release.outputs.includes-varlock == 'true'\n        run: |\n          HASH=${{ hashFiles('packages/encryption-binary-rust/Cargo.lock', 'packages/encryption-binary-rust/src/**') }}\n          echo \"hash=$HASH\" >> $GITHUB_OUTPUT\n      - name: Check Rust cache - linux-x64\n        id: rust-cache-check-linux-x64\n        if: steps.check-release.outputs.includes-varlock == 'true' && steps.check-rust.outputs.changed != 'true'\n        uses: actions/cache/restore@v5\n        with:\n          path: packages/varlock/native-bins/linux-x64/\n          key: native-bin-rust-linux-x64-${{ steps.rust-hash.outputs.hash }}\n          lookup-only: true\n      - name: Check Rust cache - linux-arm64\n        id: rust-cache-check-linux-arm64\n        if: steps.check-release.outputs.includes-varlock == 'true' && steps.check-rust.outputs.changed != 'true'\n        uses: actions/cache/restore@v5\n        with:\n          path: packages/varlock/native-bins/linux-arm64/\n          key: native-bin-rust-linux-arm64-${{ steps.rust-hash.outputs.hash }}\n          lookup-only: true\n      - name: Check Rust cache - win32-x64\n        id: rust-cache-check-win32-x64\n        if: steps.check-release.outputs.includes-varlock == 'true' && steps.check-rust.outputs.changed != 'true'\n        uses: actions/cache/restore@v5\n        with:\n          path: packages/varlock/native-bins/win32-x64/\n          key: native-bin-rust-win32-x64-${{ steps.rust-hash.outputs.hash }}\n          lookup-only: true\n      - name: Determine Rust cache status\n        id: rust-cache-final\n        if: steps.check-release.outputs.includes-varlock == 'true' && steps.check-rust.outputs.changed != 'true'\n        run: |\n          if [[ \"${{ steps.rust-cache-check-linux-x64.outputs.cache-hit }}\" == \"true\" \\\n             && \"${{ steps.rust-cache-check-linux-arm64.outputs.cache-hit }}\" == \"true\" \\\n             && \"${{ steps.rust-cache-check-win32-x64.outputs.cache-hit }}\" == \"true\" ]]; then\n            echo \"cache-hit=true\" >> $GITHUB_OUTPUT\n          else\n            echo \"cache-hit=false\" >> $GITHUB_OUTPUT\n            echo \"::warning::Some Rust binary caches missing — will trigger rebuild\"\n          fi\n\n  # Build + sign the macOS native binary if varlock is being released AND (source changed or cache missing)\n  build-native-macos:\n    needs: build-and-test\n    if: >-\n      needs.build-and-test.outputs.includes-varlock == 'true'\n      && (needs.build-and-test.outputs.swift-changed == 'true' || needs.build-and-test.outputs.swift-cache-hit != 'true')\n    uses: ./.github/workflows/build-native-macos.yaml\n    with:\n      artifact-name: native-bin-macos-ci\n    secrets:\n      OP_CI_TOKEN: ${{ secrets.OP_CI_TOKEN }}\n\n  # Build Rust native binaries if varlock is being released AND (source changed or cache missing)\n  build-native-rust:\n    needs: build-and-test\n    # CI builds never sign, so no id-token is granted here (signing is gated on\n    # the `sign` input, which only the release workflows pass).\n    permissions:\n      contents: read\n    if: >-\n      needs.build-and-test.outputs.includes-varlock == 'true'\n      && (needs.build-and-test.outputs.rust-changed == 'true' || needs.build-and-test.outputs.rust-cache-hit != 'true')\n    uses: ./.github/workflows/build-native-rust.yaml\n    with:\n      artifact-name: native-bin-rust-ci\n      source-hash: ${{ needs.build-and-test.outputs.rust-source-hash }}\n\n  # Publish preview packages via pkg-pr-new\n  release-preview-packages:\n    needs: [build-and-test, build-native-macos, build-native-rust]\n    # Run even if native builds were skipped (source unchanged), but not if anything failed. Skip on main.\n    if: always() && !failure() && !cancelled() && github.ref_name != 'main'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n      - name: Use Node.js 24.x\n        uses: actions/setup-node@v6\n        with:\n          node-version: \"24.x\"\n      - name: Install node deps\n        run: bun install\n      - name: Enable turborepo build cache\n        uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14\n\n      # Get signed macOS .app if varlock is being released\n      # If the macOS build ran this run, download the artifact directly\n      # Otherwise, restore from cross-run cache\n      - name: Download macOS native binary (from this run)\n        if: needs.build-and-test.outputs.includes-varlock == 'true' && needs.build-native-macos.result == 'success'\n        uses: actions/download-artifact@v8\n        with:\n          name: native-bin-macos-ci\n          path: packages/varlock/native-bins/darwin/VarlockEnclave.app\n      - name: Restore cached macOS native binary (from prior run)\n        if: needs.build-and-test.outputs.includes-varlock == 'true' && needs.build-native-macos.result != 'success'\n        uses: actions/cache/restore@v5\n        with:\n          path: packages/varlock/native-bins/darwin/VarlockEnclave.app\n          key: native-bin-macos-signed-${{ hashFiles('packages/encryption-binary-swift/swift/Package.swift', 'packages/encryption-binary-swift/swift/Sources/**') }}\n      - name: Verify and fix native binary permissions\n        if: needs.build-and-test.outputs.includes-varlock == 'true'\n        run: |\n          BINARY=packages/varlock/native-bins/darwin/VarlockEnclave.app/Contents/MacOS/varlock-local-encrypt\n          if [ ! -f \"$BINARY\" ]; then\n            echo \"::error::macOS native binary not found — cannot publish varlock preview without it\"\n            exit 1\n          fi\n          chmod +x \"$BINARY\"\n\n      # Get Rust native binaries if varlock is being released\n      # If the Rust build ran this run, download the artifacts; otherwise restore from cache\n      - name: Download Rust binaries (from this run)\n        if: needs.build-and-test.outputs.includes-varlock == 'true' && needs.build-native-rust.result == 'success'\n        uses: actions/download-artifact@v8\n        with:\n          pattern: native-bin-rust-ci-*\n          path: packages/varlock/native-bins/\n          merge-multiple: false\n      # Flatten: download-artifact creates subdirs per artifact name, but we need linux-x64/ etc.\n      - name: Flatten Rust artifact directories (from this run)\n        if: needs.build-and-test.outputs.includes-varlock == 'true' && needs.build-native-rust.result == 'success'\n        run: |\n          cd packages/varlock/native-bins\n          for dir in native-bin-rust-ci-*/; do\n            subdir=$(echo \"$dir\" | sed 's/native-bin-rust-ci-//' | sed 's/\\///')\n            mv \"$dir\" \"$subdir\" 2>/dev/null || true\n          done\n\n      - uses: actions/cache/restore@v5\n        if: needs.build-and-test.outputs.includes-varlock == 'true' && needs.build-native-rust.result != 'success'\n        with:\n          path: packages/varlock/native-bins/linux-x64/\n          key: native-bin-rust-linux-x64-${{ needs.build-and-test.outputs.rust-source-hash }}\n      - uses: actions/cache/restore@v5\n        if: needs.build-and-test.outputs.includes-varlock == 'true' && needs.build-native-rust.result != 'success'\n        with:\n          path: packages/varlock/native-bins/linux-arm64/\n          key: native-bin-rust-linux-arm64-${{ needs.build-and-test.outputs.rust-source-hash }}\n      - uses: actions/cache/restore@v5\n        if: needs.build-and-test.outputs.includes-varlock == 'true' && needs.build-native-rust.result != 'success'\n        with:\n          path: packages/varlock/native-bins/win32-x64/\n          key: native-bin-rust-win32-x64-${{ needs.build-and-test.outputs.rust-source-hash }}\n\n      - name: Verify and fix Rust binary permissions\n        if: needs.build-and-test.outputs.includes-varlock == 'true'\n        run: |\n          MISSING=()\n          for SUBDIR in linux-x64 linux-arm64 win32-x64; do\n            if [ \"$SUBDIR\" = \"win32-x64\" ]; then\n              BIN=\"packages/varlock/native-bins/$SUBDIR/varlock-local-encrypt.exe\"\n            else\n              BIN=\"packages/varlock/native-bins/$SUBDIR/varlock-local-encrypt\"\n            fi\n            if [ ! -f \"$BIN\" ]; then\n              MISSING+=(\"$BIN\")\n            elif [ \"$SUBDIR\" != \"win32-x64\" ]; then\n              chmod +x \"$BIN\" && echo \"Fixed: $BIN\"\n            fi\n          done\n          if [ ${#MISSING[@]} -gt 0 ]; then\n            echo \"::error::Rust native binaries not found: ${MISSING[*]}\"\n            echo \"Cache may not be seeded yet — ensure release.yaml has run on main\"\n            exit 1\n          fi\n\n      - name: Build publishable npm packages\n        if: needs.build-and-test.outputs.release-packages != '[]'\n        run: bun run build:libs\n        env:\n          BUILD_TYPE: preview\n      - name: Release preview packages\n        if: needs.build-and-test.outputs.release-packages != '[]'\n        run: bun run scripts/release-preview.ts\n        env:\n          RELEASE_PACKAGES: ${{ needs.build-and-test.outputs.release-packages }}\n"
+    },
+    {
+      "path": ".github/workflows/swift-test.yaml",
+      "sha": null,
+      "content_sha256": "ec6b777d998e6143f0a1240ad640eaa913d96b056af6d259223fdc63915fe0d1",
+      "score": 186,
+      "content": "name: Swift unit tests\n\n# Runs the SessionScoping unit tests on a macOS runner whenever the Swift\n# enclave package changes. No secrets / signing / 1Password needed — these are\n# pure logic tests of the biometric session-scoping identity against synthetic\n# process trees (see Tests/SessionScopingTests).\n\non:\n  pull_request:\n    paths:\n      - 'packages/encryption-binary-swift/swift/**'\n      - '.github/workflows/swift-test.yaml'\n  push:\n    branches: [main]\n    paths:\n      - 'packages/encryption-binary-swift/swift/**'\n      - '.github/workflows/swift-test.yaml'\n\npermissions:\n  contents: read\n\njobs:\n  swift-test:\n    runs-on: macos-latest\n    steps:\n      - uses: actions/checkout@v7\n\n      # Cache the Swift .build directory so compilation is fast on unchanged source\n      - name: Compute Swift source hash\n        id: swift-hash\n        run: |\n          HASH=$(find packages/encryption-binary-swift/swift -type f -not -path '*/.build/*' | sort | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)\n          echo \"hash=$HASH\" >> $GITHUB_OUTPUT\n\n      - name: Cache Swift build artifacts\n        uses: actions/cache@v5\n        with:\n          path: packages/encryption-binary-swift/swift/.build\n          key: varlock-swift-test-build-${{ steps.swift-hash.outputs.hash }}\n          restore-keys: |\n            varlock-swift-test-build-\n\n      - name: Run Swift tests\n        working-directory: packages/encryption-binary-swift/swift\n        run: swift test\n"
+    },
+    {
+      "path": ".github/workflows/smoke-test.yaml",
+      "sha": null,
+      "content_sha256": "512fba020594f99c2a9110513490644422976c2948f77604ce9dbb277060df98",
+      "score": 186,
+      "content": "name: Cross-Platform Smoke Tests\n\non:\n  pull_request:\n    types: [opened, synchronize, reopened, labeled]\n  # Allow manual trigger for testing\n  workflow_dispatch:\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}\n  cancel-in-progress: true\n\npermissions:\n  contents: read\n\n# Only run on release PRs (created by bumpy), PRs with \"smoke-tests\" label, or manual triggers\n# This avoids running expensive multi-platform tests on every PR\njobs:\n  check-if-release-pr:\n    name: Check if Release PR\n    runs-on: ubuntu-latest\n    permissions: {}\n    outputs:\n      is-release-pr: ${{ steps.check.outputs.is-release-pr }}\n    steps:\n      - id: check\n        env:\n          PR_TITLE: ${{ github.event.pull_request.title }}\n          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'smoke-tests') }}\n          EVENT_NAME: ${{ github.event_name }}\n        run: |\n          if [[ \"$PR_TITLE\" == *\"Versioned release\"* ]] || [[ \"$HAS_LABEL\" == \"true\" ]] || [[ \"$EVENT_NAME\" == \"workflow_dispatch\" ]] || [[ \"$EVENT_NAME\" == \"push\" ]]; then\n            echo \"is-release-pr=true\" >> $GITHUB_OUTPUT\n          else\n            echo \"is-release-pr=false\" >> $GITHUB_OUTPUT\n          fi\n\n  build:\n    name: Build and Pack Libraries\n    needs: check-if-release-pr\n    if: needs.check-if-release-pr.outputs.is-release-pr == 'true'\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      actions: write\n\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v7\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n\n      - name: Setup Node.js\n        uses: actions/setup-node@v6\n        with:\n          node-version: '24.x'\n\n      - name: Install dependencies\n        run: bun install\n\n      - name: Enable turborepo build cache\n        uses: rharkor/caching-for-turbo@56219402aacc0d06b650d898c222996dbc1191ec # v2.3.14\n\n      - name: Build varlock and integrations\n        run: bun run build:libs\n\n      - name: Build varlock binaries\n        run: |\n          echo \"=== build-binaries.ts content check ===\"\n          grep -n 'bytecode' packages/varlock/scripts/build-binaries.ts || echo \"no bytecode references found\"\n          echo \"=== building ===\"\n          cd packages/varlock && bun run build:binaries -- --skip-native\n\n      - name: Pack varlock packages\n        run: |\n          mkdir -p packed-packages\n          cd packages/varlock\n          bun pm pack --destination ../../packed-packages\n          cd ../integrations/nextjs\n          bun pm pack --destination ../../../packed-packages\n\n      - name: Upload packed packages\n        uses: actions/upload-artifact@v7\n        with:\n          name: packed-packages\n          path: packed-packages/*.tgz\n          retention-days: 1\n\n      - name: Upload varlock binary (linux-x64)\n        uses: actions/upload-artifact@v7\n        with:\n          name: varlock-binary-linux-x64\n          path: packages/varlock/dist-sea/linux-x64/varlock\n          retention-days: 1\n\n      - name: Upload varlock binary (macos-arm64)\n        uses: actions/upload-artifact@v7\n        with:\n          name: varlock-binary-macos-arm64\n          path: packages/varlock/dist-sea/macos-arm64/varlock\n          retention-days: 1\n\n      - name: Upload varlock binary (win-x64)\n        uses: actions/upload-artifact@v7\n        with:\n          name: varlock-binary-win-x64\n          path: packages/varlock/dist-sea/win-x64/varlock.exe\n          retention-days: 1\n\n  smoke-test:\n    name: Smoke Test (${{ matrix.os }})\n    needs: [check-if-release-pr, build]\n    if: needs.check-if-release-pr.outputs.is-release-pr == 'true'\n    runs-on: ${{ matrix.os }}\n    permissions:\n      contents: read\n      actions: read\n      checks: write\n\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ubuntu-latest, macos-latest, windows-latest]\n        node-version: ['24.x']\n        include:\n          - os: ubuntu-latest\n            binary-artifact: varlock-binary-linux-x64\n            binary-name: varlock\n          - os: macos-latest\n            binary-artifact: varlock-binary-macos-arm64\n            binary-name: varlock\n          - os: windows-latest\n            binary-artifact: varlock-binary-win-x64\n            binary-name: varlock.exe\n\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n\n      - name: Setup Node.js ${{ matrix.node-version }}\n        uses: actions/setup-node@v6\n        with:\n          node-version: ${{ matrix.node-version }}\n\n      - name: Setup pnpm\n        uses: pnpm/action-setup@v6\n        with:\n          version: 10\n\n      - name: Download packed packages\n        uses: actions/download-artifact@v8\n        with:\n          name: packed-packages\n          path: packed-packages\n      \n      - name: Download varlock binary\n        uses: actions/download-artifact@v8\n        with:\n          name: ${{ matrix.binary-artifact }}\n          path: packages/varlock/dist-sea\n\n      - name: Make binary executable\n        if: runner.os != 'Windows'\n        run: chmod +x packages/varlock/dist-sea/varlock\n\n      - name: Update smoke-tests to use packed packages\n        run: node smoke-tests/update-to-packed.js\n\n      - name: Install smoke tests deps\n        run: cd smoke-tests && pnpm install\n\n      - name: Run smoke tests\n        run: cd smoke-tests && pnpm test\n"
+    },
+    {
+      "path": "smoke-tests/package.json",
+      "sha": null,
+      "content_sha256": "29803e284288a60cc1646b37dc2b24eb2038dcb4cf8e1b41103a9e3e166f03e9",
+      "score": 178,
+      "content": "{\n  \"name\": \"varlock-smoke-tests\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"description\": \"Smoke test suite for varlock\",\n  \"scripts\": {\n    \"test\": \"vitest run\",\n    \"test:watch\": \"vitest\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^22.0.0\",\n    \"typescript\": \"^5.9.3\",\n    \"varlock\": \"link:../packages/varlock\",\n    \"vitest\": \"^3.2.4\"\n  },\n  \"pnpm\": {\n    \"overrides\": {\n      \"@next/env\": \"link:../packages/integrations/nextjs\"\n    }\n  },\n  \"packageManager\": \"pnpm@10.30.2\"\n}\n"
+    },
+    {
+      "path": "packages/varlock-github-action/README.md",
+      "sha": null,
+      "content_sha256": "19bbe9b2073f5371acdf9977ed7f0850c94a87c3363f11fd537e7eed936307c8",
+      "score": 178,
+      "content": "# Varlock GitHub Action\n\nUse `dmno-dev/varlock-action@v1.0.1` in your workflows to load and validate environment variables with varlock.\n\nSee [Varlock GitHub Action docs](https://varlock.dev/integrations/github-action/) for full documentation.\n\n- **Repository**: [dmno-dev/varlock-action](https://github.com/dmno-dev/varlock-action)\n- **Marketplace**: [Varlock Environment Loader](https://github.com/marketplace/actions/varlock-environment-loader)"
+    },
+    {
+      "path": "framework-tests/package.json",
+      "sha": null,
+      "content_sha256": "386b2b747534dc76a38bc28955b21a22f009d63d59a5d63a13a8b2806ea41e7a",
+      "score": 178,
+      "content": "{\n  \"name\": \"varlock-framework-tests\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"test\": \"vitest run\",\n    \"repack\": \"bun run harness/repack.ts\",\n    \"test:watch\": \"vitest\",\n    \"test:astro\": \"vitest run frameworks/astro\",\n    \"test:astro-v5\": \"vitest run frameworks/astro/astro-v5.test.ts\",\n    \"test:astro-v6\": \"vitest run frameworks/astro/astro-v6.test.ts\",\n    \"test:cloudflare\": \"vitest run frameworks/cloudflare\",\n    \"test:expo\": \"vitest run frameworks/expo\",\n    \"test:nextjs\": \"vitest run frameworks/nextjs\",\n    \"test:sveltekit\": \"vitest run frameworks/sveltekit\",\n    \"test:vanilla-node\": \"vitest run frameworks/vanilla-node\",\n    \"test:tanstack-start\": \"vitest run frameworks/tanstack-start\",\n    \"test:vite\": \"vitest run frameworks/vite\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^24.0.0\",\n    \"@types/react\": \"19.2.15\",\n    \"@varlock/1password-plugin\": \"^2.0.0\",\n    \"typescript\": \"^5.9.3\",\n    \"vitest\": \"^3.2.4\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-pkg-json-config/package.json",
+      "sha": null,
+      "content_sha256": "a0f8e48a7528ea263d40a2e3eb0819df1ab05aa72047a7382bbb9f5f60e7ebe4",
+      "score": 176,
+      "content": "{\n  \"name\": \"smoke-test-pkg-json-config\",\n  \"private\": true,\n  \"varlock\": {\n    \"loadPath\": \"./envs/\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-monorepo/package.json",
+      "sha": null,
+      "content_sha256": "f86afd66f42619b840e85f53754d60a1974acd51c066b9a0497347e7afa77dd5",
+      "score": 176,
+      "content": "{\n  \"name\": \"smoke-test-monorepo\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"devDependencies\": {\n    \"typescript\": \"^5.9.3\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/env-spec-parser/package.json",
+      "sha": null,
+      "content_sha256": "de9fb92abc78acdfd06d9d9c23898847ef2e12cb102edceb6df358212081649a",
+      "score": 176,
+      "content": "{\n  \"name\": \"@env-spec/parser\",\n  \"version\": \"0.4.1\",\n  \"description\": \"Parser for @env-spec enabled dotenv files\",\n  \"homepage\": \"https://varlock.dev\",\n  \"bugs\": \"https://github.com/dmno-dev/varlock/issues\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/dmno-dev/varlock.git\",\n    \"directory\": \"packages/env-spec-parser\"\n  },\n  \"main\": \"dist/index.js\",\n  \"files\": [\"dist\"],\n  \"exports\": {\n    \".\": {\n      \"ts-src\": \"./src/index.ts\",\n      \"types\": \"./dist/index.d.ts\",\n      \"import\": \"./dist/index.mjs\",\n      \"require\": \"./dist/index.js\"\n    }\n  },\n  \"scripts\": {\n    \"dev\": \"bun run --parallel dev:grammar dev:ts\",\n    \"dev:grammar\": \"bun run build:grammar:watch\",\n    \"dev:ts\": \"tsup --watch\",\n    \"build:grammar\": \"peggy -c peggy.config.cjs\",\n    \"build:grammar:watch\": \"peggy -c peggy.config.cjs -w\",\n    \"build:lib\": \"tsup\",\n    \"build\": \"bun run build:grammar && bun run build:lib\",\n    \"test\": \"bun run --parallel build:grammar:watch _test:watch\",\n    \"_test:watch\": \"vitest\",\n    \"test:ci\": \"bun run build:grammar && vitest --run\",\n    \"typecheck\": \"tsc --noEmit\"\n  },\n  \"keywords\": [\n    \"env-spec\",\n    \"dotenv\",\n    \"env\",\n    \"env vars\",\n    \"environment variables\",\n    \"validation\",\n    \"schema\",\n    \"config\"\n  ],\n  \"author\": \"dmno-dev\",\n  \"license\": \"MIT\",\n  \"engines\": {\n    \"node\": \">=22\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"catalog:\",\n    \"ansis\": \"catalog:\",\n    \"outdent\": \"catalog:\",\n    \"peggy\": \"^5.0.6\",\n    \"tsup\": \"catalog:\",\n    \"vitest\": \"catalog:\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-lang-rust/Cargo.toml",
+      "sha": null,
+      "content_sha256": "e872552963eedd851259bfec4f37944d7b8c790b7d7c2c45f31ec89edd927f46",
+      "score": 176,
+      "content": "[package]\nname = \"smoketest\"\nversion = \"0.0.0\"\nedition = \"2021\"\n\n[[bin]]\nname = \"smoketest\"\npath = \"src/main.rs\"\n\n[dependencies]\nserde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-nextjs/package.json",
+      "sha": null,
+      "content_sha256": "270e946f13bf6d3d9749325cf2a1f858ef27a542d0d3d0c49c601465cf57072d",
+      "score": 176,
+      "content": "{\n  \"name\": \"smoke-test-nextjs\",\n  \"version\": \"0.0.1\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"next build\"\n  },\n  \"dependencies\": {\n    \"next\": \"^15.1.6\",\n    \"react\": \"^19.0.0\",\n    \"react-dom\": \"^19.0.0\",\n    \"varlock\": \"link:../../packages/varlock\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^25.0.3\",\n    \"@types/react\": \"^19.0.0\",\n    \"@types/react-dom\": \"^19.0.0\",\n    \"typescript\": \"^5.9.3\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/tests/redaction.test.ts",
+      "sha": null,
+      "content_sha256": "91e88a9be77f47f6f83a1cde219fd55cc6567604144f3a7c081a64a4027263e9",
+      "score": 173,
+      "content": "import { describe, test, expect } from 'vitest';\nimport { varlockRun, runVarlock } from '../helpers/run-varlock.js';\n\ndescribe('Log Redaction', () => {\n  test('should load env vars correctly', () => {\n    const result = varlockRun(['node', 'test-script.js'], {\n      cwd: 'smoke-test-basic',\n    });\n\n    expect(result.output).toContain('NODE_ENV: test');\n    expect(result.output).toContain('PUBLIC_VAR: public-value');\n    expect(result.output).toContain('All env vars loaded correctly');\n  });\n\n  test('should redact sensitive values in logs', () => {\n    const result = varlockRun(['node', 'test-script.js'], {\n      cwd: 'smoke-test-basic',\n    });\n\n    // Secret should NOT appear in plain text\n    expect(result.output).not.toContain('super-secret-token-12345');\n\n    // Should contain redaction markers (may vary by platform)\n    // Just verify the secret isn't leaked\n    expect(result.output).toContain('All env vars loaded correctly');\n  });\n\n  test('should redact secrets in interactive scripts', () => {\n    const result = varlockRun(['node', 'interactive-script.js'], {\n      cwd: 'smoke-test-basic',\n    });\n\n    expect(result.output).toContain('Interactive script completed successfully');\n    expect(result.output).toContain('PUBLIC_VAR: public-value');\n    expect(result.output).not.toContain('super-secret-token-12345');\n  });\n\n  test('should preserve stdin functionality with redaction', () => {\n    const result = varlockRun(['node', 'stdin-test.js'], {\n      cwd: 'smoke-test-basic',\n    });\n\n    expect(result.output).toContain('Stdin test completed');\n    expect(result.output).toContain('stdin.isTTY');\n    expect(result.output).toContain('stdin.readable');\n    expect(result.output).not.toContain('super-secret-token-12345');\n  });\n\n  test('_VARLOCK_REDACT_STDOUT=false disables redaction', () => {\n    const result = varlockRun(['node', 'test-script.js'], {\n      cwd: 'smoke-test-basic',\n      env: { _VARLOCK_REDACT_STDOUT: 'false' },\n    });\n\n    // with redaction explicitly disabled via env var, the secret appears in plain text\n    expect(result.output).toContain('super-secret-token-12345');\n  });\n\n  test('--no-redact-stdout flag overrides _VARLOCK_REDACT_STDOUT=true', () => {\n    const result = varlockRun(['node', 'test-script.js'], {\n      cwd: 'smoke-test-basic',\n      env: { _VARLOCK_REDACT_STDOUT: 'true' },\n    });\n    // the env var alone keeps redaction on (output is captured/non-TTY)\n    expect(result.output).not.toContain('super-secret-token-12345');\n\n    const overridden = runVarlock(['run', '--no-redact-stdout', '--', 'node', 'test-script.js'], {\n      cwd: 'smoke-test-basic',\n      env: { _VARLOCK_REDACT_STDOUT: 'true' },\n    });\n    // the flag takes precedence over the env var, so the secret is shown\n    expect(overridden.output).toContain('super-secret-token-12345');\n  });\n});\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-monorepo/packages/pkg-b/package.json",
+      "sha": null,
+      "content_sha256": "26bd31645062e94658727a51d434642c8cf06f12efcb80aa390717770462fc20",
+      "score": 172,
+      "content": "{\n  \"name\": \"@smoke/pkg-b\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"dependencies\": {\n    \"@smoke/pkg-a\": \"workspace:*\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-plugin/plugins/esm-imports-plugin/package.json",
+      "sha": null,
+      "content_sha256": "74d738055c537eb3f1b71c78ed3b52a6e26e9bfc3a9b04477cf8ba02e04b378e",
+      "score": 172,
+      "content": "{\n  \"name\": \"@varlock/test-plugin-esm-imports\",\n  \"private\": true,\n  \"description\": \"Test plugin with CJS requires of Node builtins (mimics pass/bitwarden plugins)\",\n  \"version\": \"1.0.0\",\n  \"exports\": {\n    \"./plugin\": \"./plugin.js\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-monorepo/packages/pkg-a/package.json",
+      "sha": null,
+      "content_sha256": "e6f144b1df87c172cc21e5a0c68d896a68ec6562d6cb29c25b37938261ccda4d",
+      "score": 172,
+      "content": "{\n  \"name\": \"@smoke/pkg-a\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"exports\": {\n    \".\": \"./src/index.ts\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-plugin/plugins/basic-plugin/package.json",
+      "sha": null,
+      "content_sha256": "64103fb79b50d339965ddb89b4d725b3fccda38eaa93c36b809c78fa70195504",
+      "score": 172,
+      "content": "{\n  \"name\": \"@varlock/test-plugin-basic\",\n  \"private\": true,\n  \"description\": \"Basic test plugin - no imports, just registers a resolver\",\n  \"version\": \"1.0.0\",\n  \"exports\": {\n    \"./plugin\": \"./plugin.js\"\n  }\n}\n"
+    },
+    {
+      "path": "smoke-tests/smoke-test-plugin/plugins/import-meta-plugin/package.json",
+      "sha": null,
+      "content_sha256": "68a4f6759672344216391518ca25172dd02ea663a6db4d51200f35353c4e9136",
+      "score": 172,
+      "content": "{\n  \"name\": \"@varlock/test-plugin-import-meta\",\n  \"private\": true,\n  \"description\": \"Test plugin using __dirname (mimics 1password plugin)\",\n  \"version\": \"1.0.0\",\n  \"exports\": {\n    \"./plugin\": \"./plugin.js\"\n  }\n}\n"
+    },
+    {
+      "path": "packages/varlock-docs-mcp/README.md",
+      "sha": null,
+      "content_sha256": "0a400a5404997ea1eb4b1aacbdeb60435c0ef826eb5c6fdf31e4d6eda4665e49",
+      "score": 171,
+      "content": "# Varlock Docs MCP\n\n>**These are development instructions, for user facing MCP docs see [here](https://varlock.dev/guides/mcp#docs-mcp)**.\n\nThis is a MCP server that allows you to search the Varlock docs.\n\nInitially based on https://developers.cloudflare.com/agents/guides/remote-mcp-server/.\n\n\n## Usage\n\n```bash\nbun run dev\n```\n\nThen you can use the MCP server in your MCP client.\n\nFor example, you can use the MCP server in Cursor by adding the following to your `.cursor/mcp.json` file:\n\n```json\n{\n  \"mcpServers\": {\n    \"varlock-docs-mcp-local\": {\n      \"command\": \"npx\",\n      \"args\": [\"mcp-remote\", \"http://localhost:8787/sse\"]\n    }\n  }\n}\n```\n\nor via the local MCP server inspector:\n\n```bash\nbun run inspector\n```\n\n## Cloudflare\n\nThe server is deployed automaticaly to cloudlfare workers when you open a PR or merge to `main`.\n\nIt relies on an AI Gateway and an AI Search (autoRAG) to search the Varlock docs.\n\n"
+    },
+    {
+      "path": "framework-tests/frameworks/sveltekit/files/_base/package.json",
+      "sha": null,
+      "content_sha256": "c1440f85ce8183a25c31c26b724b81bfa9c19a1a03f52ac7435f96863570e483",
+      "score": 170,
+      "content": "{\n  \"name\": \"sveltekit-cloudflare-framework-test\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"type\": \"module\",\n  \"scripts\": {\n    \"build\": \"vite build\",\n    \"dev\": \"vite dev\"\n  }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 61,
+  "sensitive_files_skipped": [
+    {
+      "path": "framework-tests/deploy/.env.schema",
+      "sha": "9061582bb142c2f760a21e1ca603d4e305b797d9",
+      "size": 1279,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/astro/files/schemas/.env.dev",
+      "sha": "98ad2f5ad1b1daa96131291f6dfab3111b035278",
+      "size": 39,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/astro/files/schemas/.env.prod",
+      "sha": "437d847ceafaaa674047a29089a5455d0c176a27",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/astro/files/schemas/.env.schema",
+      "sha": "62560d0ede6c845d4bd5f44471fdbc1f02a050eb",
+      "size": 334,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/astro/files/schemas/.env.schema.empty-secret",
+      "sha": "e69f6c28589fd927849d0753dbd7c9ba72cdd30d",
+      "size": 378,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/astro/files/schemas/.env.schema.invalid",
+      "sha": "35c90bf3c0b4c30712e51d89173af64879c1c255",
+      "size": 369,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/cloudflare/files/schemas/.env.dev",
+      "sha": "cdb0a7f3117ed1ebaa9263233154614cbbf5c6ca",
+      "size": 12,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/cloudflare/files/schemas/.env.schema",
+      "sha": "f5a1f8b29f56ed9784e568af906ed2875827f915",
+      "size": 221,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/cloudflare/files/schemas/.env.schema.invalid",
+      "sha": "beee3cc05fbda5cf2b11c6d45a89a473a2dbb724",
+      "size": 120,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/cloudflare/files/schemas/.env.schema.large",
+      "sha": "b038fe475a37c2447b5fd7bd8d8676cc64c024fe",
+      "size": 6337,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/expo/files/schemas/.env.schema",
+      "sha": "1802f13bb92640a47ec3d1e7d8c997845ed5f85b",
+      "size": 184,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/expo/files/schemas/.env.schema.invalid",
+      "sha": "6cf2ead976db16f691ef951d62e6faebc9d13e0b",
+      "size": 95,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/nextjs/files/schemas/.env.dev",
+      "sha": "2054c347457dd9e8836322301f0a32c55468443e",
+      "size": 38,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/nextjs/files/schemas/.env.prod",
+      "sha": "b61d9f68f30137f26f6ecd044b8ec0a14480abdf",
+      "size": 39,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/nextjs/files/schemas/.env.schema",
+      "sha": "b2bb3ccd123b4217d248e7404162047d2051e0d2",
+      "size": 338,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/nextjs/files/schemas/.env.schema.invalid",
+      "sha": "1b649e9b21b35a9f95954686f57cda1c9e18c793",
+      "size": 124,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/sveltekit/files/schemas/.env.dev",
+      "sha": "cdb0a7f3117ed1ebaa9263233154614cbbf5c6ca",
+      "size": 12,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/sveltekit/files/schemas/.env.prod",
+      "sha": "74b8b83184c2459efc0f6c7d90aa202db9fe0a6e",
+      "size": 13,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/sveltekit/files/schemas/.env.schema",
+      "sha": "f5a1f8b29f56ed9784e568af906ed2875827f915",
+      "size": 221,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/tanstack-start/files/schemas/.env.dev",
+      "sha": "cdb0a7f3117ed1ebaa9263233154614cbbf5c6ca",
+      "size": 12,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/tanstack-start/files/schemas/.env.schema",
+      "sha": "f5a1f8b29f56ed9784e568af906ed2875827f915",
+      "size": 221,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/vanilla-node/files/_base/.env.schema",
+      "sha": "cf6b69e62a60bdded1df60b7f096f9e5298f2f10",
+      "size": 140,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/vanilla-node/files/schemas/.env.schema.valid",
+      "sha": "cf6b69e62a60bdded1df60b7f096f9e5298f2f10",
+      "size": 140,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/vite/files/schemas/.env.dev",
+      "sha": "5bf80ca6d6cf59f342f70c1f12eedbe9b7218868",
+      "size": 34,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/vite/files/schemas/.env.prod",
+      "sha": "27fb4ff6107516a0b90234c4dff3c3f22bc56460",
+      "size": 35,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/vite/files/schemas/.env.schema",
+      "sha": "fa74bab89b2f06033980bfc86229817554780073",
+      "size": 259,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "framework-tests/frameworks/vite/files/schemas/.env.schema.invalid",
+      "sha": "beee3cc05fbda5cf2b11c6d45a89a473a2dbb724",
+      "size": 120,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/encryption-binary-rust/.env.schema",
+      "sha": "db7d161a736ef270d8d0010d9ced321c8db7d8ad",
+      "size": 1525,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/encryption-binary-swift/.env.schema",
+      "sha": "ab7c49333887319b609fe9dbe8aca59bf6b30055",
+      "size": 870,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/integrations/expo/test/fixtures/.env.schema",
+      "sha": "58f4f5dc9e34c2d5a21bc969d60515b1fccc3629",
+      "size": 124,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/varlock-website/.env.schema",
+      "sha": "8925475c8e690dfcc70556a72a6f81c2a6d89f5d",
+      "size": 796,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/varlock-website/examples/load-output/.env",
+      "sha": "bb225e3004460291eaf93c3381ff9b7e62ee1939",
+      "size": 35,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/varlock-website/examples/load-output/.env.schema",
+      "sha": "c4484fa52c796de8c519ddbdfa4a0f14723faa34",
+      "size": 387,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/vscode-plugin/.env.schema",
+      "sha": "e666985d6af309300dfc9251c83370a7b37f70ad",
+      "size": 1550,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/vscode-plugin/test/fixtures/.env.comprehensive",
+      "sha": "8f48887b73de9e2f9cb7606683133d188f695a26",
+      "size": 967,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/vscode-plugin/test/fixtures/.env.comprehensive.snap",
+      "sha": "3dc07bd807fe9c8daeca88ff85c2fce684cd955a",
+      "size": 11451,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/vscode-plugin/test/fixtures/.env.literals",
+      "sha": "c5322bc13aef71328146c0b233728dbeb7793b61",
+      "size": 1400,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/vscode-plugin/test/fixtures/.env.literals.snap",
+      "sha": "8db65ec4923fe17e491f38a59ac370079a377a0d",
+      "size": 24341,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/vscode-plugin/test/fixtures/.env.multiline",
+      "sha": "532bf68e75bbf04e3ef155d4ff0f860a356da7ba",
+      "size": 793,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "packages/vscode-plugin/test/fixtures/.env.multiline.snap",
+      "sha": "a09c7f1f32cb3844d6d105fccabd0d9155fcf2f5",
+      "size": 12687,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-basic/.env.schema",
+      "sha": "61aaa91e61fb3b88084f1623c305a13b67d1cd86",
+      "size": 168,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-cache/.env.schema",
+      "sha": "b9c3a611c6ba495f7ef7fe8e6b10777b391855c4",
+      "size": 88,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-dotenv-isolation/.env",
+      "sha": "56fce9ae90b631bb46daa8abde5734b2e5098697",
+      "size": 163,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-dotenv-isolation/.env.schema",
+      "sha": "5e8dfefff0f842010525f225ce9f35c999528c46",
+      "size": 58,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-internal/.env.schema",
+      "sha": "f6920da8e7fd708009350920cdda86c4f3a05947",
+      "size": 72,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-invalid-items/.env.schema",
+      "sha": "d9144c2dd4d92e2de800b901deeeef4d350dac6d",
+      "size": 124,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-invalid/.env.schema",
+      "sha": "7a280c46d56bdbed95ce02161d5b17c7109ea7a0",
+      "size": 98,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-lang-go/.env.schema",
+      "sha": "2b6ceea71fe9ecbe7c4485f3b92bfdab8c79208d",
+      "size": 336,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-lang-php/.env.schema",
+      "sha": "7060b092aa0cacdb27dc26f0f862b15abbd45793",
+      "size": 334,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-lang-python/.env.schema",
+      "sha": "a71f3e20f201e20ee6c5d385fb8eefefa787a0b3",
+      "size": 336,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-lang-rust/.env.schema",
+      "sha": "864ec1b24896b9ccebde3da1ef1856720f4419cd",
+      "size": 338,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-monorepo/packages/pkg-a/.env.schema",
+      "sha": "43a51d2ff165c1ea03569f647b61c39d32f58453",
+      "size": 121,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-monorepo/packages/pkg-b/.env.schema",
+      "sha": "40c590ed550412ce69d5cfee0da072befdd39a2c",
+      "size": 115,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-multi-path/base/.env.schema",
+      "sha": "e1c1d277da9a4ffc7bdbdf92f044cba010d44407",
+      "size": 73,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-multi-path/overrides/.env.schema",
+      "sha": "263fe2a206b31691bb006e7dabe3c445a0f3969d",
+      "size": 87,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-nextjs/.env.schema",
+      "sha": "fc00e9ff337a681a1914dad4bd9944a9442e2665",
+      "size": 208,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-pkg-json-config/envs/.env.schema",
+      "sha": "231e16ca787b0258fc9c98f7e73405c52d1ce17b",
+      "size": 73,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-plugin/.env.schema",
+      "sha": "cecd198addbf57651267fd2f56ecd82d3100a879",
+      "size": 124,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-typegen-auto/.env.schema",
+      "sha": "2359693e78df05240a79d16173df6d1d0221f306",
+      "size": 128,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-typegen-module/.env.schema",
+      "sha": "ad692b87eec26313c47817df84e9d921220ddba3",
+      "size": 181,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "smoke-tests/smoke-test-typegen-polyglot/.env.schema",
+      "sha": "7a465a8e6964ac7d85ba0424df01b95e6face498",
+      "size": 424,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:50:50.270044+00:00"
+}

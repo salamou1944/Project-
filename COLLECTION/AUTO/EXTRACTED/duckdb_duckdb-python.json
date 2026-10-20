@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:duckdb/duckdb-python",
+  "repo": "duckdb/duckdb-python",
+  "revision_sha": "83c719961098611e769dc4bab0bda2bf149a2d1e",
+  "default_branch": "v2.0-cyanoptera",
+  "pushed_at": "2026-10-20T16:02:39Z",
+  "repo_updated_at": "2026-10-20T16:02:45Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "scripts/install_spark_in_cibuildwheels_linux_container.sh",
+      "sha": null,
+      "content_sha256": "98b77fbf27ca7906bddf31e90fb1c51bc592396e95c83ff1b2f8acf7fd316814",
+      "score": 187,
+      "content": "# The cibuildwheels manylinux image runs CentOS\nyum install java-11 -y\nyum install wget -y\n\nmkdir spark_installation\ncd spark_installation\nwget https://blobs.duckdb.org/ci/spark-3.5.3-bin-hadoop3.tgz\ntar -xvzf spark-3.5.3-bin-hadoop3.tgz\nmv spark-3.5.3-bin-hadoop3 spark\n"
+    },
+    {
+      "path": ".github/workflows/targeted_test.yml",
+      "sha": null,
+      "content_sha256": "d5ec72242a04c03a3a9a0c54ede2cc7c997b922885897c65d9702aa9bb1c2806",
+      "score": 186,
+      "content": "name: Targeted Platform Testing\n\non:\n  workflow_dispatch:\n    inputs:\n      platform:\n        description: 'Platform to test on'\n        required: true\n        type: choice\n        options:\n          - 'windows-2022'\n          - 'windows-11-arm'\n          - 'ubuntu-24.04'\n          - 'ubuntu-24.04-arm'\n          - 'macos-15'\n          - 'macos-15-intel'\n      python_version:\n        description: 'Python version to test'\n        required: true\n        type: choice\n        options:\n          - '3.10'\n          - '3.11'\n          - '3.12'\n          - '3.13'\n          - '3.14'\n          - '3.15'\n      testsuite:\n        description: 'Test suite to run (ignored if custom_test_path is provided)'\n        required: false\n        type: choice\n        options:\n          - 'fast'\n          - 'all'\n        default: 'fast'\n      custom_test_path:\n        description: 'Custom test path (must be in tests/ directory, overrides testsuite)'\n        required: false\n        type: string\n      verbose-uv:\n        description: 'Let uv generate verbose output (pytest verbosity is always on)'\n        required: false\n        type: boolean\n        default: true\n\njobs:\n  test:\n    name: 'Test with Python ${{ inputs.python_version }} on ${{ inputs.platform }}'\n    runs-on: ${{ inputs.platform }}\n\n    steps:\n      - name: Checkout DuckDB Python\n        uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n          submodules: true\n\n      - name: Install uv\n        uses: astral-sh/setup-uv@v10.3.0\n        with:\n          version: \"0.12.23\"\n          enable-cache: false\n          python-version: ${{ inputs.python_version }}\n\n      - name: Set and validate test path\n        id: test_path\n        shell: bash\n        run: |\n          if [[ -n \"${{ inputs.custom_test_path }}\" ]]; then\n            # test path was passed in\n            tests_base=\"$( pwd -P )/tests\"\n            test_path=\"${{ inputs.custom_test_path }}\"\n\n            # Ensure the given test path exists\n            [[ -e \"$test_path\" ]] || { echo \"${test_path} does not exist\"; exit 1; }\n\n            # Resolve custom test path to absolute path\n            test_path_abs=$(cd \"$test_path\" 2>/dev/null && pwd -P || ( cd \"$(dirname \"$test_path\")\" && printf '%s/%s' \"$(pwd -P)\" \"$(basename \"$test_path\")\" ) )\n\n            # Make sure test_path_abs is inside tests_base\n            [[ \"$test_path_abs\" == \"$tests_base\" || \"$test_path_abs\" == \"$tests_base\"/* ]] || { echo \"${test_path_abs} is not part of ${tests_base}?\"; exit 1; }\n\n            echo \"test_path=$test_path_abs\" >> $GITHUB_OUTPUT\n          else\n            # use a testsuite\n            echo \"test_path=$GITHUB_WORKSPACE/${{ inputs.testsuite == 'fast' && 'tests/fast' || 'tests' }}\" >> $GITHUB_OUTPUT\n          fi\n\n      - name: Run tests\n        shell: bash\n        run: |\n          uv ${{ inputs.verbose-uv && 'run -v' || 'run' }} pytest -vv ${{ steps.test_path.outputs.test_path }}\n"
+    },
+    {
+      "path": ".github/workflows/assert_test.yml",
+      "sha": null,
+      "content_sha256": "f151848bdd3e0bd217bdc5426c731f1b3ea2cc3bbb758711886a94535f943ab4",
+      "score": 186,
+      "content": "name: Full-API build with assertions and tests\n# Every release wheel is compiled with NDEBUG, and the wheels for 3.12 and up\n# are abi3, so D_ASSERT and the GIL asserts in src/include/duckdb_python/pyutil.hpp\n# compile to nothing in every wheel job. The editable install is the one build\n# that keeps the full CPython API, and FORCE_ASSERT keeps D_ASSERT live in\n# optimized code, the engine's relassert build. A Debug build ran the fast\n# suite for more than 75 minutes on a 4 vCPU runner; the relassert build runs\n# it at Release speed. This workflow builds it on Linux, against the oldest\n# interpreter the abi3 wheel serves, and runs the suite the caller asks for.\non:\n  workflow_dispatch:\n    inputs:\n      testsuite:\n        type: choice\n        description: Testsuite to run (none, fast, all)\n        required: true\n        default: fast\n        options:\n          - none\n          - fast\n          - all\n      git_ref:\n        type: string\n        description: Git ref of the DuckDB python package\n        required: false\n  workflow_call:\n    inputs:\n      testsuite:\n        type: string\n        description: Testsuite to run (none, fast, all)\n        required: true\n      git_ref:\n        type: string\n        description: Git ref of the DuckDB python package\n        required: false\n\ndefaults:\n  run:\n    shell: bash\n\njobs:\n  assert_test:\n    name: Build${{ inputs.testsuite != 'none' && ' and test ' || ' ' }}the full-API build with assertions\n    runs-on: ubuntu-24.04\n    # A hang would otherwise hold the required Summary check for the six hour default.\n    timeout-minutes: 90\n    env:\n      CMAKE_C_COMPILER_LAUNCHER: ccache\n      CMAKE_CXX_COMPILER_LAUNCHER: ccache\n      # The editable override in pyproject.toml asks for Debug; the environment wins and makes it Release with\n      # assertions. cmake/duckdb_loader.cmake forwards FORCE_ASSERT to the engine and to the binding objects.\n      SKBUILD_CMAKE_BUILD_TYPE: Release\n      SKBUILD_CMAKE_DEFINE: FORCE_ASSERT=1\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ inputs.git_ref }}\n          fetch-depth: 0\n          submodules: true\n\n      # Its own key: objects compiled with DUCKDB_FORCE_ASSERT and the full API share nothing with the Release\n      # wheel caches. A dispatch that builds another ref must not write the branch's cache.\n      - name: Setup Ccache\n        uses: ./.github/actions/ccache-action\n        with:\n          key: ubuntu-assert-editable\n          save: ${{ inputs.git_ref == '' && 'true' || 'false' }}\n\n      - name: Install Astral UV\n        uses: astral-sh/setup-uv@v10.3.0\n        with:\n          version: \"0.12.23\"\n          python-version: \"3.12\"\n          enable-cache: false\n\n      # Build deps first, because the editable install runs without build isolation. Only duckdb itself does:\n      # a global --no-build-isolation also hits pyspark, an sdist that needs setuptools in the environment.\n      - name: Build the editable install with assertions\n        run: |\n          set -eo pipefail\n          uv sync --only-group build --no-install-project -p 3.12\n          uv sync --no-build-isolation-package duckdb --reinstall -p 3.12\n\n      - name: Check the build is the full-API build with assertions\n        run: |\n          set -eo pipefail\n          grep -q 'CMAKE_BUILD_TYPE:STRING=Release' build/debug/CMakeCache.txt\n          grep -Eq 'FORCE_ASSERT:BOOL=(1|ON|TRUE)' build/debug/CMakeCache.txt\n          # The module file name tells the API: a stable ABI build is named _duckdb.abi3.so.\n          uv run --no-sync python - <<'EOF'\n          import _duckdb\n          print(_duckdb.__file__)\n          assert \"abi3\" not in _duckdb.__file__, \"expected a full-API module, got \" + _duckdb.__file__\n          EOF\n\n      - name: Run the tests\n        if: ${{ inputs.testsuite != 'none' }}\n        run: |\n          set -eo pipefail\n          uv run --no-sync pytest -n 4 ${{ inputs.testsuite == 'fast' && './tests/fast' || './tests' }}\n"
+    },
+    {
+      "path": ".github/workflows/cache_warm.yml",
+      "sha": null,
+      "content_sha256": "6a5b130906d345b2cdb67f0276cb83e4967c9286c4063ffa127ddb23c7fc15ee",
+      "score": 184,
+      "content": "name: Warm the build caches\nrun-name: Warm the build caches on ${{ github.ref_name }}\n\n# Runs the seed builds and the full-API build with assertions after pushes that change\n# what they compile, so the ccaches track the branch instead of going stale\n# between releases. PR, merge queue and feature branch builds restore these\n# caches and never save. Without this workflow every PR pays the accumulated\n# submodule delta on every platform.\n#\n# The branch patterns narrow the trigger to main and the release branches; the\n# job conditions then require a protected ref, the same rule the ccache-action\n# saves under, because the pattern also matches names like vendoring-v2.0-x.\n# Keep this file identical across the branches that have assert_test.yml.\non:\n  push:\n    branches:\n      - main\n      - v*.*-*\n    paths:\n      - 'external/duckdb'\n      - 'src/**'\n      - 'cmake/**'\n      - 'CMakeLists.txt'\n      - 'pyproject.toml'\n      - '.pre-commit-config.yaml'\n      - '.github/workflows/cache_warm.yml'\n      - '.github/workflows/code_quality.yml'\n      - '.github/workflows/packaging_wheels.yml'\n      - '.github/workflows/assert_test.yml'\n      - '.github/actions/**'\n\n# Runs are queued, not cancelled: the ccache action saves in its post step even\n# after a cancel, and with evict-old-files the newest entry would then hold only\n# what had compiled before the stop.\nconcurrency:\n  group: cache-warm-${{ github.ref }}\n  cancel-in-progress: false\n\njobs:\n  warm_caches:\n    name: Build the seed wheels to warm the caches\n    if: ${{ github.ref_protected }}\n    uses: ./.github/workflows/packaging_wheels.yml\n    with:\n      minimal: true\n      build-sanity: false\n      save-cache: true\n      testsuite: none\n\n  warm_assert_cache:\n    name: Build the full-API build with assertions to warm its cache\n    if: ${{ github.ref_protected }}\n    uses: ./.github/workflows/assert_test.yml\n    with:\n      testsuite: none\n\n  warm_pre_commit_cache:\n    name: Run the code quality checks to warm the pre-commit cache\n    if: ${{ github.ref_protected }}\n    uses: ./.github/workflows/code_quality.yml\n"
+    },
+    {
+      "path": "tests/fast/test_metatransaction.py",
+      "sha": null,
+      "content_sha256": "652193038cb3e56867b85166fd3e8d7092809c47da5af426319a1facf2b67a8c",
+      "score": 173,
+      "content": "import pytest\n\npd = pytest.importorskip(\"pandas\")\nnp = pytest.importorskip(\"numpy\")\n\nNUMBER_OF_ROWS = 200000\nNUMBER_OF_COLUMNS = 1\n\n\nclass TestMetaTransaction:\n    def test_fetchmany(self, duckdb_cursor):\n        duckdb_cursor.execute(\"CREATE SEQUENCE id_seq\")\n        column_names = \",\\n\".join([f\"column_{i} FLOAT\" for i in range(1, NUMBER_OF_COLUMNS + 1)])\n        create_table_query = f\"\"\"\n        CREATE TABLE my_table (\n            id INTEGER DEFAULT nextval('id_seq'),\n            {column_names}\n        )\n        \"\"\"\n        # Create a table containing a sequence\n        duckdb_cursor.execute(create_table_query)\n\n        for i in range(20):\n            # Then insert a large amount of tuples, triggering a parallel execution\n            data = np.random.rand(NUMBER_OF_ROWS, NUMBER_OF_COLUMNS)\n            columns = [f\"Column_{i + 1}\" for i in range(NUMBER_OF_COLUMNS)]\n            df = pd.DataFrame(data, columns=columns)\n            df_columns = \", \".join(df.columns)\n            # This gets executed in parallel, causing NextValFunction to be called in parallel\n            # stressing the MetaTransaction::Get concurrency\n            duckdb_cursor.execute(f\"INSERT INTO my_table ({df_columns}) SELECT * FROM df\")\n            print(f\"inserted {i}\")\n            duckdb_cursor.commit()\n"
+    },
+    {
+      "path": "tests/fast/test_transaction.py",
+      "sha": null,
+      "content_sha256": "9a67e671e4e4be3b04ba8559f87d3c92ecc92ad9151c002c4b4dc741ee915b66",
+      "score": 173,
+      "content": "import duckdb\n\n\nclass TestConnectionTransaction:\n    def test_transaction(self, duckdb_cursor):\n        con = duckdb.connect()\n        con.execute(\"create table t (i integer)\")\n        con.execute(\"insert into t values (1)\")\n\n        con.begin()\n        con.execute(\"insert into t values (1)\")\n        assert con.execute(\"select count (*) from t\").fetchone()[0] == 2\n        con.rollback()\n        assert con.execute(\"select count (*) from t\").fetchone()[0] == 1\n        con.begin()\n        con.execute(\"insert into t values (1)\")\n        assert con.execute(\"select count (*) from t\").fetchone()[0] == 2\n        con.commit()\n        assert con.execute(\"select count (*) from t\").fetchone()[0] == 2\n"
+    },
+    {
+      "path": "tests/fast/udf/test_transactionality.py",
+      "sha": null,
+      "content_sha256": "7766cacdfa209a30c571c179f1d6d0dbcfa7cc6ac4ae6a2a59fe97e8e234331f",
+      "score": 171,
+      "content": "import pytest\n\nimport duckdb\n\n\nclass TestUDFTransactionality:\n    def test_type_coverage(self, duckdb_cursor):\n        duckdb_cursor.execute(\"select * from range(4096)\")\n        assert duckdb_cursor.fetchone() == (0,)\n\n        def my_func(x: str) -> int:\n            return int(x)\n\n        with pytest.raises(duckdb.ResourceInUseException, match=\"unfinished result from execute\"):\n            duckdb_cursor.create_function(\"test\", my_func)\n\n        assert duckdb_cursor.fetchone() == (1,)\n"
+    },
+    {
+      "path": ".github/actions/ccache-action/action.yml",
+      "sha": null,
+      "content_sha256": "a4004e7763a8c98c64ae2700848bb4887590038294db6f734bfa1671326b50b4",
+      "score": 169,
+      "content": "name: 'Setup Ccache'\ndescription: 'Restore the ccache for a key and save it at job end on a protected branch of this repository, or on any ref of a fork.'\ninputs:\n  key:\n    description: 'Cache key (defaults to github.job)'\n    required: false\n    default: ''\n  save:\n    description: 'Allow saving the cache at job end. Saving also requires a cache writing ref, see below.'\n    required: false\n    default: 'true'\nruns:\n  using: \"composite\"\n  steps:\n     - name: Setup Ccache\n       uses: hendrikmuhs/ccache-action@main\n       with:\n         key: ${{ inputs.key || github.job }}\n         # Only protected branches write, which in this repository are main and the release branches. Pull\n         # requests restore from their base branch, pushes and merge queue entries from the default branch;\n         # none of them saves. The merge queue is excluded by name as well, because ref_protected is not\n         # documented for its temporary branches. Forks save on every ref.\n         save: ${{ inputs.save == 'true' && (github.repository != 'duckdb/duckdb-python' || (github.ref_protected && github.event_name != 'merge_group')) }}\n         # Dump verbose ccache statistics report at end of CI job.\n         verbose: 1\n         # Increase per-directory limit: 5*1024 MB / 16 = 320 MB.\n         # Note: `layout=subdirs` computes the size limit divided by 16 dirs.\n         # See also: https://ccache.dev/manual/4.9.html#_cache_size_management\n         max-size: 1500MB\n         # Evicts all cache files that were not touched during the job run.\n         # Removing cache files from previous runs avoids creating huge caches.\n         evict-old-files: 'job'\n"
+    },
+    {
+      "path": "tests/fast/test_duckdb_api.py",
+      "sha": null,
+      "content_sha256": "a45d2b792eacd8b8c0d5304f36cdfaf658d815aaed9ea6f76504ab46793eba31",
+      "score": 166,
+      "content": "import sys\n\nimport duckdb\n\n\ndef test_duckdb_api():\n    res = duckdb.execute(\"SELECT name, value FROM duckdb_settings() WHERE name == 'duckdb_api'\")\n    formatted_python_version = f\"{sys.version_info.major}.{sys.version_info.minor}\"\n    assert res.fetchall() == [(\"duckdb_api\", f\"python/{formatted_python_version}\")]\n"
+    },
+    {
+      "path": "tests/fast/api/test_with_propagating_exceptions.py",
+      "sha": null,
+      "content_sha256": "da58e56728dcc6e8926b3e1a76b55850d67586ceef95ecb8c5b2d567076df70e",
+      "score": 164,
+      "content": "import pytest\n\nimport duckdb\n\n\nclass TestWithPropagatingExceptions:\n    def test_with(self):\n        # Should propagate exception raised in the 'with duckdb.connect() ..'\n        with (\n            pytest.raises(duckdb.CatalogException, match=\"Table with name invalid does not exist\"),\n            duckdb.connect() as con,\n        ):\n            con.execute(\"SELECT * FROM invalid\")\n\n        # Does not raise an exception\n        with duckdb.connect() as con:\n            con.execute(\"select 1\")\n"
+    },
+    {
+      "path": "tests/fast/api/test_dbapi08.py",
+      "sha": null,
+      "content_sha256": "6dd3ba3f8d200161fff5960f7a1f63a03f4a139c7e831f9beb6172e141e5a9bb",
+      "score": 164,
+      "content": "# test fetchdf with various types\nimport duckdb\nimport pandas as pd\n\n\nclass TestType:\n    def test_fetchdf(self):\n        con = duckdb.connect()\n        con.execute(\"CREATE TABLE items(item VARCHAR)\")\n        con.execute(\"INSERT INTO items VALUES ('jeans'), (''), (NULL)\")\n        res = con.execute(\"SELECT item FROM items\").fetchdf()\n        assert isinstance(res, pd.core.frame.DataFrame)\n\n        df = pd.DataFrame({\"item\": [\"jeans\", \"\", None]})\n\n        print(res)\n        print(df)\n        pd.testing.assert_frame_equal(res, df, check_dtype=False)\n"
+    },
+    {
+      "path": "tests/fast/api/test_dbapi04.py",
+      "sha": null,
+      "content_sha256": "eb9386a3689ee22cb34eb29816ded7a799917eed5c19fd80b881654293fea06f",
+      "score": 164,
+      "content": "# simple DB API testcase\n\n\nclass TestSimpleDBAPI:\n    def test_regular_selection(self, duckdb_cursor, integers):\n        duckdb_cursor.execute(\"SELECT * FROM integers\")\n        result = duckdb_cursor.fetchall()\n        assert result == [\n            (0,),\n            (1,),\n            (2,),\n            (3,),\n            (4,),\n            (5,),\n            (6,),\n            (7,),\n            (8,),\n            (9,),\n            (None,),\n        ], \"Incorrect result returned\"\n"
+    },
+    {
+      "path": "tests/fast/relational_api/test_table_function.py",
+      "sha": null,
+      "content_sha256": "29694f4dcb45a329dc0cccc6d0ca7b92e2a819984ea8335abb976202652dabf0",
+      "score": 164,
+      "content": "from pathlib import Path\n\nimport pytest\n\nimport duckdb\n\nscript_path = Path(__file__).parent\n\n\nclass TestTableFunction:\n    def test_table_function(self, duckdb_cursor):\n        path = str(script_path / \"..\" / \"data/integers.csv\")\n        rel = duckdb_cursor.table_function(\"read_csv\", [path])\n        res = rel.fetchall()\n        assert res == [(1, 10, 0), (2, 50, 30)]\n\n        # Provide only a string as argument, should error, needs a list\n        with pytest.raises(duckdb.InvalidInputException, match=r\"'params' has to be a list of parameters\"):\n            rel = duckdb_cursor.table_function(\"read_csv\", path)\n"
+    },
+    {
+      "path": "tests/fast/api/test_3654.py",
+      "sha": null,
+      "content_sha256": "5d686e534cc708c3698b5ff277fa56ca110f92b62790b06a5174fbe1456266ea",
+      "score": 164,
+      "content": "import duckdb\nimport pandas as pd\n\ntry:\n    import pyarrow as pa\n\n    can_run = True\nexcept Exception:\n    can_run = False\n\n\nclass Test3654:\n    def test_3654_pandas(self, duckdb_cursor):\n        df1 = pd.DataFrame(\n            {\n                \"id\": [1, 1, 2],\n            }\n        )\n        con = duckdb.connect()\n        con.register(\"df1\", df1)\n        rel = con.view(\"df1\")\n        print(rel.fetchall())\n        assert rel.fetchall() == [(1,), (1,), (2,)]\n\n    def test_3654_arrow(self, duckdb_cursor):\n        if not can_run:\n            return\n\n        df1 = pd.DataFrame(\n            {\n                \"id\": [1, 1, 2],\n            }\n        )\n        table = pa.Table.from_pandas(df1)\n        con = duckdb.connect()\n        con.register(\"df1\", table)\n        rel = con.view(\"df1\")\n        print(rel.fetchall())\n        assert rel.fetchall() == [(1,), (1,), (2,)]\n"
+    },
+    {
+      "path": "tests/fast/api/test_insert_into.py",
+      "sha": null,
+      "content_sha256": "548bc49152f72233db7d6a01ad073db39e77ae4fdd693e4600cbe5b6a1e7765f",
+      "score": 164,
+      "content": "import pytest\n\nimport duckdb\nfrom pandas import DataFrame\n\n\nclass TestInsertInto:\n    def test_insert_into_schema(self, duckdb_cursor):\n        # open connection\n        con = duckdb.connect()\n        con.execute(\"CREATE SCHEMA s\")\n        con.execute(\"CREATE TABLE s.t (id INTEGER PRIMARY KEY)\")\n\n        # make relation\n        df = DataFrame([1], columns=[\"id\"])\n        rel = con.from_df(df)\n\n        rel.insert_into(\"s.t\")\n\n        assert con.execute(\"select * from s.t\").fetchall() == [(1,)]\n\n        # This should fail since this will go to default schema\n        with pytest.raises(duckdb.CatalogException):\n            rel.insert_into(\"t\")\n\n        # If we add t in the default schema it should work.\n        con.execute(\"CREATE TABLE t (id INTEGER PRIMARY KEY)\")\n        rel.insert_into(\"t\")\n        assert con.execute(\"select * from t\").fetchall() == [(1,)]\n"
+    },
+    {
+      "path": "tests/fast/api/test_dbapi07.py",
+      "sha": null,
+      "content_sha256": "3624805ed7b980921084196b3975776b248ecbbbbece82bb70652dddfc368755",
+      "score": 164,
+      "content": "# timestamp ms precision\n\nfrom datetime import datetime\n\nimport numpy\n\n\nclass TestNumpyTimestampMilliseconds:\n    def test_numpy_timestamp(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT TIMESTAMP '2019-11-26 21:11:42.501' as test_time\").fetchnumpy()\n        assert res[\"test_time\"] == numpy.datetime64(\"2019-11-26 21:11:42.501\")\n\n\nclass TestTimestampMilliseconds:\n    def test_numpy_timestamp(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT TIMESTAMP '2019-11-26 21:11:42.501' as test_time\").fetchone()[0]\n        assert res == datetime.strptime(\"2019-11-26 21:11:42.501\", \"%Y-%m-%d %H:%M:%S.%f\")\n"
+    },
+    {
+      "path": "tests/fast/api/test_connection_interrupt.py",
+      "sha": null,
+      "content_sha256": "20bfce7d2b5b034bc14d2753f2936ace3ae773cca4ddfb27e0be304897fd472c",
+      "score": 164,
+      "content": "import platform\nimport threading\nimport time\n\nimport pytest\n\nimport duckdb\n\n\nclass TestConnectionInterrupt:\n    @pytest.mark.xfail(\n        condition=platform.system() == \"Emscripten\",\n        reason=\"threads not allowed on Emscripten\",\n    )\n    def test_connection_interrupt(self):\n        conn = duckdb.connect()\n\n        def interrupt() -> None:\n            # Wait for query to start running before interrupting\n            time.sleep(0.1)\n            conn.interrupt()\n\n        thread = threading.Thread(target=interrupt)\n        thread.start()\n        with pytest.raises(duckdb.InterruptException):\n            conn.execute(\"select count(*) from range(100000000000)\").fetchall()\n        thread.join()\n\n    def test_interrupt_closed_connection(self):\n        conn = duckdb.connect()\n        conn.close()\n        with pytest.raises(duckdb.ConnectionException):\n            conn.interrupt()\n"
+    },
+    {
+      "path": "tests/fast/api/test_6315.py",
+      "sha": null,
+      "content_sha256": "a6dd369714f107506ba30ccb6424e22b3dfb53a77faf5ecaecdc79417a7f3aca",
+      "score": 164,
+      "content": "import duckdb\n\n\nclass Test6315:\n    def test_6315(self, duckdb_cursor):\n        # segfault when accessing description after fetching rows\n        c = duckdb.connect(\":memory:\")\n        rv = c.execute(\"select * from sqlite_master where type = 'table'\")\n        rv.fetchall()\n        desc = rv.description\n        names = [x[0] for x in desc]\n        assert names == [\"type\", \"name\", \"tbl_name\", \"rootpage\", \"sql\"]\n\n        # description of relation\n        rel = c.sql(\"select * from sqlite_master where type = 'table'\")\n        desc = rel.description\n        names = [x[0] for x in desc]\n        assert names == [\"type\", \"name\", \"tbl_name\", \"rootpage\", \"sql\"]\n\n        rel.fetchall()\n        desc = rel.description\n        names = [x[0] for x in desc]\n        assert names == [\"type\", \"name\", \"tbl_name\", \"rootpage\", \"sql\"]\n"
+    },
+    {
+      "path": "tests/fast/api/test_3728.py",
+      "sha": null,
+      "content_sha256": "ea6e19abc2df66d4fc81e12f7d621fb549b088b8a1faffa316acd746397f5287",
+      "score": 164,
+      "content": "import duckdb\n\n\nclass Test3728:\n    def test_3728_describe_enum(self, duckdb_cursor):\n        # Create an in-memory database, but the problem is also present in file-backed DBs\n        cursor = duckdb.connect(\":memory:\")\n\n        # Create an arbitrary enum type\n        cursor.execute(\"CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');\")\n\n        # Create a table where one or more columns are enum typed\n        cursor.execute(\"CREATE TABLE person (name text, current_mood mood);\")\n\n        # This fails with \"RuntimeError: Not implemented Error: unsupported type: mood\"\n        assert cursor.table(\"person\").description == [\n            (\"name\", \"VARCHAR\", None, None, None, None, None),\n            (\"current_mood\", \"ENUM('sad', 'ok', 'happy')\", None, None, None, None, None),\n        ]\n"
+    },
+    {
+      "path": "tests/fast/api/test_3324.py",
+      "sha": null,
+      "content_sha256": "4799ff80347cbf57c4f1cf21a6061829b7fbfabe5995d202d3ab5e5fc2ba278b",
+      "score": 164,
+      "content": "import pytest\n\nimport duckdb\n\n\nclass Test3324:\n    def test_3324(self, duckdb_cursor):\n        duckdb_cursor.execute(\n            \"\"\"\n        create or replace table my_table as\n        select 'test1' as column1, 1 as column2, 'quack' as column3\n        union all\n        select 'test2' as column1, 2 as column2, 'quacks' as column3\n        union all\n        select 'test3' as column1, 3 as column2, 'quacking' as column3\n        \"\"\"\n        ).fetch_df()\n        duckdb_cursor.execute(\n            \"\"\"\n            prepare v1 as\n                select\n                    column1\n                    , column2\n                    , column3\n                from my_table\n                where\n                    column1 = $1\"\"\"\n        ).fetch_df()\n\n        with pytest.raises(duckdb.BinderException, match=\"Unexpected prepared parameter\"):\n            duckdb_cursor.execute(\"\"\"execute v1(?)\"\"\", (\"test1\",)).fetch_df()\n"
+    },
+    {
+      "path": "tests/fast/api/test_dbapi13.py",
+      "sha": null,
+      "content_sha256": "e6120d514f7febfcffcb72ab0d9606d99ee5b4e53e2a8ba0bf757ff04d02749f",
+      "score": 164,
+      "content": "# time type\n\nimport datetime\n\nimport numpy\nimport pandas\n\n\nclass TestNumpyTime:\n    def test_fetchall_time(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT TIME '13:06:40' as test_time\").fetchall()\n        assert res == [(datetime.time(13, 6, 40),)]\n\n    def test_fetchnumpy_time(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT TIME '13:06:40' as test_time\").fetchnumpy()\n        arr = numpy.array([datetime.time(13, 6, 40)], dtype=\"object\")\n        arr = numpy.ma.masked_array(arr)\n        numpy.testing.assert_array_equal(res[\"test_time\"], arr)\n\n    def test_fetchdf_time(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT TIME '13:06:40' as test_time\").fetchdf()\n        ser = pandas.Series(numpy.array([datetime.time(13, 6, 40)], dtype=\"object\"), name=\"test_time\")\n        pandas.testing.assert_series_equal(res[\"test_time\"], ser)\n"
+    },
+    {
+      "path": "tests/fast/api/test_dbapi11.py",
+      "sha": null,
+      "content_sha256": "126cb19d9d2dc9980f6049306516a8403a69cf6cd04bbddd79dd771ec0876cac",
+      "score": 164,
+      "content": "# cursor description\n\nimport tempfile\n\nimport duckdb\n\n\ndef check_exception(f):\n    had_exception = False\n    try:\n        f()\n    except Exception:\n        had_exception = True\n    assert had_exception\n\n\nclass TestReadOnly:\n    def test_readonly(self, duckdb_cursor):\n        with tempfile.NamedTemporaryFile() as tmp:\n            db = tmp.name\n\n        # this is forbidden\n        check_exception(lambda: duckdb.connect(\":memory:\", True))\n\n        con_rw = duckdb.connect(db, False)\n        con_rw.cursor().execute(\"create table a (i integer)\")\n        con_rw.cursor().execute(\"insert into a values (42)\")\n        con_rw.close()\n\n        con_ro = duckdb.connect(db, True)\n        con_ro.cursor().execute(\"select * from a\").fetchall()\n        check_exception(lambda: con_ro.execute(\"delete from a\"))\n        con_ro.close()\n\n        con_rw = duckdb.connect(db, False)\n        con_rw.cursor().execute(\"drop table a\")\n        con_rw.close()\n"
+    },
+    {
+      "path": "tests/fast/api/test_dbapi09.py",
+      "sha": null,
+      "content_sha256": "a38b1e22c46c832a51428d874accb9e8e9b8f1ef3ea57f4639f10ba4ee669184",
+      "score": 164,
+      "content": "# date type\n\nimport datetime\n\nimport numpy\nimport pandas\n\n\nclass TestNumpyDate:\n    def test_fetchall_date(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT DATE '2020-01-10' as test_date\").fetchall()\n        assert res == [(datetime.date(2020, 1, 10),)]\n\n    def test_fetchnumpy_date(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT DATE '2020-01-10' as test_date\").fetchnumpy()\n        arr = numpy.array([\"2020-01-10\"], dtype=\"datetime64[s]\")\n        arr = numpy.ma.masked_array(arr)\n        numpy.testing.assert_array_equal(res[\"test_date\"], arr)\n\n    def test_fetchdf_date(self, duckdb_cursor):\n        res = duckdb_cursor.execute(\"SELECT DATE '2020-01-10' as test_date\").fetchdf()\n        ser = pandas.Series(numpy.array([\"2020-01-10\"], dtype=\"datetime64[us]\"), name=\"test_date\")\n        pandas.testing.assert_series_equal(res[\"test_date\"], ser)\n"
+    },
+    {
+      "path": "tests/fast/relational_api/test_rapi_functions.py",
+      "sha": null,
+      "content_sha256": "0eee1df9ebbf580a10722d6d46dd70db7849dc3af18b32103bcc153b2df36fe5",
+      "score": 164,
+      "content": "import json\n\nimport duckdb\n\n\ndef parsed(sql):\n    tree = json.loads(duckdb.connect().execute(\"SELECT json_serialize_sql(?)\", [sql]).fetchall()[0][0])\n    return [without_locations(statement) for statement in tree[\"statements\"]]\n\n\ndef without_locations(node):\n    if isinstance(node, dict):\n        return {k: without_locations(v) for k, v in node.items() if not k.startswith(\"query_location\")}\n    if isinstance(node, list):\n        return [without_locations(v) for v in node]\n    return node\n\n\nclass TestRAPIFunctions:\n    def test_rapi_str_print(self, duckdb_cursor, capsys):\n        res = duckdb_cursor.query(\"select 42::INT AS a, 84::BIGINT AS b\")\n        drawn = str(res)\n        assert [name for name in res.columns if name in drawn] == [\"a\", \"b\"]\n        assert \"42\" in drawn\n        assert \"84\" in drawn\n        res.show()\n        assert capsys.readouterr().out.strip() == drawn.strip()\n\n    def test_rapi_relation_sql_query(self):\n        res = duckdb.table_function(\"range\", [10])\n        assert parsed(res.sql_query()) == parsed(\"SELECT * FROM range(10)\")\n        assert duckdb.sql(res.sql_query()).fetchall() == res.fetchall()\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:50:46.173828+00:00"
+}

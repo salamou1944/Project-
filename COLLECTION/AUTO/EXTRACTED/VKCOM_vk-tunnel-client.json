@@ -1,0 +1,203 @@
+{
+  "canonical_source": "github:VKCOM/vk-tunnel-client",
+  "repo": "VKCOM/vk-tunnel-client",
+  "revision_sha": "0c31861b3b5da5625aba605d92a2f1c68b64e035",
+  "default_branch": "master",
+  "pushed_at": "2026-06-23T20:10:18Z",
+  "repo_updated_at": "2026-07-05T13:46:31Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "src/api/fetchAuthData.ts",
+      "sha": null,
+      "content_sha256": "b1b163f82ca4930812f7393c395cfa69ae457cf89a71075712b00a5034867237",
+      "score": 186,
+      "content": "import { OAUTH_HOST, TUNNEL_APP_ID } from '../constants';\nimport { VkAuthError } from '../types';\nimport { axiosWithRetry } from './axiosWithRetry';\n\ninterface FetchAuthDataResponse {\n  auth_code: string;\n  device_id: string;\n}\n\nexport async function fetchAuthData() {\n  const authData = await axiosWithRetry({\n    url: `${OAUTH_HOST}get_auth_code?scope=offline&client_id=${TUNNEL_APP_ID}`,\n    options: {},\n    onError: (error) =>\n      console.error('An error occurred when requesting authentication data:', error),\n  });\n\n  return authData.data as FetchAuthDataResponse | VkAuthError;\n}\n"
+    },
+    {
+      "path": ".github/actions/validation/action.yml",
+      "sha": null,
+      "content_sha256": "e2e98a0250ef2532d6e3adeeddbf0eef1728da6a5c9755961295801b06925c86",
+      "score": 169,
+      "content": "name: 'Validation'\ndescription: It runs linter and prettier checks\n\nruns:\n  using: composite\n  steps:\n    - name: Run linters\n      run: yarn lint:ci\n      shell: bash\n\n    - name: Run tests\n      run: yarn test:unit\n      shell: bash\n"
+    },
+    {
+      "path": "test/integration/utils/ensureAuth.ts",
+      "sha": null,
+      "content_sha256": "a7ad64b429c2b3c6d6a8927c9a98d138f0f3783e883da02acb96b662a09671b4",
+      "score": 169,
+      "content": "import Configstore from 'configstore';\nimport { USER_STORAGE_NAME } from '@/constants';\n\nexport function ensureAuth() {\n  const userStoredInfo = new Configstore(USER_STORAGE_NAME, {});\n  const accessToken = [REDACTED]'accessToken');\n  const userId = userStoredInfo.get('userId');\n\n  if (!accessToken || !userId) {\n    throw new Error(\n      [\n        '❌ Не найдены accessToken и/или userId в локальном конфиге.',\n        'Чтобы протестировать тесты:',\n        '1. Запусти туннель с авторизацией.',\n        '2. Повтори запуск тестов.',\n      ].join('\\n'),\n    );\n  }\n}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/api/axiosWithRetry.ts",
+      "sha": null,
+      "content_sha256": "57189734a7b67669b7c1134e835773345e78a3ad2c15c08783cf71571ac89a45",
+      "score": 164,
+      "content": "import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';\nimport axiosRetry, { isNetworkOrIdempotentRequestError } from 'axios-retry';\nimport {\n  TUNNEL_DATA_REQUEST_RETRIES_LIMIT,\n  TUNNEL_DATA_REQUEST_RETRY_DELAY_MS,\n} from '../constants';\n\nconst axiosInstance: AxiosInstance = axios.create();\n\naxiosRetry(axiosInstance, {\n  retries: TUNNEL_DATA_REQUEST_RETRIES_LIMIT,\n  retryDelay: () => TUNNEL_DATA_REQUEST_RETRY_DELAY_MS,\n  retryCondition: (error) => {\n    return isNetworkOrIdempotentRequestError(error);\n  },\n});\n\nexport interface AxiosWithRetryRequest {\n  url: string;\n  options: AxiosRequestConfig;\n  onError: (error: unknown) => void;\n}\n\nexport async function axiosWithRetry({\n  url,\n  options,\n  onError,\n}: AxiosWithRetryRequest): Promise<any> {\n  try {\n    return await axiosInstance(url, options);\n  } catch (error) {\n    onError(error);\n    throw error;\n  }\n}\n"
+    },
+    {
+      "path": "test/unit/getUserProxyAppSettings/getUserProxyAppSettings.validation.test.ts",
+      "sha": null,
+      "content_sha256": "061bbe87da5944b5c0c58715c8a5bc592d377291ede3c90f92191fb5657f1da2",
+      "score": 147,
+      "content": "import fs from 'node:fs';\nimport { getUserProxyAppSettings } from '@/helpers/getUserProxyAppSettings';\n\nvi.mock('node:fs', () => ({\n  default: {\n    existsSync: vi.fn(),\n    readFileSync: vi.fn(),\n  },\n}));\n\nconst mockedFs = fs as unknown as {\n  existsSync: ReturnType<typeof vi.fn>;\n  readFileSync: ReturnType<typeof vi.fn>;\n};\n\ndescribe('getUserProxyAppSettings (invalid args)', () => {\n  beforeEach(() => {\n    vi.resetAllMocks();\n    vi.unstubAllEnvs();\n  });\n\n  it('Выбрасывает ошибку, если CLI аргумент имеет неверный тип', () => {\n    const invalidArgs = ['--host=1'];\n\n    expect(() => getUserProxyAppSettings(invalidArgs as any)).toThrowError();\n  });\n\n  it('Выбрасывает ошибку, если конфигурационный файл содержит неверные типы', () => {\n    mockedFs.existsSync.mockReturnValue(true);\n    mockedFs.readFileSync.mockReturnValue(\n      JSON.stringify({\n        host: ['array-instead-of-string'],\n        port: 'not-a-number',\n      }),\n    );\n\n    expect(() => getUserProxyAppSettings([])).toThrowError();\n  });\n\n  it('Выбрасывает ошибку, если env переменные имеют неверные типы', () => {\n    vi.stubEnv('PROXY_PORT', 'not-a-number');\n    vi.stubEnv('PROXY_HOST', 'ok-host');\n\n    expect(() => getUserProxyAppSettings([])).toThrowError();\n  });\n});\n"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "sha": null,
+      "content_sha256": "1fc90f329a299025090656695997ac209507deff9c8d7b0724361f9a20562eff",
+      "score": 126,
+      "content": "name: 'Publish'\n\non:\n  workflow_dispatch:\n    inputs:\n      new_version:\n        description: 'version type:'\n        type: choice\n        default: 'minor'\n        options:\n          - patch\n          - minor\n          - major\n        required: true\n\nrun-name: Publish vk-tunnel-client ${{ inputs.new_version }}\n\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n      id-token: write\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v6\n        with:\n          fetch-depth: 0\n          token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n\n      - name: Setting up the repository environment\n        uses: ./.github/actions/setup\n\n      - name: Bump version\n        id: updated_versions_info\n        uses: ./.github/actions/bump-version\n        with:\n          version: ${{ github.event.inputs.new_version }}\n\n      - name: Validation\n        uses: ./.github/actions/validation\n\n      - name: Update npm\n        run: npm install -g npm@latest\n        shell: bash\n\n      - name: Publish to npm\n        run: npm publish --access public\n        shell: bash\n\n      - name: Commit and tag\n        run: |\n          git add -A\n          git commit -m \"bump(vk-tunnel-client): from ${{ steps.updated_versions_info.outputs.prev_version }} to ${{ steps.updated_versions_info.outputs.next_version }}\"\n          git tag vk-tunnel-client@${{ steps.updated_versions_info.outputs.next_version }}\n        shell: bash\n\n      - name: Pushing changes\n        uses: ad-m/github-push-action@master\n        with:\n          github_token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n          branch: ${{ github.ref }}\n          tags: true\n"
+    },
+    {
+      "path": ".github/workflows/set_label_for_ignored_issues.yml",
+      "sha": null,
+      "content_sha256": "ff17427018204a9aef96cc1e442da8a0e140e66f3633b2ecba47fb86b88c2f60",
+      "score": 126,
+      "content": "name: Set Pay attention label for ignored issues\non:\n  schedule:\n    - cron: '0 10 * * 1-5'\n\njobs:\n  set-label-for-issues:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Set Pay attention label for ignored issues\n        uses: actions/github-script@v7\n        with:\n          github-token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n          script: |\n            const issuesList = await github.rest.issues.listForRepo({\n              owner: context.repo.owner,\n              repo: context.repo.repo,\n            })\n            if (issuesList.data && issuesList.status === 200) {\n              for (const issue of issuesList.data) {\n                const createdDaysDelta = (new Date() - new Date(issue.created_at)) / (1000 * 60 * 60 * 24);\n\n                if (!issue.labels.length && (\n                  (!issue.pull_request && createdDaysDelta > 2) || (issue.pull_request && createdDaysDelta > 7)\n                )) {\n                  await github.rest.issues.addLabels({\n                    owner: context.repo.owner,\n                    repo: context.repo.repo,\n                    issue_number: issue.number,\n                    labels: ['pay attention']\n                  });\n                }\n              }\n            }"
+    },
+    {
+      "path": ".github/workflows/pull_request.yml",
+      "sha": null,
+      "content_sha256": "f964cdb42180397d909164a14a7c41ec11c100473d1da7e13bbbe1202d93c860",
+      "score": 126,
+      "content": "name: 'Pull Request'\n\non:\n  pull_request:\n\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Setting up the repository environment\n        uses: ./.github/actions/setup\n\n      - name: Validation\n        uses: ./.github/actions/validation\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "b9bbf31a4e42f196c8772857048dd5e20ad27179539f689a497687ba616821b6",
+      "score": 120,
+      "content": "{\n  \"name\": \"@vkontakte/vk-tunnel\",\n  \"license\": \"MIT\",\n  \"version\": \"0.2.10\",\n  \"bin\": \"./bin/vk-tunnel.js\",\n  \"scripts\": {\n    \"test\": \"yarn run test:unit && yarn run test:integration\",\n    \"test:unit\": \"vitest run test/unit/**/*.test.ts\",\n    \"test:integration\": \"vitest run test/integration/**/*.test.ts --maxWorkers 1 --maxConcurrency 1\",\n    \"test:coverage\": \"vitest --coverage --maxWorkers 1 --maxConcurrency 1\",\n    \"build\": \"tsc && esbuild src/index.ts --bundle --platform=node --target=node16.0 --outfile=bin/vk-tunnel.js\",\n    \"lint:eslint\": \"eslint ./src --ext=ts\",\n    \"lint:prettier\": \"prettier --check --ignore-unknown .\",\n    \"lint:ci\": \"yarn lint:eslint && yarn lint:prettier\",\n    \"lint:fix\": \"eslint ./src --ext=ts --fix\",\n    \"prepare\": \"husky\",\n    \"prepack\": \"yarn build\",\n    \"prepublishOnly\": \"yarn build\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/VKCOM/vk-tunnel-client\"\n  },\n  \"dependencies\": {\n    \"axios\": \"^1.13.5\",\n    \"axios-retry\": \"^4.4.0\",\n    \"chalk\": \"^3.0.0\",\n    \"configstore\": \"^6.0.0\",\n    \"minimist\": \"^1.2.8\",\n    \"pino\": \"^8.19.0\",\n    \"pino-pretty\": \"^10.3.1\",\n    \"prompts\": \"^2.3.2\",\n    \"ws\": \"^8.17.1\"\n  },\n  \"devDependencies\": {\n    \"@types/configstore\": \"^6.0.2\",\n    \"@types/http-string-parser\": \"^0.0.33\",\n    \"@types/minimist\": \"^1.2.5\",\n    \"@types/node\": \"^20.11.19\",\n    \"@types/prompts\": \"^2.4.9\",\n    \"@types/ws\": \"^8.5.10\",\n    \"@typescript-eslint/eslint-plugin\": \"^8.44.0\",\n    \"@typescript-eslint/parser\": \"^8.44.0\",\n    \"@vitest/coverage-v8\": \"^3.2.4\",\n    \"@vkontakte/eslint-plugin\": \"^1.2.0\",\n    \"@vkontakte/prettier-config\": \"^0.1.0\",\n    \"esbuild\": \"^0.25.1\",\n    \"eslint\": \"^8.56.0\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"eslint-plugin-import\": \"2.29.1\",\n    \"eslint-plugin-vitest\": \"^0.5.4\",\n    \"husky\": \"^9.1.7\",\n    \"prettier\": \"^2.7.1\",\n    \"typescript\": \"5.1.6\",\n    \"vitest\": \"^3.2.4\"\n  },\n  \"packageManager\": \"yarn@4.5.3\"\n}\n"
+    },
+    {
+      "path": ".github/actions/bump-version/action.yml",
+      "sha": null,
+      "content_sha256": "3b0db6c9c19bc0901e311d78440044c06e2af6753e2fd37f95b942d0c258c231",
+      "score": 111,
+      "content": "name: Publish Workflow / Bump version\ndescription: It bump version of provided package\n\ninputs:\n  version:\n    description: <newversion> | major | minor | patch | premajor | preminor | prepatch | prerelease\n    required: true\n  npm_tag:\n    description: tag for NPM artifact\n    required: false\noutputs:\n  prev_version:\n    description: Previous version of the package before bumping\n    value: ${{ steps.internal_id_prev_version.outputs.version }}\n  next_version:\n    description: New version of the package after bumping\n    value: ${{ steps.internal_id_next_version.outputs.version }}\n\nruns:\n  using: composite\n  steps:\n    - name: Saving current version to env\n      id: internal_id_prev_version\n      run: echo \"version=$(node -p \"require('./package.json').version\")\" >> $GITHUB_OUTPUT\n      shell: bash\n\n    - name: Bump version (no tag)\n      if: ${{ !inputs.npm_tag }}\n      run: npm version ${{ inputs.version }} --commit-hooks=false --git-tag-version=false\n      shell: bash\n\n    - name: Bump version with npm_tag\n      if: ${{ inputs.npm_tag }}\n      run: npm version ${{ inputs.version }} --preid ${{ inputs.npm_tag }} --commit-hooks=false --git-tag-version=false\n      shell: bash\n\n    - name: Saving new version to env\n      id: internal_id_next_version\n      run: echo \"version=$(node -p \"require('./package.json').version\")\" >> $GITHUB_OUTPUT\n      shell: bash\n"
+    },
+    {
+      "path": ".github/actions/setup/action.yml",
+      "sha": null,
+      "content_sha256": "33206102f7c6ba5fc2be19671a470389fd5c99a76354b310cabcb8fe7c5f41fd",
+      "score": 111,
+      "content": "name: Publish Workflow / Setup\ndescription: It setting up the repository environment for publish\n\nruns:\n  using: composite\n  steps:\n    - name: Setup NodeJS\n      uses: actions/setup-node@v4\n      with:\n        node-version: 20\n        cache: 'yarn'\n        always-auth: true\n        registry-url: 'https://registry.npmjs.org'\n\n    - name: Install dependencies\n      run: yarn install --immutable\n      shell: bash\n\n    - name: Set Git credentials\n      run: |\n        git config --local user.email \"actions@github.com\"\n        git config --local user.name \"GitHub Action\"\n      shell: bash\n"
+    },
+    {
+      "path": "src/api/index.ts",
+      "sha": null,
+      "content_sha256": "acef0ec92c515925da502a9d99b2f0c98f4f783ca6acb84116758799599a7b4e",
+      "score": 106,
+      "content": "export { fetchAuthData } from './fetchAuthData';\nexport { fetchTunnelData } from './fetchTunnelData';\nexport { fetchUserData } from './fetchUserData';\n"
+    },
+    {
+      "path": "src/api/fetchTunnelData.ts",
+      "sha": null,
+      "content_sha256": "f424eb68aab03c16ba8d996de8de327829f4168580cdd354798e6ad74bef1779",
+      "score": 106,
+      "content": "import querystring from 'node:querystring';\nimport { API_HOST } from '../constants';\nimport { axiosWithRetry } from './axiosWithRetry';\n\ninterface VkApiError {\n  error: {\n    error_code: number;\n    error_msg: string;\n  };\n}\n\ninterface FetchTunnelDataResponse {\n  response: {\n    tunnel_url: string;\n    token: string;\n    host: string;\n    url: string;\n  };\n}\n\ninterface FetchTunnelDataRequest {\n  access_token: string;\n  version: number;\n  v: string;\n  app_id?: number;\n  staging?: boolean;\n  endpoints?: string[];\n}\n\nexport async function fetchTunnelData({\n  access_token,\n  version,\n  v,\n  app_id,\n  staging,\n  endpoints,\n}: FetchTunnelDataRequest) {\n  const params: Record<string, string | number | boolean> = {\n    access_token,\n    version,\n    v,\n  };\n\n  if (app_id) params['app_id'] = app_id;\n  if (staging) params['staging'] = staging;\n  if (endpoints) params['endpoints'] = endpoints.join(',');\n\n  const tunnelData = await axiosWithRetry({\n    url: `${API_HOST}apps.getTunnelToken?${querystring.stringify(params)}`,\n    options: {},\n    onError: (error) => console.error('An error occurred when requesting tunnel settings:', error),\n  });\n\n  return tunnelData.data as FetchTunnelDataResponse | VkApiError;\n}\n"
+    },
+    {
+      "path": "src/api/fetchUserData.ts",
+      "sha": null,
+      "content_sha256": "c5adb8a82f61f24e187f40f99cb72e155151f90af71db27dd3877aacbc57bd75",
+      "score": 106,
+      "content": "import { isAxiosError } from 'axios';\nimport { OAUTH_HOST, TUNNEL_APP_ID } from '../constants';\nimport { VkAuthError } from '../types';\nimport { axiosWithRetry } from './axiosWithRetry';\n\ninterface FetchAccessTokenResponse {\n  user_id: number;\n  access_token: string;\n}\n\ninterface FetchAccessTokenRequest {\n  deviceId: string;\n}\n\nexport async function fetchUserData({ deviceId }: FetchAccessTokenRequest) {\n  const userData = await axiosWithRetry({\n    url: `${OAUTH_HOST}code_auth_token?device_id=${deviceId}&client_id=${TUNNEL_APP_ID}`,\n    options: {},\n    onError: (error) => {\n      console.error('An error occurred when requesting user data');\n      if (error && typeof error === 'object' && isAxiosError(error)) {\n        console.error('Reason:', error.response?.data?.error_description);\n      } else {\n        console.error(error);\n      }\n    },\n  });\n\n  return userData.data as FetchAccessTokenResponse | VkAuthError;\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "15f08c7d3e03725c82f9dd4cf305b973002c3b1a48b5d262dd93dba7ec21a1a4",
+      "score": 100,
+      "content": "> [!CAUTION]  \n> **Из-за технических работ с 2 октября 2025 года VK Tunnel недоступен**  \n> При подключении сервис вернёт ошибку. Для отладки и демонстрации ваших веб-приложений рекомендуем временно использовать сторонние решения.\n\n# VK Tunnel\n\nС помощью **VK Tunnel** вы можете сделать локальный веб-сервер доступным в интернете. Это нужно при отладке и демонстрации веб-приложений. VK Tunnel запускается на компьютере разработчика и создаёт специальное соединение (туннель), с помощью которого локальный веб-сервер становится доступным в интернете. Во время работы туннеля все внешние запросы к серверу и ответы на них проходят через туннель.\n\nVK Tunnel предоставляет доступ к локальному серверу по протоколам HTTP, HTTPS, WebSocket и WebSocket Secure.\n\n## Установка\n\n#### yarn\n\n```\nyarn global add @vkontakte/vk-tunnel\n```\n\n#### npm\n\n```\nnpm install @vkontakte/vk-tunnel -g\n```\n\nМы рекомендуем указать `global` для yarn или `-g` для npm, чтобы устанавливаемый пакет был доступен всем проектам на вашем компьютере.\n\n## Запуск, использование, параметры\n\nПодробная информация об использовании и параметрах VK Tunnel — на [портале для разработчиков ВКонтакте](https://dev.vk.ru/libraries/tunnel).\n\n## Полезные ссылки\n\n- [Примеры мини-приложений](https://dev.vk.ru/mini-apps/examples)\n\n- [Сообщество разработчиков мини-приложений ВКонтакте](https://vk.ru/vkappsdev)\n\n- [VK для разработчиков](https://dev.vk.ru)\n\n## Сотрудничество\n\nМы рады новым идеям и предложениям по улучшению библиотеки. Если вы хотите внести изменения:\n\n1. Сделайте ответвление (fork) репозитория.\n\n2. Склонируйте репозиторий и установите зависимости, выполнив команду `yarn` или `npm install`.\n\n3. Внесите изменения в код.\n\n4. Выполните сборку с помощью команды `yarn run build` или `npm run build`.\n\n5. Установите изменённый пакет с помощью `yarn link` или `npm link`.\n\n   Запустите его, чтобы протестировать изменения, выполнив `vk-tunnel`.\n\n6. Отправьте MR нам на проверку.\n"
+    },
+    {
+      "path": "test/unit/TunnelClient.test.ts",
+      "sha": null,
+      "content_sha256": "670ba20e5ce19684d3ff62bce20bcd2ecc4f46454d4a7b7cf1fe3b64ba6649ae",
+      "score": 91,
+      "content": "import { TunnelClient } from '@/entities/TunnelClient';\nimport { RawData, WebSocket } from 'ws';\nimport { parseHttpRequest } from '@/helpers';\nimport { HttpProtocol, WsProtocol, UserProxyAppSettings } from '@/types';\n\nvi.mock('@/helpers', () => ({ parseHttpRequest: vi.fn() }));\n\ndescribe('TunnelClient (pure computation methods)', () => {\n  let client: TunnelClient;\n  const socket = {} as WebSocket;\n  const tunnelData = {\n    tunnelHost: 'tunnel.vk.com',\n    tunnelUrl: 'https://tunnel.vk.com/connect',\n    tunnelToken: '[REDACTED]',\n    url: 'https://localhost:3000',\n    userId: 123456,\n  };\n\n  const userSettings = {\n    host: 'myhost',\n    wsProtocol: WsProtocol.WS,\n    httpProtocol: HttpProtocol.HTTP,\n    insecure: 0,\n    wsOrigin: 1,\n    port: 1234,\n    timeout: 5000,\n  } as UserProxyAppSettings;\n\n  beforeEach(() => {\n    client = new TunnelClient(socket, tunnelData, userSettings);\n  });\n\n  it('parseProxyRequest разбивает RawData корректно', () => {\n    const rawData = Buffer.from('00000001HGET /test HTTP/1.1\\n\\n');\n    (parseHttpRequest as any).mockReturnValue({ headers: {}, uri: '/test', method: 'GET' });\n\n    const result = (client as any).parseProxyRequest(rawData as RawData);\n\n    expect(result.seq).toBe('00000001');\n    expect(result.messageType).toBe('H');\n    expect(result.payload.toString()).toContain('GET /test');\n    expect(result.endpoint).toBe('/test');\n  });\n\n  it('transformPayload заменяет Host и Accept-Encoding', () => {\n    const rawPayload = Buffer.from('GET / HTTP/1.1\\nHost: example.com\\nAccept-Encoding: gzip\\n\\n');\n    const transformed = (client as any).transformPayload(rawPayload);\n\n    expect(transformed).toContain('Host: myhost');\n    expect(transformed).toContain('Accept-Encoding: gzip;q=0,deflate;q=0');\n  });\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "test/unit/parseHttpRequest.test.ts",
+      "sha": null,
+      "content_sha256": "df3eb481a62f98a69991a11e8dfd747a3368d5fe2fc8bd4053ac90b0e84e7407",
+      "score": 91,
+      "content": "import { parseHttpRequest } from '@/helpers/parseHttpRequest';\n\ndescribe('parseHttpRequest', () => {\n  it('Сохраняет повторяющиеся заголовки в массив', () => {\n    const rawRequest = [\n      'GET / HTTP/1.1',\n      'Host: example.com',\n      'Cookie: a=1',\n      'Cookie: b=2',\n      'User-Agent: test',\n      '',\n      'body content',\n    ].join('\\n');\n\n    const result = parseHttpRequest(rawRequest);\n\n    expect(result.headers['Cookie']).toEqual(['a=1', 'b=2']);\n    expect(result.headers['Host']).toBe('example.com');\n    expect(result.headers['User-Agent']).toBe('test');\n  });\n\n  it('Не модифицирует body запроса', () => {\n    const bodyContent = ['line1', 'line2', 'line3'].join('\\r\\n');\n    const rawRequest = [\n      'POST /submit HTTP/1.1',\n      'Host: example.com',\n      'Content-Type: text/plain',\n      '',\n      bodyContent,\n    ].join('\\n');\n\n    const result = parseHttpRequest(rawRequest);\n\n    expect(result.body).toBe(bodyContent);\n  });\n\n  it('Корректно обрабатывает websocket upgrade', () => {\n    const rawRequest = [\n      'GET /ws HTTP/1.1',\n      'Host: example.com',\n      'Upgrade: websocket',\n      'Connection: Upgrade',\n      '',\n      '',\n    ].join('\\n');\n\n    const result = parseHttpRequest(rawRequest);\n\n    expect(result.method).toBe('GET');\n    expect(result.uri).toBe('/ws');\n    expect(result.headers['Upgrade']).toBe('websocket');\n    expect(result.headers['Connection']).toBe('Upgrade');\n  });\n\n  it('поддерживает разные разделители CRLF и LF', () => {\n    const rawRequestCRLF = 'GET / CRLF/1.1\\r\\nHost: test\\r\\n\\r\\nbody';\n    const rawRequestLF = 'GET / LF/1.1\\nHost: test\\n\\nbody';\n\n    const resultCRLF = parseHttpRequest(rawRequestCRLF);\n    const resultLF = parseHttpRequest(rawRequestLF);\n\n    expect(resultCRLF.body).toBe('body');\n    expect(resultLF.body).toBe('body');\n  });\n});\n"
+    },
+    {
+      "path": "test/integration/http.test.ts",
+      "sha": null,
+      "content_sha256": "cd2b0e271d7e3b4b61ba22647f6783b90e22909fc386041b756b018ca200b65c",
+      "score": 91,
+      "content": "import http from 'http';\nimport { vkTunnel } from '@/vkTunnel';\nimport axios from 'axios';\nimport { ensureAuth } from './utils/ensureAuth';\n\ndescribe.sequential('Интеграционный тест HTTP через туннель', () => {\n  let server: http.Server;\n  let port: number;\n\n  let tunnelData: Awaited<ReturnType<typeof vkTunnel>>['tunnelData'];\n  let closeTunnelConnection: () => void;\n\n  beforeAll(async () => {\n    ensureAuth();\n\n    server = http.createServer((req, res) => {\n      if (req.url === '/' && req.method === 'GET') {\n        res.writeHead(200, { 'Content-Type': 'application/json' });\n        res.end(JSON.stringify({ result: true }));\n      } else if (req.url === '/echo' && req.method === 'POST') {\n        let body = '';\n        req.on('data', (chunk) => (body += chunk));\n        req.on('end', () => {\n          res.writeHead(200, { 'Content-Type': 'application/json' });\n          res.end(body);\n        });\n      } else if (req.url?.startsWith('/cookie')) {\n        res.writeHead(200, { 'Set-Cookie': 'session=12345' });\n        res.end('ok');\n      } else if (req.url?.startsWith('/query')) {\n        const url = new URL(req.url, `http://localhost:${port}`);\n        res.writeHead(200, { 'Content-Type': 'application/json' });\n        res.end(JSON.stringify({ query: url.searchParams.get('name') }));\n      } else if (req.url?.startsWith('/error')) {\n        res.writeHead(500, { 'Content-Type': 'application/json' });\n        res.end(JSON.stringify({ error: 'internal' }));\n      } else {\n        res.writeHead(404);\n        res.end();\n      }\n    });\n\n    await new Promise<void>((resolve) => server.listen(0, resolve));\n    const address = server.address();\n    if (typeof address !== 'object' || !address?.port) {\n      throw new Error('Failed to get server port');\n    }\n\n    port = address.port;\n    vi.stubEnv('PROXY_PORT', port.toString());\n\n    const tunnel = await vkTunnel();\n    tunnelData = tunnel.tunnelData;\n    closeTunnelConnection = tunnel.closeTunnelConnection;\n  });\n\n  afterAll(async () => {\n    server.close();\n    closeTunnelConnection();\n  });\n\n  afterEach(() => {\n    vi.unstubAllEnvs();\n  });\n\n  it('GET / базовый сценарий', async () => {\n    const res = await axios.get(`${tunnelData.tunnelUrl}/`);\n\n    expect(res.status).toBe(200);\n    expect(res.data).toEqual({ result: true });\n  });\n\n  it('POST /echo передача JSON', async () => {\n    const payload = { foo: 'bar' };\n    const res = await axios.post(`${tunnelData.tunnelUrl}/echo`, payload);\n\n    expect(res.status).toBe(200);\n    expect(res.data).toEqual(payload);\n  });\n\n  it('GET /cookie проброс заголовков Set-Cookie', async () => {\n    const res = await axios.get(`${tunnelData.tunnelUrl}/cookie`);\n\n    expect(res.status).toBe(200);\n    expect(res.headers['set-cookie']).toContain('session=12345');\n  });\n\n  it('GET /query?name=test проброс query-параметров', async () => {\n    const res = await axios.get(`${tunnelData.tunnelUrl}/query?name=test`);\n\n    expect(res.status).toBe(200);\n    expect(res.data).toEqual({ query: 'test' });\n  });\n\n  it('GET /error проброс ошибки', async () => {\n    try {\n      await axios.get(`${tunnelData.tunnelUrl}/error`);\n      throw new Error('Ожидалась ошибка');\n    } catch (err: any) {\n      expect(err.response.status).toBe(500);\n      expect(err.response.data).toEqual({ error: 'internal' });\n    }\n  });\n});\n"
+    },
+    {
+      "path": "test/unit/HttpProxy.test.ts",
+      "sha": null,
+      "content_sha256": "bd2fd9a337876dd6b18e363ced74bf2cbb9349f376a392ec742a0243038a026c",
+      "score": 91,
+      "content": "import { HttpProxy } from '@/entities/HttpProxy';\nimport {\n  UserProxyAppSettings,\n  ProxiedNetworkPacket,\n  HttpProtocol,\n  WsProtocol,\n  MessageTypeFromBack,\n} from '@/types';\n\nexport const USER_SETTINGS: UserProxyAppSettings = {\n  httpProtocol: HttpProtocol.HTTP,\n  wsProtocol: WsProtocol.WS,\n  timeout: 5000,\n  host: 'localhost',\n  port: 3000,\n  insecure: 0,\n  wsOrigin: 0,\n};\n\nexport const PACKET_DATA: ProxiedNetworkPacket = {\n  seq: '00000001',\n  messageType: MessageTypeFromBack.HTTP,\n  endpoint: '/test',\n  isWebsocketUpgrade: false,\n  payload: Buffer.from('GET /test HTTP/1.1\\r\\nHost: localhost\\r\\n\\r\\n'),\n  parsedRequest: {\n    method: 'GET',\n    uri: '/test',\n    headers: { Host: 'localhost' },\n    body: '',\n  },\n};\n\ndescribe('HttpProxy (unit)', () => {\n  let httpProxy: HttpProxy;\n  const sendResponseMock = vi.fn();\n\n  beforeEach(() => {\n    httpProxy = new HttpProxy(USER_SETTINGS);\n\n    vi.restoreAllMocks();\n  });\n\n  it('Должен получить ответ от локального сервера, распарсить его и отправить на бекенд туннеля', async () => {\n    const fakeResponse = {\n      status: 200,\n      statusText: 'OK',\n      headers: { 'Content-Type': 'text/plain' },\n      data: Buffer.from('Hello World'),\n    };\n\n    (httpProxy as any).getResponseFromProxiedServer = vi.fn(() => Promise.resolve(fakeResponse));\n\n    await httpProxy.proxy(PACKET_DATA, sendResponseMock);\n\n    expect(sendResponseMock).toHaveBeenCalledTimes(1);\n\n    const sentBuffer = sendResponseMock.mock.calls[0][0] as Buffer;\n    const bufferText = sentBuffer.toString();\n\n    expect(bufferText).toContain('HTTP/1.1 200 OK');\n    expect(bufferText).toContain('Content-Type: text/plain');\n    expect(bufferText).toContain('Hello World');\n  });\n\n  it('Должен получить ответ от локального сервера, распарсить его и отправить на бекенд туннеля, сохранив все заголовки', async () => {\n    const fakeResponse = {\n      status: 200,\n      statusText: 'OK',\n      headers: { 'Set-Cookie': ['a=1', 'b=2'] },\n      data: Buffer.from('data'),\n    };\n\n    (httpProxy as any).getResponseFromProxiedServer = vi.fn(() => Promise.resolve(fakeResponse));\n\n    await httpProxy.proxy(PACKET_DATA, sendResponseMock);\n\n    const sentBuffer = sendResponseMock.mock.calls[0][0] as Buffer;\n    const bufferText = sentBuffer.toString();\n    expect(bufferText).toContain('Set-Cookie: a=1');\n    expect(bufferText).toContain('Set-Cookie: b=2');\n  });\n\n  it('Не отправляет ответ на бек туннеля, если локальный сервер не отвечает', async () => {\n    (httpProxy as any).getResponseFromProxiedServer = vi.fn(() => Promise.resolve(undefined));\n\n    await httpProxy.proxy(PACKET_DATA, sendResponseMock);\n\n    expect(sendResponseMock).not.toHaveBeenCalled();\n  });\n});\n"
+    },
+    {
+      "path": "test/unit/WsProxy.test.ts",
+      "sha": null,
+      "content_sha256": "92923a9f28c61a7161f571b57fa50764a9471a3aec0e57d02af50b0183f73adb",
+      "score": 91,
+      "content": "import { WsProxy } from '@/entities/WsProxy';\nimport {\n  UserProxyAppSettings,\n  ProxiedNetworkPacket,\n  HttpProtocol,\n  WsProtocol,\n  MessageTypeFromBack,\n} from '@/types';\nimport WebSocket from 'ws';\n\ndescribe('WsProxy (unit)', () => {\n  const VALID_SEQ = 'SEQ123';\n  const TEST_ENDPOINT = '/chat';\n  const TEST_HEADERS = {\n    'Sec-WebSocket-Protocol': 'json',\n    'Sec-WebSocket-Extensions': 'permessage-deflate',\n    'Sec-WebSocket-Key': 'abc123',\n    'Sec-WebSocket-Version': '13',\n    'X-Custom-Header': 'SHOULD_BE_FILTERED',\n  };\n  const MOCK_USER_SETTINGS: UserProxyAppSettings = {\n    httpProtocol: HttpProtocol.HTTP,\n    wsProtocol: WsProtocol.WS,\n    host: 'localhost',\n    port: 8080,\n    timeout: 5000,\n    insecure: 0,\n    wsOrigin: 1,\n    app_id: undefined,\n    staging: undefined,\n    endpoints: undefined,\n  };\n\n  let wsProxy: WsProxy;\n\n  const mockSend = vi.fn((data: any, options: any, callback?: (err?: Error) => void) => {\n    if (callback) callback();\n  });\n  const mockClose = vi.fn();\n\n  beforeEach(() => {\n    wsProxy = new WsProxy(MOCK_USER_SETTINGS);\n    vi.clearAllMocks();\n  });\n\n  it('filterWebSocketHeaders должен возвращать только разрешённые заголовки', () => {\n    const filtered = (wsProxy as any).filterWebSocketHeaders(TEST_HEADERS);\n\n    expect(filtered).toEqual({\n      'Sec-WebSocket-Protocol': 'json',\n      'Sec-WebSocket-Extensions': 'permessage-deflate',\n      'Sec-WebSocket-Key': 'abc123',\n      'Sec-WebSocket-Version': '13',\n    });\n    expect(filtered).not.toHaveProperty('X-Custom-Header');\n  });\n\n  it('closeConnection должен закрывать сохранённое соединение', () => {\n    const fakeWs = { send: mockSend, close: mockClose } as unknown as WebSocket;\n    (wsProxy as any).connections.set(VALID_SEQ, fakeWs);\n\n    (wsProxy as any).closeConnection(VALID_SEQ);\n\n    expect(mockClose).toHaveBeenCalledTimes(1);\n  });\n\n  it('proxy должен закрывать соединение при messageType=WEBSOCKET_CLOSE', async () => {\n    const fakeWs = { send: mockSend, close: mockClose } as unknown as WebSocket;\n    (wsProxy as any).connections.set(VALID_SEQ, fakeWs);\n\n    const packet: ProxiedNetworkPacket = {\n      seq: VALID_SEQ,\n      endpoint: TEST_ENDPOINT,\n      payload: Buffer.from(''),\n      messageType: MessageTypeFromBack.WEBSOCKET_CLOSE,\n      isWebsocketUpgrade: false,\n      parsedRequest: { method: 'GET', uri: TEST_ENDPOINT, headers: {}, body: '' },\n    };\n\n    await wsProxy.proxy(packet, vi.fn());\n\n    expect(mockClose).toHaveBeenCalledTimes(1);\n  });\n});\n"
+    },
+    {
+      "path": "test/integration/websocket.test.ts",
+      "sha": null,
+      "content_sha256": "ef39855178956e9bdb6981fae2dd119ecb39756aff19415fda6529520c85ed50",
+      "score": 91,
+      "content": "import http from 'http';\nimport WebSocket, { WebSocketServer } from 'ws';\nimport { vkTunnel } from '@/vkTunnel';\nimport { ensureAuth } from './utils/ensureAuth';\n\ndescribe.sequential('Интеграционный тест WebSocket через туннель', () => {\n  let server: http.Server;\n  let wss: WebSocketServer;\n  let port: number;\n\n  let tunnelData: Awaited<ReturnType<typeof vkTunnel>>['tunnelData'];\n  let closeTunnelConnection: () => void;\n\n  beforeAll(async () => {\n    ensureAuth();\n\n    server = http.createServer();\n    wss = new WebSocketServer({ server });\n\n    wss.on('connection', (ws) => {\n      ws.on('message', (msg, isBinary) => {\n        ws.send(msg, { binary: isBinary });\n      });\n    });\n\n    await new Promise<void>((resolve) => server.listen(0, resolve));\n\n    const address = server.address();\n\n    if (typeof address !== 'object' || !address?.port) {\n      throw new Error('Failed to get server port');\n    }\n\n    port = address.port;\n    vi.stubEnv('PROXY_PORT', port.toString());\n\n    const tunnel = await vkTunnel();\n    tunnelData = tunnel.tunnelData;\n    closeTunnelConnection = tunnel.closeTunnelConnection;\n  });\n\n  afterAll(async () => {\n    wss.close();\n    server.close();\n    closeTunnelConnection();\n    vi.unstubAllEnvs();\n  });\n\n  it('Устанавливается соединение и работает echo', async () => {\n    const wsUrl = tunnelData.tunnelUrl.replace('https', 'wss');\n    const ws = new WebSocket(wsUrl);\n\n    await new Promise<void>((resolve, reject) => {\n      ws.on('open', () => {\n        ws.send('hello through tunnel');\n      });\n\n      ws.on('message', (data) => {\n        expect(data.toString()).toBe('hello through tunnel');\n        ws.close();\n        resolve();\n      });\n\n      ws.on('error', reject);\n    });\n  });\n\n  it('Поддерживается бинарный формат', async () => {\n    const wsUrl = tunnelData.tunnelUrl.replace('https', 'wss');\n    const ws = new WebSocket(wsUrl);\n\n    const payload = Buffer.from([1, 2, 3, 4]);\n\n    await new Promise<void>((resolve, reject) => {\n      ws.on('open', () => {\n        ws.send(payload);\n      });\n\n      ws.on('message', (data, isBinary) => {\n        expect(isBinary).toBe(true);\n        expect(Buffer.compare(data as Buffer, payload)).toBe(0);\n        ws.close();\n        resolve();\n      });\n\n      ws.on('error', reject);\n    });\n  });\n});\n"
+    },
+    {
+      "path": "test/unit/getUserProxyAppSettings/getUserProxyAppSettings.file.test.ts",
+      "sha": null,
+      "content_sha256": "a868dd66d5d2ea000d8d6977ca735f8616fd44a4eea3743170f36199f5449828",
+      "score": 89,
+      "content": "import fs from 'node:fs';\nimport { getUserProxyAppSettings } from '@/helpers/getUserProxyAppSettings';\nimport { UserProxyAppSettingsArgs } from '@/types';\n\nvi.mock('node:fs', () => ({\n  default: {\n    existsSync: vi.fn(),\n    readFileSync: vi.fn(),\n  },\n}));\n\nconst mockedFs = fs as unknown as {\n  existsSync: ReturnType<typeof vi.fn>;\n  readFileSync: ReturnType<typeof vi.fn>;\n};\n\ndescribe('getUserProxyAppSettings (file config, mocked fs)', () => {\n  beforeEach(() => {\n    vi.resetAllMocks();\n  });\n\n  it('Читает настройки из файла, если он существует', () => {\n    vi.mocked(fs.existsSync).mockReturnValue(true);\n    mockedFs.readFileSync.mockReturnValue(\n      JSON.stringify({\n        host: 'file-host',\n        port: 9999,\n      } satisfies Partial<UserProxyAppSettingsArgs>),\n    );\n\n    const settings = getUserProxyAppSettings([]);\n\n    expect(settings.host).toBe('file-host');\n    expect(settings.port).toBe(9999);\n  });\n\n  it('Возвращает дефолтные настройки, если файла нет', () => {\n    mockedFs.existsSync.mockReturnValue(false);\n\n    const settings = getUserProxyAppSettings([]);\n\n    expect(settings.host).toBe('localhost');\n    expect(settings.port).toBe(10888);\n  });\n});\n"
+    },
+    {
+      "path": "test/unit/getUserProxyAppSettings/getUserProxyAppSettings.priority.test.ts",
+      "sha": null,
+      "content_sha256": "75c428778007390285895a9e9b27e3b4d649b3102a339a4534d67ad090299db1",
+      "score": 89,
+      "content": "import fs from 'node:fs';\nimport { getUserProxyAppSettings } from '@/helpers/getUserProxyAppSettings';\nimport { HttpProtocol, WsProtocol } from '@/types';\n\nvi.mock('node:fs', () => ({\n  default: {\n    existsSync: vi.fn(),\n    readFileSync: vi.fn(),\n  },\n}));\n\nconst mockedFs = fs as unknown as {\n  existsSync: ReturnType<typeof vi.fn>;\n  readFileSync: ReturnType<typeof vi.fn>;\n};\n\ndescribe('getUserProxyAppSettings (priority check)', () => {\n  beforeEach(() => {\n    vi.resetAllMocks();\n    vi.unstubAllEnvs();\n  });\n\n  it('CLI > ENV > file > defaults', () => {\n    mockedFs.existsSync.mockReturnValue(true);\n    mockedFs.readFileSync.mockReturnValue(\n      JSON.stringify({\n        host: 'file-host',\n        port: 1111,\n      }),\n    );\n\n    vi.stubEnv('PROXY_HOST', 'env-host');\n    vi.stubEnv('PROXY_PORT', '2222');\n\n    const settings = getUserProxyAppSettings([\n      '--host=cli-host',\n      '--port=3333',\n      '--http-protocol=https',\n      '--ws-protocol=wss',\n    ]);\n\n    expect(settings.host).toBe('cli-host');\n    expect(settings.port).toBe(3333);\n\n    expect(settings.httpProtocol).toBe(HttpProtocol.HTTPS);\n    expect(settings.wsProtocol).toBe(WsProtocol.WSS);\n  });\n});\n"
+    },
+    {
+      "path": "test/unit/getUserProxyAppSettings/getUserProxyAppSettings.env.test.ts",
+      "sha": null,
+      "content_sha256": "0eadb254c59a41c843a82e7fffab7cfbf24702d85f7e7516f50875bbe7cd2247",
+      "score": 89,
+      "content": "import { getUserProxyAppSettings } from '@/helpers/getUserProxyAppSettings';\nimport { HttpProtocol, WsProtocol } from '@/types';\n\ndescribe('getUserProxyAppSettings (ENV)', () => {\n  beforeEach(() => {\n    vi.unstubAllEnvs();\n  });\n\n  afterEach(() => {\n    vi.unstubAllEnvs();\n  });\n\n  it('Должен брать значения из ENV', () => {\n    vi.stubEnv('PROXY_HTTP_PROTO', 'https');\n    vi.stubEnv('PROXY_WS_PROTO', 'wss');\n    vi.stubEnv('PROXY_PORT', '4000');\n    vi.stubEnv('PROXY_HOST', 'envhost.local');\n\n    const settings = getUserProxyAppSettings([]);\n\n    expect(settings.httpProtocol).toBe(HttpProtocol.HTTPS);\n    expect(settings.wsProtocol).toBe(WsProtocol.WSS);\n    expect(settings.port).toBe(4000);\n    expect(settings.host).toBe('envhost.local');\n  });\n\n  it('Должен парсить boolean/number из ENV', () => {\n    process.env.PROXY_WS_ORIGIN = '0';\n\n    const settings = getUserProxyAppSettings([]);\n\n    expect(settings.wsOrigin).toBe(0);\n  });\n});\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T23:50:48.298484+00:00"
+}

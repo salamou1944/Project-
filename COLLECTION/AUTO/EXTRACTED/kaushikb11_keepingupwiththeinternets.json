@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:kaushikb11/keepingupwiththeinternets",
+  "repo": "kaushikb11/keepingupwiththeinternets",
+  "revision_sha": "6b736d480cfb730d28483d3691c6b7afdbb703a8",
+  "default_branch": "main",
+  "pushed_at": "2025-01-06T09:55:15Z",
+  "repo_updated_at": "2025-01-06T12:50:46Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "agent",
+    "elevenlabs",
+    "langgraph",
+    "podcast",
+    "reddit"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "src/models/types.py",
+      "sha": null,
+      "content_sha256": "172ae1dd732b268f0dd9fc942a5d434d6821b32b2d596f8306887d89a99bc968",
+      "score": 106,
+      "content": "from operator import add\nfrom typing import Annotated, Dict, List, TypedDict\n\n\nclass PostContent(TypedDict):\n    title: str\n    selftext: str\n    url: str\n    comments: List[Dict]\n    extracted_urls: List[str]\n    url_content: Dict[str, str]\n    summary: str\n\n\nclass Section(TypedDict):\n    title: str\n    points: List[str]\n\n\nclass ProcessingState(TypedDict):\n    subreddit: str\n    posts: List[Dict]\n    processed_posts: Annotated[List[PostContent], add]\n    script_plan: str\n    sections: List[Section]\n    introduction: str\n    dialogues: Annotated[List[Dict[str, str]], add]\n    final_script: str\n    audio_path: str\n"
+    },
+    {
+      "path": "src/services/firecrawl.py",
+      "sha": null,
+      "content_sha256": "8136698d9c87d71908e9f60b0fc1093f1cdf7fae3e3e839ffcc0c06e782bf286",
+      "score": 106,
+      "content": "import logging\nimport os\nimport time\nfrom typing import Dict, Optional\n\nfrom firecrawl import FirecrawlApp\nfrom tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential\n\n\nclass FirecrawlService:\n    \"\"\"Service for interacting with Firecrawl API.\"\"\"\n\n    def __init__(self):\n        api_key = os.getenv(\"FIRECRAWL_API_KEY\")\n        if not api_key:\n            raise ValueError(\"Missing FIRECRAWL_API_KEY environment variable\")\n        self._client = FirecrawlApp(api_key=api_key)\n\n    @staticmethod\n    def _is_rate_limit_error(exception: Exception) -> bool:\n        \"\"\"Check if the error is due to rate limiting.\"\"\"\n        return \"Rate limit exceeded\" in str(exception)\n\n    @retry(\n        wait=wait_exponential(multiplier=1, min=4, max=60),\n        stop=stop_after_attempt(3),\n        retry=retry_if_exception(_is_rate_limit_error),\n    )\n    def fetch_url_content(self, url: str) -> Optional[str]:\n        \"\"\"Fetch content from a URL with retry logic.\"\"\"\n        try:\n            response = self._client.scrape_url(url)\n\n            if isinstance(response, dict):\n                metadata = response.get(\"data\", {}).get(\"metadata\", {})\n                if metadata.get(\"statusCode\") == 404:\n                    logging.warning(f\"404 Not Found for URL: {url}\")\n                    return None\n                elif metadata.get(\"pageError\"):\n                    logging.warning(f\"Page error for {url}: {metadata['pageError']}\")\n                    return None\n\n                return (\n                    response.get(\"markdown\")\n                    or response.get(\"data\", {}).get(\"markdown\")\n                    or response.get(\"data\", {}).get(\"content\")\n                )\n\n            elif hasattr(response, \"data\"):\n                return getattr(response.data, \"markdown\", None) or getattr(\n                    response.data, \"content\", None\n                )\n\n            return None\n\n        except Exception as e:\n            if self._is_rate_limit_error(e):\n                logging.warning(f\"Rate limit hit for {url}, retrying...\")\n                raise\n            logging.error(f\"Error fetching content for URL {url}: {str(e)}\")\n            return None\n\n    def process_urls_batch(self, urls: list[str]) -> Dict[str, str]:\n        \"\"\"Process a batch of URLs with rate limiting.\"\"\"\n        url_content = {}\n\n        for url in urls:\n            try:\n                content = self.fetch_url_content(url)\n                if content:\n                    url_content[url] = content\n                    time.sleep(0.1)\n            except Exception as e:\n                logging.error(f\"Failed to process URL {url} after retries: {str(e)}\")\n                continue\n\n        return url_content\n"
+    },
+    {
+      "path": "src/agents/podcast_agent.py",
+      "sha": null,
+      "content_sha256": "457c03597c0134d7cc29008a398961e908c8f5f42a3779f98e7fbf91f9c3b9d7",
+      "score": 106,
+      "content": "from typing import Dict, List\n\nfrom langgraph.graph import END, START, StateGraph\nfrom langgraph.types import Send\n\nfrom src.components.podcast import (\n    DialogueGenerator,\n    PodcastGenerator,\n    ScriptEnhancer,\n    ScriptPlanner,\n)\nfrom src.components.reddit import RedditPostFetcher, RedditPostProcessor\nfrom src.models.types import ProcessingState\n\n\nclass PodcastAgent:\n    \"\"\"Agent for orchestrating the podcast generation process\"\"\"\n\n    def __init__(self, tts_service: str = \"elevenlabs\", base_dir: str = \"./podcasts\"):\n        self.post_fetcher = RedditPostFetcher()\n        self.post_processor = RedditPostProcessor()\n        self.script_planner = ScriptPlanner()\n        self.dialogue_generator = DialogueGenerator()\n        self.script_enhancer = ScriptEnhancer()\n        self.podcast_generator = PodcastGenerator(\n            service=tts_service, base_dir=base_dir\n        )\n        self.workflow = self._create_workflow()\n\n    def fetch_posts(self, state: ProcessingState) -> Dict:\n        \"\"\"Fetch top posts from subreddit.\"\"\"\n        posts = self.post_fetcher.fetch_top_posts(\n            subreddit=state[\"subreddit\"],\n        )\n        return {\"posts\": posts}\n\n    def process_post(self, state: ProcessingState) -> Dict:\n        \"\"\"Process a single post.\"\"\"\n        return self.post_processor.process_post(state[\"post\"])\n\n    def generate_plan(self, state: ProcessingState) -> Dict:\n        \"\"\"Generate script plan from processed posts.\"\"\"\n        plan, sections = self.script_planner.generate_plan(state[\"processed_posts\"])\n        return {\"script_plan\": plan, \"sections\": sections}\n\n    def generate_introduction(self, state: ProcessingState) -> Dict:\n        \"\"\"Generate podcast introduction.\"\"\"\n        intro = self.dialogue_generator.generate_introduction(\n            state[\"sections\"], state[\"processed_posts\"]\n        )\n        return {\"introduction\": intro}\n\n    def generate_dialogue(self, state: ProcessingState) -> Dict:\n        \"\"\"Generate dialogue for a section.\"\"\"\n        dialogue = self.dialogue_generator.generate_section_dialogue(\n            state[\"section\"], state[\"processed_posts\"]\n        )\n        return {\"dialogues\": [dialogue]}\n\n    def enhance_script(self, state: ProcessingState) -> Dict:\n        \"\"\"Enhance and format the final script.\"\"\"\n        enhanced = self.script_enhancer.enhance_script(\n            state[\"introduction\"], state.get(\"dialogues\", [])\n        )\n        return {\"final_script\": enhanced}\n\n    def generate_podcast(self, state: ProcessingState) -> Dict:\n        \"\"\"Generate podcast audio.\"\"\"\n        audio_path = self.podcast_generator.generate_podcast(state[\"final_script\"])\n        return {\"audio_path\": audio_path}\n\n    def map_to_post_processing(self, state: ProcessingState) -> List[Send]:\n        \"\"\"Map each post to parallel processing.\"\"\"\n        return [Send(\"process_post\", {\"post\": post}) for post in state[\"posts\"]]\n\n    def map_to_dialogue_processing(self, state: ProcessingState) -> List[Send]:\n        \"\"\"Map each section to parallel dialogue processing.\"\"\"\n        return [\n            Send(\n                \"generate_dialogue\",\n                {\"section\": section, \"processed_posts\": state[\"processed_posts\"]},\n            )\n            for section in state[\"sections\"]\n        ]\n\n    def _create_workflow(self) -> StateGraph:\n        workflow = StateGraph(ProcessingState)\n\n        workflow.add_node(\"fetch_posts\", self.fetch_posts)\n        workflow.add_node(\"process_post\", self.process_post)\n        workflow.add_node(\"generate_plan\", self.generate_plan)\n        workflow.add_node(\"generate_introduction\", self.generate_introduction)\n        workflow.add_node(\"generate_dialogue\", self.generate_dialogue)\n        workflow.add_node(\"enhance_script\", self.enhance_script)\n        workflow.add_node(\"generate_podcast\", self.generate_podcast)\n\n        workflow.add_edge(START, \"fetch_posts\")\n        workflow.add_conditional_edges(\n            \"fetch_posts\", self.map_to_post_processing, [\"process_post\"]\n        )\n        workflow.add_edge(\"process_post\", \"generate_plan\")\n        workflow.add_edge(\"generate_plan\", \"generate_introduction\")\n        workflow.add_conditional_edges(\n            \"generate_plan\", self.map_to_dialogue_processing, [\"generate_dialogue\"]\n        )\n        workflow.add_edge(\"generate_dialogue\", \"enhance_script\")\n        workflow.add_edge(\"enhance_script\", \"generate_podcast\")\n        workflow.add_edge(\"generate_podcast\", END)\n\n        return workflow.compile()\n\n    def run(self, subreddit: str) -> Dict:\n        final_state = self.workflow.invoke({\"subreddit\": subreddit})\n        return final_state\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "22e70c3a2777483a5cca690cdb68bc547edb6d97c32cfdbc2279973c71e67514",
+      "score": 100,
+      "content": "<div align=\"center\">\n  <img src=\"assets/image.png\" alt=\"Keeping Up with the Internets\" width=\"600\"/>\n  <p align=\"center\">\n    <strong>AI-Powered Internet Culture Podcasts</strong><br>\n    Transforming Reddit's most intriguing discussions into engaging audio content\n  </p>\n\n<p align=\"center\">\n    <a href=\"#overview\">Overview</a> •\n    <a href=\"#key-features\">Features</a> •\n    <a href=\"#architecture\">Architecture</a> •\n    <a href=\"#getting-started\">Getting Started</a> •\n    <a href=\"#contributing\">Contributing</a>\n  </p>\n</div>\n\n______________________________________________________________________\n\n## 🌟 Overview\n\nEver felt overwhelmed trying to keep up with internet culture? We transform r/OutOfTheLoop's most engaging discussions into natural, conversational podcasts – making it easy to stay informed while on the go.\n\n### ✨ Key Features\n\n- 🎯 **Smart Content Curation** - Automatically selects the most meaningful discussions\n- 🎭 **Multi-Persona Dialogue** - Natural conversations between different personas\n- 🔍 **Deep Context Integration** - Synthesizes information from posts, comments, and related links\n- 🎙️ **Professional Audio** - Converts discussions into podcast-ready content\n- 🚀 **Weekly Updates** - Fresh episodes covering the latest internet phenomena\n\n## 🛠️ Architecture\n\nThe project uses LangGraph for orchestrating the podcast generation workflow:\n\n<div align=\"center\">\n  <img src=\"assets/arch.png\" alt=\"Pipeline Overview\" width=\"800\"/>\n</div>\n\n<details>\n<summary>Core Components</summary>\n\n#### 1. Content Collection & Processing\n\n- **RedditPostFetcher**: Retrieves trending discussions from r/OutOfTheLoop\n- **RedditPostProcessor**: Processes posts, comments, and related URLs\n\n#### 2. Script Planning & Generation\n\n- **ScriptPlanner**: Evaluates and structures content using 4 core patterns:\n  - Mystery Unfolding: Reveals information progressively\n  - Debate/Controversy: Explores multiple perspectives\n  - Cultural Phenomenon: Analyzes trending topics\n  - Complex Situation: Breaks down intricate issues\n- **Multi-Persona Design**: Orchestrates natural dialogue flow\n\n#### 3. Dialogue Generation\n\n- **DialogueGenerator**: Creates dynamic conversations\n- **Context Integration**: Weaves in URLs, comments, and background\n- **Parallel Processing**: Generates reddit post specific dialogues concurrently\n\n#### 4. Script Enhancement\n\n- **ScriptEnhancer**: Improves flow and reduces redundancy\n- **Format Standardization**: Ensures consistent dialogue structure\n- **Quality Control**: Maintains speaker authenticity\n\n#### 5. Podcast Generation\n\n- **Audio Synthesis**: Converts enhanced scripts to natural speech\n- **Voice Differentiation**: Distinct voices for Host, Learner, and Expert\n- **Quality Assurance**: Ensures proper pacing and pronunciation\n\n</details>\n\n## 🚀 Getting Started\n\n### Installation\n\n1. Clone the repository\n\n```bash\ngit clone https://github.com/kaushikb11/keepingupwiththeinternets.git\ncd keepingupwiththeinternets\n```\n\n2. Create and activate a virtual environment\n\n```bash\npython3 -m venv venv\nsource venv/bin/activate  # On Windows: venv\\Scripts\\activate\n```\n\n3. Install dependencies\n\n```bash\npip install -r requirements.txt\n```\n\n4. Configure environment variables\n\n```bash\ncp .env.example .env\n# Edit .env with your API credentials:\n# - REDDIT_CLIENT_ID\n# - REDDIT_CLIENT_SECRET\n# - ELEVEN_LABS_API_KEY\n```\n\n### Basic Usage\n\nGenerate a podcast from r/OutOfTheLoop's top posts:\n\n```bash\npython3 main.py\n```\n\n### Advanced Usage\n\nFor automated weekly podcast generation, you can deploy the agent using [Modal](https://modal.com/):\n\n1. Install Modal\n\n```bash\npip install modal\n```\n\n2. Set up Modal authentication\n\n```bash\npython3 -m modal setup\n```\n\n3. Add secrets to Modal either through the CLI or the web interface\n\n```bash\npython3 -m modal secret create keepingupwiththeinternets-secrets \\\nREDDIT_CLIENT_ID=<your-value> \\\nREDDIT_CLIENT_SECRET=[REDACTED] \\\nREDDIT_USER_AGENT=<your-value> \\ .....\n```\n\n4. Deploy the scheduled job\n\n```bash\npython3 -m modal deploy modal_app.py\n```\n\nThe deployment will:\n\n- Run automatically every week\n- Store podcasts in Modal's persistent storage\n- Handle all dependencies and environment setup\n\nYou can monitor your deployments in the [Modal dashboard](https://modal.com/apps).\n\n## 🤝 Contributing\n\nContributions are welcome! Feel free to submit a pull request or open an issue.\n\n1. Fork the repository\n1. Create your feature branch (`git checkout -b feature/AmazingFeature`)\n1. Commit your changes (`git commit -m 'Add some AmazingFeature'`)\n1. Push to the branch (`git push origin feature/AmazingFeature`)\n1. Open a Pull Request\n\n## 📝 License\n\nThis project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.\n\n## 🙏 Acknowledgments\n\n- [paper_to_podcast](https://github.com/Azzedde/paper_to_podcast) for components inspiration\n- Reddit's r/OutOfTheLoop community\n- [ElevenLabs](https://elevenlabs.io) for voice synthesis\n- [Firecrawl](https://www.firecrawl.dev/) for web content extraction\n- [LangGraph](https://github.com/langchain-ai/langgraph) for workflow orchestration\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "de892dbb1f7268eb09e9bcf07f537eb70a6a6c664f22f2af4de44c5b7a0fbadb",
+      "score": 85,
+      "content": "praw\ntavily-python\npython-dotenv\nfirecrawl-py\nlanggraph\nlangchain-openai\nazure-cognitiveservices-speech\npydub\nelevenlabs\n"
+    },
+    {
+      "path": "main.py",
+      "sha": null,
+      "content_sha256": "fab9810ce162eb7d26f6154562d2d9c35595c911eb32656807cd70468792251b",
+      "score": 35,
+      "content": "from dotenv import load_dotenv\n\nfrom src.agents.podcast_agent import PodcastAgent\n\n\ndef main():\n    load_dotenv()\n    agent = PodcastAgent()\n    result = agent.run(\"OutOfTheLoop\")\n\n    print(f\"✨ Podcast generated successfully!\")\n    print(f\"📝 Script: {result['final_script'][:500]}...\")\n    print(f\"🎧 Audio saved to: {result['audio_path']}\")\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "sha": null,
+      "content_sha256": "c2e984902279ecc2a819421706cde980d2b0bb87505476fb647cd4923e91841b",
+      "score": 35,
+      "content": "# See https://pre-commit.com for more information\n# See https://pre-commit.com/hooks.html for more hooks\ndefault_language_version:\n  python: python3.9\n\nci:\n  autofix_prs: true\n  autoupdate_commit_msg: \"[pre-commit.ci] pre-commit suggestions\"\n  autoupdate_schedule: quarterly\n  # submodules: true\n\nrepos:\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v4.5.0\n    hooks:\n      - id: end-of-file-fixer\n      - id: trailing-whitespace\n      - id: check-case-conflict\n      - id: check-yaml\n        exclude: redis/redis.yml\n      - id: check-toml\n      - id: check-json\n      - id: check-added-large-files\n        args: [\"--maxkb=1550\", \"--enforce-all\"]\n        exclude: |\n          (?x)(\n              ^muse/ui/build|\n              muse/ui/yarn.lock\n          )\n      - id: check-docstring-first\n      - id: detect-private-key\n\n  - repo: https://github.com/asottile/pyupgrade\n    rev: v3.3.1\n    hooks:\n      - id: pyupgrade\n        args: [--py37-plus]\n        name: Upgrade code\n\n  - repo: https://github.com/PyCQA/isort\n    rev: 5.13.2\n    hooks:\n      - id: isort\n        name: isort (python)\n\n  - repo: https://github.com/psf/black\n    rev: 23.12.1\n    hooks:\n      - id: black\n        language_version: python3.11\n\n  - repo: https://github.com/executablebooks/mdformat\n    rev: 0.7.16\n    hooks:\n      - id: mdformat\n        additional_dependencies:\n          - mdformat-black\n          - mdformat_frontmatter\n        exclude: ^resources\n\n  - repo: https://github.com/asottile/yesqa\n    rev: v1.4.0\n    hooks:\n      - id: yesqa\n\n  - repo: https://github.com/PyCQA/flake8\n    rev: 6.0.0\n    hooks:\n      - id: flake8\n\n  - repo: https://github.com/pre-commit/mirrors-prettier\n    rev: v3.0.0-alpha.4\n    hooks:\n      - id: prettier\n        exclude: |\n          (?x)(\n              ^.github/ISSUE_TEMPLATE/bug_report.md|\n              ^.github/ISSUE_TEMPLATE/feature_request.md|\n              ^.github/ISSUE_TEMPLATE/documentation.md|\n              ^muse/ui/build|\n              ^README.md\n          )\n        additional_dependencies:\n          - prettier@2.7.1\n          - typescript@4.4.2\n          - prettier-plugin-organize-imports@3.1.0\n"
+    },
+    {
+      "path": "modal_app.py",
+      "sha": null,
+      "content_sha256": "7188cdb65367b2de971f83c34f44eca88f3c7987649ebe4df0ee8454679a7f08",
+      "score": 35,
+      "content": "from datetime import datetime\n\nimport modal\n\napp = modal.App(\"keepingupwithinternets\")\nvolume = modal.Volume.from_name(\"podcast-storage\", create_if_missing=True)\n\n\ndef get_keepingupwithinternets_mount():\n    return [modal.Mount.from_local_dir(\"src\", remote_path=\"/root/src\")]\n\n\nimage = (\n    modal.Image.debian_slim()\n    .pip_install(\n        \"praw\",\n        \"openai\",\n        \"python-dotenv\",\n        \"firecrawl-py\",\n        \"elevenlabs\",\n        \"azure-cognitiveservices-speech\",\n        \"pydub\",\n        \"langchain-openai\",\n        \"langgraph\",\n    )\n    .apt_install([\"ffmpeg\"])\n)\n\n\n@app.function(\n    image=image,\n    volumes={\"/podcasts\": volume},\n    secrets=[modal.Secret.from_name(\"keepingupwiththeinternets-secrets\")],\n    mounts=get_keepingupwithinternets_mount(),\n)\ndef generate_podcast():\n    import sys\n\n    sys.path.append(\"/root\")\n\n    from src.agents.podcast_agent import PodcastAgent\n\n    print(f\"Starting podcast generation at {datetime.now()}\")\n\n    agent = PodcastAgent(tts_service=\"elevenlabs\", base_dir=\"/podcasts\")\n\n    result = agent.run(\"OutOfTheLoop\")\n\n    print(\"✨ Podcast generated successfully!\")\n    print(f\"📝 Script: {result['final_script'][:500]}...\")\n    print(f\"🎧 Audio saved to: {result['audio_path']}\")\n\n\n@app.function(schedule=modal.Period(days=7))\ndef scheduled_podcast():\n    return generate_podcast.remote()\n"
+    },
+    {
+      "path": "src/components/base.py",
+      "sha": null,
+      "content_sha256": "903ba5693e1a32dc43137fdc58143d6e1e7aa0d15c76857ba65efef910325c11",
+      "score": 31,
+      "content": "from src.services.firecrawl import FirecrawlService\nfrom src.services.openai import OpenAIService\nfrom src.services.reddit import RedditService\n\n\nclass BaseComponent:\n    \"\"\"Base component with access to all services.\"\"\"\n\n    def __init__(self):\n        self.openai_service = OpenAIService()\n        self.reddit_service = RedditService()\n        self.firecrawl_service = FirecrawlService()\n"
+    },
+    {
+      "path": "src/prompts/__init__.py",
+      "sha": null,
+      "content_sha256": "701910b6823847c1ee57bda329e4fed76e08a5fb89d191c4673af9c8cdb7dd8f",
+      "score": 31,
+      "content": "\"\"\"Prompts module for podcast generation.\"\"\"\n"
+    },
+    {
+      "path": "src/utils/formatting.py",
+      "sha": null,
+      "content_sha256": "d75699d642d7e39f05002f7c639821a57de5d3064f1bfa5059417cbdbc87cd8e",
+      "score": 31,
+      "content": "from typing import Dict, List\n\n\ndef format_comments(comments: List[Dict]) -> str:\n    \"\"\"Format comments for prompts.\"\"\"\n    return \"\\n\".join(\n        [\n            f\"- {comment['author']} (Score: {comment['score']}): {comment['body']}\"\n            for comment in comments\n        ]\n    )\n\n\ndef format_posts_for_script(posts: List[Dict]) -> str:\n    \"\"\"Format processed posts for script generation.\"\"\"\n    formatted = []\n    for i, post in enumerate(posts, 1):\n        formatted.append(\n            f\"\"\"\n        Post {i}:\n        Title: {post['title']}\n        Summary: {post['summary']}\n\n        Key Points from Related Content:\n        {post.get('url_content', 'No additional content available')}\n\n        Notable Discussion:\n        {format_comments(post.get('comments', []))}\n\n        ---\n        \"\"\"\n        )\n    return \"\\n\".join(formatted)\n\n\ndef format_url_content(url_content: Dict[str, str]) -> str:\n    \"\"\"Format URL content for prompts.\"\"\"\n    formatted = []\n    for url, content in url_content.items():\n        formatted.append(\n            f\"URL: {url}\\nContent: {content[:500]}...\"\n        )  # Truncate long content\n    return \"\\n\\n\".join(formatted)\n"
+    },
+    {
+      "path": "src/utils/reddit.py",
+      "sha": null,
+      "content_sha256": "af7a0e715631e155cd3673720eca1211873680662aa710c6d48f47fafb38fb1c",
+      "score": 31,
+      "content": "import os\nfrom typing import Dict, List\n\nimport praw\nfrom dotenv import load_dotenv\n\n\ndef setup_reddit_client() -> praw.Reddit:\n    load_dotenv()\n\n    client_id = os.getenv(\"REDDIT_CLIENT_ID\")\n    client_secret = os.getenv(\"REDDIT_CLIENT_SECRET\")\n    user_agent = os.getenv(\"REDDIT_USER_AGENT\")\n\n    if not all([client_id, client_secret, user_agent]):\n        raise ValueError(\n            \"Missing required environment variables. Please ensure REDDIT_CLIENT_ID, \"\n            \"REDDIT_CLIENT_SECRET, and REDDIT_USER_AGENT are set in your .env file.\"\n        )\n\n    return praw.Reddit(\n        client_id=client_id, client_secret=[REDACTED], user_agent=user_agent\n    )\n\n\ndef format_comments(comments: List[Dict]) -> str:\n    \"\"\"Format comments for prompts.\"\"\"\n    return \"\\n\".join(\n        [\n            f\"- {comment['author']} (Score: {comment['score']}): {comment['body']}\"\n            for comment in comments\n        ]\n    )\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/services/openai.py",
+      "sha": null,
+      "content_sha256": "3398048e56f0a7b28841ed1f4ed33c8d11320c8a07a23a2d54df6138f0a92c93",
+      "score": 31,
+      "content": "import logging\nimport os\nfrom typing import Any, Dict, Optional\n\nfrom dotenv import load_dotenv\nfrom langchain_openai import AzureChatOpenAI\n\n\nclass OpenAIService:\n    \"\"\"Service for interacting with Azure OpenAI API.\"\"\"\n\n    def __init__(self):\n        self._model = self._setup_model()\n\n    def _setup_model(self) -> AzureChatOpenAI:\n        \"\"\"Initialize Azure OpenAI model.\"\"\"\n        load_dotenv()\n\n        deployment = os.getenv(\"AZURE_DEPLOYMENT\")\n        api_version = os.getenv(\"AZURE_API_VERSION\")\n\n        if not all([deployment, api_version]):\n            raise ValueError(\n                \"Missing required environment variables. Please ensure AZURE_DEPLOYMENT \"\n                \"and AZURE_API_VERSION are set in your .env file.\"\n            )\n\n        return AzureChatOpenAI(\n            azure_deployment=deployment,\n            api_version=api_version,\n        )\n\n    def generate_completion(\n        self,\n        prompt: str,\n        temperature: float = 0.7,\n        max_tokens: Optional[int] = None,\n        **kwargs: Dict[str, Any],\n    ) -> str:\n        \"\"\"Generate completion from prompt.\"\"\"\n        try:\n            response = self._model.invoke(\n                prompt, temperature=temperature, max_tokens=max_tokens, **kwargs\n            )\n            return response.content\n        except Exception as e:\n            logging.error(f\"Error generating completion: {str(e)}\")\n            raise\n"
+    },
+    {
+      "path": "src/utils/script_parser.py",
+      "sha": null,
+      "content_sha256": "a4bfe2ec570cec574a8ef5bae40e716494f8d0653f8dc789bc2f953adc3085c7",
+      "score": 31,
+      "content": "from typing import Dict, List\n\nfrom src.models.types import Section\n\n\ndef parse_script_plan(content: str) -> List[Section]:\n    \"\"\"Parse the script plan content into structured sections.\"\"\"\n    sections = []\n    current_section = None\n    lines = [line.strip() for line in content.splitlines() if line.strip()]\n\n    for line in lines:\n        if line.startswith(\"##\"):\n            if current_section:\n                sections.append(current_section)\n\n            current_section = {\"title\": line.lstrip(\"#\").strip(), \"points\": []}\n\n        elif line.startswith(\"-\"):\n            if current_section:\n                current_section[\"points\"].append(line.lstrip(\"- \").strip())\n\n    if current_section:\n        sections.append(current_section)\n\n    return sections\n"
+    },
+    {
+      "path": "src/prompts/summary.py",
+      "sha": null,
+      "content_sha256": "d9e9362010a5190905b596b1f766d3d660eea6780edcdcae823af9c19f617db0",
+      "score": 31,
+      "content": "SUMMARY_PROMPT = \"\"\"Analyze this Reddit post and its related content:\n\nTitle: {title}\nContent: {content}\n\nRelated URLs content:\n{url_content}\n\nTop Comments:\n{comments}\n\nProvide a concise summary that captures:\n1. The main question/topic\n2. Key information from related links\n3. Important points from the discussion\n4. Why this topic is interesting/relevant\n\"\"\"\n"
+    },
+    {
+      "path": "src/utils/script.py",
+      "sha": null,
+      "content_sha256": "b904156dd44304aaa7e7448d8dd27d32001b9f83a87e3119e7b8a48f00389164",
+      "score": 31,
+      "content": "from typing import Dict, List\n\nfrom src.utils.reddit import format_comments\nfrom src.utils.urls import format_url_content\n\n\ndef format_posts_for_script(posts: List[Dict]) -> str:\n    \"\"\"Format processed posts for script generation.\"\"\"\n    formatted = []\n    for i, post in enumerate(posts, 1):\n        formatted.append(\n            f\"\"\"\n        Post {i}:\n        Title: {post['title']}\n        Summary: {post['summary']}\n\n        Key Points from Related Content:\n        {format_url_content(post.get('url_content', {}))}\n\n        Notable Discussion:\n        {format_comments(post.get('top_comments', []))}\n\n        ---\n        \"\"\"\n        )\n    return \"\\n\".join(formatted)\n\n\ndef parse_script_plan(content: str) -> list[dict]:\n    \"\"\"\n    Parse the script plan content into structured sections.\n\n    Args:\n        content: String containing the script plan with headers and bullet points\n\n    Returns:\n        List of dictionaries containing parsed sections with title and discussion points\n    \"\"\"\n    sections = []\n    current_section = None\n\n    # Split into lines and remove any empty lines\n    lines = [line.strip() for line in content.splitlines() if line.strip()]\n\n    for line in lines:\n        # Check if line is a header (starts with ##)\n        if line.startswith(\"##\"):\n            # If we have a previous section, add it\n            if current_section:\n                sections.append(current_section)\n\n            # Start new section\n            current_section = {\"title\": line.lstrip(\"#\").strip(), \"points\": []}\n\n        # Check if line is a bullet point\n        elif line.startswith(\"-\"):\n            if current_section:\n                current_section[\"points\"].append(line.lstrip(\"- \").strip())\n\n    # Add the last section\n    if current_section:\n        sections.append(current_section)\n\n    return sections\n"
+    },
+    {
+      "path": "src/services/__init__.py",
+      "sha": null,
+      "content_sha256": "4134ce2a215d7ec4c5fcf73454745e120500b90f2218ab39e16f84404592b639",
+      "score": 31,
+      "content": "\"\"\"Services module for external API integrations.\"\"\"\n"
+    },
+    {
+      "path": "src/utils/urls.py",
+      "sha": null,
+      "content_sha256": "3c04abbf4b22a934acce84130f43964c2a137e7fcfc0a97279f565b37e5ee264",
+      "score": 31,
+      "content": "import logging\nimport re\nfrom typing import Dict, List\nfrom urllib.parse import urlparse\n\n\ndef extract_urls(text: str) -> List[str]:\n    \"\"\"Extract URLs from text content.\"\"\"\n    url_pattern = r\"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\\\(\\\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+\"\n    urls = re.findall(url_pattern, text)\n    return [url for url in urls if is_valid_url(url)]\n\n\ndef is_valid_url(url: str) -> bool:\n    \"\"\"Validate URL and check if it's worth processing.\"\"\"\n    try:\n        result = urlparse(url)\n        excluded_domains = {\n            \"imgur.com\",\n            \"i.redd.it\",\n            \"twitter.com\",\n            \"x.com\",\n            \"facebook.com\",\n            \"instagram.com\",\n            \"reddit.com\",\n            \"t.co\",\n            \"youtube.com\",\n        }\n        domain = result.netloc.lower()\n        if any(excluded in domain for excluded in excluded_domains):\n            logging.info(f\"Skipping unsupported/excluded domain: {domain}\")\n            return False\n\n        return all([result.scheme, result.netloc])\n    except Exception as e:\n        logging.warning(f\"Error validating URL {url}: {str(e)}\")\n        return False\n\n\ndef format_url_content(url_content: Dict[str, str]) -> str:\n    \"\"\"Format URL content for prompts.\"\"\"\n    formatted = []\n    for url, content in url_content.items():\n        formatted.append(\n            f\"URL: {url}\\nContent: {content[:500]}...\"\n        )  # Truncate long content\n    return \"\\n\\n\".join(formatted)\n"
+    },
+    {
+      "path": "src/components/reddit.py",
+      "sha": null,
+      "content_sha256": "b44e4bd625ba644144cbd4693ba1b7468b19cc1abb18229b2c5bbcce36eb6744",
+      "score": 31,
+      "content": "from typing import Dict, List\n\nfrom src.components.base import BaseComponent\nfrom src.models.types import PostContent\nfrom src.prompts.summary import SUMMARY_PROMPT\nfrom src.utils.formatting import format_comments\nfrom src.utils.urls import extract_urls, format_url_content, is_valid_url\n\n\nclass RedditPostFetcher(BaseComponent):\n    def fetch_top_posts(\n        self,\n        subreddit: str,\n        flair_filter: str = \"Answered\",\n        time_filter: str = \"week\",\n        limit: int = 10,\n    ) -> List[Dict]:\n        return self.reddit_service.get_top_posts(\n            subreddit_name=subreddit,\n            flair_filter=flair_filter,\n            time_filter=time_filter,\n            limit=limit,\n        )\n\n\nclass RedditPostProcessor(BaseComponent):\n    def _generate_summary(self, post: Dict, url_content: Dict[str, str]) -> str:\n        prompt = SUMMARY_PROMPT.format(\n            title=post[\"title\"],\n            content=post[\"selftext\"],\n            url_content=format_url_content(url_content),\n            comments=format_comments(post[\"comments\"]),\n        )\n        return self.openai_service.generate_completion(prompt)\n\n    def process_post(self, post: Dict) -> PostContent:\n        \"\"\"Process a single post and its related content.\"\"\"\n        urls = extract_urls(post[\"selftext\"])\n        if post[\"url\"] and is_valid_url(post[\"url\"]):\n            urls.append(post[\"url\"])\n\n        for comment in post[\"comments\"]:\n            urls.extend(extract_urls(comment[\"body\"]))\n\n        urls = list(set(filter(is_valid_url, urls)))\n        url_content = self.firecrawl_service.process_urls_batch(urls)\n\n        summary = self._generate_summary(post, url_content)\n\n        return PostContent(\n            title=post[\"title\"],\n            selftext=post[\"selftext\"],\n            url=post[\"url\"],\n            comments=post[\"comments\"],\n            extracted_urls=urls,\n            url_content=url_content,\n            summary=summary,\n        )\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [
+    {
+      "path": "src/agents/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "src/models/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "src/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "src/components/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "src/utils/__init__.py",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 5,
+  "generated_at": "2026-10-20T23:50:53.637745+00:00"
+}
