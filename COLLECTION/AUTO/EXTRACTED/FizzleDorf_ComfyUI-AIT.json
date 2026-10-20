@@ -1,0 +1,62 @@
+{
+  "canonical_source": "github:FizzleDorf/ComfyUI-AIT",
+  "repo": "FizzleDorf/ComfyUI-AIT",
+  "revision_sha": "8386876a598fc6eb2876b2db9f65d1186615bfee",
+  "default_branch": "main",
+  "pushed_at": "2024-06-22T03:13:05Z",
+  "repo_updated_at": "2026-09-02T13:27:29Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "33e11b56a43a241dd9581c0cdf39942d5ccc67421e8cc9dfbf3f58b2a64d78b8",
+      "score": 120,
+      "content": "[project]\nname = \"comfyui-ait\"\ndescription = \"Use Facebook Meta's AITemplate repo for faster inference using cpp/cuda.\"\nversion = \"1.0.0\"\nlicense = \"LICENSE\"\ndependencies = [\"aitemplate\"]\n\n[project.urls]\nRepository = \"https://github.com/FizzleDorf/ComfyUI-AIT\"\n\n#  Used by Comfy Registry https://comfyregistry.org\n[tool.comfy]\nPublisherId = \"fizzledorf\"\nDisplayName = \"ComfyUI-AIT\"\nIcon = \"\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "368fdf835381d08c04d7e94a56fffbd499d3c18d6c23aeb3c0542781334f67e4",
+      "score": 100,
+      "content": "# ComfyUI-AIT\n\nA [ComfyUI](https://github.com/comfyanonymous/ComfyUI) implementation of Meta's [AITemplate](https://github.com/facebookincubator/AITemplate) repo for faster inference using cpp/cuda. The old AIT repo is still available for reference. You can find it [here](https://github.com/FizzleDorf/AIT). The node in the UI is located under loaders->AIT. This new repo is behiond but is a much more stable foundation to keep AIT online. *Please be patient as the repo will eventually include the same features as before.*\n\n-----\n\n## Installation\n\nThis repo can be downloaded using [ComfyUI manager](https://github.com/ltdrdata/ComfyUI-Manager).\n\nTo install the repo manually, simply git bash inside the `custom_nodes` directory and use the command `git clone https://github.com/FizzleDorf/ComfyUI-AIT.git`\n\n### Linux\n- open a terminal pathed to the current folder and use `git clone --recursive https://github.com/facebookincubator/AITemplate`.\n- path to `cd python`.\n- run `python setup.py bdist_wheel`.\n- **If you are using a virtual environment, make sure it's activated before installing the wheel.**\n- `pip install dist/*.whl --force-reinstall`\n- copy and paste the `3rdparty` directory to the `Lib` directory of your venv or python install.\n\n### Windows\n*This is for compilation only, you can do the Linux install for inference only*\n- Extract the `ait_windows.zip` file in `\\ComfyUI-AIT\\compile` directory.\n- open a cmd pathed to the current folder and use `git clone --recursive ait_windows.bundle -b fixes`.\n- path to `cd ait_windows/python`.\n- run `python setup.py bdist_wheel`.\n- **If you cloned your ComfyUI install and you are using a virtual environment, make sure it's activated before installing the wheel.**\n- `pip install dist/*.whl --force-reinstall` for cloned comfy installs or `.\\python_embed\\python.exe -s -m pip install` for packaged comfy.\n- copy and paste the `3rdparty` directory to the `Lib` directory of your venv or python install.\n\n-----\n\n## Modules\n\nYou can find already [compiled modules here](https://huggingface.co/Fizzledorf/AITemplateXL) otherwise you can compile your own modules (requires sm80 or higher NVIDIA GPU). \n\n*a bundle for Windows compilation is included with this repo. See Windows installation instructions.*\n\nPlace your downloaded or compiles Modules in the ComfyUI/models/ait directory.\n\nWhile in ComfyUI, simply hook up the AIT_Unet_Loader to your workflow and select a module that is equal to or larger than the resolution you are generating at.\n"
+    },
+    {
+      "path": "requirements.txt.txt",
+      "sha": null,
+      "content_sha256": "ffc9a9ffd7112d9d688e2fd728d6dbb2aa898c06efbbdc7b0a36b5ff3f8b39b9",
+      "score": 85,
+      "content": "aitemplate"
+    },
+    {
+      "path": "__init__.py",
+      "sha": null,
+      "content_sha256": "580ad3faefc87e75e9a196350514896e8de1bd79a18602f776e338fe5e0afec9",
+      "score": 35,
+      "content": "from .ait_load import AIT_Unet_Loader #, AIT_VAE_Encode_Loader\n\nNODE_CLASS_MAPPINGS = {\n    \"AIT_Unet_Loader\":AIT_Unet_Loader,\n    #\"AIT_VAE_Encode_Loader\":AIT_VAE_Encode_Loader,\n}\n\nprint('\\033[34mAIT Nodes: \\033[92mLoaded\\033[0m')"
+    },
+    {
+      "path": "ait_load.py",
+      "sha": null,
+      "content_sha256": "71364e9a931c4c6c756fe53d1a7028b207b4c0bdf44db80c943caa0a346c56e9",
+      "score": 35,
+      "content": "import torch\nimport folder_paths\nimport comfy.utils\nimport os\n\nif \"ait\" in folder_paths.folder_names_and_paths:\n    folder_paths.folder_names_and_paths[\"ait\"][0].append(os.path.join(folder_paths.models_dir, \"ait\"))\n    folder_paths.folder_names_and_paths[\"ait\"][1].add(\".so\")\n    folder_paths.folder_names_and_paths[\"ait\"][1].add(\".dll\")\nelse:\n    folder_paths.folder_names_and_paths[\"ait\"] = ([os.path.join(folder_paths.models_dir, \"ait\")], {\".so\", \".dll\"})\n\ndef map_unet_params(pt_params):\n    dim = 320\n    params_ait = {}\n    for key, arr in pt_params.items():\n        if len(arr.shape) == 4:\n            arr = arr.permute((0, 2, 3, 1)).contiguous()\n        elif key.endswith(\"ff.net.0.proj.weight\"):\n            w1, w2 = arr.chunk(2, dim=0)\n            params_ait[key.replace(\".\", \"_\")] = w1\n            params_ait[key.replace(\".\", \"_\").replace(\"proj\", \"gate\")] = w2\n            continue\n        elif key.endswith(\"ff.net.0.proj.bias\"):\n            w1, w2 = arr.chunk(2, dim=0)\n            params_ait[key.replace(\".\", \"_\")] = w1\n            params_ait[key.replace(\".\", \"_\").replace(\"proj\", \"gate\")] = w2\n            continue\n        params_ait[key.replace(\".\", \"_\")] = arr.half()\n    params_ait[\"arange\"] = (\n        torch.arange(start=0, end=dim // 2, dtype=torch.float32).cuda().half()\n    )\n    return params_ait\n\nfrom aitemplate.compiler import Model\n\nclass AITModel:\n    def __init__(self, ait_path):\n        self.exe_module = Model(ait_path)\n\n    def set_weights(self, sd):\n        constants = map_unet_params(sd)\n        self.exe_module.set_many_constants_with_tensors(constants)\n\n    def apply_model(self, xc, t, c_crossattn, y=None, control=None, transformer_options=None, **kwargs):\n        xc = xc.permute((0, 2, 3, 1)).half().contiguous()\n        output = [torch.empty_like(xc)]\n        inputs = {\"x\": xc, \"timesteps\": t.half(), \"context\": c_crossattn.half()}\n        if y is not None:\n            inputs['y'] = y.half()\n        self.exe_module.run_with_tensors(inputs, output, graph_mode=False)\n        return output[0].permute((0, 3, 1, 2))\n\n    def unload_model(self):\n        self.exe_module.close()\n\n\nclass AITPatch:\n    def __init__(self, model, ait_model_path):\n        self.model = model\n        self.ait_model_path = ait_model_path\n        self.ait_model = None\n\n    def __call__(self, model_function, params):\n        if self.ait_model is None:\n            self.ait_model = AITModel(self.ait_model_path)\n            sd = self.model.model_state_dict(\"diffusion_model.\")\n            sd = comfy.utils.state_dict_prefix_replace(sd, {\"diffusion_model.\": \"\"})\n            self.ait_model.set_weights(sd)\n\n        c_concat = params[\"c\"].get(\"c_concat\", None)\n        sigma = params[\"timestep\"]\n        t = self.model.model.model_sampling.timestep(sigma).float()\n        x = self.model.model.model_sampling.calculate_input(sigma, params[\"input\"])\n        if c_concat is not None:\n            xc = torch.cat([x] + [c_concat], dim=1)\n        else:\n            xc = x\n        model_output = self.ait_model.apply_model(x, t, **params[\"c\"]).float()\n        return self.model.model.model_sampling.calculate_denoised(sigma, model_output, params[\"input\"])\n\n    def to(self, a):\n        if self.ait_model is not None:\n            if a == torch.device(\"cpu\"):\n                self.ait_model.unload_model()\n                self.ait_model = None\n                print(\"unloaded AIT\")\n        return self\n\nclass AIT_Unet_Loader:\n    @classmethod\n    def INPUT_TYPES(s):\n        return {\"required\": { \"model\": (\"MODEL\", ),\n                              \"ait_name\": (folder_paths.get_filename_list(\"ait\"), ),\n                             }}\n    RETURN_TYPES = (\"MODEL\",)\n    FUNCTION = \"load_ait\"\n\n    CATEGORY = \"loaders/AIT\"\n\n    def load_ait(self, model, ait_name):\n        ait_path = folder_paths.get_full_path(\"ait\", ait_name)\n        patch = AITPatch(model, ait_path)\n        model_ait = model.clone()\n        model_ait.set_model_unet_function_wrapper(patch)\n        print(patch)\n        return (model_ait,)\n\n\n\nNODE_CLASS_MAPPINGS = {\n  \"AIT_Unet_Loader\": AIT_Unet_Loader,\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T22:57:02.547773+00:00"
+}

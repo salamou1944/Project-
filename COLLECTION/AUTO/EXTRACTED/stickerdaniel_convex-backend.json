@@ -1,0 +1,842 @@
+{
+  "canonical_source": "github:stickerdaniel/convex-backend",
+  "repo": "stickerdaniel/convex-backend",
+  "revision_sha": "346623f8af27ded5b914051025a82b5aeae4036e",
+  "default_branch": "main",
+  "pushed_at": "2026-09-26T15:25:35Z",
+  "repo_updated_at": "2026-09-26T15:18:15Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "crates/database/src/bootstrap_model/test_facing.rs",
+      "sha": null,
+      "content_sha256": "58789cd3e3db24bb8dc0fb522534171e9fb9e76ccb4be16eff18e25964578a81",
+      "score": 376,
+      "content": "use common::{\n    document::{\n        PendingDocument,\n        ResolvedDocument,\n    },\n    runtime::Runtime,\n};\nuse value::{\n    ConvexObject,\n    PendingValue,\n    ResolvedDocumentId,\n    TableName,\n    TableNamespace,\n};\n\nuse crate::{\n    SystemMetadataModel,\n    TableModel,\n    Transaction,\n};\n\npub struct TestFacingModel<'a, RT: Runtime> {\n    tx: &'a mut Transaction<RT>,\n}\n\nimpl<'a, RT: Runtime> TestFacingModel<'a, RT> {\n    pub fn new(tx: &'a mut Transaction<RT>) -> Self {\n        Self { tx }\n    }\n\n    #[convex_macro::instrument_future]\n    pub async fn insert(\n        &mut self,\n        table: &TableName,\n        value: ConvexObject,\n    ) -> anyhow::Result<ResolvedDocumentId> {\n        SystemMetadataModel::new(self.tx, TableNamespace::test_user())\n            .insert_metadata(table, value)\n            .await\n    }\n\n    /// Insert a new document whose body may contain unresolved commit\n    /// timestamps (see `value::PendingValue`).\n    #[convex_macro::instrument_future]\n    pub async fn insert_pending(\n        &mut self,\n        table: &TableName,\n        body: PendingValue,\n    ) -> anyhow::Result<ResolvedDocumentId> {\n        let namespace = TableNamespace::test_user();\n        TableModel::new(self.tx)\n            .insert_table_metadata(namespace, table)\n            .await?;\n        let table_id = self.tx.table_mapping().namespace(namespace).id(table)?;\n        let id = self.tx.id_generator.generate_resolved(table_id);\n        let creation_time = self.tx.next_creation_time.increment()?;\n        let document = PendingDocument::new(id, creation_time, body)?;\n        self.tx.insert_pending_document(document).await\n    }\n\n    #[convex_macro::instrument_future]\n    pub async fn replace(\n        &mut self,\n        id: ResolvedDocumentId,\n        value: ConvexObject,\n    ) -> anyhow::Result<ResolvedDocument> {\n        SystemMetadataModel::new(self.tx, TableNamespace::test_user())\n            .replace(id, value)\n            .await\n    }\n\n    /// Replace a document by id, bypassing user-facing checks.\n    pub async fn replace_inner(\n        &mut self,\n        id: ResolvedDocumentId,\n        value: ConvexObject,\n    ) -> anyhow::Result<ResolvedDocument> {\n        self.tx.replace_inner(id, value).await?.into_resolved()\n    }\n\n    /// Insert a new document and immediately read it. Prefer using `insert`\n    /// unless you need to read the creation time.\n    #[convex_macro::instrument_future]\n    pub async fn insert_and_get(\n        &mut self,\n        table: TableName,\n        value: ConvexObject,\n    ) -> anyhow::Result<ResolvedDocument> {\n        let id = self.insert(&table, value).await?;\n        self.tx\n            .get(id)\n            .await?\n            .ok_or_else(|| anyhow::anyhow!(\"Document with id {id} must exist\"))\n    }\n}\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/import_facing.rs",
+      "sha": null,
+      "content_sha256": "d5c4ed242006ec6cbf07ff12c8dc7d8307b02348ba6316909c36511ddfcf7912",
+      "score": 316,
+      "content": "use anyhow::Context;\nuse common::{\n    document::{\n        CreationTime,\n        ResolvedDocument,\n        CREATION_TIME_FIELD,\n        ID_FIELD,\n    },\n    runtime::Runtime,\n};\nuse errors::ErrorMetadata;\nuse keybroker::DeploymentOp;\nuse roles::RequireDeploymentOp;\nuse value::{\n    ConvexObject,\n    ConvexValue,\n    DeveloperDocumentId,\n    FieldName,\n    ResolvedDocumentId,\n    TableMapping,\n    TableName,\n    TabletIdAndTableNumber,\n};\n\nuse crate::{\n    defaults::bootstrap_system_tables,\n    SchemaModel,\n    Transaction,\n};\n\n/// `ImportFacingModel` is similar to `UserFacingModel` but with a few\n/// differences for insertions:\n/// - the table for insertion is chosen by table id, not table name or number.\n/// - we allow the insertion to choose its document ID.\n/// - nonexistent tables won't be created implicitly.\n/// - the _creationTime may be user-specified.\n/// - only admin/system auth is allowed.\npub struct ImportFacingModel<'a, RT: Runtime> {\n    tx: &'a mut Transaction<RT>,\n}\n\nimpl<'a, RT: Runtime> ImportFacingModel<'a, RT> {\n    pub fn new(tx: &'a mut Transaction<RT>) -> Self {\n        Self { tx }\n    }\n\n    /// Inserts a new document as part of a snapshot import.\n    #[convex_macro::instrument_future]\n    pub async fn insert(\n        &mut self,\n        table_id: TabletIdAndTableNumber,\n        table_name: &TableName,\n        value: ConvexObject,\n        table_mapping_for_schema: &TableMapping,\n    ) -> anyhow::Result<DeveloperDocumentId> {\n        if self\n            .tx\n            .virtual_system_mapping()\n            .is_virtual_table(table_name)\n        {\n            anyhow::bail!(ErrorMetadata::bad_request(\n                \"ReadOnlyTable\",\n                format!(\"{table_name} is a read-only table\"),\n            ));\n        }\n        anyhow::ensure!(\n            bootstrap_system_tables()\n                .iter()\n                .all(|t| t.table_name() != *table_name),\n            \"Cannot import into bootstrap system table {table_name}\"\n        );\n        self.tx\n            .identity\n            .require_operation(DeploymentOp::ImportBackups)?;\n\n        let id_field = FieldName::from(ID_FIELD.clone());\n        let internal_id = if let Some(ConvexValue::String(s)) = value.get(&id_field) {\n            let id_v6 = DeveloperDocumentId::decode(s).context(ErrorMetadata::bad_request(\n                \"InvalidId\",\n                format!(\"invalid _id '{s}'\"),\n            ))?;\n            anyhow::ensure!(\n                id_v6.table() == table_id.table_number,\n                ErrorMetadata::bad_request(\n                    \"ImportConflict\",\n                    format!(\n                        \"_id {s} cannot be imported into '{table_name}' because it came from a \\\n                         different deployment and conflict with preexisting tables in this \\\n                         deployment. Try deleting preexisting tables or importing into an empty\n                         deployment.\"\n                    )\n                )\n            );\n            id_v6.internal_id()\n        } else {\n            self.tx.id_generator.generate_internal()\n        };\n        let id = ResolvedDocumentId::new(\n            table_id.tablet_id,\n            DeveloperDocumentId::new(table_id.table_number, internal_id),\n        );\n        let namespace = self\n            .tx\n            .table_mapping()\n            .tablet_namespace(table_id.tablet_id)?;\n\n        let creation_time_field = FieldName::from(CREATION_TIME_FIELD.clone());\n        let creation_time = if let Some(ConvexValue::Float64(f)) = value.get(&creation_time_field) {\n            CreationTime::try_from(*f)?\n        } else {\n            self.tx.next_creation_time.increment()?\n        };\n\n        let document = ResolvedDocument::new(id, creation_time, value)?;\n        SchemaModel::new(self.tx, namespace)\n            .enforce_with_table_mapping(&document, &table_mapping_for_schema.namespace(namespace))\n            .await?;\n        self.tx\n            .apply_validated_write(id, None, Some(document.into()))?;\n\n        Ok(id.into())\n    }\n\n    #[convex_macro::instrument_future]\n    pub async fn upsert(\n        &mut self,\n        table_id: TabletIdAndTableNumber,\n        table_name: &TableName,\n        value: ConvexObject,\n        table_mapping_for_schema: &TableMapping,\n    ) -> anyhow::Result<DeveloperDocumentId> {\n        if self\n            .tx\n            .virtual_system_mapping()\n            .is_virtual_table(table_name)\n        {\n            anyhow::bail!(ErrorMetadata::bad_request(\n                \"ReadOnlyTable\",\n                format!(\"{table_name} is a read-only table\"),\n            ));\n        }\n        anyhow::ensure!(\n            bootstrap_system_tables()\n                .iter()\n                .all(|t| t.table_name() != *table_name),\n            \"Cannot import into bootstrap system table {table_name}\"\n        );\n        self.tx\n            .identity\n            .require_operation(DeploymentOp::ImportBackups)?;\n\n        let id_field = FieldName::from(ID_FIELD.clone());\n        let developer_id = if let Some(ConvexValue::String(s)) = value.get(&id_field) {\n            let id_v6 = DeveloperDocumentId::decode(s).context(ErrorMetadata::bad_request(\n                \"InvalidId\",\n                format!(\"invalid _id '{s}'\"),\n            ))?;\n            anyhow::ensure!(\n                id_v6.table() == table_id.table_number,\n                ErrorMetadata::bad_request(\n                    \"ImportConflict\",\n                    format!(\n                        \"_id {s} cannot be imported into '{table_name}' because its IDs have a \\\n                         different format\"\n                    )\n                )\n            );\n            id_v6\n        } else {\n            anyhow::bail!(\"upsert requires _id field\");\n        };\n        let id = ResolvedDocumentId::new(table_id.tablet_id, developer_id);\n        let namespace = self\n            .tx\n            .table_mapping()\n            .tablet_namespace(table_id.tablet_id)?;\n\n        let existing_doc = self.tx.get_with_ts(id).await?;\n\n        let creation_time_field = FieldName::from(CREATION_TIME_FIELD.clone());\n        let creation_time = if let Some(ConvexValue::Float64(f)) = value.get(&creation_time_field) {\n            CreationTime::try_from(*f)?\n        } else {\n            self.tx.next_creation_time.increment()?\n        };\n\n        let document = ResolvedDocument::new(id, creation_time, value)?;\n        SchemaModel::new(self.tx, namespace)\n            .enforce_with_table_mapping(&document, &table_mapping_for_schema.namespace(namespace))\n            .await?;\n        self.tx\n            .apply_validated_write(id, existing_doc, Some(document.into()))?;\n\n        Ok(id.into())\n    }\n\n    pub async fn delete(\n        &mut self,\n        table_id: TabletIdAndTableNumber,\n        table_name: &TableName,\n        developer_id: DeveloperDocumentId,\n    ) -> anyhow::Result<()> {\n        if self\n            .tx\n            .virtual_system_mapping()\n            .is_virtual_table(table_name)\n        {\n            anyhow::bail!(ErrorMetadata::bad_request(\n                \"ReadOnlyTable\",\n                format!(\"{table_name} is a read-only table\"),\n            ));\n        }\n        anyhow::ensure!(\n            bootstrap_system_tables()\n                .iter()\n                .all(|t| t.table_name() != *table_name),\n            \"Cannot import into bootstrap system table {table_name}\"\n        );\n        self.tx\n            .identity\n            .require_operation(DeploymentOp::ImportBackups)?;\n\n        let id = ResolvedDocumentId::new(table_id.tablet_id, developer_id);\n        let existing_doc = self.tx.get_with_ts(id).await?;\n\n        self.tx.apply_validated_write(id, existing_doc, None)?;\n\n        Ok(())\n    }\n}\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/user_facing.rs",
+      "sha": null,
+      "content_sha256": "dc06a024b20a6fae984f8e9c0621a0be889fa5f8597756585e8e106bf06be649",
+      "score": 316,
+      "content": "use std::{\n    cmp,\n    collections::BTreeMap,\n};\n\nuse anyhow::Context;\nuse common::{\n    bootstrap_model::components::ComponentState,\n    components::ComponentId,\n    document::{\n        DeveloperDocument,\n        PackedDocument,\n        PendingDocument,\n    },\n    query::CursorPosition,\n    runtime::Runtime,\n    types::{\n        StableIndexName,\n        WriteTimestamp,\n    },\n    version::Version,\n};\nuse errors::ErrorMetadata;\nuse indexing::index_reader::{\n    BatchKey,\n    RangeRequest,\n};\nuse itertools::Itertools;\nuse value::{\n    DeveloperDocumentId,\n    PendingValue,\n    ResolvedDocumentId,\n    TableName,\n    TableNamespace,\n};\n\nuse crate::{\n    metrics::{\n        log_virtual_table_get,\n        log_virtual_table_query,\n    },\n    query::IndexRangeResponse,\n    transaction::{\n        IndexRangeRequest,\n        MAX_PAGE_SIZE,\n    },\n    unauthorized_error,\n    virtual_tables::VirtualTable,\n    BootstrapComponentsModel,\n    PatchValue,\n    TableModel,\n    Transaction,\n};\n\n// Low-level model struct that represents a \"user facing\" data model\n// on the database. This view differs from the authoritative system\n// state in a few ways:\n//\n//  1. System tables are only visible for `Identity::Admin` or\n//     `Identity::System`.\n//  2. We support virtual tables.\n//  3. The interface is in `DeveloperDocumentId`s, not `ResolvedDocumentId`.\n//  4. We track user size limits for documents, which are more restrictive than\n//     the database's limits.\n//  5. We support branching on the `convex` NPM package's version.\npub struct UserFacingModel<'a, RT: Runtime> {\n    tx: &'a mut Transaction<RT>,\n    namespace: TableNamespace,\n}\n\nimpl<'a, RT: Runtime> UserFacingModel<'a, RT> {\n    pub fn new(tx: &'a mut Transaction<RT>, namespace: TableNamespace) -> Self {\n        Self { tx, namespace }\n    }\n\n    #[fastrace::trace]\n    #[convex_macro::instrument_future]\n    pub async fn get_with_ts(\n        &mut self,\n        id: DeveloperDocumentId,\n        version: Option<Version>,\n    ) -> anyhow::Result<Option<(DeveloperDocument, WriteTimestamp)>> {\n        if !self\n            .tx\n            .table_mapping()\n            .namespace(self.namespace)\n            .table_number_exists()(id.table())\n        {\n            return Ok(None);\n        }\n        let id_ = self.tx.resolve_developer_id(&id, self.namespace)?;\n        let physical_table_name = self\n            .tx\n            .table_mapping()\n            .namespace(self.namespace)\n            .tablet_name(id_.tablet_id)?;\n        if self\n            .tx\n            .virtual_system_mapping()\n            .primary_system_to_virtual_table(&physical_table_name)\n            .is_some()\n        {\n            log_virtual_table_get();\n            VirtualTable::new(self.tx)\n                .get(self.namespace, id, version)\n                .await\n        } else {\n            let table_name = self.tx.table_mapping().tablet_name(id_.tablet_id)?;\n            let result = self.tx.get_inner(id_, table_name).await?;\n            Ok(result.map(|(doc, ts)| (doc.to_developer(), ts)))\n        }\n    }\n\n    /// Returns an error if the component associated with the current namespace\n    /// is unmounted. Should be called in all methods that write to user tables.\n    async fn require_active_component(&mut self) -> anyhow::Result<()> {\n        match self.namespace {\n            TableNamespace::Global => {},\n            TableNamespace::ByComponent(developer_id) => {\n                let component = BootstrapComponentsModel::new(self.tx)\n                    .load_component(ComponentId::Child(developer_id))\n                    .await?\n                    .with_context(|| format!(\"Component not found for id: {developer_id}\"))?;\n\n                match component.state {\n                    ComponentState::Active => {},\n                    ComponentState::Unmounted => {\n                        anyhow::bail!(ErrorMetadata::bad_request(\n                            \"UnmountedComponent\",\n                            \"Cannot perform write operations in an unmounted component. Make sure \\\n                             your component is installed in your `convex.config.ts` file.\",\n                        ));\n                    },\n                }\n            },\n        }\n        Ok(())\n    }\n\n    /// Creates a new document with given value in the specified table.\n    #[fastrace::trace]\n    #[convex_macro::instrument_future]\n    pub async fn insert(\n        &mut self,\n        table: TableName,\n        value: impl Into<PendingValue> + Send,\n    ) -> anyhow::Result<DeveloperDocumentId> {\n        let value = value.into();\n        self.require_active_component().await?;\n        if self.tx.virtual_system_mapping().is_virtual_table(&table) {\n            anyhow::bail!(ErrorMetadata::bad_request(\n                \"ReadOnlyTable\",\n                format!(\"{table} is a read-only table\"),\n            ));\n        }\n\n        let internal_id = self.tx.id_generator.generate_internal();\n\n        let creation_time = self.tx.next_creation_time.increment()?;\n\n        if table.is_system() {\n            anyhow::bail!(ErrorMetadata::bad_request(\n                \"InvalidTableName\",\n                format!(\"Invalid table name {table} starts with metadata prefix '_'\")\n            ));\n        }\n\n        // Note that the index and document store updates within `self.insert_document`\n        // below are fallible, and since the layers above still have access to\n        // the `Transaction` in that case (we only have `&mut self` here, not a\n        // consuming `self`), we need to make sure we leave the transaction in a\n        // consistent state on error.\n        //\n        // It's okay for us to insert the table write here and fail below: At worse the\n        // transaction will contain an insertion for an empty table's `_tables`\n        // record. On the other hand, it's not okay for us to succeed an\n        // insertion into the index/document store and then fail to insert the\n        // table metadata. If the user then subsequently commits that transaction,\n        // they'll have a record that points to a nonexistent table.\n        TableModel::new(self.tx)\n            .insert_table_metadata(self.namespace, &table)\n            .await?;\n        let table_id = self\n            .tx\n            .table_mapping()\n            .namespace(self.namespace)\n            .name_to_id_user_input()(table)?;\n        let document = PendingDocument::new(\n            ResolvedDocumentId::new(\n                table_id.tablet_id,\n                DeveloperDocumentId::new(table_id.table_number, internal_id),\n            ),\n            creation_time,\n            value,\n        )?;\n        let document_id = self.tx.insert_pending_document(document).await?;\n\n        Ok(document_id.into())\n    }\n\n    /// Merges the existing document with the given object. Will overwrite any\n    /// conflicting fields.\n    #[fastrace::trace]\n    #[convex_macro::instrument_future]\n    pub async fn patch(\n        &mut self,\n        id: DeveloperDocumentId,\n        value: PatchValue,\n    ) -> anyhow::Result<PendingDocument> {\n        if self.tx.is_system(self.namespace, id.table())\n            && !(self.tx.identity.is_admin() || self.tx.identity.is_system())\n        {\n            anyhow::bail!(unauthorized_error(\"patch\"))\n        }\n        self.require_active_component().await?;\n\n        let id_ = self.tx.resolve_developer_id(&id, self.namespace)?;\n\n        let new_document = self.tx.patch_inner(id_, value).await?;\n        Ok(new_document)\n    }\n\n    /// Replace the document with the given value.\n    #[fastrace::trace]\n    #[convex_macro::instrument_future]\n    pub async fn replace(\n        &mut self,\n        id: DeveloperDocumentId,\n        value: impl Into<PendingValue> + Send,\n    ) -> anyhow::Result<PendingDocument> {\n        if self.tx.is_system(self.namespace, id.table())\n            && !(self.tx.identity.is_admin() || self.tx.identity.is_system())\n        {\n            anyhow::bail!(unauthorized_error(\"replace\"))\n        }\n        self.require_active_component().await?;\n        let id_ = self.tx.resolve_developer_id(&id, self.namespace)?;\n\n        let new_document = self.tx.replace_inner(id_, value).await?;\n        Ok(new_document)\n    }\n\n    /// Delete the document at the given path -- called from user facing APIs\n    /// (e.g. syscalls)\n    #[fastrace::trace]\n    #[convex_macro::instrument_future]\n    pub async fn delete(&mut self, id: DeveloperDocumentId) -> anyhow::Result<DeveloperDocument> {\n        if self.tx.is_system(self.namespace, id.table())\n            && !(self.tx.identity.is_admin() || self.tx.identity.is_system())\n        {\n            anyhow::bail!(unauthorized_error(\"delete\"))\n        }\n        self.require_active_component().await?;\n\n        let id_ = self.tx.resolve_developer_id(&id, self.namespace)?;\n        let document = self.tx.delete_inner(id_).await?;\n        Ok(document.to_developer())\n    }\n\n    pub fn record_read_document(\n        &mut self,\n        document: &PackedDocument,\n        table_name: &TableName,\n    ) -> anyhow::Result<()> {\n        let component_path = self\n            .tx\n            .must_component_path(ComponentId::from(self.namespace))?;\n        self.tx.reads.record_read_document(\n            component_path,\n            table_name.clone(),\n            document.size(),\n            &self.tx.usage_tracker,\n            &self.tx.virtual_system_mapping,\n            &self.tx.limits,\n        )\n    }\n}\n\nfn start_index_range<RT: Runtime>(\n    tx: &mut Transaction<RT>,\n    request: IndexRangeRequest,\n) -> anyhow::Result<Result<(), RangeRequest>> {\n    if request.interval.is_empty() {\n        return Ok(Ok(()));\n    }\n\n    let max_rows = cmp::min(request.max_rows, MAX_PAGE_SIZE);\n\n    match request.stable_index_name {\n        StableIndexName::Physical(tablet_index_name) => {\n            let index_name = tablet_index_name\n                .clone()\n                .map_table(&tx.table_mapping().tablet_to_name())?;\n            Ok(Err(RangeRequest {\n                index_name: tablet_index_name,\n                printable_index_name: index_name,\n                interval: request.interval.clone(),\n                order: request.order,\n                max_size: max_rows,\n            }))\n        },\n        StableIndexName::Virtual(index_name, tablet_index_name) => {\n            log_virtual_table_query();\n            Ok(Err(RangeRequest {\n                index_name: tablet_index_name,\n                printable_index_name: index_name,\n                interval: request.interval.clone(),\n                order: request.order,\n                max_size: max_rows,\n            }))\n        },\n        StableIndexName::Missing(_) => Ok(Ok(())),\n    }\n}\n\n/// NOTE: returns a page of results. Callers must call record_read_document +\n/// record_indexed_directly for all documents returned from the index stream.\n#[fastrace::trace]\n#[convex_macro::instrument_future]\npub async fn index_range_batch<RT: Runtime>(\n    tx: &mut Transaction<RT>,\n    requests: BTreeMap<BatchKey, IndexRangeRequest>,\n) -> BTreeMap<BatchKey, anyhow::Result<IndexRangeResponse>> {\n    let batch_size = requests.len();\n    let mut results = BTreeMap::new();\n    let mut fetch_requests = BTreeMap::new();\n    for (batch_key, request) in requests {\n        match start_index_range(tx, request) {\n            Err(e) => {\n                results.insert(batch_key, Err(e));\n            },\n            Ok(Ok(())) => {\n                results.insert(\n                    batch_key,\n                    Ok(IndexRangeResponse {\n                        page: vec![],\n                        cursor: CursorPosition::End,\n                    }),\n                );\n            },\n            Ok(Err(request)) => {\n                fetch_requests.insert(batch_key, request);\n            },\n        }\n    }\n\n    let fetch_results = tx\n        .index\n        .range_batch(&fetch_requests.values().collect_vec())\n        .await;\n\n    for (&batch_key, fetch_result) in fetch_requests.keys().zip(fetch_results) {\n        results.insert(batch_key, fetch_result);\n    }\n\n    assert_eq!(results.len(), batch_size);\n    results\n}\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/schema_validations/mod.rs",
+      "sha": null,
+      "content_sha256": "2ca3e66bd2042d398f4b862fded2d80b2ae1be5d7bd34f46665b0765cffa21f7",
+      "score": 300,
+      "content": "pub mod types;\n\nuse std::sync::{\n    Arc,\n    LazyLock,\n};\n\nuse common::{\n    bootstrap_model::schema::SchemaState,\n    document::{\n        ParseDocument,\n        ParsedDocument,\n        CREATION_TIME_FIELD_PATH,\n    },\n    runtime::Runtime,\n};\nuse value::{\n    FieldPath,\n    ResolvedDocumentId,\n    TableName,\n    TableNamespace,\n};\n\nuse self::types::ValidationState;\nuse crate::{\n    system_tables::{\n        SystemIndex,\n        SystemTable,\n    },\n    SchemaModel,\n    SchemaValidationMetadata,\n    SchemaValidationProgress,\n    SchemaValidationProgressModel,\n    SystemMetadataModel,\n    Transaction,\n};\n\npub const SCHEMA_VALIDATIONS_TABLE: TableName = TableName::const_new(\"_schema_validations\");\n\npub static SCHEMA_VALIDATIONS_BY_SCHEMA_ID_AND_TABLE_NAME: LazyLock<\n    SystemIndex<SchemaValidationTable>,\n> = LazyLock::new(|| {\n    SystemIndex::new(\n        \"by_schema_id_and_table_name\",\n        [\n            &SCHEMA_ID_FIELD,\n            &TABLE_NAME_FIELD,\n            &CREATION_TIME_FIELD_PATH,\n        ],\n    )\n    .unwrap()\n});\n\nstatic SCHEMA_ID_FIELD: LazyLock<FieldPath> =\n    LazyLock::new(|| \"schemaId\".parse().expect(\"invalid schemaId field\"));\n\nstatic TABLE_NAME_FIELD: LazyLock<FieldPath> =\n    LazyLock::new(|| \"tableName\".parse().expect(\"invalid tableName field\"));\n\npub struct SchemaValidationTable;\n\nimpl SystemTable for SchemaValidationTable {\n    type Metadata = types::SchemaValidationMetadata;\n\n    const TABLE_NAME: TableName = SCHEMA_VALIDATIONS_TABLE;\n\n    fn indexes() -> Vec<SystemIndex<Self>> {\n        vec![SCHEMA_VALIDATIONS_BY_SCHEMA_ID_AND_TABLE_NAME.clone()]\n    }\n}\n\n/// Worker updates apply only to the pending attempt identified by its document\n/// ID.\n#[derive(Clone)]\npub enum ValidationAttemptUpdate {\n    StartWalk {\n        total_docs: Option<u64>,\n    },\n    RecordProgress {\n        additional_docs_validated: u64,\n        total_docs: Option<u64>,\n    },\n    MarkValid,\n    MarkFailed {\n        error: String,\n    },\n}\n\npub struct SchemaValidationWithProgress {\n    pub validation: SchemaValidationMetadata,\n    pub progress: SchemaValidationProgress,\n}\n\npub struct SchemaValidationModel<'a, RT: Runtime> {\n    tx: &'a mut Transaction<RT>,\n    namespace: TableNamespace,\n}\n\nimpl<'a, RT: Runtime> SchemaValidationModel<'a, RT> {\n    pub fn new(tx: &'a mut Transaction<RT>, namespace: TableNamespace) -> Self {\n        Self { tx, namespace }\n    }\n\n    /// Runs at startup. This version of the backend does not check writes\n    /// against staged validators, so it cannot keep a `Valid` staged attempt\n    /// truthful while it serves writes. Every attempt is deleted: enforced ones\n    /// are recreated by the schema worker when it resumes the pending schema,\n    /// and staged ones for the active schema restart as `Pending` so a later\n    /// upgrade re-proves them instead of trusting stale results.\n    pub async fn reset_for_compatibility(tx: &mut Transaction<RT>) -> anyhow::Result<()> {\n        for namespace in tx\n            .table_mapping()\n            .namespaces_for_name(&SCHEMA_VALIDATIONS_TABLE)\n        {\n            let active = SchemaModel::new(tx, namespace)\n                .get_by_state(SchemaState::Active)\n                .await?\n                .map(|(id, _)| id);\n            let validations = tx\n                .query_system(namespace, &SystemIndex::<SchemaValidationTable>::by_id())?\n                .all()\n                .await?;\n            let mut model = SchemaValidationModel::new(tx, namespace);\n            for validation in validations {\n                model.delete_attempt(validation.id()).await?;\n                if let Some(schema_id) = active\n                    && schema_id.developer_id == validation.schema_id\n                    && validation.validator_hash.is_some()\n                {\n                    model\n                        .start_table_validation(\n                            schema_id,\n                            validation.table_name.clone(),\n                            validation.validator_hash.clone(),\n                            None,\n                        )\n                        .await?;\n                }\n            }\n        }\n        Ok(())\n    }\n\n    pub async fn validations_for_schema(\n        &mut self,\n        schema_id: ResolvedDocumentId,\n    ) -> anyhow::Result<Vec<ParsedDocument<SchemaValidationMetadata>>> {\n        Ok(self\n            .tx\n            .query_system(\n                self.namespace,\n                &*SCHEMA_VALIDATIONS_BY_SCHEMA_ID_AND_TABLE_NAME,\n            )?\n            .eq(&[schema_id.developer_id.encode_into(&mut Default::default())])?\n            .all()\n            .await?\n            .into_iter()\n            .map(|validation| (*validation).clone())\n            .collect())\n    }\n\n    /// The validation for one table under `schema_id`, if any.\n    pub async fn validation_metadata_for_table(\n        &mut self,\n        schema_id: ResolvedDocumentId,\n        table_name: &TableName,\n    ) -> anyhow::Result<Option<ParsedDocument<SchemaValidationMetadata>>> {\n        Ok(self\n            .tx\n            .query_system(\n                self.namespace,\n                &*SCHEMA_VALIDATIONS_BY_SCHEMA_ID_AND_TABLE_NAME,\n            )?\n            .eq(&[\n                schema_id.developer_id.encode_into(&mut Default::default()),\n                table_name,\n            ])?\n            .unique()\n            .await?\n            .map(Arc::unwrap_or_clone))\n    }\n\n    /// Create (or reset) the validation for one table under `schema_id`, in\n    /// state `Pending` with zero progress. Its fresh document ID fences\n    /// workers holding a previous attempt's snapshot.\n    pub async fn start_table_validation(\n        &mut self,\n        schema_id: ResolvedDocumentId,\n        table_name: TableName,\n        validator_hash: Option<String>,\n        total_docs: Option<u64>,\n    ) -> anyhow::Result<ResolvedDocumentId> {\n        if let Some(existing) = self\n            .validation_metadata_for_table(schema_id, &table_name)\n            .await?\n        {\n            self.delete_attempt(existing.id()).await?;\n        }\n        let metadata = SchemaValidationMetadata {\n            schema_id: schema_id.developer_id,\n            table_name,\n            validator_hash,\n            state: ValidationState::Pending,\n        };\n        let id = SystemMetadataModel::new(self.tx, self.namespace)\n            .insert(&SCHEMA_VALIDATIONS_TABLE, metadata.try_into()?)\n            .await?;\n        SchemaValidationProgressModel::new(self.tx, self.namespace)\n            .create(id, 0, total_docs)\n            .await?;\n        Ok(id)\n    }\n\n    /// The document ID binds the update to the snapshot captured by the worker.\n    /// A retry replaces the validation, so stale workers return false. Counter\n    /// flushes read this validation and write only progress: a committed\n    /// failure cancels an in-flight flush without counter updates\n    /// invalidating failure writes.\n    pub async fn update_attempt(\n        &mut self,\n        attempt_id: ResolvedDocumentId,\n        update: ValidationAttemptUpdate,\n    ) -> anyhow::Result<bool> {\n        let Some(doc) = self.tx.get(attempt_id).await? else {\n            return Ok(false);\n        };\n        let validation: ParsedDocument<SchemaValidationMetadata> = doc.parse()?;\n        let (id, mut metadata) = validation.into_id_and_value();\n        match metadata.state {\n            ValidationState::Pending => {},\n            ValidationState::Valid | ValidationState::Failed { .. } => return Ok(false),\n        }\n        match update {\n            ValidationAttemptUpdate::StartWalk { total_docs } => {\n                SchemaValidationProgressModel::new(self.tx, self.namespace)\n                    .reset(id, total_docs)\n                    .await?;\n                return Ok(true);\n            },\n            ValidationAttemptUpdate::RecordProgress {\n                additional_docs_validated,\n                total_docs,\n            } => {\n                SchemaValidationProgressModel::new(self.tx, self.namespace)\n                    .record(id, additional_docs_validated, total_docs)\n                    .await?;\n                return Ok(true);\n            },\n            ValidationAttemptUpdate::MarkValid => metadata.state = ValidationState::Valid,\n            ValidationAttemptUpdate::MarkFailed { error } => {\n                metadata.state = ValidationState::Failed { error }\n            },\n        }\n        SystemMetadataModel::new(self.tx, self.namespace)\n            .replace(id, metadata.try_into()?)\n            .await?;\n        Ok(true)\n    }\n\n    pub async fn progress(\n        &mut self,\n        id: ResolvedDocumentId,\n    ) -> anyhow::Result<SchemaValidationProgress> {\n        Ok(SchemaValidationProgressModel::new(self.tx, self.namespace)\n            .must_get(id)\n            .await?\n            .into_value())\n    }\n\n    pub async fn validations_with_progress(\n        &mut self,\n        schema_id: ResolvedDocumentId,\n    ) -> anyhow::Result<Vec<SchemaValidationWithProgress>> {\n        let mut result = vec![];\n        for validation in self.validations_for_schema(schema_id).await? {\n            let counters = self.progress(validation.id()).await?;\n            result.push(SchemaValidationWithProgress {\n                validation: validation.into_value(),\n                progress: counters,\n            });\n        }\n        Ok(result)\n    }\n\n    async fn delete_attempt(&mut self, id: ResolvedDocumentId) -> anyhow::Result<()> {\n        SchemaValidationProgressModel::new(self.tx, self.namespace)\n            .delete(id)\n            .await?;\n        SystemMetadataModel::new(self.tx, self.namespace)\n            .delete(id)\n            .await?;\n        Ok(())\n    }\n\n    /// Write-time invalidation applies to both pending and valid attempts.\n    /// An already-failed validation keeps its first error; a missing validation\n    /// is canceled.\n    pub async fn mark_failed(\n        &mut self,\n        schema_id: ResolvedDocumentId,\n        table_name: &TableName,\n        error: String,\n    ) -> anyhow::Result<bool> {\n        let Some(validation) = self\n            .validation_metadata_for_table(schema_id, table_name)\n            .await?\n        else {\n            return Ok(false);\n        };\n        let (id, mut metadata) = validation.into_id_and_value();\n        match metadata.state {\n            ValidationState::Failed { .. } => {},\n            ValidationState::Pending | ValidationState::Valid => {\n                metadata.state = ValidationState::Failed { error };\n                SystemMetadataModel::new(self.tx, self.namespace)\n                    .replace(id, metadata.try_into()?)\n                    .await?;\n            },\n        }\n        Ok(true)\n    }\n\n    pub async fn delete_validations_for_schema(\n        &mut self,\n        schema_id: ResolvedDocumentId,\n    ) -> anyhow::Result<()> {\n        for validation in self.validations_for_schema(schema_id).await? {\n            self.delete_attempt(validation.id()).await?;\n        }\n        Ok(())\n    }\n}\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/schema_validation_progress/types.rs",
+      "sha": null,
+      "content_sha256": "83629a9659e7156b1f39376a7cf2ffe760a7154de9693137ebd33cfd3a3e2991",
+      "score": 300,
+      "content": "use serde::{\n    Deserialize,\n    Serialize,\n};\nuse value::{\n    codegen_convex_serialization,\n    DeveloperDocumentId,\n};\n\n/// Schema validation progress is written by the SchemaWorker for each\n/// `Pending` attempt in `_schema_validations`. There is at most one progress\n/// document per attempt, and every `Pending` attempt has one. Counters are\n/// separate from attempts so flushing progress cannot invalidate a document\n/// transaction that records a validation failure.\n///\n/// Documents keyed by `schemaId` instead of `validationId` are the aggregate\n/// format written before attempts existed; see `legacy::types`.\n#[derive(Clone, Debug, Eq, PartialEq)]\npub struct SchemaValidationProgress {\n    /// The attempt these counters belong to. Should correspond to a document in\n    /// the `_schema_validations` table.\n    pub validation_id: DeveloperDocumentId,\n    /// The number of documents in the attempt's table validated so far.\n    pub num_docs_validated: u64,\n    /// The number of total documents that need to be validated. Note this is\n    /// approximate because there could be changes since the time we wrote this\n    /// value from the table summary when the attempt was created. It's\n    /// possible for num_docs_validated to exceed total_docs. This field is None\n    /// if there is no table summary available.\n    pub total_docs: Option<u64>,\n}\n\n#[derive(Serialize, Deserialize)]\n#[serde(rename_all = \"camelCase\")]\npub struct SerializedSchemaValidationProgress {\n    pub validation_id: String,\n    pub num_docs_validated: i64,\n    pub total_docs: Option<i64>,\n}\n\nimpl TryFrom<SchemaValidationProgress> for SerializedSchemaValidationProgress {\n    type Error = anyhow::Error;\n\n    fn try_from(value: SchemaValidationProgress) -> anyhow::Result<Self> {\n        Ok(Self {\n            validation_id: value.validation_id.to_string(),\n            num_docs_validated: value.num_docs_validated.try_into()?,\n            total_docs: value.total_docs.map(|v| v.try_into()).transpose()?,\n        })\n    }\n}\n\nimpl TryFrom<SerializedSchemaValidationProgress> for SchemaValidationProgress {\n    type Error = anyhow::Error;\n\n    fn try_from(value: SerializedSchemaValidationProgress) -> anyhow::Result<Self> {\n        Ok(Self {\n            validation_id: value.validation_id.parse()?,\n            num_docs_validated: value.num_docs_validated.try_into()?,\n            total_docs: value.total_docs.map(|v| v.try_into()).transpose()?,\n        })\n    }\n}\ncodegen_convex_serialization!(SchemaValidationProgress, SerializedSchemaValidationProgress);\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/schema_validation_progress/mod.rs",
+      "sha": null,
+      "content_sha256": "eb5ec512a97887727bc33aed19cded92b3d54b9aaa900d710843eea5140c709e",
+      "score": 300,
+      "content": "pub mod legacy;\npub mod types;\n\nuse std::sync::{\n    Arc,\n    LazyLock,\n};\n\nuse anyhow::Context as _;\nuse common::{\n    document::{\n        ParsedDocument,\n        CREATION_TIME_FIELD_PATH,\n    },\n    runtime::Runtime,\n};\nuse value::{\n    FieldPath,\n    ResolvedDocumentId,\n    TableName,\n    TableNamespace,\n};\n\nuse crate::{\n    system_tables::{\n        SystemIndex,\n        SystemTable,\n    },\n    SchemaValidationProgress,\n    SystemMetadataModel,\n    Transaction,\n};\n\npub const SCHEMA_VALIDATION_PROGRESS_TABLE: TableName =\n    TableName::const_new(\"_schema_validation_progress\");\npub static SCHEMA_VALIDATION_PROGRESS_BY_VALIDATION_ID: LazyLock<\n    SystemIndex<SchemaValidationProgressTable>,\n> = LazyLock::new(|| {\n    SystemIndex::new(\n        \"by_validation_id\",\n        [&VALIDATION_ID_FIELD, &CREATION_TIME_FIELD_PATH],\n    )\n    .unwrap()\n});\nstatic VALIDATION_ID_FIELD: LazyLock<FieldPath> =\n    LazyLock::new(|| \"validationId\".parse().expect(\"invalid validationId field\"));\n\npub struct SchemaValidationProgressTable;\nimpl SystemTable for SchemaValidationProgressTable {\n    type Metadata = SchemaValidationProgress;\n\n    const TABLE_NAME: TableName = SCHEMA_VALIDATION_PROGRESS_TABLE;\n\n    fn indexes() -> Vec<SystemIndex<Self>> {\n        vec![SCHEMA_VALIDATION_PROGRESS_BY_VALIDATION_ID.clone()]\n    }\n}\n\npub struct SchemaValidationProgressModel<'a, RT: Runtime> {\n    tx: &'a mut Transaction<RT>,\n    namespace: TableNamespace,\n}\nimpl<'a, RT: Runtime> SchemaValidationProgressModel<'a, RT> {\n    pub fn new(tx: &'a mut Transaction<RT>, namespace: TableNamespace) -> Self {\n        Self { tx, namespace }\n    }\n\n    pub async fn get(\n        &mut self,\n        validation_id: ResolvedDocumentId,\n    ) -> anyhow::Result<Option<ParsedDocument<SchemaValidationProgress>>> {\n        Ok(self\n            .tx\n            .query_system(\n                self.namespace,\n                &*SCHEMA_VALIDATION_PROGRESS_BY_VALIDATION_ID,\n            )?\n            .eq(&[validation_id\n                .developer_id\n                .encode_into(&mut Default::default())])?\n            .unique()\n            .await?\n            .map(Arc::unwrap_or_clone))\n    }\n\n    pub async fn must_get(\n        &mut self,\n        validation_id: ResolvedDocumentId,\n    ) -> anyhow::Result<ParsedDocument<SchemaValidationProgress>> {\n        self.get(validation_id)\n            .await?\n            .context(\"Validation attempt is missing its progress\")\n    }\n\n    pub(crate) async fn create(\n        &mut self,\n        validation_id: ResolvedDocumentId,\n        num_docs_validated: u64,\n        total_docs: Option<u64>,\n    ) -> anyhow::Result<()> {\n        anyhow::ensure!(\n            self.get(validation_id).await?.is_none(),\n            \"Validation attempt {validation_id} already has progress\"\n        );\n        let metadata = SchemaValidationProgress {\n            validation_id: validation_id.developer_id,\n            num_docs_validated,\n            total_docs,\n        };\n        SystemMetadataModel::new(self.tx, self.namespace)\n            .insert(&SCHEMA_VALIDATION_PROGRESS_TABLE, metadata.try_into()?)\n            .await?;\n        Ok(())\n    }\n\n    pub(crate) async fn reset(\n        &mut self,\n        validation_id: ResolvedDocumentId,\n        total_docs: Option<u64>,\n    ) -> anyhow::Result<()> {\n        let doc = self.must_get(validation_id).await?;\n        let (id, mut metadata) = doc.into_id_and_value();\n        metadata.num_docs_validated = 0;\n        metadata.total_docs = total_docs;\n        SystemMetadataModel::new(self.tx, self.namespace)\n            .replace(id, metadata.try_into()?)\n            .await?;\n        Ok(())\n    }\n\n    pub(crate) async fn record(\n        &mut self,\n        validation_id: ResolvedDocumentId,\n        count: u64,\n        total_docs: Option<u64>,\n    ) -> anyhow::Result<()> {\n        let doc = self.must_get(validation_id).await?;\n        let (id, mut metadata) = doc.into_id_and_value();\n        metadata.num_docs_validated += count;\n        metadata.total_docs = metadata.total_docs.or(total_docs);\n        SystemMetadataModel::new(self.tx, self.namespace)\n            .replace(id, metadata.try_into()?)\n            .await?;\n        Ok(())\n    }\n\n    pub(crate) async fn delete(&mut self, validation_id: ResolvedDocumentId) -> anyhow::Result<()> {\n        if let Some(doc) = self.get(validation_id).await? {\n            SystemMetadataModel::new(self.tx, self.namespace)\n                .delete(doc.id())\n                .await?;\n        }\n        Ok(())\n    }\n}\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/schema_validations/types.rs",
+      "sha": null,
+      "content_sha256": "9137c6864db34c045bd2f2e0af2828ae23c8318493b2ee1d392fb8fd01f4f501",
+      "score": 300,
+      "content": "use serde::{\n    Deserialize,\n    Serialize,\n};\nuse value::{\n    codegen_convex_serialization,\n    DeveloperDocumentId,\n    TableName,\n};\n\n/// One row per (schema, table) tracking the validation of that table's\n/// documents against a validator: the enforced validator while the schema is\n/// `Pending` (rows are deleted when the schema resolves), or a staged\n/// validator while the schema is `Active`.\n#[derive(Clone, Debug, Eq, PartialEq)]\npub struct SchemaValidationMetadata {\n    /// The schema whose validator this row tracks.\n    pub schema_id: DeveloperDocumentId,\n    /// The table being validated.\n    pub table_name: TableName,\n    /// Staged validator hash. Matching validators carry nonfailed state into a\n    /// fresh attempt on activation; failed validators restart.\n    pub validator_hash: Option<String>,\n    pub state: ValidationState,\n}\n\n#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]\n#[serde(tag = \"state\", rename_all = \"camelCase\")]\npub enum ValidationState {\n    /// Not all documents have been checked yet.\n    Pending,\n    /// Every document conforms; staged validators remain valid through\n    /// write-time checks until a violation fails the attempt.\n    Valid,\n    /// A document failed the validator.\n    Failed { error: String },\n}\n\n#[derive(Serialize, Deserialize)]\n#[serde(rename_all = \"camelCase\")]\npub struct SerializedSchemaValidationMetadata {\n    pub schema_id: String,\n    pub table_name: String,\n    #[serde(skip_serializing_if = \"Option::is_none\")]\n    pub validator_hash: Option<String>,\n    pub state: ValidationState,\n}\n\nimpl TryFrom<SchemaValidationMetadata> for SerializedSchemaValidationMetadata {\n    type Error = anyhow::Error;\n\n    fn try_from(metadata: SchemaValidationMetadata) -> anyhow::Result<Self> {\n        Ok(SerializedSchemaValidationMetadata {\n            schema_id: metadata.schema_id.to_string(),\n            table_name: metadata.table_name.to_string(),\n            validator_hash: metadata.validator_hash,\n            state: metadata.state,\n        })\n    }\n}\n\nimpl TryFrom<SerializedSchemaValidationMetadata> for SchemaValidationMetadata {\n    type Error = anyhow::Error;\n\n    fn try_from(serialized: SerializedSchemaValidationMetadata) -> anyhow::Result<Self> {\n        Ok(SchemaValidationMetadata {\n            schema_id: serialized.schema_id.parse()?,\n            table_name: serialized.table_name.parse()?,\n            validator_hash: serialized.validator_hash,\n            state: serialized.state,\n        })\n    }\n}\n\ncodegen_convex_serialization!(SchemaValidationMetadata, SerializedSchemaValidationMetadata);\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/schema_validation_progress/legacy/mod.rs",
+      "sha": null,
+      "content_sha256": "d7d5a176baf5ae4982f1497d8b8b6568dd9a991d6f1414e1d6a4c7363a00ecfb",
+      "score": 298,
+      "content": "pub mod types;\n\npub use types::SchemaValidationProgressMetadata as LegacySchemaValidationProgressMetadata;\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/schema_validation_progress/legacy/types.rs",
+      "sha": null,
+      "content_sha256": "9003186b88860c25d897c76502db25e52ca46fb2df8a3f16fb97361e89780478",
+      "score": 298,
+      "content": "use serde::{\n    Deserialize,\n    Serialize,\n};\nuse value::{\n    codegen_convex_serialization,\n    DeveloperDocumentId,\n};\n\n#[derive(Clone, Debug, Eq, PartialEq)]\n/// Aggregate progress format keyed by schema that predates validation\n/// attempts. Retained so the verifier can parse documents in historical\n/// snapshots, which may only exist for `Pending` and `Validated` schemas.\npub struct SchemaValidationProgressMetadata {\n    /// The ID of the schema being validated. Should correspond to a document in\n    /// the _schemas table.\n    pub schema_id: DeveloperDocumentId,\n    /// The number of documents that have been validated so far.\n    pub num_docs_validated: u64,\n    /// The number of total documents that need to be validated. Note this is\n    /// approximate because there could be changes since the time we wrote this\n    /// value from the table summary when the schema is submitted as pending.\n    /// It's possible for num_docs_validated to exceed total_docs.\n    /// This field is None if there is no table summary available.\n    pub total_docs: Option<u64>,\n}\n\n#[derive(Serialize, Deserialize)]\n#[serde(rename_all = \"camelCase\")]\npub struct SerializedSchemaValidationProgressMetadata {\n    pub schema_id: String,\n    pub num_docs_validated: i64,\n    pub total_docs: Option<i64>,\n}\n\nimpl TryFrom<SchemaValidationProgressMetadata> for SerializedSchemaValidationProgressMetadata {\n    type Error = anyhow::Error;\n\n    fn try_from(metadata: SchemaValidationProgressMetadata) -> anyhow::Result<Self> {\n        Ok(SerializedSchemaValidationProgressMetadata {\n            schema_id: metadata.schema_id.to_string(),\n            num_docs_validated: metadata.num_docs_validated.try_into()?,\n            total_docs: metadata.total_docs.map(|x| x.try_into()).transpose()?,\n        })\n    }\n}\n\nimpl TryFrom<SerializedSchemaValidationProgressMetadata> for SchemaValidationProgressMetadata {\n    type Error = anyhow::Error;\n\n    fn try_from(serialized: SerializedSchemaValidationProgressMetadata) -> anyhow::Result<Self> {\n        Ok(SchemaValidationProgressMetadata {\n            schema_id: serialized.schema_id.parse()?,\n            num_docs_validated: serialized.num_docs_validated.try_into()?,\n            total_docs: serialized.total_docs.map(|x| x.try_into()).transpose()?,\n        })\n    }\n}\n\ncodegen_convex_serialization!(\n    SchemaValidationProgressMetadata,\n    SerializedSchemaValidationProgressMetadata\n);\n"
+    },
+    {
+      "path": "npm-packages/private-demos/waitlist/.claude/skills/convex-setup-auth/agents/openai.yaml",
+      "sha": null,
+      "content_sha256": "1a384a83bd4c1b6b68f7ec6580b4de7b70d4572dd150c2e0994048bf20295dc3",
+      "score": 258,
+      "content": "interface:\n  display_name: \"Convex Setup Auth\"\n  short_description:\n    \"Set up Convex auth, user identity mapping, and access control.\"\n  icon_small: \"./assets/icon.svg\"\n  icon_large: \"./assets/icon.svg\"\n  brand_color: \"#2563EB\"\n  default_prompt:\n    \"Set up authentication for this Convex app. Figure out the provider first,\n    then wire up the user model, identity mapping, and access control with the\n    smallest solid implementation.\"\n\npolicy:\n  allow_implicit_invocation: true\n"
+    },
+    {
+      "path": "npm-packages/private-demos/waitlist/.agents/skills/convex-setup-auth/agents/openai.yaml",
+      "sha": null,
+      "content_sha256": "1a384a83bd4c1b6b68f7ec6580b4de7b70d4572dd150c2e0994048bf20295dc3",
+      "score": 258,
+      "content": "interface:\n  display_name: \"Convex Setup Auth\"\n  short_description:\n    \"Set up Convex auth, user identity mapping, and access control.\"\n  icon_small: \"./assets/icon.svg\"\n  icon_large: \"./assets/icon.svg\"\n  brand_color: \"#2563EB\"\n  default_prompt:\n    \"Set up authentication for this Convex app. Figure out the provider first,\n    then wire up the user model, identity mapping, and access control with the\n    smallest solid implementation.\"\n\npolicy:\n  allow_implicit_invocation: true\n"
+    },
+    {
+      "path": "npm-packages/demos/dall-e-storage-action/package.json",
+      "sha": null,
+      "content_sha256": "9d90d9edaeb96c55f733bcef6a4ac64cb620f0be351619b7c138c333098b5619",
+      "score": 256,
+      "content": "{\n  \"name\": \"dall-e-storage-action\",\n  \"version\": \"0.0.0\",\n  \"scripts\": {\n    \"dev\": \"convex dev --start 'vite --open'\",\n    \"build\": \"tsc --noEmit && vite build\"\n  },\n  \"dependencies\": {\n    \"convex\": \"workspace:*\",\n    \"openai\": \"^6.0.0\",\n    \"react\": \"^18.0.0\",\n    \"react-dom\": \"^18.0.0\"\n  },\n  \"devDependencies\": {\n    \"@types/babel__core\": \"^7.20.0\",\n    \"@types/node\": \"^18.17.0\",\n    \"@types/react\": \"^18.0.0\",\n    \"@types/react-dom\": \"^18.0.0\",\n    \"@vitejs/plugin-react\": \"^4.2.1\",\n    \"typescript\": \"~5.0.3\",\n    \"vite\": \"^6.4.3\"\n  }\n}\n"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/sveltekit/.claude/skills/convex-setup-auth/agents/openai.yaml",
+      "sha": null,
+      "content_sha256": "94c667f99cd028f090a1b1e4b4b8282d067f5a0e6ba3de0ba4574d74b97f5809",
+      "score": 256,
+      "content": "interface:\n  display_name: \"Convex Setup Auth\"\n  short_description: \"Set up Convex auth, user identity mapping, and access control.\"\n  icon_small: \"./assets/icon.svg\"\n  icon_large: \"./assets/icon.svg\"\n  brand_color: \"#2563EB\"\n  default_prompt: \"Set up authentication for this Convex app. Figure out the provider first, then wire up the user model, identity mapping, and access control with the smallest solid implementation.\"\n\npolicy:\n  allow_implicit_invocation: true\n"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/sveltekit/.agents/skills/convex-setup-auth/agents/openai.yaml",
+      "sha": null,
+      "content_sha256": "94c667f99cd028f090a1b1e4b4b8282d067f5a0e6ba3de0ba4574d74b97f5809",
+      "score": 256,
+      "content": "interface:\n  display_name: \"Convex Setup Auth\"\n  short_description: \"Set up Convex auth, user identity mapping, and access control.\"\n  icon_small: \"./assets/icon.svg\"\n  icon_large: \"./assets/icon.svg\"\n  brand_color: \"#2563EB\"\n  default_prompt: \"Set up authentication for this Convex app. Figure out the provider first, then wire up the user model, identity mapping, and access control with the smallest solid implementation.\"\n\npolicy:\n  allow_implicit_invocation: true\n"
+    },
+    {
+      "path": "npm-packages/tests/component-tests/projects/http_actions/package.json",
+      "sha": null,
+      "content_sha256": "c0590e629d4ab096f71fa7a21ee2d5f014cbe90ffd020be2145c6fa0145c9aca",
+      "score": 252,
+      "content": "{\n  \"name\": \"component-tests-http-actions\",\n  \"version\": \"0.0.0\",\n  \"dependencies\": {\n    \"convex\": \"workspace:*\",\n    \"prettier\": \"3.8.1\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"~5.0.3\",\n    \"@types/node\": \"^18.17.0\"\n  },\n  \"scripts\": {\n    \"build\": \"\",\n    \"test\": \"tsc -p convex\"\n  }\n}\n"
+    },
+    {
+      "path": "npm-packages/demo_browser_tests/package.json",
+      "sha": null,
+      "content_sha256": "27fded45f7645d74bffd14e91b79e214654dbf3d70221c6683aa8df0c2d28805",
+      "score": 251,
+      "content": "{\n  \"name\": \"demo_browser_tests\",\n  \"version\": \"1.0.0\",\n  \"type\": \"module\",\n  \"main\": \"index.js\",\n  \"license\": \"MIT\",\n  \"dependencies\": {\n    \"puppeteer\": \"^24.0.0\",\n    \"@convex-dev/platform\": \"workspace:*\",\n    \"commander\": \"^14.0.3\"\n  },\n  \"scripts\": {\n    \"postinstall\": \"node ./install-browser.mjs\",\n    \"build\": \"tsc\",\n    \"test-relational-data-modeling\": \"node ./dist/relational-data-modeling.js\",\n    \"test-users-and-auth\": \"node ./dist/users-and-auth.js\",\n    \"test-tutorial\": \"node ./dist/tutorial.js\",\n    \"test-sessions\": \"node ./dist/sessions.js\",\n    \"test-create-react-app\": \"node  ./dist/create-react-app.js\",\n    \"test-dashboard-production-provision\": \"node ./dist/dashboard-production-provision.js\",\n    \"test-dashboard-redirects-brand-new\": \"node ./dist/dashboard-redirects-brand-new.js\",\n    \"test-dashboard-redirects-last-viewed\": \"node ./dist/dashboard-redirects-last-viewed.js\",\n    \"test-platform\": \"node ./dist/test_platform.js\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^18.17.0\",\n    \"typescript\": \"^5.9.2\"\n  },\n  \"overrides\": {\n    \"js-yaml@>=4.0.0 <4.1.1\": \"4.1.1\"\n  }\n}\n"
+    },
+    {
+      "path": "npm-packages/docs/src/theme/ApiExplorer/Authorization/index.tsx",
+      "sha": null,
+      "content_sha256": "ec926b1a4817eab227abe24c986789c8fb79e0672c1e9fd29fd9a7dce63faa51",
+      "score": 248,
+      "content": "/*\n * Ejected to always render the security scheme selector, including when an\n * operation has a single scheme.\n */\n\nimport React from \"react\";\n\nimport { translate } from \"@docusaurus/Translate\";\nimport FormItem from \"@theme/ApiExplorer/FormItem\";\nimport FormSelect from \"@theme/ApiExplorer/FormSelect\";\nimport FormTextInput from \"@theme/ApiExplorer/FormTextInput\";\nimport { useTypedDispatch, useTypedSelector } from \"@theme/ApiItem/hooks\";\n\nimport {\n  setAuthData,\n  setSelectedAuth,\n} from \"docusaurus-theme-openapi-docs/lib/theme/ApiExplorer/Authorization/slice\";\n\nfunction Authorization() {\n  const data = useTypedSelector((state: any) => state.auth.data);\n  const options = useTypedSelector((state: any) => state.auth.options);\n  const selected = useTypedSelector((state: any) => state.auth.selected);\n\n  const dispatch = useTypedDispatch();\n\n  if (selected === undefined) {\n    return null;\n  }\n\n  const selectedAuth = options[selected];\n\n  const optionKeys = Object.keys(options);\n\n  return (\n    <div>\n      <FormItem>\n        <FormSelect\n          label={translate({\n            id: \"theme.openapi.auth.securityScheme\",\n            message: \"Security Scheme\",\n          })}\n          options={optionKeys}\n          value={selected}\n          onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {\n            dispatch(setSelectedAuth(e.target.value));\n          }}\n        />\n      </FormItem>\n      {selectedAuth.map((a: any) => {\n        if (a.type === \"http\" && a.scheme === \"bearer\") {\n          return (\n            <FormItem key={a.key + \"-bearer\"}>\n              <FormTextInput\n                label={translate({\n                  id: \"theme.openapi.auth.bearerToken\",\n                  message: \"Bearer Token\",\n                })}\n                placeholder={translate({\n                  id: \"theme.openapi.auth.bearerToken\",\n                  message: \"Bearer Token\",\n                })}\n                password\n                value={data[a.key].token ?? \"\"}\n                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {\n                  const value = e.target.value;\n                  dispatch(\n                    setAuthData({\n                      scheme: a.key,\n                      key: \"token\",\n                      value: value ? value : undefined,\n                    }),\n                  );\n                }}\n              />\n            </FormItem>\n          );\n        }\n\n        if (a.type === \"oauth2\") {\n          return (\n            <FormItem key={a.key + \"-oauth2\"}>\n              <FormTextInput\n                label={translate({\n                  id: \"theme.openapi.auth.bearerToken\",\n                  message: \"Bearer Token\",\n                })}\n                placeholder={translate({\n                  id: \"theme.openapi.auth.bearerToken\",\n                  message: \"Bearer Token\",\n                })}\n                password\n                value={data[a.key].token ?? \"\"}\n                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {\n                  const value = e.target.value;\n                  dispatch(\n                    setAuthData({\n                      scheme: a.key,\n                      key: \"token\",\n                      value: value ? value : undefined,\n                    }),\n                  );\n                }}\n              />\n            </FormItem>\n          );\n        }\n\n        if (a.type === \"http\" && a.scheme === \"basic\") {\n          return (\n            <React.Fragment key={a.key + \"-basic\"}>\n              <FormItem>\n                <FormTextInput\n                  label={translate({\n                    id: \"theme.openapi.auth.username\",\n                    message: \"Username\",\n                  })}\n                  placeholder={translate({\n                    id: \"theme.openapi.auth.username\",\n                    message: \"Username\",\n                  })}\n                  value={data[a.key].username ?? \"\"}\n                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {\n                    const value = e.target.value;\n                    dispatch(\n                      setAuthData({\n                        scheme: a.key,\n                        key: \"username\",\n                        value: value ? value : undefined,\n                      }),\n                    );\n                  }}\n                />\n              </FormItem>\n              <FormItem>\n                <FormTextInput\n                  label={translate({\n                    id: \"theme.openapi.auth.password\",\n                    message: \"Password\",\n                  })}\n                  placeholder={translate({\n                    id: \"theme.openapi.auth.password\",\n                    message: \"Password\",\n                  })}\n                  password\n                  value={data[a.key].password ?? \"\"}\n                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {\n                    const value = e.target.value;\n                    dispatch(\n                      setAuthData({\n                        scheme: a.key,\n                        key: \"password\",\n                        value: value ? value : undefined,\n                      }),\n                    );\n                  }}\n                />\n              </FormItem>\n            </React.Fragment>\n          );\n        }\n\n        if (a.type === \"apiKey\") {\n          return (\n            <FormItem key={a.key + \"-apikey\"}>\n              <FormTextInput\n                label={`${a.key}`}\n                placeholder={`${a.key}`}\n                password\n                value={data[a.key].apiKey ?? \"\"}\n                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {\n                  const value = e.target.value;\n                  dispatch(\n                    setAuthData({\n                      scheme: a.key,\n                      key: \"apiKey\",\n                      value: value ? value : undefined,\n                    }),\n                  );\n                }}\n              />\n            </FormItem>\n          );\n        }\n\n        return null;\n      })}\n    </div>\n  );\n}\n\nexport default Authorization;\n"
+    },
+    {
+      "path": "npm-packages/docs/src/theme/ApiExplorer/SecuritySchemes/index.tsx",
+      "sha": null,
+      "content_sha256": "9c11f424d68bf0f5bbe3b417f06203881fcf08dc07a1c97d78b48211692b6e82",
+      "score": 248,
+      "content": "/*\n * Ejected to apply Markdown to authorization descriptions and link to a custom location.\n */\n\nimport React from \"react\";\nimport Markdown from \"react-markdown\";\n\nimport Link from \"@docusaurus/Link\";\nimport { useTypedSelector } from \"@theme/ApiItem/hooks\";\n\nfunction Passthrough({ children }: any) {\n  return children;\n}\n\nconst AuthTypeLinks: Record<string, string> = {\n  \"OAuth Team Token\": \"[REDACTED]\",\n  \"OAuth Project Token\": \"[REDACTED]\",\n  \"Team Token\": \"[REDACTED]\",\n  PAT: \"/platform-apis#managing-your-own-projects\",\n};\n\nfunction SecuritySchemes(props: any) {\n  const options = useTypedSelector((state: any) => state.auth.options);\n  const selected = useTypedSelector((state: any) => state.auth.selected);\n\n  if (selected === undefined) return null;\n\n  if (options[selected]?.[0]?.type === undefined) {\n    return null;\n  }\n\n  const selectedAuth = options[selected];\n  return (\n    <details className=\"openapi-security__details\" open={false}>\n      <summary className=\"openapi-security__summary-container\">\n        <h4 className=\"openapi-security__summary-header\">\n          Authorization: [REDACTED]].name ?? selectedAuth[0].type}\n        </h4>\n      </summary>\n      {selectedAuth.map((auth: any) => {\n        const isHttp = auth.type === \"http\";\n        const isApiKey = auth.type === \"apiKey\";\n        const isOauth2 = auth.type === \"oauth2\";\n        const isOpenId = auth.type === \"openIdConnect\";\n\n        const infoAuthPath = `/${props.infoPath}#authentication`;\n        if (isHttp) {\n          if (auth.scheme === \"bearer\") {\n            const {\n              name,\n              key,\n              type: _type,\n              scopes,\n              scheme: _scheme,\n              ...rest\n            } = auth;\n            return (\n              <React.Fragment key={auth.key}>\n                <pre\n                  style={{\n                    display: \"flex\",\n                    flexDirection: \"column\",\n                    background: \"var(--openapi-card-background-color)\",\n                    whiteSpace: \"pre-wrap\",\n                    wordWrap: \"break-word\",\n                    overflowWrap: \"break-word\",\n                  }}\n                >\n                  <span>\n                    <strong>\n                      <Link to={AuthTypeLinks[key] || infoAuthPath}>\n                        {name ?? key}\n                      </Link>\n                    </strong>\n                  </span>\n                  <span>HTTP Bearer token</span>\n                  {scopes && scopes.length > 0 && (\n                    <span>\n                      <strong>scopes: </strong>\n                      <code>\n                        {auth.scopes.length > 0 ? auth.scopes.toString() : \"[]\"}\n                      </code>\n                    </span>\n                  )}\n                  {Object.keys(rest).map((k, _i) => {\n                    return (\n                      <span key={k}>\n                        {typeof rest[k] === \"object\" ? (\n                          JSON.stringify(rest[k], null, 2)\n                        ) : typeof rest[k] === \"string\" &&\n                          rest[k].includes(\"](\") ? (\n                          <Markdown components={{ a: Link, p: Passthrough }}>\n                            {rest[k]}\n                          </Markdown>\n                        ) : (\n                          String(rest[k])\n                        )}\n                      </span>\n                    );\n                  })}\n                </pre>\n              </React.Fragment>\n            );\n          }\n          if (auth.scheme === \"basic\") {\n            const { name, key, type, scopes, ...rest } = auth;\n            return (\n              <React.Fragment key={auth.key}>\n                <pre\n                  style={{\n                    display: \"flex\",\n                    flexDirection: \"column\",\n                    background: \"var(--openapi-card-background-color)\",\n                  }}\n                >\n                  <span>\n                    <strong>name:</strong>{\" \"}\n                    <Link to={infoAuthPath}>{name ?? key}</Link>\n                  </span>\n                  <span>\n                    <strong>type: </strong>\n                    {type}\n                  </span>\n                  {scopes && scopes.length > 0 && (\n                    <span>\n                      <strong>scopes: </strong>\n                      <code>\n                        {auth.scopes.length > 0 ? auth.scopes.toString() : \"[]\"}\n                      </code>\n                    </span>\n                  )}\n                  {Object.keys(rest).map((k, _i) => {\n                    return (\n                      <span key={k}>\n                        <strong>{k}: </strong>\n                        {typeof rest[k] === \"object\"\n                          ? JSON.stringify(rest[k], null, 2)\n                          : String(rest[k])}\n                      </span>\n                    );\n                  })}\n                </pre>\n              </React.Fragment>\n            );\n          }\n          return (\n            <React.Fragment key={auth.key}>\n              <pre\n                style={{\n                  display: \"flex\",\n                  flexDirection: \"column\",\n                  background: \"var(--openapi-card-background-color)\",\n                }}\n              >\n                <span>\n                  <strong>name:</strong>{\" \"}\n                  <Link to={infoAuthPath}>{auth.name ?? auth.key}</Link>\n                </span>\n                <span>\n                  <strong>type: </strong>\n                  {auth.type}\n                </span>\n                <span>\n                  <strong>in: </strong>\n                  {auth.in}\n                </span>\n              </pre>\n            </React.Fragment>\n          );\n        }\n\n        if (isApiKey) {\n          const { name, key, type: _, scopes, ...rest } = auth;\n          return (\n            <React.Fragment key={auth.key}>\n              <pre\n                style={{\n                  display: \"flex\",\n                  flexDirection: \"column\",\n                  background: \"var(--openapi-card-background-color)\",\n                  whiteSpace: \"pre-wrap\",\n                  wordWrap: \"break-word\",\n                  overflowWrap: \"break-word\",\n                }}\n              >\n                <span>\n                  <strong>\n                    <Link to={AuthTypeLinks[key] || infoAuthPath}>\n                      {name ?? key}\n                    </Link>\n                  </strong>\n                </span>\n                <span>API Key in {auth.in}</span>\n                {scopes && scopes.length > 0 && (\n                  <span>\n                    <strong>scopes: </strong>\n                    <code>\n                      {auth.scopes.length > 0 ? auth.scopes.toString() : \"[]\"}\n                    </code>\n                  </span>\n                )}\n                {Object.keys(rest).map((k, _i) => {\n                  return (\n                    <span key={k}>\n                      {typeof rest[k] === \"object\" ? (\n                        JSON.stringify(rest[k], null, 2)\n                      ) : typeof rest[k] === \"string\" &&\n                        rest[k].includes(\"](\") ? (\n                        <Markdown components={{ a: Link, p: Passthrough }}>\n                          {rest[k]}\n                        </Markdown>\n                      ) : (\n                        String(rest[k])\n                      )}\n                    </span>\n                  );\n                })}\n              </pre>\n            </React.Fragment>\n          );\n        }\n\n        if (isOauth2) {\n          const { name, key, type, scopes, flows, ...rest } = auth;\n          return (\n            <React.Fragment key={selected}>\n              <pre\n                style={{\n                  display: \"flex\",\n                  flexDirection: \"column\",\n                  background: \"var(--openapi-card-background-color)\",\n                }}\n              >\n                <span>\n                  <strong>name:</strong>{\" \"}\n                  <Link to={infoAuthPath}>{name ?? key}</Link>\n                </span>\n                <span>\n                  <strong>type: </strong>\n                  {type}\n                </span>\n                {scopes && scopes.length > 0 && (\n                  <span>\n                    <strong>scopes: </strong>\n                    <code>\n                      {auth.scopes.length > 0 ? auth.scopes.toString() : \"[]\"}\n                    </code>\n                  </span>\n                )}\n                {Object.keys(rest).map((k, _i) => {\n                  return (\n                    <span key={k}>\n                      <strong>{k}: </strong>\n                      {typeof rest[k] === \"object\"\n                        ? JSON.stringify(rest[k], null, 2)\n                        : String(rest[k])}\n                    </span>\n                  );\n                })}\n                {flows && (\n                  <span>\n                    <code>\n                      <strong>flows: </strong>\n                      {JSON.stringify(flows, null, 2)}\n                    </code>\n                  </span>\n                )}\n              </pre>\n            </React.Fragment>\n          );\n        }\n\n        if (isOpenId) {\n          const { name, key, scopes, type, ...rest } = auth;\n          return (\n            <React.Fragment key={auth.key}>\n              <pre\n                style={{\n                  display: \"flex\",\n                  flexDirection: \"column\",\n                  background: \"var(--openapi-card-background-color)\",\n                }}\n              >\n                <span>\n                  <strong>name:</strong>{\" \"}\n                  <Link to={infoAuthPath}>{name ?? key}</Link>\n                </span>\n                <span>\n                  <strong>type: </strong>\n                  {type}\n                </span>\n                {scopes && scopes.length > 0 && (\n                  <span>\n                    <strong>scopes: </strong>\n                    <code>\n                      {auth.scopes.length > 0 ? auth.scopes.toString() : \"[]\"}\n                    </code>\n                  </span>\n                )}\n                {Object.keys(rest).map((k, _i) => {\n                  return (\n                    <span key={k}>\n                      <strong>{k}: </strong>\n                      {typeof rest[k] === \"object\"\n                        ? JSON.stringify(rest[k], null, 2)\n                        : String(rest[k])}\n                    </span>\n                  );\n                })}\n              </pre>\n            </React.Fragment>\n          );\n        }\n\n        return undefined;\n      })}\n    </details>\n  );\n}\n\nexport default SecuritySchemes;\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "npm-packages/demo_browser_tests/users-and-auth.ts",
+      "sha": null,
+      "content_sha256": "21216a6c8a741c2098f6c104c76209f751cdbea4519fa93571a5f33f92beb15d",
+      "score": 246,
+      "content": "import { argv } from \"node:process\";\nimport { withBrowser } from \"./common.js\";\n\nwithBrowser(async (page) => {\n  await page.goto(`http://localhost:${argv[2]}`);\n  console.log(\"opened demo app\");\n\n  console.log(\"clicking login\");\n\n  await page.locator(\"button\").click();\n\n  await page.waitForNavigation();\n\n  console.log(\"navigated to auth0 sign in screen\");\n\n  await page.locator(\"input#username\").fill(\"jamie@convex.dev\");\n  await page.locator(\"input#password\").fill(\"@9pFVGcmCJvHMCP*ti3QPg64\");\n\n  await page\n    .locator(\"button[name='action']:not([aria-hidden])::-p-text(Continue)\")\n    .click();\n\n  await page.waitForNavigation();\n\n  console.log(\"navigated back to demo app\");\n\n  await page.waitForSelector(\"::-p-text(Logged in as jamie@convex.dev)\");\n  console.log(\"correct user is logged in!\");\n}).catch((error) => {\n  console.error(error);\n  process.exit(1);\n});\n"
+    },
+    {
+      "path": "npm-packages/demo_browser_tests/oauth_flow.ts",
+      "sha": null,
+      "content_sha256": "d16c67302063bb0331cb4746d2be1409364fb286fb2b5a1276a874d28adc28f0",
+      "score": 246,
+      "content": "import { argv } from \"node:process\";\nimport { sleep, withBrowser } from \"./common.js\";\nimport { loginToDashboard } from \"./dashboardHelpers.js\";\n\nconst main = async () => {\n  // argv needed by loginToDashboard()\n  if (argv.length < 4) {\n    console.error(\"Usage: node dist/oauth_flow.js <username> <password>\");\n    console.error(\n      \"OAuth URL should be passed via OAUTH_URL environment variable\",\n    );\n    process.exit(1);\n  }\n\n  const authUrl = process.env.OAUTH_URL;\n  if (!authUrl) {\n    console.error(\"OAUTH_URL environment variable not set\");\n    process.exit(1);\n  }\n\n  console.log(`Starting OAuth flow with URL: ${authUrl}`);\n\n  await withBrowser(async (page) => {\n    // We end up building large sections of code here, so increase the default\n    // timeouts to reduce flakes on CI.\n    page.setDefaultTimeout(60000);\n    page.setDefaultNavigationTimeout(60000);\n\n    console.log(`Original OAuth URL: ${authUrl}`);\n\n    // First, log in to the dashboard normally\n    await loginToDashboard(page);\n\n    // After successful login, navigate to the OAuth authorization URL\n    console.log(`Navigating to OAuth URL: ${authUrl}`);\n    // `page.goto` throws net::ERR_ABORTED if the login redirect chain is\n    // still in flight and supersedes our navigation, so retry thrown errors\n    // as well as error statuses.\n    const gotoAuthUrl = async () => {\n      try {\n        return await page.goto(authUrl);\n      } catch (error) {\n        console.log(`OAuth page navigation failed: ${error}`);\n        return null;\n      }\n    };\n    let gotoResponse = await gotoAuthUrl();\n    let retries = 0;\n    while ((!gotoResponse || gotoResponse.status() >= 400) && retries < 2) {\n      console.log(\n        `OAuth page returned status ${gotoResponse?.status()}, retrying (attempt ${retries + 1})...`,\n      );\n      await sleep(3000);\n      gotoResponse = await gotoAuthUrl();\n      retries++;\n    }\n\n    console.log(\n      `Logged in and navigated to OAuth authorization page: ${page.url()}`,\n    );\n\n    // Wait for the OAuth authorization page to load and click authorize\n    await page.waitForSelector(\"button::-p-text(Authorize)\");\n    console.log(\"Found Authorize button, clicking...\");\n    await page.locator(\"button::-p-text(Authorize)\").click();\n    console.log(\"Clicked Authorize button\");\n\n    // Wait a moment to see if anything happens\n    await sleep(2000);\n    console.log(`After clicking, current URL: ${page.url()}`);\n\n    // Wait for redirect to callback URL\n    console.log(\"Waiting for redirect to callback URL...\");\n    await page.waitForFunction(() =>\n      window.location.href.includes(\"localhost:8080/callback\"),\n    );\n    console.log(`OAuth flow completed! Redirected to: ${page.url()}`);\n  });\n};\n\nmain().catch((error) => {\n  console.error(\"OAuth flow script failed:\", error);\n  process.exit(1);\n});\n"
+    },
+    {
+      "path": "npm-packages/private-demos/deploy-speed-test/package.json",
+      "sha": null,
+      "content_sha256": "bc36d88187fb27b94df5947bbedebcfc1de659c588fef8cb2c5894427f75f725",
+      "score": 246,
+      "content": "{\n  \"name\": \"deploy-speed-test\",\n  \"private\": true,\n  \"version\": \"0.0.0\",\n  \"type\": \"module\",\n  \"scripts\": {\n    \"dev\": \"convex dev --admin-key 0135d8598650f8f5cb0f30c34ec2e2bb62793bc28717c8eb6fb577996d50be5f4281b59181095065c5d0f86a2c31ddbe9b597ec62b47ded69782cd --url \\\"http://localhost.charlesproxy.com:8000\\\"\",\n    \"build\": \"tsc --noEmit\"\n  },\n  \"dependencies\": {\n    \"convex\": \"workspace:*\",\n    \"@faker-js/faker\": \"^10.0.0\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"^5.9.2\"\n  }\n}\n"
+    },
+    {
+      "path": "crates/database/src/search_index_bootstrap.rs",
+      "sha": null,
+      "content_sha256": "8306b1ea5aab050708d2f94441d753c677cd7692b8ea2c0d1380e1540a2f3121",
+      "score": 246,
+      "content": "use std::{\n    cmp::{\n        max,\n        min,\n    },\n    collections::{\n        BTreeMap,\n        BTreeSet,\n    },\n    ops::Bound,\n    time::Duration,\n};\n\nuse common::{\n    bootstrap_model::index::{\n        text_index::{\n            TextIndexSnapshot,\n            TextIndexState,\n        },\n        vector_index::VectorIndexState,\n        IndexConfig,\n        TabletIndexMetadata,\n    },\n    document::ParsedDocument,\n    errors::report_error,\n    knobs::UDF_EXECUTOR_OCC_MAX_RETRIES,\n    persistence::{\n        RepeatablePersistence,\n        TimestampRange,\n    },\n    persistence_helpers::RevisionPair,\n    query::Order,\n    runtime::{\n        try_join_buffer_unordered,\n        Runtime,\n    },\n    types::{\n        IndexId,\n        RepeatableTimestamp,\n        WriteTimestamp,\n    },\n};\nuse errors::ErrorMetadataAnyhowExt;\nuse futures::{\n    future,\n    Stream,\n    TryStreamExt,\n};\nuse indexing::index_registry::IndexRegistry;\nuse search::{\n    DiskIndex,\n    MemoryTextIndex,\n    SnapshotInfo,\n    TantivySearchIndexSchema,\n    TextIndex,\n    TextIndexManager,\n    TextIndexManagerState,\n};\nuse sync_types::{\n    backoff::Backoff,\n    Timestamp,\n};\nuse value::{\n    NamespacedTableMapping,\n    TabletId,\n};\nuse vector::{\n    IndexState,\n    MemoryVectorIndex,\n    QdrantSchema,\n    VectorIndexManager,\n};\n\nuse crate::{\n    bootstrap_model::index_workers::load_metadata_fast_forward_ts,\n    committer::CommitterClient,\n    metrics::log_document_skipped,\n};\n\npub const FINISHED_BOOTSTRAP_UPDATES: &str = \"finished_bootstrap_updates\";\n\npub struct SearchIndexBootstrapWorker<RT: Runtime> {\n    runtime: RT,\n    index_registry: IndexRegistry,\n    persistence: RepeatablePersistence,\n    table_mapping: NamespacedTableMapping,\n    committer_client: CommitterClient,\n    backoff: Backoff,\n}\n\nconst INITIAL_BACKOFF: Duration = Duration::from_millis(10);\nconst MAX_BACKOFF: Duration = Duration::from_secs(5);\n\nstruct IndexesToBootstrap {\n    table_to_text_indexes: BTreeMap<TabletId, Vec<TextIndexBootstrapData>>,\n    table_to_vector_indexes: BTreeMap<TabletId, Vec<VectorIndexBootstrapData>>,\n    /// Timestamp to walk the document log from to get all of the revisions\n    /// since the last write to disk.\n    oldest_index_ts: Timestamp,\n}\n\npub struct BootstrappedSearchIndexes {\n    pub text_index_manager: TextIndexManager,\n    pub vector_index_manager: VectorIndexManager,\n    pub tables_with_indexes: BTreeSet<TabletId>,\n}\n\nimpl IndexesToBootstrap {\n    fn create(\n        upper_bound: RepeatableTimestamp,\n        indexes_with_fast_forward_ts: Vec<(ParsedDocument<TabletIndexMetadata>, Option<Timestamp>)>,\n    ) -> anyhow::Result<Self> {\n        let mut table_to_vector_indexes: BTreeMap<_, Vec<_>> = BTreeMap::new();\n        let mut table_to_text_indexes: BTreeMap<_, Vec<_>> = BTreeMap::new();\n        // We keep track of latest ts we can bootstrap from for each vector index.\n        let mut oldest_index_ts = *upper_bound;\n\n        for (index_doc, fast_forward_ts) in indexes_with_fast_forward_ts {\n            let is_enabled = index_doc.config.is_enabled();\n            let (index_id, index_metadata) = index_doc.into_id_and_value();\n            match index_metadata.config {\n                IndexConfig::Vector {\n                    on_disk_state,\n                    ref spec,\n                    ..\n                } => {\n                    let qdrant_schema = QdrantSchema::new(spec);\n                    let ts = match on_disk_state {\n                        VectorIndexState::Backfilled {\n                            snapshot: ref snapshot_info,\n                            ..\n                        }\n                        | VectorIndexState::SnapshottedAt(ref snapshot_info) => {\n                            // Use fast forward ts instead of snapshot ts.\n                            let current_index_ts =\n                                max(fast_forward_ts.unwrap_or_default(), snapshot_info.ts);\n                            oldest_index_ts = min(oldest_index_ts, current_index_ts);\n                            snapshot_info.ts\n                        },\n                        VectorIndexState::Backfilling(_) => upper_bound.succ()?,\n                    };\n                    let vector_index_bootstrap_data = VectorIndexBootstrapData {\n                        index_id: index_id.internal_id().into(),\n                        on_disk_state,\n                        memory_index: MemoryVectorIndex::new(WriteTimestamp::Committed(ts.succ()?)),\n                        qdrant_schema,\n                    };\n                    if let Some(vector_indexes) =\n                        table_to_vector_indexes.get_mut(index_metadata.name.table())\n                    {\n                        vector_indexes.push(vector_index_bootstrap_data);\n                    } else {\n                        table_to_vector_indexes.insert(\n                            *index_metadata.name.table(),\n                            vec![vector_index_bootstrap_data],\n                        );\n                    }\n                },\n                IndexConfig::Text {\n                    ref spec,\n                    on_disk_state,\n                } => {\n                    let text_index = match on_disk_state {\n                        TextIndexState::Backfilling(_) => {\n                            // We'll start a new memory search index starting at the next commit\n                            // after our persistence upper bound. After\n                            // bootstrapping, all commits after\n                            // `persistence.upper_bound()` will flow through `Self::update`, so our\n                            // memory index contains all revisions `>=\n                            // persistence.upper_bound().succ()?`.\n                            let memory_index = MemoryTextIndex::new(WriteTimestamp::Committed(\n                                upper_bound.succ()?,\n                            ));\n                            TextIndex::Backfilling { memory_index }\n                        },\n                        TextIndexState::Backfilled {\n                            snapshot:\n                                TextIndexSnapshot {\n                                    data,\n                                    ts: disk_ts,\n                                    version,\n                                },\n                            staged: _,\n                        }\n                        | TextIndexState::SnapshottedAt(TextIndexSnapshot {\n                            data,\n                            ts: disk_ts,\n                            version,\n                        }) => {\n                            let current_index_ts =\n                                max(disk_ts, fast_forward_ts.unwrap_or_default());\n                            oldest_index_ts = min(oldest_index_ts, current_index_ts);\n                            let memory_index =\n                                MemoryTextIndex::new(WriteTimestamp::Committed(disk_ts.succ()?));\n                            let snapshot = SnapshotInfo {\n                                disk_index: DiskIndex::try_from(data)?,\n                                disk_index_ts: current_index_ts,\n                                disk_index_version: version,\n                                memory_index,\n                            };\n                            if is_enabled {\n                                TextIndex::Ready(snapshot)\n                            } else {\n                                TextIndex::Backfilled(snapshot)\n                            }\n                        },\n                    };\n                    let tantivy_schema = TantivySearchIndexSchema::new(spec);\n                    let text_index_bootstrap_data = TextIndexBootstrapData {\n                        index_id: index_id.internal_id().into(),\n                        text_index,\n                        tantivy_schema,\n                    };\n                    if let Some(text_indexes) =\n                        table_to_text_indexes.get_mut(index_metadata.name.table())\n                    {\n                        text_indexes.push(text_index_bootstrap_data);\n                    } else {\n                        table_to_text_indexes.insert(\n                            *index_metadata.name.table(),\n                            vec![text_index_bootstrap_data],\n                        );\n                    }\n                },\n                _ => continue,\n            };\n        }\n        Ok(Self {\n            table_to_text_indexes,\n            table_to_vector_indexes,\n            oldest_index_ts,\n        })\n    }\n\n    fn tables_with_indexes(&self) -> BTreeSet<TabletId> {\n        self.table_to_text_indexes\n            .keys()\n            .chain(self.table_to_vector_indexes.keys())\n            .copied()\n            .collect()\n    }\n\n    async fn bootstrap(\n        mut self,\n        persistence: &RepeatablePersistence,\n    ) -> anyhow::Result<BootstrappedSearchIndexes> {\n        let timer = crate::metrics::bootstrap_timer();\n        let upper_bound = persistence.upper_bound();\n        let mut num_revisions = 0;\n        let mut total_size = 0;\n\n        let range = TimestampRange::new((\n            Bound::Excluded(self.oldest_index_ts),\n            Bound::Included(*upper_bound),\n        ));\n        let tables_with_indexes = self.tables_with_indexes();\n        let revision_stream =\n            stream_revision_pairs_for_indexes(&tables_with_indexes, persistence, range);\n        futures::pin_mut!(revision_stream);\n\n        tracing::info!(\n            \"Starting search index bootstrap at {} with upper bound {}\",\n            self.oldest_index_ts,\n            upper_bound\n        );\n        while let Some(revision_pair) = revision_stream.try_next().await? {\n            num_revisions += 1;\n            total_size += revision_pair.document().map(|d| d.size()).unwrap_or(0);\n            if let Some(vector_indexes_to_update) = self\n                .table_to_vector_indexes\n                .get_mut(&revision_pair.id.table())\n            {\n                for vector_index in vector_indexes_to_update {\n                    vector_index.update(&revision_pair)?;\n                }\n            }\n            if let Some(text_indexes_to_update) = self\n                .table_to_text_indexes\n                .get_mut(&revision_pair.id.table())\n            {\n                for text_index in text_indexes_to_update {\n                    text_index.update(&revision_pair)?;\n                }\n            }\n            if num_revisions % 500 == 0 {\n                let percent_progress =\n                    (u64::from(revision_pair.ts()) - u64::from(self.oldest_index_ts)) as f64\n                        / (u64::from(*upper_bound) - u64::from(self.oldest_index_ts)) as f64\n                        * 100.0;\n                tracing::info!(\n                    \"Processed ts {}, estimated progress: ({:.1}%)\",\n                    revision_pair.ts(),\n                    percent_progress\n                );\n            }\n        }\n\n        tracing::info!(\n            \"Loaded {num_revisions} revisions ({total_size} bytes) in {:?}.\",\n            timer.elapsed()\n        );\n        crate::metrics::finish_bootstrap(num_revisions, total_size, timer);\n\n        Ok(self.finish())\n    }\n\n    fn finish(self) -> BootstrappedSearchIndexes {\n        let tables_with_indexes = self.tables_with_indexes();\n        let text_index_manager = TextIndexManager::new(TextIndexManagerState::Ready(\n            self.table_to_text_indexes\n                .into_values()\n                .flat_map(|text_indexes| {\n                    text_indexes\n                        .into_iter()\n                        .map(\n                            |TextIndexBootstrapData {\n                                 index_id,\n                                 text_index: search_index,\n                                 tantivy_schema: _,\n                             }| (index_id, search_index),\n                        )\n                        .collect::<Vec<_>>()\n                })\n                .collect(),\n        ));\n        let indexes = IndexState::Ready(\n            self.table_to_vector_indexes\n                .into_values()\n                .flat_map(|vector_indexes| {\n                    vector_indexes\n                        .into_iter()\n                        .map(\n                            |VectorIndexBootstrapData {\n                                 index_id,\n                                 on_disk_state,\n                                 memory_index,\n                                 qdrant_schema: _,\n                             }| {\n                                (index_id, (on_disk_state, memory_index))\n                            },\n                        )\n                        .collect::<Vec<_>>()\n                })\n                .collect(),\n        );\n        let vector_index_manager = VectorIndexManager { indexes };\n        BootstrappedSearchIndexes {\n            text_index_manager,\n            vector_index_manager,\n            tables_with_indexes,\n        }\n    }\n}\n\n#[derive(Clone)]\nstruct TextIndexBootstrapData {\n    index_id: IndexId,\n    text_index: TextIndex,\n    tantivy_schema: TantivySearchIndexSchema,\n}\n\nimpl TextIndexBootstrapData {\n    fn update(&mut self, revision_pair: &RevisionPair) -> anyhow::Result<()> {\n        let memory_index = self.text_index.memory_index_mut();\n        match memory_index.min_ts() {\n            WriteTimestamp::Pending => {\n                anyhow::bail!(\n                    \"Found a pending write timestamp for search memory index created during \\\n                     bootstrapping. This should always be a committed timestamp.\"\n                )\n            },\n            WriteTimestamp::Committed(ts) => {\n                // Skip updates for revision pairs that have already been written to disk.\n                if ts > revision_pair.ts() {\n                    return Ok(());\n                }\n            },\n        }\n        memory_index.update(\n            revision_pair.id.internal_id(),\n            WriteTimestamp::Committed(revision_pair.ts()),\n            revision_pair\n                .prev_document()\n                .map(|d| anyhow::Ok((self.tantivy_schema.index_into_terms(d)?, d.creation_time())))\n                .transpose()?,\n            revision_pair\n                .document()\n                .map(|d| anyhow::Ok((self.tantivy_schema.index_into_terms(d)?, d.creation_time())))\n                .transpose()?,\n        )\n    }\n}\n\n#[derive(Clone)]\nstruct VectorIndexBootstrapData {\n    index_id: IndexId,\n    on_disk_state: VectorIndexState,\n    memory_index: MemoryVectorIndex,\n    qdrant_schema: QdrantSchema,\n}\n\nimpl VectorIndexBootstrapData {\n    fn update(&mut self, revision_pair: &RevisionPair) -> anyhow::Result<()> {\n        match self.memory_index.min_ts() {\n            WriteTimestamp::Pending => {\n                anyhow::bail!(\n                    \"Found a pending write timestamp for vector memory index created during \\\n                     bootstrapping. This should always be a committed timestamp.\"\n                )\n            },\n            WriteTimestamp::Committed(ts) => {\n                // Skip updates for revision pairs that have already been written to disk.\n                if ts > revision_pair.ts() {\n                    return Ok(());\n                }\n            },\n        }\n        self.memory_index.update(\n            revision_pair.id.internal_id(),\n            WriteTimestamp::Committed(revision_pair.ts()),\n            revision_pair\n                .prev_document()\n                .and_then(|d| self.qdrant_schema.index(d)),\n            revision_pair\n                .document()\n                .and_then(|d| self.qdrant_schema.index(d)),\n        )\n    }\n}\n\n/// Streams revision pairs for documents in the indexed tables.\npub fn stream_revision_pairs_for_indexes<'a>(\n    tables_with_indexes: &'a BTreeSet<TabletId>,\n    persistence: &'a RepeatablePersistence,\n    range: TimestampRange,\n) -> impl Stream<Item = anyhow::Result<RevisionPair>> + 'a {\n    persistence\n        .load_revision_pairs(None /* tablet_id */, range, Order::Asc)\n        .try_filter(|revision| {\n            let is_in_indexed_table = tables_with_indexes.contains(&revision.id.table());\n            if !is_in_indexed_table {\n                log_document_skipped();\n            }\n            future::ready(is_in_indexed_table)\n        })\n}\n\nimpl<RT: Runtime> SearchIndexBootstrapWorker<RT> {\n    pub(crate) fn new(\n        runtime: RT,\n        index_registry: IndexRegistry,\n        persistence: RepeatablePersistence,\n        table_mapping: NamespacedTableMapping,\n        committer_client: CommitterClient,\n    ) -> Self {\n        Self {\n            runtime,\n            index_registry,\n            table_mapping,\n            persistence,\n            committer_client,\n            backoff: Backoff::new(INITIAL_BACKOFF, MAX_BACKOFF),\n        }\n    }\n\n    pub async fn start(mut self) {\n        let timer = crate::metrics::search_and_vector_bootstrap_timer();\n        loop {\n            if let Err(e) = self.run().await {\n                let delay = self.backoff.fail(&mut self.runtime.rng());\n                // Forgive OCC errors < N to match UDF mutation retry behavior.\n                if !e.is_occ() || (self.backoff.failures() as usize) > *UDF_EXECUTOR_OCC_MAX_RETRIES\n                {\n                    report_error(&mut e.context(\"SearchAndVectorBootstrapWorker died\")).await;\n                    tracing::error!(\n                        \"SearchIndexBoostrapWorker died, num_failures: {}. Backing off for {}ms\",\n                        self.backoff.failures(),\n                        delay.as_millis()\n                    );\n                } else {\n                    tracing::trace!(\n                        \"SearchIndexBoostrapWorker occed, retrying. num_failures: {}, backoff: \\\n                         {}ms\",\n                        self.backoff.failures(),\n                        delay.as_millis(),\n                    )\n                }\n                self.runtime.wait(delay).await;\n            } else {\n                tracing::info!(\"SearchIndexBoostrapWorker finished!\");\n                break;\n            }\n        }\n        timer.finish();\n    }\n\n    async fn run(&mut self) -> anyhow::Result<()> {\n        let bootstrapped_indexes = self.bootstrap().await?;\n        let pause_client = self.runtime.pause_client();\n        pause_client.wait(FINISHED_BOOTSTRAP_UPDATES).await;\n        self.committer_client\n            .finish_search_and_vector_bootstrap(\n                bootstrapped_indexes,\n                self.persistence.upper_bound(),\n            )\n            .await\n    }\n\n    async fn bootstrap(&self) -> anyhow::Result<BootstrappedSearchIndexes> {\n        // Load all of the fast forward timestamps first to ensure that we stay within\n        // the comparatively short valid time for the persistence snapshot\n        let snapshot = self\n            .persistence\n            .read_snapshot(self.persistence.upper_bound())?;\n        let registry = self.index_registry.clone();\n        let table_mapping = self.table_mapping.clone();\n        let get_index_futs = self\n            .index_registry\n            .all_text_and_vector_indexes()\n            .into_iter()\n            .map(move |index| {\n                let registry = registry.clone();\n                let table_mapping = table_mapping.clone();\n                let snapshot = snapshot.clone();\n                async move {\n                    let fast_forward_ts = load_metadata_fast_forward_ts(\n                        &registry,\n                        &snapshot,\n                        &table_mapping,\n                        index.id(),\n                    )\n                    .await?;\n                    anyhow::Ok((index, fast_forward_ts))\n                }\n            });\n        let indexes_with_fast_forward_ts =\n            try_join_buffer_unordered(\"get_index_futs\", get_index_futs).await?;\n        let indexes_to_bootstrap = IndexesToBootstrap::create(\n            self.persistence.upper_bound(),\n            indexes_with_fast_forward_ts,\n        )?;\n        indexes_to_bootstrap.bootstrap(&self.persistence).await\n    }\n}\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/mod.rs",
+      "sha": null,
+      "content_sha256": "7fb04f4a509c65b10271ad48047a27fa519ab14bae45a635391bfc65fd52b11a",
+      "score": 244,
+      "content": "//! Each module here represents a bootstrap table - a table required for the\n//! low level database to start up properly.\n//!\n//! Higher level tables belong in the model crate, layered above the database.\npub mod components;\npub mod defaults;\npub mod import_facing;\npub mod index;\npub mod index_backfills;\npub mod index_workers;\npub mod next_persistence_index_id;\npub mod schema;\npub mod schema_validation_progress;\npub mod schema_validations;\npub mod system_metadata;\npub mod table;\npub mod user_facing;\n"
+    },
+    {
+      "path": "crates/database/src/bootstrap_model/defaults.rs",
+      "sha": null,
+      "content_sha256": "25958ab01d9dd3b6747c794e7670a29ebe7309bfa315759aed9798077eea62b3",
+      "score": 244,
+      "content": "//! Default state to initialize the database with.\n\nuse std::{\n    collections::BTreeMap,\n    sync::LazyLock,\n};\n\nuse common::{\n    bootstrap_model::{\n        index::INDEX_TABLE,\n        tables::TABLES_TABLE,\n    },\n    types::{\n        IndexId,\n        TableName,\n    },\n    value::{\n        TableMapping,\n        TabletIdAndTableNumber,\n    },\n};\nuse maplit::btreemap;\nuse value::{\n    DeveloperDocumentId,\n    ResolvedDocumentId,\n    TableNamespace,\n    TableNumber,\n    TabletId,\n};\n\nuse crate::{\n    bootstrap_model::{\n        components::{\n            definition::COMPONENT_DEFINITIONS_TABLE,\n            COMPONENTS_TABLE,\n        },\n        index::IndexTable,\n        index_backfills::IndexBackfillTable,\n        index_workers::IndexWorkerMetadataTable,\n        next_persistence_index_id::NextPersistenceIndexIdTable,\n        schema::SchemasTable,\n        schema_validation_progress::{\n            SchemaValidationProgressTable,\n            SCHEMA_VALIDATION_PROGRESS_TABLE,\n        },\n        table::TablesTable,\n    },\n    system_tables::ErasedSystemTable,\n    ComponentDefinitionsTable,\n    ComponentsTable,\n    SchemaValidationTable,\n    INDEX_BACKFILLS_TABLE,\n    INDEX_WORKER_METADATA_TABLE,\n    NEXT_PERSISTENCE_INDEX_ID_TABLE,\n    NUM_RESERVED_LEGACY_TABLE_NUMBERS,\n    SCHEMAS_TABLE,\n    SCHEMA_VALIDATIONS_TABLE,\n};\n\npub fn bootstrap_system_tables() -> Vec<&'static dyn ErasedSystemTable> {\n    vec![\n        &TablesTable,\n        &IndexTable,\n        &SchemasTable,\n        &IndexBackfillTable,\n        &IndexWorkerMetadataTable,\n        &NextPersistenceIndexIdTable,\n        &ComponentDefinitionsTable,\n        &ComponentsTable,\n        &SchemaValidationProgressTable,\n        &SchemaValidationTable,\n    ]\n}\n\npub static DEFAULT_BOOTSTRAP_TABLE_NUMBERS: LazyLock<BTreeMap<TableName, TableNumber>> =\n    LazyLock::new(|| {\n        let tn = |tn| TableNumber::try_from(NUM_RESERVED_LEGACY_TABLE_NUMBERS + tn).unwrap();\n        btreemap! {\n            TABLES_TABLE.clone() => tn(1),\n            INDEX_TABLE.clone() => tn(2),\n            SCHEMAS_TABLE.clone() => tn(20),\n            INDEX_WORKER_METADATA_TABLE.clone() => tn(30),\n            COMPONENT_DEFINITIONS_TABLE.clone() => tn(31),\n            COMPONENTS_TABLE.clone() => tn(32),\n            INDEX_BACKFILLS_TABLE.clone() => tn(36),\n            SCHEMA_VALIDATION_PROGRESS_TABLE.clone() => tn(37),\n            NEXT_PERSISTENCE_INDEX_ID_TABLE.clone() => tn(42),\n            SCHEMA_VALIDATIONS_TABLE.clone() => tn(43)\n            // To add a bootstrap system table, first add to model/src/lib and then\n            // replicate that table number to here.\n        }\n    });\n\n/// Contains the table_id and index_id that never change after initializing the\n/// backend database. We prefer to pass this around instead of the full\n/// TableMapping so don't worry about passing around a reference to the\n/// \"authoritative\" table mapping.\n#[derive(Clone, Copy)]\npub struct BootstrapTableIds {\n    pub tables_id: TabletIdAndTableNumber,\n    pub index_id: TabletIdAndTableNumber,\n}\n\nimpl BootstrapTableIds {\n    pub fn new(table_mapping: &TableMapping) -> Self {\n        let tables_id = table_mapping\n            .namespace(TableNamespace::Global)\n            .id(&TABLES_TABLE)\n            .expect(\"_tables should exist\");\n        let index_id = table_mapping\n            .namespace(TableNamespace::Global)\n            .id(&INDEX_TABLE)\n            .expect(\"_index should exist\");\n        Self {\n            tables_id,\n            index_id,\n        }\n    }\n\n    pub fn table_resolved_doc_id(&self, table_id: TabletId) -> ResolvedDocumentId {\n        ResolvedDocumentId::new(\n            self.tables_id.tablet_id,\n            DeveloperDocumentId::new(self.tables_id.table_number, table_id.0),\n        )\n    }\n\n    pub fn index_resolved_doc_id(&self, index_id: IndexId) -> ResolvedDocumentId {\n        ResolvedDocumentId::new(\n            self.index_id.tablet_id,\n            DeveloperDocumentId::new(self.index_id.table_number, index_id.0),\n        )\n    }\n\n    pub fn is_index_table(&self, tablet_id: TabletId) -> bool {\n        self.index_id.tablet_id == tablet_id\n    }\n\n    pub fn is_tables_table(&self, tablet_id: TabletId) -> bool {\n        self.tables_id.tablet_id == tablet_id\n    }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 107,
+  "sensitive_files_skipped": [
+    {
+      "path": "crates/keybroker/dev/secret.txt",
+      "sha": "660316fb6ad64a5f6b858e769b1502b4b4c1c5b5",
+      "size": 64,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "demo/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "demo/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/.npmrc",
+      "sha": "66964f75f59ce984fc45e7fa0580faab21c80b85",
+      "size": 276,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/@convex-dev/react-query/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/dashboard/.env.development",
+      "sha": "21a1667281862b4da3ef0fe2dd4f98793b8d1ee5",
+      "size": 855,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/dashboard/.env.production",
+      "sha": "1f00b99aef5361a6d2edacbd01578b09d883f819",
+      "size": 975,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/args-validation/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/args-validation/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/clerk/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/clerk/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/convex-test/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/cron-jobs/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/cron-jobs/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/custom-errors/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/custom-errors/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/dall-e-storage-action/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/dall-e-storage-action/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/file-storage-with-http/.env",
+      "sha": "9c150e5398eaeda0f9281f6965a369af832a0c8a",
+      "size": 307,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/file-storage-with-http/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/file-storage/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/file-storage/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/giphy-action/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/giphy-action/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/html/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/html/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/http/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/http/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/nextjs-app-router/.env",
+      "sha": "64f16564bfcbd24470262bb319fd34328ce93e88",
+      "size": 268,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/nextjs-app-router/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/nextjs-pages-router/.env",
+      "sha": "187323ddafc79e66a5696ee9858b64185d68bded",
+      "size": 396,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/nextjs-pages-router/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/node/.env",
+      "sha": "d7878fff876f9e3ef1d9fc064ac88c7d9c83ffca",
+      "size": 257,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/node/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/pagination/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/pagination/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/presence-facepile/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/presence-facepile/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/presence-typing-indicator/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/presence-typing-indicator/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/prewarming/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/prewarming/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/python-quickstart/.env",
+      "sha": "869a381f549af91a7ab03a1cd2cfbe4211a14b8a",
+      "size": 35,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/python-quickstart/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/react-native/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/react-query/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/react-query/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/relational-data-modeling/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/relational-data-modeling/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/scheduling/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/scheduling/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/search/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/search/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/sessions/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/sessions/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/system-tables/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/system-tables/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/tour-chat/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/tour-chat/0-start/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/tour-chat/1-smileys/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/tour-chat/2-likes/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/tutorial/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/tutorial/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/typescript/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/typescript/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/users-and-auth/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/users-and-auth/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/users-and-clerk-webhooks/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/users-and-clerk-webhooks/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/users-and-clerk/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/users-and-clerk/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/vector-search/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/vector-search/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/zod-validation-ts/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/demos/zod-validation-ts/.npmrc",
+      "sha": "d92fc6bc5d8e96093f05786e61231cc8b86a5cf9",
+      "size": 273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/actions/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/actions/.npmrc",
+      "sha": "b6f27f135954640c8cc5bfd7b8c9922ca6eb2aad",
+      "size": 19,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/bundle-size/.npmrc",
+      "sha": "b6f27f135954640c8cc5bfd7b8c9922ca6eb2aad",
+      "size": 19,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/cjs-typescript/.env",
+      "sha": "869a381f549af91a7ab03a1cd2cfbe4211a14b8a",
+      "size": 35,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/clerk-initial-auth/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/cron/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/http/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/javascript-old-syntax/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/javascript/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/javascript/.npmrc",
+      "sha": "b6f27f135954640c8cc5bfd7b8c9922ca6eb2aad",
+      "size": 19,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/middleware/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/nextjs-15-app-clerk/.env",
+      "sha": "8592760503984f8a42d18c48951808bb914f6649",
+      "size": 47,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/nextjs-15-app/.env",
+      "sha": "8592760503984f8a42d18c48951808bb914f6649",
+      "size": 47,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/nextjs-app-router-snippets/.env",
+      "sha": "64f16564bfcbd24470262bb319fd34328ce93e88",
+      "size": 268,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/pagination-adversarial/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/bun/.env",
+      "sha": "869a381f549af91a7ab03a1cd2cfbe4211a14b8a",
+      "size": 35,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/expo/.env",
+      "sha": "e7eb8ddbdc2f524851dcc73527671b215306606a",
+      "size": 47,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/nextjs-app-dir-14/.env",
+      "sha": "e21bc64c5b7d8631e1c54f2a032df78d6538d539",
+      "size": 269,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/nextjs/.env",
+      "sha": "8592760503984f8a42d18c48951808bb914f6649",
+      "size": 47,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/nodejs/.env",
+      "sha": "869a381f549af91a7ab03a1cd2cfbe4211a14b8a",
+      "size": 35,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/react-vite/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/quickstarts/sveltekit/.npmrc",
+      "sha": "b6f27f135954640c8cc5bfd7b8c9922ca6eb2aad",
+      "size": 19,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/tanstack-start-clerk/.env",
+      "sha": "79957143da78e5f229dd7315ea88347ed7db6900",
+      "size": 265,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/tanstack-start/.env",
+      "sha": "7379cca3346469401ee4f9dd6846ff7d2ed7d483",
+      "size": 38,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/typescript-exact-optional-property-types/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/typescript-modern/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/typescript-old/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/uses-ents/.env",
+      "sha": "d2621a6c96e9bd3a13ae78267403ee2c7f7bbcc6",
+      "size": 50,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/uses-ents/.npmrc",
+      "sha": "bf2e7648b0769ef6c6ed71925485d24530571bc7",
+      "size": 22,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/vector-search/.env",
+      "sha": "25dd0dfc61db4cda6fb8af8fc7bb6db4ae82e8a2",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/private-demos/waitlist/.env",
+      "sha": "e3598a707a835a43484d86eaab46f9f511a1bd32",
+      "size": 262,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "npm-packages/shared-cursors/.env",
+      "sha": "57570d8747a1e31172bc0d1b84d0bc684c84debd",
+      "size": 40,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T22:57:01.628764+00:00"
+}

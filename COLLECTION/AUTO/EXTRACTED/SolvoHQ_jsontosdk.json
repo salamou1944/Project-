@@ -1,0 +1,102 @@
+{
+  "canonical_source": "github:SolvoHQ/jsontosdk",
+  "repo": "SolvoHQ/jsontosdk",
+  "revision_sha": "a799000b2e643a112d0a66ea4fcbf569bca98d37",
+  "default_branch": "main",
+  "pushed_at": "2026-05-14T16:54:33Z",
+  "repo_updated_at": "2026-05-14T16:54:38Z",
+  "license": null,
+  "topics": [
+    "claude",
+    "code-generation",
+    "dev-tools",
+    "developer-tools",
+    "json",
+    "json-to-typescript",
+    "llm-tools",
+    "typescript",
+    "typescript-generator",
+    "zod"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "1e5410c896acafd02e1f62ce187675c072349695736a52968410da32d6fd54ea",
+      "score": 120,
+      "content": "{\n  \"name\": \"jsontosdk\",\n  \"type\": \"module\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"astro dev\",\n    \"start\": \"astro dev\",\n    \"build\": \"astro build\",\n    \"preview\": \"astro preview\",\n    \"astro\": \"astro\"\n  },\n  \"dependencies\": {\n    \"@anthropic-ai/sdk\": \"^0.32.1\",\n    \"@astrojs/vercel\": \"^8.0.7\",\n    \"@vercel/analytics\": \"^2.0.1\",\n    \"astro\": \"^5.0.0\"\n  }\n}\n"
+    },
+    {
+      "path": "src/pages/api/waitlist.ts",
+      "sha": null,
+      "content_sha256": "dbd0743552d1dd8e77135344302ab4419d552ef0f058f3fc974a937af07d2931",
+      "score": 104,
+      "content": "import type { APIRoute } from 'astro';\nimport { getClientIp } from '@/lib/rateLimit';\nimport { waitlistRateLimit } from '@/lib/waitlistRateLimit';\n\nexport const prerender = false;\n\nconst EMAIL_RE = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\nexport const POST: APIRoute = async ({ request }) => {\n  const ip = getClientIp(request.headers);\n\n  let body: any;\n  try {\n    body = await request.json();\n  } catch {\n    return Response.json({ error: 'Body must be JSON.' }, { status: 400 });\n  }\n  const email = typeof body?.email === 'string' ? body.email.trim() : '';\n  if (!email || !EMAIL_RE.test(email) || email.length > 254) {\n    return Response.json({ error: 'Invalid email.' }, { status: 400 });\n  }\n\n  const rl = waitlistRateLimit(ip);\n  if (!rl.ok) {\n    const mins = Math.ceil(rl.resetIn / 60000);\n    return Response.json(\n      { error: `Rate limit hit (5/hr). Try again in ~${mins} min.` },\n      { status: 429 },\n    );\n  }\n\n  const apiKey = [REDACTED];\n  if (!apiKey) {\n    return Response.json(\n      { error: 'Server misconfigured: RESEND_API_KEY missing.' },\n      { status: 500 },\n    );\n  }\n\n  const ts = new Date().toISOString();\n  const ua = request.headers.get('user-agent') || '';\n  const referer = request.headers.get('referer') || '';\n  const text = [\n    `email: ${email}`,\n    `timestamp: ${ts}`,\n    `ip: ${ip}`,\n    `user-agent: ${ua}`,\n    `referer: ${referer}`,\n  ].join('\\n');\n\n  try {\n    const res = await fetch('https://api.resend.com/emails', {\n      method: 'POST',\n      headers: {\n        'authorization': `Bearer ${apiKey}`,\n        'content-type': 'application/json',\n      },\n      body: JSON.stringify({\n        from: 'waitlist@west0n.top',\n        to: ['agent+jsontosdk-waitlist@west0n.top'],\n        subject: `jsontosdk waitlist: ${email}`,\n        text,\n      }),\n    });\n    if (!res.ok) {\n      const detail = await res.text().catch(() => '');\n      return Response.json(\n        { error: `Mail provider error (${res.status}): ${detail.slice(0, 200)}` },\n        { status: 502 },\n      );\n    }\n  } catch (e: any) {\n    return Response.json(\n      { error: 'Mail provider unreachable: ' + (e?.message || 'fetch failed') },\n      { status: 502 },\n    );\n  }\n\n  // Auto-reply to the user — fire-and-forget. Any failure here is swallowed:\n  // the inbound notification already succeeded, so the waitlist signup is\n  // captured. The user-facing auto-reply is a best-effort \"personal touch\"\n  // that also seeds Q3 reply-thread evidence; it must NEVER fail the request.\n  try {\n    const replyText = [\n      'Hi,',\n      '',\n      \"Thanks for joining the jsontosdk waitlist — you're in line for v2 (API + CLI).\",\n      '',\n      \"Quick favor: what API or endpoint are you trying to type? Just hit reply with a URL or the JSON shape, and I'll prioritize that pattern when v2 ships.\",\n      '',\n      '— jsontosdk',\n    ].join('\\n');\n    const replyRes = await fetch('https://api.resend.com/emails', {\n      method: 'POST',\n      headers: {\n        'authorization': `Bearer ${apiKey}`,\n        'content-type': 'application/json',\n      },\n      body: JSON.stringify({\n        from: 'jsontosdk@west0n.top',\n        to: [email],\n        subject: 'Welcome to jsontosdk — quick question',\n        text: replyText,\n      }),\n    });\n    if (!replyRes.ok) {\n      const detail = await replyRes.text().catch(() => '');\n      console.error(\n        `waitlist auto-reply non-2xx (${replyRes.status}): ${detail.slice(0, 200)}`,\n      );\n    }\n  } catch (e: any) {\n    console.error('waitlist auto-reply threw:', e?.message || e);\n  }\n\n  return Response.json(\n    { ok: true },\n    { headers: { 'x-ratelimit-remaining': String(rl.remaining) } },\n  );\n};\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/pages/api/generate.ts",
+      "sha": null,
+      "content_sha256": "295623bc794fd9a014520684934151dca400c374094a92a742bd800260afc499",
+      "score": 104,
+      "content": "import type { APIRoute } from 'astro';\nimport Anthropic from '@anthropic-ai/sdk';\nimport { rateLimit, getClientIp } from '@/lib/rateLimit';\n\nexport const prerender = false;\n\nconst MAX_BYTES = 100 * 1024;\nconst MODEL = 'claude-haiku-4-5';\n\nconst SYSTEM_PROMPT = `You convert a single JSON sample into production-grade TypeScript types and a matching Zod schema.\n\nRules:\n- Infer a sensible PascalCase name for the root type from context (singular noun: \"User\" if the shape looks like one user, \"Post\" if it looks like a post). Default to \"Root\" only if no name is plausible.\n- Each nested object MUST become a separately-named interface, named after its key in the parent (singular form: \"posts\": [...] → Post[]). Snake_case keys keep their casing in field names but interfaces are PascalCase.\n- Arrays of objects: emit the element interface and use ElementName[].\n- Detect: ISO 8601 dates → \"string  // ISO 8601 date\" (keep type as string), URLs → \"string  // URL\", emails → \"string  // email\", enums → string literal unions when the sample suggests them (rare from one sample — only if obvious).\n- Numbers: use \\`number\\` (TS has no separate int/float).\n- Null fields: emit \\`field: T | null\\`. Missing fields are not nullable.\n- Arrays of mixed primitives → union element type. Empty arrays → \\`unknown[]\\` with a comment.\n- The Zod schema must mirror the interfaces exactly (z.object, z.array, z.string(), z.number(), z.boolean(), z.nullable(...) for nullables). Export each schema and infer the matching type via z.infer where useful, but the primary types come from the interfaces file.\n- Output is JSON only (no markdown fences, no commentary outside the JSON), with shape: {\"types\": \"<typescript code as a single string>\", \"schema\": \"<typescript code that imports z from 'zod'>\"}.\n\nPROVENANCE HEADER: every output starts with a provenance comment as its first line, so downstream devs opening the file later see where it came from. Both \\`schema\\` (the Zod file) and \\`types\\` (the interfaces file) first line is \\`// Generated by jsontosdk — edit freely\\`.\n\n- \"types\" file: Line 1: \\`// Generated by jsontosdk — edit freely\\` then only \\`export interface\\` declarations, ordered child-first so each interface is defined before it is referenced.\n- \"schema\" file: Line 1: \\`// Generated by jsontosdk — edit freely\\` then Line 2: \\`import { z } from \"zod\";\\`, then \\`export const FooSchema = z.object({...});\\` declarations, child-first ordering.\n- No trailing newlines beyond what's natural. No \\`any\\`. No leading explanation comments.`;\n\ntype Out = { types: string; schema: string };\n\nexport const POST: APIRoute = async ({ request }) => {\n  return await respond(await parseRequest(request));\n};\n\nasync function parseRequest(request: Request): Promise<\n  | { ok: false; status: number; error: string }\n  | { ok: true; json: string; ip: string }\n> {\n  const ip = getClientIp(request.headers);\n  let body: unknown;\n  try {\n    body = await request.json();\n  } catch {\n    return { ok: false, status: 400, error: 'Body must be JSON.' };\n  }\n  if (!body || typeof body !== 'object' || typeof (body as any).json !== 'string') {\n    return { ok: false, status: 400, error: 'Expected {\"json\": \"<json string>\"}.' };\n  }\n  const json = (body as any).json as string;\n  const bytes = new TextEncoder().encode(json).length;\n  if (bytes === 0) return { ok: false, status: 400, error: 'JSON input is empty.' };\n  if (bytes > MAX_BYTES) {\n    return { ok: false, status: 413, error: `JSON exceeds 100 KB (${bytes} bytes).` };\n  }\n  try {\n    JSON.parse(json);\n  } catch (e: any) {\n    return { ok: false, status: 400, error: 'Invalid JSON: ' + (e?.message || 'parse error') };\n  }\n  return { ok: true, json, ip };\n}\n\nasync function respond(\n  parsed:\n    | { ok: false; status: number; error: string }\n    | { ok: true; json: string; ip: string },\n): Promise<Response> {\n  if (!parsed.ok) {\n    return Response.json({ error: parsed.error }, { status: parsed.status });\n  }\n  const rl = rateLimit(parsed.ip);\n  if (!rl.ok) {\n    const mins = Math.ceil(rl.resetIn / 60000);\n    return Response.json(\n      { error: `Rate limit hit (20/hr). Try again in ~${mins} min.` },\n      { status: 429 },\n    );\n  }\n  const apiKey = [REDACTED] || process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC;\n  if (!apiKey) {\n    return Response.json(\n      { error: 'Server misconfigured: ANTHROPIC key missing.' },\n      { status: 500 },\n    );\n  }\n  try {\n    const out = await runClaude(apiKey, parsed.json);\n    return Response.json(out, {\n      headers: { 'x-ratelimit-remaining': String(rl.remaining) },\n    });\n  } catch (e: any) {\n    const msg = e?.message || 'LLM call failed';\n    return Response.json({ error: msg }, { status: 502 });\n  }\n}\n\nasync function runClaude(apiKey: string, json: string): Promise<Out> {\n  const client = new Anthropic({ apiKey });\n  const msg = await client.messages.create({\n    model: MODEL,\n    max_tokens: 4096,\n    system: SYSTEM_PROMPT,\n    messages: [\n      {\n        role: 'user',\n        content: 'JSON sample:\\n\\n```json\\n' + json + '\\n```\\n\\nReturn only the JSON object as specified.',\n      },\n    ],\n  });\n  const textBlock = msg.content.find((b) => b.type === 'text');\n  if (!textBlock || textBlock.type !== 'text') {\n    throw new Error('No text in model response.');\n  }\n  const raw = textBlock.text.trim();\n  const parsed = extractJson(raw);\n  if (!parsed || typeof parsed.types !== 'string' || typeof parsed.schema !== 'string') {\n    throw new Error('Model returned malformed payload.');\n  }\n  return { types: parsed.types.trim(), schema: parsed.schema.trim() };\n}\n\nfunction extractJson(text: string): { types?: unknown; schema?: unknown } | null {\n  // Tolerate ```json fences even though we tell the model not to use them.\n  const fenced = text.match(/```(?:json)?\\s*([\\s\\S]*?)```/);\n  const candidate = (fenced ? fenced[1] : text).trim();\n  try {\n    return JSON.parse(candidate);\n  } catch {\n    // Last-ditch: find first { and last }\n    const start = candidate.indexOf('{');\n    const end = candidate.lastIndexOf('}');\n    if (start >= 0 && end > start) {\n      try {\n        return JSON.parse(candidate.slice(start, end + 1));\n      } catch {\n        return null;\n      }\n    }\n    return null;\n  }\n}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "340523eba05bf5dd3a07dcfcdac29d7b2a2032db8a3190aa7a8ca5b99166c7ed",
+      "score": 100,
+      "content": "# jsontosdk\n\nPaste a JSON sample → production-grade TypeScript interfaces + Zod schema, in ~2 seconds.\nLLM-named (no `_C`, `_C1`, `_C2`), no signup, the URL is shareable.\n\n**Live:** https://jsontosdk.vercel.app\n\n## Why\n\n`quicktype` produces unreadable type names. ChatGPT works but the result lives\nin a chat — there's no permanence and no shareable URL. OpenAPI codegen only\nworks when the upstream publishes a spec, which most small SaaS, partner APIs,\ninternal endpoints, and MCP-server resource shapes don't.\n\njsontosdk is the LLM-first take: paste → typed SDK, named like a human wrote it.\n\n## How it works\n\n1. Paste one JSON response (≤ 100 KB).\n2. The server (Astro endpoint on Vercel) forwards it to Claude Haiku 4.5 with\n   a strict system prompt that produces:\n   - `types.ts` — `export interface` declarations, PascalCase, child-first\n     ordered, with comment hints for ISO dates / URLs / emails.\n   - `schema.ts` — matching Zod schema, mirrors the interfaces.\n3. The result is rendered in two copy-buttoned panels.\n4. The paste is encoded into `#payload=<base64>` so the URL is shareable.\n\n## v1 limits\n\n- One sample per call (multi-sample union inference is v2).\n- TypeScript + Zod only (Pydantic / Go / Rust are v3+).\n- 100 KB input cap, 20 generations / hour / IP.\n- No signup, no account, no DB.\n\n## Local dev\n\n```sh\ncd code\nnpm install\nANTHROPIC_API_KEY=sk-ant-... npm run dev\n```\n\n## Stack\n\n- Astro 5 (server output) on Vercel serverless\n- `@anthropic-ai/sdk` calling `claude-haiku-4-5`\n- Vanilla JS, no framework on the page\n- In-memory IP rate limit (resets per cold start — fine for v1)\n\n## License\n\nMIT\n"
+    },
+    {
+      "path": "src/lib/rateLimit.ts",
+      "sha": null,
+      "content_sha256": "1e0b81d386e4b27c917d013274912b7d2709503a9f081ea601b385f05f330709",
+      "score": 89,
+      "content": "// In-memory IP rate limiter. Lives per serverless invocation, so it resets on\n// cold start — fine for v1 viral-burst cost protection. Move to Vercel KV in v2\n// when we need persistence across function instances.\n\ntype Bucket = { count: number; windowStart: number };\n\nconst WINDOW_MS = 60 * 60 * 1000;\nconst LIMIT = 20;\nconst buckets = new Map<string, Bucket>();\n\nexport function rateLimit(ip: string): { ok: boolean; remaining: number; resetIn: number } {\n  const now = Date.now();\n  const b = buckets.get(ip);\n  if (!b || now - b.windowStart >= WINDOW_MS) {\n    buckets.set(ip, { count: 1, windowStart: now });\n    return { ok: true, remaining: LIMIT - 1, resetIn: WINDOW_MS };\n  }\n  if (b.count >= LIMIT) {\n    return { ok: false, remaining: 0, resetIn: WINDOW_MS - (now - b.windowStart) };\n  }\n  b.count += 1;\n  return { ok: true, remaining: LIMIT - b.count, resetIn: WINDOW_MS - (now - b.windowStart) };\n}\n\nexport function getClientIp(headers: Headers): string {\n  const fwd = headers.get('x-forwarded-for');\n  if (fwd) return fwd.split(',')[0].trim();\n  const real = headers.get('x-real-ip');\n  if (real) return real.trim();\n  return 'unknown';\n}\n"
+    },
+    {
+      "path": "src/lib/waitlistRateLimit.ts",
+      "sha": null,
+      "content_sha256": "f4009f9f0a925d0bf025f76618e73e3e7471ce3390e656ec92911bd202dd4013",
+      "score": 89,
+      "content": "// Separate in-memory bucket for /api/waitlist so a waitlist signup does not\n// consume a /api/generate quota slot. 5 hits / hour / IP.\n\ntype Bucket = { count: number; windowStart: number };\n\nconst WINDOW_MS = 60 * 60 * 1000;\nconst LIMIT = 5;\nconst buckets = new Map<string, Bucket>();\n\nexport function waitlistRateLimit(ip: string): { ok: boolean; remaining: number; resetIn: number } {\n  const now = Date.now();\n  const b = buckets.get(ip);\n  if (!b || now - b.windowStart >= WINDOW_MS) {\n    buckets.set(ip, { count: 1, windowStart: now });\n    return { ok: true, remaining: LIMIT - 1, resetIn: WINDOW_MS };\n  }\n  if (b.count >= LIMIT) {\n    return { ok: false, remaining: 0, resetIn: WINDOW_MS - (now - b.windowStart) };\n  }\n  b.count += 1;\n  return { ok: true, remaining: LIMIT - b.count, resetIn: WINDOW_MS - (now - b.windowStart) };\n}\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "5ab5e88cdce59bdae1d0441058fe7158a4d5c5a40a417120361b595084535296",
+      "score": 35,
+      "content": "{\n  \"extends\": \"astro/tsconfigs/strict\",\n  \"compilerOptions\": {\n    \"baseUrl\": \".\",\n    \"paths\": {\n      \"@/*\": [\"src/*\"]\n    }\n  }\n}\n"
+    },
+    {
+      "path": "src/env.d.ts",
+      "sha": null,
+      "content_sha256": "cc719d1ef0609cd73ab9d19df5df62df8a3f84bed76b9e6b0ae1f669c67a1ff8",
+      "score": 33,
+      "content": "/// <reference path=\"../.astro/types.d.ts\" />"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T22:57:01.723020+00:00"
+}

@@ -1,0 +1,220 @@
+{
+  "canonical_source": "github:frappe/hrms",
+  "repo": "frappe/hrms",
+  "revision_sha": "7fc314bdbdb69d0161bff1ba4dd46f4a7dffd8a2",
+  "default_branch": "develop",
+  "pushed_at": "2026-10-20T16:53:41Z",
+  "repo_updated_at": "2026-10-20T21:29:28Z",
+  "license": "GPL-3.0",
+  "topics": [
+    "attendance",
+    "employee",
+    "erpnext",
+    "exits",
+    "frappe",
+    "frappe-framework",
+    "hcm",
+    "hr",
+    "hris",
+    "hrms",
+    "javascript",
+    "leave-management",
+    "onboarding",
+    "open-source",
+    "payroll",
+    "performance-management",
+    "pwa",
+    "python",
+    "recruitment",
+    "shift-management"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "86bd9e109bde42582d50dc21382ffae6dfc1c39668dc784f19937c79053d8c07",
+      "score": 198,
+      "content": "name: CI\n\non:\n  pull_request:\n    paths-ignore:\n      - \"**.css\"\n      - \"**.js\"\n      - \"**.md\"\n      - \"**.html\"\n      - \"**.csv\"\n      - \"**.po\"\n      - \"**.pot\"\n      - 'crowdin.yml'\n      - '.mergify.yml'\n      - '**.vue'\n  schedule:\n    # Run everday at midnight UTC / 5:30 IST\n    - cron: \"0 0 * * *\"\nenv:\n    HR_BRANCH: ${{ github.base_ref || github.ref_name }}\n\nconcurrency:\n  group: develop-${{ github.event.number }}\n  cancel-in-progress: true\n\njobs:\n  tests:\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    env:\n      NODE_ENV: \"production\"\n      WITH_COVERAGE: ${{ github.event_name != 'pull_request' }}\n\n    strategy:\n      fail-fast: false\n\n      matrix:\n        container: [1, 2, 3]\n\n    name: Python Unit Tests\n\n    services:\n      mysql:\n        image: mariadb:11.8\n        env:\n          MARIADB_ROOT_PASSWORD: 'root'\n        ports:\n          - 3306:3306\n        options: --health-cmd=\"mariadb-admin ping\" --health-interval=5s --health-timeout=2s --health-retries=3\n\n    steps:\n      - name: Clone\n        uses: actions/checkout@v6\n\n      - name: Setup Python\n        uses: actions/setup-python@v6\n        with:\n          python-version: '3.14'\n\n      - name: Check for valid Python & Merge Conflicts\n        run: |\n          python -m compileall -f \"${GITHUB_WORKSPACE}\"\n          if grep -lr --exclude-dir=node_modules \"^<<<<<<< \" \"${GITHUB_WORKSPACE}\"\n              then echo \"Found merge conflicts\"\n              exit 1\n          fi\n\n      - name: Setup Node\n        uses: actions/setup-node@v6\n        with:\n          node-version: 24\n          check-latest: true\n\n      - name: Add to Hosts\n        run: echo \"127.0.0.1 test_site\" | sudo tee -a /etc/hosts\n\n      - name: Cache pip\n        uses: actions/cache@v4\n        with:\n          path: ~/.cache/pip\n          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml') }}\n          restore-keys: |\n            ${{ runner.os }}-pip-\n            ${{ runner.os }}-\n\n      - name: Cache node modules\n        uses: actions/cache@v4\n        env:\n          cache-name: cache-node-modules\n        with:\n          path: ~/.npm\n          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}\n          restore-keys: |\n            ${{ runner.os }}-build-${{ env.cache-name }}-\n            ${{ runner.os }}-build-\n            ${{ runner.os }}-\n\n      - name: Get yarn cache directory path\n        id: yarn-cache-dir-path\n        run: echo \"::set-output name=dir::$(yarn cache dir)\"\n\n      - uses: actions/cache@v4\n        id: yarn-cache\n        with:\n          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}\n          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}\n          restore-keys: |\n            ${{ runner.os }}-yarn-\n\n      - name: Install\n        run: |\n          bash ${GITHUB_WORKSPACE}/.github/helper/install.sh\n        env:\n          FRAPPE_USER: ${{ github.event.inputs.user }}\n          FRAPPE_BRANCH: ${{ github.event.inputs.branch }}\n\n      - name: Run Tests\n        run: cd ~/frappe-bench/ && bench --site test_site run-parallel-tests --app hrms --total-builds ${{ strategy.job-total }} --build-number ${{ matrix.container }} --lightmode\n        env:\n          TYPE: server\n          CAPTURE_COVERAGE: ${{ github.event_name != 'pull_request' }}\n\n      - name: Upload coverage data\n        uses: actions/upload-artifact@v4\n        if: github.event_name != 'pull_request'\n        with:\n          name: coverage-${{ matrix.container }}\n          path: /home/runner/frappe-bench/sites/coverage.xml\n\n  coverage:\n    name: Coverage Wrap Up\n    needs: tests\n    runs-on: ubuntu-latest\n    if: ${{ github.event_name != 'pull_request' }}\n    steps:\n      - name: Clone\n        uses: actions/checkout@v6\n\n      - name: Download artifacts\n        uses: actions/download-artifact@v4\n\n      - name: Upload coverage data\n        uses: codecov/codecov-action@v4\n        with:\n          token: ${{ secrets.CODECOV_TOKEN }}\n          fail_ci_if_error: true\n          verbose: true\n"
+    },
+    {
+      "path": ".github/workflows/ci_faux.yml",
+      "sha": null,
+      "content_sha256": "421565781eac436763f2c2b48cfba656c532318cf966fa604c7bac3e2584ca94",
+      "score": 198,
+      "content": "# Tests are skipped for these files but github doesn't allow \"passing\" hence this is required.\n\nname: Skipped Tests\n\non:\n  pull_request:\n    paths:\n      - \"**.css\"\n      - \"**.js\"\n      - \"**.md\"\n      - \"**.html\"\n      - \"**.csv\"\n      - \"**.po\"\n      - \"**.pot\"\n      - 'crowdin.yml'\n      - '.mergify.yml'\n      - '**.vue'\n\npermissions:\n  contents: read\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        container: [1, 2, 3]\n\n    name: Python Unit Tests\n\n    steps:\n      - name: Pass skipped tests unconditionally\n        run: \"echo Skipped\"\n"
+    },
+    {
+      "path": "hrms/api/oauth.py",
+      "sha": null,
+      "content_sha256": "08779a4debdd52d28203add04ab840823e065410a23d923664b92867431bd1ef",
+      "score": 186,
+      "content": "import frappe\n\n\n@frappe.whitelist(allow_guest=True)\ndef oauth_providers():\n\tfrom frappe.utils.html_utils import get_icon_html\n\tfrom frappe.utils.oauth import get_oauth2_authorize_url, get_oauth_keys\n\tfrom frappe.utils.password import get_decrypted_password\n\n\tout = []\n\tproviders = frappe.get_all(\n\t\t\"Social Login Key\",\n\t\tfilters={\"enable_social_login\": 1},\n\t\tfields=[\"name\", \"client_id\", \"base_url\", \"provider_name\", \"icon\"],\n\t\torder_by=\"name\",\n\t)\n\n\tfor provider in providers:\n\t\tclient_secret = [REDACTED]\"Social Login Key\", provider.name, \"client_secret\")\n\t\tif not client_secret:\n\t\t\tcontinue\n\n\t\tif provider.client_id and provider.base_url and get_oauth_keys(provider.name):\n\t\t\tout.append(\n\t\t\t\t{\n\t\t\t\t\t\"name\": provider.name,\n\t\t\t\t\t\"provider_name\": provider.provider_name,\n\t\t\t\t\t\"auth_url\": get_oauth2_authorize_url(provider.name, \"/hrms\"),\n\t\t\t\t\t\"icon\": provider.icon,\n\t\t\t\t}\n\t\t\t)\n\n\treturn out\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".github/workflows/run-individual-tests.yml",
+      "sha": null,
+      "content_sha256": "32783f9d2fb56fce4b696a870af15254d6f26b9bef6267822137d04c969dfe0b",
+      "score": 186,
+      "content": "name: Individual\n\non:\n  workflow_dispatch:\n\nconcurrency:\n  group: server-individual-tests-lightmode-develop\n  cancel-in-progress: true\n\npermissions:\n  contents: read\n\njobs:\n  discover:\n    runs-on: ubuntu-latest\n    outputs:\n      matrix: ${{ steps.set-matrix.outputs.matrix }}\n    steps:\n    - name: Clone\n      uses: actions/checkout@v6\n    - id: set-matrix\n      run: |\n        # Use grep and find to get the list of test files\n        matrix=$(find . -path '*/test_*.py' | xargs grep -l 'def test_' | sort | awk '{\n            # Remove ./ prefix, file extension, and replace / with .\n            gsub(/^\\.\\//, \"\", $0)\n            gsub(/\\.py$/, \"\", $0)\n            gsub(/\\//, \".\", $0)\n            # Add to array\n            tests[NR] = $0\n        }\n        END {\n            # Start JSON array\n            printf \"{\\n  \\\"include\\\": [\\n\"\n            # Loop through array and create JSON objects\n            for (i=1; i<=NR; i++) {\n                printf \"    {\\\"test\\\": \\\"%s\\\"}\", tests[i]\n                if (i < NR) printf \",\"\n                printf \"\\n\"\n            }\n            # Close JSON array\n            printf \"  ]\\n}\"\n        }')\n\n        # Output the matrix\n        echo \"matrix=$(echo \"$matrix\" | jq -c)\" >> $GITHUB_OUTPUT\n\n        # For debugging (optional)\n        echo \"Generated matrix:\"\n        echo \"$matrix\"\n  test:\n    needs: discover\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    env:\n      NODE_ENV: \"production\"\n\n    strategy:\n      fail-fast: false\n      matrix: ${{fromJson(needs.discover.outputs.matrix)}}\n      # max-parallel: 10\n\n    name: Test\n\n    services:\n      mysql:\n        image: mariadb:10.6\n        env:\n          MARIADB_ROOT_PASSWORD: 'root'\n        ports:\n          - 3306:3306\n        options: --health-cmd=\"mariadb-admin ping\" --health-interval=5s --health-timeout=2s --health-retries=3\n\n    steps:\n      - name: Clone\n        uses: actions/checkout@v6\n\n      - name: Setup Python\n        uses: actions/setup-python@v6\n        with:\n          python-version: '3.14'\n\n      - name: Setup Node\n        uses: actions/setup-node@v6\n        with:\n          node-version: 24\n          check-latest: true\n\n      - name: Add to Hosts\n        run: echo \"127.0.0.1 test_site\" | sudo tee -a /etc/hosts\n\n      - name: Cache pip\n        uses: actions/cache@v4\n        with:\n          path: ~/.cache/pip\n          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml') }}\n          restore-keys: |\n            ${{ runner.os }}-pip-\n            ${{ runner.os }}-\n\n      - name: Cache node modules\n        uses: actions/cache@v4\n        env:\n          cache-name: cache-node-modules\n        with:\n          path: ~/.npm\n          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}\n          restore-keys: |\n            ${{ runner.os }}-build-${{ env.cache-name }}-\n            ${{ runner.os }}-build-\n            ${{ runner.os }}-\n\n      - name: Get yarn cache directory path\n        id: yarn-cache-dir-path\n        run: echo \"dir=$(yarn cache dir)\" >> $GITHUB_OUTPUT\n\n      - uses: actions/cache@v4\n        id: yarn-cache\n        with:\n          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}\n          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}\n          restore-keys: |\n            ${{ runner.os }}-yarn-\n\n      - name: Install\n        run: bash ${GITHUB_WORKSPACE}/.github/helper/install.sh\n        env:\n          DB: mariadb\n          TYPE: server\n          FRAPPE_USER: ${{ github.event.inputs.user }}\n          FRAPPE_BRANCH: ${{ github.event.inputs.branch }}\n\n      - name: Run Tests\n        run: |\n          site_name=$(echo \"${{matrix.test}}\" | sed -e 's/.*\\.\\(test_.*$\\)/\\1/')\n          echo \"$site_name\"\n          mkdir ~/frappe-bench/sites/$site_name\n          cp -r \"${GITHUB_WORKSPACE}/.github/helper/site_config.json\" ~/frappe-bench/sites/$site_name/site_config.json\n          cd ~/frappe-bench/\n          bench --site $site_name reinstall --yes\n          bench --site $site_name install-app hrms\n          bench --site $site_name set-config allow_tests true\n          bench --site $site_name run-tests --module ${{ matrix.test }} --lightmode\n\n"
+    },
+    {
+      "path": "hrms/patches/post_install/create_country_fixtures.py",
+      "sha": null,
+      "content_sha256": "3654380e4ea74d3d38ad9df909299136c47d1998d05368a4f4ba70ffb3903193",
+      "score": 171,
+      "content": "import frappe\n\nfrom hrms.overrides.company import make_salary_components, run_regional_setup\n\n\ndef execute():\n\tfor country in frappe.get_all(\"Company\", pluck=\"country\", distinct=True):\n\t\trun_regional_setup(country)\n\t\tmake_salary_components(country)\n"
+    },
+    {
+      "path": "hrms/tests/test_api.py",
+      "sha": null,
+      "content_sha256": "0f34ce837df2c8f994f64306ca57a2fc3fcfbdd5e439ff01a34f1c5a33545c52",
+      "score": 166,
+      "content": "import frappe\n\nfrom erpnext.setup.doctype.employee.test_employee import make_employee\n\nfrom hrms.api import (\n\tget_company_currencies,\n\tget_expense_approval_details,\n\tget_holidays_for_employee,\n\tget_leave_approval_details,\n\tget_shift_request_approvers,\n)\nfrom hrms.overrides.employee_master import get_timeline_data\nfrom hrms.tests.utils import HRMSTestSuite, make_company_restricted_user\nfrom hrms.utils.holiday_list import get_holiday_list_for_employee\n\n\nclass TestAPI(HRMSTestSuite):\n\tdef test_get_company_currencies_respects_company_scope(self):\n\t\tcompanies = get_company_currencies()\n\t\tself.assertIn(\"_Test Company\", companies)\n\t\tself.assertIn(\"_Test Company 1\", companies)\n\t\tself.assertEqual(\n\t\t\tcompanies[\"_Test Company\"][0], frappe.db.get_value(\"Company\", \"_Test Company\", \"default_currency\")\n\t\t)\n\n\t\tuser = \"test_scoped_employee@example.com\"\n\t\tmake_employee(user, company=\"_Test Company\")\n\t\tmake_company_restricted_user(user, \"_Test Company\", role=\"Employee\")\n\t\tfrappe.set_user(user)\n\t\ttry:\n\t\t\tcompanies = get_company_currencies()\n\t\tfinally:\n\t\t\tfrappe.set_user(\"Administrator\")\n\n\t\tself.assertEqual(list(companies), [\"_Test Company\"])\n\n\tdef test_get_timeline_data_only_for_employee(self):\n\t\temployee = make_employee(\"test_timeline_employee@example.com\", company=\"_Test Company\")\n\t\tself.assertIn(\"timeline_data\", get_timeline_data(\"Employee\", employee))\n\t\tself.assertRaises(frappe.ValidationError, get_timeline_data, \"Company\", \"_Test Company\")\n\n\tdef test_employee_can_load_own_holidays_and_approvers(self):\n\t\tuser = \"test_pwa_employee@example.com\"\n\t\temployee = make_employee(user, company=\"_Test Company\")\n\t\tself.assertTrue(frappe.db.get_value(\"Employee\", employee, \"department\"))\n\t\tself.assertTrue(get_holiday_list_for_employee(employee, raise_exception=False))\n\n\t\tfrappe.set_user(user)\n\t\ttry:\n\t\t\tself.assertIsInstance(get_holidays_for_employee(employee), list)\n\t\t\tself.assertIn(\"department_approvers\", get_leave_approval_details(employee))\n\t\t\tself.assertIn(\"department_approvers\", get_expense_approval_details(employee))\n\t\t\tget_shift_request_approvers(employee)\n\t\tfinally:\n\t\t\tfrappe.set_user(\"Administrator\")\n"
+    },
+    {
+      "path": ".github/workflows/docs_checker.yml",
+      "sha": null,
+      "content_sha256": "10d4cef05fb27b212e5a0b2a2ec1e785fb5f2076d5d4b73b9f9dcc1de5f70ea4",
+      "score": 126,
+      "content": "name: 'Documentation Required'\non:\n  pull_request:\n    types: [ opened, synchronize, reopened, edited ]\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n\n    steps:\n      - name: 'Setup Environment'\n        uses: actions/setup-python@v6\n        with:\n          python-version: 3.8\n\n      - name: 'Clone repo'\n        uses: actions/checkout@v6\n\n      - name: Validate Docs\n        env:\n          PR_NUMBER: ${{ github.event.number }}\n        run: |\n          pip install requests --quiet\n          python $GITHUB_WORKSPACE/.github/helper/documentation.py $PR_NUMBER"
+    },
+    {
+      "path": ".github/workflows/patch_faux.yml",
+      "sha": null,
+      "content_sha256": "d1c08bb3ea231ed854b6af5cfd82b4e38eb73ceb276c99598efce42d50b446e6",
+      "score": 126,
+      "content": "# Tests are skipped for these files but github doesn't allow \"passing\" hence this is required.\n\nname: Skipped Patch Test\n\non:\n  pull_request:\n    paths:\n      - '**.js'\n      - '**.css'\n      - '**.md'\n      - '**.html'\n      - '**.csv'\n      - 'crowdin.yml'\n      - '.mergify.yml'\n      - '**.vue'\n      - '**.pot'\n      - '**.po'\n\npermissions:\n  contents: read\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n\n    name: Patch Test\n\n    steps:\n      - name: Pass skipped tests unconditionally\n        run: \"echo Skipped\"\n"
+    },
+    {
+      "path": ".github/workflows/labeller.yml",
+      "sha": null,
+      "content_sha256": "16e979967b496165e1b1984c0d168faca15b4f95d6b1bc6bd64c8909ccb04b22",
+      "score": 126,
+      "content": "name: \"Pull Request Labeler\"\non:\n  pull_request_target:\n    types: [opened, reopened]\n\njobs:\n  triage:\n    runs-on: ubuntu-latest\n    steps:\n    - uses: actions/labeler@v4\n      with:\n        repo-token: \"${{ secrets.GITHUB_TOKEN }}\"\n"
+    },
+    {
+      "path": ".github/workflows/assets.yml",
+      "sha": null,
+      "content_sha256": "c0540e8c5b72c5986d677f20dad3e3bd1c6c2f479760f3d446a8b886732dbe4f",
+      "score": 126,
+      "content": "name: Pre-build assets\n\non:\n  push:\n    branches: [develop, version-16, version-15]\n\njobs:\n  assets:\n    name: Pre-build assets\n    uses: frappe/pilot/.github/workflows/app-assets.yml@develop\n    permissions:\n      contents: write\n"
+    },
+    {
+      "path": ".github/workflows/review-translation-changes.yaml",
+      "sha": null,
+      "content_sha256": "2e00fbfb311dc3a469ccc6afec4d37f00a6da426276d35e0ce66adfc43a40cb1",
+      "score": 126,
+      "content": "name: Review translation PRs\ndescription: \"Posts review comments with relevant translation changes that are hard to inspect in the diff view.\"\n\non:\n  pull_request_target:\n    types: [opened, reopened, synchronize, ready_for_review]\n    paths:\n      - \"**/*.po\"\n      - \"**/*.pot\"\n\nconcurrency:\n  group: po-review-${{ github.event.pull_request.number }}\n  cancel-in-progress: true\n\njobs:\n  review-po-pr:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n    permissions:\n      contents: read\n      issues: write\n      pull-requests: write\n\n    steps:\n      - uses: alyf-de/po-review-action@57fff275f4a0518a2ca55869ec6776fa3813b3d5 # v1.2.0\n        with:\n          hidden-po-files: eo.po\n"
+    },
+    {
+      "path": ".github/workflows/on_release.yml",
+      "sha": null,
+      "content_sha256": "46a6ac5b1fbdcba52723bf51d2d4aafd825dfbc9004def08ecf8d04d50fcc8a7",
+      "score": 126,
+      "content": "name: Generate Semantic Release\non:\n  workflow_dispatch:\n  push:\n    branches:\n      - version-14\njobs:\n  release:\n    name: Release\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout Entire Repository\n        uses: actions/checkout@v6\n        with:\n          fetch-depth: 0\n          persist-credentials: false\n      - name: Setup Node.js\n        uses: actions/setup-node@v6\n        with:\n          node-version: 20\n      - name: Setup dependencies\n        run: |\n          npm install @semantic-release/git @semantic-release/exec --no-save\n      - name: Create Release\n        env:\n          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n          GIT_AUTHOR_NAME: \"Frappe PR Bot\"\n          GIT_AUTHOR_EMAIL: \"developers@frappe.io\"\n          GIT_COMMITTER_NAME: \"Frappe PR Bot\"\n          GIT_COMMITTER_EMAIL: \"developers@frappe.io\"\n        run: npx semantic-release\n"
+    },
+    {
+      "path": ".github/workflows/release_notes.yml",
+      "sha": null,
+      "content_sha256": "6831c7c31baac8c23372cb141fce4d7be670dad17c114096ac9a576b51b62bce",
+      "score": 126,
+      "content": "# This action:\n#\n# 1. Generates release notes using github API.\n# 2. Strips unnecessary info like chore/style etc from notes.\n# 3. Updates release info.\n\n# This action needs to be maintained on all branches that do releases.\n\nname: 'Release Notes'\n\non:\n  workflow_dispatch:\n    inputs:\n      tag_name:\n        description: 'Tag of release like v13.0.0'\n        required: true\n        type: string\n  release:\n    types: [released]\n\npermissions:\n  contents: read\n\njobs:\n  regen-notes:\n    name: 'Regenerate release notes'\n    runs-on: ubuntu-latest\n\n    steps:\n    - name: Update notes\n      run: |\n        NEW_NOTES=$(gh api --method POST -H \"Accept: application/vnd.github+json\"  /repos/frappe/hrms/releases/generate-notes  -f tag_name=$RELEASE_TAG \\\n          | jq -r '.body' \\\n          | sed -E '/^\\* (chore|ci|test|docs|style)/d' \\\n          | sed -E 's/by @mergify //'\n        )\n        RELEASE_ID=$(gh api -H \"Accept: application/vnd.github+json\" /repos/frappe/hrms/releases/tags/$RELEASE_TAG | jq -r '.id')\n        gh api --method PATCH -H \"Accept: application/vnd.github+json\" /repos/frappe/hrms/releases/$RELEASE_ID -f body=\"$NEW_NOTES\"\n\n      env:\n        GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n        RELEASE_TAG: ${{ github.event.inputs.tag_name || github.event.release.tag_name }}"
+    },
+    {
+      "path": ".github/workflows/initiate_release.yml",
+      "sha": null,
+      "content_sha256": "3cc64cca2a25a3f0045eaaa68c4b98d15fa2daa932979ff049f8385b04676748",
+      "score": 126,
+      "content": "# This workflow is agnostic to branches. Only maintain on develop branch.\n# To add/remove versions just modify the matrix.\n\nname: Create weekly release pull requests\non:\n  schedule:\n    # 9:45 UTC => 3:15 PM IST Tuesday\n    - cron: \"45 9 * * 2\"\n  workflow_dispatch:\n\njobs:\n  stable-release:\n    name: Release\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n      matrix:\n        version: [\"14\", \"15\", \"16\"]\n\n    steps:\n      - uses: octokit/request-action@v2.x\n        with:\n          route: POST /repos/{owner}/{repo}/pulls\n          owner: frappe\n          repo: hrms\n          title: |-\n            \"chore: release v${{ matrix.version }}\"\n          body: \"Automated Release.\"\n          base: version-${{ matrix.version }}\n          head: version-${{ matrix.version }}-hotfix\n        env:\n          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n"
+    },
+    {
+      "path": ".github/workflows/generate-pot-file.yml",
+      "sha": null,
+      "content_sha256": "283a8f93fa600c5218db65cf4800d12279f00f95549986b1f9c5fbe95f172688",
+      "score": 126,
+      "content": "name: Regenerate POT file (translatable strings)\non:\n  schedule:\n    # 9:30 UTC => 3 PM IST Sunday\n    - cron: \"30 9 * * 0\"\n  workflow_dispatch:\n\njobs:\n  regenerate-pot-file:\n    name: Regenerate POT file\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n      matrix:\n        branch: [\"develop\"]\n    permissions:\n      contents: write\n\n    steps:\n        - name: Checkout\n          uses: actions/checkout@v6\n          with:\n            ref: ${{ matrix.branch }}\n\n        - name: Setup Python\n          uses: actions/setup-python@v6\n          with:\n            python-version: \"3.14\"\n\n        - name: Setup Node\n          uses: actions/setup-node@v6\n          with:\n            node-version: 24\n\n        - name: Run script to update POT file\n          run: |\n            bash ${GITHUB_WORKSPACE}/.github/helper/update_pot_file.sh\n          env:\n            GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n            BASE_BRANCH: ${{ matrix.branch }}\n"
+    },
+    {
+      "path": ".github/workflows/linters.yml",
+      "sha": null,
+      "content_sha256": "68c768c82f703d27711ae7435208bff66e91cd2b3aec655a7dc1fc6b93e5051a",
+      "score": 126,
+      "content": "name: Linters\n\non:\n  pull_request: { }\n\njobs:\n  commit-lint:\n    name: 'Semantic Commits'\n    runs-on: ubuntu-latest\n    if: github.event_name == 'pull_request'\n\n    steps:\n      - uses: actions/checkout@v6\n        with:\n          fetch-depth: 200\n      - uses: actions/setup-node@v6\n        with:\n          node-version: 24\n          check-latest: true\n\n      - name: Check commit titles\n        run: |\n          npm install @commitlint/cli @commitlint/config-conventional\n          npx commitlint --verbose --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}\n\n  linter:\n    name: 'Frappe Linter'\n    runs-on: ubuntu-latest\n    if: github.event_name == 'pull_request'\n\n    steps:\n      - uses: actions/checkout@v6\n\n      - name: Set up Python 3.14\n        uses: actions/setup-python@v6\n        with:\n          python-version: '3.14'\n\n      - name: Install and Run Pre-commit\n        uses: pre-commit/action@v3.0.0\n\n      - name: Download Semgrep rules\n        run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules\n\n      - name: Download semgrep\n        run: pip install semgrep\n\n      - name: Run Semgrep rules\n        run: semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness\n\n      - name: Semgrep for Test Correctness\n        run: semgrep ci --include=**/test_*.py --config ./semgrep/test-correctness.yml        \n"
+    },
+    {
+      "path": ".github/workflows/stale.yml",
+      "sha": null,
+      "content_sha256": "781fe22353a02a7bb5c23503d0b0e952613c288beb500bb1e726b1ef3f3a160f",
+      "score": 126,
+      "content": "# https://github.com/actions/stale\n\nname: \"Close Stale PRs\"\non:\n  schedule:\n    - cron: 0 0 * * *\n  workflow_dispatch:\n\njobs:\n  stale:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/stale@v9\n        with:\n          days-before-pr-stale: 15\n          days-before-pr-close: 3\n          stale-pr-label: 'Inactive'\n          exempt-draft-pr: true\n          days-before-issue-stale: 5\n          days-before-issue-close: 2\n          stale-issue-label: 'Inactive'\n          any-of-issue-labels: \"question,can't replicate\"\n          remove-issue-stale-when-updated: true\n          labels-to-remove-when-unstale: 'Inactive'\n          stale-pr-message: |\n            This pull request is being marked as inactive because of no recent activity. \n            If your PR hasn't been reviewed, it's likely because it doesn't fullfill the [contribution guidelines](https://github.com/frappe/erpnext/wiki/Contribution-Guidelines). Please read them carefully and fix the pull request. When you are sure all items are checked, please ping relevant codeowner in the comment. Be nice, they have a lot on their plate too.\n            \n            It will be closed in 3 days if no further activity occurs.\n            Thank you for contributing!\n          stale-issue-message: |\n            Hi, this is your friendly neighbourhood bot :)\n            \n            Thank you for taking time to report the issue, however your description of the issue is insufficient to understand the exact problem and/or to replicate and fix it. Please provide the information requested by the maintainers, so this can be fixed. More the steps/screenshots/videos the better.\n\n            It will be closed in 2 days if no further activity occurs.\n            Beep Boop!\n"
+    },
+    {
+      "path": ".github/workflows/patch.yml",
+      "sha": null,
+      "content_sha256": "dbca58a99e16c22b926cb1f40e77b41a66a6fbd0a445b960bd678a572b331672",
+      "score": 126,
+      "content": "name: Patch\n\non:\n  pull_request:\n    paths-ignore:\n      - '**.js'\n      - '**.css'\n      - '**.md'\n      - '**.html'\n      - '**.csv'\n      - 'crowdin.yml'\n      - '.mergify.yml'\n      - '**.vue'\n      - '**.pot'\n      - '**.po'\n\n  workflow_dispatch:\n\nconcurrency:\n  group: patch-develop-${{ github.event_name }}-${{ github.event.number || github.event_name == 'workflow_dispatch' && github.run_id || '' }}\n  cancel-in-progress: true\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n\n    name: Patch Test\n\n    services:\n      mysql:\n        image: mariadb:11.8\n        env:\n          MARIADB_ROOT_PASSWORD: 'root'\n        ports:\n          - 3306:3306\n        options: --health-cmd=\"mariadb-admin ping\" --health-interval=5s --health-timeout=2s --health-retries=3\n\n    steps:\n      - name: Clone\n        uses: actions/checkout@v6\n\n      - name: Check for valid Python & Merge Conflicts\n        run: |\n          python -m compileall -f \"${GITHUB_WORKSPACE}\"\n          if grep -lr --exclude-dir=node_modules \"^<<<<<<< \" \"${GITHUB_WORKSPACE}\"\n              then echo \"Found merge conflicts\"\n              exit 1\n          fi\n\n      - name: Setup Python\n        uses: actions/setup-python@v6\n        with:\n          python-version: |\n            3.11\n            3.13\n            3.14\n\n      - name: Setup Node\n        uses: actions/setup-node@v6\n        with:\n          node-version: 24\n          check-latest: true\n\n      - name: Add to Hosts\n        run: echo \"127.0.0.1 test_site\" | sudo tee -a /etc/hosts\n\n      - name: Cache pip\n        uses: actions/cache@v4\n        with:\n          path: ~/.cache/pip\n          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml') }}\n          restore-keys: |\n            ${{ runner.os }}-pip-\n            ${{ runner.os }}-\n\n      - name: Cache node modules\n        uses: actions/cache@v4\n        env:\n          cache-name: cache-node-modules\n        with:\n          path: ~/.npm\n          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}\n          restore-keys: |\n            ${{ runner.os }}-build-${{ env.cache-name }}-\n            ${{ runner.os }}-build-\n            ${{ runner.os }}-\n\n      - name: Get yarn cache directory path\n        id: yarn-cache-dir-path\n        run: echo \"::set-output name=dir::$(yarn cache dir)\"\n\n      - uses: actions/cache@v4\n        id: yarn-cache\n        with:\n          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}\n          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}\n          restore-keys: |\n            ${{ runner.os }}-yarn-\n\n      - name: Install\n        run: |\n          pip install frappe-bench\n          bash ${GITHUB_WORKSPACE}/.github/helper/install.sh\n        env:\n          DB: mariadb\n          TYPE: server\n\n      - name: Run Patch Tests\n        run: |\n          cd ~/frappe-bench/\n          bench remove-app payments --force\n          bench remove-app lending --force\n          jq 'del(.install_apps)' ~/frappe-bench/sites/test_site/site_config.json > tmp.json\n          mv tmp.json ~/frappe-bench/sites/test_site/site_config.json\n\n          wget https://frappe.io/files/frappe-hr-v14-p.sql.gz\n          bench --site test_site --force restore ~/frappe-bench/frappe-hr-v14-p.sql.gz\n\n          git -C \"apps/frappe\" remote set-url upstream https://github.com/frappe/frappe.git\n          git -C \"apps/erpnext\" remote set-url upstream https://github.com/frappe/erpnext.git\n          git -C \"apps/hrms\" remote set-url upstream https://github.com/frappe/hrms.git\n\n\n          function update_to_version() {\n            version=$1\n\n            branch_name=\"version-$version-hotfix\"\n            echo \"Updating to v$version\"\n\n            # Fetch and checkout branches\n            git -C \"apps/frappe\" fetch --depth 1 upstream $branch_name:$branch_name\n            git -C \"apps/erpnext\" fetch --depth 1 upstream $branch_name:$branch_name\n            git -C \"apps/hrms\" fetch --depth 1 upstream $branch_name:$branch_name\n            git -C \"apps/frappe\" checkout -q -f $branch_name\n            git -C \"apps/erpnext\" checkout -q -f $branch_name\n            git -C \"apps/hrms\" checkout -q -f $branch_name\n\n            # Resetup env and install apps\n            pgrep honcho | xargs kill\n            rm -rf ~/frappe-bench/env\n            bench -v setup env --python python$2\n            bench pip install -e ./apps/erpnext\n            bench pip install -e ./apps/hrms\n            bench start &>> ~/frappe-bench/bench_start.log &\n\n            bench --site test_site migrate\n          }\n\n          update_to_version 15 3.13\n          update_to_version 16 3.14\n\n          echo \"Updating to latest version\"\n          git -C \"apps/frappe\" fetch --depth 1 upstream \"${GITHUB_BASE_REF:-${GITHUB_REF##*/}}\"\n          git -C \"apps/frappe\" checkout -q -f FETCH_HEAD\n          git -C \"apps/erpnext\" checkout -q -f FETCH_HEAD\n          git -C \"apps/hrms\" checkout -q -f \"$GITHUB_SHA\"\n\n          pgrep honcho | xargs kill\n          rm -rf ~/frappe-bench/env\n          bench -v setup env\n          bench pip install -e ./apps/erpnext\n          bench pip install -e ./apps/hrms\n          bench start &>> ~/frappe-bench/bench_start.log &\n\n          bench --site test_site migrate\n\n      - name: Show bench output\n        if: ${{ always() }}\n        run: |\n          cd ~/frappe-bench\n          cat bench_start.log || true\n          cd logs\n          for f in ./*.log*; do\n            echo \"Printing log: $f\";\n            cat $f\n          done"
+    },
+    {
+      "path": ".github/workflows/build_image.yml",
+      "sha": null,
+      "content_sha256": "ebe801b4bd135ffe54ff5efd80cffd019b6209116d4bc4f67f2d934f893ad38c",
+      "score": 126,
+      "content": "name: Build Container Image\non:\n  release:\n    types: [published]\n  workflow_dispatch:\n  push:\n    branches:\n      - version-15\n    tags:\n      - \"*\"\njobs:\n  build:\n    name: Build\n    runs-on: ubuntu-latest\n\n    strategy:\n      matrix:\n        arch: [amd64, arm64]\n\n    permissions:\n      packages: write\n\n    steps:\n      - name: Checkout Entire Repository\n        uses: actions/checkout@v4\n\n      - name: Set up QEMU\n        uses: docker/setup-qemu-action@v3\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v3\n        with:\n          platforms: linux/${{ matrix.arch }}\n      - name: Login to GitHub Container Registry\n        uses: docker/login-action@v2\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n          \n      - name: Set Branch\n        run: |\n          echo \"FRAPPE_BRANCH=version-15\" >> $GITHUB_ENV\n\n      - name: Set Image Tag\n        run: |\n          echo \"IMAGE_TAG=stable\" >> $GITHUB_ENV\n      - uses: actions/checkout@v4\n        with:\n          repository: frappe/frappe_docker\n          path: builds\n\n      - name: Build and push\n        uses: docker/build-push-action@v6\n        with:\n          push: true\n          context: builds\n          file: builds/images/layered/Containerfile\n          tags: >\n            ghcr.io/${{ github.repository }}:${{ github.ref_name }},\n            ghcr.io/${{ github.repository }}:${{ env.IMAGE_TAG }}\n          build-args: |\n            \"FRAPPE_BRANCH=${{ env.FRAPPE_BRANCH }}\"\n          secret-files: |\n            apps_json=${{ github.workspace }}/.github/helper/apps.json"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "ad469a98d118030747e371e67ab0741ba3e2ff5f89097969203c7fa024eda8d8",
+      "score": 120,
+      "content": "{\n  \"private\": true,\n  \"name\": \"hrms\",\n  \"description\": \"Open Source HR & Payroll System powered by the Frappe Framework\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/frappe/hrms.git\"\n  },\n  \"homepage\": \"https://frappe.io/hr\",\n  \"author\": \"Frappe Technologies Pvt. Ltd.\",\n  \"license\": \"GPL-3.0\",\n  \"bugs\": {\n    \"url\": \"https://github.com/frappe/hrms/issues\"\n  },\n  \"aworkspaces\": [\"frontend\", \"roster\", \"frappe-ui\"],\n  \"scripts\": {\n    \"postinstall\": \"yarn install-pwa-deps && yarn install-roster-deps\",\n    \"install-pwa-deps\": \"cd frontend && yarn install --check-files\",\n    \"install-roster-deps\": \"cd roster && yarn install --check-files\",\n    \"dev-pwa\": \"cd frontend && yarn dev\",\n    \"dev-roster\": \"cd roster && yarn dev\",\n    \"build\": \"yarn build-pwa && yarn build-roster\",\n    \"build-pwa\": \"cd frontend && yarn build\",\n    \"build-roster\": \"cd roster && yarn build\"\n  },\n  \"dependencies\": {\n    \"html2canvas\": \"^1.4.1\"\n  }\n}\n"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "2e49c3acb87bbcae99bddd35b7ef069e71a4ab3a1da224cfd881c574927eb90b",
+      "score": 120,
+      "content": "[project]\nname = \"hrms\"\nauthors = [\n    { name = \"Frappe Technologies Pvt Ltd\", email = \"developers@frappe.io\" },\n]\ndescription = \"Open Source HR & Payroll Software\"\nrequires-python = \">=3.10\"\nreadme = \"README.md\"\ndynamic = [\"version\"]\n\n[build-system]\nrequires = [\"flit_core >=3.4,<4\"]\nbuild-backend = \"flit_core.buildapi\"\n\n[tool.frappe.testing.function_type_validation]\nmax_module_depth = 0\n\n[tool.ruff]\nline-length = 110\ntarget-version = \"py310\"\n\n[tool.ruff.lint]\nselect = [\"F\", \"E\", \"W\", \"I\", \"UP\", \"B\", \"RUF\"]\nignore = [\n    \"B017\",   # assertRaises(Exception) - should be more specific\n    \"B018\",   # useless expression, not assigned to anything\n    \"B023\",   # function doesn't bind loop variable - will have last iteration's value\n    \"B904\",   # raise inside except without from\n    \"E101\",   # indentation contains mixed spaces and tabs\n    \"E402\",   # module level import not at top of file\n    \"E501\",   # line too long\n    \"E741\",   # ambiguous variable name\n    \"F401\",   # \"unused\" imports\n    \"F403\",   # can't detect undefined names from * import\n    \"F405\",   # can't detect undefined names from * import\n    \"F722\",   # syntax error in forward type annotation\n    \"W191\",   # indentation contains tabs\n    \"RUF001\", # string contains ambiguous unicode character\n]\ntyping-modules = [\"frappe.types.DF\"]\n\n[tool.ruff.format]\nquote-style = \"double\"\nindent-style = \"tab\"\ndocstring-code-format = true\n\n[tool.ruff.lint.isort.sections]\n\"frappe\" = [\"frappe\"]\n\"erpnext\" = [\"erpnext\"]\n\"hrms\" = [\"hrms\"]\n\n[tool.ruff.lint.isort]\nsection-order = [\n    \"future\",\n    \"standard-library\",\n    \"third-party\",\n    \"frappe\",\n    \"erpnext\",\n    \"hrms\",\n    \"first-party\",\n    \"local-folder\",\n]\n\n\n[project.urls]\nHomepage = \"https://frappe.io/hr\"\nRepository = \"https://github.com/frappe/hrms.git\"\nDocumentation = \"https://docs.frappe.io/hr\"\n\"Bug Reports\" = \"https://github.com/frappe/hrms/issues\"\n\n[[tool.bench.assets]]\nbuild_dir = \"./frontend\"\nout_dir = \"./hrms/public/frontend\"\nindex_html_path = \"./hrms/www/hrms.html\"\n\n[[tool.bench.assets]]\nbuild_dir = \"./roster\"\nout_dir = \"./hrms/public/roster\"\nindex_html_path = \"./hrms/www/roster.html\"\n\n\n[tool.bench.frappe-dependencies]\nfrappe = \">=17.0.0-dev,<18.0.0\"\nerpnext = \">=17.0.0-dev,<18.0.0\"\n"
+    },
+    {
+      "path": "frontend/package.json",
+      "sha": null,
+      "content_sha256": "1ed2ee1c3d6b91c788eefc6fbeed45a8843e100cc144c74d11198ca1a339f685",
+      "score": 118,
+      "content": "{\n\t\"name\": \"frappe-hr-ui\",\n\t\"private\": true,\n\t\"version\": \"0.0.0\",\n\t\"type\": \"module\",\n\t\"scripts\": {\n\t\t\"dev\": \"vite\",\n\t\t\"serve\": \"vite preview\",\n\t\t\"build\": \"vite build --base=/assets/hrms/frontend/ && yarn copy-html-entry\",\n\t\t\"ionic:build\": \"npm run build\",\n\t\t\"ionic:serve\": \"vite dev --host\",\n\t\t\"copy-html-entry\": \"cp ../hrms/public/frontend/index.html ../hrms/www/hrms.html\"\n\t},\n\t\"dependencies\": {\n\t\t\"@ionic/vue\": \"^7.4.3\",\n\t\t\"@ionic/vue-router\": \"^7.4.3\",\n\t\t\"@vitejs/plugin-vue\": \"^4.4.0\",\n\t\t\"autoprefixer\": \"^10.4.19\",\n\t\t\"dayjs\": \"^1.11.11\",\n\t\t\"feather-icons\": \"^4.29.1\",\n\t\t\"firebase\": \"^10.8.0\",\n\t\t\"frappe-ui\": \"0.1.105\",\n\t\t\"postcss\": \"^8.4.5\",\n\t\t\"tailwindcss\": \"^3.4.3\",\n\t\t\"vite\": \"^5.4.10\",\n\t\t\"vite-plugin-pwa\": \"^0.20.5\",\n\t\t\"vue\": \"^3.5.12\",\n\t\t\"vue-router\": \"^4.3.2\",\n\t\t\"workbox-core\": \"^7.0.0\",\n\t\t\"workbox-precaching\": \"^7.0.0\"\n\t},\n\t\"devDependencies\": {\n\t\t\"eslint\": \"^8.39.0\",\n\t\t\"eslint-plugin-vue\": \"^9.11.0\",\n\t\t\"prettier\": \"^2.8.8\"\n\t}\n}\n"
+    },
+    {
+      "path": "docker/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "a346f337e8b532b2859406d48cc2046a8aba072779ffa42755a693084ee18c25",
+      "score": 118,
+      "content": "version: \"3.8\" # Updated version\nservices:\n  mariadb:\n    image: mariadb:10.8\n    command:\n      - --character-set-server=utf8mb4\n      - --collation-server=utf8mb4_unicode_ci\n      - --skip-character-set-client-handshake\n      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6\n    environment:\n      MYSQL_ROOT_PASSWORD: 123\n    volumes:\n      - mariadb-data:/var/lib/mysql\n\n  redis:\n    image: redis:alpine\n\n  frappe:\n    image: frappe/bench:latest\n    command: bash /workspace/init.sh\n    environment:\n      - SHELL=/bin/bash\n    working_dir: /home/frappe\n    volumes:\n      - .:/workspace\n    ports:\n      - 8000:8000\n      - 9000:9000\n\nvolumes:\n  mariadb-data:\n"
+    },
+    {
+      "path": "roster/package.json",
+      "sha": null,
+      "content_sha256": "259ebbb75525cf482546f82fba3de115a7fd542add969b596f522c0d26a71e2c",
+      "score": 118,
+      "content": "{\n  \"name\": \"roster\",\n  \"private\": true,\n  \"version\": \"0.0.0\",\n  \"type\":\"module\",\n  \"scripts\": {\n    \"dev\": \"vite\",\n    \"serve\": \"vite preview\",\n    \"build\": \"vite build --base=/assets/hrms/roster/ && yarn copy-html-entry\",\n    \"copy-html-entry\": \"cp ../hrms/public/roster/index.html ../hrms/www/roster.html\"\n  },\n  \"dependencies\": {\n    \"@vitejs/plugin-vue\": \"^4.4.0\",\n    \"autoprefixer\": \"^10.4.19\",\n    \"dayjs\": \"^1.11.11\",\n    \"feather-icons\": \"^4.29.1\",\n    \"frappe-ui\": \"0.1.105\",\n    \"postcss\": \"^8.4.5\",\n    \"tailwindcss\": \"^3.4.3\",\n    \"vite\": \"^5.4.10\",\n    \"vue\": \"^3.5.12\",\n    \"vue-router\": \"^4.3.2\"\n  },\n  \"devDependencies\": {\n    \"typescript\": \"^5.4.5\"\n  }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-20T22:56:56.812532+00:00"
+}
