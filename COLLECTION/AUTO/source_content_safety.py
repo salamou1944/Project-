@@ -27,6 +27,7 @@ TOKEN_PATTERNS = [
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b")),
     ("slack_token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b")),
     ("google_api_key", re.compile(r"\bAIza[0-9A-Za-z_-]{20,}\b")),
+    ("google_oauth_access_token", re.compile(r"\bya29\.[A-Za-z0-9._-]{20,}\b")),
     ("aws_access_key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("stripe_or_webhook_secret", re.compile(r"\b(?:sk_live_|rk_live_|whsec_)[A-Za-z0-9]{16,}\b")),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b")),
