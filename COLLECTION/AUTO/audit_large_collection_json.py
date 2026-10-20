@@ -13,14 +13,27 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+RECOMMENDED_BYTES = 50_000_000
+BLOCK_COMMIT_BYTES = 95_000_000
 DEFAULT_PATHS = (
     "COLLECTION/MASTER/READY.json",
     "COLLECTION/MASTER/PROMOTION-QUEUE.json",
+    "COLLECTION/MASTER/READINESS-QUEUE.json",
+    "COLLECTION/MASTER/CANONICAL-PROMOTION-PLAN.json",
+    "COLLECTION/MASTER/VALUE-OPERATOR-QUEUE.json",
     "COLLECTION/VERIFICATION/RESTRICTED-QUEUE.json",
     "COLLECTION/VERIFICATION/INSTALLED-QUEUE.json",
     "COLLECTION/MASTER/CALLABLE-REGISTRY.json",
     "COLLECTION/AUTO/EXTRACTED/MANIFEST.json",
 )
+
+
+def size_status(byte_count: int) -> str:
+    if byte_count >= BLOCK_COMMIT_BYTES:
+        return "BLOCK_HARD_LIMIT_RISK"
+    if byte_count > RECOMMENDED_BYTES:
+        return "OVER_RECOMMENDED_LIMIT"
+    return "OK"
 
 
 def audit(path: Path) -> dict:
@@ -36,6 +49,7 @@ def audit(path: Path) -> dict:
             "path": display_path,
             "bytes": len(raw),
             "sha256": hashlib.sha256(raw).hexdigest(),
+            "size_status": size_status(len(raw)),
             "status": "INVALID_JSON",
             "error": f"{type(exc).__name__}: {exc}",
         }
@@ -44,6 +58,7 @@ def audit(path: Path) -> dict:
         "path": display_path,
         "bytes": len(raw),
         "sha256": hashlib.sha256(raw).hexdigest(),
+        "size_status": size_status(len(raw)),
         "status": "PASS",
         "root_type": type(payload).__name__,
     }
@@ -65,7 +80,9 @@ def audit(path: Path) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     args = argv if argv is not None else sys.argv[1:]
-    paths = [ROOT / arg for arg in args] if args else [ROOT / item for item in DEFAULT_PATHS]
+    enforce_size = "--enforce-size" in args
+    path_args = [arg for arg in args if arg != "--enforce-size"]
+    paths = [ROOT / arg for arg in path_args] if path_args else [ROOT / item for item in DEFAULT_PATHS]
     reports = []
     failed = False
     for path in paths:
@@ -76,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
         report = audit(path)
         reports.append(report)
         failed = failed or report["status"] != "PASS"
+        if enforce_size and report.get("bytes", 0) >= BLOCK_COMMIT_BYTES:
+            failed = True
     print(json.dumps({"schema_version": "collection-readonly-json-audit/v1", "files": reports}, ensure_ascii=False, sort_keys=True))
     return 1 if failed else 0
 
