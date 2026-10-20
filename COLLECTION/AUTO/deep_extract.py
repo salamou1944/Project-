@@ -7,6 +7,8 @@ import base64, datetime, hashlib, json, os, re, time, urllib.error, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from source_content_safety import sanitize_source_content
+
 TOKEN = os.environ.get("GH_TOKEN", "")
 API = "https://api.github.com"
 ACCOUNTS = Path("COLLECTION/ACCOUNTS")
@@ -126,10 +128,6 @@ def paged(path):
             return
         page += 1
 
-def redact(s):
-    s = re.sub(r"""(?im)([A-Z0-9_]*(?:TOKEN|API[_-]?KEY|SECRET|PASSWORD|PASSWD)[A-Z0-9_]*\s*[:=]\s*["']?)([^\s"']+)""", r"\1<REDACTED>", s)
-    return re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{16,}", r"\1<REDACTED>", s)
-
 def owners():
     # GitHub logins are case-insensitive. Canonicalize keys so mixed-case links
     # across old account captures do not trigger duplicate owner-wide sweeps.
@@ -207,9 +205,13 @@ def extract(repo, meta=None):
     def one(e):
         raw = content_file(repo, rev, e["path"])
         raw = raw[:MAX_FILE]
-        text = redact(raw.decode("utf-8", "replace"))
+        raw_text = raw.decode("utf-8", "replace")
+        text, redaction_reasons = sanitize_source_content(e["path"], raw_text)
         return {"path":e["path"],"sha":e.get("sha"),"bucket":bucket(e["path"], text),
-                "content_sha256":hashlib.sha256(text.encode()).hexdigest(),"content":text}
+                "source_content_sha256":hashlib.sha256(raw).hexdigest(),
+                "content_sha256":hashlib.sha256(text.encode()).hexdigest(),
+                "redaction_applied":bool(redaction_reasons),"redaction_reasons":redaction_reasons,
+                "content":text}
 
     # Fetch concurrently, then apply the byte budget in deterministic relevance order.
     fetched = {}
