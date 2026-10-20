@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Regression tests for repository-root path resolution and sticky quarantine."""
+"""Regression tests for repository-root path resolution and sticky quarantine.
+The focused workflow also reruns the previously failing full policy gate.
+"""
 import importlib.util
 import json
 import os
