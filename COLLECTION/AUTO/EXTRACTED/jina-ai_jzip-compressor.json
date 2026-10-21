@@ -1,0 +1,41 @@
+{
+  "canonical_source": "github:jina-ai/jzip-compressor",
+  "repo": "jina-ai/jzip-compressor",
+  "revision_sha": "b724e20d118f278d402b6510e5659703d02a2807",
+  "default_branch": "main",
+  "pushed_at": "2026-01-23T19:57:51Z",
+  "repo_updated_at": "2026-10-13T17:05:29Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "ba6b4a3dbb93bd7003a683762908535728248fbe029102f028bda78597eb9acc",
+      "score": 100,
+      "content": "# jzip\n\nNear-lossless compression for unit-norm embedding vectors using spherical coordinates, 1.5x compression ratio.\n\n> [!NOTE]\n> Near-lossless means the reconstruction error is below 1e-7 (the float32 machine epsilon). So indistinguishable at float32 precision, but we still can't call it bit-exact. [Read our paper for more details](https://jina.ai/embedding-compression.pdf).\n\n![jzip pipeline](pipeline.png)\n\n\n\n## Build\n\nRequires zstd library.\n\n```bash\n# macOS\nbrew install zstd\n\n# Ubuntu/Debian\napt install libzstd-dev\n\n# Build\nmake\n```\n\n## Usage\n\n```bash\n# Compress: input.bin (N vectors of D dimensions) -> output.jz\njzip -c input.bin output.jz N D [LEVEL]\n\n# Decompress: output.jz -> output.bin\njzip -d output.jz output.bin\n```\n\nLEVEL is the zstd compression level (1-22, default: 1). Higher levels are slower with negligible compression gain because the spherical transform already minimizes entropy.\n\n## Example\n\n```bash\n# Compress 1000 vectors of 384 dimensions\njzip -c embeddings.bin compressed.jz 1000 384\n\n# Compress with higher zstd level (slower, same ratio)\njzip -c embeddings.bin compressed.jz 1000 384 19\n\n# Decompress\njzip -d compressed.jz restored.bin\n```\n\n## Python/NumPy Integration\n\nExport embeddings to binary format:\n\n```python\nimport numpy as np\n\n# Ensure float32 and unit-normalized\nembeddings = embeddings.astype(np.float32)\nembeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)\n\n# Save to binary\nembeddings.tofile('embeddings.bin')\nn, d = embeddings.shape  # use these for jzip -c\n```\n\nWith sentence-transformers:\n\n```python\nfrom sentence_transformers import SentenceTransformer\nimport numpy as np\n\nmodel = SentenceTransformer('all-MiniLM-L6-v2')\nembeddings = model.encode(texts).astype(np.float32)\nembeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)\nembeddings.tofile('embeddings.bin')\n# jzip -c embeddings.bin out.jz {len(texts)} {model.get_sentence_embedding_dimension()}\n```\n\nLoad decompressed embeddings back:\n\n```python\nrestored = np.fromfile('restored.bin', dtype=np.float32).reshape(n, d)\n```\n\n## File Format\n\nInput: raw float32 binary (N x D floats, row-major)\n\nOutput: 16-byte header + zstd-compressed spherical angles\n\nThe input embeddings must be unit-normalized (L2 norm = 1).\n\n## Algorithm\n\n1. Convert Cartesian coordinates to spherical angles (N x D -> N x D-1)\n2. Transpose angle matrix to group same-position angles\n3. Byte-shuffle to group IEEE 754 exponent bytes\n4. Compress with zstd\n\nDecompression reverses these steps. Reconstruction error is ~7e-8, below float32 machine epsilon.\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "7ad67723d045d5eaa5f832b8cda70fff958d390663d00f18ec84302158b3cee0",
+      "score": 85,
+      "content": "CC = cc\nCFLAGS = -O3 -Wall -Wextra -std=c99 -march=native -flto -DNDEBUG\nLDFLAGS = -lzstd -lm -flto\n\nifeq ($(shell uname), Darwin)\n    CFLAGS += -I/opt/homebrew/include -I/usr/local/include\n    LDFLAGS := -L/opt/homebrew/lib -L/usr/local/lib $(LDFLAGS)\nendif\n\njzip: jzip.c\n\t$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)\n\nclean:\n\trm -f jzip\n\n.PHONY: clean\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:38:49.531438+00:00"
+}

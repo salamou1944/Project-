@@ -1,0 +1,112 @@
+{
+  "canonical_source": "github:DIYgod/gugu-node-api",
+  "repo": "DIYgod/gugu-node-api",
+  "revision_sha": "dff4c844309d755cf3067c559f45a8e9ca693750",
+  "default_branch": "master",
+  "pushed_at": "2017-08-10T17:35:31Z",
+  "repo_updated_at": "2026-09-08T09:35:01Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "1d8668a893d6a02e5e022011a565435c0b4b34289f178236cfcaced41396df2a",
+      "score": 120,
+      "content": "{\n  \"name\": \"gugu-node-api\",\n  \"version\": \"0.0.1\",\n  \"description\": \"咕咕机 Node.js API\",\n  \"main\": \"index.js\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/DIYgod/gugu-node-api.git\"\n  },\n  \"keywords\": [\n    \"gugu\"\n  ],\n  \"author\": \"DIYgod\",\n  \"license\": \"MIT\",\n  \"bugs\": {\n    \"url\": \"https://github.com/DIYgod/gugu-node-api/issues\"\n  },\n  \"homepage\": \"https://github.com/DIYgod/gugu-node-api#readme\",\n  \"devDependencies\": {},\n  \"dependencies\": {\n    \"express\": \"^4.15.3\",\n    \"express-session\": \"^1.15.3\",\n    \"log4js\": \"^1.1.1\",\n    \"memobird\": \"^0.0.2\",\n    \"passport\": \"^0.3.2\",\n    \"passport-oauth\": \"^1.0.0\",\n    \"passport-weibo\": \"^0.1.2\"\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "797c923ebd9f694a8845aee0365ce5c988c89bf159e2a8f00ae7897f420d6802",
+      "score": 100,
+      "content": "# gugu-node-api\n\n> 咕咕机 API\n\n## 特性\n\n- 强制微博登录\n\n- 打印频率控制\n\n- 黑名单\n\n- 打印文本长度控制\n\n## 使用\n\n`/login`: 登录微博\n\n`/logout`: 登出微博\n\n`/account`: 微博个人信息\n\n`/print`: 打印\n\n`/status`: 打印状态\n\n## 搭建\n\n需要环境：Node.js\n\n## LICENSE\n\nMIT © [DIYgod](http://github.com/DIYgod)"
+    },
+    {
+      "path": "tools/redis.js",
+      "sha": null,
+      "content_sha256": "d34fa0eb26b6a60a7114fca7032497e6b69a090e3e5155fb9f75ed80cc5183b8",
+      "score": 93,
+      "content": "var logger = require('./logger');\nvar redis = require(\"redis\");\nvar client;\nif (process.env.REDIS_PORT_6379_TCP_ADDR && process.env.REDIS_PORT_6379_TCP_PORT && process.env.REDIS_PASSWORD) {\n    client = redis.createClient({\n        host: process.env.REDIS_PORT_6379_TCP_ADDR,\n        port: process.env.REDIS_PORT_6379_TCP_PORT,\n        password: [REDACTED]\n    });\n}\nelse {\n    client = redis.createClient();\n}\n\n\nclient.on(\"error\", function (err) {\n    logger.error('Redis Error ' + err);\n});\n\nmodule.exports = {\n    set: function (key, value) {\n        client.set(key, value, redis.print);\n        client.expire(key, 300);\n        logger.info('Set redis: ' + key);\n    },\n    client: client\n};",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "config.example.js",
+      "sha": null,
+      "content_sha256": "0a6fbe0ff4ee2be26af0fd41bc8c0f488205e04ac648de73da2252f38c9a401f",
+      "score": 35,
+      "content": "module.exports = {\n    ak: '',                  // 咕咕机开放平台\n    memobirdID: '',\n    useridentifying: '',\n    appKey: '',              // 微博开放平台\n    appSecret: '',\n    frequency: 5,            // 每人每半个小时允许打印次数\n    maxLength: 500,          // 最大打印长度\n    URL: '',                 // API 地址\n    redirectURL: '',         // 登录成功转跳链接\n    allowOrigin: ['anotherhome.net', 'diygod.me']   // 允许的域\n};"
+    },
+    {
+      "path": "index.js",
+      "sha": null,
+      "content_sha256": "c29c1ba3a3f84f2627cf0635b2600340a19d668c43cf6a7b945ca439047f6deb",
+      "score": 35,
+      "content": "var express = require('express');\nvar session = require('express-session');\n\nvar logger = require('./tools/logger');\nvar passport = require('./tools/passport');\nvar config = require('./config');\n\nlogger.info(`🍻 gugu start! Cheers!`);\n\nvar app = express();\n\napp.use(session({\n    secret: 'keyboard cat',\n    resave: false,\n    saveUninitialized: true,\n}));\napp.use(passport.initialize());\napp.use(passport.session());\n\napp.all('*', require('./routes/all'));\n\napp.get('/login',\n    passport.authenticate('weibo'),\n    function (req, res) {\n    }\n);\n\napp.get('/callback',\n    passport.authenticate('weibo', { failureRedirect: '/login' }),\n    function (req, res) {\n        res.send('<script>window.location.href = \"' + config.redirectURL + '\"</script>');\n    }\n);\n\napp.get('/logout', function (req, res) {\n    req.logout();\n    res.send('<script>window.location.href = \"' + config.redirectURL + '\"</script>');\n});\n\napp.get('/account', function (req, res) {\n    res.send(JSON.stringify(req.user));\n});\n\napp.post('/print', require('./routes/print'));\napp.get('/status', require('./routes/status'));\n\napp.listen(1211);"
+    },
+    {
+      "path": "tools/passport.js",
+      "sha": null,
+      "content_sha256": "971842d5e02260a32ed1d4e1ab6e334c8e632c9e7bda749531f028b3589aed1a",
+      "score": 33,
+      "content": "var passport = require('passport');\nvar WeiboStrategy = require('passport-weibo').Strategy;\nvar config = require('../config');\n\npassport.serializeUser(function (user, done) {\n    done(null, user);\n});\n\npassport.deserializeUser(function (obj, done) {\n    done(null, obj);\n});\n\npassport.use(new WeiboStrategy({\n    clientID: config.appKey,\n    clientSecret: [REDACTED],\n    callbackURL: config.URL + '/callback'\n},\n    function (accessToken, refreshToken, profile, done) {\n        process.nextTick(function () {\n            return done(null, profile);\n        });\n    }\n));\n\nmodule.exports = passport;",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "tools/gugu.js",
+      "sha": null,
+      "content_sha256": "67eb07df6767b3518620ea11ffa5f4efc3ff4b5ce080b2d11fa763c6a7cd067f",
+      "score": 33,
+      "content": "var Memobird = require('memobird');\nvar config = require('../config');\n\nvar gugu = new Memobird({\n    ak: config.ak,\n    memobirdID: config.memobirdID,\n    useridentifying: config.useridentifying,\n});\n\ngugu.init();\n\nmodule.exports = gugu;"
+    },
+    {
+      "path": "tools/logger.js",
+      "sha": null,
+      "content_sha256": "4b190fef2454a9771134a5ba74634c81afb7965f84430ec11276d5c3d73b9bd7",
+      "score": 33,
+      "content": "var log4js = require('log4js');\nlog4js.configure({\n    appenders: [\n        {\n            type: \"file\",\n            filename: 'logs/gugu.log',\n            maxLogSize: 20480,\n            backups: 3,\n            category: [ 'gugu','console' ]\n        },\n        {\n            type: \"console\"\n        }\n    ],\n    replaceConsole: true\n});\nvar logger = log4js.getLogger('gugu');\nlogger.setLevel('INFO');\n\nmodule.exports = logger;"
+    },
+    {
+      "path": "routes/all.js",
+      "sha": null,
+      "content_sha256": "55c29c8e5758184b3fcf8d302da01ebae456d86e0be0962d86937aed6045e007",
+      "score": 33,
+      "content": "var config = require('../config');\n\nmodule.exports = function (req, res, next) {\n    if (req.headers.origin) {\n        for (var i = 0; i < config.allowOrigin.length; i++) {\n            if (new RegExp(config.allowOrigin[i]).test(req.headers.origin)) {\n                res.header(\"Access-Control-Allow-Origin\", req.headers.origin);\n                res.header('Access-Control-Allow-Credentials', 'true');\n                res.header('Access-Control-Allow-Headers', 'Content-Type, Content-Length, Authorization, Accept, X-Requested-With , yourHeaderFeild');\n                res.header('Access-Control-Allow-Methods', 'PUT, POST, GET, DELETE, OPTIONS');\n                res.header('content-type', 'application/json; charset=utf-8');\n\n                if (req.method == 'OPTIONS') {\n                    res.send(200);\n                }\n                else {\n                    next();\n                    return;\n                }\n            }\n        }\n        res.send('Unallowed origin');\n    }\n    else {\n        if (req.method == 'OPTIONS') {\n            res.send(200);\n        }\n        else {\n            next();\n        }\n    }\n};"
+    },
+    {
+      "path": "routes/print.js",
+      "sha": null,
+      "content_sha256": "1a75fe4414cd873145898e7bbdda5c18bd6045e61134338da8b1e59f70fc47d9",
+      "score": 33,
+      "content": "var fs = require('fs');\nvar url = require('url');\nvar logger = require('../tools/logger');\nvar gugu = require('../tools/gugu');\nvar config = require('../config');\n\nvar reqIP = {};\nvar reqUser = {};\n\nmodule.exports = function (req, res) {\n    var body = '';\n    var jsonStr = {};\n\n    var ip = req.headers['x-forwarded-for'] ||\n        req.connection.remoteAddress ||\n        req.socket.remoteAddress ||\n        req.connection.socket.remoteAddress;\n\n    req.on('data', dataListener);\n    req.on('end', endListener);\n\n    function dataListener (chunk) {\n        body += chunk;\n    }\n    function endListener () {\n        cleanListener();\n        var type;\n        var content;\n        try {\n            jsonStr = JSON.parse(body);\n            type = jsonStr.type;\n            content = jsonStr.content;\n        } catch (err) {\n            jsonStr = {};\n        }\n\n        if (!req.user) {\n            logger.info(`Reject gugu print for not login, IP: ${ip}`);\n            res.send(`{\"code\": 4, \"msg\": \" 请先登录\"}`);\n            return;\n        }\n\n        // check black ip\n        var blanklist = fs.readFileSync('blacklist').toString().split('\\n');\n        if (blanklist.indexOf(ip.split(',')[0]) !== -1 || blanklist.indexOf(req.user.id) !== -1 || blanklist.indexOf(req.user.displayName) !== -1) {\n            logger.info(`Reject gugu print for black ip, IP: ${ip}`);\n            res.send(`{\"code\": 1, \"msg\": \"抱歉，您已被加入黑名单\"}`);\n            return;\n        }\n\n        if (content.length > config.maxLength) {\n            logger.info(`Reject gugu print for max length, IP: ${ip}`);\n            res.send(`{\"code\": 2, \"msg\": \"超出最大文本长度\"}`);\n            return;\n        }\n\n        // frequency limitation(ip)\n        if (reqIP[ip] && reqIP[ip] >= config.frequency) {\n            logger.info(`Reject gugu print for frequent operation, IP: ${ip}`);\n            res.send(`{\"code\": 3, \"msg\": \"操作频繁，频繁次数过多会被拉入黑名单哦\"}`);\n            return;\n        }\n        else {\n            if (reqIP[ip]) {\n                reqIP[ip]++;\n            }\n            else {\n                reqIP[ip] = 1;\n            }\n            setTimeout(function () {\n                reqIP[ip]--;\n            }, 1800000);   // 30 min\n        }\n\n        // frequency limitation(weibo user)\n        var userid = req.user.id;\n        if (reqUser[userid] && reqUser[userid] >= config.frequency) {\n            logger.info(`Reject gugu print for frequent operation, User: ${userid} ${req.user.displayName}`);\n            res.send(`{\"code\": 3, \"msg\": \"操作频繁，频繁次数过多会被拉入黑名单哦\"}`);\n            return;\n        }\n        else {\n            if (reqUser[userid]) {\n                reqUser[userid]++;\n            }\n            else {\n                reqUser[userid] = 1;\n            }\n            setTimeout(function () {\n                reqUser[userid]--;\n            }, 1800000);   // 30 min\n        }\n\n        logger.info(`gugu print ${type} ${content}, IP: ${ip}`);\n\n        switch (type) {\n            case '1':\n                gugu.printText(req.user.displayName + ': ' + content)\n                    .then(printcontentid => res.send(`{\"code\": 0, \"msg\": \"成功发送打印请求\", \"user\": \"${req.user.displayName}\", \"printcontentid\": \"${printcontentid}\"}`));\n                break;\n            case '2':\n                gugu.printImage(content)\n                    .then(printcontentid => res.send(`{\"code\": 0, \"msg\": \"成功发送打印请求\", \"user\": \"${req.user.displayName}\", \"printcontentid\": \"${printcontentid}\"}`));\n                break;\n            default:\n                res.send(`{\"code\": 1, \"msg\": \"参数错误\"}`);\n        }\n    }\n\n    function cleanListener () {\n        req.removeListener('data', dataListener);\n        req.removeListener('end', endListener);\n    }\n};"
+    },
+    {
+      "path": "routes/status.js",
+      "sha": null,
+      "content_sha256": "f2c748e000a38cc3af3944bb9d3663c3b565f79f252151911d9c8e910b367df1",
+      "score": 33,
+      "content": "var url = require('url');\nvar logger = require('../tools/logger');\nvar gugu = require('../tools/gugu');\n\nmodule.exports = function (req, res) {\n\n    var ip = req.headers['x-forwarded-for'] ||\n        req.connection.remoteAddress ||\n        req.socket.remoteAddress ||\n        req.connection.socket.remoteAddress;\n    \n    var query = url.parse(req.url, true).query;\n    var id = query.id;\n\n    logger.info(`gugu status ${id}, IP: ${ip}`);\n\n    gugu.watch(id, 1000, 20000)\n        .then(printflag => res.send('' + printflag));\n};"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:38:52.521225+00:00"
+}

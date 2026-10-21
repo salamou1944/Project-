@@ -1,0 +1,74 @@
+{
+  "canonical_source": "github:ArchiveBox/archivebox-proxy",
+  "repo": "ArchiveBox/archivebox-proxy",
+  "revision_sha": "15ab7c074ff531c41ed555eff706871a42a3ac43",
+  "default_branch": "master",
+  "pushed_at": "2024-07-12T01:42:03Z",
+  "repo_updated_at": "2026-06-18T09:02:17Z",
+  "license": "MIT",
+  "topics": [
+    "archivebox",
+    "digipres",
+    "digital-preservation",
+    "https-proxy",
+    "internet-archiving",
+    "mitmproxy",
+    "proxy",
+    "web-archiving",
+    "web-proxy"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "4c530198841a46713ccee62fcf05c113c88f0cd0e7554e9e2df001c2d79e0da6",
+      "score": 100,
+      "content": "# ArchiveBox Proxy\n\nA proxy that saves navigated URLs to [ArchiveBox](https://github.com/mitmproxy/mitmproxy), implemented with [mitmproxy](https://github.com/mitmproxy/mitmproxy).\n\n*✨ Contributed by [Bruno Schroeder (@brunocek)](https://github.com/brunocek/archivebox-proxy)*\n\n---\nThis project is intended to meet ArchiveBox's ticket 557: [Feature Request: Browser extension to submit either all history or certain URLs to a given ArchiveBox instance](https://github.com/ArchiveBox/ArchiveBox/issues/577).\n\nThe main challenge is to serve ios, as ios does not allow firefox plugins to be installed.\n\n\n## Installation\n\nPre-requisites: \n\n- ArchiveBox is installed and runs.\n- User can run `archivebox add <url>` on the machine where this project will run, and have it add the URL to the desired instance of ArchiveBox\n- python3 and pipenv are installed (else, on Debian, run `sudo apt-get install python3 pipenv` )\n\n### Debian\n\n1. Clone this repository and have `mitmdump` on the same path (e.g. `/home/user/archivebox-proxy` )\n\nPlease follow ( https://docs.mitmproxy.org/stable/overview-installation/ ) to install mitmdump.\n\n```\nPATH=/home/user/archivebox-proxy\ngit clone https://codeberg.org/brunoschroeder/archivebox-proxy.git $PATH\n\n# mitmdump installation as of 2024-01 - alternatives exist\ncd $PATH\nwget https://downloads.mitmproxy.org/10.2.1/mitmproxy-10.2.1-linux-x86_64.tar.gz\ntar xf mitmproxy-10.2.1-linux-x86_64.tar.gz\n\n```\n\n2. Edit with vim `config-archivebox-proxy.yaml` and re-define `archivebox-path`\n\nIf you wish to switch mode from **record** to **archive**, review parameter: `mode` (read section bellow about **Modes**).\n\n3. On `$PATH`, run:\n\n```\ncd $PATH\npipenv shell\npipenv install\nexit\n\n```\n\n4. Edit with vim `archivebox-proxy.service` and re-define `User`, `Group`, and `WorkingDirectory`\n\n5. Run: \n\n```\nsudo ln -sv $PATH/archivebox-proxy.service /etc/systemd/system/archivebox-proxy.servicey\nsudo systemctl enable archivebox-proxy\nsudo systemctl start archivebox-proxy\nsudo systemctl status archivebox-proxy\nq\n\n```\n\n6. The **archivebox-proxy** should be up and running on port 8080. Test it by configuring a browser or device:\n\n> HTTP Proxy: <debian-server-ip>\n> HTTP Port: 8080\n> HTTPS Proxy: <debian-server-ip>\n> HTTPS Port: 8080\n\nHTTPS will not be working yet (bellow section on the TLS Certificate installation), test HTTP works by navigating to an HTTP only website, e.g.: `http://mitm.it`\n\n## Configuring an HTTPS Client\n\nOne needs to install the TLS Certificate on each of the clients in order to proxy HTTPS flow.\n\nThere are several ways to do it, please refer to: ( https://docs.mitmproxy.org/stable/concepts-certificates/ )\n\nThis solution does not involve transparent proxy or services that would suffer from traffic that goes to certificate pinning endpoints.\n\n## Modes\n\nConfig file ( `config-archivebox-proxy.yaml` ) holds a parameter for `mode` that can be: **record**, or **archive**.\n\nThe reason for two modes is explained in the section bellow **Identifying User HTTP Requests - not trivial**.\n\nOn **record mode**, archivebox-proxy will record all the navigation on `record.yaml` file, and the user will need to latter on manually run `archivebox add record.yaml`. The user may edit the file with vim and remove some of the lines ( `dd` ) with URLs not for archiving.\n\nOn **archive mode**, archivebox-proxy will run `archivebox add` to each of the identified URLs. Please read section **Identifying User HTTP requests - not trivial** bellow, before using this mode.\n\n\n## Comments\n### Identifying User HTTP Requests - not trivial\n\nWhen developing this proxy, I came across research papers trying to solve the open problem of identifying User Actions in a HTTP Flow. It is not a trivial problem to solve as you can attest in the article bellow.\n\nAt that time (2016), some of the evidence on HTTP flows:\n\n> \"..a single request for the Huffington Post website results in the download of 408 objects from 113 unique domains. A similar analysis by Butkiewicz et al. [4], of 1,700 popular websites showed that the median landing page consists of at least 40 objects, requested from 10 or more servers, most of which are operated by third-party services.\"\n\n> \"..Here, the pool of starting pages is randomly selected from the top-1,000 most popular webpages according to alexa.com, excluding HTTPS pages and Chinese websites (using non-Roman script). HTTPS pages were omitted to allow fair head-to-head comparison. On average, each trace of 500 page requests resulted in 29,506 HTTP requests, distributed over 14.168 connections.\"\n\n---\n\nAs of today, 2024, traffic is HTTPS, but this problem still exists. \n\nI implemented filters based on the authors insights and these can be tweaked by changing the float constants `__time_window_next` and `__reset_timer` in the script. (I may externalise them to the config file if users demand to constantly tinker with it).\n\nSome more filters may be in place:\n\n- mitmdump filter expressions, specially `'!~a'`, that filters out webpage assets. For more on these: (https://docs.mitmproxy.org/stable/concepts-filters/ )\n- commercial VPNs such as ivpn and mullvad filter adverts\n- projects such as [pihole](https://github.com/arkenfox/user.js)\n- firefox hardening such as [arkenfox](https://github.com/arkenfox/user.js)\n\nWith all these filters running, I still get a lot of URLs that are not user action. More research must be invested on this. I count with your help on the issues forum.\n\n---\n\nGeorgios Rizothanasis; Niklas Carlsson; Aniket Mahanti\nIdentifying User Actions from HTTP(S) Traffic\nIEEE, 2016\n( https://ieeexplore.ieee.org/document/7796839 )\n\n\n### historic\n\n2024-01 Bruno Schroeder kick-starts and asks for contribution with the architectural decisions, and delivers a script for mitmproxy.\n\n### ios alternative solution\n\nFor each tab:\n\n1. Hit share, and share it to iMarkdown or Obsidian \n1. Obsidian asks which file to append to - one may have one file per tag/subject\n1. ios appends the url there (but sometimes it appends the page title and work must be re-done)\n1. Tab must be closed\n\n\n\n"
+    },
+    {
+      "path": "config-archive-proxy.yaml",
+      "sha": null,
+      "content_sha256": "20a489258e5c96c562173720940bf21bf14e3dd461eea0e4151c166fcb75dfd4",
+      "score": 35,
+      "content": "\n# record, archive\nmode: 'record'\narchivebox-path: '/opt/archivebox'\n\n# paths:\nrecorded: 'recorded.yaml'\nignored-urls: 'http_records/ignored-urls.yaml'\ntagged-urls: 'http_records/tagged-urls.yaml'\narchivebox-path: '/home/user/archivebox/'\n\n\n"
+    },
+    {
+      "path": "archivebox-proxy.py",
+      "sha": null,
+      "content_sha256": "825e081aeeae0d65f74ca7e9cf5ab88bed467d36ed701d6ecad82fe4f6912bf5",
+      "score": 35,
+      "content": "#!/usr/bin/env python\n\n# usage: pipenv shell && mitmdump -q -s dbproxy.py '!~a' # Attention dump, not proxy\n#\n# remember to add certificates in your browser/os for TLS/HTTPS\n# certs docs: https://docs.mitmproxy.org/stable/concepts-certificates/\n# filter expressions docs: https://docs.mitmproxy.org/stable/concepts-filters/\n\nimport mimetypes\nimport os, time\nimport yaml\nfrom pathlib import Path\n\nfrom mitmproxy import ctx\nfrom mitmproxy import flowfilter\nfrom mitmproxy import http\n\n# mitmproxy http.HTTPFlow 'headers' type is multidict\ndef _get( multidict, key ):\n    try:\n        return multidict[ key ]\n    except KeyError:\n        return ''\n\n\n# yaml helping records\nrecords = {}\nrecs = [ 'ignored-urls', 'tagged-urls', 'recorded' ]\n\ndef load_records( conf ):\n    global recs\n    global records\n    for r in recs:\n        with open( conf.get( r ), 'r' ) as f:\n            records[ r ] = yaml.load( f, Loader=yaml.SafeLoader )\n        if not records[ r ]:\n            records[ r ] = []\n        f.close()\n    # print( records )\n\n\ntime_last_req = 0.0\n\n# https://ieeexplore.ieee.org/document/7796839\ndef identify( request, conf ):\n    global time_last_req\n    __time_window_next = 2.0\n    __reset_timer = 4.0\n\n    if request.timestamp_start - time_last_req > __reset_timer or time_last_req == 0:\n        time_last_req = request.timestamp_start\n        return True\n    ua = True \n\n    # TODO make this into regex\n    if request.url in conf.get( 'ignored-urls' ):\n        ua = False\n    if request.timestamp_start - time_last_req < __time_window_next:\n        ua = False\n    return ua\n\n\ndef archive( request, conf ):\n    global records\n    # conf.get( 'tagged-urls' ))\n\n    if conf.get( 'mode' ) == 'archive':\n        subprocess.Popen( [ \n\t      'archivebox', 'add', request.url ], \n\t      stdout=subprocess.DEVNULL, \n\t\t  stderr=subprocess.DEVNULL, \n\t      stdin=subprocess.DEVNULL,\n          cdw=conf.get( 'archivebox-path' ))\n\n    elif conf.get( 'mode' ) == 'record':\n        records.get( 'recorded' )[ request.url ] = True\n        # print( records.get( 'recorded' ))\n        with open( conf.get( 'recorded' ), 'w' ) as f:\n            yaml.dump( records[ 'recorded' ], f )\n        f.close()\n\n\n\n_config_path = 'config-archive-proxy.yaml'\n\nclass ArchiveBoxProxy:\n    def __init__( self ) -> None:\n        with open( _config_path, 'r' ) as f:\n            self.config = yaml.load( f, Loader=yaml.SafeLoader )\n        print( self.config )\n\n        load_records( self.config )\n\n    def request(self, flow: http.HTTPFlow) -> None:\n        # // in requests - identify user action\n        ua = identify( flow.request, self.config )\n\n        if ua:\n            time_created = time.strftime( \"%Y-%M-%d %H:%M:%S\", time.localtime( flow.timestamp_created))\n            print( f'''{ flow.request.url }''' )\n\n            archive( flow.request, self.config )\n\n\naddons = [ArchiveBoxProxy()]\n"
+    },
+    {
+      "path": "recorded.yaml",
+      "sha": null,
+      "content_sha256": "1f44ad09cf7d1933b864f4b5f37483b831170f3d10eed1a9ef18cafd3eb6a75d",
+      "score": 35,
+      "content": "http://mitmproxy.org: True\n\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [
+    {
+      "path": "http_records/ignored-urls.yaml",
+      "error": "empty content"
+    },
+    {
+      "path": "http_records/tagged-urls.yaml",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 2,
+  "generated_at": "2026-10-21T20:38:55.215433+00:00"
+}

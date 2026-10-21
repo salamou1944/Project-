@@ -1,0 +1,76 @@
+{
+  "canonical_source": "github:pydantic/strict-no-cover",
+  "repo": "pydantic/strict-no-cover",
+  "revision_sha": "6c644106e03138abae01d8d60105d4a7ad4916a1",
+  "default_branch": "main",
+  "pushed_at": "2026-08-28T12:35:14Z",
+  "repo_updated_at": "2026-08-28T12:35:59Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "f17acd326ff63519d7a75eaa7467672159b262ffba0a431952243b758b518ecb",
+      "score": 120,
+      "content": "[project]\nname = \"strict-no-cover\"\nversion = \"0.1.1\"\ndescription = \"Error on unnecessary `pragma: no cover` comments\"\nreadme = \"README.md\"\nauthors = [{ name = \"Samuel Colvin\", email = \"samuel@pydantic.dev\" }]\nlicense = \"MIT\"\nclassifiers = [\n    \"Development Status :: 4 - Beta\",\n    \"Programming Language :: Python\",\n    \"Programming Language :: Python :: 3\",\n    \"Programming Language :: Python :: 3 :: Only\",\n    \"Programming Language :: Python :: 3.9\",\n    \"Programming Language :: Python :: 3.10\",\n    \"Programming Language :: Python :: 3.11\",\n    \"Programming Language :: Python :: 3.12\",\n    \"Programming Language :: Python :: 3.13\",\n    \"Intended Audience :: Developers\",\n    \"Intended Audience :: Information Technology\",\n    \"Operating System :: OS Independent\",\n    \"Topic :: Internet\",\n    \"Topic :: Scientific/Engineering :: Artificial Intelligence\",\n    \"Topic :: Software Development :: Libraries :: Python Modules\",\n]\nrequires-python = \">=3.9\"\ndependencies = [\"coverage>=7,<8\"]\n\n[project.urls]\nHomepage = \"https://github.com/samuelcolvin/strict-no-cover\"\nSource = \"https://github.com/samuelcolvin/strict-no-cover\"\n\n[project.scripts]\nstrict-no-cover = \"strict_no_cover.__main__:cli\"\n\n[tool.ruff]\nline-length = 120\ntarget-version = \"py39\"\ninclude = [\"strict_no_cover/**/*.py\"]\n\n[tool.ruff.lint]\nextend-select = [\"Q\", \"RUF100\", \"C90\", \"UP\", \"I\"]\nflake8-quotes = { inline-quotes = \"single\", multiline-quotes = \"double\" }\nisort = { combine-as-imports = true }\nmccabe = { max-complexity = 15 }\n\n[tool.ruff.lint.pydocstyle]\nconvention = \"google\"\n\n[tool.ruff.format]\n# don't format python in docstrings, pytest-examples takes care of it\ndocstring-code-format = false\nquote-style = \"single\"\n\n[tool.pyright]\npythonVersion = \"3.9\"\ntypeCheckingMode = \"strict\"\nreportUnnecessaryTypeIgnoreComment = true\ninclude = [\"strict_no_cover\"]\nvenvPath = \".venv\"\n\n[dependency-groups]\ndev = [\"pyright>=1.1.400\", \"pytest>=8\", \"ruff>=0.11.8\"]\n\n[tool.pytest.ini_options]\naddopts = \"--strict-config --strict-markers\"\npythonpath = [\".\"]\nxfail_strict = true\nfilterwarnings = [\"error\"]\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "14a4221c564545d2334aaf899735c536aaddcb30f3e76d50aa074a0533f8637f",
+      "score": 100,
+      "content": "# strict-no-cover\n\nError on unnecessary `pragma: no cover` comments.\n\nUtility to report `# pragma: no cover` comments which are unnecessary (where some of the relevant lines are actually covered).\n\nFor cases with flakey coverage or partial coverage on code, use `# pragma: lax no cover` which will not error if some relevant lines are covered.\n\n## Install\n\n```bash\nuv add --dev strict-no-cover\n```\n\n## Usage\n\nAfter running coverage and generating a `.coverage` file, run:\n\n```bash\nuv run strict-no-cover\n```\n\nor without installing it explicitly, run:\n\n```bash\nuvx strict-no-cover\n```\n\nYou'll want to modify `pyproject.toml` to include the following:\n\n```toml\n[tool.coverage.report]\nexclude_lines = [\n    # `# pragma: no cover` is standard marker for code that's not covered, this will error if code is covered\n    'pragma: no cover',\n    # use `# pragma: lax no cover` if you want to ignore cases where (some of) the code is covered\n    'pragma: lax no cover',\n    'raise NotImplementedError',\n    ...\n]\n```\n"
+    },
+    {
+      "path": "tests/test_strict_no_cover.py",
+      "sha": null,
+      "content_sha256": "d6567deb4ba4586f16fdc85e4a942a58162bbe7e27651ad605d02aad96e15d82",
+      "score": 93,
+      "content": "from __future__ import annotations\n\nimport subprocess\nimport sys\nfrom pathlib import Path\n\nimport pytest\n\nfrom strict_no_cover import strict_no_cover\n\nCOVERED_BODY_LINE = \"\"\"\\\ndef foo(x):\n    if x:  # pragma: no cover\n        y = 1\n        return y\n    return 0\n\n\nfoo(1)\nfoo(0)\n\"\"\"\n\nEXECUTED_SIGNATURE_STUB = \"\"\"\\\ndef stub(\n    x: int,\n    y: str,\n) -> None: ...  # pragma: no cover\n\n\ndef real():\n    return 1\n\n\nreal()\n\"\"\"\n\n\ndef run_check(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str) -> int:\n    (tmp_path / 'mod.py').write_text(source)\n    subprocess.run([sys.executable, '-m', 'coverage', 'run', 'mod.py'], cwd=tmp_path, check=True)\n    monkeypatch.chdir(tmp_path)\n    return strict_no_cover()\n\n\ndef test_covered_body_line_is_flagged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:\n    assert run_check(tmp_path, monkeypatch, COVERED_BODY_LINE) == 1\n    out = capsys.readouterr().out\n    assert 'mod.py:2 to 4' in out\n\n\ndef test_executed_signature_stub_is_not_flagged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:\n    assert run_check(tmp_path, monkeypatch, EXECUTED_SIGNATURE_STUB) == 0\n    out = capsys.readouterr().out\n    assert 'No lines wrongly marked' in out\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "672749b3797096a7bc18c9a5ce20c47670fdf2a232386d34ca1ff3eae1b6fbc6",
+      "score": 85,
+      "content": ".DEFAULT_GOAL := all\n\n.PHONY: .uv\n.uv: ## Check that uv is installed\n\t@uv --version || echo 'Please install uv: https://docs.astral.sh/uv/getting-started/installation/'\n\n.PHONY: .pre-commit\n.pre-commit: ## Check that pre-commit is installed\n\t@pre-commit -V || echo 'Please install pre-commit: https://pre-commit.com/'\n\n.PHONY: install\ninstall: .uv .pre-commit ## Install the package, dependencies, and pre-commit for local development\n\tuv sync --frozen\n\tpre-commit install --install-hooks\n\n.PHONY: format\nformat: ## Format the code\n\tuv run ruff format\n\tuv run ruff check --fix --fix-only\n\n.PHONY: lint\nlint: ## Lint the code\n\tuv run ruff format --check\n\tuv run ruff check\n\n.PHONY: typecheck\ntypecheck:\n\t@# PYRIGHT_PYTHON_IGNORE_WARNINGS avoids the overhead of making a request to github on every invocation\n\tPYRIGHT_PYTHON_IGNORE_WARNINGS=1 uv run pyright\n\n.PHONY: all\nall: format lint typecheck ## Run code formatting, linting, static type checks\n\n.PHONY: help\nhelp: ## Show this help (usage: make help)\n\t@echo \"Usage: make [recipe]\"\n\t@echo \"Recipes:\"\n\t@awk '/^[a-zA-Z0-9_-]+:.*?##/ { \\\n\t\thelpMessage = match($$0, /## (.*)/); \\\n\t\tif (helpMessage) { \\\n\t\t\trecipe = $$1; \\\n\t\t\tsub(/:/, \"\", recipe); \\\n\t\t\tprintf \"  \\033[36m%-20s\\033[0m %s\\n\", recipe, substr($$0, RSTART + 3, RLENGTH); \\\n\t\t} \\\n\t}' $(MAKEFILE_LIST)\n"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "sha": null,
+      "content_sha256": "d608106c113f452dcb9b99d888f804556de0143552282c891488674ab62db91d",
+      "score": 35,
+      "content": "repos:\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v4.3.0\n    hooks:\n      - id: no-commit-to-branch # prevent direct commits to the `main` branch\n      - id: check-yaml\n      - id: check-toml\n      - id: end-of-file-fixer\n      - id: trailing-whitespace\n\n  - repo: local\n    hooks:\n      - id: format\n        name: Format\n        entry: make\n        args: [format]\n        language: system\n        types: [python]\n        pass_filenames: false\n      - id: lint\n        name: Lint\n        entry: make\n        args: [lint]\n        types: [python]\n        language: system\n        pass_filenames: false\n      - id: typecheck\n        name: Typecheck\n        entry: make\n        args: [typecheck]\n        language: system\n        types: [python]\n        pass_filenames: false\n\n  - repo: https://github.com/codespell-project/codespell\n    # Configuration for codespell is in pyproject.toml\n    rev: v2.3.0\n    hooks:\n      - id: codespell\n        args: [\"--skip\", \"tests/models/cassettes/*\"]\n        additional_dependencies:\n          - tomli\n"
+    },
+    {
+      "path": "strict_no_cover/__main__.py",
+      "sha": null,
+      "content_sha256": "eaf70f8fb6fe9d7933f8df086ddb0e87bb6fa6ce6ad89098057de469fdc7b590",
+      "score": 33,
+      "content": "from __future__ import annotations\n\nimport os\nimport re\nimport sys\nfrom importlib.metadata import PackageNotFoundError, version as _metadata_version\n\nfrom coverage import Coverage\nfrom coverage.exceptions import CoverageException\n\n\ndef strict_no_cover() -> int:\n    try:\n        print(f'strict-no-cover v{_metadata_version(\"strict-no-cover\")}')\n    except PackageNotFoundError:\n        print('strict-no-cover (uninstalled)')\n\n    exclude_comment = os.getenv('EXCLUDE_COMMENT', 'pragma: no cover')\n    coverage_file = os.getenv('COVERAGE_FILE', '.coverage')\n\n    cov = Coverage(data_file=coverage_file)\n    cov.config.exclude_list = [exclude_comment]\n    try:\n        cov.load()\n        data = cov.get_data()\n    except CoverageException as e:\n        print(f'❎ Error loading coverage data: {e}', file=sys.stderr)\n        return 1\n\n    blocks: list[str] = []\n    total_lines = 0\n    for abs_file_name in sorted(data.measured_files()):\n        file_name = os.path.relpath(abs_file_name)\n        try:\n            file_reporter = cov._get_file_reporter(abs_file_name)\n            excluded = file_reporter.excluded_lines()\n            executed = file_reporter.translate_lines(data.lines(abs_file_name) or ())\n        except CoverageException:\n            continue\n\n        # Find lines that are both excluded and executed. Traced lines are translated so\n        # continuation lines of multi-line statements collapse to the statement's first line,\n        # letting the block-opening exemption below handle multi-line `def` signatures.\n        common_lines = sorted(excluded & executed)\n\n        if not common_lines:\n            continue\n\n        code_analyzer = CodeAnalyzer(file_name)\n\n        def add_block(start: int, end: int):\n            nonlocal code_analyzer, total_lines\n\n            if not code_analyzer.all_block_openings(start, end):\n                b = str(start) if start == end else f'{start} to {end}'\n                total_lines += end - start + 1\n                blocks.append(f'  {file_name}:{b}')\n\n        first_line, *rest = common_lines\n        current_start = current_end = first_line\n\n        for line in rest:\n            if line == current_end + 1:\n                current_end = line\n            else:\n                # Start a new block\n                add_block(current_start, current_end)\n                current_start = current_end = line\n\n        add_block(current_start, current_end)\n\n    if blocks:\n        print(f\"❎ {total_lines} lines wrongly marked with '{exclude_comment}' are covered\")\n        print('\\n'.join(blocks))\n        return 1\n    else:\n        print(f\"✅ No lines wrongly marked with '{exclude_comment}'\")\n        return 0\n\n\n# python expressions that can open blocks so can have the `# pragma: no cover` comment on them\n# even though they're covered\nBLOCK_OPENINGS = re.compile(rb'\\s*(?:def|async def|@|class|if|elif|else)')\n\n\nclass CodeAnalyzer:\n    def __init__(self, file_path: str) -> None:\n        with open(file_path, 'rb') as f:\n            self.lines: list[bytes] = f.read().splitlines()\n\n    def all_block_openings(self, start: int, end: int) -> bool:\n        return all(self._is_block_opening(line_no) for line_no in range(start, end + 1))\n\n    def _is_block_opening(self, line_no: int) -> bool:\n        return bool(BLOCK_OPENINGS.match(self.lines[line_no - 1]))\n\n\ndef cli():\n    sys.exit(strict_no_cover())\n\n\nif __name__ == '__main__':\n    cli()\n"
+    },
+    {
+      "path": "strict_no_cover/__init__.py",
+      "sha": null,
+      "content_sha256": "13e7e93a815839565f4ab7ab68fe96aba33d2a2946349e1f406e76be2b83d116",
+      "score": 33,
+      "content": "from .__main__ import strict_no_cover\n\n__all__ = 'strict_no_cover', '__version__'\n\n\ndef __getattr__(name: str) -> str:\n    if name == '__version__':\n        from importlib.metadata import version\n\n        return version('strict-no-cover')\n    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:38:49.869023+00:00"
+}

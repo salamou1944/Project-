@@ -1,0 +1,148 @@
+{
+  "canonical_source": "github:zulip/zulip-zapier",
+  "repo": "zulip/zulip-zapier",
+  "revision_sha": "0ce51159b47d3a06feb1eb0fa3787a12e9af73a9",
+  "default_branch": "master",
+  "pushed_at": "2021-06-04T20:24:10Z",
+  "repo_updated_at": "2023-08-01T22:20:18Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "test/authentication.js",
+      "sha": null,
+      "content_sha256": "2a5b858ea5f5bb3f2b16fdcd92539179b17b4c3d70d3f91fcde4fadef07a22ba",
+      "score": 173,
+      "content": "/* global it */\n/* global describe */\n\nrequire('should');\n\nconst zapier = require('zapier-platform-core');\n\nconst App = require('../index');\nconst appTester = zapier.createAppTester(App);\n\nconst nock = require('nock');\n\ndescribe('authentication', () => {\n\n    it('passes generic bot authentication', (done) => {\n\n        const bundle = {\n            authData: {\n                api_key: 'secret',\n                domain: 'subdomain.zulipchat.com',\n            }\n        };\n\n        const payload = {\n            'pointer': -1,\n            'msg': '',\n            'max_message_id': 28,\n            'result': 'success',\n            'is_bot': true,\n            'email': 'webhook-bot@zulip.com',\n            'client_id': '14a85cb43284d3b05dcae36d8e1c12db',\n            'user_id': 5,\n            'short_name': 'webhook-bot',\n            'is_admin': true,\n            'full_name': 'Zulip Webhook Bot'\n        };\n\n        // mocks the next request that matches this url and querystring\n        nock('https://subdomain.zulipchat.com')\n            .get('/api/v1/users/me')\n            .reply(200, payload);\n\n        appTester(App.authentication.test, bundle)\n            .then((json_response) => {\n                json_response.msg.should.eql('');\n                json_response.result.should.eql('success');\n                json_response.full_name.should.eql('Zulip Webhook Bot');\n                done();\n            })\n            .catch(done);\n\n    });\n\n    it('passes incoming webhook bot authentication', (done) => {\n\n        const bundle = {\n            authData: {\n                api_key: 'secret',\n                domain: 'subdomain.zulipchat.com',\n            }\n        };\n\n        const errorPayload = {\n            'msg': 'This API is not available to incoming webhook bots.',\n            'result': 'error',\n        };\n\n        const successPayload = {\n            'msg': '',\n            'result': 'success',\n            'full_name': 'Zulip Webhook Bot',\n            'email': 'bot-name@zulip.com',\n            'id': '5'\n        };\n\n        // mocks the next request that matches this url and querystring\n        nock('https://subdomain.zulipchat.com')\n            .get('/api/v1/users/me')\n            .reply(400, errorPayload);\n\n        nock('https://subdomain.zulipchat.com')\n            .post('/api/v1/external/zapier?api_key=secret', { type: 'auth' })\n            .reply(200, successPayload);\n\n        appTester(App.authentication.test, bundle)\n            .then((json_response) => {\n                json_response.msg.should.eql('');\n                json_response.result.should.eql('success');\n                json_response.full_name.should.eql('Zulip Webhook Bot');\n                json_response.email.should.eql('bot-name@zulip.com');\n                json_response.should.have.property('id');\n                done();\n            })\n            .catch(done);\n    });\n});\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "8a72cde45598e4331d5715222b05358d6b57e2afcb144ef759e362a72a9af81f",
+      "score": 120,
+      "content": "{\n    \"name\": \"Zulip\",\n    \"version\": \"1.0.2\",\n    \"description\": \"Zulip provides a rich chat interface for real-time and asynchronous team communication.\",\n    \"repository\": \"https://github.com/zulip/zulip-zapier\",\n    \"homepage\": \"https://zulipchat.com/\",\n    \"author\": \"\",\n    \"license\": \"Apache-2.0\",\n    \"main\": \"index.js\",\n    \"scripts\": {\n        \"test\": \"mocha --recursive\",\n        \"lint\": \"./node_modules/eslint/bin/eslint.js .\"\n    },\n    \"engines\": {\n        \"node\": \"8.10.0\",\n        \"npm\": \">=5.6.0\"\n    },\n    \"dependencies\": {\n        \"nock\": \"^10.0.6\",\n        \"npm\": \"^6.9.0\",\n        \"zapier-platform-cli\": \"^8.2.1\",\n        \"zapier-platform-core\": \"11.0.1\",\n        \"zulip-js\": \"^2.0.6\"\n    },\n    \"devDependencies\": {\n        \"eslint\": \"^5.16.0\",\n        \"mocha\": \"^6.1.4\",\n        \"should\": \"^13.2.3\"\n    }\n}\n"
+    },
+    {
+      "path": "authentication.js",
+      "sha": null,
+      "content_sha256": "6d06d6cce9fd6fa29832898b57a3be7ebdf9e965456cdd331ae3eb7da77ddafe",
+      "score": 115,
+      "content": "const zulip = require('zulip-js');\nconst sanitize = require('./util.js').sanitizeZulipURL;\nconst webhookBotError = require('./util.js').webhookBotErrorMessage;\n\nconst genericBotAuth = (z, bundle) => {\n    const config = {\n        realm: sanitize(bundle.authData.domain),\n        username: bundle.authData.username,\n        apiKey: [REDACTED]\n    };\n\n    return zulip(config).then((client) => {\n        return client.users.me.getProfile().then((res) => {\n            // If the requesting user can't authenticate because they are\n            // an incoming webhook bot, we should simply return the response\n            // so that incomingWebhookBotAuth can handle it.\n            if (res.result !== 'success' && res.msg !== webhookBotError) {\n                throw new Error(res.msg);\n            }\n            return res;\n        });\n    });\n};\n\nconst incomingWebhookBotAuth = (z, bundle) => {\n    bundle.authData.domain = sanitize(bundle.authData.domain);\n    const url = '{{bundle.authData.domain}}/api/v1/external/zapier?api_key=[REDACTED]}}';\n    const payload = {'type': 'auth'};\n    const options = {\n        method: 'POST',\n        headers: {'Content-Type': 'application/json'},\n        body: z.JSON.stringify(payload)\n    };\n\n    return z.request(url, options).then((response) => {\n        const parsed_response = z.JSON.parse(response.content);\n        if (response.status !== 200) {\n            throw new Error(parsed_response.msg);\n        }\n        return parsed_response;\n    });\n};\n\nconst testAuth = (z, bundle) => {\n    return genericBotAuth(z, bundle).then((res1) => {\n        if (res1.result !== 'success' && res1.msg === webhookBotError) {\n            return incomingWebhookBotAuth(z, bundle).then((res2) => res2);\n        }\n\n        return res1;\n    });\n};\n\nmodule.exports = {\n    type: 'custom',\n\n    fields: [\n        {\n            key: 'domain',\n            label: 'Zulip URL',\n            type: 'string',\n            required: true,\n            helpText: 'It may look like subdomain.zulipchat.com, or zulip.your-company.com. For more details, you can visit [the official Zulip documentation](https://zulip.com/integrations/doc/zapier).'\n        },\n        {\n            key: 'username',\n            label: 'Bot username or email',\n            type: 'string',\n            required: true,\n            helpText: 'After [creating a Zulip bot](https://zulipchat.com/help/add-a-bot-or-integration), you can retrieve its username and API key by going to Settings > Your bots > Active bots.'\n        },\n        {\n            key: 'api_key',\n            label: 'Bot API key',\n            required: true,\n            type: 'string',\n            helpText: 'After [creating a Zulip bot](https://zulipchat.com/help/add-a-bot-or-integration), you can retrieve its username and API key by going to Settings > Your bots > Active bots.'\n        }\n    ],\n\n    test: testAuth,\n\n    connectionLabel: (z, bundle) => {\n        return bundle.inputData.full_name;\n    }\n};\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3df070e565f0a8ab42b2d0b255b9b9637216f271f2b6fa3b2cdc01f5cf07c14b",
+      "score": 100,
+      "content": "# zulip-zapier\nZulip's Zapier integration\n"
+    },
+    {
+      "path": "test/fields.js",
+      "sha": null,
+      "content_sha256": "e70de7f632344b9daccf3bb40e1862679e957db9897d90cddeec98f8ab6b1c5a",
+      "score": 93,
+      "content": "/* global it */\n/* global describe */\n\nrequire('should');\n\nconst zapier = require('zapier-platform-core');\n\nconst App = require('../index');\nconst appTester = zapier.createAppTester(App);\n\nconst nock = require('nock');\n\ndescribe('custom fields', () => {\n    it('should return a custom/dynamic stream field', (done) => {\n\n        const bundle = {\n            authData: {\n                api_key: 'secret',\n                domain: 'https://yourzulipsubdomain.zulipchat.com/api/v1',\n                username: 'zapierbot@zulip.com'\n            },\n        };\n\n        const payload = {\n            'msg': '',\n            'result': 'success',\n            'streams': [\n                {\n                    'name': 'Denmark',\n                    'rendered_description': '<p>A Scandinavian country</p>',\n                    'stream_id': 1,\n                    'is_announcement_only': false,\n                    'invite_only': false,\n                    'description': 'A Scandinavian country',\n                    'history_public_to_subscribers': true\n                },\n                {\n                    'name': 'Rome',\n                    'rendered_description': '<p>Yet another Italian city</p>',\n                    'stream_id': 2,\n                    'is_announcement_only': false,\n                    'invite_only': false,\n                    'description': 'Yet another Italian city',\n                    'history_public_to_subscribers': true\n                }\n            ]\n        };\n\n        // mocks the next request that matches this url and querystring\n        nock('https://yourzulipsubdomain.zulipchat.com')\n            .get('/api/v1/streams?include_public=true&include_subscribed=true&include_owner_subscribed=true')\n            .reply(200, payload);\n\n        appTester(App.creates.stream_message.operation.inputFields[0], bundle)\n            .then((json_response) => {\n                json_response.choices.should.eql({\n                    1: 'Denmark',\n                    2: 'Rome'\n                });\n                done();\n            })\n            .catch(done);\n    });\n\n    it('should return the default stream field', (done) => {\n\n        const bundle = {\n            authData: {\n                api_key: 'secret',\n                domain: 'https://yourzulipsubdomain.zulipchat.com/api/v1',\n                username: 'zapierbot@zulip.com'\n            },\n        };\n\n        const errorPayload = {\n            'msg': 'This API is not available to incoming webhook bots.',\n            'result': 'error',\n        };\n\n        // mocks the next request that matches this url and querystring\n        nock('https://yourzulipsubdomain.zulipchat.com')\n            .get('/api/v1/streams?include_public=true&include_subscribed=true&include_owner_subscribed=true')\n            .reply(400, errorPayload);\n\n        appTester(App.creates.stream_message.operation.inputFields[0], bundle)\n            .then((json_response) => {\n                json_response.type.should.eql('string');\n                json_response.label.should.eql('Stream name');\n                json_response.should.not.have.property('choices');\n                done();\n            })\n            .catch(done);\n    });\n});\n"
+    },
+    {
+      "path": "test/creates.js",
+      "sha": null,
+      "content_sha256": "c2114fcef2396e3634872cf009a520df46ccb1260253e7998332470d61c99b9d",
+      "score": 93,
+      "content": "/* global it */\n/* global describe */\n\nrequire('should');\n\nconst zapier = require('zapier-platform-core');\n\nconst App = require('../index');\nconst appTester = zapier.createAppTester(App);\n\nconst nock = require('nock');\n\ndescribe('creates', () => {\n\n    it('should send a stream message', (done) => {\n\n        const bundle = {\n            authData: {\n                api_key: 'secret',\n                domain: 'https://yourzulipsubdomain.zulipchat.com/api/v1',\n                username: 'zapierbot@zulip.com'\n            },\n            inputData: {\n                stream: 2,\n                topic: 'Sample topic',\n                content: 'Sample content'\n            }\n        };\n\n        const sample = {\n            result: 'success',\n            msg: '',\n            id: 36,\n            message_url: 'https://zulip.yourcompany.org/#narrow/stream/announce/topic/Announcement/near/36'\n        };\n\n        // mocks the next request that matches this url and querystring\n        nock('https://yourzulipsubdomain.zulipchat.com')\n            .post('/api/v1/messages')\n            .reply(200, sample);\n\n        appTester(App.creates.stream_message.operation.perform, bundle)\n            .then((json_response) => {\n                json_response.should.have.property('msg');\n                json_response.result.should.eql('success');\n                json_response.should.have.property('id');\n                json_response.should.have.property('message_url');\n                done();\n            })\n            .catch(done);\n\n    });\n\n    it('should send a stream message using a stream name', (done) => {\n\n        const bundle = {\n            authData: {\n                api_key: 'secret',\n                domain: 'https://yourzulipsubdomain.zulipchat.com/api/v1',\n                username: 'zapierbot@zulip.com'\n            },\n            inputData: {\n                stream: '#stream',\n                topic: 'Sample topic',\n                content: 'Sample content'\n            }\n        };\n\n        const sample = {\n            result: 'success',\n            msg: '',\n            id: 36,\n            message_url: 'https://zulip.yourcompany.org/#narrow/stream/announce/topic/Announcement/near/36'\n        };\n\n        // mocks the next request that matches this url and querystring\n        nock('https://yourzulipsubdomain.zulipchat.com')\n            .post('/api/v1/messages')\n            .reply(200, sample);\n\n        appTester(App.creates.stream_message.operation.perform, bundle)\n            .then((json_response) => {\n                json_response.should.have.property('msg');\n                json_response.result.should.eql('success');\n                json_response.should.have.property('id');\n                json_response.should.have.property('message_url');\n                done();\n            })\n            .catch(done);\n\n    });\n\n    it('should send a private message', (done) => {\n        const bundle = {\n            authData: {\n                api_key: 'secret',\n                domain: 'https://yourzulipsubdomain.zulipchat.com/',\n                username: 'zapierbot@zulip.com'\n            },\n            inputData: {\n                recipients: [1, 3],\n                content: 'Sample content'\n            }\n        };\n\n        const sample = {\n            result: 'success',\n            msg: '',\n            id: 36,\n            message_url: 'https://yourzulipsubdomain.zulipchat.com/#narrow/id/36'\n        };\n\n        // mocks the next request that matches this url and querystring\n        nock('https://yourzulipsubdomain.zulipchat.com')\n            .post('/api/v1/messages')\n            .reply(200, sample);\n\n        appTester(App.creates.private_message.operation.perform, bundle)\n            .then((json_response) => {\n                json_response.should.have.property('msg');\n                json_response.should.have.property('id');\n                json_response.result.should.eql('success');\n                json_response.should.have.property('message_url');\n                done();\n            })\n            .catch(done);\n    });\n});\n"
+    },
+    {
+      "path": ".zapierapprc",
+      "sha": null,
+      "content_sha256": "6a0d941fbd9ba7f617e5abe6b8bb958d9b6e3635cc196e34ad786a1b7bf25da8",
+      "score": 75,
+      "content": "{\n  \"id\": 8304,\n  \"key\": \"App8304\"\n}\n"
+    },
+    {
+      "path": "tools/test-all",
+      "sha": null,
+      "content_sha256": "06cdf3644a4281a0da479c532db1eda4ccb950232bf024838c39441501261f47",
+      "score": 58,
+      "content": "#!/usr/bin/env bash\n\nset -ev\n\nnpm run lint\nzapier test\n"
+    },
+    {
+      "path": ".travis.yml",
+      "sha": null,
+      "content_sha256": "0469f9206910fc6226c9b9cc7b6868b6f32426e8d9e95bc9cd78477aa3434364",
+      "score": 35,
+      "content": "language: node_js\nnode_js:\n  - 8.10.0\nbefore_script: 'npm install -g zapier-platform-cli'\nscript:\n  - ./tools/test-all\nnotifications:\n  email: false\n"
+    },
+    {
+      "path": "index.js",
+      "sha": null,
+      "content_sha256": "d529b5f0212f725f77a671538574886d26b762e656a323ed4826e601fe0cc537",
+      "score": 35,
+      "content": "const authentication = require('./authentication');\nconst stream_message = require('./creates/stream_message');\nconst private_message = require('./creates/private_message');\n\nconst App = {\n    // This is just shorthand to reference the installed dependencies\n    // for the app. Zapier will need to know these before we can upload.\n    version: require('./package.json').version,\n    platformVersion: require('zapier-platform-core').version,\n\n    authentication: authentication,\n\n    beforeRequest: [\n    ],\n\n    afterResponse: [\n    ],\n\n    resources: {\n    },\n\n    // If you want your trigger to show up, you better include it here!\n    triggers: {\n    },\n\n    // If you want your searches to show up, you better include it here!\n    searches: {\n    },\n\n    // If you want your creates to show up, you better include it here!\n    creates: {\n        [stream_message.key]: stream_message,\n        [private_message.key]: private_message\n    }\n};\n\n// Finally, export the app.\nmodule.exports = App;\n"
+    },
+    {
+      "path": ".eslintrc.json",
+      "sha": null,
+      "content_sha256": "14a16f2e5ee4dec3192dc7fda898473ea6fb2e500340e942d1fd6384a41522b3",
+      "score": 35,
+      "content": "{\n    \"env\": {\n        \"browser\": true,\n        \"commonjs\": true,\n        \"es6\": true\n    },\n    \"extends\": \"eslint:recommended\",\n    \"parserOptions\": {\n        \"ecmaFeatures\": {\n            \"jsx\": true\n        },\n        \"ecmaVersion\": 2018,\n        \"sourceType\": \"module\"\n    },\n    \"rules\": {\n        \"indent\": [\n            \"error\",\n            4\n        ],\n        \"linebreak-style\": [\n            \"error\",\n            \"unix\"\n        ],\n        \"quotes\": [\n            \"error\",\n            \"single\"\n        ],\n        \"semi\": [\n            \"error\",\n            \"always\"\n        ]\n    }\n}"
+    },
+    {
+      "path": "util.js",
+      "sha": null,
+      "content_sha256": "861d62ff5506bc48d7f497c782d7c6d656596e357543d0fbf8345771e334fa56",
+      "score": 35,
+      "content": "const URL = require('url').URL;\n\nconst webhookBotErrorMessage = 'This API is not available to incoming webhook bots.';\n\nconst sanitizeZulipURL = (domain) => {\n    if (!domain.match(/^[a-zA-Z]+:\\/\\//))\n    {\n        domain = 'https://' + domain;\n    }\n    const parsed_url = new URL(domain);\n    return parsed_url.origin;\n};\n\nconst constructStreamMessageURL = (data) => {\n    let stream_info = data.stream;\n    if (!isNaN(parseInt(stream_info, 10))) {\n        stream_info = stream_info + '-';\n    }\n    const url = `${data.realm}/#narrow/stream/${stream_info}/topic/${data.topic}/near/${data.id}`;\n    return encodeURI(url);\n};\n\nconst constructPrivateMessageURL = (data) => {\n    const url = `${data.realm}/#narrow/id/${data.id}`;\n    return encodeURI(url);\n};\n\nmodule.exports = {\n    'sanitizeZulipURL': sanitizeZulipURL,\n    'webhookBotErrorMessage': webhookBotErrorMessage,\n    'constructStreamMessageURL': constructStreamMessageURL,\n    'constructPrivateMessageURL': constructPrivateMessageURL\n};\n"
+    },
+    {
+      "path": "creates/custom_fields.js",
+      "sha": null,
+      "content_sha256": "5d3f9442e08374142e4ace3e6da191f2c1873638f747b9bb8d759b7cd5c212ac",
+      "score": 33,
+      "content": "const zulip = require('zulip-js');\nconst sanitize = require('../util.js').sanitizeZulipURL;\nconst webhookBotError = require('../util.js').webhookBotErrorMessage;\n\nconst getStreams = (z, bundle) => {\n    const config = {\n        realm: sanitize(bundle.authData.domain),\n        username: bundle.authData.username,\n        apiKey: [REDACTED]\n    };\n\n    return zulip(config).then((client) => {\n        const params = {\n            include_public: true,\n            include_subscribed: true,\n            include_owner_subscribed: true\n        };\n        return client.streams.retrieve(params).then((res) => {\n            // If the requesting user can't authenticate because they are\n            // an incoming webhook bot, we should simply return the response\n            // so that getStreamField can handle it.\n            if (res.result !== 'success' && res.msg === webhookBotError) {\n                return res;\n            }\n            else if (res.result !== 'success' && res.msg !== webhookBotError) {\n                throw new Error(res.msg);\n            }\n\n            var choices = {};\n            res.streams.forEach((stream) => {\n                choices[stream.stream_id] = stream.name;\n            });\n\n            const field = {\n                key: 'stream',\n                required: true,\n                label: 'Stream',\n                choices: choices,\n            };\n\n            return field;\n        });\n    });\n};\n\nconst getStreamField = (z, bundle) => {\n    const defaultField =  {\n        key: 'stream',\n        required: true,\n        type: 'string',\n        label: 'Stream name'\n    };\n\n    return getStreams(z, bundle).then((res) => {\n        if (res.result !== 'success' && res.msg === webhookBotError) {\n            return defaultField;\n        }\n\n        return res;\n    });\n};\n\nmodule.exports = {\n    'getStreamField': getStreamField\n};\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "creates/stream_message.js",
+      "sha": null,
+      "content_sha256": "226339d9e8f66790095c3c9252269646e30a485b6519a0dca4bf1d4db4e3bb7e",
+      "score": 33,
+      "content": "const zulip = require('zulip-js');\nconst sanitize = require('../util.js').sanitizeZulipURL;\nconst constructStreamMessageURL = require('../util.js').constructStreamMessageURL;\nconst getStreamField = require('./custom_fields.js').getStreamField;\n\nmodule.exports = {\n    key: 'stream_message',\n    noun: 'Stream message',\n    display: {\n        label: 'Send a Stream Message',\n        description: 'Send a message to a Zulip stream'\n    },\n\n    operation: {\n        inputFields: [\n            getStreamField,\n            {\n                key: 'topic',\n                required: true,\n                type: 'string',\n                label: 'Topic'\n            },\n            {\n                key: 'content',\n                required: true,\n                type: 'text',\n                label: 'Message content'\n            }\n        ],\n\n        perform: (z, bundle) => {\n            let stream = bundle.inputData.stream;\n            if (!isNaN(parseInt(stream, 10))) {\n                stream = z.JSON.stringify([parseInt(stream, 10)]);\n            }\n            else if (stream.charAt(0) === '#')\n            {\n                stream = stream.substr(1);\n            }\n\n            const params = {\n                type: 'stream',\n                client: 'ZulipZapierApp',\n                to: stream,\n                content: bundle.inputData.content,\n                topic: bundle.inputData.topic\n            };\n\n            const config = {\n                realm: sanitize(bundle.authData.domain),\n                username: bundle.authData.username,\n                apiKey: [REDACTED]\n            };\n\n            return zulip(config).then((client) => {\n                return client.messages.send(params).then((response) => {\n                    if (response.result !== 'success') {\n                        throw new Error(response.msg);\n                    }\n\n                    const data = {\n                        realm: config.realm,\n                        stream: bundle.inputData.stream,\n                        topic: bundle.inputData.topic,\n                        id: response.id\n                    };\n                    response.message_url = constructStreamMessageURL(data);\n\n                    return response;\n                });\n            });\n        },\n\n        // In cases where Zapier needs to show an example record to the user,\n        // but we are unable to get a live example from the API, Zapier will\n        // fallback to this hard-coded sample.\n        sample: {\n            result: 'success',\n            msg: '',\n            id: 36,\n            message_url: 'https://zulip.yourcompany.org/#narrow/stream/announce/topic/Announcement/near/36'\n        },\n    }\n};\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "creates/private_message.js",
+      "sha": null,
+      "content_sha256": "bec17a6827f09b17216400c110d26aa093e5bf6322e09ab8b6b37b31a7499eb8",
+      "score": 33,
+      "content": "const zulip = require('zulip-js');\nconst sanitize = require('../util.js').sanitizeZulipURL;\nconst constructPrivateMessageURL = require('../util.js').constructPrivateMessageURL;\n\nmodule.exports = {\n    key: 'private_message',\n\n    noun: 'Private message',\n    display: {\n        label: 'Send a Private Message',\n        description: 'Send a private or group message'\n    },\n\n    operation: {\n        inputFields: [\n            {\n                key: 'recipients',\n                required: true,\n                type: 'string',\n                label: 'Recipient(s)',\n                helpText: 'Email addresses of recipients.',\n                list: true\n            },\n            {\n                key: 'content',\n                required: true,\n                type: 'text',\n                label: 'Message content',\n            }\n        ],\n\n        perform: (z, bundle) => {\n            const userIDs = [];\n            bundle.inputData.recipients.forEach((id) => {\n                if (!isNaN(parseInt(id))) {\n                    userIDs.push(parseInt(id));\n                }\n                else {\n                    userIDs.push(id);\n                }\n            });\n\n            const params = {\n                type: 'private',\n                client: 'ZulipZapierApp',\n                to: z.JSON.stringify(userIDs),\n                content: bundle.inputData.content\n            };\n\n            const config = {\n                realm: sanitize(bundle.authData.domain),\n                username: bundle.authData.username,\n                apiKey: [REDACTED]\n            };\n\n            return zulip(config).then((client) => {\n                return client.messages.send(params).then((response) => {\n                    if (response.result !== 'success') {\n                        throw new Error(response.msg);\n                    }\n\n                    const data = {\n                        realm: config.realm,\n                        id: response.id\n                    };\n                    response.message_url = constructPrivateMessageURL(data);\n\n                    return response;\n                });\n            });\n        },\n\n        // In cases where Zapier needs to show an example record to the user,\n        // but we are unable to get a live example from the API, Zapier will\n        // fallback to this hard-coded sample.\n        sample: {\n            result: 'success',\n            msg: '',\n            id: 36,\n            message_url: 'https://yourzulipsubdomain.zulipchat.com/#narrow/id/36'\n        },\n    }\n};\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:38:57.229564+00:00"
+}

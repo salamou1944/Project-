@@ -1,0 +1,73 @@
+{
+  "canonical_source": "github:stickerdaniel/sleep-preventer",
+  "repo": "stickerdaniel/sleep-preventer",
+  "revision_sha": "0733b3f64e16e99d188ef9aeb43db9550ffe8b18",
+  "default_branch": "main",
+  "pushed_at": "2026-10-06T07:22:03Z",
+  "repo_updated_at": "2026-10-06T07:22:06Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/check-attribution.yml",
+      "sha": null,
+      "content_sha256": "00aa4fd465ebd0f184e79ff21772cc6d28fb9c012700876c93581287a492b937",
+      "score": 126,
+      "content": "name: Check Attribution\n\non:\n  pull_request_target:\n    types: [opened, synchronize, reopened, edited]\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}\n  cancel-in-progress: true\n\njobs:\n  check-bot-coauthors:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Check agent attribution and hidden Unicode\n        uses: stickerdaniel/post-no-bills@3a0295140a40edc1ded01766ed9d0ac42cd148a5 # v3.0.0\n        with:\n          model-attribution: host\n"
+    },
+    {
+      "path": "scripts/install.sh",
+      "sha": null,
+      "content_sha256": "34a5ec2b645a98c03e314621d8604ad88d9d027951b990769cc840568a17f438",
+      "score": 115,
+      "content": "#!/bin/bash\nset -e\n\ncd \"$(dirname \"$0\")/..\"\n\nAPP_NAME=\"sleep-preventer\"\nINSTALL_DIR=\"/usr/local/bin\"\nLABEL=\"com.sleep-preventer\"\nPLIST=\"$HOME/Library/LaunchAgents/${LABEL}.plist\"\nSUDOERS_DST=\"/etc/sudoers.d/${APP_NAME}\"\nUSER_NAME=\"$(id -un)\"\n\necho \"Installing Sleep Preventer...\"\necho \"\"\n\n# 1. Build\necho \"1. Building release binary...\"\nswift build -c release\necho \"   Done.\"\necho \"\"\n\n# 2. Install binary\necho \"2. Installing binary to $INSTALL_DIR...\"\nif [ -w \"$INSTALL_DIR\" ]; then\n    cp \".build/release/$APP_NAME\" \"$INSTALL_DIR/\"\nelse\n    echo \"   Requires sudo...\"\n    sudo cp \".build/release/$APP_NAME\" \"$INSTALL_DIR/\"\nfi\necho \"   Done.\"\necho \"\"\n\n# 3. Sudoers drop-in (passwordless pmset)\necho \"3. Installing sudoers rule for passwordless pmset...\"\nSUDOERS_TMP=\"$(mktemp)\"\ntrap 'rm -f \"$SUDOERS_TMP\"' EXIT\ncat > \"$SUDOERS_TMP\" <<EOF\n${USER_NAME} ALL=(ALL) NOPASSWD: [REDACTED] -a disablesleep *\n${USER_NAME} ALL=(ALL) NOPASSWD: [REDACTED] sleepnow\nEOF\n\nif sudo visudo -cf \"$SUDOERS_TMP\" >/dev/null; then\n    sudo install -m 440 -o root -g wheel \"$SUDOERS_TMP\" \"$SUDOERS_DST\"\n    echo \"   Installed: $SUDOERS_DST\"\nelse\n    echo \"   ERROR: sudoers fragment failed visudo check; not installed.\" >&2\n    exit 1\nfi\necho \"\"\n\n# 4. LaunchAgent\necho \"4. Installing LaunchAgent...\"\nmkdir -p \"$(dirname \"$PLIST\")\"\ncat > \"$PLIST\" <<EOF\n<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n    <key>Label</key>\n    <string>${LABEL}</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>${INSTALL_DIR}/${APP_NAME}</string>\n    </array>\n    <key>RunAtLoad</key>\n    <true/>\n    <key>KeepAlive</key>\n    <dict>\n        <key>SuccessfulExit</key>\n        <false/>\n    </dict>\n    <key>ThrottleInterval</key>\n    <integer>5</integer>\n    <key>StandardOutPath</key>\n    <string>/tmp/${APP_NAME}.log</string>\n    <key>StandardErrorPath</key>\n    <string>/tmp/${APP_NAME}.log</string>\n</dict>\n</plist>\nEOF\necho \"   Wrote: $PLIST\"\necho \"\"\n\n# 5. Reload (modern API; idempotent)\necho \"5. Loading LaunchAgent...\"\nlaunchctl bootout \"gui/$(id -u)/${LABEL}\" 2>/dev/null || true\nlaunchctl bootout \"gui/$(id -u)\" \"$PLIST\" 2>/dev/null || true\nlaunchctl bootstrap \"gui/$(id -u)\" \"$PLIST\"\nlaunchctl kickstart -k \"gui/$(id -u)/${LABEL}\"\necho \"   Done. Will auto-start on login.\"\necho \"\"\n\necho \"Installation complete.\"\necho \"\"\necho \"Look for the bolt icon in the menubar. Click + 15 min to start a timer.\"\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "15876123bba264ab8be0dc581ba6a07be9c2ac0081016b377d12fc873f4573d9",
+      "score": 100,
+      "content": "# Sleep Preventer\n\nA tiny macOS menubar app that keeps your Mac awake for a fixed amount of time, then lets it sleep normally. While active, closing the lid does not put the Mac to sleep — useful when an AI agent or long-running task needs to keep working on your laptop while you carry it.\n\n| Feature | Detail |\n|---|---|\n| Manual timer | Click \"+15 min\" to add 15 minutes; click \"Stop\" to cancel. |\n| Closed lid, awake system | Lid close → backlight off (zero display battery), but the system stays awake. |\n| Auto-sleep on expiry | Timer reaches zero → normal sleep is re-enabled; if the lid is closed, the Mac sleeps immediately. |\n| Battery-friendly | No always-on background loop. Sleep prevention only runs while the timer is active. |\n| Crash-safe | LaunchAgent restarts on non-zero exit. Boot reconciliation clears any leaked `disablesleep=1`. |\n\n## Install\n\n```bash\ngit clone https://github.com/stickerdaniel/sleep-preventer.git\ncd sleep-preventer\n./scripts/install.sh\n```\n\nClone anywhere you like — the installer builds in `.build/` next to the source and copies the binary to `/usr/local/bin/`, so the source directory location doesn't matter.\n\nThe installer will:\n\n1. Build the release binary with `swift build -c release`.\n2. Copy it to `/usr/local/bin/sleep-preventer` (asks for sudo).\n3. Install a scoped passwordless sudoers rule at `/etc/sudoers.d/sleep-preventer` allowing only `pmset -a disablesleep *` and `pmset sleepnow`.\n4. Drop a LaunchAgent at `~/Library/LaunchAgents/com.sleep-preventer.plist` and start it via `launchctl bootstrap` + `kickstart`.\n\nAfter install, look for a `bolt.slash` icon in your menubar.\n\n## Usage\n\n| Click | Effect |\n|---|---|\n| `+ 15 min` (idle) | Starts a 15-minute timer. Icon becomes `bolt.fill`. System sleep is disabled. |\n| `+ 15 min` (running) | Adds 15 minutes to the remaining time. |\n| `Stop` | Cancels the timer. If the lid is closed, the Mac sleeps immediately. |\n| `Quit` | Exits the app cleanly. Sleep is re-enabled. The LaunchAgent does **not** auto-restart after a clean Quit (`KeepAlive: {SuccessfulExit: false}`). |\n\n## How it works\n\n- `pmset -a disablesleep 1` (via sudoers) prevents both lid-close and idle sleep.\n- A polled `ioreg AppleClamshellState` check detects lid open/close and calls `pmset displaysleepnow` on close to kill the backlight while the system stays awake.\n- On timer expiry or Stop, `pmset -a disablesleep 0` re-enables sleep. If the lid is closed at that moment, `pmset sleepnow` puts the Mac to sleep immediately.\n\n## Requirements\n\n- macOS 14 (Sonoma) or later\n- Swift 5.9+\n- Admin password (one time, during install) for the sudoers rule\n\n## Uninstall\n\n```bash\nlaunchctl bootout \"gui/$(id -u)/com.sleep-preventer\" 2>/dev/null || true\nrm -f ~/Library/LaunchAgents/com.sleep-preventer.plist\nsudo rm -f /usr/local/bin/sleep-preventer\nsudo rm -f /etc/sudoers.d/sleep-preventer\nsudo pmset -a disablesleep 0\n```\n\n## Predecessor\n\nSleep Preventer replaces [opencode-sleep-control](https://github.com/stickerdaniel/opencode-sleep-control), which was driven by an HTTP `/active`/`/idle` plugin model intended for OpenCode. The new app trades that for a simpler manual timer UI — no daemon dependency on an external editor.\n\n## License\n\nMIT — see [LICENSE](LICENSE).\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha": null,
+      "content_sha256": "79c31482b1455812daf73420c17bbc808c6838463a27d098880aa11d89119124",
+      "score": 75,
+      "content": "# AGENTS.md\n\n## Pull requests\n\n- End every PR body with `Generated with <model> for <job> in <tool> via <host>.` CI requires that line, including the period. For example, `Generated with Claude Opus 5.5 for implementation in Claude Code via T3 Code.` For several models, write `Generated with <model 1> for <job 1> and <model 2> for <job 2> in <tool> via <host>.` Every model needs a job. Commas or `/` list several jobs for one model.\n"
+    },
+    {
+      "path": "Sources/LidMonitor.swift",
+      "sha": null,
+      "content_sha256": "169d25afb3be8925138da0e30976fa6652004be90ab83e31b612ba19fa3ff7d7",
+      "score": 58,
+      "content": "import Foundation\nimport IOKit\n\nclass LidMonitor {\n    private var timer: Timer?\n    private var lastLidState: Bool = false\n    \n    var onLidClose: (() -> Void)?\n    var onLidOpen: (() -> Void)?\n    \n    func start() {\n        // Get initial state\n        lastLidState = isLidClosed()\n        \n        // Poll for lid state changes every 2 seconds\n        // (IOKit notifications for clamshell state are complex and unreliable)\n        timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in\n            self?.checkLidState()\n        }\n    }\n    \n    func stop() {\n        timer?.invalidate()\n        timer = nil\n    }\n    \n    private func checkLidState() {\n        let currentState = isLidClosed()\n        \n        if currentState != lastLidState {\n            lastLidState = currentState\n            \n            DispatchQueue.main.async { [weak self] in\n                if currentState {\n                    self?.onLidClose?()\n                } else {\n                    self?.onLidOpen?()\n                }\n            }\n        }\n    }\n    \n    func isLidClosed() -> Bool {\n        let task = Process()\n        task.executableURL = URL(fileURLWithPath: \"/usr/sbin/ioreg\")\n        task.arguments = [\"-r\", \"-k\", \"AppleClamshellState\", \"-d\", \"4\"]\n        \n        let pipe = Pipe()\n        task.standardOutput = pipe\n        task.standardError = FileHandle.nullDevice\n        \n        do {\n            try task.run()\n            task.waitUntilExit()\n        } catch {\n            return false\n        }\n        \n        let data = pipe.fileHandleForReading.readDataToEndOfFile()\n        let output = String(data: data, encoding: .utf8) ?? \"\"\n        return output.contains(\"\\\"AppleClamshellState\\\" = Yes\")\n    }\n}\n"
+    },
+    {
+      "path": "scripts/build.sh",
+      "sha": null,
+      "content_sha256": "17db944b5392798f84ac1b9cd9050b92c5ba5ecb8f48291088cfa67a9c9ca337",
+      "score": 33,
+      "content": "#!/bin/bash\nset -e\n\ncd \"$(dirname \"$0\")/..\"\n\necho \"Building sleep-preventer release...\"\nswift build -c release\necho \"Built: .build/release/sleep-preventer\"\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:38:52.353740+00:00"
+}
