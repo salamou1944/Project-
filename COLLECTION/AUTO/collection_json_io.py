@@ -176,7 +176,7 @@ def write_collection_json(
     if current:
         chunks.append(current)
     serialized = [
-        b"[\\n" + b",\\n".join(_compact(item) for item in chunk) + b"\\n]\\n"
+        b"[\n" + b",\n".join(_compact(item) for item in chunk) + b"\n]\n"
         for chunk in chunks
     ]
     if any(len(raw) > max_shard_bytes for raw in serialized):
