@@ -1,0 +1,112 @@
+{
+  "canonical_source": "github:trailofbits/ebpfpub",
+  "repo": "trailofbits/ebpfpub",
+  "revision_sha": "8d2c38946ad2197d16aabacc2ababf095a56a3b1",
+  "default_branch": "main",
+  "pushed_at": "2026-06-22T13:34:06Z",
+  "repo_updated_at": "2026-08-29T23:40:49Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "bpf",
+    "ebpf",
+    "llvm",
+    "monitoring",
+    "security",
+    "tracepoints",
+    "tracing"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/build.yml",
+      "sha": null,
+      "content_sha256": "e4760b2e2cd0b8b439582d2e97a381590e807c62a27906d6e0178f915e0b2775",
+      "score": 126,
+      "content": "#\n# Copyright (c) 2019-present, Trail of Bits, Inc.\n# All rights reserved.\n#\n# This source code is licensed in accordance with the terms specified in\n# the LICENSE file found in the root directory of this source tree.\n#\n\nname: Build\n\non:\n  schedule:\n    - cron: '00 21 * * *'\n\n  pull_request:\n    branches:\n      - '*'\n\n  push:\n    branches:\n      - 'main'\n\nconcurrency:\n  group: main-${{ github.event.pull_request.number || github.sha }}\n  cancel-in-progress: true\n\njobs:\n  Linux_RelWithDebInfo:\n    uses: ./.github/workflows/linux.yml\n    with:\n      platform: ubuntu-22.04\n      build_type: RelWithDebInfo\n      osquery_toolchain_version: 1.1.0\n\n  Linux_Debug:\n    uses: ./.github/workflows/linux.yml\n    with:\n      platform: ubuntu-22.04\n      build_type: Debug\n      osquery_toolchain_version: 1.1.0\n"
+    },
+    {
+      "path": ".github/workflows/linux.yml",
+      "sha": null,
+      "content_sha256": "493092f6b1a503e4bafd54f98ddf7de34e5dcacea57a319360dac98e483777fb",
+      "score": 126,
+      "content": "#\n# Copyright (c) 2019-present, Trail of Bits, Inc.\n# All rights reserved.\n#\n# This source code is licensed in accordance with the terms specified in\n# the LICENSE file found in the root directory of this source tree.\n#\n\nname: Linux\n\non:\n  workflow_call:\n    inputs:\n      platform:\n        required: true\n        type: string\n\n      build_type:\n        required: true\n        type: string\n\n      osquery_toolchain_version:\n        required: true\n        type: string\n\njobs:\n  build:\n    runs-on: ${{ inputs.platform }}\n\n    env:\n      CACHE_KEY: platform-${{ inputs.platform }}_type-${{ inputs.build_type }}\n\n    steps:\n      - name: Update the environment variables\n        run: |\n          echo \"CCACHE_DIR=${{ github.workspace }}/ccache\" >> $GITHUB_ENV\n          echo \"DOWNLOADS_PATH=${{ github.workspace }}/downloads\" >> $GITHUB_ENV\n          echo \"TOOLCHAIN_PATH=${{ github.workspace }}/osquery-toolchain-${{ inputs.osquery_toolchain_version }}\" >> $GITHUB_ENV\n\n      - name: Update the ccache cache\n        uses: actions/cache@v5\n        with:\n          path: ${{ env.CCACHE_DIR }}\n          key: ccache_${{ env.CACHE_KEY }}-${{ github.sha }}\n          restore-keys: ccache_${{ env.CACHE_KEY }}\n\n      - name: Update the downloads cache\n        uses: actions/cache@v5\n        with:\n          path: ${{ env.DOWNLOADS_PATH }}\n          key: downloads_${{ env.CACHE_KEY }}-${{ github.sha }}\n          restore-keys: downloads_${{ env.CACHE_KEY }}\n\n      - name: Create the build folders\n        run: |\n          mkdir -p \\\n            ${{ env.CCACHE_DIR }} \\\n            ${{ env.DOWNLOADS_PATH }}\n\n      - name: Install system dependencies\n        run: |\n          sudo apt-get install -y \\\n            ccache \\\n            ninja-build \\\n            cmake\n\n      - name: Install the osquery-toolchain\n        id: osquery_toolchain_installer\n        run: |\n          if [ ! -f \"${{ env.DOWNLOADS_PATH }}/osquery-toolchain-${{ inputs.osquery_toolchain_version }}.tar.xz\" ] ; then\n            curl \\\n              -L \\\n              \"https://github.com/osquery/osquery-toolchain/releases/download/${{ inputs.osquery_toolchain_version }}/osquery-toolchain-${{ inputs.osquery_toolchain_version }}-x86_64.tar.xz\" \\\n              -o \\\n              \"${{ env.DOWNLOADS_PATH }}/osquery-toolchain-${{ inputs.osquery_toolchain_version }}.tar.xz\"\n          fi\n\n          tar \\\n            xf \\\n            \"${{ env.DOWNLOADS_PATH }}/osquery-toolchain-${{ inputs.osquery_toolchain_version }}.tar.xz\"\n\n          mv \\\n            osquery-toolchain \\\n            ${{ env.TOOLCHAIN_PATH }}\n\n      - name: Clone the ebpfpub source code\n        uses: actions/checkout@v6\n        with:\n          repository: trailofbits/ebpfpub\n          path: ebpfpub\n          fetch-depth: 0\n\n      - name: Initialize the submodules\n        working-directory: ${{ github.workspace }}/ebpfpub\n        run: |\n          git submodule update --init --recursive\n\n      - name: Configure the project\n        run: |\n          cmake \\\n            -G Ninja \\\n            -S ebpfpub \\\n            -B build-ebpfpub \\\n            -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain.cmake \\\n            -DCMAKE_BUILD_TYPE=${{ inputs.build_type }} \\\n            -DEBPFPUB_ENABLE_TESTS=true \\\n            -DEBPFPUB_ENABLE_EXAMPLES=true\n\n      - name: Build the project\n        run: |\n          cmake \\\n            --build build-ebpfpub \\\n            -v\n\n      - name: Run the tests\n        run: |\n          sudo cmake \\\n            --build build-ebpfpub \\\n            --target run-ebpfpub-tests \\\n            -v\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "cb19b3f7745b320defd4bd3b7affe0ad9bfb42f8cffb74a3ac8fc7f9e203c5e3",
+      "score": 100,
+      "content": "# ebpfpub\n\nebpfpub is a generic function tracing library for Linux that supports tracepoints, kprobes and uprobes.\n\n| | |\n|-|-|\n| CI Status | ![](https://github.com/trailofbits/ebpfpub/workflows/Build/badge.svg) |\n\n## Building\n\n### Prerequisites\n\n* A recent libc++ or stdc++ library, supporting C++17\n* CMake >= 3.16.2. A pre-built binary can be downloaded from the [CMake's download page](https://cmake.org/download/).\n* Linux kernel >= 4.18 (Ubuntu 18.10, CentOS 8, Red Hat Enterprise Linux 8).\n  * Test for the support: ``grep BPF /boot/config-`uname -r` `` and check the output for `CONFIG_BPF=y` and `CONFIG_BPF_SYSCALL=y`\n* The package `libz-dev`, needed during linking.\n* Optional, but highly recommended: download and install the osquery-toolchain (see below).\n  * **This should work fine on any recent Linux distribution. The binaries generated with this toolchain are portable and can be deployed on any distro >= CentOS 6/Ubuntu 16.04**\n* If _not_ using the osquery-toolchain (if building with the system toolchain):\n  * **Clang and the C++ library must both support C++17**. Recent distributions should be compatible (tested on Arch Linux, Ubuntu 19.10 and above).\n  * A recent Clang/LLVM installation (8.0 or better), compiled with BPF support.\n    * Test for the support: `llc --version | grep bpf` and check that BPF is listed as a registered target.\n    * Please note that LLVM itself must be compiled with libc++ when enabling the `EBPF_COMMON_ENABLE_LIBCPP` option, since ebfpub will directly link against the LLVM libraries.\n  * The packages `llvm-devel` (for `LLVMConfig.cmake` files), `llvm-static` (for additional LLVM libraries), and `ncurses-devel` (for `libtinfo`)\n\n#### Installing the osquery-toolchain\n\nAs root:\n```shell\ncd /tmp\nwget https://github.com/osquery/osquery-toolchain/releases/download/1.1.0/osquery-toolchain-1.1.0-x86_64.tar.xz \ntar -xf /tmp/ebpfpub/build/osquery-toolchain-1.1.0-x86_64.tar.xz -C /opt\n```\n\n### Dependencies (retrieved with git)\n\n* [ebpf-common](https://github.com/trailofbits/ebpf-common)\n\n### Steps to Build\n\n1. Obtain the source code: `git clone --recursive https://github.com/trailofbits/ebpfpub`\n2. If you cloned the repo without the `--recursive` flag, run `git submodule update --init --recursive`\n3. Enter the source folder: `cd ebpfpub`\n4. If you intend to build the project using the osquery-toolchain: `export TOOLCHAIN_PATH=\"/opt/osquery-toolchain\"`, then add `-DCMAKE_TOOLCHAIN_FILE=cmake/toolchain.cmake` to step 6\n5. Configure the project: `cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DEBPFPUB_ENABLE_INSTALL=true -DEBPFPUB_ENABLE_EXAMPLES=true -DEBPF_COMMON_ENABLE_TESTS=true`\n6. Build the project: `cmake --build build -j $(($(nproc) + 1))`\n7. Run the tests: `cmake --build build --target run-ebpf-common-tests`\n\n## Building the package\n\n### Prerequisites for packaging\n\n* DEB: **dpkg** command\n* RPM: **rpm** command\n* TGZ: **tar** command\n\n### Steps to package\n\nMake sure that the `-DEBPFPUB_ENABLE_INSTALL:BOOL=true` parameter has been passed at configure time, then run the following commands inside the build folder:\n\n```shell\nmkdir install\nexport DESTDIR=`realpath install`\n\ncd build\ncmake --build . --target install\n```\n\nConfigure the packaging project:\n\n```shell\nmkdir package\ncd package\n\ncmake -DEBPFPUB_INSTALL_PATH:PATH=\"${DESTDIR}\" /path/to/source_folder/package_generator\ncmake --build . --target package\n```\n"
+    },
+    {
+      "path": "ebpfpub/src/bufferstorage.h",
+      "sha": null,
+      "content_sha256": "5a3acf8c31b2ad62ff40abc07c6b8ccfbc24a9836f328af1731de8eedefe9489",
+      "score": 56,
+      "content": "/*\n  Copyright (c) 2019-present, Trail of Bits, Inc.\n  All rights reserved.\n\n  This source code is licensed in accordance with the terms specified in\n  the LICENSE file found in the root directory of this source tree.\n*/\n\n#pragma once\n\n#include <vector>\n\n#include <ebpfpub/ibufferstorage.h>\n\n#include <linux/bpf.h>\n\n#include <tob/ebpf/bpfmap.h>\n\nnamespace tob::ebpfpub {\nclass BufferStorage final : public IBufferStorage {\npublic:\n  virtual ~BufferStorage();\n\n  virtual std::size_t memoryUsage() const override;\n  virtual std::size_t bufferSize() const override;\n  virtual std::size_t bufferCount() const override;\n\n  virtual int bufferMap() const override;\n  virtual int indexMap() const override;\n\n  virtual ebpf::BPFMapErrorCode getBuffer(std::vector<std::uint8_t> &value,\n                                          std::uint64_t index) override;\n\n  BufferStorage(const BufferStorage &) = delete;\n  BufferStorage &operator=(const BufferStorage &) = delete;\n\nprotected:\n  BufferStorage(std::size_t buffer_size, std::size_t buffer_count);\n\nprivate:\n  struct PrivateData;\n  std::unique_ptr<PrivateData> d;\n\n  friend class IBufferStorage;\n};\n} // namespace tob::ebpfpub\n"
+    },
+    {
+      "path": "ebpfpub/src/bufferstorage.cpp",
+      "sha": null,
+      "content_sha256": "fd66012d71e08c1b3a66b42e27c6a8529d4e4483c0de78f4a1cf1653c76f31c1",
+      "score": 56,
+      "content": "/*\n  Copyright (c) 2019-present, Trail of Bits, Inc.\n  All rights reserved.\n\n  This source code is licensed in accordance with the terms specified in\n  the LICENSE file found in the root directory of this source tree.\n*/\n\n#include \"bufferstorage.h\"\n\n#include <sys/sysinfo.h>\n#include <unistd.h>\n\n#include <tob/ebpf/typedbpfmap.h>\n\nnamespace tob::ebpfpub {\nnamespace {\nusing BufferMap = ebpf::BPFMap<BPF_MAP_TYPE_PERCPU_ARRAY, std::uint32_t>;\n\nusing IndexMap =\n    ebpf::TypedBPFMap<BPF_MAP_TYPE_PERCPU_ARRAY, std::uint32_t, std::uint32_t>;\n} // namespace\n\nstruct BufferStorage::PrivateData final {\n  std::size_t buffer_size{0U};\n  std::size_t buffer_count{0U};\n\n  BufferMap::Ref buffer_map;\n  IndexMap::Ref index_map;\n};\n\nBufferStorage::~BufferStorage() {}\n\nstd::size_t BufferStorage::memoryUsage() const {\n  return ebpf::getPossibleProcessorCount() * (bufferSize() * bufferCount());\n}\n\nstd::size_t BufferStorage::bufferSize() const { return d->buffer_size; }\n\nstd::size_t BufferStorage::bufferCount() const { return d->buffer_count; }\n\nint BufferStorage::bufferMap() const { return d->buffer_map->fd(); }\n\nint BufferStorage::indexMap() const { return d->index_map->fd(); }\n\nebpf::BPFMapErrorCode BufferStorage::getBuffer(std::vector<std::uint8_t> &value,\n                                               std::uint64_t index) {\n\n  auto key = static_cast<std::uint32_t>(index & 0xFFFFFFFFULL);\n  auto processor = static_cast<std::uint32_t>((index >> 48ULL) & 0xFFULL);\n\n  if (processor >= ebpf::getPossibleProcessorCount()) {\n    return ebpf::BPFMapErrorCode::Value::InvalidProcessorIndex;\n  }\n\n  std::vector<std::uint8_t> buffer;\n  auto err = d->buffer_map->get(buffer, key);\n  if (!err.succeeded()) {\n    return err;\n  }\n\n  auto section_ptr = buffer.data() + (processor * d->buffer_size);\n\n  value.resize(d->buffer_size);\n  std::memcpy(value.data(), section_ptr, value.size());\n\n  return ebpf::BPFMapErrorCode::Value::Success;\n}\n\nBufferStorage::BufferStorage(std::size_t buffer_size, std::size_t buffer_count)\n    : d(new PrivateData) {\n\n  d->buffer_size = buffer_size;\n  d->buffer_count = buffer_count;\n\n  auto buffer_map_exp = BufferMap::create(buffer_size, buffer_count);\n  if (!buffer_map_exp.succeeded()) {\n    throw buffer_map_exp.error();\n  }\n\n  d->buffer_map = buffer_map_exp.takeValue();\n\n  auto index_map_exp = IndexMap::create(1U);\n  if (!index_map_exp.succeeded()) {\n    throw index_map_exp.error();\n  }\n\n  d->index_map = index_map_exp.takeValue();\n}\n\nStringErrorOr<IBufferStorage::Ref>\nIBufferStorage::create(std::size_t buffer_size, std::size_t buffer_count) {\n  try {\n    return Ref(new BufferStorage(buffer_size, buffer_count));\n\n  } catch (const std::bad_alloc &) {\n    return StringError::create(\"Memory allocation failure\");\n\n  } catch (const StringError &error) {\n    return error;\n  }\n}\n} // namespace tob::ebpfpub\n"
+    },
+    {
+      "path": "ebpfpub/tests/CMakeLists.txt",
+      "sha": null,
+      "content_sha256": "6c75dd6873d3464e10590fa252dbb7efecec8fc937c6b47ab53921b369103196",
+      "score": 56,
+      "content": "#\n# Copyright (c) 2019-present, Trail of Bits, Inc.\n# All rights reserved.\n#\n# This source code is licensed in accordance with the terms specified in\n# the LICENSE file found in the root directory of this source tree.\n#\n\nadd_executable(\"ebpfpub-tests\"\n  src/main.cpp\n  src/kallsymsparser.cpp\n)\n\ntarget_link_libraries(\"ebpfpub-tests\" PRIVATE\n  \"ebpfpub_cxx_settings\"\n  \"ebpfpub\"\n  \"error\"\n  \"external::doctest\"\n)\n\ntarget_include_directories(\"ebpfpub-tests\" PRIVATE\n  \"${CMAKE_CURRENT_SOURCE_DIR}/../src\"\n)\n\nadd_custom_target(\"run-ebpfpub-tests\"\n  COMMAND \"$<TARGET_FILE:ebpfpub-tests>\"\n  COMMENT \"Running ebpfpub tests\"\n)\n"
+    },
+    {
+      "path": "libraries/doctest/CMakeLists.txt",
+      "sha": null,
+      "content_sha256": "14b4481511116747feee87fd8c6fd229d6565707a07fcd9fed7619c5cb23ccb1",
+      "score": 56,
+      "content": "#\n# Copyright (c) 2021-present, Trail of Bits, Inc.\n# All rights reserved.\n#\n# This source code is licensed in accordance with the terms specified in\n# the LICENSE file found in the root directory of this source tree.\n#\n\nif(NOT TARGET \"thirdparty_doctest\")\n  add_library(\"thirdparty_doctest\" INTERFACE)\n  target_include_directories(\"thirdparty_doctest\" INTERFACE\n    \"${CMAKE_CURRENT_SOURCE_DIR}/src\"\n  )\n\n  add_library(\"external::doctest\" ALIAS \"thirdparty_doctest\")\nendif()\n"
+    },
+    {
+      "path": "ebpfpub/tests/src/main.cpp",
+      "sha": null,
+      "content_sha256": "6a6f93470f5f2c2ba5a0f25858845b44bc1afbe816e6cd4e4e72d2dae3f4aa7f",
+      "score": 54,
+      "content": "/*\n  Copyright (c) 2019-present, Trail of Bits, Inc.\n  All rights reserved.\n\n  This source code is licensed in accordance with the terms specified in\n  the LICENSE file found in the root directory of this source tree.\n*/\n\n#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN\n#include <doctest/doctest.h>\n"
+    },
+    {
+      "path": "ebpfpub/tests/src/kallsymsparser.cpp",
+      "sha": null,
+      "content_sha256": "3d1570eb26abfd1a30f174170f44331ccecfdbf22b3030034299baa64bc3c3a3",
+      "score": 54,
+      "content": "/*\n  Copyright (c) 2019-present, Trail of Bits, Inc.\n  All rights reserved.\n\n  This source code is licensed in accordance with the terms specified in\n  the LICENSE file found in the root directory of this source tree.\n*/\n\n#include <doctest/doctest.h>\n\n#include \"kallsymsparser.h\"\n\nnamespace tob::ebpfpub {\nSCENARIO(\"kallsyms parser\") {\n  GIVEN(\"a list of symbols\") {\n    // clang-format off\n    const std::string kKallsymsExample = \n      \"0000000000000000 A fixed_percpu_data\\n\"\n      \"0000000000000000 A __per_cpu_start\\n\"\n      \"0000000000000000 A cpu_debug_store\\n\"\n      \"0000000000000000 A irq_stack_backing_store\\n\"\n      \"0000000000000000 A cpu_tss_rw\\n\"\n      \"0000000000000000 A gdt_page\\n\"\n      \"0000000000000000 A exception_stacks\\n\"\n      \"0000000000000000 A entry_stack_storage\\n\"\n      \"0000000000000000 A espfix_waddr\\n\"\n      \"0000000000000000 A espfix_stack\\n\"\n      \"0000000000000000 t fuse_set_nowrite\t[fuse]\\n\"\n      \"0000000000000000 t fuse_unlock_inode\t[fuse]\\n\"\n      \"0000000000000000 t fuse_file_open\t[fuse]\\n\"\n      \"0000000000000000 t fuse_abort_conn\t[fuse]\\n\"\n      \"0000000000000000 t fuse_request_end\t[fuse]\\n\"\n      \"0000000000000000 t fuse_update_ctime\t[fuse]\\n\"\n      \"0000000000000000 t fuse_update_attributes\t[fuse]\\n\"\n      \"0000000000000000 t fuse_open_common\t[fuse]\\n\"\n      \"0000000000000000 t fuse_flush_writepages\t[fuse]\\n\"\n      \"0000000000000000 t fuse_fill_super_common\t[fuse]\\n\";\n    // clang-format on\n\n    const std::unordered_set<std::string> kExpectedSymbolNameList{\n        \"fixed_percpu_data\",\n        \"__per_cpu_start\",\n        \"cpu_debug_store\",\n        \"irq_stack_backing_store\",\n        \"cpu_tss_rw\",\n        \"gdt_page\",\n        \"exception_stacks\",\n        \"entry_stack_storage\",\n        \"espfix_waddr\",\n        \"espfix_stack\",\n        \"fuse_set_nowrite\",\n        \"fuse_unlock_inode\",\n        \"fuse_file_open\",\n        \"fuse_abort_conn\",\n        \"fuse_request_end\",\n        \"fuse_update_ctime\",\n        \"fuse_update_attributes\",\n        \"fuse_open_common\",\n        \"fuse_flush_writepages\",\n        \"fuse_fill_super_common\"};\n\n    WHEN(\"obtaining the symbol list\") {\n      std::stringstream buffer;\n      buffer.str(kKallsymsExample);\n\n      auto symbol_list_exp = KallsymsParser::parseBuffer(std::move(buffer));\n\n      REQUIRE(symbol_list_exp.succeeded());\n      auto symbol_list = symbol_list_exp.takeValue();\n\n      THEN(\"the symbol names are returned\") {\n        REQUIRE(symbol_list.size() == 20);\n\n        for (const auto &expected_symbol_name : kExpectedSymbolNameList) {\n          REQUIRE(symbol_list.count(expected_symbol_name) == 1);\n        }\n      }\n    }\n  }\n}\n} // namespace tob::ebpfpub\n"
+    },
+    {
+      "path": "ebpfpub/include/ebpfpub/ibufferstorage.h",
+      "sha": null,
+      "content_sha256": "c592c18c57a1daa510486cdcdedc92ea8967a243e9258bbfe82a6f558b63fed0",
+      "score": 54,
+      "content": "/*\n  Copyright (c) 2019-present, Trail of Bits, Inc.\n  All rights reserved.\n\n  This source code is licensed in accordance with the terms specified in\n  the LICENSE file found in the root directory of this source tree.\n*/\n\n#pragma once\n\n#include <memory>\n#include <unordered_map>\n\n#include <tob/ebpf/bpfmap.h>\n#include <tob/error/stringerror.h>\n\nnamespace tob::ebpfpub {\nclass IBufferStorage {\npublic:\n  using Ref = std::unique_ptr<IBufferStorage>;\n  static StringErrorOr<Ref> create(std::size_t buffer_size,\n                                   std::size_t buffer_count);\n\n  IBufferStorage() = default;\n  virtual ~IBufferStorage() = default;\n\n  virtual std::size_t memoryUsage() const = 0;\n  virtual std::size_t bufferSize() const = 0;\n  virtual std::size_t bufferCount() const = 0;\n\n  virtual int bufferMap() const = 0;\n  virtual int indexMap() const = 0;\n\n  virtual ebpf::BPFMapErrorCode getBuffer(std::vector<std::uint8_t> &value,\n                                          std::uint64_t index) = 0;\n\n  IBufferStorage(const IBufferStorage &) = delete;\n  IBufferStorage &operator=(const IBufferStorage &) = delete;\n};\n} // namespace tob::ebpfpub\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "4880b8f44cf949e56a4204e421976a09c21d9170667684b2f6f4cbe9b8d2398e",
+      "score": 33,
+      "content": "version: 2\nupdates:\n  # GitHub Actions\n  - package-ecosystem: \"github-actions\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    open-pull-requests-limit: 5\n    labels:\n      - \"dependencies\"\n      - \"github-actions\"\n\n  # Git submodules\n  - package-ecosystem: \"gitsubmodule\"\n    directory: \"/\"\n    schedule:\n      interval: \"weekly\"\n    open-pull-requests-limit: 10\n    labels:\n      - \"dependencies\"\n      - \"submodules\"\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T21:07:34.503678+00:00"
+}
