@@ -62,3 +62,30 @@ This is a fresh verification delta from connected GitHub, Railway, Supabase, Ren
 5. Continue remaining account/repository/service checks as explicit deltas; mark unknowns rather than filling gaps with assumptions.
 6. Only after runtime acceptance, finish deployment execution + durable state, publish a usable API path, and measure a real customer conversion.
 
+
+
+## Additional connected-account and automation audit — 2026-10-21
+
+### Revenue and creator accounts
+- AgentMail: three inboxes confirmed — `PASTEL Realtime E2E Test`, `AI API Pilot Outreach`, and `EASY Project`. Inbox existence does not prove outreach or replies.
+- Apollo: current cycle shows 80/80 lead credits, 150/150 conversation credits, 5,000/5,000 AI credits, 20/20 inbound-visitor credits, and 50,000/50,000 broadcast credits. Export credits are 0. Direct-dial endpoint results conflict: usage stats report 80 remaining from a limit of 160, while the profile summary reports effective 160 and used 0; treat direct-dial availability as inconsistent until reconciled.
+- Upwork: one Freelancer account. Profile is private, total completed jobs is 0, and Connects balance is 0. Proposal submission capability is reported true but there are no Connects to spend.
+- HubSpot: connected account responds; the connector reports read/write availability by object type. Existing CRM inventory is 2 contacts, 1 company, 0 deals, 0 tickets, 0 products, and 0 invoices. Campaign and partner-client access require account modification.
+- Shopify: connected store `My Store`, currency DZD, Algeria, CET, on a trial plan. **Plan: trial — you'll need to upgrade before you can start selling and unlock full features**
+- Wix: authenticated profile exists, but site listing returns zero sites.
+- Canva: design search returned zero indexed results; this is not proof there are no assets outside the search index.
+- Figma: Starter plan, View seat; Code Layers and Specs disabled. Suitable for viewing/review, not confirmed code handoff.
+- Metricool: one brand is connected, with a YouTube channel linked. This verifies an analytics/scheduling surface, not a current publishing cadence or monetization.
+- Higgsfield: Free plan, 10 credits. A 100-credit MCP trial is eligible but still pending; no trial started and no credits spent in this audit.
+- GitLab: one private project `salamou1944-group/Salamou1944-project`, confirmed empty. No implementation work is stored there yet.
+
+### Automations
+Five automations were found:
+- Enabled: `Revenue + leverage sweep`. It is scheduled daily, last ran 2026-10-21 03:24 UTC, but `next_run_time` is null. Its scheduling state requires investigation; do not assume future runs are scheduled reliably.
+- Disabled: `Daily collection digest`, `استمرار جمع الحسابات — قاعدة الخمسة الأوائل`, `EASY opportunity watch`, and `EASY Build Watch`. All have `next_run_time` null.
+- Do not enable or change schedules blindly. First inspect the automation scheduler's status/limitations, then activate only the tasks that can run without duplicate or conflicting work.
+
+### Connector/plugin inventory boundary
+- The current runtime exposes 30 connector namespaces and 1,413 tool definitions, including GitHub, GitLab, Railway, Render, Vercel, Supabase, Replit, Notion, Termalin, OpenAI Platform, AgentMail, Apollo, HubSpot, Shopify, Wix, Canva, Figma, Higgsfield, Upwork, Metricool, and others.
+- Tool count is not the same as installed ChatGPT marketplace plugins, and neither count proves every account is connected or entitled to use every capability.
+- Plugin discovery is query-based, not a complete marketplace export. TinyFish is available but not installed/connected. Do not count it as usable browser automation until the user connects it and an actual browser task is verified.
