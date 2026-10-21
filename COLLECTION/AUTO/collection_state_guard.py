@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+from collection_json_io import load_collection_json
+
 ROOT = Path(__file__).resolve().parents[2]
 REQUIRED = [
     ROOT / "COLLECTION/MASTER/READY.json",
@@ -22,7 +24,7 @@ def load_nonempty(path):
     if path.stat().st_size == 0:
         raise SystemExit(f"empty generated state: {path}")
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return load_collection_json(path)
     except Exception as exc:
         raise SystemExit(f"invalid JSON state {path}: {exc}")
 
