@@ -3,14 +3,14 @@
 This short page is the live status pointer. The older [COLLECTION/INDEX.md](./INDEX.md) remains the long historical log; use this page for the current snapshot.
 
 ## COLLECTION
-- Latest completed: [cycle 25 — success](https://github.com/salamou1944/Project-/actions/runs/39674669139).
-- Cycle 25: 69 refreshed, 31 blocked attempts preserved; 5,571 source rows; 5,540 extracted artifacts; 18,040 repositories deferred.
-- Current-main JSON audit: 13,532 JSON/JSONC files, zero parse failures, 985,944,742 bytes.
-- 49,534 capability/readiness groups; 33,994 promotion-review items; 15,540 restricted items.
+- Latest completed: [cycle 26 — success](https://github.com/salamou1944/Project-/actions/runs/39675099179).
+- Cycle 26: 69 refreshed, 31 blocked attempts preserved; 5,640 source rows; 5,609 extracted artifacts; 17,971 repositories deferred.
+- Current-main JSON audit: 13,601 JSON/JSONC files, zero parse failures, 993,914,190 bytes.
+- 50,019 capability/readiness groups; 34,313 promotion-review items; 15,706 restricted items.
 - Install result: `NO_APPROVED_CANDIDATES`; zero installed.
-- Cumulative cycles 1–25: 2,069 refreshed sources, 431 blocked attempts preserved.
-- Current cycle: [cycle 26, run 39675099179](https://github.com/salamou1944/Project-/actions/runs/39675099179), currently queued. Do not publish counts until its logs finish.
-- Size warning: `READY.json` 86.9 MB, `CANONICAL-PROMOTION-PLAN.json` 58.7 MB, `PROMOTION-QUEUE.json` 51.4 MB. The 95 MB hard guard is still passing; a non-destructive partitioning plan is needed before approaching it.
+- Cumulative cycles 1–26: 2,138 refreshed sources, 462 blocked attempts preserved.
+- Current cycle: [cycle 27, run 39675537201](https://github.com/salamou1944/Project-/actions/runs/39675537201), currently queued. Do not publish counts until its logs finish.
+- Size warning: `READY.json` 87.8 MB, `CANONICAL-PROMOTION-PLAN.json` 59.3 MB, `PROMOTION-QUEUE.json` 52.0 MB. The 95 MB hard guard is still passing; implement a non-destructive partitioning plan before `READY.json` approaches 95 MB.
 
 ## Canonical inventory documents
 - [Full resource inventory and execution plan](../VERIFICATION/RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
