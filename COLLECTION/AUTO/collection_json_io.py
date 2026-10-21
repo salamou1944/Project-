@@ -156,24 +156,31 @@ def write_collection_json(
         _remove_stale_shard_dirs(target, keep=None)
         return {"format": "monolithic", "items": len(items), "estimated_bytes": estimated}
 
-    bucket_count = max(1, initial_buckets)
-    while True:
-        buckets = [[] for _ in range(bucket_count)]
-        for item in items:
-            identity = _stable_key(item)
-            slot = int(hashlib.sha256(identity.encode("utf-8")).hexdigest()[:8], 16) % bucket_count
-            buckets[slot].append(item)
-        for bucket in buckets:
-            bucket.sort(key=lambda item: (_stable_key(item), _compact(item)))
-        serialized = [
-            b"[\n" + b",\n".join(_compact(item) for item in bucket) + b"\n]\n"
-            for bucket in buckets if bucket
-        ]
-        if all(len(raw) <= max_shard_bytes for raw in serialized):
-            break
-        bucket_count *= 2
-        if bucket_count > 2048:
-            raise ValueError("cannot partition collection JSON below max_shard_bytes")
+    # Keep the original array order. Hash-bucket partitioning reordered items on
+    # readback, which broke round-trip equality for ordered records.
+    chunks: list[list[Any]] = []
+    current: list[Any] = []
+    current_bytes = 4  # brackets plus newline bytes
+    for item in items:
+        item_bytes = len(_compact(item))
+        if item_bytes + 4 > max_shard_bytes:
+            raise ValueError("single collection item exceeds max_shard_bytes")
+        extra_bytes = item_bytes + (2 if current else 0)  # comma + newline
+        if current and current_bytes + extra_bytes > max_shard_bytes:
+            chunks.append(current)
+            current = []
+            current_bytes = 4
+            extra_bytes = item_bytes
+        current.append(item)
+        current_bytes += extra_bytes
+    if current:
+        chunks.append(current)
+    serialized = [
+        b"[\\n" + b",\\n".join(_compact(item) for item in chunk) + b"\\n]\\n"
+        for chunk in chunks
+    ]
+    if any(len(raw) > max_shard_bytes for raw in serialized):
+        raise ValueError("cannot partition collection JSON below max_shard_bytes")
 
     shard_digest = hashlib.sha256()
     for raw in serialized:
@@ -188,20 +195,15 @@ def write_collection_json(
     temporary_dir.mkdir(parents=True, exist_ok=True)
 
     shard_entries = []
-    raw_index = 0
-    for bucket_index, bucket in enumerate(buckets):
-        if not bucket:
-            continue
-        raw = b"[\n" + b",\n".join(_compact(item) for item in bucket) + b"\n]\n"
-        filename = f"part-{bucket_index:04d}.json"
+    for chunk_index, (chunk, raw) in enumerate(zip(chunks, serialized)):
+        filename = f"part-{chunk_index:04d}.json"
         (temporary_dir / filename).write_bytes(raw)
         shard_entries.append({
             "path": f"{shard_dir_name}/{filename}",
-            "item_count": len(bucket),
+            "item_count": len(chunk),
             "bytes": len(raw),
             "sha256": hashlib.sha256(raw).hexdigest(),
         })
-        raw_index += 1
 
     if final_dir.exists():
         shutil.rmtree(temporary_dir)
