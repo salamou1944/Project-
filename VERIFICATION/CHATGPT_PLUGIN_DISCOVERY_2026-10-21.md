@@ -26,3 +26,9 @@ This is a discovery snapshot from a targeted search for browser automation and d
 A second search for local-computer coding and remote shell tools surfaced Replit and Figma as already installed, plus Context7, Superpowers, Webflow, MagicPath, and ThoughtSpot as available but not installed. A search for SSH/terminal access did not surface a currently available remote-shell plugin; dbt, Snowflake, and Metabase appeared disabled by administrator. These are search results, not a complete marketplace export.
 
 Replit can build and host app projects through its connected service, but it is not evidence of access to the user's local Windows machine. Figma is connected with a Starter/View seat; its account metadata says Code Layers and Specs are disabled. TinyFish remains the most relevant optional cloud-browser route discovered so far.
+
+## OpenAI account clarification — official policy checked 2026-10-21
+
+- Codex is included across ChatGPT plans, including Free and Go, but usage is limited by plan. **Codex Cloud is not included with Free or Go**; see the [OpenAI Help Center](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan).
+- ChatGPT subscription billing and API Platform billing are separate; a ChatGPT account does not automatically provide free API credits or an API key. See [OpenAI's billing guidance](https://help.openai.com/en/articles/9039756-managing-billing-settings-on-chatgpt-web-and-platform).
+- Practical consequence: ChatGPT/Codex can help with coding within its own usage limits, but it is not a free always-on provider endpoint for API Factory. Using the local Codex CLI would require a reachable user machine or an authorized execution environment; the current local bridge is queued and Termalin has zero reachable hosts.
