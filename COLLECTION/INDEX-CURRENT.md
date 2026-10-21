@@ -1,6 +1,6 @@
 # Current resource and Collection status — 2026-10-21
 
-This short page is the live status pointer. The older [COLLECTION/INDEX.md](./INDEX.md) remains the long historical log; use this page for the current snapshot.
+This short page is the live status pointer. The long [COLLECTION/INDEX.md](./INDEX.md) contains the historical log through cycle 23; this page supersedes it for the current snapshot.
 
 ## COLLECTION
 - Latest completed: [cycle 26 — success](https://github.com/salamou1944/Project-/actions/runs/39675099179).
