@@ -20,3 +20,9 @@ This is a discovery snapshot from a targeted search for browser automation and d
 - TinyFish is the one relevant optional connection because the current browser connector cannot access the originating browser context and Termalin reports zero reachable hosts.
 - TinyFish does not give local Ollama access or make a model free; it only offers a possible cloud-browser path after the user connects it.
 - Continue independent GitHub/Render/Supabase/Notion work while that connection is pending.
+
+## Additional search results
+
+A second search for local-computer coding and remote shell tools surfaced Replit and Figma as already installed, plus Context7, Superpowers, Webflow, MagicPath, and ThoughtSpot as available but not installed. A search for SSH/terminal access did not surface a currently available remote-shell plugin; dbt, Snowflake, and Metabase appeared disabled by administrator. These are search results, not a complete marketplace export.
+
+Replit can build and host app projects through its connected service, but it is not evidence of access to the user's local Windows machine. Figma is connected with a Starter/View seat; its account metadata says Code Layers and Specs are disabled. TinyFish remains the most relevant optional cloud-browser route discovered so far.
