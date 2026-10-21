@@ -3,6 +3,13 @@
 Status: INCREMENTAL_COLLECTION
 Updated: 2026-10-21
 
+## Verified update — 2026-10-21 20:52 UTC (cycle 23)
+- [Cycle 23](https://github.com/salamou1944/Project-/actions/runs/39673609320) completed successfully. It selected 100 repositories, refreshed 72, preserved 28 blocked attempts, and left 18,179 repositories deferred. The manifest contains 5,429 source rows and 5,401 extracted artifacts.
+- Current-main JSON audit passed: 13,393 JSON/JSONC files, zero parse failures, 967,136,501 bytes. Historical evidence reconciliation passed with zero unrecoverable prior evidence records.
+- Capability/readiness groups: 48,434; promotion-review items: 33,273; restricted items: 15,161. Installation remains `NO_APPROVED_CANDIDATES`: zero installed and zero ready for verification.
+- Large-file risk is now significant: `READY.json` is 84,943,156 bytes, `CANONICAL-PROMOTION-PLAN.json` is 57,493,432 bytes, and `PROMOTION-QUEUE.json` is 50,368,982 bytes. All three exceed GitHub's recommended 50 MB size; JSON and 95 MB guards passed. Plan a non-destructive chunk/manifest approach before the hard guard is approached.
+- Across cycles 1–23: 1,930 refreshed sources and 370 blocked source attempts preserved. Continue bounded incremental mode only; do not force refresh or auto-install.
+
 ## Verified update — 2026-10-21 20:48 UTC (cycle 22)
 - [Cycle 22](https://github.com/salamou1944/Project-/actions/runs/39673053050) completed successfully. It selected 100 repositories, refreshed 73, preserved 27 blocked attempts, and left 18,251 repositories deferred. The manifest contains 5,356 source rows and 5,329 extracted artifacts.
 - Current-main JSON audit passed: 13,321 JSON/JSONC files, zero parse failures, 957,589,987 bytes. Historical evidence reconciliation passed with zero unrecoverable prior evidence records.
