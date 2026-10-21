@@ -10,7 +10,7 @@ This short page is the live status pointer. The long [COLLECTION/INDEX.md](./IND
 - Install result: `NO_APPROVED_CANDIDATES`; zero installed.
 - Cumulative cycles 1–28: 2,275 refreshed sources, 525 blocked attempts preserved.
 - Current cycle: paused after [cycle 28 success](https://github.com/salamou1944/Project-/actions/runs/39676042890); see [detailed cycle 28 result](./CYCLE-28-RESULT.md). Do not trigger another harvest until partitioning is implemented and tested.
-- Size warning: `READY.json` 88.9 MB, `CANONICAL-PROMOTION-PLAN.json` 60.1 MB, `PROMOTION-QUEUE.json` 52.6 MB. The 95 MB hard guard is still passing. Cycle 28 is the last bounded cycle before pausing extraction to implement and test non-destructive partitioning.
+- Size warning: `READY.json` 89.8 MB, `CANONICAL-PROMOTION-PLAN.json` 60.7 MB, `PROMOTION-QUEUE.json` 53.2 MB. The 95 MB hard guard still passes; see the cycle 28 result for the next maintenance gate.
 
 ## Canonical inventory documents
 - [Full resource inventory and execution plan](../VERIFICATION/RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
