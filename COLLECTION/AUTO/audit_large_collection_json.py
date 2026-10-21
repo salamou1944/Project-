@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import sys
 
+from collection_json_io import SHARD_SCHEMA, load_collection_json
+
 ROOT = Path(__file__).resolve().parents[2]
 RECOMMENDED_BYTES = 50_000_000
 BLOCK_COMMIT_BYTES = 95_000_000
@@ -43,14 +45,16 @@ def audit(path: Path) -> dict:
         display_path = path.name
     raw = path.read_bytes()
     try:
-        payload = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        document = json.loads(raw)
+        is_sharded = isinstance(document, dict) and document.get("schema_version") == SHARD_SCHEMA
+        payload = load_collection_json(path) if is_sharded else document
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, OSError) as exc:
         return {
             "path": display_path,
             "bytes": len(raw),
             "sha256": hashlib.sha256(raw).hexdigest(),
             "size_status": size_status(len(raw)),
-            "status": "INVALID_JSON",
+            "status": "INVALID_JSON_OR_SHARD",
             "error": f"{type(exc).__name__}: {exc}",
         }
 
@@ -62,6 +66,19 @@ def audit(path: Path) -> dict:
         "status": "PASS",
         "root_type": type(payload).__name__,
     }
+    if is_sharded:
+        logical_bytes = int(document.get("estimated_monolithic_bytes", document.get("total_shard_bytes", 0)))
+        result.update({
+            "format": "sharded",
+            "shard_count": document.get("shard_count"),
+            "shard_bytes": document.get("total_shard_bytes"),
+            "largest_shard_bytes": max((entry.get("bytes", 0) for entry in document.get("shards", [])), default=0),
+            "logical_bytes_estimate": logical_bytes,
+            "logical_size_status": size_status(logical_bytes),
+            "shard_integrity": "PASS",
+        })
+    else:
+        result["format"] = "monolithic"
     if isinstance(payload, dict):
         result["top_level_keys"] = sorted(payload.keys())
         result["collections"] = {
