@@ -160,16 +160,16 @@ def write_collection_json(
     # readback, which broke round-trip equality for ordered records.
     chunks: list[list[Any]] = []
     current: list[Any] = []
-    current_bytes = 4  # brackets plus newline bytes
+    current_bytes = 5  # opening bracket/newline plus closing newline/bracket/newline
     for item in items:
         item_bytes = len(_compact(item))
-        if item_bytes + 4 > max_shard_bytes:
+        if item_bytes + 5 > max_shard_bytes:
             raise ValueError("single collection item exceeds max_shard_bytes")
         extra_bytes = item_bytes + (2 if current else 0)  # comma + newline
         if current and current_bytes + extra_bytes > max_shard_bytes:
             chunks.append(current)
             current = []
-            current_bytes = 4
+            current_bytes = 5
             extra_bytes = item_bytes
         current.append(item)
         current_bytes += extra_bytes
