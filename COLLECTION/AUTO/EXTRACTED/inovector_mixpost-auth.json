@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:inovector/mixpost-auth",
+  "repo": "inovector/mixpost-auth",
+  "revision_sha": "1db57f3d405075ca88d79daa7ecf415787fc3c25",
+  "default_branch": "main",
+  "pushed_at": "2025-05-28T15:53:03Z",
+  "repo_updated_at": "2026-06-15T08:25:58Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/run-tests.yml",
+      "sha": null,
+      "content_sha256": "d600d45678038c73206a9d963ddbe729d166d1a5a4c458a0639efced78e5254d",
+      "score": 186,
+      "content": "name: run-tests\n\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n\njobs:\n  run-tests:\n    runs-on: ubuntu-latest\n\n    services:\n      mysql:\n        image: mysql:latest\n        env:\n          MYSQL_DATABASE: mixpost_auth_test\n          MYSQL_USER: user\n          MYSQL_PASSWORD: secret\n          MYSQL_ROOT_PASSWORD: root\n        ports:\n          - 3306:3306\n        options: --health-cmd=\"mysqladmin ping\" --health-interval=10s --health-timeout=5s --health-retries=3\n    strategy:\n      fail-fast: false\n      matrix:\n        php: [8.2, 8.3]\n        laravel: [^10.47,^11.0,^12.0]\n\n    name: P${{ matrix.php }} - L${{ matrix.laravel }}\n\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v3\n\n      - name: Setup PHP\n        uses: shivammathur/setup-php@v2\n        with:\n          php-version: ${{ matrix.php }}\n          extensions: dom, curl, libxml, mbstring, zip, pcntl, mysql, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, redis\n          coverage: none\n\n      - name: Set Laravel version\n        run: |\n          sed -i 's/^10.47|^11.0|^12.0/${{ matrix.laravel }}/g' composer.json\n\n      - name: Install composer dependencies\n        uses: ramsey/composer-install@v2\n        env:\n          COMPOSER_ROOT_VERSION: dev-main\n\n        with:\n          composer-options: \"--prefer-dist --no-interaction\"\n\n      - name: Execute tests\n        run: composer test\n        env:\n          DB_PORT: 3306\n          DB_DATABASE: mixpost_auth_test\n          DB_USERNAME: user\n          DB_PASSWORD: secret\n"
+    },
+    {
+      "path": "tests/Http/Controllers/AuthenticatedControllerTest.php",
+      "sha": null,
+      "content_sha256": "c5d9c2496a58ca5903459a62693f9a83b80d3562d187497fa003677df426d136",
+      "score": 169,
+      "content": "<?php\n\nuse Inovector\\MixpostAuth\\Models\\User;\n\ntest('login screen can be rendered', function () {\n    $this->publishAssets();\n\n    $response = $this->get('/mixpost/login');\n\n    $response->assertStatus(200);\n});\n\ntest('users can authenticate using the login screen', function () {\n    $user = User::factory()->create();\n\n    $response = $this->post('/mixpost/login', [\n        'email' => $user->email,\n        'password' => 'password',\n    ]);\n\n    $this->assertAuthenticated();\n    $response->assertRedirect(config('mixpost.redirect_to_url'));\n});\n\ntest('users can not authenticate with invalid password', function () {\n    $user = User::factory()->create();\n\n    $this->post('/mixpost/login', [\n        'email' => $user->email,\n        'password' => 'wrong-password',\n    ]);\n\n    $this->assertGuest();\n});\n"
+    },
+    {
+      "path": ".github/workflows/build-assets.yml",
+      "sha": null,
+      "content_sha256": "824e637e0cc9a6a8472f35550619b334df959118f881c0807e978d82faa08e37",
+      "score": 126,
+      "content": "name: build-assets\n\non:\n  push:\n    branches: [ main ]\n\njobs:\n  build:\n\n    runs-on: ubuntu-latest\n\n    strategy:\n      matrix:\n        node-version: [16.x]\n\n    steps:\n      - uses: actions/checkout@v3\n\n      - name: Setup PHP\n        uses: shivammathur/setup-php@v2\n        with:\n          php-version: '8.2'\n          coverage: none\n\n      - name: Install composer dependencies\n        run: composer install\n\n      - name: Use Node.js ${{ matrix.node-version }}\n        uses: actions/setup-node@v3\n        with:\n          node-version: ${{ matrix.node-version }}\n      - run: npm ci\n      - run: npm run build --if-present\n\n      - name: Commit changes\n        uses: stefanzweifel/git-auto-commit-action@v4\n        with:\n          commit_message: Build assets\n          push_options: --force\n"
+    },
+    {
+      "path": ".github/workflows/update-changelog.yml",
+      "sha": null,
+      "content_sha256": "b0a92f249af90bc5d37c341d5c9d48a3b14b61ad0e2f1780932b47826b982de8",
+      "score": 126,
+      "content": "name: \"Update Changelog\"\n\non:\n  release:\n    types: [released]\n\njobs:\n  update:\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Checkout code\n        uses: actions/checkout@v3\n        with:\n          ref: main\n\n      - name: Update Changelog\n        uses: stefanzweifel/changelog-updater-action@v1\n        with:\n          latest-version: ${{ github.event.release.name }}\n          release-notes: ${{ github.event.release.body }}\n\n      - name: Commit updated CHANGELOG\n        uses: stefanzweifel/git-auto-commit-action@v4\n        with:\n          branch: main\n          commit_message: Update CHANGELOG\n          file_pattern: CHANGELOG.md\n"
+    },
+    {
+      "path": "composer.json",
+      "sha": null,
+      "content_sha256": "a024804d4f31fd6573f93f089bb903550cf633768218ed4a59b48ac3ff92084a",
+      "score": 120,
+      "content": "{\n    \"name\": \"inovector/mixpost-auth\",\n    \"description\": \"Mixpost's authentication feature\",\n    \"keywords\": [\n        \"inovector\",\n        \"mixpost\",\n        \"mixpost-auth\",\n        \"mixpost-user-auth\",\n        \"mixpost-authentication\"\n    ],\n    \"homepage\": \"https://github.com/inovector/mixpost-auth\",\n    \"license\": \"MIT\",\n    \"authors\": [\n        {\n            \"name\": \"Dima Botezatu\",\n            \"email\": \"dima@inovector.com\",\n            \"role\": \"Developer\"\n        }\n    ],\n    \"require\": {\n        \"php\": \"^8.2\",\n        \"ext-fileinfo\": \"*\",\n        \"illuminate/contracts\": \"^10.47|^11.0|^12.0\",\n        \"spatie/laravel-package-tools\": \"^1.14\"\n    },\n    \"require-dev\": {\n        \"nunomaduro/collision\": \"^8.1\",\n        \"orchestra/testbench\": \"^9.2|^10.0\",\n        \"pestphp/pest\": \"^2.34|^3.0\",\n        \"pestphp/pest-plugin-faker\": \"^2.0|^3.0\",\n        \"pestphp/pest-plugin-laravel\": \"^2.0|^3.0\",\n        \"phpstan/extension-installer\": \"^1.1\",\n        \"phpstan/phpstan-deprecation-rules\": \"^1.0\",\n        \"phpstan/phpstan-phpunit\": \"^1.0\",\n        \"phpunit/phpunit\": \"^10.5|^11.0\"\n    },\n    \"autoload\": {\n        \"psr-4\": {\n            \"Inovector\\\\MixpostAuth\\\\\": \"src\",\n            \"Inovector\\\\MixpostAuth\\\\Database\\\\Factories\\\\\": \"database/factories\"\n        }\n    },\n    \"autoload-dev\": {\n        \"psr-4\": {\n            \"Inovector\\\\MixpostAuth\\\\Tests\\\\\": \"tests\"\n        }\n    },\n    \"scripts\": {\n        \"analyse\": \"vendor/bin/phpstan analyse\",\n        \"test\": \"vendor/bin/pest\",\n        \"test-coverage\": \"vendor/bin/pest --coverage\",\n        \"format\": \"vendor/bin/pint\"\n    },\n    \"config\": {\n        \"sort-packages\": true,\n        \"allow-plugins\": {\n            \"pestphp/pest-plugin\": true,\n            \"phpstan/extension-installer\": true\n        }\n    },\n    \"extra\": {\n        \"laravel\": {\n            \"providers\": [\n                \"Inovector\\\\MixpostAuth\\\\MixpostAuthServiceProvider\"\n            ]\n        }\n    },\n    \"minimum-stability\": \"dev\",\n    \"prefer-stable\": true\n}\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "beec0223c8bad8f5a867bf52a0e0dc79093adb13ea5fae50431d2120f97e54f9",
+      "score": 120,
+      "content": "{\n    \"private\": true,\n    \"type\": \"module\",\n    \"scripts\": {\n        \"dev\": \"vite\",\n        \"build\": \"vite build\"\n    },\n    \"devDependencies\": {\n        \"@tailwindcss/forms\": \"^0.5.2\",\n        \"@tailwindcss/vite\": \"^4.1.3\",\n        \"laravel-vite-plugin\": \"^1.0.5\",\n        \"tailwindcss\": \"^4.1.4\",\n        \"vite\": \"^5.4.9\"\n    }\n}\n"
+    },
+    {
+      "path": "src/MixpostAuth.php",
+      "sha": null,
+      "content_sha256": "8f828b6d4888ef137f74f8b785cf7dd931de10bfd526abe2c1c38bae96bc08fc",
+      "score": 113,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth;\n\nuse Illuminate\\Support\\HtmlString;\nuse Inovector\\MixpostAuth\\Models\\User;\n\nclass MixpostAuth\n{\n    static function assets()\n    {\n        $hot = __DIR__ . '/../resources/dist/hot';\n\n        $devServerIsRunning = file_exists($hot);\n\n        if ($devServerIsRunning) {\n            $viteServer = file_get_contents($hot);\n\n            return new HtmlString(<<<HTML\n                <script type=\"module\" src=\"$viteServer/@vite/client\"></script>\n                <script type=\"module\" src=\"$viteServer/resources/css/app.css\"></script>\n            HTML\n            );\n        }\n\n        $manifest = json_decode(file_get_contents(\n            public_path('vendor/mixpost-auth/manifest.json')\n        ), true);\n\n        return new HtmlString(<<<HTML\n                <link rel=\"stylesheet\" href=\"/vendor/mixpost-auth/{$manifest['resources/css/app.css']['file']}\">\n            HTML\n        );\n    }\n\n    static function getUserClass(): string\n    {\n        return config('mixpost-auth.user_model', User::class);\n    }\n}\n"
+    },
+    {
+      "path": "src/MixpostAuthServiceProvider.php",
+      "sha": null,
+      "content_sha256": "fc8b39250cb2559c81f89975658c67019c88ce02decd777b31884891cd4959a0",
+      "score": 113,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth;\n\nuse Illuminate\\Support\\Facades\\Blade;\nuse Inovector\\MixpostAuth\\Commands\\CreateUser;\nuse Inovector\\MixpostAuth\\Commands\\ChangeUserPassword;\nuse Inovector\\MixpostAuth\\Commands\\DeleteUser;\nuse Spatie\\LaravelPackageTools\\Package;\nuse Spatie\\LaravelPackageTools\\PackageServiceProvider;\n\nclass MixpostAuthServiceProvider extends PackageServiceProvider\n{\n    public function configurePackage(Package $package): void\n    {\n        $package\n            ->name('mixpost-auth')\n            ->hasConfigFile()\n            ->hasViews()\n            ->hasRoute('web')\n            ->hasCommands([\n                CreateUser::class,\n                DeleteUser::class,\n                ChangeUserPassword::class\n            ]);\n    }\n\n    public function packageBooted(): void\n    {\n        if ($this->app->runningInConsole()) {\n            $this->publishes([\n                $this->package->basePath(\"/../resources/dist/vendor/{$this->package->shortName()}\") => public_path(\"vendor/{$this->package->shortName()}\"),\n                $this->package->basePath('/../resources/img') => public_path(\"vendor/{$this->package->shortName()}/img\"),\n            ], \"{$this->package->shortName()}-assets\");\n        }\n\n        $this->bootBladeComponents();\n    }\n\n    protected function bootBladeComponents(): static\n    {\n        Blade::component('mixpost-auth::components.panel', 'mixpost-auth::panel');\n        Blade::component('mixpost-auth::components.input', 'mixpost-auth::input');\n        Blade::component('mixpost-auth::components.input-error', 'mixpost-auth::input-error');\n        Blade::component('mixpost-auth::components.checkbox', 'mixpost-auth::checkbox');\n        Blade::component('mixpost-auth::components.primary-button', 'mixpost-auth::primary-button');\n\n        return $this;\n    }\n}\n"
+    },
+    {
+      "path": "config/mixpost-auth.php",
+      "sha": null,
+      "content_sha256": "adf48c2542689a1329e97ce2511cc11856a3c8e5d8eb0bdaa73840939b999f33",
+      "score": 113,
+      "content": "<?php\n\nreturn [\n    /*\n     * After login will redirect to this url.\n     */\n    'redirect_to_url' => '/mixpost',\n\n    /*\n     * The model you want to use as a User model.\n     */\n    'model_user' => \\Inovector\\MixpostAuth\\Models\\User::class\n];\n"
+    },
+    {
+      "path": "src/Http/Controllers/AuthenticatedController.php",
+      "sha": null,
+      "content_sha256": "cb56204eb85ac37e40dafb465b8e98c408cc7f1744ff9212984eb30221b15725",
+      "score": 109,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth\\Http\\Controllers;\n\nuse Illuminate\\Routing\\Controller;\n\nuse Illuminate\\Http\\RedirectResponse;\nuse Illuminate\\Http\\Request;\nuse Illuminate\\Support\\Facades\\Auth;\nuse Illuminate\\View\\View;\nuse Inovector\\MixpostAuth\\Http\\Requests\\LoginRequest;\n\nclass AuthenticatedController extends Controller\n{\n    public function create(): View\n    {\n        return view('mixpost-auth::login');\n    }\n\n    public function store(LoginRequest $request): RedirectResponse\n    {\n        $request->authenticate();\n\n        $request->session()->regenerate();\n\n        return redirect()->intended(config('mixpost-auth.redirect_to_url'));\n    }\n\n    public function destroy(Request $request): RedirectResponse\n    {\n        Auth::guard('web')->logout();\n\n        $request->session()->invalidate();\n\n        $request->session()->regenerateToken();\n\n        return redirect()->route('login');\n    }\n}\n"
+    },
+    {
+      "path": "src/Models/User.php",
+      "sha": null,
+      "content_sha256": "87077deb7c118421164b87e64c897e20a0a96655be585c8a8ba904545ff62f40",
+      "score": 106,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth\\Models;\n\nuse Illuminate\\Database\\Eloquent\\Factories\\HasFactory;\nuse Illuminate\\Foundation\\Auth\\User as Authenticatable;\nuse Illuminate\\Notifications\\Notifiable;\n\nclass User extends Authenticatable\n{\n    use HasFactory, Notifiable;\n\n    protected $fillable = [\n        'name',\n        'email',\n        'password',\n    ];\n\n    protected $hidden = [\n        'password',\n        'remember_token',\n    ];\n\n    protected $casts = [\n        'email_verified_at' => 'datetime',\n    ];\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "f550467ee94f589b45dcacea1634e38bd9df84327a9b0a1a07dc831ccf564ded",
+      "score": 100,
+      "content": "[<img src=\"./art/standwithua.png\" />](https://supportukrainenow.org)\n\n* * *\n\n[<img src=\"https://raw.githubusercontent.com/inovector/mixpost/main/art/logo.svg\" alt=\"Logo Mixpost\" />](https://mixpost.app)\n\n[![Latest Version on Packagist](https://img.shields.io/packagist/v/inovector/mixpost-auth.svg?style=flat-square)](https://packagist.org/packages/inovector/mixpost-auth)\n[![GitHub Tests Action Status](https://img.shields.io/github/workflow/status/inovector/mixpost-auth/run-tests?label=tests)](https://github.com/inovector/mixpost-auth/actions?query=workflow%3Arun-tests+branch%3Amain)\n[![Total Downloads](https://img.shields.io/packagist/dt/inovector/mixpost-auth.svg?style=flat-square)](https://packagist.org/packages/inovector/mixpost-auth)\n\n## Introduction\n\nMixpost Auth provides a login page for the [Mixpost](https://github.com/inovector/mixpost) package. If you already have user management, do not install this package. Install only if you don't have one.\n\nJoin our community:\n\n- [Discord](https://discord.gg/5YdseZnK2Z)\n- [Facebook Private Group](https://www.facebook.com/groups/inovector)\n\n[<img src=\"./art/cover.png\" />](https://mixpost.app)\n\n## Requirements\n\n* Laravel Framework [^10.47, ^11.0]\n* PHP 8.2 or higher\n* Database (eg: MySQL, PostgresSQL, SQLite)\n\n## Installation\n\nYou may use Composer to install Mixpost Auth into your new Laravel project:\n\n```bash\ncomposer require inovector/mixpost-auth\n```\n\nAfter installing the Mixpost Auth package, you may execute:\n\n```bash\nphp artisan vendor:publish --tag=mixpost-auth-assets\n```\n\nYou can publish the config file with:\n\n```bash\nphp artisan vendor:publish --tag=mixpost-auth-config\n```\n\nThis is the contents of the published config file:\n\n```php\nreturn [\n    /*\n     * After login will redirect to this url.\n     */\n    'redirect_to_url' => '/mixpost',\n\n    /*\n     * The model you want to use as a User model.\n     */\n    'model_user' => \\Inovector\\MixpostAuth\\Models\\User::class\n];\n```\n\n## Create a new user\n\nTo create a new user, you can run this command: `php artisan mixpost-auth:create` and follow the instructions.\n\n## Delete a user\n\nTo delete a user, you can run this command: `php artisan mixpost-auth:delete example@mail.com`.\n\n## Change user password\n\nTo change user password, you can run this command: `mixpost-auth:password example@mail.com` and follow the instructions.\n\n## Visit\n\nAfter performing all these steps, you should be able to visit the Login page at /mixpost/login.\n\n## Testing\n\n```bash\ncomposer test\n```\n\n## Changelog\n\nPlease see [Releases](../../releases) for more information what has changed recently.\n\n## Contributing\n\nBy participating in this project you agree to these conditions 👇\n\nPlease note that this project is a [commercial product](https://mixpost.app/), and this repository is the lite version\nof Mixpost Pro. We work hard to offer the community the best free social media manager solution and please read this\nsection carefully.\n\nIf you want to add a feature, it's better to open an issue before you start coding. It is important for us that features\nfrom the Lite version do not correlate with features from the Mixpost Pro. PRs with optimizations, bug fixes are\nwelcome.\n\nPlease, be very clear on your commit messages and pull requests, empty pull request messages may be rejected.\n\nWhen contributing code to Mixpost Auth, you must follow\nthe [PSR-12 Coding Standard](https://github.com/php-fig/fig-standards/blob/master/accepted/PSR-12-extended-coding-style-guide.md).\nThe golden rule is: Imitate the existing Mixpost Auth code.\n\n## Security Vulnerabilities\n\nPlease review [our security policy](../../security/policy) on how to report security vulnerabilities.\n\n## Credits\n\n- [Dima Botezatu](https://github.com/lao9s)\n- [All Contributors](../../contributors)\n\n## License\n\nMixpost Auth is licensed under the [MIT License](LICENSE.md), sponsored and supported by [Inovector](https://inovector.com).\n"
+    },
+    {
+      "path": "tests/Pest.php",
+      "sha": null,
+      "content_sha256": "8d21098593d06089b35f96b62bd4f9bf2564a6f2b6e2af2c15f599dec70c21dc",
+      "score": 93,
+      "content": "<?php\n\nuse Inovector\\MixpostAuth\\Tests\\TestCase;\n\nuses(TestCase::class)->in(__DIR__);\n"
+    },
+    {
+      "path": "tests/TestCase.php",
+      "sha": null,
+      "content_sha256": "19c144e0ca6a350649e883167604e0c56c28293e218e50646c6972578f260910",
+      "score": 93,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth\\Tests;\n\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\nuse Illuminate\\Foundation\\Testing\\LazilyRefreshDatabase;\nuse Illuminate\\Foundation\\Testing\\RefreshDatabaseState;\nuse Illuminate\\Contracts\\Console\\Kernel;\nuse Inovector\\MixpostAuth\\MixpostAuthServiceProvider;\nuse Orchestra\\Testbench\\TestCase as Orchestra;\n\nclass TestCase extends Orchestra\n{\n    use LazilyRefreshDatabase;\n\n    protected function setUp(): void\n    {\n        parent::setUp();\n\n        Factory::guessFactoryNamesUsing(\n            fn(string $modelName) => 'Inovector\\\\MixpostAuth\\\\Database\\\\Factories\\\\' . class_basename($modelName) . 'Factory'\n        );\n    }\n\n    protected function getPackageProviders($app)\n    {\n        return [\n            MixpostAuthServiceProvider::class\n        ];\n    }\n\n    protected function refreshTestDatabase()\n    {\n        if (!RefreshDatabaseState::$migrated) {\n            $this->artisan('migrate:fresh', $this->migrateFreshUsing());\n\n            if ($this->app->version() > 10) {\n                $migration = include __DIR__ . '/../vendor/orchestra/testbench-core/laravel/migrations/0001_01_01_000000_testbench_create_users_table.php';\n                $migration->up();\n            } else {\n                $migration = include __DIR__ . '/../vendor/orchestra/testbench-core/laravel/migrations/2014_10_12_000000_testbench_create_users_table.php';\n                $migration->up();\n            }\n\n            $this->app[Kernel::class]->setArtisan(null);\n\n            RefreshDatabaseState::$migrated = true;\n        }\n\n        $this->beginDatabaseTransaction();\n    }\n\n    public function getEnvironmentSetUp($app)\n    {\n        config()->set('database.default', 'mysql');\n\n        config()->set('database.connections.mysql', [\n            'driver' => 'mysql',\n            'host' => env('DB_HOST', '127.0.0.1'),\n            'port' => env('DB_PORT', '3305'),\n            'database' => env('DB_DATABASE', 'mixpost_auth_test'),\n            'username' => env('DB_USERNAME', 'root'),\n            'password' => env('DB_PASSWORD', ''),\n            'prefix' => '',\n            'charset' => 'utf8mb4',\n            'collation' => 'utf8mb4_unicode_ci',\n        ]);\n    }\n\n    public function publishAssets(): void\n    {\n        $this->artisan('vendor:publish', ['--tag' => 'mixpost-auth-assets'])->run();\n    }\n}\n"
+    },
+    {
+      "path": "tests/Commands/CreateUserTest.php",
+      "sha": null,
+      "content_sha256": "639888780deafae5457cc570bfa2d5a40cd8d05244afddd77b5d9ef54c2b30be",
+      "score": 91,
+      "content": "<?php\n\nuse Inovector\\MixpostAuth\\Models\\User;\nuse Inovector\\MixpostAuth\\Commands\\CreateUser;\n\nit('creates a new user with valid data', function () {\n    $name = 'Test User';\n    $email = 'testuser@example.com';\n    $password = 'password';\n\n    $this->artisan(CreateUser::class, [\n        '--admin' => false,\n    ])\n        ->expectsQuestion('What is the name of the new user?', $name)\n        ->expectsQuestion('What is the email address of the new user?', $email)\n        ->expectsQuestion('What is the password for the new user?', $password)\n        ->doesntExpectOutputToContain('- Your email:')\n        ->doesntExpectOutputToContain('- Your password:')\n        ->assertExitCode(0);\n\n    $user = User::where('email', $email)->first();\n\n    expect($user !== null)->toBeTrue()\n        ->and($user->name)->toBe($name)\n        ->and($user->email)->toBe($email);\n});\n\nit('does not create a new user with invalid data', function () {\n    $name = 'Test User';\n    $email = 'invalid-email';\n    $password = '';\n\n    $this->artisan(CreateUser::class, [\n        '--admin' => false,\n    ])\n        ->expectsQuestion('What is the name of the new user?', $name)\n        ->expectsQuestion('What is the email address of the new user?', $email)\n        ->expectsQuestion('What is the password for the new user?', $password)\n        ->doesntExpectOutputToContain('- Your email:')\n        ->doesntExpectOutputToContain('- Your password:')\n        ->assertExitCode(1);\n\n});\n\nit('does not create a user if one already exists by email', function () {\n    $name = 'Test User';\n    $email = 'testuser@example.com';\n    $password = 'password';\n\n    User::create([\n        'name' => $name,\n        'email' => $email,\n        'password' => bcrypt($password)\n    ]);\n\n    $this->artisan(CreateUser::class, [\n        '--admin' => false,\n    ])\n        ->expectsQuestion('What is the name of the new user?', $name)\n        ->expectsQuestion('What is the email address of the new user?', $email)\n        ->expectsQuestion('What is the password for the new user?', $password)\n        ->doesntExpectOutputToContain('- Your email:')\n        ->doesntExpectOutputToContain('- Your password:')\n        ->assertExitCode(1);\n\n});\n\nit('creates an admin user', function () {\n    $this->artisan(CreateUser::class, [\n        '--admin' => true,\n    ])->assertExitCode(0);\n});\n\nit('does not create an admin user if one already exists', function () {\n    User::create([\n        'name' => 'Admin',\n        'email' => 'admin@example.com',\n        'password' => bcrypt('password')\n    ]);\n\n    $this->artisan(CreateUser::class, [\n        '--admin' => true,\n    ])->assertExitCode(1);\n});\n"
+    },
+    {
+      "path": "database/factories/UserFactory.php",
+      "sha": null,
+      "content_sha256": "d5a08194a7938133cd990e81ecff817412ff1fccea51234125fa7383b9d75798",
+      "score": 91,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth\\Database\\Factories;\n\nuse Illuminate\\Database\\Eloquent\\Factories\\Factory;\nuse Illuminate\\Support\\Str;\nuse Inovector\\MixpostAuth\\Models\\User;\n\nclass UserFactory extends Factory\n{\n    protected $model = User::class;\n\n    public function definition()\n    {\n        return [\n            'name' => $this->faker->name,\n            'email' => $this->faker->email,\n            'password' => bcrypt('password'),\n            'remember_token' => Str::random(10),\n        ];\n    }\n}\n"
+    },
+    {
+      "path": "tests/Commands/ChangeUserPasswordTest.php",
+      "sha": null,
+      "content_sha256": "7620a49fdbb31d819c7c930d23a174a6bf498f9b686d594db32510443f686aaf",
+      "score": 91,
+      "content": "<?php\n\nuse Inovector\\MixpostAuth\\Commands\\ChangeUserPassword;\nuse Inovector\\MixpostAuth\\Models\\User;\n\nit('changes user password with valid data', function () {\n    $user = User::factory()->create();\n\n    $this->artisan(ChangeUserPassword::class, [\n        'email' => $user->email,\n    ])\n        ->expectsQuestion('What is the new password?', 'new-password')\n        ->assertExitCode(0);\n\n});\n\nit('fails when new password is invalid', function () {\n    $user = User::factory()->create();\n\n    $this->artisan(ChangeUserPassword::class, [\n        'email' => $user->email,\n    ])\n        ->expectsQuestion('What is the new password?', '')\n        ->assertExitCode(1);\n});\n\nit('fails when user email does not exist', function () {\n    $this->artisan(ChangeUserPassword::class, [\n        'email' => 'nonexistent@example.com'\n    ])->assertExitCode(1);\n});\n"
+    },
+    {
+      "path": "tests/Commands/DeleteUserTest.php",
+      "sha": null,
+      "content_sha256": "ff2ae80624c9b4d81b58c77cea7b51d349efa56f5421a71ce301f0c88bfc599c",
+      "score": 91,
+      "content": "<?php\n\nuse Inovector\\MixpostAuth\\MixpostAuth;\nuse Inovector\\MixpostAuth\\Commands\\DeleteUser;\n\nit('deletes a user with valid email', function () {\n    $email = 'testuser@example.com';\n\n    MixpostAuth::getUserClass()::create([\n        'name' => 'Test User',\n        'email' => $email,\n        'password' => bcrypt('password')\n    ]);\n\n    $this->artisan(DeleteUser::class, [\n        'email' => $email,\n    ])\n        ->expectsConfirmation('Are you sure you want to delete this user?', 'yes')\n        ->expectsOutput('User deleted successfully!')\n        ->assertExitCode(0);\n\n    $user = MixpostAuth::getUserClass()::where('email', $email)->first();\n\n    expect($user)->toBeNull();\n});\n\nit('does not delete a user with invalid email', function () {\n    $email = 'invalid-email';\n\n    $this->artisan(DeleteUser::class, [\n        'email' => $email,\n    ])\n        ->assertExitCode(1);\n});\n\nit('aborts deletion process if confirmation is declined', function () {\n    $email = 'testuser@example.com';\n\n    MixpostAuth::getUserClass()::create([\n        'name' => 'Test User',\n        'email' => $email,\n        'password' => bcrypt('password')\n    ]);\n\n    $this->artisan(DeleteUser::class, [\n        'email' => $email,\n    ])\n        ->expectsConfirmation('Are you sure you want to delete this user?', 'no')\n        ->assertExitCode(1);\n\n    $user = MixpostAuth::getUserClass()::where('email', $email)->first();\n\n    expect($user)->not->toBeNull();\n});\n"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha": null,
+      "content_sha256": "7325cae113329aa248670c35ecccd01a1d62c77e560acb18fe99578841b25497",
+      "score": 80,
+      "content": "# Security Policy\n\n## Reporting a Vulnerability\n\nIf you discover any security related issues, please email dima@inovector.com instead of using the issue tracker.\n"
+    },
+    {
+      "path": "vite.config.js",
+      "sha": null,
+      "content_sha256": "ac1b0cdb594f43f11d5ba345919742fd1f938a40877f2dbad398c72b22ea7aac",
+      "score": 35,
+      "content": "import {defineConfig} from 'vite';\nimport laravel from 'laravel-vite-plugin';\nimport tailwindcss from \"@tailwindcss/vite\";\n\nexport default defineConfig({\n    plugins: [\n        laravel({\n            input: 'resources/css/app.css',\n            publicDirectory: 'resources/dist',\n            buildDirectory: 'vendor/mixpost-auth',\n            refresh: true\n        }),\n        tailwindcss(),\n    ]\n});\n"
+    },
+    {
+      "path": "routes/web.php",
+      "sha": null,
+      "content_sha256": "9e41308369ab6125499c061c3e9b711593d7b04750523ebf7d1e331738a19935",
+      "score": 33,
+      "content": "<?php\n\nuse Illuminate\\Support\\Facades\\Route;\nuse Inovector\\MixpostAuth\\Http\\Controllers\\AuthenticatedController;\n\nRoute::middleware(['web', 'guest'])->prefix('mixpost')->group(function () {\n    Route::get('login', [AuthenticatedController::class, 'create'])\n        ->name('login');\n\n    Route::post('login', [AuthenticatedController::class, 'store']);\n});\n"
+    },
+    {
+      "path": "src/Commands/DeleteUser.php",
+      "sha": null,
+      "content_sha256": "ddc2a2d010f2ec4bf3c7fd52091a4ac5b6d1a822038e97ae7bbdbf683aedcd74",
+      "score": 31,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth\\Commands;\n\nuse Illuminate\\Console\\Command;\nuse Inovector\\MixpostAuth\\MixpostAuth;\n\nclass DeleteUser extends Command\n{\n    public $signature = 'mixpost-auth:delete {email}';\n\n    public $description = 'Delete a user';\n\n    public function handle(): int\n    {\n        if (!MixpostAuth::getUserClass()::where('email', $this->argument('email'))->exists()) {\n            return $this->userNotFound();\n        }\n\n        if (!$this->confirm('Are you sure you want to delete this user?')) {\n            return self::FAILURE;\n        }\n\n        $delete = MixpostAuth::getUserClass()::where('email', $this->argument('email'))->delete();\n\n        if (!$delete) {\n            return $this->userNotFound();\n        }\n\n        $this->info('User deleted successfully!');\n\n        return self::SUCCESS;\n    }\n\n    protected function userNotFound(): int\n    {\n        $this->error('User not found!');\n        return self::FAILURE;\n    }\n}\n"
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "sha": null,
+      "content_sha256": "c53c9b15124671e2accaa157bd4d1dfff55467e802243d760cd84082ed4ec1cf",
+      "score": 31,
+      "content": "blank_issues_enabled: false\ncontact_links:\n  - name: Report a security issue\n    url: https://github.com/inovector/mixpost-auth/security/policy\n    about: Learn how to notify us for sensitive bugs\n"
+    },
+    {
+      "path": "src/Commands/ChangeUserPassword.php",
+      "sha": null,
+      "content_sha256": "105ab3f5f78049ea4207acdb435c66a415a8ce8c2986bcd993821a4d0a5b154d",
+      "score": 31,
+      "content": "<?php\n\nnamespace Inovector\\MixpostAuth\\Commands;\n\nuse Illuminate\\Console\\Command;\nuse Illuminate\\Support\\Facades\\Validator;\nuse Inovector\\MixpostAuth\\MixpostAuth;\n\nclass ChangeUserPassword extends Command\n{\n    public $signature = 'mixpost-auth:password {email}';\n\n    public $description = 'Change user password to authenticate in to Mixpost';\n\n    public function handle(): int\n    {\n        $email = $this->argument('email');\n\n        $user = MixpostAuth::getUserClass()::where('email', $email)->first();\n\n        if (!$user) {\n            $this->error(\"User $email doesn't exists!\");\n\n            return self::FAILURE;\n        }\n\n        $password = [REDACTED]'What is the new password?');\n\n        $validator = Validator::make(['password' => $password], [\n            'password' => ['required', 'string'],\n        ]);\n\n        if ($validator->fails()) {\n            $this->error('The following validation errors occurred:');\n            $this->error(json_encode($validator->errors(), JSON_PRETTY_PRINT));\n\n            return self::FAILURE;\n        }\n\n        $user->update([\n            'password' => bcrypt($password)\n        ]);\n\n        $this->info(\"Password for $user->email updated successfully!\");\n\n        return self::SUCCESS;\n    }\n}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:34:59.092490+00:00"
+}

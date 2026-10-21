@@ -1,0 +1,66 @@
+{
+  "canonical_source": "github:ai-forever/mcp_giga_checker",
+  "repo": "ai-forever/mcp_giga_checker",
+  "revision_sha": "f7cdf359f26c3132f883e7cb04960455d8983082",
+  "default_branch": "main",
+  "pushed_at": "2025-05-13T11:45:04Z",
+  "repo_updated_at": "2026-08-12T18:40:45Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "3fe334b57c1713222cd8b4a981e5d2fa0de34f8c3cf119fc13690e4dcae62577",
+      "score": 120,
+      "content": "[project]\nname = \"mcp_giga_checker\"\nversion = \"0.1.0\"\ndescription = \"MCP сервер для проверки текста на сгенерированность ИИ через GigaChat API\"\nrequires-python = \">=3.12\"\nauthors = [\n    { name = \"Sergei Trashchenkov\", email = \"trashchenkov@gmail.com\" }\n]\nlicense = {text = \"MIT\"}\ndependencies = [\n    \"httpx>=0.28.1\",\n    \"mcp[cli]>=1.6.0\",\n    \"uv>=0.7.2\"\n]\n\n[project.scripts]\nmcp-giga-checker = \"mcp_giga_checker.server:run\"\n\n[build-system]\nrequires = [\"setuptools>=61.0\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[tool.setuptools]\npackages = [\"mcp_giga_checker\"] "
+    },
+    {
+      "path": "mcp_giga_checker/__init__.py",
+      "sha": null,
+      "content_sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+      "score": 108,
+      "content": " "
+    },
+    {
+      "path": "mcp_giga_checker/__main__.py",
+      "sha": null,
+      "content_sha256": "f94a6ce621a66453433c318eba7196bc2264c167546782625c941659971d6f13",
+      "score": 108,
+      "content": "from .server import run\n \nif __name__ == \"__main__\":\n    run() "
+    },
+    {
+      "path": "mcp_giga_checker/server.py",
+      "sha": null,
+      "content_sha256": "569667352125b7b36bf86740a717ee4f02be8d754035c60ab721edca1e06c159",
+      "score": 108,
+      "content": "from mcp.server.fastmcp import FastMCP\nimport os\nimport httpx\nimport uuid\nimport asyncio\nimport ssl\n\nprint(\"SSL default verify paths:\", ssl.get_default_verify_paths())\nprint(\"SSL env:\", {k: v for k, v in os.environ.items() if 'SSL' in k or 'CA' in k})\n\nmcp = FastMCP(\"mcp_giga_checker\")\n\nGIGACHAT_AUTH_ENV = \"GIGACHAT_AUTH\"\nGIGACHAT_SCOPE_ENV = \"GIGACHAT_SCOPE\"\n\n# Глобальный SSLContext с отключённой проверкой\n_unverified_ctx = ssl.create_default_context()\n_unverified_ctx.check_hostname = False\n_unverified_ctx.verify_mode = ssl.CERT_NONE\n\nasync def get_access_token() -> str:\n    \"\"\"\n    Получает access_token для GigaChat API, используя переменные окружения GIGACHAT_AUTH (ключ авторизации, base64) и GIGACHAT_SCOPE.\n    \"\"\"\n    auth = os.getenv(GIGACHAT_AUTH_ENV)\n    if not auth:\n        raise ValueError(f\"Environment variable {GIGACHAT_AUTH_ENV} not set\")\n    scope = os.getenv(GIGACHAT_SCOPE_ENV)\n    if not scope:\n        raise ValueError(f\"Environment variable {GIGACHAT_SCOPE_ENV} not set\")\n    rq_uid = str(uuid.uuid4())\n    url = \"https://ngw.devices.sberbank.ru:9443/api/v2/oauth\"\n    headers = {\n        \"Content-Type\": \"application/x-www-form-urlencoded\",\n        \"Accept\": \"application/json\",\n        \"RqUID\": rq_uid,\n        \"Authorization\": f\"Basic {auth}\",\n    }\n    data = {\"scope\": scope}\n    print(\"[DEBUG] Requesting access token with headers:\", headers)\n    async with httpx.AsyncClient(verify=_unverified_ctx, trust_env=False) as client:\n        resp = await client.post(url, headers=headers, data=data)\n        print(\"[DEBUG] Access token response status:\", resp.status_code)\n        resp.raise_for_status()\n        token = [REDACTED]\"access_token\")\n    if not token:\n        raise RuntimeError(\"Failed to obtain access token from GigaChat OAuth API\")\n    return token\n\n@mcp.tool()\nasync def giga_check_text(input: str, model: str = \"GigaCheckDetection\") -> dict:\n    \"\"\"\n    Проверяет, написан ли текст с помощью ИИ через эндпоинт GigaChat /ai/check.\n    Токен всегда получается автоматически.\n    \"\"\"\n    access_token = await get_access_token()\n    url = \"https://gigachat.devices.sberbank.ru/api/v1/ai/check\"\n    headers = {\n        \"Authorization\": f\"Bearer {access_token}\",\n        \"Content-Type\": \"application/json\",\n        \"Accept\": \"application/json\",\n        \"RqUID\": str(uuid.uuid4()),\n    }\n    payload = {\"input\": input, \"model\": model}\n    print(\"[DEBUG] Sending AI check request with headers:\", headers)\n    async with httpx.AsyncClient(verify=_unverified_ctx, trust_env=False) as client:\n        resp = await client.post(url, headers=headers, json=payload)\n        print(\"[DEBUG] AI check response status:\", resp.status_code)\n        resp.raise_for_status()\n        return resp.json()\n\n@mcp.tool()\nasync def giga_check_file(file_path: str, model: str = \"GigaCheckDetection\") -> dict:\n    \"\"\"\n    Проверяет, написан ли текстовый файл с помощью ИИ через эндпоинт GigaChat /ai/check.\n    Токен всегда получается автоматически.\n    \"\"\"\n    if not os.path.isfile(file_path):\n        raise FileNotFoundError(f\"File not found: {file_path}\")\n    with open(file_path, \"r\", encoding=\"utf-8\") as f:\n        text = f.read()\n    return await giga_check_text(text, model=model)\n\ndef run():\n    mcp.run(transport=\"stdio\") ",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "0d0b8835423a795535a060b5da4e18d848bf58edee9f03af9aac8fd4a51a8a2a",
+      "score": 100,
+      "content": "# MCP Giga Checker\n\nMCP Giga Checker — это сервер MCP (Model Context Protocol) для проверки текста на сгенерированность искусственным интеллектом через GigaChat API от Сбера.\n\nСервер предоставляет интеграцию проверки сгенерированности текста в ваших ИИ-ассистентов.\n\n## Важно: тарифы GigaChat API\n\nПроверка сгенерированности текста через GigaChat API доступна только для пользователей с корпоративным доступом (тарифы для юрлиц). Подробнее: [Тарифы GigaChat API для юрлиц](https://developers.sber.ru/docs/ru/gigachat/tariffs/legal-tariffs)\n\n\n## Возможности\n- Проверка текста на признаки генерации ИИ (GigaChat)\n- Готовность к работе с агентами на базе MCP (например, Cursor)\n\n## Требования\n- Python 3.12+\n- Доступ к GigaChat API (см. тарифы ниже)\n\n\n## Запуск MCP-сервера\n\n\nДобавьте сервер в ваш `json`-конфигурационный файл:\n\n```json\n\"mcpServers\": {\n  \"mcp-giga-checker\": {\n    \"command\": \"uvx\",\n    \"args\": [\"--from\", \"mcp_giga_checker\", \"mcp-giga-checker\"],\n    \"enabled\": true,\n    \"env\": {\n      \"GIGACHAT_AUTH\": \"ваши_авторизационные_данные_GigaChat\",\n      \"GIGACHAT_SCOPE\": \"GIGACHAT_API_CORP\"\n    }\n  }\n}\n```\n\n\n## Лицензия\n\nMIT  \n\n\n\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:34:56.805427+00:00"
+}
