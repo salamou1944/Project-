@@ -1,0 +1,224 @@
+{
+  "canonical_source": "github:SigNoz/logs-benchmark",
+  "repo": "SigNoz/logs-benchmark",
+  "revision_sha": "0b2451e6108d8fa5fdd5808c4e174bd52b9d55d3",
+  "default_branch": "main",
+  "pushed_at": "2023-01-23T18:53:03Z",
+  "repo_updated_at": "2026-05-14T13:05:01Z",
+  "license": null,
+  "topics": [
+    "benchmark",
+    "logging",
+    "performance"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "elk/elk-server/setup/Dockerfile",
+      "sha": null,
+      "content_sha256": "8d0f2b2e1052055eaeba226c34d85897fd1fbd6c0e124ddf207459f951c145c4",
+      "score": 161,
+      "content": "ARG ELASTIC_VERSION\n\n# https://www.docker.elastic.co/\nFROM docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}\n\nUSER root\n\nCOPY . /\n\nRUN set -eux; \\\n\tmkdir /state; \\\n\tchown elasticsearch /state; \\\n\tchmod +x /entrypoint.sh\n\nUSER elasticsearch:root\n\nENTRYPOINT [\"/entrypoint.sh\"]"
+    },
+    {
+      "path": "plg/plg-client/docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "1e7e57d6d8d8a39b64d4b66be0e36cd959884a1ee95dc676838194488ecd9284",
+      "score": 116,
+      "content": "version: \"3\"\n\nnetworks:\n  monitoring:\n\n\nservices:\n  promtail:\n    image: grafana/promtail:2.6.1\n    volumes:\n      - /var/log:/var/log\n      - ./promtail.yml:/etc/promtail/config.yml\n      # - /var/lib/docker/containers:/var/lib/docker/containers\n      - ./data:/logs/\n    command: -config.file=/etc/promtail/config.yml\n    networks:\n      - monitoring\n  \n  # Log generator\n  # Generate logs and split log files every 1000MB in \"/logs/*.log\" path with \"json\" format\n  # $ flog -t log -f json -o /logs/*.log -p 1000000000\n  flog-1:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format\n    command: [ \"--format=json_with_trace\", \"--type=log\", \"--output=/logs/logs1.log\", \"-k\", \"1500\", \"-p\", \"1000000000\", \"--bytes=83400000000\"]\n    volumes:\n      - ./data:/logs/\n    networks:\n      - monitoring\n    stop_signal: SIGKILL\n\n  flog-2:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format\n    command: [ \"--format=json_with_trace\", \"--type=log\", \"--output=/logs/logs2.log\", \"-k\", \"1500\", \"-p\", \"1000000000\", \"--bytes=83400000000\"]\n    volumes:\n      - ./data:/logs/\n    networks:\n      - monitoring\n    stop_signal: SIGKILL\n\n"
+    },
+    {
+      "path": "signoz/signoz-client/docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "8fc4dd277892853097f81c4afb43d62054a8a37326be2632de9d6bdd9d790a74",
+      "score": 116,
+      "content": "version: \"2.3\"\n\nservices:\n  otel-collector:\n    image: signoz/signoz-otel-collector:0.55.3\n    command: [\"--config=/etc/otel-collector-config.yaml\"]\n    volumes:\n      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml\n    environment:\n      - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux\n    ports:\n      - \"2255:2255\"\n    restart: on-failure\n  \n  # Log generator\n  # Generate logs and split log files every 1000MB in \"/logs/*.log\" path with \"json\" format\n  # $ flog -t log -f json -o /logs/*.log -p 1000000000\n  flog-0:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format with traces\n    command: [ \"--format=json_with_trace\", \"-k\", \"1500\", \"--bytes=55500000000\"]\n    stop_signal: SIGKILL\n    logging:\n      driver: syslog\n      options:\n        syslog-address: \"tcp://localhost:2255\"\n    depends_on:\n      - otel-collector\n  \n  flog-1:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format with traces\n    command: [ \"--format=json_with_trace\", \"-k\", \"1500\", \"--bytes=55500000000\"]\n    stop_signal: SIGKILL\n    logging:\n      driver: syslog\n      options:\n        syslog-address: \"tcp://localhost:2255\"\n    depends_on:\n      - otel-collector\n  \n  flog-2:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format with traces\n    command: [ \"--format=json_with_trace\", \"-k\", \"1500\", \"--bytes=55500000000\"]\n    stop_signal: SIGKILL\n    logging:\n      driver: syslog\n      options:\n        syslog-address: \"tcp://localhost:2255\"\n    depends_on:\n      - otel-collector"
+    },
+    {
+      "path": "elk/elk-server/docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "dea4daf8a1041f1d4267ae95f643bd7b28fe7d89cc0ee03b004d0968c22d4554",
+      "score": 116,
+      "content": "version: '3.7'\n\nservices:\n  # The 'setup' service runs a one-off script which initializes the\n  # 'logstash_internal' and 'kibana_system' users inside Elasticsearch with the\n  # values of the passwords defined in the '.env' file.\n  #\n  # This task is only performed during the *initial* startup of the stack. On all\n  # subsequent runs, the service simply returns immediately, without performing\n  # any modification to existing users.\n  setup:\n    build:\n      context: setup/\n      args:\n        ELASTIC_VERSION: ${ELASTIC_VERSION}\n    init: true\n    volumes:\n      - setup:/state:Z\n    environment:\n      ELASTIC_PASSWORD: [REDACTED]}\n      LOGSTASH_INTERNAL_PASSWORD: [REDACTED]}\n      KIBANA_SYSTEM_PASSWORD: [REDACTED]}\n    networks:\n      - elk\n    depends_on:\n      - elasticsearch\n\n  elasticsearch:\n    image: docker.elastic.co/elasticsearch/elasticsearch:${ELASTIC_VERSION}\n    volumes:\n      - ./elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro,z\n      - es:/usr/share/elasticsearch/data:z\n    ports:\n      - \"9200:9200\"\n      - \"9300:9300\"\n    environment:\n      # ES_JAVA_OPTS: -Xms16G -Xmx16G\n      # Bootstrap password.\n      # Used to initialize the keystore during the initial startup of\n      # Elasticsearch. Ignored on subsequent runs.\n      ELASTIC_PASSWORD: [REDACTED]}\n      # Use single node discovery in order to disable production mode and avoid bootstrap checks.\n      # see: https://www.elastic.co/guide/en/elasticsearch/reference/current/bootstrap-checks.html\n      discovery.type: single-node\n    networks:\n      - elk\n\n  kibana:\n    image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}\n    volumes:\n      - ./kibana.yml:/usr/share/kibana/config/kibana.yml:ro,Z\n    ports:\n      - \"5601:5601\"\n    environment:\n      KIBANA_SYSTEM_PASSWORD: [REDACTED]}\n      # Fleet plugin\n      KIBANA_FLEET_SETUP: '1'\n    networks:\n      - elk\n    depends_on:\n      - elasticsearch\n  \n  eexporter:\n    image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.5.0\n    command:\n      - '--es.uri=http://elasticsearch:9200'\n    restart: always\n    ports:\n      - \"127.0.0.1:9114:9114\"\n    networks:\n      - elk\n  \n  prometheus:\n    image: prom/prometheus:v2.37.1\n    volumes:\n        - ./prometheus.yml:/etc/prometheus/prometheus.yml\n        - elk_prometheus_data:/prometheus\n    command:\n        - '--config.file=/etc/prometheus/prometheus.yml'\n    ports:\n        - '9090:9090'\n    networks:\n      - elk\n  \n  node-exporter:\n    image: prom/node-exporter:v1.4.0\n    restart: unless-stopped\n    volumes:\n      - /proc:/host/proc:ro\n      - /sys:/host/sys:ro\n      - /:/rootfs:ro\n    command:\n      - '--path.procfs=/host/proc'\n      - '--path.rootfs=/rootfs'\n      - '--path.sysfs=/host/sys'\n      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'\n    expose:\n      - 9100\n    networks:\n      - elk\n  \n  grafana:\n    image: grafana/grafana:9.2.1\n    volumes:\n      - elk-grafana-storage:/var/lib/grafana\n    ports:\n      - \"3000:3000\"\n    networks:\n      - elk\n\nnetworks:\n  elk:\n    driver: bridge\n\nvolumes:\n  setup:\n  es:\n  elk-grafana-storage:\n  elk_prometheus_data:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "plg/plg-server/docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "7d1fa7505b0329df6bf6050a85e3c5f6742a64eb9b1bb7024f52a5fb1a03953b",
+      "score": 116,
+      "content": "version: \"3\"\n\nnetworks:\n  monitoring:\n\n\nservices:\n  node-exporter:\n    image: prom/node-exporter:v1.4.0\n    restart: unless-stopped\n    volumes:\n      - /proc:/host/proc:ro\n      - /sys:/host/sys:ro\n      - /:/rootfs:ro\n    command:\n      - '--path.procfs=/host/proc'\n      - '--path.rootfs=/rootfs'\n      - '--path.sysfs=/host/sys'\n      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'\n    expose:\n      - 9100\n    networks:\n      - monitoring\n  prometheus:\n    image: prom/prometheus:v2.37.1\n    restart: unless-stopped\n    volumes:\n      - ./prometheus.yml:/etc/prometheus/prometheus.yml\n      - prometheus_data:/prometheus\n    command:\n      - '--config.file=/etc/prometheus/prometheus.yml'\n      - '--storage.tsdb.path=/prometheus'\n      - '--web.console.libraries=/etc/prometheus/console_libraries'\n      - '--web.console.templates=/etc/prometheus/consoles'\n      - '--web.enable-lifecycle'\n    expose:\n      - 9090\n    networks:\n      - monitoring\n\n  loki:\n    image: grafana/loki:2.6.1\n    ports:\n      - \"3100:3100\"\n    volumes:\n      - ./loki.yml:/etc/loki/local-config.yaml\n      - loki-data:/loki\n    command: -config.file=/etc/loki/local-config.yaml\n    networks:\n      - monitoring\n\n  grafana:\n    image: grafana/grafana:9.2.1\n    volumes:\n      - grafana-storage:/var/lib/grafana\n    ports:\n      - \"3000:3000\"\n    networks:\n      - monitoring\n\nvolumes:\n  prometheus_data: {}\n  grafana-storage: {}\n  loki-data: {}\n\n\n"
+    },
+    {
+      "path": "signoz/signoz-server/docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "73afba6143dcc990ecb2060ea5a8ad3f9ee0dea21603473fcef7fd6ff54ef6b5",
+      "score": 116,
+      "content": "version: \"2.3\"\n\nservices:\n  clickhouse:\n    image: clickhouse/clickhouse-server:22.4.5-alpine\n    ports:\n    - \"9000:9000\"\n    tty: true\n    volumes:\n      - ./clickhouse-config.xml:/etc/clickhouse-server/config.xml\n      - ./clickhouse-users.xml:/etc/clickhouse-server/users.xml\n      # - ./clickhouse-storage.xml:/etc/clickhouse-server/config.d/storage.xml\n      - ./data/clickhouse/:/var/lib/clickhouse/\n    restart: on-failure\n    logging:\n      options:\n        max-size: 50m\n        max-file: \"3\"\n    healthcheck:\n      # \"clickhouse\", \"client\", \"-u ${CLICKHOUSE_USER}\", \"--password ${CLICKHOUSE_PASSWORD}\", \"-q 'SELECT 1'\"\n      test: [\"CMD\", \"wget\", \"--spider\", \"-q\", \"localhost:8123/ping\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n\n  alertmanager:\n    image: signoz/alertmanager:0.23.0-0.2\n    volumes:\n      - ./data/alertmanager:/data\n    depends_on:\n      query-service:\n        condition: service_healthy\n    restart: on-failure\n    command:\n      - --queryService.url=http://query-service:8085\n      - --storage.path=/data\n\n  # Notes for Maintainers/Contributors who will change Line Numbers of Frontend & Query-Section. Please Update Line Numbers in `./scripts/commentLinesForSetup.sh` & `./CONTRIBUTING.md`\n  query-service:\n    image: signoz/query-service:0.11.2\n    container_name: query-service\n    command: [\"-config=/root/config/prometheus.yml\"]\n    volumes:\n      - ./prometheus.yml:/root/config/prometheus.yml\n      # - ../dashboards:/root/config/dashboards\n      - ./data/signoz/:/var/lib/signoz/\n    environment:\n      - ClickHouseUrl=tcp://clickhouse:9000/?database=signoz_traces\n      - ALERTMANAGER_API_PREFIX=http://alertmanager:9093/api/\n      - SIGNOZ_LOCAL_DB_PATH=/var/lib/signoz/signoz.db\n      - DASHBOARDS_PATH=/root/config/dashboards\n      - STORAGE=clickhouse\n      - GODEBUG=netdns=go\n      - TELEMETRY_ENABLED=true\n      - DEPLOYMENT_TYPE=docker-standalone-amd\n    restart: on-failure\n    healthcheck:\n      test: [\"CMD\", \"wget\", \"--spider\", \"-q\", \"localhost:8080/api/v1/version\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n    depends_on:\n      clickhouse:\n        condition: service_healthy\n\n  frontend:\n    image: signoz/frontend:0.11.2\n    container_name: frontend\n    restart: on-failure\n    depends_on:\n      - alertmanager\n      - query-service\n    ports:\n      - \"3301:3301\"\n    volumes:\n      - ../common/nginx-config.conf:/etc/nginx/conf.d/default.conf\n\n\n  otel-collector-0:\n    image: signoz/signoz-otel-collector:0.55.3\n    container_name: otel-collector-0\n    command: [\"--config=/etc/otel-collector-config.yaml\"]\n    user: root # required for reading docker container logs\n    volumes:\n      - ./otel-collector-config-0.yaml:/etc/otel-collector-config.yaml\n      - /var/lib/docker/containers:/var/lib/docker/containers:ro\n      - /var/log/syslog:/var/log/syslog:ro\n    environment:\n      - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux\n    ports:\n      - \"4317:4317\"     # OTLP gRPC receiver\n      - \"4318:4318\"     # OTLP HTTP receiver\n    restart: on-failure\n    depends_on:\n      clickhouse:\n        condition: service_healthy\n\n  otel-collector-1:\n    image: signoz/signoz-otel-collector:0.55.3\n    container_name: otel-collector-1\n    command: [\"--config=/etc/otel-collector-config.yaml\"]\n    volumes:\n      - ./otel-collector-config-1.yaml:/etc/otel-collector-config.yaml\n    environment:\n      - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux\n    ports:\n      - \"4417:4417\"     # OTLP gRPC receiver\n      - \"4418:4418\"     # OTLP HTTP receiver\n    restart: on-failure\n    depends_on:\n      clickhouse:\n        condition: service_healthy\n\n  otel-collector-2:\n    image: signoz/signoz-otel-collector:0.55.3\n    container_name: otel-collector-2\n    command: [\"--config=/etc/otel-collector-config.yaml\"]\n    volumes:\n      - ./otel-collector-config-2.yaml:/etc/otel-collector-config.yaml\n    environment:\n      - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux\n    ports:\n      - \"4517:4517\"     # OTLP gRPC receiver\n      - \"4518:4518\"     # OTLP HTTP receiver\n    restart: on-failure\n    depends_on:\n      clickhouse:\n        condition: service_healthy\n\n  otel-collector-metrics:\n    image: signoz/signoz-otel-collector:0.55.3\n    command: [\"--config=/etc/otel-collector-metrics-config.yaml\"]\n    volumes:\n      - ./otel-collector-metrics-config.yaml:/etc/otel-collector-metrics-config.yaml\n    restart: on-failure\n    depends_on:\n      clickhouse:\n        condition: service_healthy\n  \n  node-exporter:\n    image: prom/node-exporter:latest\n    container_name: node-exporter\n    restart: unless-stopped\n    volumes:\n      - /proc:/host/proc:ro\n      - /sys:/host/sys:ro\n      - /:/rootfs:ro\n    command:\n      - '--path.procfs=/host/proc'\n      - '--path.rootfs=/rootfs'\n      - '--path.sysfs=/host/sys'\n      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'\n    expose:\n      - 9100\n\n  cadvisor:\n    image: gcr.io/cadvisor/cadvisor:latest\n    container_name: cadvisor\n    ports:\n    - 8080:8080\n    volumes:\n    - /:/rootfs:ro\n    - /var/run:/var/run:rw\n    - /sys:/sys:ro\n    - /var/lib/docker/:/var/lib/docker:ro\n"
+    },
+    {
+      "path": "elk/elk-client/docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "03356e4e69bf6e31508119d91e95d5803bc3053036846423774ed7495135ea10",
+      "score": 116,
+      "content": "version: '3.7'\n\nservices:\n  logstash:\n    image: docker.elastic.co/logstash/logstash:${ELASTIC_VERSION}\n    volumes:\n      - ./logstash.yml:/usr/share/logstash/config/logstash.yml:ro,Z\n      - ./pipeline:/usr/share/logstash/pipeline:ro,Z\n    ports:\n      - \"5044:5044\"\n      - \"2256:2256\"\n      - \"50000:50000/tcp\"\n      - \"50000:50000/udp\"\n      - \"9600:9600\"\n    environment:\n      LS_JAVA_OPTS: -Xms256m -Xmx256m\n      LOGSTASH_INTERNAL_PASSWORD: [REDACTED]}\n    networks:\n      - elk\n\n  # Log generator\n  # Generate logs and split log files every 1000MB in \"/logs/*.log\" path with \"json\" format\n  # $ flog -t log -f json -o /logs/*.log -p 1000000000\n  flog-0:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format with traces\n    command: [ \"--format=json_with_trace\", \"-k\", \"1500\", \"--bytes=55500000000\"]\n    stop_signal: SIGKILL\n    logging:\n      driver: syslog\n      options:\n        syslog-address: \"tcp://localhost:2256\"\n    depends_on:\n      - logstash\n  \n  flog-1:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format with traces\n    command: [ \"--format=json_with_trace\", \"-k\", \"1500\", \"--bytes=55500000000\"]\n    stop_signal: SIGKILL\n    logging:\n      driver: syslog\n      options:\n        syslog-address: \"tcp://localhost:2256\"\n    depends_on:\n      - logstash\n  flog-2:\n    image: nityag123/flog:latest\n    # Output fake log in JSON format with traces\n    command: [ \"--format=json_with_trace\", \"-k\", \"1500\", \"--bytes=55500000000\"]\n    stop_signal: SIGKILL\n    logging:\n      driver: syslog\n      options:\n        syslog-address: \"tcp://localhost:2256\"\n    depends_on:\n      - logstash\n\nnetworks:\n  elk:\n    driver: bridge\n\nvolumes:\n  setup:\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "elk/elk-server/setup/entrypoint.sh",
+      "sha": null,
+      "content_sha256": "27cee147d4c24067068f0eac5e00f92c5092b1e82451469ea9802c66efc470d4",
+      "score": 111,
+      "content": "#!/usr/bin/env bash\n\nset -eu\nset -o pipefail\n\nsource \"$(dirname \"${BASH_SOURCE[0]}\")/helpers.sh\"\n\n\n# --------------------------------------------------------\n# Users declarations\n\ndeclare -A users_passwords\nusers_passwords=(\n\t[logstash_internal]=\"${LOGSTASH_INTERNAL_PASSWORD:-}\"\n\t[kibana_system]=\"${KIBANA_SYSTEM_PASSWORD:-}\"\n)\n\ndeclare -A users_roles\nusers_roles=(\n\t[logstash_internal]='logstash_writer'\n)\n\n# --------------------------------------------------------\n# Roles declarations\n\ndeclare -A roles_files\nroles_files=(\n\t[logstash_writer]='logstash_writer.json'\n)\n\n# --------------------------------------------------------\n\n\necho \"-------- $(date) --------\"\n\nstate_file=\"$(dirname \"${BASH_SOURCE[0]}\")/state/.done\"\nif [[ -e \"$state_file\" ]]; then\n\tlog \"State file exists at '${state_file}', skipping setup\"\n\texit 0\nfi\n\nlog 'Waiting for availability of Elasticsearch. This can take several minutes.'\n\ndeclare -i exit_code=0\nwait_for_elasticsearch || exit_code=$?\n\nif ((exit_code)); then\n\tcase $exit_code in\n\t\t6)\n\t\t\tsuberr 'Could not resolve host. Is Elasticsearch running?'\n\t\t\t;;\n\t\t7)\n\t\t\tsuberr 'Failed to connect to host. Is Elasticsearch healthy?'\n\t\t\t;;\n\t\t28)\n\t\t\tsuberr 'Timeout connecting to host. Is Elasticsearch healthy?'\n\t\t\t;;\n\t\t*)\n\t\t\tsuberr \"Connection to Elasticsearch failed. Exit code: ${exit_code}\"\n\t\t\t;;\n\tesac\n\n\texit $exit_code\nfi\n\nsublog 'Elasticsearch is running'\n\nfor role in \"${!roles_files[@]}\"; do\n\tlog \"Role '$role'\"\n\n\tdeclare body_file\n\tbody_file=\"$(dirname \"${BASH_SOURCE[0]}\")/roles/${roles_files[$role]:-}\"\n\tif [[ ! -f \"${body_file:-}\" ]]; then\n\t\tsublog \"No role body found at '${body_file}', skipping\"\n\t\tcontinue\n\tfi\n\n\tsublog 'Creating/updating'\n\tensure_role \"$role\" \"$(<\"${body_file}\")\"\ndone\n\nfor user in \"${!users_passwords[@]}\"; do\n\tlog \"User '$user'\"\n\tif [[ -z \"${users_passwords[$user]:-}\" ]]; then\n\t\tsublog 'No password defined, skipping'\n\t\tcontinue\n\tfi\n\n\tdeclare -i user_exists=0\n\tuser_exists=\"$(check_user_exists \"$user\")\"\n\n\tif ((user_exists)); then\n\t\tsublog 'User exists, setting password'\n\t\tset_user_password \"$user\" \"${users_passwords[$user]}\"\n\telse\n\t\tif [[ -z \"${users_roles[$user]:-}\" ]]; then\n\t\t\terr '  No role defined, skipping creation'\n\t\t\tcontinue\n\t\tfi\n\n\t\tsublog 'User does not exist, creating'\n\t\tcreate_user \"$user\" \"${users_passwords[$user]}\" \"${users_roles[$user]}\"\n\tfi\ndone\n\nmkdir -p \"$(dirname \"${state_file}\")\"\ntouch \"$state_file\""
+    },
+    {
+      "path": "elk/elk-server/setup/helpers.sh",
+      "sha": null,
+      "content_sha256": "6147bf42f5d06e159d71e1e792b4c3876d8da415e1f64838eabd5a6cb52313e0",
+      "score": 111,
+      "content": "#!/usr/bin/env bash\n\n# Log a message.\nfunction log {\n\techo \"[+] $1\"\n}\n\n# Log a message at a sub-level.\nfunction sublog {\n\techo \"   ⠿ $1\"\n}\n\n# Log an error.\nfunction err {\n\techo \"[x] $1\" >&2\n}\n\n# Log an error at a sub-level.\nfunction suberr {\n\techo \"   ⠍ $1\" >&2\n}\n\n# Poll the 'elasticsearch' service until it responds with HTTP code 200.\nfunction wait_for_elasticsearch {\n\tlocal elasticsearch_host=\"${ELASTICSEARCH_HOST:-elasticsearch}\"\n\n\tlocal -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}' \"http://${elasticsearch_host}:9200/\" )\n\n\tif [[ -n \"${ELASTIC_PASSWORD:-}\" ]]; then\n\t\targs+=( '-u' \"elastic:${ELASTIC_PASSWORD}\" )\n\tfi\n\n\tlocal -i result=1\n\tlocal output\n\n\t# retry for max 300s (60*5s)\n\tfor _ in $(seq 1 60); do\n\t\tlocal -i exit_code=0\n\t\toutput=\"$(curl \"${args[@]}\")\" || exit_code=$?\n\n\t\tif ((exit_code)); then\n\t\t\tresult=$exit_code\n\t\tfi\n\n\t\tif [[ \"${output: -3}\" -eq 200 ]]; then\n\t\t\tresult=0\n\t\t\tbreak\n\t\tfi\n\n\t\tsleep 5\n\tdone\n\n\tif ((result)) && [[ \"${output: -3}\" -ne 000 ]]; then\n\t\techo -e \"\\n${output::-3}\"\n\tfi\n\n\treturn $result\n}\n\n# Verify that the given Elasticsearch user exists.\nfunction check_user_exists {\n\tlocal username=$1\n\n\tlocal elasticsearch_host=\"${ELASTICSEARCH_HOST:-elasticsearch}\"\n\n\tlocal -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'\n\t\t\"http://${elasticsearch_host}:9200/_security/user/${username}\"\n\t\t)\n\n\tif [[ -n \"${ELASTIC_PASSWORD:-}\" ]]; then\n\t\targs+=( '-u' \"elastic:${ELASTIC_PASSWORD}\" )\n\tfi\n\n\tlocal -i result=1\n\tlocal -i exists=0\n\tlocal output\n\n\toutput=\"$(curl \"${args[@]}\")\"\n\tif [[ \"${output: -3}\" -eq 200 || \"${output: -3}\" -eq 404 ]]; then\n\t\tresult=0\n\tfi\n\tif [[ \"${output: -3}\" -eq 200 ]]; then\n\t\texists=1\n\tfi\n\n\tif ((result)); then\n\t\techo -e \"\\n${output::-3}\"\n\telse\n\t\techo \"$exists\"\n\tfi\n\n\treturn $result\n}\n\n# Set password of a given Elasticsearch user.\nfunction set_user_password {\n\tlocal username=$1\n\tlocal password=$2\n\n\tlocal elasticsearch_host=\"${ELASTICSEARCH_HOST:-elasticsearch}\"\n\n\tlocal -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'\n\t\t\"http://${elasticsearch_host}:9200/_security/user/${username}/_password\"\n\t\t'-X' 'POST'\n\t\t'-H' 'Content-Type: application/json'\n\t\t'-d' \"{\\\"password\\\" : \\\"${password}\\\"}\"\n\t\t)\n\n\tif [[ -n \"${ELASTIC_PASSWORD:-}\" ]]; then\n\t\targs+=( '-u' \"elastic:${ELASTIC_PASSWORD}\" )\n\tfi\n\n\tlocal -i result=1\n\tlocal output\n\n\toutput=\"$(curl \"${args[@]}\")\"\n\tif [[ \"${output: -3}\" -eq 200 ]]; then\n\t\tresult=0\n\tfi\n\n\tif ((result)); then\n\t\techo -e \"\\n${output::-3}\\n\"\n\tfi\n\n\treturn $result\n}\n\n# Create the given Elasticsearch user.\nfunction create_user {\n\tlocal username=$1\n\tlocal password=$2\n\tlocal role=$3\n\n\tlocal elasticsearch_host=\"${ELASTICSEARCH_HOST:-elasticsearch}\"\n\n\tlocal -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'\n\t\t\"http://${elasticsearch_host}:9200/_security/user/${username}\"\n\t\t'-X' 'POST'\n\t\t'-H' 'Content-Type: application/json'\n\t\t'-d' \"{\\\"password\\\":\\\"${password}\\\",\\\"roles\\\":[\\\"${role}\\\"]}\"\n\t\t)\n\n\tif [[ -n \"${ELASTIC_PASSWORD:-}\" ]]; then\n\t\targs+=( '-u' \"elastic:${ELASTIC_PASSWORD}\" )\n\tfi\n\n\tlocal -i result=1\n\tlocal output\n\n\toutput=\"$(curl \"${args[@]}\")\"\n\tif [[ \"${output: -3}\" -eq 200 ]]; then\n\t\tresult=0\n\tfi\n\n\tif ((result)); then\n\t\techo -e \"\\n${output::-3}\\n\"\n\tfi\n\n\treturn $result\n}\n\n# Ensure that the given Elasticsearch role is up-to-date, create it if required.\nfunction ensure_role {\n\tlocal name=$1\n\tlocal body=$2\n\n\tlocal elasticsearch_host=\"${ELASTICSEARCH_HOST:-elasticsearch}\"\n\n\tlocal -a args=( '-s' '-D-' '-m15' '-w' '%{http_code}'\n\t\t\"http://${elasticsearch_host}:9200/_security/role/${name}\"\n\t\t'-X' 'POST'\n\t\t'-H' 'Content-Type: application/json'\n\t\t'-d' \"$body\"\n\t\t)\n\n\tif [[ -n \"${ELASTIC_PASSWORD:-}\" ]]; then\n\t\targs+=( '-u' \"elastic:${ELASTIC_PASSWORD}\" )\n\tfi\n\n\tlocal -i result=1\n\tlocal output\n\n\toutput=\"$(curl \"${args[@]}\")\"\n\tif [[ \"${output: -3}\" -eq 200 ]]; then\n\t\tresult=0\n\tfi\n\n\tif ((result)); then\n\t\techo -e \"\\n${output::-3}\\n\"\n\tfi\n\n\treturn $result\n}"
+    },
+    {
+      "path": "elk/elk-server/setup/roles/logstash-writer.json",
+      "sha": null,
+      "content_sha256": "3b9fb940cd41c10e9b0d33b0ea40388b4e619dc48990862e547fd2ea52c3a301",
+      "score": 109,
+      "content": "{\n    \"cluster\": [\n        \"manage_index_templates\",\n        \"monitor\",\n        \"manage_ilm\"\n    ],\n    \"indices\": [\n        {\n            \"names\": [\n                \"logs-generic-default\",\n                \"logstash-*\",\n                \"ecs-logstash-*\"\n            ],\n            \"privileges\": [\n                \"write\",\n                \"create\",\n                \"create_index\",\n                \"manage\",\n                \"manage_ilm\"\n            ]\n        },\n        {\n            \"names\": [\n                \"logstash\",\n                \"ecs-logstash\"\n            ],\n            \"privileges\": [\n                \"write\",\n                \"manage\"\n            ]\n        }\n    ]\n}"
+    },
+    {
+      "path": "elk/elk-server/elasticsearch.yml",
+      "sha": null,
+      "content_sha256": "aaa4cbd8bc61e346f47e4b766930f833362b7113a7e02ae56b3f7a2e9ef9b9fe",
+      "score": 106,
+      "content": "---\n## Default Elasticsearch configuration from Elasticsearch base image.\n## https://github.com/elastic/elasticsearch/blob/main/distribution/docker/src/docker/config/elasticsearch.yml\n#\ncluster.name: \"docker-cluster\"\nnetwork.host: 0.0.0.0\n\n## X-Pack settings\n## see https://www.elastic.co/guide/en/elasticsearch/reference/current/security-settings.html\n#\nxpack.license.self_generated.type: trial\nxpack.security.enabled: false"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "baf5e60b24203f3f21d64c7c424f8d14c039f1e5795434a0a6e3ccd7b9957d41",
+      "score": 100,
+      "content": "\n### Logs Benchmark\n\nThis repo contains the setup for the all the three stacks i.e SigNoz, ELK and PLG used for benchmarking.\n\nEach of the folders contains it's own set of instructions on how to run them.\n\nThe results of the benchmark are published here [benchmark](https://signoz.io/blog/logs-performance-benchmark/?utm_source=github&utm_medium=logs-benchmark)\n\n### Benchmark Key Findings: A summary\nFor any log management tool to be efficient, the following three factors are very important.\n\n#### Ingestion\nDistributed cloud-native applications can generate logs at a humungous scale. Log management tools should be efficient at ingesting log data at scale.\n\n#### Query\nLogs help in troubleshooting, and troubleshooting should be fast. The end-user experience depends on how fast a user can query relevant logs.\n\n#### Storage\nStorage is costly and logs data is often huge. Log management tools need to be efficient in storing logs.\n\n#### Findings\n- For ingestion, we found SigNoz to be 2.5x faster than ELK and consumed 50% less resources.\n- For querying benchmarks, we tested out different types of commonly used queries. While ELK was better at performing queries like COUNT, SigNoz is 13x faster than ELK for aggregate queries.\n- Storage used by SigNoz for the same amount of logs is about half of what ELK uses.\n- Loki doesn’t perform well if you want to index and query high cardinality data. In our setup for Loki we were not able to push it to ingest high cardinality labels/indexes.\n\n### Version Info :\n* Logstash: 8.4.3\n* Elasticsearch: 8.4.3\n* Promtail:2.6.1\n* Loki: 2.6.1\n* Grafana: 9.2.1\n* Signoz-otel-collector: 0.55.3\n* Clickhouse-server: 22.4.5\n\n---\n\nNote: We saw Loki team has [recently shared](https://twitter.com/sukhanisandeep/status/1615243908241588224) some improvements in querying speed, but this benchmark is not updated based on this update and we have not verified if it would help in high cardinality data. If anyone in the community has been able to get good performance for high cardinality data, we would love to learn more.\n"
+    },
+    {
+      "path": "elk/README.md",
+      "sha": null,
+      "content_sha256": "d705edf5007f734d03ace9cf3b8ad1c459539147ebf4c13ae6f95d9fc445992e",
+      "score": 98,
+      "content": "## ELK stack\n\n* Dashboards\n    * Import elasticsearch dashboard with ID : 6483\n    * Import node exporter dashboard with ID : 13978\n    \n* Removing the default heap limit, without setting it manually https://stackoverflow.com/a/71929849.\n    Default value got set to   \"-Xms15706m\",\n          \"-Xmx15706m\",\n          curl localhost:9200/_nodes/_all/jvm\n\n## Credits\nMost of these configurations has been adapted from https://github.com/deviantony/docker-elk\n\n## Steps to run\n* Run docker-compose.yaml of elk-server in one VM.\n* Copy the ip of that VM and replace the value of host in `elk-client/pipeline/logstash.conf`\n* Run docker-compose.yaml of elk-client in the other VMs."
+    },
+    {
+      "path": "signoz/README.md",
+      "sha": null,
+      "content_sha256": "f073455652c76680a61fc297f8b1776fe390e6156102fdc8dc080c807e069f85",
+      "score": 98,
+      "content": "## SigNoz\n\n* Dashboards\n    Copy the dashboards from the `dashboards` folder and import them to signoz.\n## Steps to run\n* Run docker-compose.yaml of signoz-server in one VM.\n* Copy the ip of that VM and replace the value of `endpoint` in `signoz-client/otel-collector-config.yaml`\n* Run docker-compose.yaml of signoz-client in the other VMs."
+    },
+    {
+      "path": "plg/README.md",
+      "sha": null,
+      "content_sha256": "b69f0aee6eb28a888490fcf797bfc2c9bb849c59888c42a1a93b00899a1e93d6",
+      "score": 98,
+      "content": "\n## PLG stack\nIt contains the deployment of grafana and loki which will accept data from promtail running in other VMs\n\n## Steps to run the server\n* Run docker-compose inside plg-server\n* Add the prometheus datasource in the grafana UI\n* import hostmeterics dashboard with id : 1860\n    In cpu graph for cpu change stack series to never.\n* import loki dashboard : 14055\n\n\n## Steps to run the clients\nIt contains the deployment of promtail to collect data from docker containers and push it loki running the server\n* Copy the ip of the VM where plg-server is running and replace the value of `url` in `plg-client/promtail.yml`\n* Run docker-compose inside plg-client\n\n\n\n## Current Problems with Promtail\n* One promtail cannot forward to another promtail, it directly writes to loki\n* Promtail can only read from a file (won't have been a problem if the above was not an issue)\n\n## FluentD with Loki Plugin\n* Promtail will be removed\n* FluentD will run on the client machines as well as this machine where loki is running.\n* https://grafana.com/docs/loki/latest/clients/fluentd/"
+    },
+    {
+      "path": "elk/elk-server/prometheus.yml",
+      "sha": null,
+      "content_sha256": "82e80a93a271fef4baf0a5c92e032f3a20c3554268a641e19e96d9b1dcff3ef4",
+      "score": 91,
+      "content": "global:\n  scrape_interval: 10s\nscrape_configs:\n  - job_name: 'eexporter'\n    static_configs:\n      - targets: ['eexporter:9114']\n  - job_name: \"node\"\n    static_configs:\n      - targets: [\"node-exporter:9100\"]"
+    },
+    {
+      "path": "plg/plg-server/prometheus.yml",
+      "sha": null,
+      "content_sha256": "d76b9e8c6724bc9af0ad31d8ae48492bfb740e9ac7fef33fed86eb67229f2822",
+      "score": 91,
+      "content": "global:\n  scrape_interval: 10s\n\nscrape_configs:\n  - job_name: \"prometheus\"\n    scrape_interval: 1m\n    static_configs:\n    - targets: [\"localhost:9090\"]\n\n  - job_name: \"node\"\n    static_configs:\n    - targets: [\"node-exporter:9100\"]\n\n  - job_name: \"loki\"\n    static_configs:\n    - targets: [\"loki:3100\"]\n  \n  # - job_name: \"promtail\"\n  #   static_configs:\n  #   - targets: [\"promtail:9080\"]\n"
+    },
+    {
+      "path": "signoz/signoz-server/prometheus.yml",
+      "sha": null,
+      "content_sha256": "a5cbdb35814db9a244d8ee96a5cc34d7c419c01c9a671382d246499b1701dc9f",
+      "score": 91,
+      "content": "# my global config\nglobal:\n  scrape_interval:     5s # Set the scrape interval to every 15 seconds. Default is every 1 minute.\n  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.\n  # scrape_timeout is set to the global default (10s).\n\n# Alertmanager configuration\nalerting:\n  alertmanagers:\n  - static_configs:\n    - targets:\n      - alertmanager:9093\n\n# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.\nrule_files:\n  # - \"first_rules.yml\"\n  # - \"second_rules.yml\"\n  - 'alerts.yml'\n\n# A scrape configuration containing exactly one endpoint to scrape:\n# Here it's Prometheus itself.\nscrape_configs: []\n\nremote_read:\n  - url: tcp://clickhouse:9000/?database=signoz_metrics\n"
+    },
+    {
+      "path": "elk/elk-client/logstash.yml",
+      "sha": null,
+      "content_sha256": "38274a6c044b8cfe44cc6868390cef6bd9bcd1fb7be18e0cddcf5e5770ca8ac8",
+      "score": 31,
+      "content": "---\n## Default Logstash configuration from Logstash base image.\n## https://github.com/elastic/logstash/blob/main/docker/data/logstash/config/logstash-full.yml\n#\nhttp.host: \"0.0.0.0\""
+    },
+    {
+      "path": "signoz/signoz-server/otel-collector-config-1.yaml",
+      "sha": null,
+      "content_sha256": "08d9e6aae03302ad01345cf03d416fd0332c25a9892347dfd226aabb7ff8e90a",
+      "score": 31,
+      "content": "receivers:\n  otlp:\n    protocols:\n      grpc:\n        max_recv_msg_size_mib: 300\n        endpoint: 0.0.0.0:4417\n      http:\n        endpoint: 0.0.0.0:4418\n\nprocessors:\n  batch:\n    send_batch_size: 100000\n    timeout: 10s\n\nextensions:\n  health_check:\n    endpoint: 0.0.0.0:13133\n  zpages:\n    endpoint: 0.0.0.0:55679\n  pprof:\n    endpoint: 0.0.0.0:1777\n\nexporters:\n  logging: {}\n\n  clickhouselogsexporter:\n    dsn: tcp://clickhouse:9000/\n    timeout: 10s\n    sending_queue:\n      queue_size: 20\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n\nservice:\n  telemetry:\n    metrics:\n      address: 0.0.0.0:8888\n    logs:\n      level: \"debug\"\n  extensions:\n    - health_check\n    - zpages\n    - pprof\n  pipelines:\n    logs:\n      receivers:  [otlp]\n      processors: [batch]\n      exporters: [clickhouselogsexporter]"
+    },
+    {
+      "path": "elk/elk-server/kibana.yml",
+      "sha": null,
+      "content_sha256": "5222f7135aaf8d275bc3a197187f29db7cc488be0671b7cbd1f2147caee2b4d5",
+      "score": 31,
+      "content": "---\n## Default Kibana configuration from Kibana base image.\n## https://github.com/elastic/kibana/blob/main/src/dev/build/tasks/os_packages/docker_generator/templates/kibana_yml.template.ts\n#\nserver.name: kibana\nserver.host: 0.0.0.0\nelasticsearch.hosts: [ 'http://elasticsearch:9200' ]\nmonitoring.ui.container.elasticsearch.enabled: true\n\n## X-Pack security credentials\n#\nelasticsearch.username: kibana_system\nelasticsearch.password: [REDACTED]}\n\n## Fleet\n## https://www.elastic.co/guide/en/kibana/current/fleet-settings-kb.html\n#\nxpack.fleet.agents.fleet_server.hosts: [ 'http://fleet-server:8220' ]\nxpack.fleet.agents.elasticsearch.hosts: [ 'http://elasticsearch:9200' ]\n\nxpack.fleet.packages:\n  - name: fleet_server\n    version: latest\n  - name: system\n    version: latest\n  - name: elastic_agent\n    version: latest\n\nxpack.fleet.agentPolicies:\n  - name: Fleet Server policy\n    id: fleet-server-policy\n    description: Fleet Server policy\n    monitoring_enabled:\n      - logs\n      - metrics\n    package_policies:\n      - name: fleet_server-1\n        package:\n          name: fleet_server\n      - name: system-1\n        package:\n          name: system\n      - name: elastic_agent-1\n        package:\n          name: elastic_agent",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "signoz/signoz-server/alerts.yml",
+      "sha": null,
+      "content_sha256": "e17374b7ad6dda5ff8a383685d0cec56079b2b3dc09226c8b180567b6c7993a3",
+      "score": 31,
+      "content": "groups:\n- name: ExampleCPULoadGroup\n  rules:\n  - alert: HighCpuLoad\n    expr: system_cpu_load_average_1m > 0.1\n    for: 0m\n    labels:\n      severity: warning\n    annotations:\n      summary: High CPU load\n      description: \"CPU load is > 0.1\\n  VALUE = {{ $value }}\\n  LABELS = {{ $labels }}\"\n"
+    },
+    {
+      "path": "signoz/signoz-server/alertmanager.yml",
+      "sha": null,
+      "content_sha256": "97bdf5ca8ffcfc99825f83fb9964b36475a6ae540253fbd14fc1fe1d2881e758",
+      "score": 31,
+      "content": "global:\n  resolve_timeout: 1m\n  slack_api_url: 'https://hooks.slack.com/services/xxx'\n\nroute:\n  receiver: 'slack-notifications'\n\nreceivers:\n- name: 'slack-notifications'\n  slack_configs:\n  - channel: '#alerts'\n    send_resolved: true\n    icon_url: https://avatars3.githubusercontent.com/u/3380462\n    title: |-\n     [{{ .Status | toUpper }}{{ if eq .Status \"firing\" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }} for {{ .CommonLabels.job }}\n     {{- if gt (len .CommonLabels) (len .GroupLabels) -}}\n       {{\" \"}}(\n       {{- with .CommonLabels.Remove .GroupLabels.Names }}\n         {{- range $index, $label := .SortedPairs -}}\n           {{ if $index }}, {{ end }}\n           {{- $label.Name }}=\"{{ $label.Value -}}\"\n         {{- end }}\n       {{- end -}}\n       )\n     {{- end }}\n    text: >-\n     {{ range .Alerts -}}\n     *Alert:* {{ .Annotations.title }}{{ if .Labels.severity }} - `{{ .Labels.severity }}`{{ end }}\n\n     *Description:* {{ .Annotations.description }}\n\n     *Details:*\n       {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`\n       {{ end }}\n     {{ end }}"
+    },
+    {
+      "path": "signoz/signoz-server/otel-collector-config-2.yaml",
+      "sha": null,
+      "content_sha256": "7ec73933e61261dbcea380517fa614016d00ae8ee3f457ebbea5f81ce236a821",
+      "score": 31,
+      "content": "receivers:\n  otlp:\n    protocols:\n      grpc:\n        max_recv_msg_size_mib: 300\n        endpoint: 0.0.0.0:4517\n      http:\n        endpoint: 0.0.0.0:4518\n\n\nprocessors:\n  batch:\n    send_batch_size: 100000\n    timeout: 10s\n\nextensions:\n  health_check:\n    endpoint: 0.0.0.0:13133\n  zpages:\n    endpoint: 0.0.0.0:55679\n  pprof:\n    endpoint: 0.0.0.0:1777\n\nexporters:\n  prometheus:\n    endpoint: 0.0.0.0:8889\n  logging: {}\n\n  clickhouselogsexporter:\n    dsn: tcp://clickhouse:9000/\n    timeout: 10s\n    sending_queue:\n      queue_size: 20\n    retry_on_failure:\n      enabled: true\n      initial_interval: 5s\n      max_interval: 30s\n      max_elapsed_time: 300s\n\nservice:\n  telemetry:\n    metrics:\n      address: 0.0.0.0:8888\n    logs:\n      level: \"debug\"\n  extensions:\n    - health_check\n    - zpages\n    - pprof\n  pipelines:\n    logs:\n      receivers:  [otlp]\n      processors: [batch]\n      exporters: [clickhouselogsexporter]"
+    }
+  ],
+  "sensitive_files_skipped_count": 2,
+  "sensitive_files_skipped": [
+    {
+      "path": "elk/elk-client/.env",
+      "sha": "b65f4a1176bcab7142e1df2ed7cab046db42d65d",
+      "size": 234,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "elk/elk-server/.env",
+      "sha": "e5d571ef93fa93788965459636816579c8ae08ba",
+      "size": 708,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:46:38.024508+00:00"
+}

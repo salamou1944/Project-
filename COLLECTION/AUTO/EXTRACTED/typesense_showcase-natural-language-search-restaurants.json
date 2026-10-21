@@ -1,0 +1,212 @@
+{
+  "canonical_source": "github:typesense/showcase-natural-language-search-restaurants",
+  "repo": "typesense/showcase-natural-language-search-restaurants",
+  "revision_sha": "e0cee73f674c2f2d40693ce211c44eb53c2ef42f",
+  "default_branch": "master",
+  "pushed_at": "2026-05-04T14:27:18Z",
+  "repo_updated_at": "2026-08-20T11:37:04Z",
+  "license": null,
+  "topics": [
+    "ai",
+    "llm",
+    "search-engine",
+    "typesense"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "397fe4be29814b2ca0b13cf4bda595537db33c1060168a1b45f781f13080605d",
+      "score": 120,
+      "content": "{\n  \"main\": \"lib/index.js\",\n  \"scripts\": {\n    \"start\": \"next start\",\n    \"build\": \"npm run upsertModel:typesense && next build\",\n    \"build:watch\": \"tsc --watch\",\n    \"dev\": \"next dev\",\n    \"lint\": \"next lint\",\n    \"start:typesense\": \"docker compose up\",\n    \"index:typesense\": \"npx tsx ./scripts/indexTypesense.ts\",\n    \"upsertModel:typesense\": \"npx tsx ./scripts/upsertModel.ts\"\n  },\n  \"name\": \"showcase-natural-language-search-restaurants\",\n  \"version\": \"0.1.0\",\n  \"private\": true,\n  \"dependencies\": {\n    \"@radix-ui/react-dialog\": \"^1.1.14\",\n    \"@radix-ui/react-popover\": \"^1.1.14\",\n    \"@radix-ui/react-slot\": \"^1.2.3\",\n    \"@radix-ui/react-toast\": \"^1.2.1\",\n    \"@radix-ui/react-tooltip\": \"^1.2.7\",\n    \"@tanstack/react-query\": \"^5.51.23\",\n    \"@tanstack/react-query-devtools\": \"^5.51.23\",\n    \"class-variance-authority\": \"^0.7.0\",\n    \"clsx\": \"^2.1.1\",\n    \"lucide-react\": \"^0.427.0\",\n    \"next\": \"^16.2.4\",\n    \"react\": \"^18\",\n    \"react-dom\": \"^18\",\n    \"react-intersection-observer\": \"^9.13.0\",\n    \"react18-json-view\": \"^0.2.9\",\n    \"tailwind-merge\": \"^2.5.2\",\n    \"tailwindcss-animate\": \"^1.0.7\",\n    \"typesense\": \"^3.0.6\",\n    \"zod\": \"^3.25.67\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^20\",\n    \"@types/react\": \"^18\",\n    \"@types/react-dom\": \"^18\",\n    \"dotenv\": \"^16.4.5\",\n    \"postcss\": \"^8\",\n    \"tailwindcss\": \"^3.4.1\",\n    \"typescript\": \"^5.5.4\"\n  }\n}\n"
+    },
+    {
+      "path": "compose.yml",
+      "sha": null,
+      "content_sha256": "2ae45a50955f6225e5df08b44bd42f7a055d4cdc755e12fbb9cbdd09aeab7746",
+      "score": 120,
+      "content": "services:\n  typesense:\n    image: typesense/typesense:29.0\n    restart: on-failure\n    ports:\n      - '8108:8108'\n    volumes:\n      - ./typesense-data:/data\n    command: '--data-dir /data --api-key=xyz --enable-cors'\n"
+    },
+    {
+      "path": "src/lib/actions.ts",
+      "sha": null,
+      "content_sha256": "67adca14a873987e9af1510130ce33cd63d88968caf5d7b3783f6a678fdbe940",
+      "score": 113,
+      "content": "import { SearchParams } from 'typesense/lib/Typesense/Documents';\nimport { _Restaurant, typesense } from './typesense';\nimport { clientEnv } from '@/utils/env';\nimport { TYPESENSE_CONFIG } from '@/utils/utils';\n\nexport type _searchData = Awaited<ReturnType<ReturnType<typeof fetchData>>>;\n\nexport default function fetchData(\n  searchParams: SearchParams<_Restaurant, string>\n) {\n  return async ({ pageParam }: { pageParam: number }) => {\n    const res = await typesense\n      .collections<_Restaurant>(clientEnv.TYPESENSE_COLLECTION_NAME)\n      .documents()\n      .search({\n        ...searchParams,\n        query_by: 'restaurant_name',\n        per_page: TYPESENSE_CONFIG.per_page,\n        page: pageParam,\n      });\n    const { per_page = 0 } = res.request_params;\n\n    return {\n      data: res.hits,\n      nextPage: pageParam * per_page < res.found ? pageParam + 1 : null,\n    };\n  };\n}\n"
+    },
+    {
+      "path": "scripts/upsertModel.ts",
+      "sha": null,
+      "content_sha256": "0c4dc5854f93c3699cf65857442169d19ac1e284222a840ac89b0458aedb25d4",
+      "score": 108,
+      "content": "import 'dotenv/config';\nimport { client } from './typesense-client';\nimport { ObjectNotFound, TypesenseError } from 'typesense/lib/Typesense/Errors';\nimport { NLSearchModelBase } from 'typesense/lib/Typesense/NLSearchModels';\n\nconst GOOGLE_AI_STUDIO_API_KEY = [REDACTED] || '';\nconst MODEL_ID =\n  process.env.NEXT_PUBLIC_TYPESENSE_NL_MODEL_ID || 'gemini_restaurant';\n\nconst system_prompt = `Filtering Nested Arrays of Objects:\nWhen filtering on fields inside nested array objects, you need to use a special syntax to ensure the filters are applied to the same object within the array. The syntax is: <nested_field_parent>.{<filter_conditions>}.\nE.g: open_hours.{day:=Mon && close:>=11}\n\nOnly include keywords from the user query that could be part of a restaurant name or address in the \\`q\\` parameter. Exclude generic category words like \"restaurant\", \"restaurants\", \"cafe\", \"bar\", \"place\", or similar.\n\nprice_min and price_max represent the restaurant's general price range for a meal or dish:\n- price_min -> the lowest typical price the restaurant offers (e.g., cheapest dish or small portion).\n- price_max -> the highest typical price the restaurant offers (e.g., premium dish or full meal).\n\nWhen comparing with an user's budget, treat this as a range:\nA restaurant matches if its price_min <= user_budget <= price_max.\nThis means the restaurant offers options within or below the user's budget.\n\nYou must use three-letter weekday abbreviation (Mon, Tue,...) to filter on the day field of \"open_hours\".`;\n\n(async () => {\n  let model;\n  try {\n    model = await client.nlSearchModels(MODEL_ID).retrieve();\n  } catch (err) {\n    if (err instanceof TypesenseError && err instanceof ObjectNotFound) {\n      console.log(err.message);\n    }\n  }\n\n  try {\n    if (model) {\n      console.log(`Found existing model with id: ${MODEL_ID}`);\n\n      const updatedConfig: NLSearchModelBase = {\n        model_name: 'google/gemini-flash-lite-latest',\n        system_prompt,\n      };\n\n      console.log('Updating model with this configuration:', updatedConfig);\n      await client.nlSearchModels(MODEL_ID).update(updatedConfig);\n    } else {\n      console.log(\n        `Model with id: ${MODEL_ID} not found. Creating a new model...`,\n      );\n      await client.nlSearchModels().create({\n        id: MODEL_ID,\n        model_name: 'google/gemini-flash-lite-latest',\n        api_key: [REDACTED],\n        max_bytes: 16000,\n        temperature: 0.0,\n        system_prompt,\n      });\n    }\n\n    console.log('Success!');\n  } catch (err) {\n    console.log(err);\n    return;\n  }\n})();\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/components/ExampleSearchTerms.tsx",
+      "sha": null,
+      "content_sha256": "909775713c97ababd9c6c47ef588cc148dc1b9ca4e89ec38a69caee35a61e95d",
+      "score": 106,
+      "content": "import { EXAMPLE_SEARCH_TERMS } from '@/utils/utils';\n\nexport default function ExampleSearchTerms({\n  onClick,\n}: {\n  onClick: (item: string) => any;\n}) {\n  return (\n    <>\n      <h2 className='w-full'>Here are some example queries to try:</h2>\n      <ul className='w-full flex flex-col gap-2 mt-2 text-sm font-light'>\n        {EXAMPLE_SEARCH_TERMS.map((item) => (\n          <li\n            className='w-full py-2.5 px-3 border rounded-sm cursor-pointer hover:bg-neutral-100 hover:transition'\n            onClick={() => onClick(item)}\n            key={item}\n          >\n            {item}\n          </li>\n        ))}\n      </ul>\n    </>\n  );\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "403905f1108b6e8e930549f9de7db7cde419b3a85d65621ba10ab77859bc3a48",
+      "score": 100,
+      "content": "<h1>\n 🔥 🤖 🍖 Natural Language Search Restaurants powered by Typesense\n</h1>\nThis demo restaurant search showcases the new Natural Language Search feature powered by Typesense. This allows users to search for restaurants using everyday language.\n<br>\n<br>\nInstead of needing to use specific keywords or precise filters, you can simply type a free-form sentence into the search bar. Typesense then uses Large Language Models (LLMs) to understand your intent, automatically translating your natural language query into structured search parameters like filters, sort orders, and relevant keywords.\n<br>\n<br>\nThis means you can find exactly what you're looking for with ease and flexibility, even if your exact keywords aren't in the restaurant's description. Experience a more intuitive and powerful way to discover your next dining destination!\n<br>\n<br>\nThis demo uses the dataset \"TripAdvisor European restaurants\" which is available on <a href=\"https://www.kaggle.com/datasets/stefanoleone992/tripadvisor-european-restaurants\" target=\"_blank\">Kaggle</a>.\n\n## Tech Stack\n\n- <a href=\"https://github.com/typesense/typesense\" target=\"_blank\">Typesense</a>\n- <a href=\"https://deepmind.google/technologies/gemini/\" target=\"_blank\">Google Gemini</a>\n- NextJS\n- Typescript\n- Tailwind\n- React Query\n\n## Project Structure\n\n```bash\n├── scripts/\n│   ├── data/\n│   │   └── restaurants.jsonl\n│   ├── indexTypesense.ts # script that create a collection and index data from restaurants.json into typesense server\n│   └── upsertModel.ts # create a Typesense natural language search model, update system_prompt if model already exists\n└── src/\n    ├── app/\n    │   └── page.tsx # main application\n    ├── components/\n    │   └── UI components...\n    ├── hooks/\n    │   └── getUserLocation.ts # provide the user location for the LLM to perform geosearch\n    └── lib/\n        ├── actions.ts # the search function used for pagination\n        └── typesense.ts # typesense config\n```\n\nYou can view the specific LLM instructions for this project in [upsertModel.ts](/scripts/upsertModel.ts)\n\n## Development\n\nTo run this project locally, make sure you have docker and nodejs, clone this project, install dependencies and start the dev server:\n\nStart typesense server\n\n```shell\nnpm run start:typesense # or: docker compose up\n```\n\nIndex data into typesense\n\n```shell\nnpm run index:typesense\n```\n\nCreate a natural language search model, this script is also used to update the model's `system_prompt`.\n\n```shell\nnpm run upsertModel:typesense\n```\n\nStart the dev server\n\n```shell\nnpm run dev\n```\n\nOpen http://localhost:3000 to see the app ✌️\n\n## Deployment\n\nSee [.env.example](.env.example) for environment variables.\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "9af62241e054524b6d1b819d824a5b1363c7a89d69762d7be38b29fc2d22ca1e",
+      "score": 35,
+      "content": "{\n  \"compileOnSave\": true,\n  \"include\": [\n    \"next-env.d.ts\",\n    \"**/*.ts\",\n    \"**/*.tsx\",\n    \".next/types/**/*.ts\",\n    \".next/dev/types/**/*.ts\"\n  ],\n  \"compilerOptions\": {\n    \"module\": \"esnext\",\n    \"noImplicitReturns\": true,\n    \"outDir\": \"lib\",\n    \"sourceMap\": true,\n    \"strict\": true,\n    \"target\": \"es2017\",\n    \"skipLibCheck\": true,\n    \"esModuleInterop\": true,\n    \"lib\": [\n      \"dom\",\n      \"dom.iterable\",\n      \"esnext\"\n    ],\n    \"allowJs\": true,\n    \"noEmit\": true,\n    \"moduleResolution\": \"bundler\",\n    \"resolveJsonModule\": true,\n    \"isolatedModules\": true,\n    \"jsx\": \"react-jsx\",\n    \"incremental\": true,\n    \"plugins\": [\n      {\n        \"name\": \"next\"\n      }\n    ],\n    \"paths\": {\n      \"@/*\": [\n        \"./src/*\"\n      ]\n    }\n  },\n  \"exclude\": [\n    \"node_modules\"\n  ]\n}\n"
+    },
+    {
+      "path": "tailwind.config.ts",
+      "sha": null,
+      "content_sha256": "c70f240d2e27ae8a53f83f7e6e91afe8a4267cc5ffe5ae8bd888b0df1423787a",
+      "score": 35,
+      "content": "import type { Config } from \"tailwindcss\"\n\nconst config = {\n  darkMode: [\"class\"],\n  content: [\n    './pages/**/*.{ts,tsx}',\n    './components/**/*.{ts,tsx}',\n    './app/**/*.{ts,tsx}',\n    './src/**/*.{ts,tsx}',\n\t],\n  prefix: \"\",\n  theme: {\n    container: {\n      center: true,\n      padding: \"2rem\",\n      screens: {\n        \"2xl\": \"1400px\",\n      },\n    },\n    extend: {\n      colors: {\n        border: \"hsl(var(--border))\",\n        input: \"hsl(var(--input))\",\n        ring: \"hsl(var(--ring))\",\n        background: \"hsl(var(--background))\",\n        foreground: \"hsl(var(--foreground))\",\n        primary: {\n          DEFAULT: \"hsl(var(--primary))\",\n          foreground: \"hsl(var(--primary-foreground))\",\n        },\n        secondary: {\n          DEFAULT: \"hsl(var(--secondary))\",\n          foreground: \"hsl(var(--secondary-foreground))\",\n        },\n        destructive: {\n          DEFAULT: \"hsl(var(--destructive))\",\n          foreground: \"hsl(var(--destructive-foreground))\",\n        },\n        muted: {\n          DEFAULT: \"hsl(var(--muted))\",\n          foreground: \"hsl(var(--muted-foreground))\",\n        },\n        accent: {\n          DEFAULT: \"hsl(var(--accent))\",\n          foreground: \"hsl(var(--accent-foreground))\",\n        },\n        popover: {\n          DEFAULT: \"hsl(var(--popover))\",\n          foreground: \"hsl(var(--popover-foreground))\",\n        },\n        card: {\n          DEFAULT: \"hsl(var(--card))\",\n          foreground: \"hsl(var(--card-foreground))\",\n        },\n      },\n      borderRadius: {\n        lg: \"var(--radius)\",\n        md: \"calc(var(--radius) - 2px)\",\n        sm: \"calc(var(--radius) - 4px)\",\n      },\n      keyframes: {\n        \"accordion-down\": {\n          from: { height: \"0\" },\n          to: { height: \"var(--radix-accordion-content-height)\" },\n        },\n        \"accordion-up\": {\n          from: { height: \"var(--radix-accordion-content-height)\" },\n          to: { height: \"0\" },\n        },\n      },\n      animation: {\n        \"accordion-down\": \"accordion-down 0.2s ease-out\",\n        \"accordion-up\": \"accordion-up 0.2s ease-out\",\n      },\n    },\n  },\n  plugins: [require(\"tailwindcss-animate\")],\n} satisfies Config\n\nexport default config"
+    },
+    {
+      "path": "components.json",
+      "sha": null,
+      "content_sha256": "991c604eae9988f387b9201a31a246153d6de2363737e6bd59051ea45938d664",
+      "score": 35,
+      "content": "{\n  \"$schema\": \"https://ui.shadcn.com/schema.json\",\n  \"style\": \"default\",\n  \"rsc\": true,\n  \"tsx\": true,\n  \"tailwind\": {\n    \"config\": \"tailwind.config.ts\",\n    \"css\": \"src/app/globals.css\",\n    \"baseColor\": \"neutral\",\n    \"cssVariables\": true,\n    \"prefix\": \"\"\n  },\n  \"aliases\": {\n    \"components\": \"@/components\",\n    \"utils\": \"@/lib/utils\"\n  }\n}"
+    },
+    {
+      "path": "scripts/typesense-client.ts",
+      "sha": null,
+      "content_sha256": "0d7a34a96002179927b8463f6a6b04bb736a0842f8035e7fb967a5cfe4ea24f7",
+      "score": 33,
+      "content": "import Typesense from 'typesense';\n\nexport const client = new Typesense.Client({\n  apiKey: [REDACTED] || 'xyz',\n  nodes: process.env.NEXT_PUBLIC_TYPESENSE_URLS\n    ? process.env.NEXT_PUBLIC_TYPESENSE_URLS.split(',').map((url: string) => ({\n        url,\n      }))\n    : [\n        {\n          url: 'http://localhost:8108',\n        },\n      ],\n\n  nearestNode: process.env.PUBLIC_TYPESENSE_NEAREST_NODE_URL\n    ? {\n        url: process.env.PUBLIC_TYPESENSE_NEAREST_NODE_URL,\n      }\n    : undefined,\n  connectionTimeoutSeconds: 60 * 60,\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "scripts/indexTypesense.ts",
+      "sha": null,
+      "content_sha256": "4887260b4ed109d1b6d8a037fa78e2a8e6dd4810d32f6a004df67cef07af4b07",
+      "score": 33,
+      "content": "import 'dotenv/config';\nimport fs from 'fs/promises';\nimport { resolve } from 'path';\nimport { client } from './typesense-client';\nimport { ObjectNotFound, TypesenseError } from 'typesense/lib/Typesense/Errors';\n\nconst COLLECTION_NAME =\n  process.env.NEXT_PUBLIC_TYPESENSE_COLLECTION_NAME || 'restaurant';\nconst PATH_TO_DATASET = './scripts/data/restaurants.jsonl';\n\n(async () => {\n  try {\n    await client.collections(COLLECTION_NAME).retrieve();\n    console.log(`Found existing collection of ${COLLECTION_NAME}`);\n\n    if (process.env.FORCE_REINDEX !== 'true')\n      return console.log('FORCE_REINDEX = false. Canceling operation...');\n\n    console.log('FORCE_REINDEX = true. Deleting collection');\n    await client.collections(COLLECTION_NAME).delete();\n  } catch (err) {\n    if (err instanceof TypesenseError && err instanceof ObjectNotFound) {\n      console.log(err.message);\n    } else {\n      console.error(err);\n    }\n  }\n\n  console.log('Creating schema...');\n\n  try {\n    await client.collections().create({\n      name: COLLECTION_NAME,\n      fields: [\n        { name: 'restaurant_name', type: 'string' },\n        { name: 'address', type: 'string' },\n        { name: 'country', type: 'string', facet: true },\n        { name: 'region', type: 'string', optional: true, facet: true },\n        { name: 'province', type: 'string', facet: true, optional: true },\n        { name: 'city', type: 'string', optional: true, facet: true },\n        // { name: 'location', type: 'geopoint' },\n        { name: 'awards', type: 'string[]' },\n        { name: 'top_tags', type: 'string[]' },\n        { name: 'price_min', type: 'float' },\n        { name: 'price_max', type: 'float' },\n        { name: 'meals', type: 'string[]', facet: true },\n        { name: 'cuisines', type: 'string[]', facet: true },\n        { name: 'features', type: 'string[]', facet: true },\n        { name: 'vegetarian_friendly', type: 'bool' },\n        { name: 'gluten_free', type: 'bool' },\n        { name: 'open_hours', type: 'object[]' },\n        { name: 'open_days_per_week', type: 'int32' },\n        { name: 'avg_rating', type: 'float' },\n        { name: 'total_reviews_count', type: 'int32' },\n        // specific rating score\n        { name: 'food', type: 'float' },\n        { name: 'service', type: 'float', optional: true },\n        { name: 'value', type: 'float', optional: true },\n        { name: 'atmosphere', type: 'float', optional: true },\n      ],\n      enable_nested_fields: true,\n    });\n\n    console.log('Indexing data');\n\n    const dataset = await fs.readFile(\n      resolve(resolve(), PATH_TO_DATASET),\n      'utf-8',\n    );\n\n    const returnData = await client\n      .collections(COLLECTION_NAME)\n      .documents()\n      .import(dataset);\n\n    console.log('Return data: ', returnData);\n  } catch (error) {\n    console.log('Error during indexing: ', error);\n  }\n})();\n"
+    },
+    {
+      "path": "src/lib/utils.ts",
+      "sha": null,
+      "content_sha256": "51bbf14cd1f84f49aab2e0dbee420137015d56b6677bb439e83a908cd292cce1",
+      "score": 31,
+      "content": "import { type ClassValue, clsx } from \"clsx\"\nimport { twMerge } from \"tailwind-merge\"\n\nexport function cn(...inputs: ClassValue[]) {\n  return twMerge(clsx(inputs))\n}\n"
+    },
+    {
+      "path": "src/components/LocalTimeTooltip.tsx",
+      "sha": null,
+      "content_sha256": "cba8e1ac127ed40f00290c97de019a5d6c6d4055ca092982e8f908dcb93a80c7",
+      "score": 31,
+      "content": "import { HelpCircle } from 'lucide-react';\nimport {\n  Tooltip,\n  TooltipContent,\n  TooltipProvider,\n  TooltipTrigger,\n} from './ui/tooltip';\n\nexport default function LocalTimeTooltip() {\n  return (\n    <TooltipProvider>\n      <Tooltip>\n        <TooltipTrigger asChild>\n          <button className='text-gray-400 hover:text-gray-600 transition-colors'>\n            <HelpCircle className='w-4 h-4' />\n          </button>\n        </TooltipTrigger>\n        <TooltipContent>\n          <p className='text-sm'>In restaurant's local time.</p>\n        </TooltipContent>\n      </Tooltip>\n    </TooltipProvider>\n  );\n}\n"
+    },
+    {
+      "path": "src/lib/ReactQueryProviders.tsx",
+      "sha": null,
+      "content_sha256": "907c089b4b72b58cec5460bd6e01b303c66bde284c94a61f9ed40f891e02339c",
+      "score": 31,
+      "content": "'use client';\n\nimport { QueryClient, QueryClientProvider } from '@tanstack/react-query';\nimport { ReactQueryDevtools } from '@tanstack/react-query-devtools';\n\nconst queryClient = new QueryClient();\n\nexport default function ReactQueryProvider({\n  children,\n}: {\n  children: React.ReactNode;\n}) {\n  return (\n    <QueryClientProvider client={queryClient}>\n      {children}\n      <ReactQueryDevtools initialIsOpen={false} />\n    </QueryClientProvider>\n  );\n}\n"
+    },
+    {
+      "path": "src/utils/utils.ts",
+      "sha": null,
+      "content_sha256": "50707d9842b3edd339e59317a3f24207758aa443d141d00efa04d41012cc26f3",
+      "score": 31,
+      "content": "export const EXAMPLE_SEARCH_TERMS = [\n  'Best pizza in Italy',\n  'Restaurant with 5 stars food and service rating',\n  'What can I have for lunch with 10€ in Paris',\n  'Free wifi and wheelchair accessible',\n  'Good restaurants in Dublin',\n  'Restaurants open 4pm Sunday',\n  'I am vegan',\n  'I like spicy food',\n  'Restaurants open 5 am to 11 pm',\n];\n\nexport const TYPESENSE_CONFIG = {\n  per_page: 8,\n  query_by: 'restaurant_name,address',\n};\n\nexport const GITHUB_LINK =\n  'https://github.com/typesense/showcase-natural-language-search-restaurants';\n"
+    },
+    {
+      "path": "src/lib/typesense.ts",
+      "sha": null,
+      "content_sha256": "9afbd56d0122e072e4fe50826f98041a2efd9c1458880be6d514129a47f9365f",
+      "score": 31,
+      "content": "import Typesense from 'typesense';\n\nexport type _Restaurant = {\n  id: string;\n  restaurant_link: string;\n  restaurant_name: string;\n  country: string;\n  region: string | null;\n  province: string | null;\n  city: string | null;\n  address: string;\n  awards: string[];\n  popularity_detailed: string;\n  top_tags: string[];\n  meals: string[];\n  cuisines: string[];\n  features: string[];\n  vegetarian_friendly: boolean;\n  gluten_free: boolean;\n  open_hours: { day: string; open: number; close: number }[];\n  open_days_per_week: number | null;\n  avg_rating: number;\n  total_reviews_count: number;\n  reviews_count_in_default_language: number;\n  excellent: number;\n  very_good: number;\n  average: number;\n  poor: number;\n  terrible: number;\n  food: number;\n  service: number | null;\n  value: number | null;\n  atmosphere: number | null;\n  geopoint: [number, number];\n  price_min: number;\n  price_max: number;\n};\n\nexport const typesense = new Typesense.Client({\n  apiKey: [REDACTED] || 'xyz',\n  nodes: process.env.NEXT_PUBLIC_TYPESENSE_URLS\n    ? process.env.NEXT_PUBLIC_TYPESENSE_URLS.split(',').map((url: string) => ({\n        url,\n      }))\n    : [\n        {\n          url: 'http://localhost:8108',\n        },\n      ],\n\n  nearestNode: process.env.PUBLIC_TYPESENSE_NEAREST_NODE_URL\n    ? {\n        url: process.env.PUBLIC_TYPESENSE_NEAREST_NODE_URL,\n      }\n    : undefined,\n  connectionTimeoutSeconds: 30,\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/utils/env.ts",
+      "sha": null,
+      "content_sha256": "a892351329f65e82c9bd29640169aa00eb5d9911ea64bed2a502be53bf469f04",
+      "score": 31,
+      "content": "import { z } from 'zod';\n\nconst envSchema = z.object({\n  TYPESENSE_COLLECTION_NAME: z.string(),\n  NL_MODEL_ID: z.string(),\n});\n\nexport const clientEnv = envSchema.parse({\n  TYPESENSE_COLLECTION_NAME: process.env.NEXT_PUBLIC_TYPESENSE_COLLECTION_NAME,\n  NL_MODEL_ID: process.env.NEXT_PUBLIC_TYPESENSE_NL_MODEL_ID,\n});\n"
+    },
+    {
+      "path": "src/components/Form.tsx",
+      "sha": null,
+      "content_sha256": "13051b12ebe1e529e50c101f3fcd14284897e10033c055b9ec025262901df5f3",
+      "score": 31,
+      "content": "import { useEffect, useState } from 'react';\nimport { SearchIcon } from './icons';\nimport { useRouter } from 'next/navigation';\nimport { ParsedNLQuery } from '@/app/page';\n\nexport default function Form({\n  q,\n  onSubmit,\n}: {\n  q: string;\n  onSubmit: (q: string) => any;\n}) {\n  const [query, setQuery] = useState('');\n  const router = useRouter();\n\n  useEffect(() => {\n    setQuery(q);\n  }, [q]);\n\n  return (\n    <form\n      onSubmit={(e) => {\n        e.preventDefault();\n        router.push(`?q=${query}`);\n        // we only fire a search event if the query changes, this check if the user is retrying a search\n        if (q === query) onSubmit(query);\n      }}\n      className='w-full flex gap-2.5 mb-4'\n    >\n      <div className='flex-1 relative'>\n        <input\n          className='w-full h-full font-normal px-5 pr-10 border border-gray-300 rounded-full focus:outline-none placeholder:font-light text-sm'\n          type='text'\n          value={query}\n          onChange={(e) => setQuery(e.target.value)}\n          placeholder=\"Type in what you're looking for in a restaurant , e.g. 'best pizza in Italy' or 'sushi in Paris'\"\n        />\n      </div>\n      <button\n        className='bg-[#cffc75] aspect-square w-11 grid place-content-center rounded-full hover:bg-[#bee76b] transition'\n        type='submit'\n      >\n        <SearchIcon className='size-5 fill-white' />\n      </button>\n    </form>\n  );\n}\n"
+    },
+    {
+      "path": "src/components/Heading.tsx",
+      "sha": null,
+      "content_sha256": "21e4b54fb3d2d0eecda925f92ca6ef8c7044d2ccaabb055ef46fa922aa220640",
+      "score": 31,
+      "content": "import Link from 'next/link';\n\nexport default function Heading() {\n  return (\n    <div className='mb-6 flex flex-col items-center gap-2'>\n      <Link href={'/'}>\n        <h1 className='text-3xl font-bold capitalize text-center'>\n          Natural language search restaurants\n        </h1>\n      </Link>\n      <div className='flex items-center gap-2 font-normal text-sm'>\n        Powered by\n        <a\n          href='https://typesense.org/'\n          target='_blank'\n          rel='noopener noreferrer'\n        >\n          <img\n            className='h-6'\n            src='https://typesense.org/typesense-logo.svg'\n            alt='Typesense logo'\n          />\n        </a>\n      </div>\n    </div>\n  );\n}\n"
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "sha": null,
+      "content_sha256": "be999a0d884f2a21641eb9ad894b4dd94dfd045572039eb2a754e963656a92de",
+      "score": 31,
+      "content": "import type { Metadata } from 'next';\nimport { Inter } from 'next/font/google';\nimport './globals.css';\nimport ReactQueryProviders from '@/lib/ReactQueryProviders';\nimport { Toaster } from '@/components/ui/toaster';\n\nconst inter = Inter({ subsets: ['latin'], weight: ['300', '400', '500'] });\n\nexport const metadata: Metadata = {\n  title: 'Restaurant search | Typesense',\n  description:\n    'Easily search for restaurants using natural language, powered by Typesense',\n};\n\nexport default function RootLayout({\n  children,\n}: Readonly<{\n  children: React.ReactNode;\n}>) {\n  return (\n    <html lang='en'>\n      <body className={inter.className}>\n        <ReactQueryProviders>{children}</ReactQueryProviders>\n        <Toaster />\n      </body>\n    </html>\n  );\n}\n"
+    },
+    {
+      "path": "src/components/LoaderSVG.tsx",
+      "sha": null,
+      "content_sha256": "5a76b2ab6b8bd55014a3e00778d3823c2cfc4f40df03cb10c4ea868281f01145",
+      "score": 31,
+      "content": "import { cn } from '@/lib/utils';\nimport { SVGProps } from 'react';\n\nexport default function LoaderSVG({\n  className,\n  message,\n  ...props\n}: SVGProps<SVGSVGElement> & { message?: string }) {\n  return (\n    <div className='flex flex-col items-center my-10'>\n      <svg\n        className={cn('fill-foreground', className)}\n        {...props}\n        xmlns='http://www.w3.org/2000/svg'\n        x='0px'\n        y='0px'\n        width='40px'\n        height='40px'\n        viewBox='0 0 50 50'\n      >\n        <path d='M43.935,25.145c0-10.318-8.364-18.683-18.683-18.683c-10.318,0-18.683,8.365-18.683,18.683h4.068c0-8.071,6.543-14.615,14.615-14.615c8.072,0,14.615,6.543,14.615,14.615H43.935z'>\n          <animateTransform\n            attributeType='xml'\n            attributeName='transform'\n            type='rotate'\n            from='0 25 25'\n            to='360 25 25'\n            dur='0.6s'\n            repeatCount='indefinite'\n          />\n        </path>\n      </svg>\n      {message && (\n        <small className='text-muted-foreground font-light'>{message}</small>\n      )}\n    </div>\n  );\n}\n"
+    },
+    {
+      "path": "src/components/RestaurantList.tsx",
+      "sha": null,
+      "content_sha256": "7e818d499194ecb350d66608f037c9eb7d1e43b9b8bfcf5694f99505b8153fe6",
+      "score": 31,
+      "content": "import fetchData, { _searchData } from '@/lib/actions';\nimport { useInfiniteQuery } from '@tanstack/react-query';\nimport LoaderSVG from './LoaderSVG';\nimport { useInView } from 'react-intersection-observer';\nimport { useEffect } from 'react';\nimport RestaurantCard from './RestaurantCard';\n\nexport default function CarList({\n  initialData,\n  searchParams,\n  queryKey,\n}: {\n  initialData: _searchData;\n  searchParams: object;\n  queryKey: string;\n}) {\n  const {\n    data,\n    error,\n    fetchNextPage,\n    hasNextPage,\n    isFetchingNextPage,\n    status,\n  } = useInfiniteQuery({\n    queryKey: ['restaurants', queryKey],\n    queryFn: fetchData(searchParams),\n    initialData: { pages: [initialData], pageParams: [1] },\n    initialPageParam: 1,\n    getNextPageParam: (lastPage) => lastPage.nextPage,\n    refetchOnWindowFocus: false,\n    staleTime: Infinity,\n  });\n  const { ref, inView } = useInView();\n\n  useEffect(() => {\n    if (inView) {\n      fetchNextPage();\n    }\n  }, [inView]);\n\n  if (status === 'error') {\n    console.log(error);\n    return 'Error';\n  }\n  return (\n    <>\n      <ul className='w-full grid grid-cols-2 gap-4 max-md:grid-cols-1'>\n        {data.pages.map((page) =>\n          page.data?.map(({ document }) => (\n            <RestaurantCard restaurantData={document} key={document.id} />\n          ))\n        )}\n      </ul>\n      {isFetchingNextPage && hasNextPage ? (\n        <LoaderSVG />\n      ) : (\n        <div className='w-full text-center text-sm mt-4'>\n          No more restaurants found.\n        </div>\n      )}\n      <div ref={ref} />\n    </>\n  );\n}\n"
+    },
+    {
+      "path": "scripts/data/sample.json",
+      "sha": null,
+      "content_sha256": "a359ca4fbd3281aca24ab4da999ad790509e7f0fdc79445a5b35a04199a9c30c",
+      "score": 31,
+      "content": "{\n  \"restaurant_link\": \"g304061-d12073708\",\n  \"restaurant_name\": \"Via29\",\n  \"country\": \"Romania\",\n  \"region\": \"Transylvania\",\n  \"province\": \"Bihor County\",\n  \"city\": \"Oradea\",\n  \"address\": \"Str. Mihai Eminescu, 29, Oradea 410019 Romania\",\n  \"awards\": [\n    \"Travellers' Choice\",\n    \"Certificate of Excellence 2020\",\n    \"Certificate of Excellence 2019\",\n    \"Certificate of Excellence 2018\"\n  ],\n  \"popularity_detailed\": \"#2 of 117 Restaurants in Oradea\",\n  \"top_tags\": [\"Mid-range\", \"Italian\", \"Pizza\", \"International\"],\n  \"meals\": [\"Breakfast\", \"Lunch\", \"Dinner\", \"Brunch\", \"Drinks\"],\n  \"cuisines\": [\"Italian\", \"Pizza\", \"International\"],\n  \"features\": [\n    \"Delivery\",\n    \"Takeout\",\n    \"Reservations\",\n    \"Outdoor Seating\",\n    \"Seating\",\n    \"Highchairs Available\",\n    \"Wheelchair Accessible\",\n    \"Serves Alcohol\",\n    \"Full Bar\",\n    \"Free Wifi\",\n    \"Accepts Credit Cards\",\n    \"Table Service\"\n  ],\n  \"vegetarian_friendly\": true,\n  \"gluten_free\": true,\n  \"open_hours\": [\n    { \"day\": \"Mon\", \"open\": 0, \"close\": 23.9833333333 },\n    { \"day\": \"Tue\", \"open\": 0, \"close\": 23.9833333333 },\n    { \"day\": \"Wed\", \"open\": 0, \"close\": 23.9833333333 },\n    { \"day\": \"Thu\", \"open\": 0, \"close\": 23.9833333333 },\n    { \"day\": \"Fri\", \"open\": 0, \"close\": 23.9833333333 },\n    { \"day\": \"Sat\", \"open\": 0, \"close\": 23.9833333333 },\n    { \"day\": \"Sun\", \"open\": 0, \"close\": 23.9833333333 }\n  ],\n  \"open_days_per_week\": 7,\n  \"avg_rating\": 5,\n  \"total_reviews_count\": 168,\n  \"reviews_count_in_default_language\": 148,\n  \"excellent\": 132,\n  \"very_good\": 11,\n  \"average\": 4,\n  \"poor\": 1,\n  \"terrible\": 0,\n  \"food\": 5,\n  \"service\": 4.5,\n  \"value\": 4.5,\n  \"atmosphere\": null,\n  \"location\": [47.062153, 21.932116],\n  \"price_min\": 2,\n  \"price_max\": 20\n}\n"
+    },
+    {
+      "path": "src/components/Header.tsx",
+      "sha": null,
+      "content_sha256": "95a26705a57c4f7f9361d154fd3bd0636fccfa77f4fb495335def5870a1438a9",
+      "score": 31,
+      "content": "import { ExternalLinkIcon, GithubIcon } from '@/components/icons';\nimport { GITHUB_LINK } from '@/utils/utils';\nimport {\n  Dialog,\n  DialogContent,\n  DialogDescription,\n  DialogHeader,\n  DialogTitle,\n} from './ui/dialog';\nimport { DialogTrigger } from '@radix-ui/react-dialog';\n\nexport default function Header() {\n  return (\n    <header className='w-full flex justify-end mb-2'>\n      <nav className='flex gap-6 items-center'>\n        <Dialog>\n          <DialogTrigger>\n            <span className='text-sm flex items-center gap-1 hover:underline'>\n              About\n            </span>\n          </DialogTrigger>\n          <DialogContent className='md:min-w-[700px]'>\n            <DialogHeader>\n              <DialogTitle className='mb-2 text-left'>About</DialogTitle>\n              <DialogDescription className='font-normal leading-6 text-left'>\n                This demo restaurant search showcases the new Natural Language\n                Search feature powered by Typesense. This allows users to search\n                for restaurants using everyday language.\n                <br />\n                <br />\n                Instead of needing to use specific keywords or precise filters,\n                you can simply type a free-form sentence into the search bar.\n                Typesense then uses Large Language Models (LLMs) to understand\n                your intent, automatically translating your natural language\n                query into structured search parameters like filters, sort\n                orders, and relevant keywords.\n                <br />\n                <br />\n                This means you can find exactly what you're looking for with\n                ease and flexibility, even if your exact keywords aren't in the\n                restaurant's description. Experience a more intuitive and\n                powerful way to discover your next dining destination!\n                <br />\n                <br />\n                This demo uses the dataset \"TripAdvisor European restaurants\"\n                which is available on{' '}\n                <a\n                  className='text-[#5d7c1d] underline'\n                  target='_blank'\n                  href='https://www.kaggle.com/datasets/stefanoleone992/tripadvisor-european-restaurants'\n                >\n                  Kaggle\n                </a>\n                .\n                <br />\n                <br />\n                For more details on this feature, visit the{' '}\n                <a\n                  className='text-[#5d7c1d] underline'\n                  target='_blank'\n                  href='https://typesense.org/docs/29.0/api/natural-language-search.html#use-case'\n                >\n                  Typesense Natural Language Search documentation\n                </a>\n              </DialogDescription>\n            </DialogHeader>\n          </DialogContent>\n        </Dialog>\n\n        <a href={GITHUB_LINK} target='_blank' rel='noopener noreferrer'>\n          <GithubIcon className='size-7' aria-label='Source code' />\n        </a>\n      </nav>\n    </header>\n  );\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:46:33.969367+00:00"
+}

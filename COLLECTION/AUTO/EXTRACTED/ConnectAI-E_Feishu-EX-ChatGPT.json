@@ -1,0 +1,203 @@
+{
+  "canonical_source": "github:ConnectAI-E/Feishu-EX-ChatGPT",
+  "repo": "ConnectAI-E/Feishu-EX-ChatGPT",
+  "revision_sha": "167d493b141dccb46d819a48b4429763bf4e2433",
+  "default_branch": "main",
+  "pushed_at": "2023-05-29T12:30:29Z",
+  "repo_updated_at": "2026-10-18T07:55:19Z",
+  "license": "GPL-3.0",
+  "topics": [
+    "chatgpt",
+    "chatgpt-plugin",
+    "connect-ai",
+    "feishu-bot",
+    "go",
+    "golang",
+    "openai"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "internal/domain/action_llm.go",
+      "sha": null,
+      "content_sha256": "700f8d80785aabe2644036f55bc1acc990e94052c8ecd0511677ebf58fd3309a",
+      "score": 188,
+      "content": "package domain\n\nimport (\n\t\"context\"\n\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/pkg/escape\"\n\t\"github.com/sirupsen/logrus\"\n)\n\nvar _ Action = &MessageAction{}\n\ntype MessageAction struct {\n\tllmer LLMer\n}\n\nfunc NewMessageAction(llmer LLMer) *MessageAction {\n\treturn &MessageAction{llmer: llmer}\n}\n\nfunc (a MessageAction) Execute(ctx context.Context, actionInfo *ActionInfo) (next bool, err error) {\n\tif actionInfo.ExistsResult() {\n\t\treturn false, nil\n\t}\n\n\tif actionInfo.UsePlugin() {\n\t\treturn true, nil\n\t}\n\n\tmsg := actionInfo.GetText()\n\tmsgID := actionInfo.Message.ID()\n\n\tif len(msg) == 0 {\n\t\treturn false, nil\n\t}\n\n\tmessages := a.makeLlmMessages(msg)\n\n\tlogrus.Debugf(\"ask llm: %v\", messages)\n\n\tanswer, err := a.llmer.Chat(ctx, messages)\n\tif err != nil {\n\t\tlogrus.Errorf(\"MessageAction: llmer chat error: %v\", err)\n\t\treturn false, err\n\t}\n\n\tlogrus.Debugf(\"MessageAction: llmer.Chat: message=%s answer: %s\", msg, answer.Content)\n\n\tresult := escape.String(answer.Content)\n\n\tactionInfo.Result = &ActionResult{\n\t\tReplyMsgID: msgID,\n\t\tResult:     result,\n\t\tType:       ActionResultText,\n\t}\n\treturn true, nil\n}\n\nfunc (a MessageAction) makeLlmMessages(content string) []LlmMessage {\n\n\treturn []LlmMessage{\n\t\t{\n\t\t\tRole:    \"user\",\n\t\t\tContent: content,\n\t\t},\n\t}\n}\n"
+    },
+    {
+      "path": "internal/domain/action_unique.go",
+      "sha": null,
+      "content_sha256": "36e9d932b23f40f3cf406698ea412ef410cf8b92c0d5382ce1854e3a68aead08",
+      "score": 113,
+      "content": "package domain\n\nimport (\n\t\"context\"\n\t\"time\"\n\n\t\"github.com/patrickmn/go-cache\"\n\t\"github.com/sirupsen/logrus\"\n)\n\nvar _ Action = (*ProcessUniqueAction)(nil)\n\ntype ProcessUniqueAction struct {\n\tprocessed cache.Cache\n}\n\nfunc NewProcessUniqueAction() *ProcessUniqueAction {\n\treturn &ProcessUniqueAction{\n\t\tprocessed: *cache.New(1*time.Hour, 1*time.Hour),\n\t}\n}\n\nfunc (a *ProcessUniqueAction) Execute(ctx context.Context, actionInfo *ActionInfo) (next bool, err error) {\n\n\tmsgID := actionInfo.Message.ID()\n\n\tif _, ok := a.processed.Get(msgID); ok {\n\t\tlogrus.Infof(\"message processed: %s\", actionInfo.GetText())\n\t\treturn false, nil\n\t}\n\n\ta.processed.Set(msgID, true, cache.DefaultExpiration)\n\treturn true, nil\n}\n"
+    },
+    {
+      "path": "internal/domain/action_plugin.go",
+      "sha": null,
+      "content_sha256": "70e548d8af58801e4d67004950ad09b723ea8b7a6190d3803f2d0e633e654da2",
+      "score": 113,
+      "content": "package domain\n\nimport (\n\t\"context\"\n\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/pkg/escape\"\n\t\"github.com/agi-cn/llmplugin\"\n\t\"github.com/agi-cn/llmplugin/plugins/stablediffusion\"\n\t\"github.com/sirupsen/logrus\"\n)\n\nvar _ Action = (*PluginAction)(nil)\n\ntype PluginAction struct {\n\tmanager *llmplugin.PluginManager\n}\n\nfunc NewPluginAction(manager *llmplugin.PluginManager) *PluginAction {\n\n\treturn &PluginAction{manager: manager}\n}\n\nfunc (a PluginAction) Execute(ctx context.Context, actionInfo *ActionInfo) (next bool, err error) {\n\tif !actionInfo.UsePlugin() {\n\t\treturn true, nil\n\t}\n\n\ttext := actionInfo.GetText()\n\tpluginCtxs, err := a.manager.Select(context.Background(), text)\n\tif err != nil {\n\t\tlogrus.Errorf(\"PluginAction Select error: %v\", err)\n\t\treturn false, err\n\t}\n\n\tresult := a.makeActionResult(ctx, pluginCtxs)\n\tif result == nil {\n\t\treturn true, nil\n\t}\n\n\t// NOTE(zy): 需要特别补充一下遗漏的 reply message id\n\tresult.ReplyMsgID = actionInfo.GetMessageID()\n\n\tif result.Type != ActionResultImageB64 {\n\t\tlogrus.Debugf(\"got plugin result: %+v\", result)\n\t} else {\n\t\tlogrus.Debugf(\"got plugin result in base64 image\")\n\t}\n\tactionInfo.Result = result\n\n\treturn true, nil\n}\n\nfunc (a PluginAction) makeActionResult(ctx context.Context, pluginCtxs []llmplugin.PluginContext) *ActionResult {\n\t// only choice one plugin\n\tif len(pluginCtxs) == 0 {\n\t\treturn nil\n\t}\n\n\tpluginCtx := pluginCtxs[0]\n\n\tlogrus.Debugf(\"run plugin=%v input=%v\", pluginCtx.GetName(), pluginCtx.Input)\n\n\tresult, err := pluginCtx.Do(ctx, pluginCtx.Input)\n\tif err != nil {\n\t\tlogrus.Errorf(\"plugin=%s input=%v run error: %v\", pluginCtx.GetName(), pluginCtx.Input, err)\n\t\treturn nil\n\t}\n\n\t// --- 根据插件类型做多模态 ---\n\n\t// stable diffusion - answer is base64 image\n\tif pluginCtx.GetName() == (stablediffusion.StableDiffusion{}).GetName() {\n\t\treturn &ActionResult{\n\t\t\tResult: result,\n\t\t\tType:   ActionResultImageB64,\n\t\t}\n\t}\n\n\t// 普通文本\n\tresult = escape.String(result)\n\treturn &ActionResult{\n\t\tResult: result,\n\t\tType:   ActionResultText,\n\t}\n}\n"
+    },
+    {
+      "path": "internal/domain/action_mention.go",
+      "sha": null,
+      "content_sha256": "4524ac8124ae597611053b06f8f29606ddedbd98abed6aaf2747f87fde060d63",
+      "score": 113,
+      "content": "package domain\n\nimport (\n\t\"context\"\n\n\t\"github.com/sirupsen/logrus\"\n)\n\nvar _ Action = &ProcessMentionAction{}\n\n// ProcessMentionAction 是否 @ 机器人\ntype ProcessMentionAction struct {\n\tbotname string\n}\n\nfunc NewProcessMentionAction(botname string) *ProcessMentionAction {\n\treturn &ProcessMentionAction{botname}\n}\n\nfunc (a ProcessMentionAction) Execute(ctx context.Context, actionInfo *ActionInfo) (bool, error) {\n\tchatType := actionInfo.Message.GetChatType()\n\n\t// 私聊直接过\n\tif chatType.IsUserChatType() {\n\t\treturn true, nil\n\t}\n\n\tif !chatType.IsGroupChatType() {\n\t\tlogrus.Errorf(\"receive message chat type unsupport: %v\", chatType)\n\t\treturn false, nil\n\t}\n\n\t// 群聊判断是否提到机器人\n\treturn actionInfo.Message.IsMentionAt(a.botname), nil\n}\n"
+    },
+    {
+      "path": "internal/domain/action_final_reply.go",
+      "sha": null,
+      "content_sha256": "e47de47487c1c8d3cc45ec4e4e8e67cd7185f5d5dfbb2ea1d3aa278ed385c9f2",
+      "score": 113,
+      "content": "package domain\n\nimport \"context\"\n\nvar _ Action = (*FinalReply)(nil)\n\ntype FinalReply struct {\n\ttext string\n}\n\nfunc NewFinalReply(text string) *FinalReply {\n\treturn &FinalReply{text}\n}\n\nfunc (a *FinalReply) Execute(ctx context.Context, actionInfo *ActionInfo) (next bool, err error) {\n\n\tif actionInfo.Result == nil {\n\t\tactionInfo.Result = &ActionResult{\n\t\t\tReplyMsgID: actionInfo.GetMessageID(),\n\t\t\tType:       ActionResultText,\n\t\t\tResult:     a.text,\n\t\t}\n\t}\n\n\treturn true, nil\n}\n"
+    },
+    {
+      "path": "internal/domain/actions.go",
+      "sha": null,
+      "content_sha256": "fae21231e0412bee363e12ee11ddb3647407e85eca625cfe87a9945f6f2057d7",
+      "score": 113,
+      "content": "package domain\n\nimport (\n\t\"context\"\n\t\"strings\"\n)\n\ntype ActionResultType string\n\nconst (\n\tActionResultText     ActionResultType = \"text\"\n\tActionResultImageB64 ActionResultType = \"image_b64\"\n\tActionResultHelpCard ActionResultType = \"help_card\"\n)\n\ntype ActionResult struct {\n\tReplyMsgID string\n\n\tResult string // may: text, base64 for image\n\n\tType ActionResultType\n}\n\ntype ActionInfo struct {\n\tMessage *LarkMessage\n\n\tResult *ActionResult // 返回的消息。如果已经有了返回的消息，则不执行下一阶段。\n}\n\nfunc (a *ActionInfo) GetMessageID() string {\n\treturn *(a.Message.MessageId)\n}\n\nfunc (a *ActionInfo) GetText() string {\n\tif msg := a.Message; msg != nil {\n\n\t\treturn strings.TrimLeft(msg.GetText(), \"#\")\n\t}\n\n\treturn \"\"\n}\n\nfunc (a *ActionInfo) UsePlugin() bool {\n\tif msg := a.Message; msg != nil {\n\t\ttext := msg.GetText()\n\t\treturn strings.HasPrefix(text, \"#\")\n\t}\n\n\treturn false\n}\n\nfunc (a *ActionInfo) ExistsResult() bool {\n\treturn a.Result != nil\n}\n\ntype Action interface {\n\tExecute(ctx context.Context, actionInfo *ActionInfo) (next bool, err error)\n}\n"
+    },
+    {
+      "path": "internal/domain/action_help.go",
+      "sha": null,
+      "content_sha256": "8ed689e97f698dcce331c309523f50c7fe68d64f399f3327109c2ee804313a9d",
+      "score": 113,
+      "content": "package domain\n\nimport (\n\t\"context\"\n\t\"strings\"\n)\n\nvar helperStrings = []string{\n\t\"/help\",\n\t\"/h\",\n}\n\n// HelperAction 帮助卡片\ntype HelperAction struct{}\n\nfunc NewHelperAction() *HelperAction {\n\treturn &HelperAction{}\n}\n\nfunc (h HelperAction) Execute(ctx context.Context, actionInfo *ActionInfo) (next bool, err error) {\n\n\ttext := actionInfo.GetText()\n\tif include := h.includeHelperString(text); !include {\n\t\treturn true, nil\n\t}\n\n\tmsgID := actionInfo.GetMessageID()\n\n\tactionInfo.Result = &ActionResult{\n\t\tReplyMsgID: msgID,\n\t\tType:       ActionResultHelpCard,\n\t}\n\n\treturn false, nil\n}\n\nfunc (h HelperAction) includeHelperString(text string) bool {\n\n\tfor _, s := range helperStrings {\n\t\tif strings.Contains(text, s) {\n\t\t\treturn true\n\t\t}\n\t}\n\n\treturn false\n}\n"
+    },
+    {
+      "path": "cmd/llm.go",
+      "sha": null,
+      "content_sha256": "195a159df7de851a253b5d820ed9d4d27e1780d38690e170ee248672bb52a89b",
+      "score": 108,
+      "content": "package main\n\nimport (\n\t\"os\"\n\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/domain\"\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/repo/chatgpt\"\n\t\"github.com/sashabaranov/go-openai\"\n)\n\nfunc newLLM() domain.LLMer {\n\tvar (\n\t\topenAIToken = os.Getenv(\"OPENAI_TOKEN\")\n\n\t\t// 如果不为空，则设置 openai 的代理模式\n\t\topenAIURL = os.Getenv(\"OPENAI_URL\")\n\t)\n\n\tconfig := openai.DefaultConfig(openAIToken)\n\tif openAIURL != \"\" {\n\t\tconfig.BaseURL = openAIURL\n\t}\n\n\topenaiClient := openai.NewClientWithConfig(config)\n\tllm := chatgpt.NewChatGPT(openaiClient)\n\n\treturn llm\n}\n"
+    },
+    {
+      "path": "cmd/llmplugin.go",
+      "sha": null,
+      "content_sha256": "c36c9da8678a2a6889bb24cd176aab40e42082600950d9ce7e940ba26c751d36",
+      "score": 108,
+      "content": "package main\n\nimport (\n\t\"os\"\n\n\t\"github.com/agi-cn/llmplugin\"\n\t\"github.com/agi-cn/llmplugin/llm/openai\"\n\t\"github.com/agi-cn/llmplugin/plugins/calculator\"\n\t\"github.com/agi-cn/llmplugin/plugins/google\"\n\t\"github.com/agi-cn/llmplugin/plugins/stablediffusion\"\n\t\"github.com/sirupsen/logrus\"\n)\n\nfunc newLLMPluginManager() *llmplugin.PluginManager {\n\tvar (\n\t\topenAIToken = os.Getenv(\"OPENAI_TOKEN\")\n\t)\n\n\tchatgpt := openai.NewChatGPT(openAIToken)\n\n\tplugins := makePlugins(chatgpt)\n\n\tloggingPlugin(plugins)\n\n\treturn llmplugin.NewPluginManager(\n\t\tchatgpt,\n\t\tllmplugin.WithPlugins(plugins),\n\t)\n}\n\nfunc makePlugins(chatgpt *openai.ChatGPT) []llmplugin.Plugin {\n\n\tplugins := []llmplugin.Plugin{\n\t\tcalculator.NewCalculator(),\n\t}\n\n\t{ // Google Search Engine\n\t\tvar (\n\t\t\tgoogleEngineID = os.Getenv(\"GOOGLE_ENGINE_ID\")\n\t\t\tgoogleToken    = os.Getenv(\"GOOGLE_TOKEN\")\n\t\t)\n\n\t\tif googleEngineID != \"\" && googleToken != \"\" {\n\t\t\tg := google.NewGoogle(googleEngineID, googleToken, google.WithSummarizer(chatgpt))\n\t\t\tplugins = append(plugins, g)\n\t\t}\n\t}\n\n\t{ // Customize Search Engine: agi.cn search\n\t\t// plugins = append(plugins, agicn_search.NewAgicnSearch())\n\t}\n\n\t{ // Stable Diffusion\n\t\tif sdAddr := os.Getenv(\"SD_ADDR\"); sdAddr != \"\" {\n\t\t\tplugins = append(plugins, stablediffusion.NewStableDiffusion(sdAddr))\n\t\t}\n\t}\n\n\treturn plugins\n}\n\nfunc loggingPlugin(plugins []llmplugin.Plugin) {\n\tfor _, p := range plugins {\n\t\tlogrus.Infof(\"load plugin: %v\", p.GetName())\n\t}\n}\n"
+    },
+    {
+      "path": "internal/domain/llm.go",
+      "sha": null,
+      "content_sha256": "64b8418b4089216fa7e2700b7bee0db6ca709e6e1425caa3caa5c01178ab93b9",
+      "score": 106,
+      "content": "package domain\n\nimport \"context\"\n\ntype LlmMessage struct {\n\tRole    string\n\tContent string\n}\n\ntype LlmAnswer struct {\n\tRole    string\n\tContent string\n}\n\ntype LLMer interface {\n\tChat(ctx context.Context, messages []LlmMessage) (*LlmAnswer, error)\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "5a7a23d3e4ff163df3937c625e104d82b646531c4944cbd008a543fa110e0be9",
+      "score": 100,
+      "content": "# Feishu-EX-ChatGPT\n\n\nFeishu-EX-ChatGPT 是让飞书接入一个拥有增强版本的 ChatGPT 功能。\n通过集成各种插件，Feishu-EX-ChatGPT 可以让 ChatGPT 更好地与外部服务进行交互。插件可以轻松扩展，并通过注册机制来注册和激活。此外，Feishu-EX-ChatGPT 插件系统还支持第三方服务的扩展能力。⚡\n\n## 功能 ✨\n\n1. 通过集成不同的插件来增强 ChatGPT 的外部能力。\n2. 插件可以进行随意扩展，并通过注册机制完成插件的注册与激活。\n3. 利用插件机制，实现对第三方服务的扩展能力。\n\n一起贡献更多插件能力，增强 FeishuEx 扩展能力。[github.com/agi-cn/llmplugin](https://github.com/agi-cn/llmplugin)\n\n\n![](./images/plugins.png)\n\n1. 正常提问，使用 ChatGPT 回答。\n2. 以 `#` 开头提问，使用插件进行回答。\n\n\n## 工作流程 🌊\n\n![how_it_works](./images/how_it_works.png)\n\n1. 注册插件列表以获取扩展能力。📝\n2. 根据用户的提问，选择并激活相应的插件（可能是一个或多个）。🎯\n3. 等待获取所有插件的结果，并汇总所有结果。🔁\n4. 将汇总后的结果返回给用户。🔙\n\n\n## 如何开始 🛠️\n\n1. 克隆此仓库到本地。\n2. 在项目中，根据需要创建自己的插件并实现相应的接口。\n3. 注册并激活插件。\n4. 开始使用 Feishu-EX-ChatGPT 与 ChatGPT 进行交互！🎉\n\n\n现在开始使用 Feishu-EX-ChatGPT，让您的飞书接入的 ChatGPT 拥有的功能更强大吧！🚀\n\n\n## 运行\n\n支持本地运行，或者使用 fly.io 进行部署。\n\n运行时，依赖环境变量支持，环境变量加载形式有：\n\n1. 设置系统环境变量\n2. 加载 .env 环境变量定义文件\n\n具体环境变量参考：`./dotenv.example` 文件说明。\n\n\n### 1. 本地运行\n\n使用 .env 环境变量文件，\n\n```bash\ncp dotenv.example .env\n\ngo run ./cmd\n```\n\n### 2. 集成 Stable Diffusion 插件\n\n![](./images/feishu-ex-sd.jpg)\n\n### 2. 搜索插件支持\n\n支持搜索引擎如下，\n\n1. agi.cn search 搜索插件 - 封装了 duckduckgo 搜索能力，且不需要额外申请 token，默认集成。\n2. 支持 Google Search 插件能力（需要申请 Google Search Engine Token）。\n\n<details>\n    <summary>申请 Google 搜索接口</summary>\n\n1. 获取 [GOOGLE_ENGINE_ID](http://www.google.com/cse/)\n2. 开通 [GOOGLE_SEARCH_API](https://console.cloud.google.com/apis/api/customsearch.googleapis.com/metrics)\n2. 获取 [GOOGLE_TOKEN](https://console.cloud.google.com/apis/credentials?pli=1&project=bobmac-344202)\n\n[主要参考](https://stackoverflow.com/questions/37083058/programmatically-searching-google-in-python-using-custom-search)\n\n</details>\n\n没有配置 Google Search 的环境变量，则默认启动 duckduckgo 搜索。\n\n\n### 2. 飞书提问\n\n1. 没有支持 Plugin 时，效果如下，\n\n  ![](./images/answer_by_chatgpt.jpg)\n\n2. 支持 Plugin 时，效果，\n\n  ![](./images/answer_by_plugin.png)\n\n\n\n## 如何贡献\n\n1. 代码结构参考「整洁架构思想」，具体说明参考 [github.com/xpzouying/go-clean-arch](https://github.com/xpzouying/go-clean-arch)。\n2. 编码规范参考 [Go Code Review](https://github.com/golang/go/wiki/CodeReviewComments)\n\n\n## 部署机器人\n\n### 1. 部署飞书机器人服务\n\n因为飞书需要访问公网的 IP 地址，所以我们使用 [fly.io](https://fly.io/) 进行部署。一般情况下，免费额度都够用。\n\n<details>\n    <summary>fly.io 部署流程</summary>\n\n以 MacOS 为例，其他的类似。\n\n1. 登录 [https://fly.io/dashboard](https://fly.io/dashboard) 并注册账号。\n\n2. 安装 [Fly CLI](https://fly.io/docs/getting-started/installing-flyctl/)。\n\n3. 运行命令登录，`flyctl auth login`。\n\n  ```bash\n  Waiting for session... Done\n  successfully logged in as xpzouying@gmail.com\n  ```\n\n4. 运行 `flyctl apps create`，输入 app name： `feishuex-bot`。\n\n5. 使用 flyctl env 配置各种环境变量。\n  * flyctl secrets set FEISHU_APP_ID=cli_xxx\n  * flyctl secrets set FEISHU_APP_SECRET=abcABCxxx\n  * flyctl secrets set VERIFY_TOKEN=abcABCxxx\n  * flyctl secrets set ENCRYPT_KEY=abcABCxxx\n  * flyctl secrets set BOT_NAME=feishu-bot\n  * flyctl secrets set OPENAI_TOKEN=sk-xxx\n\n  配置后，使用 `flyctl secrets list` 查看环境变量设置。\n  ![](./images/fly_env_list.jpg)\n\n6. 部署程序：`flyctl deploy`。\n  ![](./images/fly_deploy.png)\n\n\n7. 查看状态：\n\n  * 通过命令行查看：`flyctl status`\n    ![](./images/fly_status.png)\n\n  * 通过页面查看 [https://fly.io/dashboard/personal](https://fly.io/dashboard/personal)\n    ![](./images/fly_dashboard.png)\n\n</details>\n\n\n\n### 2. 配置飞书机器人\n\n使用 fly.io 成功部署后，可以在飞书开发平台配置请求地址。\n\n![](./images/feishu_bot_config.png)\n\n\n## 联系\n\n欢迎讨论更多功能扩展，\n\n <img src='https://github.com/ConnectAI-E/Feishu-EX-ChatGPT/assets/50035229/3a65502b-bfd5-4096-96d0-90ecc1b5d535' alt='' width='200'/>\n\n\n\n\n"
+    },
+    {
+      "path": "pkg/escape/escape_test.go",
+      "sha": null,
+      "content_sha256": "a9633d96c542e7b446a07aa729f6bab66e15198385b97505e2ebd8b6185cd09f",
+      "score": 91,
+      "content": "package escape\n\nimport (\n\t\"testing\"\n\n\t\"github.com/stretchr/testify/assert\"\n)\n\nfunc TestReplace(t *testing.T) {\n\n\tts := []struct {\n\t\tbefore string\n\n\t\tafter string\n\t}{\n\t\t{\n\t\t\t`HELLO \"WORLD\"`,\n\t\t\t`HELLO \\\"WORLD\\\"`,\n\t\t},\n\t\t{\n\t\t\t`HELLO \\tWORLD`,\n\t\t\t`HELLO \\\\tWORLD`,\n\t\t},\n\t}\n\n\tfor _, tc := range ts {\n\n\t\tgot := String(tc.before)\n\n\t\twant := tc.after\n\t\tassert.Equal(t, want, got)\n\t}\n\n}\n"
+    },
+    {
+      "path": "go.mod",
+      "sha": null,
+      "content_sha256": "beca2f3ddeeef0b52e010159af2ffc8c88469517b61836e15d8ea5b4002a5a60",
+      "score": 85,
+      "content": "module github.com/ConnectAI-E/Feishu-EX-ChatGPT\n\ngo 1.20\n\nrequire (\n\tgithub.com/agi-cn/llmplugin v0.4.3\n\tgithub.com/gin-gonic/gin v1.9.0\n\tgithub.com/google/uuid v1.3.0\n\tgithub.com/joho/godotenv v1.5.1\n\tgithub.com/larksuite/oapi-sdk-gin v1.0.0\n\tgithub.com/larksuite/oapi-sdk-go/v3 v3.0.20\n\tgithub.com/patrickmn/go-cache v2.1.0+incompatible\n\tgithub.com/sashabaranov/go-openai v1.9.4\n\tgithub.com/sirupsen/logrus v1.9.0\n\tgithub.com/stretchr/testify v1.8.2\n)\n\nrequire (\n\tcloud.google.com/go/compute v1.19.1 // indirect\n\tcloud.google.com/go/compute/metadata v0.2.3 // indirect\n\tgithub.com/bytedance/sonic v1.8.7 // indirect\n\tgithub.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect\n\tgithub.com/davecgh/go-spew v1.1.1 // indirect\n\tgithub.com/gin-contrib/sse v0.1.0 // indirect\n\tgithub.com/go-playground/locales v0.14.1 // indirect\n\tgithub.com/go-playground/universal-translator v0.18.1 // indirect\n\tgithub.com/go-playground/validator/v10 v10.12.0 // indirect\n\tgithub.com/goccy/go-json v0.10.2 // indirect\n\tgithub.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect\n\tgithub.com/golang/protobuf v1.5.3 // indirect\n\tgithub.com/google/s2a-go v0.1.2 // indirect\n\tgithub.com/googleapis/enterprise-certificate-proxy v0.2.3 // indirect\n\tgithub.com/googleapis/gax-go/v2 v2.8.0 // indirect\n\tgithub.com/json-iterator/go v1.1.12 // indirect\n\tgithub.com/klauspost/cpuid/v2 v2.2.4 // indirect\n\tgithub.com/leodido/go-urn v1.2.3 // indirect\n\tgithub.com/mattn/go-isatty v0.0.18 // indirect\n\tgithub.com/mnogu/go-calculator v0.0.1 // indirect\n\tgithub.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect\n\tgithub.com/modern-go/reflect2 v1.0.2 // indirect\n\tgithub.com/pelletier/go-toml/v2 v2.0.7 // indirect\n\tgithub.com/pkg/errors v0.9.1 // indirect\n\tgithub.com/pmezard/go-difflib v1.0.0 // indirect\n\tgithub.com/twitchyliquid64/golang-asm v0.15.1 // indirect\n\tgithub.com/ugorji/go/codec v1.2.11 // indirect\n\tgo.opencensus.io v0.24.0 // indirect\n\tgolang.org/x/arch v0.3.0 // indirect\n\tgolang.org/x/crypto v0.8.0 // indirect\n\tgolang.org/x/net v0.9.0 // indirect\n\tgolang.org/x/oauth2 v0.7.0 // indirect\n\tgolang.org/x/sys v0.8.0 // indirect\n\tgolang.org/x/text v0.9.0 // indirect\n\tgoogle.golang.org/api v0.120.0 // indirect\n\tgoogle.golang.org/appengine v1.6.7 // indirect\n\tgoogle.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect\n\tgoogle.golang.org/grpc v1.54.0 // indirect\n\tgoogle.golang.org/protobuf v1.30.0 // indirect\n\tgopkg.in/yaml.v3 v3.0.1 // indirect\n)\n"
+    },
+    {
+      "path": "fly.toml",
+      "sha": null,
+      "content_sha256": "dd32d663e5918fc696f35d8723ad21226da91d6985d39aa9c447942d195fd162",
+      "score": 35,
+      "content": "# fly.toml app configuration file generated for feishuex-bot on 2023-04-30T21:30:33+08:00\n#\n# See https://fly.io/docs/reference/configuration/ for information about how to use this file.\n#\n\napp = \"feishuex-bot\"\nprimary_region = \"hkg\"\n\n[build]\n  builder = \"paketobuildpacks/builder:base\"\n  buildpacks = [\"gcr.io/paketo-buildpacks/go\"]\n\n[env]\n  PORT = \"8080\"\n\n[http_service]\n  internal_port = 8080\n  force_https = true\n  auto_stop_machines = true\n  auto_start_machines = true\n"
+    },
+    {
+      "path": "cmd/main.go",
+      "sha": null,
+      "content_sha256": "ce7407d4e5a11ed02285ac1b9b8b56710075324dd29011a4ab3c1ec2b5032688",
+      "score": 33,
+      "content": "package main\n\nimport (\n\t\"os\"\n\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/domain\"\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/repo/feishu\"\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/server\"\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/service\"\n\n\t\"github.com/agi-cn/llmplugin\"\n\t\"github.com/joho/godotenv\"\n\tsdkginext \"github.com/larksuite/oapi-sdk-gin\"\n\tlark \"github.com/larksuite/oapi-sdk-go/v3\"\n\t\"github.com/larksuite/oapi-sdk-go/v3/event/dispatcher\"\n\t\"github.com/sirupsen/logrus\"\n)\n\nfunc main() {\n\tlogrus.SetLevel(logrus.DebugLevel)\n\n\tif err := godotenv.Load(); err != nil {\n\t\tlogrus.Warnf(\"load env failed: %v\", err)\n\t}\n\n\tvar (\n\t\tfeishuAppID       = os.Getenv(\"FEISHU_APP_ID\")\n\t\tfeishuAppSecret   = os.Getenv(\"FEISHU_APP_SECRET\")\n\t\tbotname           = os.Getenv(\"BOT_NAME\")\n\t\tfeishuVerifyToken = os.Getenv(\"VERIFY_TOKEN\")\n\t\tfeishuEncryptKey  = os.Getenv(\"ENCRYPT_KEY\")\n\n\t\tport = os.Getenv(\"HTTP_PORT\")\n\t)\n\n\tif port == \"\" {\n\t\tport = \":8080\"\n\t}\n\n\tvar feishuer domain.Feishuer\n\t{ // feishu client\n\t\tfeishuClient := lark.NewClient(feishuAppID, feishuAppSecret)\n\t\tfeishuer = feishu.NewFeishu(feishuClient)\n\t}\n\n\tvar llm domain.LLMer\n\t{ // llm client\n\t\tllm = newLLM()\n\t}\n\n\tvar llmManager *llmplugin.PluginManager\n\t{ // make sure the os env loaded.\n\t\tllmManager = newLLMPluginManager()\n\t}\n\n\tfeishuEx, err := domain.NewFeishuEx(\n\t\tfeishuer,\n\n\t\tdomain.WithActions(\n\t\t\tdomain.NewProcessUniqueAction(),\n\t\t\tdomain.NewHelperAction(),\n\t\t\tdomain.NewProcessMentionAction(botname),\n\t\t\tdomain.NewMessageAction(llm),\n\n\t\t\tdomain.NewPluginAction(llmManager),\n\n\t\t\tdomain.NewFinalReply(\"摸鱼中，稍后重试\"),\n\t\t),\n\t)\n\tif err != nil {\n\t\tlogrus.Fatalf(\"FeishuEx init failed: %v\", err)\n\t}\n\n\tservice := service.NewFeishuExService(feishuEx)\n\n\tfeishuDispatcher := dispatcher.NewEventDispatcher(feishuVerifyToken, feishuEncryptKey).\n\t\tOnP2MessageReceiveV1(service.HandleMessageReceive)\n\n\tr := server.NewHTTPServer()\n\tr.POST(\"/webhook/event\", sdkginext.NewEventHandlerFunc(feishuDispatcher))\n\n\tlogrus.Fatal(r.Run(port))\n}\n"
+    },
+    {
+      "path": "internal/server/http.go",
+      "sha": null,
+      "content_sha256": "cc61a9850cdcdf8b8a8bfadcea45ede855eb597e899056fa2016eb32b0f4302b",
+      "score": 31,
+      "content": "package server\n\nimport (\n\t\"net/http\"\n\n\t\"github.com/gin-gonic/gin\"\n)\n\nfunc NewHTTPServer() *gin.Engine {\n\tr := gin.Default()\n\n\tr.GET(\"/\", func(ctx *gin.Context) {\n\t\tctx.JSON(http.StatusOK, gin.H{\n\t\t\t\"result\": true,\n\t\t})\n\t})\n\n\treturn r\n}\n"
+    },
+    {
+      "path": "pkg/consts/consts.go",
+      "sha": null,
+      "content_sha256": "52c4cdc3b8f3a7de23474536af28b337d9302fb2d0f82d6dceb0020eaf946f15",
+      "score": 31,
+      "content": "package consts\n\n// ChatType\ntype ChatType string\n\nfunc (c ChatType) IsGroupChatType() bool {\n\treturn c == \"group\"\n}\n\nfunc (c ChatType) IsUserChatType() bool {\n\treturn c == \"p2p\"\n}\n\nconst (\n\tChatTypeGroup ChatType = \"group\"\n\tChatTypeUser  ChatType = \"personal\"\n)\n"
+    },
+    {
+      "path": "pkg/escape/escape.go",
+      "sha": null,
+      "content_sha256": "787122fbfdc65b780e061e872e81790d36cf509ca1247611029f7aa5d858acdf",
+      "score": 31,
+      "content": "package escape\n\n// String 进行转义处理。\nfunc String(in string) string {\n\n\tout := \"\"\n\tfor _, r := range in {\n\t\tswitch r {\n\t\tcase '\\n':\n\t\t\tout += \"\\\\n\"\n\t\tcase '\\t':\n\t\t\tout += \"\\\\t\"\n\t\tcase '\\\\':\n\t\t\tout += \"\\\\\\\\\"\n\t\tcase '\"':\n\t\t\tout += \"\\\\\\\"\"\n\t\tdefault:\n\t\t\tout += string(r)\n\t\t}\n\t}\n\treturn out\n}\n"
+    },
+    {
+      "path": "internal/service/feishuex_service.go",
+      "sha": null,
+      "content_sha256": "b6696780ae7ddcc63b50dbcf69c99887f407ba72450b71414023f4ab2be6bc22",
+      "score": 31,
+      "content": "package service\n\nimport (\n\t\"context\"\n\t\"runtime/debug\"\n\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/domain\"\n\t\"github.com/sirupsen/logrus\"\n\n\tlarkim \"github.com/larksuite/oapi-sdk-go/v3/service/im/v1\"\n)\n\ntype FeishuExService struct {\n\tfeishuEx *domain.FeishuEx\n}\n\nfunc NewFeishuExService(feishuEx *domain.FeishuEx) *FeishuExService {\n\treturn &FeishuExService{\n\t\tfeishuEx: feishuEx,\n\t}\n}\n\nfunc (s *FeishuExService) HandleMessageReceive(ctx context.Context, receive *larkim.P2MessageReceiveV1) error {\n\tdefer func() {\n\t\tif r := recover(); r != nil {\n\t\t\tlogrus.Errorf(\"HandleMessageReceive: recover: %v\\n%s\", r, debug.Stack())\n\t\t}\n\n\t}()\n\n\tlarkMessage := (*domain.LarkMessage)(receive.Event.Message)\n\n\treturn s.feishuEx.HandleMessageReceive(ctx, larkMessage)\n}\n"
+    },
+    {
+      "path": "internal/domain/feishu.go",
+      "sha": null,
+      "content_sha256": "e1579245fdffe845045cc02b5e81b15f65eb72aa81910c8abc5700dac0006c9a",
+      "score": 31,
+      "content": "package domain\n\nimport \"context\"\n\ntype Feishuer interface {\n\tReply(ctx context.Context, actionResult *ActionResult) error\n}\n"
+    },
+    {
+      "path": "internal/domain/message.go",
+      "sha": null,
+      "content_sha256": "053a051c41d6db566d1ef6e8ec9d17204505a5f37f418404933e08347d3a4308",
+      "score": 31,
+      "content": "package domain\n\nimport (\n\t\"encoding/json\"\n\t\"fmt\"\n\t\"regexp\"\n\t\"strings\"\n\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/pkg/consts\"\n\n\tlarkim \"github.com/larksuite/oapi-sdk-go/v3/service/im/v1\"\n)\n\nvar reTrimMentionText = regexp.MustCompile(`@[^ ]*`)\n\ntype LarkMessage larkim.EventMessage\n\nfunc (m LarkMessage) ID() string {\n\treturn *m.MessageId\n}\n\nfunc (m LarkMessage) IsMentionAt(name string) bool {\n\n\tfor _, mention := range m.Mentions {\n\n\t\tif *mention.Name == name {\n\t\t\treturn true\n\t\t}\n\t}\n\n\treturn false\n}\n\nfunc (m LarkMessage) GetChatType() consts.ChatType {\n\treturn consts.ChatType(*m.ChatType)\n}\n\nfunc (m LarkMessage) GetText() string {\n\n\tcontent := m.parseContent()\n\n\treturn strings.TrimSpace(content)\n}\n\nfunc (m LarkMessage) parseContent() string {\n\tcontent := *m.Content\n\n\t//\"{\\\"text\\\":\\\"@_user_1  hahaha\\\"}\",\n\t//only get text content hahaha\n\tvar contentMap map[string]interface{}\n\terr := json.Unmarshal([]byte(content), &contentMap)\n\tif err != nil {\n\t\tfmt.Println(err)\n\t}\n\tif contentMap[\"text\"] == nil {\n\t\treturn \"\"\n\t}\n\ttext := contentMap[\"text\"].(string)\n\treturn m.trimMentionText(text)\n}\n\nfunc (m LarkMessage) trimMentionText(msg string) string {\n\t//replace @到下一个非空的字段 为 ''\n\treturn reTrimMentionText.ReplaceAllString(msg, \"\")\n}\n"
+    },
+    {
+      "path": "internal/domain/feishuex.go",
+      "sha": null,
+      "content_sha256": "8e370b97b841467fdb78e1afa0f0f9e3545a670676031c38aca04c1bd3e7f80e",
+      "score": 31,
+      "content": "package domain\n\nimport (\n\t\"context\"\n\t\"errors\"\n\n\t\"github.com/sirupsen/logrus\"\n)\n\ntype FeishuEx struct {\n\tactions  []Action\n\tfeishuer Feishuer\n}\n\ntype FeishuExOption func(*FeishuEx)\n\n// WithAction 添加单个处理流程\nfunc WithAction(action Action) FeishuExOption {\n\treturn func(fe *FeishuEx) {\n\t\tfe.actions = append(fe.actions, action)\n\t}\n}\n\n// WithActions 添加多个处理流程\nfunc WithActions(actions ...Action) FeishuExOption {\n\treturn func(fe *FeishuEx) {\n\t\tfe.actions = append(fe.actions, actions...)\n\t}\n}\n\nfunc NewFeishuEx(feishuer Feishuer, opts ...FeishuExOption) (*FeishuEx, error) {\n\tfeishuEx := &FeishuEx{\n\t\tfeishuer: feishuer,\n\t\tactions:  make([]Action, 0, 8),\n\t}\n\n\tfor _, opt := range opts {\n\t\topt(feishuEx)\n\t}\n\n\tif err := feishuEx.checkInitSucc(); err != nil {\n\t\treturn nil, err\n\t}\n\n\treturn feishuEx, nil\n}\n\nfunc (f *FeishuEx) checkInitSucc() error {\n\tif len(f.actions) == 0 {\n\t\treturn errors.New(\"empty actions\")\n\t}\n\n\treturn nil\n}\n\nfunc (f *FeishuEx) HandleMessageReceive(ctx context.Context, msg *LarkMessage) error {\n\tactionInfo := f.makeActionInfo(msg)\n\n\tif err := f.processActionInfo(ctx, actionInfo); err != nil {\n\t\tlogrus.Errorf(\"process action_info error: %v\", err)\n\t\treturn err\n\t}\n\n\treturn f.sendReplyMessage(ctx, actionInfo.Result)\n}\n\nfunc (f *FeishuEx) makeActionInfo(msg *LarkMessage) *ActionInfo {\n\treturn &ActionInfo{\n\t\tMessage: msg,\n\t}\n}\n\nfunc (f *FeishuEx) processActionInfo(ctx context.Context, actionInfo *ActionInfo) error {\n\n\tfor _, action := range f.actions {\n\t\tnext, err := action.Execute(ctx, actionInfo)\n\t\tif err != nil {\n\t\t\tlogrus.Errorf(\"action execute error: %v\", err)\n\t\t\treturn err\n\t\t}\n\t\tif !next {\n\t\t\treturn nil\n\t\t}\n\n\t\tif actionInfo.ExistsResult() {\n\t\t\treturn nil\n\t\t}\n\t}\n\n\treturn nil\n}\n\nfunc (f *FeishuEx) sendReplyMessage(ctx context.Context, actionResult *ActionResult) error {\n\t// NOTE(zy): 这里有可能是没有结果，也有可能是重复消息处理。\n\tif actionResult == nil {\n\t\tlogrus.Warnf(\"sendReplyMessage: reply failed, nil reply message\")\n\t\treturn nil\n\t}\n\n\treturn f.feishuer.Reply(ctx, actionResult)\n}\n"
+    },
+    {
+      "path": "internal/repo/feishu/reply_message.go",
+      "sha": null,
+      "content_sha256": "d73d60e697c683e291890d5dbb744ae9a3203ca85846eec33dd98d500ae9deec",
+      "score": 29,
+      "content": "package feishu\n\nimport (\n\t\"encoding/json\"\n\t\"strings\"\n\n\t\"github.com/google/uuid\"\n\tlarkcard \"github.com/larksuite/oapi-sdk-go/v3/card\"\n\tlarkim \"github.com/larksuite/oapi-sdk-go/v3/service/im/v1\"\n)\n\n// type ReplyMessage larkim.ReplyMessageReq\n\nfunc MakeSimpleReply(replyMessageID string, message string) *larkim.ReplyMessageReq {\n\n\tcontent := larkim.NewTextMsgBuilder().\n\t\tText(message).Build()\n\n\treply := larkim.NewReplyMessageReqBuilder().\n\t\tMessageId(replyMessageID).Body(\n\t\tlarkim.NewReplyMessageReqBodyBuilder().\n\t\t\tMsgType(larkim.MsgTypeText).\n\t\t\tUuid(uuid.New().String()).\n\t\t\tContent(content).\n\t\t\tBuild()).\n\t\tBuild()\n\n\treturn reply\n}\n\nfunc MakeSendHelpCard(messageID string) *larkim.ReplyMessageReq {\n\n\tnewCardContent, _ := newSendCard(\n\t\twithHeader(\"🎒需要帮助吗？\", larkcard.TemplateBlue),\n\t\twithMainMd(\"**我是万能的机器人**\"),\n\t)\n\n\treply := larkim.NewReplyMessageReqBuilder().\n\t\tMessageId(messageID).\n\t\tBody(larkim.NewReplyMessageReqBodyBuilder().\n\t\t\tMsgType(larkim.MsgTypeInteractive).\n\t\t\tUuid(uuid.New().String()).\n\t\t\tContent(newCardContent).\n\t\t\tBuild()).\n\t\tBuild()\n\n\treturn reply\n}\n\nfunc newSendCard(header *larkcard.MessageCardHeader, elements ...larkcard.MessageCardElement) (string, error) {\n\n\tconfig := larkcard.NewMessageCardConfig().\n\t\tWideScreenMode(false).\n\t\tEnableForward(true).\n\t\tUpdateMulti(false).\n\t\tBuild()\n\n\t// 卡片消息体\n\tcardContent, err := larkcard.NewMessageCard().\n\t\tConfig(config).\n\t\tHeader(header).\n\t\tElements(elements).\n\t\tString()\n\treturn cardContent, err\n}\n\n// withSplitLine 用于生成分割线\nfunc withSplitLine() larkcard.MessageCardElement {\n\tsplitLine := larkcard.NewMessageCardHr().\n\t\tBuild()\n\treturn splitLine\n}\n\n// withHeader 用于生成消息头\nfunc withHeader(title string, color string) *larkcard.\n\tMessageCardHeader {\n\tif title == \"\" {\n\t\ttitle = \"🤖️机器人提醒\"\n\t}\n\theader := larkcard.NewMessageCardHeader().\n\t\tTemplate(color).\n\t\tTitle(larkcard.NewMessageCardPlainText().\n\t\t\tContent(title).\n\t\t\tBuild()).\n\t\tBuild()\n\treturn header\n}\n\n// withNote 用于生成纯文本脚注\nfunc withNote(note string) larkcard.MessageCardElement {\n\tnoteElement := larkcard.NewMessageCardNote().\n\t\tElements([]larkcard.MessageCardNoteElement{larkcard.NewMessageCardPlainText().\n\t\t\tContent(note).\n\t\t\tBuild()}).\n\t\tBuild()\n\treturn noteElement\n}\n\n// withMainMd 用于生成markdown消息体\nfunc withMainMd(msg string) larkcard.MessageCardElement {\n\tmsg, i := processMessage(msg)\n\tmsg = processNewLine(msg)\n\tif i != nil {\n\t\treturn nil\n\t}\n\tmainElement := larkcard.NewMessageCardDiv().\n\t\tFields([]*larkcard.MessageCardField{larkcard.NewMessageCardField().\n\t\t\tText(larkcard.NewMessageCardLarkMd().\n\t\t\t\tContent(msg).\n\t\t\t\tBuild()).\n\t\t\tIsShort(true).\n\t\t\tBuild()}).\n\t\tBuild()\n\treturn mainElement\n}\n\nfunc processMessage(msg interface{}) (string, error) {\n\tmsg = strings.TrimSpace(msg.(string))\n\tmsgB, err := json.Marshal(msg)\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\n\tmsgStr := string(msgB)\n\n\tif len(msgStr) >= 2 {\n\t\tmsgStr = msgStr[1 : len(msgStr)-1]\n\t}\n\treturn msgStr, nil\n}\n\nfunc processNewLine(msg string) string {\n\treturn strings.Replace(msg, \"\\\\n\", `\n`, -1)\n}\n"
+    },
+    {
+      "path": "internal/repo/chatgpt/openai.go",
+      "sha": null,
+      "content_sha256": "8e2c9125f49e148bb2ab53bd230c542b4c066763ed709b0e458a4417c6eb0e2b",
+      "score": 29,
+      "content": "package chatgpt\n\nimport (\n\t\"context\"\n\t\"errors\"\n\n\t\"github.com/ConnectAI-E/Feishu-EX-ChatGPT/internal/domain\"\n\n\t\"github.com/sashabaranov/go-openai\"\n)\n\nvar _ domain.LLMer = &ChatGPT{}\n\ntype ChatGPT struct {\n\tmodel  string\n\tclient *openai.Client\n}\n\ntype ChatGPTOption func(c *ChatGPT)\n\nfunc WithModel(model string) ChatGPTOption {\n\treturn func(c *ChatGPT) {\n\t\tc.model = model\n\t}\n}\n\nfunc NewChatGPT(client *openai.Client, opts ...ChatGPTOption) *ChatGPT {\n\n\tchat := &ChatGPT{\n\t\tmodel:  openai.GPT3Dot5Turbo,\n\t\tclient: client,\n\t}\n\n\tfor _, opt := range opts {\n\t\topt(chat)\n\t}\n\n\treturn chat\n}\n\nfunc (c ChatGPT) Chat(ctx context.Context, messages []domain.LlmMessage) (*domain.LlmAnswer, error) {\n\n\tchatGPTMessages := c.makeChatGPTMessage(messages)\n\n\treturn c.send(ctx, chatGPTMessages)\n}\n\nfunc (c ChatGPT) makeChatGPTMessage(messages []domain.LlmMessage) []openai.ChatCompletionMessage {\n\n\tchatGPTMessages := make([]openai.ChatCompletionMessage, 0, len(messages))\n\tfor _, m := range messages {\n\t\tchatGPTMessages = append(chatGPTMessages, openai.ChatCompletionMessage{\n\t\t\tRole:    m.Role,\n\t\t\tContent: m.Content,\n\t\t})\n\t}\n\n\treturn chatGPTMessages\n}\n\nfunc (c ChatGPT) send(ctx context.Context, messages []openai.ChatCompletionMessage) (*domain.LlmAnswer, error) {\n\n\tresp, err := c.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{\n\t\tModel:    c.model,\n\t\tMessages: messages,\n\t})\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tif choices := resp.Choices; len(choices) == 0 {\n\t\treturn nil, errors.New(\"got empty ChatGPT response\")\n\t}\n\n\tanswer := c.convertLlmAnswer(resp)\n\treturn answer, nil\n}\n\nfunc (c ChatGPT) convertLlmAnswer(openaiResp openai.ChatCompletionResponse) *domain.LlmAnswer {\n\n\tchoices := openaiResp.Choices[0]\n\n\treturn &domain.LlmAnswer{\n\t\tRole:    choices.Message.Role,\n\t\tContent: choices.Message.Content,\n\t}\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:46:41.296541+00:00"
+}

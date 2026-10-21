@@ -1,0 +1,198 @@
+{
+  "canonical_source": "github:google/skill-reach",
+  "repo": "google/skill-reach",
+  "revision_sha": "89174fa86c30e5a4b415587d2796da6c98d547f6",
+  "default_branch": "main",
+  "pushed_at": "2026-10-18T18:31:07Z",
+  "repo_updated_at": "2026-10-18T21:04:40Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "agent-skills",
+    "evaluation"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "3ffc84b13e1979b72542ebfefc0e1e48e27bdd476b4a329e3729d0a79aeb3356",
+      "score": 198,
+      "content": "# Copyright 2026 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nname: CI\n\non:\n  push:\n    branches: [main]\n  pull_request:\n\njobs:\n  check:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    strategy:\n      matrix:\n        python-version: [\"3.12\", \"3.14\"]\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Install uv\n        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # ratchet:astral-sh/setup-uv@v10.3.0\n        with:\n          version: \"latest-known\"\n          enable-cache: true\n          python-version: ${{ matrix.python-version }}\n\n      - name: Install dependencies\n        run: uv sync --locked --all-groups --all-extras\n\n      - name: Test\n        run: uv run pytest -q\n\n      - name: Run Integration Tests\n        run: uv run pytest -q -m integration\n\n      - name: Verify documentation\n        env:\n          NO_MKDOCS_2_WARNING: \"1\"\n        run: uv run mkdocs build --strict\n\n      - name: Setup Node.js\n        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # ratchet:actions/setup-node@v7.1.0\n        with:\n          node-version: \"24\"\n          cache: \"npm\"\n\n      - name: Install Node.js dependencies\n        run: npm ci\n\n      - name: Check web assets with Biome\n        run: npx --no-install biome ci\n\n      - name: Check Markdown formatting\n        run: npx --no-install prettier --check \"**/*.md\"\n\n      - name: Lint\n        run: uv run ruff check .\n\n      - name: Format\n        run: uv run ruff format --check .\n\n      - name: Type check\n        run: uv run ty check\n"
+    },
+    {
+      "path": "tests/test_models.py",
+      "sha": null,
+      "content_sha256": "594093ab860e8e0b5b0d5e1606d0c5173898200696a6d99df10674ab9d070def",
+      "score": 168,
+      "content": "# Copyright 2026 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n\"\"\"Verify Query and ProbeResult models.\"\"\"\n\nfrom __future__ import annotations\n\nimport pytest\nfrom pydantic import ValidationError\n\nfrom reach.models import (\n    NO_SKILL,\n    Catalog,\n    CatalogMode,\n    ProbeResult,\n    Query,\n    QueryKind,\n)\nfrom reach.runtime import SelectionOutcome\n\n\ndef test_query_attributes_and_out_of_scope() -> None:\n    \"\"\"Verify Query stores expected_skill, computes properties, and handles out-of-scope.\"\"\"\n    q = Query(\n        query_id=\"q1\",\n        text=\"Deploy the app\",\n        expected_skill=\"cloud-run-deploy\",\n    )\n    assert q.query_id == \"q1\"\n    assert q.text == \"Deploy the app\"\n    assert q.expected_skill == \"cloud-run-deploy\"\n    assert q.truth_label == \"cloud-run-deploy\"\n    assert not q.is_out_of_scope\n\n    q_oos = Query(query_id=\"q3\", text=\"What is the weather?\", kind=QueryKind.OUT_OF_SCOPE)\n    assert q_oos.is_out_of_scope\n    assert q_oos.truth_label == NO_SKILL\n\n\ndef test_probe_result_invoked_skill_property() -> None:\n    \"\"\"Verify ProbeResult exposes invoked_skill as property over invoked_skills.\"\"\"\n    res1 = ProbeResult(\n        query_id=\"q1\",\n        catalog_id=\"cat1\",\n        catalog_mode=CatalogMode.ALL,\n        catalog_size=5,\n        model=\"test-model\",\n        runtime=\"test-runtime\",\n        invoked_skills=(\"gcloud-auth\", \"cloud-run-deploy\"),\n    )\n    assert res1.invoked_skills == (\"gcloud-auth\", \"cloud-run-deploy\")\n    assert res1.invoked_skill == \"gcloud-auth\"\n    assert res1.selected is True\n    assert res1.predicted_label == \"gcloud-auth\"\n\n    res2 = ProbeResult(\n        query_id=\"q2\",\n        catalog_id=\"cat1\",\n        catalog_mode=CatalogMode.ALL,\n        catalog_size=5,\n        model=\"test-model\",\n        runtime=\"test-runtime\",\n    )\n    assert res2.invoked_skills == ()\n    assert res2.invoked_skill is None\n    assert res2.selected is False\n    assert res2.predicted_label == NO_SKILL\n\n\ndef test_probe_result_from_outcome() -> None:\n    \"\"\"Verify ProbeResult.from_outcome converts SelectionOutcome into a ProbeResult.\"\"\"\n    from reach.models import Catalog, Provenance\n\n    q = Query(query_id=\"q1\", text=\"Deploy app\", expected_skill=\"deploy\")\n    cat = Catalog(id=\"cat1\", mode=CatalogMode.ALL, skills=(\"deploy\", \"build\"))\n    outcome = SelectionOutcome(\n        invoked_skills=(\"deploy\",),\n        resolved_model=\"gemini-flash\",\n        observed_catalog=(\"deploy\", \"build\"),\n        cost_usd=0.002,\n        duration_ms=450,\n        reasoning=(\"Selected deploy skill\",),\n    )\n    prov = Provenance(config_fingerprint=\"fp123\", corpus_digest=\"cd456\")\n    result = ProbeResult.from_outcome(\n        outcome=outcome,\n        query=q,\n        catalog=cat,\n        runtime_name=\"fake\",\n        model=\"fake-model\",\n        attempt=2,\n        provenance=prov,\n    )\n    assert result.query_id == \"q1\"\n    assert result.catalog_id == \"cat1\"\n    assert result.catalog_size == 2\n    assert result.invoked_skill == \"deploy\"\n    assert result.invoked_skills == (\"deploy\",)\n    assert result.runtime == \"fake\"\n    assert result.model == \"fake-model\"\n    assert result.resolved_model == \"gemini-flash\"\n    assert result.attempt == 2\n    assert result.config_fingerprint == \"fp123\"\n    assert result.corpus_digest == \"cd456\"\n    assert result.cost_usd == 0.002\n    assert result.duration_ms == 450\n    assert result.error is None\n    assert result.selected is True\n    assert result.predicted_label == \"deploy\"\n\n\ndef test_catalog_rejects_duplicate_skills() -> None:\n    \"\"\"Verify Catalog model rejects duplicate skill names.\"\"\"\n    with pytest.raises(ValueError, match=\"duplicate\"):\n        Catalog(\n            id=\"cat-dup\",\n            mode=CatalogMode.ALL,\n            skills=(\"skill-a\", \"skill-b\", \"skill-a\"),\n        )\n\n\ndef test_skill_requires_non_empty_name_and_description() -> None:\n    \"\"\"Verify Skill StringConstraints reject whitespace-only name or description and strip name.\"\"\"\n    from pathlib import Path\n\n    from reach.models import Skill\n\n    with pytest.raises(ValidationError, match=\"name\"):\n        Skill(name=\"   \", description=\"Valid description.\", path=Path(\"SKILL.md\"))\n\n    with pytest.raises(ValidationError, match=\"description\"):\n        Skill(name=\"s\", description=\"   \", path=Path(\"SKILL.md\"))\n\n    stripped = Skill(name=\"  deploy  \", description=\"  Valid description.  \", path=Path(\"SKILL.md\"))\n    assert stripped.name == \"deploy\"\n    assert stripped.description == \"  Valid description.  \"\n\n\ndef test_query_acceptable_skills() -> None:\n    \"\"\"Verify Query accepts optional acceptable_skills as sequence of skill names.\"\"\"\n    q_default = Query(query_id=\"q1\", text=\"Deploy app\", expected_skill=\"deploy\")\n    assert q_default.acceptable_skills == ()\n\n    q_with_list = Query.model_validate(\n        {\n            \"query_id\": \"q2\",\n            \"text\": \"Deploy app\",\n            \"expected_skill\": \"deploy\",\n            \"acceptable_skills\": [\"cloud-run-deploy\", \"app-engine-deploy\"],\n        }\n    )\n    assert q_with_list.acceptable_skills == (\"cloud-run-deploy\", \"app-engine-deploy\")\n"
+    },
+    {
+      "path": "tests/runtime/test_agent_preflight.py",
+      "sha": null,
+      "content_sha256": "8b79f1f0c1c9542310b93fa65620103e47720ecaa7aa990baf629752714da9a6",
+      "score": 166,
+      "content": "# Copyright 2026 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n\"\"\"Verify live agent runtime preflight, CLI execution, sandbox isolation, and skill discovery.\"\"\"\n\nfrom __future__ import annotations\n\nimport json\nimport shutil\nfrom typing import TYPE_CHECKING\n\nimport pytest\n\nfrom reach.cli.doctor import (\n    _check_cli_binary,\n    _check_google_adc,\n    _check_python,\n    _check_skills,\n)\nfrom reach.runtime import CliAgentRuntime, RuntimeSettings, build_runtime\nfrom reach.runtime._subprocess import run_subprocess_probe\nfrom reach.runtime.claude_code import ClaudeCodeRuntime\n\nif TYPE_CHECKING:\n    from pathlib import Path\n\npytestmark = pytest.mark.integration\n\n#: Registered CLI agent runtime names and their primary command-line binary names.\nCLI_AGENTS: tuple[tuple[str, str], ...] = (\n    (\"claude-code\", \"claude\"),\n    (\"goose\", \"goose\"),\n    (\"pi\", \"pi\"),\n    (\"antigravity-cli\", \"antigravity\"),\n)\n\n\n@pytest.mark.parametrize((\"agent_name\", \"executable\"), CLI_AGENTS)\ndef test_agent_binary_isolated_execution(\n    agent_name: str,\n    executable: str,\n    tmp_path: Path,\n) -> None:\n    \"\"\"Verify agent binary executes under Reach's isolated environment without consuming tokens.\"\"\"\n    if not shutil.which(executable):\n        pytest.skip(f\"Agent binary {executable!r} not installed in PATH\")\n\n    runtime = build_runtime(RuntimeSettings(agent=agent_name))\n    assert isinstance(runtime, CliAgentRuntime)\n\n    workdir = tmp_path / f\"work_{agent_name}\"\n    workdir.mkdir()\n\n    env = runtime.build_env(workdir)\n\n    # 1. Verify isolated configuration directory is created with private 0o700 permissions\n    iso_dir = runtime.effective_isolation_dir(workdir)\n    if iso_dir is not None:\n        assert iso_dir.is_dir()\n        assert (iso_dir.stat().st_mode & 0o777) == 0o700\n\n    # 2. Execute binary --version using Reach's isolated environment\n    completed, err = run_subprocess_probe(\n        [executable, \"--version\"],\n        workdir=workdir,\n        env=env,\n        timeout_s=5.0,\n    )\n\n    assert err is None, f\"Subprocess probe failed with error: {err}\"\n    assert completed is not None\n    assert completed.returncode == 0, f\"Command exited {completed.returncode}:\\n{completed.stderr}\"\n    assert len(completed.stdout.strip()) > 0, \"Expected version string in stdout\"\n\n    # 3. Verify clean post-probe teardown\n    runtime.post_probe(workdir)\n\n\n@pytest.mark.parametrize((\"agent_name\", \"executable\"), CLI_AGENTS)\ndef test_agent_cli_help_and_flag_compatibility(\n    agent_name: str,\n    executable: str,\n    tmp_path: Path,\n) -> None:\n    \"\"\"Verify agent binary accepts CLI help flags under Reach's execution environment.\"\"\"\n    if not shutil.which(executable):\n        pytest.skip(f\"Agent binary {executable!r} not installed in PATH\")\n\n    runtime = build_runtime(RuntimeSettings(agent=agent_name))\n    workdir = tmp_path / f\"work_{agent_name}\"\n    workdir.mkdir()\n    env = runtime.build_env(workdir)\n\n    completed, err = run_subprocess_probe(\n        [executable, \"--help\"],\n        workdir=workdir,\n        env=env,\n        timeout_s=5.0,\n    )\n\n    assert err is None, f\"Help probe failed with error: {err}\"\n    assert completed is not None\n    assert completed.returncode == 0\n    assert len(completed.stdout.strip()) > 0\n\n    if isinstance(runtime, ClaudeCodeRuntime):\n        cmd = runtime.build_command(\"preflight-query\")\n        assert \"--output-format\" in cmd\n        assert \"stream-json\" in cmd\n        assert \"--verbose\" in cmd\n        assert \"--strict-mcp-config\" in cmd\n        assert \"--no-session-persistence\" in cmd\n        settings_str = runtime.options.settings_json()\n        if settings_str is not None:\n            parsed = json.loads(settings_str)\n            assert isinstance(parsed, dict)\n\n\ndef test_doctor_diagnostics_live(synthetic_skills_repo: Path) -> None:\n    \"\"\"Verify reach doctor diagnostics report accurate binary, ADC, and skill status.\"\"\"\n    py_check = _check_python()\n    assert py_check.status == \"ok\"\n\n    for _, exe in CLI_AGENTS:\n        result = _check_cli_binary(exe, exe, \"runtime\")\n        exe_path = shutil.which(exe)\n        if exe_path is not None:\n            assert result.status == \"ok\"\n            assert exe_path in result.detail\n        else:\n            assert result.status == \"warn\"\n\n    adc_check = _check_google_adc()\n    assert adc_check.status in (\"ok\", \"warn\")\n\n    skills_check = _check_skills(synthetic_skills_repo.parent)\n    assert skills_check.status in (\"ok\", \"warn\")\n"
+    },
+    {
+      "path": "docs/api/overlap.md",
+      "sha": null,
+      "content_sha256": "83c784a0d1ec7e633d05fd8f7aecd3d7c050f6ac6ddbc5c5a5968e983ad7abb1",
+      "score": 141,
+      "content": "# `reach.overlap`\n\nRank and analyze lexical overlap between skill descriptions using BM25.\n\n<!-- prettier-ignore -->\n::: reach.overlap\n    options:\n      show_root_heading: false\n      members:\n        - compete\n        - Competition\n        - CorpusOverlap\n        - rank_corpus\n        - Rival\n        - Standing\n"
+    },
+    {
+      "path": "docs/api/retrieval.md",
+      "sha": null,
+      "content_sha256": "aa02d3dfa422f761e11878d0fc1cfb3c2105b41e125eeab4d238de0a313219bd",
+      "score": 141,
+      "content": "# `reach.retrieval`\n\nLexical, dense embedding, and hybrid retrieval scorers for skill selection modeling.\n\n<!-- prettier-ignore -->\n::: reach.retrieval\n    options:\n      show_root_heading: false\n      members:\n        - Bm25Scorer\n        - build_scorer\n        - classify_overlap_quadrant\n        - DenseScorer\n        - HybridScorer\n        - OverlapQuadrant\n        - Scorer\n        - TextScorer\n"
+    },
+    {
+      "path": "docs/api/registry.md",
+      "sha": null,
+      "content_sha256": "98416beadf4f3f4e6e2bd88a02beb7e16c9c1a971caec4b71a016e4ce158c19a",
+      "score": 141,
+      "content": "# `reach.registry`\n\nGoogle Cloud Agent Registry client and skill manifest models.\n\n<!-- prettier-ignore -->\n::: reach.registry\n    options:\n      show_root_heading: false\n      members:\n        - AuthenticationError\n        - NotFoundError\n        - PermissionDeniedError\n        - RegistryClient\n        - RegistryError\n        - RegistryManifest\n        - RegistrySkillData\n        - ServiceDisabledError\n"
+    },
+    {
+      "path": "docs/api/check.md",
+      "sha": null,
+      "content_sha256": "4a13010fcfc00fc7862e6ae37711de909f7bf8ab3ab3e224fb4a3997920e1416",
+      "score": 141,
+      "content": "# `reach.check`\n\nTwo-stage CI/CD regression check and quality gate orchestration.\n\n<!-- prettier-ignore -->\n::: reach.check\n    options:\n      show_root_heading: false\n      members:\n        - changed_skills\n        - CheckAssertion\n        - CheckOutcome\n        - CheckStage\n        - EmpiricalMetrics\n        - run_check\n"
+    },
+    {
+      "path": "docs/api/queries.md",
+      "sha": null,
+      "content_sha256": "73450fa89ee6946a4281596b9cf053482ce8d5dfb9c3b2e687b18485413ca4f2",
+      "score": 141,
+      "content": "# `reach.queries`\n\nLoad, save, and validate labeled evaluation query sets and calculate digests.\n\n<!-- prettier-ignore -->\n::: reach.queries\n    options:\n      show_root_heading: false\n      members:\n        - load_query_set\n        - Origin\n        - query_set_digest\n        - QuerySet\n        - QuerySetProvenance\n        - save_query_set\n"
+    },
+    {
+      "path": "docs/api/models.md",
+      "sha": null,
+      "content_sha256": "77d4dd68f1412cb0108468681db289817e9c92248497b7a9a83d729d700ce0d4",
+      "score": 141,
+      "content": "# `reach.models`\n\nDomain representations for skills, catalogs, queries, and probe results.\n\n<!-- prettier-ignore -->\n::: reach.models\n    options:\n      show_root_heading: false\n      members:\n        - Catalog\n        - CatalogMode\n        - DisclosureState\n        - InvocationPattern\n        - NO_SKILL\n        - ProbeResult\n        - Provenance\n        - Query\n        - QueryKind\n        - Skill\n"
+    },
+    {
+      "path": "docs/api/cluster.md",
+      "sha": null,
+      "content_sha256": "126dfcb982de36ad4f2fd4eab8445233496dba8e2cdb7ca8eab46e4fb89a5124",
+      "score": 141,
+      "content": "# `reach.cluster`\n\nModularity-based skill clustering for subagent catalog scoping.\n\n<!-- prettier-ignore -->\n::: reach.cluster\n    options:\n      show_root_heading: false\n      members:\n        - cluster_skills\n        - ClusterPartition\n        - SkillCluster\n"
+    },
+    {
+      "path": "docs/api/diff.md",
+      "sha": null,
+      "content_sha256": "0afa3457cbd70453d77cd8d9d5b5a983fadff0a12e880922061d5b742d07d40f",
+      "score": 141,
+      "content": "# `reach.diff`\n\nA/B evaluation diffing between two arms against calibrated noise floors.\n\n<!-- prettier-ignore -->\n::: reach.diff\n    options:\n      show_root_heading: false\n      members:\n        - Arm\n        - ArmSummary\n        - Comparison\n        - Corroboration\n        - diff_arms\n        - diff_runs\n        - Headline\n        - load_arm\n        - QueryDelta\n        - SkillDelta\n        - VaryFactor\n"
+    },
+    {
+      "path": "docs/api/config.md",
+      "sha": null,
+      "content_sha256": "2e336e57d0f120cf7e6614e2f41722e381d578489d0ba08cde30ca5080d6074f",
+      "score": 141,
+      "content": "# `reach.config`\n\nConfiguration models, settings resolution, and path expansions.\n\n<!-- prettier-ignore -->\n::: reach.config\n    options:\n      show_root_heading: false\n      members:\n        - AgentProfile\n        - CatalogSettings\n        - CheckSettings\n        - DiffSettings\n        - DiscoverySettings\n        - GeneralSettings\n        - LintSettings\n        - load_config\n        - OptimizeSettings\n        - OverlapSettings\n        - PlanSettings\n        - QuerySettings\n        - RegistrySettings\n        - RetrievalSettings\n        - RunConfig\n        - RuntimeSettings\n        - Severity\n        - StudySettings\n"
+    },
+    {
+      "path": "docs/api/metrics.md",
+      "sha": null,
+      "content_sha256": "12d8f3d21bf8d3a1c7dc964ecb16f72cdd8a5b8a7acd2f84542e2d10c33dbdc2",
+      "score": 141,
+      "content": "# `reach.metrics`\n\nCompute standard evaluation, classification, routing, and multi-step trajectory metrics for skill selection probes.\n\n---\n\n## Multi-Step Trajectory Routing\n\nModern agent runtimes execute multi-turn conversational trajectories where a task may require entering via one skill, performing a precursor handoff, and terminating at the target capability:\n\n```mermaid\nflowchart LR\n    Query[\"User Query\"] --> E[\"Step 1: Entrypoint Skill<br/>(Entrypoint Accuracy)\"]\n    E -->|Handoff| P[\"Step 2: Precursor Skill\"]\n    P -->|Handoff| T[\"Step 3: Target Capability<br/>(Trajectory Reachability)\"]\n```\n\n---\n\n## Trajectory Metrics\n\nReach evaluates multi-step trajectories against the ground-truth capability target $T$ over the scored trajectory ($\\vec{s}$ after stripping neutral `acceptable_skills`):\n\n| Metric                      |       Symbol        | Definition & Meaning                                                                                                                                                                      |\n| :-------------------------- | :-----------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |\n| **Entrypoint Accuracy**     | $A_{\\text{entry}}$  | Fraction of queries where the **very first** scored skill invoked matches target $T$ ($\\vec{s}_1 = T$, or $\\vec{s} = \\emptyset$ for `out_of_scope` queries).                              |\n| **Trajectory Reachability** |  $R_{\\text{traj}}$  | Fraction of queries where target $T$ is reached anywhere in the scored trajectory ($T \\in \\vec{s}$, or $\\vec{s} = \\emptyset$ for `out_of_scope` queries).                                 |\n| **Step Efficiency (MRR)**   |    $\\text{MRR}$     | Reciprocal rank $\\frac{1}{\\text{step}}$ of the first scored invocation of $T$ for positive queries (`None` / excluded from macro-averages on `out_of_scope` queries).                     |\n| **Skill Selection F1**      |        $F_1$        | Harmonic mean of set-level precision (target reached / unique scored skills invoked) and recall (target reached) for positive queries (`None` on `out_of_scope` queries).                 |\n| **Skill Redundancy**        | $\\text{Redundancy}$ | Excess scored invocations beyond the target: $\\max(0, \\text{len}(\\vec{s}) - 1)$ for positive queries, or $\\text{len}(\\vec{s})$ for `out_of_scope` queries where any invocation is excess. |\n\n---\n\n## API Reference\n\n<!-- prettier-ignore -->\n::: reach.metrics\n    options:\n      show_root_heading: false\n      members:\n        - classification_report\n        - ClassificationReport\n        - classify_invocation_pattern\n        - ClassMetrics\n        - collisions\n        - confusion\n        - consistency\n        - decompose_pass_rate_drop\n        - DecompositionResult\n        - score_trajectory\n        - TrajectoryScore\n"
+    },
+    {
+      "path": "docs/api/sweep.md",
+      "sha": null,
+      "content_sha256": "c09f2a27c80776c5d828d8edea12ca743c612b8db8d61b543a9bad8bb3afed8a",
+      "score": 141,
+      "content": "# `reach.sweep`\n\nExecute multi-scale catalog evaluation sweeps to measure reachability decay and capacity knees.\n\n<!-- prettier-ignore -->\n::: reach.sweep\n    options:\n      show_root_heading: false\n      members:\n        - PairedTrialOutcomes\n        - ReplicateCollisionDiagnostic\n        - run_scaling_sweep\n        - ScalingPoint\n        - ScalingStudy\n"
+    },
+    {
+      "path": "docs/api/catalog.md",
+      "sha": null,
+      "content_sha256": "2f29a692c46ad2f2201fe7a81d2559f87c581a740cc3382bfee8ee9da1a2fa65",
+      "score": 141,
+      "content": "# `reach.catalog`\n\nFilesystem scanning, discovery, and YAML frontmatter parsing routines.\n\n<!-- prettier-ignore -->\n::: reach.catalog\n    options:\n      show_root_heading: false\n      members:\n        - build_catalogs\n        - build_neighborhood_catalogs\n        - build_scaling_catalogs\n        - corpus_digest\n        - load_registry_skills\n        - load_skills\n        - parse_frontmatter\n        - resolve_catalog\n"
+    },
+    {
+      "path": "docs/api/optimize.md",
+      "sha": null,
+      "content_sha256": "9c5383c22afcc516b654bd75a63540da4874b42449e586f0c9d9655cf3742faf",
+      "score": 141,
+      "content": "# `reach.optimize`\n\nClosed-loop skill description optimization using candidate synthesis and empirical probes.\n\n<!-- prettier-ignore -->\n::: reach.optimize\n    options:\n      show_root_heading: false\n      members:\n        - apply_optimization_candidate\n        - CandidateOrigin\n        - CandidateProbeTally\n        - IterationRecord\n        - OptimizationCandidate\n        - OptimizationReport\n        - optimize_skill\n        - ReciprocalHandoff\n"
+    },
+    {
+      "path": "docs/api/run.md",
+      "sha": null,
+      "content_sha256": "91fc513fa4335c0966d091277e3766f1fffdad056645927869e478d9659d98bf",
+      "score": 141,
+      "content": "# `reach.run`\n\nOrchestration engine for conducting evaluation runs, assembling catalogs, and executing probe loops.\n\n<!-- prettier-ignore -->\n::: reach.run\n    options:\n      show_root_heading: false\n      members:\n        - compose\n        - Composition\n        - conduct\n        - evaluate\n        - load_corpus\n        - load_results\n        - Plan\n        - plan_only\n        - ProbeHarness\n        - ProbeOutcomeCacheKey\n        - RunOutcome\n        - write_results\n"
+    },
+    {
+      "path": "docs/api/lint.md",
+      "sha": null,
+      "content_sha256": "8ef7e6065a950988f028e650ec984d67fd9219ae1513f1f516043ce9b4b3a850",
+      "score": 141,
+      "content": "# `reach.lint`\n\nStatic validation engine for skill manifests, frontmatter schemas, naming conventions, and listing budgets.\n\n<!-- prettier-ignore -->\n::: reach.lint\n    options:\n      show_root_heading: false\n      members:\n        - explain_rule\n        - lint_file\n        - lint_skills\n        - lint_tree\n        - LintIssue\n        - LintReport\n        - LintSettings\n        - RuleDefinition\n        - RULES\n        - Severity\n"
+    },
+    {
+      "path": "docs/api/index.md",
+      "sha": null,
+      "content_sha256": "997532b8f9730651d36a3961d9f11eec207c7a261c9ad165f9c2e6172b2d8816",
+      "score": 141,
+      "content": "# Python API Reference\n\n`skill-reach` provides a programmatic Python API for embedding reachability measurement, manifest linting, and automated description optimization into custom tools or workflows.\n\n---\n\n## Top-Level Package (`reach`)\n\nThe most common models and entrypoints are re-exported directly from the top-level `reach` package:\n\n```python\nfrom pathlib import Path\nfrom reach import lint_tree, load_skills\n\nskills = load_skills(Path(\"./skills\"))\nreport = lint_tree(Path(\"./skills\"))\n\nfor issue in report.issues:\n    print(f\"[{issue.rule}] {issue.skill}: {issue.message}\")\n```\n\n---\n\n## Module Index\n\n| Module                                | Description                                                                                      |\n| :------------------------------------ | :----------------------------------------------------------------------------------------------- |\n| [`reach.artifact`](artifact.md)       | Evaluation artifact schema, scoring metrics, and confusion matrix data structures.               |\n| [`reach.catalog`](catalog.md)         | Skill loading, catalog assembly, and YAML frontmatter parsing.                                   |\n| [`reach.check`](check.md)             | Two-stage CI/CD quality gate orchestration, git diff scoping, and threshold enforcement.         |\n| [`reach.cluster`](cluster.md)         | Modularity-based skill clustering for subagent catalog scoping.                                  |\n| [`reach.config`](config.md)           | Configuration loading and Pydantic settings models.                                              |\n| [`reach.diff`](diff.md)               | A/B evaluation comparison, noise floor estimation, and effect size reporting.                    |\n| [`reach.lint`](lint.md)               | Static analysis engine for validating skill manifests and listing budgets.                       |\n| [`reach.metrics`](metrics.md)         | Accuracy, precision, recall, F1, and multi-step trajectory evaluation metrics.                   |\n| [`reach.models`](models.md)           | Domain representations: `Skill`, `Catalog`, `Query`, and `ProbeResult`.                          |\n| [`reach.optimize`](optimize.md)       | Closed-loop empirical optimization routines for skill descriptions.                              |\n| [`reach.overlap`](overlap.md)         | BM25 vocabulary competition ranking, nearest-rival extraction, and pairwise collision detection. |\n| [`reach.queries`](queries.md)         | Labeled evaluation query set loading, serialization, provenance recording, and digesting.        |\n| [`reach.registry`](registry.md)       | Google Cloud Agent Registry client and skill manifest models.                                    |\n| [`reach.retrieval`](retrieval.md)     | BM25 lexical, dense semantic, and hybrid Reciprocal Rank Fusion (RRF) scorers.                   |\n| [`reach.run`](run.md)                 | Execution engine for planning and conducting evaluation runs.                                    |\n| [`reach.runtime`](runtime.md)         | Agent execution runtime interfaces, selection outcomes, and driver options models.               |\n| [`reach.sweep`](sweep.md)             | Multi-scale catalog scaling sweeps, capacity knee detection, and loss decomposition.             |\n| [`reach.uncertainty`](uncertainty.md) | Wilson score confidence intervals, sample size sizing, and power analysis.                       |\n"
+    },
+    {
+      "path": "docs/api/artifact.md",
+      "sha": null,
+      "content_sha256": "dfbcbd1b6a288b2f9314cdd46d843a64986ce35f3e9f475baf276b4ec5ef5f2c",
+      "score": 141,
+      "content": "# `reach.artifact`\n\nData structures representing evaluation outcomes, confusion matrices, and serialized run artifacts.\n\n<!-- prettier-ignore -->\n::: reach.artifact\n    options:\n      show_root_heading: false\n      members:\n        - Abstention\n        - Artifact\n        - ConfusionPair\n        - ContestedSkill\n        - Leak\n        - LexicalRankLike\n        - NotHeadline\n        - QueryRecord\n        - read_artifact\n        - ResolvedRoot\n        - RunProvenance\n        - RunScores\n        - SampleQuery\n        - SkillScore\n        - Spread\n        - write_artifact\n"
+    },
+    {
+      "path": "docs/api/uncertainty.md",
+      "sha": null,
+      "content_sha256": "8392b95ee860bee5289ed2c3c41b14891a3ba5cb63d8c247bc82202cbcb68dd5",
+      "score": 141,
+      "content": "# `reach.uncertainty`\n\nStatistical uncertainty estimation, Wilson score confidence intervals, and power analysis.\n\n<!-- prettier-ignore -->\n::: reach.uncertainty\n    options:\n      show_root_heading: false\n      members:\n        - cluster_wilson_interval\n        - detectable_delta\n        - effective_sample_size\n        - estimate_skill_icc\n        - Interval\n        - required_probes\n        - wilson_interval\n"
+    },
+    {
+      "path": "docs/api/runtime.md",
+      "sha": null,
+      "content_sha256": "e713e3cef6e2201b576612a60225cd62f91f54e4ee5ae5c1dcd18d95ef22cf3b",
+      "score": 141,
+      "content": "# `reach.runtime`\n\nAgent execution runtime interfaces, selection outcomes, and driver options models.\n\n<!-- prettier-ignore -->\n::: reach.runtime\n    options:\n      show_root_heading: false\n      members:\n        - AgentOptions\n        - AgentRuntime\n        - AntigravityOptions\n        - build_runtime\n        - CatalogFit\n        - CliOptions\n        - known_agents\n        - register_agent\n        - SelectionOutcome\n        - SessionStatus\n        - SessionSummary\n        - SkillRoot\n        - ToolCallInfo\n        - VertexOptions\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "8a864507eca273dde20337caacb7aa61ede63c7c0f222dfee0af00076caffee7",
+      "score": 126,
+      "content": "# Copyright 2026 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nname: Release to PyPI\n\non:\n  push:\n    tags:\n      - \"v[0-9]+.[0-9]+.[0-9]+\"\n      - \"v[0-9]+.[0-9]+.[0-9]+rc[0-9]+\"\n      - \"v[0-9]+.[0-9]+.[0-9]+[ab][0-9]+\"\n  workflow_dispatch:\n\njobs:\n  build:\n    name: Build distribution packages\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1\n        with:\n          persist-credentials: false\n\n      - name: Install uv\n        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # ratchet:astral-sh/setup-uv@v10.3.0\n        with:\n          version: \"latest-known\"\n          enable-cache: false\n\n      - name: Build distributions\n        run: uv build\n\n      - name: Upload distributions artifact\n        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # ratchet:actions/upload-artifact@v7.0.2\n        with:\n          name: dist\n          path: dist/\n\n  publish:\n    name: Publish to PyPI\n    needs: [build]\n    runs-on: ubuntu-latest\n    environment:\n      name: pypi\n    permissions:\n      id-token: write # Mandatory for PyPI Trusted Publishing (OIDC)\n    steps:\n      - name: Install uv\n        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # ratchet:astral-sh/setup-uv@v10.3.0\n        with:\n          version: \"latest-known\"\n          enable-cache: false\n\n      - name: Download distributions artifact\n        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # ratchet:actions/download-artifact@v8.0.2\n        with:\n          name: dist\n          path: dist/\n\n      - name: Publish to PyPI\n        run: uv publish\n"
+    },
+    {
+      "path": ".github/workflows/docs.yml",
+      "sha": null,
+      "content_sha256": "d906db435d6a72b00a7f7d5c123f2093b831827aa27a3a4dba29e46ede03e4ef",
+      "score": 126,
+      "content": "# Copyright 2026 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nname: Deploy Documentation\n\non:\n  push:\n    branches: [main]\n  workflow_dispatch:\n\npermissions:\n  contents: write\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # ratchet:actions/checkout@v7.0.1\n\n      - name: Install uv\n        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # ratchet:astral-sh/setup-uv@v10.3.0\n        with:\n          version: \"latest-known\"\n          enable-cache: true\n\n      - name: Install documentation dependencies\n        run: uv sync --only-group docs\n\n      - name: Deploy to GitHub Pages\n        env:\n          NO_MKDOCS_2_WARNING: \"1\"\n        run: uv run mkdocs gh-deploy --force\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:46:24.528686+00:00"
+}
