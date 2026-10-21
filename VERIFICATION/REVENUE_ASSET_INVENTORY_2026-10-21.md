@@ -35,3 +35,11 @@ This is a read-only account snapshot. It records available assets, not verified 
 - Higgsfield account recheck shows Free plan with 10 credits; a 100-credit MCP trial is eligible but pending. The trial was not started and no generation credits were spent.
 - GitLab account is active and has one private project, `salamou1944-group/Salamou1944-project`, which is empty.
 - Automation inventory shows five jobs: `Revenue + leverage sweep` is enabled, but its next-run field is null; four others are disabled and all show null next-run fields. Scheduler reliability is unknown; no schedules were changed during this audit.
+
+
+## Outreach deliverability — verified 2026-10-21
+
+- AI API Pilot Outreach inbox: 6 threads, all delivery-failure/bounce notifications; no customer reply is evidenced in this inbox's current thread list.
+- EASY Project inbox: 5 threads, all delivery-failure notifications; no customer reply is evidenced in this inbox's current thread list.
+- PASTEL Realtime E2E Test inbox: zero threads.
+- This is limited to the three AgentMail inboxes and does not inspect a separate personal mailbox or other email services. Before sending more outreach through these inboxes, verify each recipient address against an official source and address the delivery problem. Do not count a sent email as a delivered prospect or revenue.
