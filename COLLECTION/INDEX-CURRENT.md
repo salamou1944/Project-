@@ -4,11 +4,11 @@ This short page is the live status pointer. The long [COLLECTION/INDEX.md](./IND
 
 ## COLLECTION
 - Latest completed: [cycle 28 — success](https://github.com/salamou1944/Project-/actions/runs/39676042890).
-- Cycle 27: 69 refreshed, 31 blocked attempts preserved; 5,709 source rows; 5,678 extracted artifacts; 17,902 repositories deferred.
-- Current-main JSON audit: 13,670 JSON/JSONC files, zero parse failures, 1,003,679,370 bytes.
-- 50,600 capability/readiness groups; 34,751 promotion-review items; 15,849 restricted items.
+- Cycle 28: 68 refreshed, 32 blocked attempts preserved; 5,778 source rows; 5,746 extracted artifacts; 17,834 repositories deferred.
+- Current-main JSON audit: 13,738 JSON/JSONC files, zero parse failures, 1,011,256,549 bytes.
+- 51,100 capability/readiness groups; 35,112 promotion-review items; 15,988 restricted items.
 - Install result: `NO_APPROVED_CANDIDATES`; zero installed.
-- Cumulative cycles 1–27: 2,207 refreshed sources, 493 blocked attempts preserved.
+- Cumulative cycles 1–28: 2,275 refreshed sources, 525 blocked attempts preserved.
 - Current cycle: paused after [cycle 28 success](https://github.com/salamou1944/Project-/actions/runs/39676042890); see [detailed cycle 28 result](./CYCLE-28-RESULT.md). Do not trigger another harvest until partitioning is implemented and tested.
 - Size warning: `READY.json` 88.9 MB, `CANONICAL-PROMOTION-PLAN.json` 60.1 MB, `PROMOTION-QUEUE.json` 52.6 MB. The 95 MB hard guard is still passing. Cycle 28 is the last bounded cycle before pausing extraction to implement and test non-destructive partitioning.
 
