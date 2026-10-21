@@ -3,21 +3,20 @@
 This short page is the live status pointer. The older [COLLECTION/INDEX.md](./INDEX.md) remains the long historical log; use this page for the current snapshot.
 
 ## COLLECTION
-- Latest completed: [cycle 24 — success](https://github.com/salamou1944/Project-/actions/runs/39674187945).
-- Cycle 24: 70 refreshed, 30 blocked attempts preserved; 5,501 source rows; 5,471 extracted artifacts; 18,109 repositories deferred.
-- Current-main JSON audit: 13,463 JSON/JSONC files, zero parse failures, 976,652,278 bytes.
-- 49,020 capability/readiness groups; 33,658 promotion-review items; 15,362 restricted items.
+- Latest completed: [cycle 25 — success](https://github.com/salamou1944/Project-/actions/runs/39674669139).
+- Cycle 25: 69 refreshed, 31 blocked attempts preserved; 5,571 source rows; 5,540 extracted artifacts; 18,040 repositories deferred.
+- Current-main JSON audit: 13,532 JSON/JSONC files, zero parse failures, 985,944,742 bytes.
+- 49,534 capability/readiness groups; 33,994 promotion-review items; 15,540 restricted items.
 - Install result: `NO_APPROVED_CANDIDATES`; zero installed.
-- Cumulative cycles 1–24: 2,000 refreshed sources, 400 blocked attempts preserved.
-- Current cycle: [cycle 25, run 39674669139](https://github.com/salamou1944/Project-/actions/runs/39674669139), currently in progress. Do not publish counts until its logs finish.
-- Size warning: `READY.json` 85.9 MB, `CANONICAL-PROMOTION-PLAN.json` 58.1 MB, `PROMOTION-QUEUE.json` 50.9 MB. The 95 MB hard guard is still passing; a non-destructive partitioning plan is needed before approaching it.
+- Cumulative cycles 1–25: 2,069 refreshed sources, 431 blocked attempts preserved.
+- Current cycle: [cycle 26, run 39675099179](https://github.com/salamou1944/Project-/actions/runs/39675099179), currently queued. Do not publish counts until its logs finish.
+- Size warning: `READY.json` 86.9 MB, `CANONICAL-PROMOTION-PLAN.json` 58.7 MB, `PROMOTION-QUEUE.json` 51.4 MB. The 95 MB hard guard is still passing; a non-destructive partitioning plan is needed before approaching it.
 
 ## Canonical inventory documents
 - [Full resource inventory and execution plan](../VERIFICATION/RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
 - [Resource verification delta](../VERIFICATION/RESOURCE_INVENTORY_DELTA_2026-10-21.md)
 - [Revenue and creator account inventory](../VERIFICATION/REVENUE_ASSET_INVENTORY_2026-10-21.md)
 - [Railway runtime triage](../VERIFICATION/RAILWAY_RUNTIME_TRIAGE_2026-10-21.md)
-- [Railway authorization boundary](../VERIFICATION/RAILWAY_AUTH_BOUNDARY_2026-10-21.md)
 - [Railway authorization boundary](../VERIFICATION/RAILWAY_AUTH_BOUNDARY_2026-10-21.md)
 - [API Factory runtime observations](../VERIFICATION/API_FACTORY_RUNTIME_OBSERVATIONS_2026-10-21.md)
 - [ChatGPT plugin discovery](../VERIFICATION/CHATGPT_PLUGIN_DISCOVERY_2026-10-21.md)
