@@ -97,3 +97,21 @@ No stage may be inferred from the prior stage. Do not report revenue before stag
 2. Build a list of 20 qualified sellers from public, relevant sources; record sources and avoid duplicate/bounced contacts.
 3. Draft two short outreach variants (Arabic-first; English only where suitable) and keep them as drafts until recipients and payment terms are checked.
 4. Report the first real reply, funded pilot, delivery, and cash receipt separately.
+
+
+## New highest-priority cash-now route found on 2026-10-21
+
+Before spending time on direct customer acquisition, pursue the no-upfront-cost application path in parallel because it may produce income without first building a new product:
+
+1. **OpenTrain AI QA and Model Evaluation Engineer** — listing explicitly includes Algeria, requires English, is labeled entry-level/part-time, and advertises $63–$120/hour. Listing: https://www.opentrain.ai/jobs/ai-qa-and-model-evaluation-engineer--cmva8j6mp001s08igut8gkeyy/
+2. **OpenTrain AI Question and Answer Evaluation Specialist** — listing explicitly includes Algeria, requires English, is labeled entry-level/part-time under 20 hours weekly, and advertises $20–$60/hour equivalent paid per accepted task. Listing: https://www.opentrain.ai/jobs/ai-question-and-answer-evaluation-specialist--cmvh7dcj8002q07i56g1mkj32/
+
+These are applications, not jobs secured. OpenTrain's published payout-country list includes Algeria for Stripe-hosted local-bank payout setup: https://www.opentrain.ai/docs/payments/payout-country-availability/ . This does not guarantee the user's individual onboarding, a project offer, available tasks, or payout. Check payout setup before investing substantial time, do not pay any deposit, and keep all work/payment on-platform for opportunities introduced there.
+
+**Revised execution priority:**
+- **P0 (today):** check existing OpenTrain account; complete accurate profile and payout eligibility; apply to one or both roles only if language/skills are truthful and match.
+- **P0 (same sprint):** keep the prepared catalog-cleanup demo as the fallback owned service; identify a small number of relevant sellers and offer a paid pilot without ads or paid tools.
+- **P1:** only after a paying customer or contract exists, turn repeated catalog-cleanup steps into a small reusable script/workflow.
+- **P2:** return to API Factory as a paid prototype service only after the exact delivery boundary is clear; do not claim production deployment capability while the deployment executor is missing.
+
+The OpenTrain role links, current eligibility evidence, payout gate, and NOT APPLIED status are recorded in AI_WORK_APPLICATION_TRACKER_2026-10-08.md. Neither application has been submitted by this assistant.
