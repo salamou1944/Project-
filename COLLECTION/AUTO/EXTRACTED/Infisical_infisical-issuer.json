@@ -1,0 +1,215 @@
+{
+  "canonical_source": "github:Infisical/infisical-issuer",
+  "repo": "Infisical/infisical-issuer",
+  "revision_sha": "605926e3175d51581b00c85263ecc8648fd1a258",
+  "default_branch": "main",
+  "pushed_at": "2026-06-29T18:55:12Z",
+  "repo_updated_at": "2026-08-21T14:05:10Z",
+  "license": "NOASSERTION",
+  "topics": [
+    "cert-manager",
+    "certificate-management",
+    "infisical",
+    "pki",
+    "private-ca",
+    "secrets-management"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/run-helm-chart-tests.yaml",
+      "sha": null,
+      "content_sha256": "e427ddfbcdc995899b2cc6f3526eabe306d868a8614e4f8b2033b9e2fb4fcf43",
+      "score": 258,
+      "content": "name: Run Helm Chart Tests for Infisical PKI Issuer\non:\n  pull_request:\n    paths:\n      - \"helm-charts/infisical-pki-issuer/**\"\n      - \".github/workflows/run-helm-chart-tests.yaml\"\n\njobs:\n  test-helm:\n    name: Test Helm Chart\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v3\n        with:\n          fetch-depth: 0\n\n      - name: Set up Helm\n        uses: azure/setup-helm@v4.2.0\n        with:\n          version: v3.17.0\n\n      - uses: actions/setup-python@v5.3.0\n        with:\n          python-version: \"3.x\"\n          check-latest: true\n\n      - name: Set up chart-testing\n        uses: helm/chart-testing-action@v2.7.0\n        with:\n          yamale_version: \"6.0.0\"\n\n      - name: Run chart-testing (lint)\n        run: ct lint --config ct.yaml --charts helm-charts/infisical-pki-issuer\n\n      - name: Create kind cluster\n        uses: helm/kind-action@v1.12.0\n\n      - name: Run chart-testing (install)\n        run: ct install --config ct.yaml --charts helm-charts/infisical-pki-issuer\n"
+    },
+    {
+      "path": "internal/auth/kubernetes_test.go",
+      "sha": null,
+      "content_sha256": "631f12c0ed987df481682a7b824d7ffe2404997a81e04f28e825bd1733a80d39",
+      "score": 243,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\t\"github.com/Infisical/infisical-issuer/api/v1alpha1\"\n\t\"github.com/Infisical/infisical-issuer/internal/auth\"\n)\n\nvar _ = Describe(\"Kubernetes Auth\", func() {\n\tconst (\n\t\tidentityIDSecretName = \"k8s-identity-id\"\n\t\tnamespace            = \"default\"\n\t\tsecretKey            = \"value\"\n\t)\n\n\tIt(\"should fail when .spec.authentication.kubernetes is nil\", func() {\n\t\tprovider := auth.NewKubernetesAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodKubernetes)\n\n\t\terr := provider.Validate(ctx, spec, namespace)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.authentication.kubernetes is not set\"))\n\t})\n\n\tIt(\"should fail when serviceAccountRef name is empty\", func() {\n\t\tprovider := auth.NewKubernetesAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodKubernetes)\n\t\tspec.Authentication.Kubernetes = &v1alpha1.KubernetesAuthConfig{\n\t\t\tServiceAccountRef: v1alpha1.NamespacedName{Name: \"\", Namespace: namespace},\n\t\t}\n\n\t\terr := provider.Validate(ctx, spec, namespace)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"serviceAccountRef requires a name\"))\n\t})\n\n\tIt(\"should fail when the identity id secret does not exist\", func() {\n\t\tprovider := auth.NewKubernetesAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodKubernetes)\n\t\tspec.Authentication.Kubernetes = &v1alpha1.KubernetesAuthConfig{\n\t\t\tServiceAccountRef: v1alpha1.NamespacedName{Name: \"my-sa\", Namespace: namespace},\n\t\t\tIdentityIDRef:     v1alpha1.SecretReference{Name: identityIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\terr := provider.Validate(ctx, spec, namespace)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unable to fetch secret\"))\n\t})\n\n\tIt(\"should succeed when serviceAccountRef and the identity id secret are set\", func() {\n\t\tcreateSecret(identityIDSecretName, namespace, map[string][]byte{secretKey: []byte(\"my-identity-id\")})\n\t\tDeferCleanup(func() { deleteSecret(identityIDSecretName, namespace) })\n\n\t\tprovider := auth.NewKubernetesAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodKubernetes)\n\t\tspec.Authentication.Kubernetes = &v1alpha1.KubernetesAuthConfig{\n\t\t\tServiceAccountRef: v1alpha1.NamespacedName{Name: \"my-sa\", Namespace: namespace},\n\t\t\tIdentityIDRef:     v1alpha1.SecretReference{Name: identityIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\tExpect(provider.Validate(ctx, spec, namespace)).To(Succeed())\n\t})\n})\n"
+    },
+    {
+      "path": "internal/cache/auth_cache_test.go",
+      "sha": null,
+      "content_sha256": "8e1858baf348176b39a83864fffa7ce05d20cd3e974367336d6088da7da847c8",
+      "score": 229,
+      "content": "package cache_test\n\nimport (\n\t\"testing\"\n\t\"time\"\n\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tinfisicalSdk \"github.com/infisical/go-sdk\"\n\n\t\"github.com/Infisical/infisical-issuer/internal/cache\"\n\t\"github.com/Infisical/infisical-issuer/internal/model\"\n)\n\nfunc TestCache(t *testing.T) {\n\tRegisterFailHandler(Fail)\n\tRunSpecs(t, \"Cache Suite\")\n}\n\nfunc newAuthResult(token string) *model.AuthenticationResult {\n\treturn &model.AuthenticationResult{\n\t\tMachineIdentity: infisicalSdk.MachineIdentityCredential{AccessToken: token},\n\t}\n}\n\nvar _ = Describe(\"AuthCache\", func() {\n\tvar (\n\t\tauthCache *cache.AuthCache\n\t\tkey       cache.ClientCacheKey\n\t)\n\n\tBeforeEach(func() {\n\t\tkey = cache.ClientCacheKey{Name: \"test-issuer\", Namespace: \"default\"}\n\t})\n\n\tAfterEach(func() {\n\t\tif authCache != nil {\n\t\t\tauthCache.Cleanup()\n\t\t}\n\t})\n\n\tDescribe(\"happy path\", func() {\n\t\tBeforeEach(func() {\n\t\t\tvar err error\n\t\t\tauthCache, err = cache.NewAuthCache()\n\t\t\tExpect(err).NotTo(HaveOccurred())\n\t\t})\n\n\t\tIt(\"should store and retrieve a value\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"token-1\"), 30*time.Second)\n\n\t\t\tresult, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeTrue())\n\t\t\tExpect(result.AccessToken()).To(Equal(\"token-1\"))\n\t\t})\n\n\t\tIt(\"should return false for a key that was never set\", func() {\n\t\t\t_, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\n\t\tIt(\"should not cache a value with a non-positive TTL\", func() {\n\t\t\tExpect(authCache.Set(key, newAuthResult(\"zero-ttl\"), 0)).To(BeFalse())\n\t\t\t_, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\n\t\t\tExpect(authCache.Set(key, newAuthResult(\"negative-ttl\"), -5*time.Second)).To(BeFalse())\n\t\t\t_, found = authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\n\t\tIt(\"should treat keys that differ only by generation as distinct\", func() {\n\t\t\tgen1 := cache.ClientCacheKey{Name: \"iss\", Namespace: \"default\", Generation: 1}\n\t\t\tgen2 := cache.ClientCacheKey{Name: \"iss\", Namespace: \"default\", Generation: 2}\n\n\t\t\tExpect(authCache.Set(gen1, newAuthResult(\"old\"), 30*time.Second)).To(BeTrue())\n\n\t\t\t_, found := authCache.Get(gen2)\n\t\t\tExpect(found).To(BeFalse(), \"a new generation must not hit the prior generation's token\")\n\n\t\t\tresult, found := authCache.Get(gen1)\n\t\t\tExpect(found).To(BeTrue())\n\t\t\tExpect(result.AccessToken()).To(Equal(\"old\"))\n\t\t})\n\n\t\tIt(\"should delete a cached entry\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"token-1\"), 30*time.Second)\n\n\t\t\tauthCache.Delete(key)\n\n\t\t\t_, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\t})\n\n\tDescribe(\"TTL expiration\", func() {\n\t\tBeforeEach(func() {\n\t\t\tvar err error\n\t\t\tauthCache, err = cache.NewAuthCache()\n\t\t\tExpect(err).NotTo(HaveOccurred())\n\t\t})\n\n\t\tIt(\"should not find a key after its TTL expires\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"short-lived\"), 2*time.Second)\n\n\t\t\tresult, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeTrue())\n\t\t\tExpect(result.AccessToken()).To(Equal(\"short-lived\"))\n\n\t\t\ttime.Sleep(3 * time.Second)\n\n\t\t\t_, found = authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\t})\n\n\tDescribe(\"minTTLThreshold\", func() {\n\t\tBeforeEach(func() {\n\t\t\tvar err error\n\t\t\tauthCache, err = cache.NewAuthCache(cache.WithMinTTLThreshold(5 * time.Second))\n\t\t\tExpect(err).NotTo(HaveOccurred())\n\t\t})\n\n\t\tIt(\"should not cache a value when the TTL is below the threshold\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"below-threshold\"), 2*time.Second)\n\n\t\t\t_, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeFalse())\n\t\t})\n\n\t\tIt(\"should cache a value when the TTL meets the threshold\", func() {\n\t\t\tauthCache.Set(key, newAuthResult(\"above-threshold\"), 10*time.Second)\n\n\t\t\tresult, found := authCache.Get(key)\n\t\t\tExpect(found).To(BeTrue())\n\t\t\tExpect(result.AccessToken()).To(Equal(\"above-threshold\"))\n\t\t})\n\t})\n})\n"
+    },
+    {
+      "path": ".github/workflows/release-helm-chart.yaml",
+      "sha": null,
+      "content_sha256": "f07e82c6f2414ddd8aacfea000db37edae98db7df80934e081204a3ec1ba632e",
+      "score": 198,
+      "content": "name: Release Infisical PKI Issuer Helm Chart\non:\n  workflow_dispatch:\n\njobs:\n  test-helm:\n    name: Test Helm Chart\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v3\n        with:\n          fetch-depth: 0\n\n      - name: Set up Helm\n        uses: azure/setup-helm@v4.2.0\n        with:\n          version: v3.17.0\n\n      - uses: actions/setup-python@v5.3.0\n        with:\n          python-version: \"3.x\"\n          check-latest: true\n\n      - name: Set up chart-testing\n        uses: helm/chart-testing-action@v2.7.0\n        with:\n          yamale_version: \"6.0.0\"\n\n      - name: Run chart-testing (lint)\n        run: ct lint --config ct.yaml --charts helm-charts/infisical-pki-issuer\n\n      - name: Create kind cluster\n        uses: helm/kind-action@v1.12.0\n\n      - name: Run chart-testing (install)\n        run: ct install --config ct.yaml --charts helm-charts/infisical-pki-issuer\n\n  release-helm:\n    name: Release Helm Chart\n    needs: test-helm\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v2\n\n      - name: Install Helm\n        uses: azure/setup-helm@v3\n        with:\n          version: v3.10.0\n\n      - name: Build and push helm package to CloudSmith\n        run: cd helm-charts && sh upload-infisical-pki-issuer-chart.sh\n        env:\n          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}\n          CLOUDSMITH_USERNAME: ${{ secrets.CLOUDSMITH_USERNAME }}\n"
+    },
+    {
+      "path": "internal/auth/kubernetes.go",
+      "sha": null,
+      "content_sha256": "387b7db978fac7843eefc50203c067f93fe992bd34521c9f585b45b21eb42f2d",
+      "score": 183,
+      "content": "package auth\n\nimport (\n\t\"context\"\n\t\"fmt\"\n\n\t\"github.com/Infisical/infisical-issuer/api/v1alpha1\"\n\t\"github.com/Infisical/infisical-issuer/internal/model\"\n\t\"github.com/Infisical/infisical-issuer/internal/util\"\n\t\"sigs.k8s.io/controller-runtime/pkg/client\"\n)\n\ntype kubernetesAuth struct {\n\tclient client.Client\n}\n\nfunc NewKubernetesAuth(c client.Client) Strategy {\n\treturn &kubernetesAuth{client: c}\n}\n\nfunc (k *kubernetesAuth) Validate(ctx context.Context, spec *v1alpha1.IssuerSpec, resourceNamespace string) error {\n\tcfg := spec.Authentication.Kubernetes\n\tif cfg == nil {\n\t\treturn fmt.Errorf(\"%w: method is %q but .spec.authentication.kubernetes is not set\", model.ErrInvalidIssuerSpec, v1alpha1.AuthMethodKubernetes)\n\t}\n\tif cfg.ServiceAccountRef.Name == \"\" {\n\t\treturn fmt.Errorf(\"%w: .spec.authentication.kubernetes.serviceAccountRef requires a name\", model.ErrInvalidIssuerSpec)\n\t}\n\tif _, err := util.ResolveSecretReference(ctx, k.client, cfg.IdentityIDRef, resourceNamespace, \".spec.authentication.kubernetes.identityIdRef\"); err != nil {\n\t\treturn err\n\t}\n\treturn nil\n}\n\nfunc (k *kubernetesAuth) Authenticate(ctx context.Context, conn *model.InfisicalConnection, spec *v1alpha1.IssuerSpec, resourceNamespace string) (*model.AuthenticationResult, error) {\n\tcfg := spec.Authentication.Kubernetes\n\tif cfg == nil {\n\t\treturn nil, fmt.Errorf(\"%w: .spec.authentication.kubernetes is nil\", model.ErrInvalidIssuerSpec)\n\t}\n\n\tidentityID, err := util.ResolveSecretReference(ctx, k.client, cfg.IdentityIDRef, resourceNamespace, \".spec.authentication.kubernetes.identityIdRef\")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\ttoken, err := util.MintServiceAccountToken(ctx, k.client, cfg.ServiceAccountRef, resourceNamespace, cfg.ServiceAccountTokenAudiences)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tcred, err := newSDKClient(ctx, conn).Auth().KubernetesRawServiceAccountTokenLogin(identityID, token)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"unable to authenticate with Kubernetes Auth: %w\", err)\n\t}\n\n\treturn &model.AuthenticationResult{MachineIdentity: cred}, nil\n}\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/issuer-editor-rbac.yaml",
+      "sha": null,
+      "content_sha256": "bf59001b67994bc30696a49252d731cfac5565b9de9771e863406e6b3933c254",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-issuer-editor-role\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - issuers\n  verbs:\n  - create\n  - delete\n  - get\n  - list\n  - patch\n  - update\n  - watch\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - issuers/status\n  verbs:\n  - get\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/issuer-viewer-rbac.yaml",
+      "sha": null,
+      "content_sha256": "24509bd1e6db881e8303df031b36cde9c44018c07455fae17a7431ac1187008d",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-issuer-viewer-role\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - issuers\n  verbs:\n  - get\n  - list\n  - watch\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - issuers/status\n  verbs:\n  - get\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/metrics-reader-rbac.yaml",
+      "sha": null,
+      "content_sha256": "7a4c1a682e164c44fad54e59baa09113a9cc28287647fc44f67d1da154d514c3",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-metrics-reader\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- nonResourceURLs:\n  - /metrics\n  verbs:\n  - get\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/clusterissuer-editor-rbac.yaml",
+      "sha": null,
+      "content_sha256": "d8b076bccd119cfa477c12231e4fbddbb009cde43550fa3ac05ab77826ecd8a8",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-clusterissuer-editor-role\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - clusterissuers\n  verbs:\n  - create\n  - delete\n  - get\n  - list\n  - patch\n  - update\n  - watch\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - clusterissuers/status\n  verbs:\n  - get\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/metrics-auth-rbac.yaml",
+      "sha": null,
+      "content_sha256": "61268cff55bc432406b450d01149cbba7e39025bfda36cc0e68759a179b1a626",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-metrics-auth-role\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - authentication.k8s.io\n  resources:\n  - tokenreviews\n  verbs:\n  - create\n- apiGroups:\n  - authorization.k8s.io\n  resources:\n  - subjectaccessreviews\n  verbs:\n  - create\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-metrics-auth-rolebinding\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: '{{ include \"infisical-pki-issuer.fullname\" . }}-metrics-auth-role'\nsubjects:\n- kind: ServiceAccount\n  name: '{{ include \"infisical-pki-issuer.fullname\" . }}-controller-manager'\n  namespace: '{{ .Release.Namespace }}'\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/leader-election-rbac.yaml",
+      "sha": null,
+      "content_sha256": "19689c03d245c6f5f8e34c3fe4de55b2588afcdfe8930be980b8a38c4819dea7",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: Role\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-leader-election-role\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - \"\"\n  resources:\n  - configmaps\n  verbs:\n  - get\n  - list\n  - watch\n  - create\n  - update\n  - patch\n  - delete\n- apiGroups:\n  - coordination.k8s.io\n  resources:\n  - leases\n  verbs:\n  - get\n  - list\n  - watch\n  - create\n  - update\n  - patch\n  - delete\n- apiGroups:\n  - \"\"\n  resources:\n  - events\n  verbs:\n  - create\n  - patch\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: RoleBinding\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-leader-election-rolebinding\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: Role\n  name: '{{ include \"infisical-pki-issuer.fullname\" . }}-leader-election-role'\nsubjects:\n- kind: ServiceAccount\n  name: '{{ include \"infisical-pki-issuer.fullname\" . }}-controller-manager'\n  namespace: '{{ .Release.Namespace }}'\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/clusterissuer-viewer-rbac.yaml",
+      "sha": null,
+      "content_sha256": "a36aff453780664ea545dddc5473ddf62136e48d305d63e666fe2b50c97e6b18",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-clusterissuer-viewer-role\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - clusterissuers\n  verbs:\n  - get\n  - list\n  - watch\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - clusterissuers/status\n  verbs:\n  - get\n"
+    },
+    {
+      "path": "helm-charts/infisical-pki-issuer/templates/manager-rbac.yaml",
+      "sha": null,
+      "content_sha256": "7553d8d46f6d926e93e26b0e3e6431791d2bae2ea1a84525369916557bcac67b",
+      "score": 181,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-manager-role\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nrules:\n- apiGroups:\n  - \"\"\n  resources:\n  - events\n  verbs:\n  - create\n  - patch\n- apiGroups:\n  - \"\"\n  resources:\n  - secrets\n  verbs:\n  - get\n  - list\n  - watch\n- apiGroups:\n  - \"\"\n  resources:\n  - serviceaccounts/token\n  verbs:\n  - create\n- apiGroups:\n  - cert-manager.io\n  resources:\n  - certificaterequests\n  verbs:\n  - get\n  - list\n  - patch\n  - update\n  - watch\n- apiGroups:\n  - cert-manager.io\n  resources:\n  - certificaterequests/status\n  verbs:\n  - get\n  - patch\n  - update\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - clusterissuers\n  - issuers\n  verbs:\n  - get\n  - list\n  - watch\n- apiGroups:\n  - infisical-issuer.infisical.com\n  resources:\n  - clusterissuers/status\n  - issuers/status\n  verbs:\n  - get\n  - patch\n  - update\n---\napiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: {{ include \"infisical-pki-issuer.fullname\" . }}-manager-rolebinding\n  labels:\n  {{- include \"infisical-pki-issuer.labels\" . | nindent 4 }}\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: '{{ include \"infisical-pki-issuer.fullname\" . }}-manager-role'\nsubjects:\n- kind: ServiceAccount\n  name: '{{ include \"infisical-pki-issuer.fullname\" . }}-controller-manager'\n  namespace: '{{ .Release.Namespace }}'\n"
+    },
+    {
+      "path": "internal/auth/helpers_test.go",
+      "sha": null,
+      "content_sha256": "38188beae0c70794075340461f784e5faa140c3af41b5019f2ac85defc25b121",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/gomega\"\n\tcorev1 \"k8s.io/api/core/v1\"\n\tmetav1 \"k8s.io/apimachinery/pkg/apis/meta/v1\"\n\t\"k8s.io/apimachinery/pkg/types\"\n\n\t\"github.com/Infisical/infisical-issuer/api/v1alpha1\"\n)\n\nfunc createSecret(name, namespace string, data map[string][]byte) {\n\tsecret := &corev1.Secret{\n\t\tObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},\n\t\tData:       data,\n\t}\n\tExpect(k8sClient.Create(ctx, secret)).To(Succeed())\n}\n\nfunc deleteSecret(name, namespace string) {\n\tsecret := &corev1.Secret{}\n\tExpect(k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, secret)).To(Succeed())\n\tExpect(k8sClient.Delete(ctx, secret)).To(Succeed())\n}\n\nfunc newIssuerSpec(method v1alpha1.AuthMethod) *v1alpha1.IssuerSpec {\n\treturn &v1alpha1.IssuerSpec{\n\t\tURL:            \"https://app.infisical.com\",\n\t\tApplication:    \"app\",\n\t\tProfile:        \"profile\",\n\t\tAuthentication: v1alpha1.Authentication{Method: method},\n\t}\n}\n"
+    },
+    {
+      "path": "internal/auth/strategy_resolver_test.go",
+      "sha": null,
+      "content_sha256": "ea74c14e7e123c67510cc9334477ec2de81f6221b911c7855f02a643faee64f2",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t\"context\"\n\t\"time\"\n\n\t\"github.com/go-logr/logr\"\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\tinfisicalSdk \"github.com/infisical/go-sdk\"\n\n\t\"github.com/Infisical/infisical-issuer/api/v1alpha1\"\n\t\"github.com/Infisical/infisical-issuer/internal/auth\"\n\t\"github.com/Infisical/infisical-issuer/internal/cache\"\n\t\"github.com/Infisical/infisical-issuer/internal/model\"\n)\n\ntype fakeStrategy struct {\n\tcallCount int\n\tresult    *model.AuthenticationResult\n}\n\nfunc (f *fakeStrategy) Validate(_ context.Context, _ *v1alpha1.IssuerSpec, _ string) error {\n\treturn nil\n}\n\nfunc (f *fakeStrategy) Authenticate(_ context.Context, _ *model.InfisicalConnection, _ *v1alpha1.IssuerSpec, _ string) (*model.AuthenticationResult, error) {\n\tf.callCount++\n\treturn f.result, nil\n}\n\nvar _ = Describe(\"Resolver registry\", func() {\n\tIt(\"should return an error for an unsupported auth method\", func() {\n\t\tauthCache, err := cache.NewAuthCache()\n\t\tExpect(err).ToNot(HaveOccurred())\n\t\tDeferCleanup(authCache.Cleanup)\n\n\t\tresolver := auth.NewResolver(k8sClient, authCache, logr.Discard())\n\t\tspec := newIssuerSpec(\"unsupported-method\")\n\n\t\terr = resolver.Validate(ctx, spec, \"default\")\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unsupported authentication method\"))\n\t})\n})\n\nvar _ = Describe(\"Resolver cache behavior\", func() {\n\tvar (\n\t\tauthCache *cache.AuthCache\n\t\tfake      *fakeStrategy\n\t\tresolver  *auth.Resolver\n\t\tspec      *v1alpha1.IssuerSpec\n\t\tkey       cache.ClientCacheKey\n\t)\n\n\tBeforeEach(func() {\n\t\tvar err error\n\t\tauthCache, err = cache.NewAuthCache(cache.WithMinTTLThreshold(1 * time.Second))\n\t\tExpect(err).ToNot(HaveOccurred())\n\n\t\tfake = &fakeStrategy{\n\t\t\tresult: &model.AuthenticationResult{\n\t\t\t\tMachineIdentity: infisicalSdk.MachineIdentityCredential{\n\t\t\t\t\tAccessToken: \"fake-token\",\n\t\t\t\t\tExpiresIn:   600,\n\t\t\t\t},\n\t\t\t},\n\t\t}\n\n\t\tresolver = auth.NewResolverForTesting(authCache, map[v1alpha1.AuthMethod]auth.Strategy{\n\t\t\tv1alpha1.AuthMethodUniversal: fake,\n\t\t})\n\n\t\tspec = newIssuerSpec(v1alpha1.AuthMethodUniversal)\n\t\tkey = cache.ClientCacheKey{Name: \"issuer-1\", Namespace: \"default\"}\n\t})\n\n\tAfterEach(func() {\n\t\tauthCache.Cleanup()\n\t})\n\n\tIt(\"should authenticate once and serve the second request from cache\", func() {\n\t\tr1, err := resolver.Authenticate(ctx, spec, key, \"default\")\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(r1.AccessToken()).To(Equal(\"fake-token\"))\n\t\tExpect(fake.callCount).To(Equal(1))\n\n\t\tr2, err := resolver.Authenticate(ctx, spec, key, \"default\")\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(r2.AccessToken()).To(Equal(\"fake-token\"))\n\t\tExpect(fake.callCount).To(Equal(1))\n\t})\n\n\tIt(\"should re-authenticate after the cache entry is invalidated\", func() {\n\t\t_, err := resolver.Authenticate(ctx, spec, key, \"default\")\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(fake.callCount).To(Equal(1))\n\n\t\tresolver.Invalidate(key)\n\n\t\t_, err = resolver.Authenticate(ctx, spec, key, \"default\")\n\t\tExpect(err).NotTo(HaveOccurred())\n\t\tExpect(fake.callCount).To(Equal(2))\n\t})\n})\n"
+    },
+    {
+      "path": "internal/auth/universal_test.go",
+      "sha": null,
+      "content_sha256": "ddf412b3d764514fc232b449fefeb3f003859e6adf646101abc0dd3093fafa9e",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\t\"github.com/Infisical/infisical-issuer/api/v1alpha1\"\n\t\"github.com/Infisical/infisical-issuer/internal/auth\"\n)\n\nvar _ = Describe(\"Universal Auth\", func() {\n\tconst (\n\t\tclientIDSecretName     = \"universal-client-id\"\n\t\tclientSecretSecretName = \"universal-client-secret\"\n\t\tnamespace              = \"default\"\n\t\tsecretKey              = \"value\"\n\t)\n\n\tIt(\"should fail when .spec.authentication.universal is nil\", func() {\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodUniversal)\n\n\t\terr := provider.Validate(ctx, spec, namespace)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\".spec.authentication.universal is not set\"))\n\t})\n\n\tIt(\"should fail when the referenced secrets do not exist\", func() {\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodUniversal)\n\t\tspec.Authentication.Universal = &v1alpha1.UniversalAuthConfig{\n\t\t\tClientIDRef:     v1alpha1.SecretReference{Name: clientIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tClientSecretRef: v1alpha1.SecretReference{Name: clientSecretSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\terr := provider.Validate(ctx, spec, namespace)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unable to fetch secret\"))\n\t})\n\n\tIt(\"should succeed when both secrets exist, then fail after deletion\", func() {\n\t\tBy(\"creating the required secrets\")\n\t\tcreateSecret(clientIDSecretName, namespace, map[string][]byte{secretKey: []byte(\"my-client-id\")})\n\t\tcreateSecret(clientSecretSecretName, namespace, map[string][]byte{secretKey: []byte(\"my-client-secret\")})\n\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodUniversal)\n\t\tspec.Authentication.Universal = &v1alpha1.UniversalAuthConfig{\n\t\t\tClientIDRef:     v1alpha1.SecretReference{Name: clientIDSecretName, Namespace: namespace, Key: secretKey},\n\t\t\tClientSecretRef: v1alpha1.SecretReference{Name: clientSecretSecretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\tBy(\"validating, which should succeed\")\n\t\tExpect(provider.Validate(ctx, spec, namespace)).To(Succeed())\n\n\t\tBy(\"deleting the secrets\")\n\t\tdeleteSecret(clientIDSecretName, namespace)\n\t\tdeleteSecret(clientSecretSecretName, namespace)\n\n\t\tBy(\"validating again, which should fail\")\n\t\terr := provider.Validate(ctx, spec, namespace)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"unable to fetch secret\"))\n\t})\n\n\tIt(\"should fail when the secret exists but the key is missing\", func() {\n\t\tsecretName := \"universal-wrong-key\"\n\t\tcreateSecret(secretName, namespace, map[string][]byte{\"wrong-key\": []byte(\"data\")})\n\t\tDeferCleanup(func() { deleteSecret(secretName, namespace) })\n\n\t\tprovider := auth.NewUniversalAuth(k8sClient)\n\t\tspec := newIssuerSpec(v1alpha1.AuthMethodUniversal)\n\t\tspec.Authentication.Universal = &v1alpha1.UniversalAuthConfig{\n\t\t\tClientIDRef:     v1alpha1.SecretReference{Name: secretName, Namespace: namespace, Key: secretKey},\n\t\t\tClientSecretRef: v1alpha1.SecretReference{Name: secretName, Namespace: namespace, Key: secretKey},\n\t\t}\n\n\t\terr := provider.Validate(ctx, spec, namespace)\n\t\tExpect(err).To(HaveOccurred())\n\t\tExpect(err.Error()).To(ContainSubstring(\"no value for key\"))\n\t})\n})\n"
+    },
+    {
+      "path": "internal/auth/suite_test.go",
+      "sha": null,
+      "content_sha256": "e059322864115486030ac0a88b4f51abfcf18d27779d566288f91ff4a8e770cb",
+      "score": 171,
+      "content": "package auth_test\n\nimport (\n\t\"context\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"testing\"\n\n\t. \"github.com/onsi/ginkgo/v2\"\n\t. \"github.com/onsi/gomega\"\n\n\t\"k8s.io/client-go/kubernetes/scheme\"\n\t\"sigs.k8s.io/controller-runtime/pkg/client\"\n\t\"sigs.k8s.io/controller-runtime/pkg/envtest\"\n\tlogf \"sigs.k8s.io/controller-runtime/pkg/log\"\n\t\"sigs.k8s.io/controller-runtime/pkg/log/zap\"\n)\n\nvar (\n\tctx       context.Context\n\tcancel    context.CancelFunc\n\ttestEnv   *envtest.Environment\n\tk8sClient client.Client\n)\n\nfunc TestAuth(t *testing.T) {\n\tRegisterFailHandler(Fail)\n\tRunSpecs(t, \"Auth Suite\")\n}\n\nvar _ = BeforeSuite(func() {\n\tlogf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))\n\n\tctx, cancel = context.WithCancel(context.TODO())\n\n\tBy(\"bootstrapping test environment\")\n\ttestEnv = &envtest.Environment{}\n\tif dir := getFirstFoundEnvTestBinaryDir(); dir != \"\" {\n\t\ttestEnv.BinaryAssetsDirectory = dir\n\t}\n\n\tcfg, err := testEnv.Start()\n\tExpect(err).NotTo(HaveOccurred())\n\tExpect(cfg).NotTo(BeNil())\n\n\tk8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})\n\tExpect(err).NotTo(HaveOccurred())\n\tExpect(k8sClient).NotTo(BeNil())\n})\n\nvar _ = AfterSuite(func() {\n\tBy(\"tearing down the test environment\")\n\tcancel()\n\tExpect(testEnv.Stop()).To(Succeed())\n})\n\n// getFirstFoundEnvTestBinaryDir returns the first envtest binary directory under\n// bin/k8s, which `make setup-envtest` populates. Returns \"\" if none is present.\nfunc getFirstFoundEnvTestBinaryDir() string {\n\tbasePath := filepath.Join(\"..\", \"..\", \"bin\", \"k8s\")\n\tentries, err := os.ReadDir(basePath)\n\tif err != nil {\n\t\tlogf.Log.Error(err, \"Failed to read directory\", \"path\", basePath)\n\t\treturn \"\"\n\t}\n\tfor _, entry := range entries {\n\t\tif entry.IsDir() {\n\t\t\treturn filepath.Join(basePath, entry.Name())\n\t\t}\n\t}\n\treturn \"\"\n}\n"
+    },
+    {
+      "path": "internal/cache/auth_cache.go",
+      "sha": null,
+      "content_sha256": "9b68fc99eb8eb3514bd31a4e80e8368253214dff3e9d7e178190ecf7110f4d69",
+      "score": 169,
+      "content": "package cache\n\nimport (\n\t\"fmt\"\n\t\"time\"\n\n\t\"github.com/Infisical/infisical-issuer/internal/model\"\n\t\"github.com/dgraph-io/ristretto/v2\"\n)\n\ntype ClientCacheKey struct {\n\tName      string\n\tNamespace string\n\t// Generation is the issuer's metadata.generation, so an in-place spec edit\n\t// yields a new key and never reuses a stale token.\n\tGeneration int64\n}\n\nfunc (k ClientCacheKey) String() string {\n\treturn fmt.Sprintf(\"%s/%s/%d\", k.Namespace, k.Name, k.Generation)\n}\n\ntype AuthCache struct {\n\tcache           *ristretto.Cache[string, *model.AuthenticationResult]\n\tminTTLThreshold time.Duration\n}\n\ntype AuthCacheOption func(*AuthCache)\n\nfunc WithMinTTLThreshold(minTTL time.Duration) AuthCacheOption {\n\treturn func(ac *AuthCache) {\n\t\tac.minTTLThreshold = minTTL\n\t}\n}\n\nfunc NewAuthCache(opts ...AuthCacheOption) (*AuthCache, error) {\n\tc, err := ristretto.NewCache(&ristretto.Config[string, *model.AuthenticationResult]{\n\t\tNumCounters:        1000,\n\t\tMaxCost:            1 << 30,\n\t\tBufferItems:        64,\n\t\tIgnoreInternalCost: true,\n\t})\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to create auth cache: %w\", err)\n\t}\n\tac := &AuthCache{cache: c}\n\tfor _, opt := range opts {\n\t\topt(ac)\n\t}\n\treturn ac, nil\n}\n\nfunc (c *AuthCache) Get(key ClientCacheKey) (*model.AuthenticationResult, bool) {\n\treturn c.cache.Get(key.String())\n}\n\n// Set caches the result and reports whether it was stored. A non-positive TTL is\n// rejected (ristretto treats ttl==0 as no-expiry), as is a TTL below minTTLThreshold.\nfunc (c *AuthCache) Set(key ClientCacheKey, value *model.AuthenticationResult, ttl time.Duration) bool {\n\tif ttl <= 0 || ttl < c.minTTLThreshold {\n\t\treturn false\n\t}\n\tc.cache.SetWithTTL(key.String(), value, 1, ttl)\n\tc.cache.Wait()\n\treturn true\n}\n\nfunc (c *AuthCache) Delete(key ClientCacheKey) {\n\tc.cache.Del(key.String())\n}\n\nfunc (c *AuthCache) Cleanup() {\n\tif c.cache != nil {\n\t\tc.cache.Close()\n\t}\n}\n"
+    },
+    {
+      "path": "internal/util/kubernetes_test.go",
+      "sha": null,
+      "content_sha256": "0c4fc7aef4bfb575e0a4b3146c6bfd6fef8631975559c6adc0d5cd60c6d12497",
+      "score": 163,
+      "content": "package util_test\n\nimport (\n\t\"context\"\n\t\"strings\"\n\t\"testing\"\n\n\tcorev1 \"k8s.io/api/core/v1\"\n\tmetav1 \"k8s.io/apimachinery/pkg/apis/meta/v1\"\n\t\"k8s.io/apimachinery/pkg/runtime\"\n\t\"sigs.k8s.io/controller-runtime/pkg/client/fake\"\n\n\t\"github.com/Infisical/infisical-issuer/api/v1alpha1\"\n\t\"github.com/Infisical/infisical-issuer/internal/util\"\n)\n\nfunc newClientWithSecret(namespace string) *corev1.Secret {\n\treturn &corev1.Secret{\n\t\tObjectMeta: metav1.ObjectMeta{Name: \"creds\", Namespace: namespace},\n\t\tData:       map[string][]byte{\"value\": []byte(\"secret-data\")},\n\t}\n}\n\nfunc TestResolveSecretReferenceConfinement(t *testing.T) {\n\tscheme := runtime.NewScheme()\n\tif err := corev1.AddToScheme(scheme); err != nil {\n\t\tt.Fatalf(\"add corev1 to scheme: %v\", err)\n\t}\n\tc := fake.NewClientBuilder().WithScheme(scheme).WithObjects(newClientWithSecret(\"team-a\")).Build()\n\tctx := context.Background()\n\n\tt.Run(\"resolves a reference within the resource namespace\", func(t *testing.T) {\n\t\tref := v1alpha1.SecretReference{Name: \"creds\", Namespace: \"team-a\", Key: \"value\"}\n\t\tval, err := util.ResolveSecretReference(ctx, c, ref, \"team-a\", \"field\")\n\t\tif err != nil {\n\t\t\tt.Fatalf(\"unexpected error: %v\", err)\n\t\t}\n\t\tif val != \"secret-data\" {\n\t\t\tt.Fatalf(\"got %q, want %q\", val, \"secret-data\")\n\t\t}\n\t})\n\n\tt.Run(\"defaults to the resource namespace when the reference omits it\", func(t *testing.T) {\n\t\tref := v1alpha1.SecretReference{Name: \"creds\", Key: \"value\"}\n\t\tval, err := util.ResolveSecretReference(ctx, c, ref, \"team-a\", \"field\")\n\t\tif err != nil {\n\t\t\tt.Fatalf(\"unexpected error: %v\", err)\n\t\t}\n\t\tif val != \"secret-data\" {\n\t\t\tt.Fatalf(\"got %q, want %q\", val, \"secret-data\")\n\t\t}\n\t})\n\n\tt.Run(\"rejects a reference to a foreign namespace\", func(t *testing.T) {\n\t\t// A namespaced Issuer in team-a must not be able to read team-b's Secret.\n\t\tref := v1alpha1.SecretReference{Name: \"creds\", Namespace: \"team-b\", Key: \"value\"}\n\t\t_, err := util.ResolveSecretReference(ctx, c, ref, \"team-a\", \"field\")\n\t\tif err == nil {\n\t\t\tt.Fatal(\"expected a cross-namespace reference to be rejected, got nil\")\n\t\t}\n\t\tif got := err.Error(); !strings.Contains(got, \"cross-namespace references are not allowed\") {\n\t\t\tt.Fatalf(\"error %q does not mention the cross-namespace rejection\", got)\n\t\t}\n\t})\n}\n"
+    },
+    {
+      "path": ".github/workflows/release_docker_pki-issuer.yaml",
+      "sha": null,
+      "content_sha256": "4a3a1b17f51e3076ed20a84043667c07c53ad4c065f85c40c7f1eb1c1919977b",
+      "score": 126,
+      "content": "name: Release Docker image for Infisical PKI Issuer for K8s Cert-Manager\non:\n  push:\n    tags:\n      - \"v*.*.*\"\n\njobs:\n  release:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v2\n\n      - name: 🔧 Set up QEMU\n        uses: docker/setup-qemu-action@v1\n\n      - name: 🔧 Set up Docker Buildx\n        uses: docker/setup-buildx-action@v1\n\n      - name: 🐋 Login to Docker Hub\n        uses: docker/login-action@v1\n        with:\n          username: ${{ secrets.DOCKERHUB_USERNAME }}\n          password: ${{ secrets.DOCKERHUB_TOKEN }}\n\n      - name: Build and push\n        id: docker_build\n        uses: docker/build-push-action@v2\n        with:\n          context: .\n          push: true\n          platforms: linux/amd64,linux/arm64\n          tags: |\n            infisical/pki-issuer:latest\n            infisical/pki-issuer:${{ github.ref_name }}\n"
+    },
+    {
+      "path": "config/rbac/service_account.yaml",
+      "sha": null,
+      "content_sha256": "6929b89c9304f7c27ff35c06a933c36a1fe4dead7a3bb5cb4827ade34b0f5e8c",
+      "score": 111,
+      "content": "apiVersion: v1\nkind: ServiceAccount\nmetadata:\n  labels:\n    app.kubernetes.io/name: infisical-issuer\n    app.kubernetes.io/managed-by: kustomize\n  name: controller-manager\n  namespace: system\n"
+    },
+    {
+      "path": "config/rbac/metrics_reader_role.yaml",
+      "sha": null,
+      "content_sha256": "265c1a9eb994019c6f8cf3f919a83452bb3615893d15bedfe65399bc369d7f6f",
+      "score": 111,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: metrics-reader\nrules:\n- nonResourceURLs:\n  - \"/metrics\"\n  verbs:\n  - get\n"
+    },
+    {
+      "path": "config/rbac/metrics_auth_role.yaml",
+      "sha": null,
+      "content_sha256": "d7b950563fdfd2b26662184e74068baaddaf666eb184ea44413abea0e4d2a32a",
+      "score": 111,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRole\nmetadata:\n  name: metrics-auth-role\nrules:\n- apiGroups:\n  - authentication.k8s.io\n  resources:\n  - tokenreviews\n  verbs:\n  - create\n- apiGroups:\n  - authorization.k8s.io\n  resources:\n  - subjectaccessreviews\n  verbs:\n  - create\n"
+    },
+    {
+      "path": "config/rbac/metrics_auth_role_binding.yaml",
+      "sha": null,
+      "content_sha256": "a9f0db19f9eb778e18d03db770a4b58a360f7e31c9f5f952c5ca1b3bfd1566c8",
+      "score": 111,
+      "content": "apiVersion: rbac.authorization.k8s.io/v1\nkind: ClusterRoleBinding\nmetadata:\n  name: metrics-auth-rolebinding\nroleRef:\n  apiGroup: rbac.authorization.k8s.io\n  kind: ClusterRole\n  name: metrics-auth-role\nsubjects:\n- kind: ServiceAccount\n  name: controller-manager\n  namespace: system\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 2,
+  "sensitive_files_skipped": [
+    {
+      "path": "config/samples/secret_clusterissuer.yaml",
+      "sha": "64cca1df5bbb91ac5414340c06f17b859292c64a",
+      "size": 446,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "config/samples/secret_issuer.yaml",
+      "sha": "c147811de5041522c5e1302ea64978fd30f84761",
+      "size": 515,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:50:26.788564+00:00"
+}

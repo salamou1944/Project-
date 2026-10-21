@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:trailofbits/mishegos",
+  "repo": "trailofbits/mishegos",
+  "revision_sha": "3451719c788943274f3fb5779ba0e1d43cdac39a",
+  "default_branch": "master",
+  "pushed_at": "2026-10-15T13:33:16Z",
+  "repo_updated_at": "2026-10-15T13:33:13Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "fuzzing",
+    "hacktoberfest",
+    "x86"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "4f337d93ecaa72b95aab141bde5f3123dffabbeffb776a235dee761cf235a004",
+      "score": 198,
+      "content": "name: CI\n\non:\n  push:\n    branches:\n      - master\n  pull_request:\n  schedule:\n    # run CI every day even if no PRs/merges occur\n    - cron:  '0 12 * * *'\n\njobs:\n  lint:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - name: Install dependencies\n        run: sudo apt install -y cppcheck clang-format\n      - name: Lint\n        run: |\n          make fmt && git diff --exit-code\n          make lint\n\n  docker-build:\n    runs-on: ubuntu-24.04\n    steps:\n    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      with:\n        submodules: true\n\n    - name: Docker build\n      run: docker build -t mishegos .\n\n    - name: Docker Smoketest\n      run: |\n        docker run --rm mishegos bash -eo pipefail -c './src/mishegos/mishegos -m manual ./workers.spec <<< \"90\" | ./src/mish2jsonl/mish2jsonl' | jq .\n\n    - name: Docker Test Fuzz\n      run: |\n        docker run --rm mishegos bash -eo pipefail -c \\\n          '(timeout --preserve-status 5s ./src/mishegos/mishegos -s 0 ./workers.spec || true) | ./src/mish2jsonl/mish2jsonl | tail'\n\n  build:\n    name: ${{ matrix.name }}\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          # Preserve the Linux check name required by branch protection.\n          - os: ubuntu-26.04\n            name: build\n          - os: macos-26\n            name: build-macos\n    runs-on: ${{ matrix.os }}\n    defaults:\n      run:\n        shell: bash\n    env:\n      WORKER_SPEC: ./workers.spec\n      TIMEOUT: timeout\n    steps:\n    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      with:\n        submodules: true\n\n    - name: Install Linux dependencies\n      if: runner.os == 'Linux'\n      run: sudo bash scripts/docker/install_dev_deps.sh\n\n    - name: Install macOS dependencies\n      if: runner.os == 'macOS'\n      run: |\n        brew install cmake meson ninja coreutils\n        echo \"WORKERS=bddisasm capstone fadec iced xed yaxpeax-x86 zydis\" >> \"$GITHUB_ENV\"\n        echo \"TIMEOUT=gtimeout\" >> \"$GITHUB_ENV\"\n        grep -E '/(bddisasm|capstone|fadec|iced|xed|yaxpeax-x86|zydis)/' workers.spec \\\n          > \"$RUNNER_TEMP/workers.spec\"\n        echo \"WORKER_SPEC=$RUNNER_TEMP/workers.spec\" >> \"$GITHUB_ENV\"\n\n    - name: Build\n      run: make\n\n    - name: Smoketest\n      # Disassemble NOP in process and thread modes.\n      run: |\n        for mode in process thread; do\n          flags=()\n          if [[ \"$mode\" == thread ]]; then\n            flags=(-t)\n          fi\n          ./src/mishegos/mishegos \"${flags[@]}\" -m manual \"$WORKER_SPEC\" <<< \"90\" \\\n            | ./src/mish2jsonl/mish2jsonl \\\n            | jq -e '.nworkers > 0 and all(.outputs[]; .status.name == \"success\" and .ndecoded == 1)'\n        done\n\n    - name: Test Fuzz\n      run: |\n        for mode in process thread; do\n          flags=()\n          if [[ \"$mode\" == thread ]]; then\n            flags=(-t)\n          fi\n          (\"$TIMEOUT\" --kill-after=5s 5s ./src/mishegos/mishegos \"${flags[@]}\" -s 0 \"$WORKER_SPEC\" \\\n            || test \"$?\" -eq 124) \\\n            | ./src/mish2jsonl/mish2jsonl | jq -ce . | tail\n        done\n"
+    },
+    {
+      "path": "src/analysis/pass/find-size-discrepancies/spec.yml",
+      "sha": null,
+      "content_sha256": "1bb4a39cae34fa2c0fcc05f25e6100265b3d5c2685c6e4bbf01408bd5c3ceae4",
+      "score": 159,
+      "content": "name: find-size-discrepancies\ndesc: Find results that have at least two successful results that disagree on size\nrun: find-size-discrepancies\n"
+    },
+    {
+      "path": "src/worker/yaxpeax-x86/Cargo.toml",
+      "sha": null,
+      "content_sha256": "8a80abdb4478da84b214591cb8df7de69f444429624e781febdee60b6fa4a15f",
+      "score": 114,
+      "content": "[package]\nname = \"yaxpeax-x86-mishegos\"\nversion = \"0.1.0\"\nauthors = [\"iximeow <git@iximeow.net>\"]\nedition = \"2018\"\n\n[lib]\ncrate-type = [\"cdylib\"]\n\n[dependencies]\nyaxpeax-x86 = { version = \"2.0.0\" }\nyaxpeax-arch = { version = \"0.3.2\" }\n\n[build-dependencies]\nbindgen = \"*\"\n\n[profile.release]\nlto = true\nopt-level = 3\n"
+    },
+    {
+      "path": "src/worker/iced/Cargo.toml",
+      "sha": null,
+      "content_sha256": "d6675c87978d7d11a0888afa7cde5d3f56222d733f048fb87ed480743fce7b92",
+      "score": 114,
+      "content": "[package]\nname = \"iced\"\nversion = \"1.0.0\"\nauthors = [\"mishegos\"]\nedition = \"2018\"\n\n[lib]\ncrate-type = [\"cdylib\"]\n\n[dependencies.iced-x86]\ndefault-features = false\nfeatures = [\"std\", \"decoder\", \"intel\"]\npath = \"./iced/src/rust/iced-x86\"\n\n[build-dependencies]\nbindgen = \"*\"\n\n[profile.release]\ncodegen-units = 1\nlto = true\nopt-level = 3\n"
+    },
+    {
+      "path": "scripts/docker/install_rust.sh",
+      "sha": null,
+      "content_sha256": "3acfb429dbf5f3b4bf69450859e84b64d9d0c8baace02d4849d2aca7c0678432",
+      "score": 113,
+      "content": "#!/bin/bash\nset -euo pipefail\n\ncurl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --no-modify-path\n"
+    },
+    {
+      "path": "scripts/docker/install_dev_deps.sh",
+      "sha": null,
+      "content_sha256": "34928673abf93cf2e3944d9429ad12c71918cf2590c09f5a5aa2ec2515241972",
+      "score": 113,
+      "content": "#!/bin/bash\nset -euo pipefail\n\nexport DEBIAN_FRONTEND=noninteractive\n\napt-get -o Acquire::Retries=3 update\napt-get install -y --no-install-recommends \\\n  build-essential \\\n  binutils-dev \\\n  python3 \\\n  cmake \\\n  meson \\\n  ruby \\\n  autotools-dev \\\n  autoconf \\\n  libtool \\\n  git \\\n  curl \\\n  llvm-dev \\\n  libclang-dev \\\n  clang \\\n  patchelf \\\n  zlib1g-dev\nrm -rf /var/lib/apt/lists/*\n"
+    },
+    {
+      "path": "scripts/docker/install_runtime_deps.sh",
+      "sha": null,
+      "content_sha256": "0783b5cfb353255d37f51a5fb78877d3209b843ac385751450337d72ac7d0531",
+      "score": 113,
+      "content": "#!/bin/bash\nset -euo pipefail\n\nexport DEBIAN_FRONTEND=noninteractive\n\napt-get -o Acquire::Retries=3 update\napt-get install -y --no-install-recommends \\\n  binutils \\\n  llvm \\\n  ruby \\\n  zlib1g\nrm -rf /var/lib/apt/lists/*\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b642ec2639ec66f98b60cf3d00af508a8abb48571f4098c8530d658f218e9760",
+      "score": 100,
+      "content": "mishegos\n========\n\n[![CI](https://github.com/trailofbits/mishegos/actions/workflows/ci.yml/badge.svg)](https://github.com/trailofbits/mishegos/actions/workflows/ci.yml)\n\nA differential fuzzer for x86 decoders.\n\n![mishegos](https://user-images.githubusercontent.com/3059210/59005797-da89b400-87ec-11e9-8274-321edfa6df45.png)\n\nRead more about `mishegos` in its accompanying [blog post](https://blog.trailofbits.com/2019/10/31/destroying-x86_64-instruction-decoders-with-differential-fuzzing/)\nand academic publication ([paper](https://github.com/gangtan/LangSec-papers-and-slides/raw/main/langsec21/papers/Woodruff_LangSec21.pdf)\n| [recording](https://www.youtube.com/watch?v=a2q86KTZt0g)\n| [slides](https://github.com/trailofbits/publications/blob/master/presentations/Differential%20analysis%20of%20x86-64%20decoders/langsec-2021-slides.pdf)).\n\n```bibtex\n@InProceedings{woodruff21differential,\n  author       = \"William Woodruff and Niki Carroll and Sebastiaan Peters\",\n  title        = \"Differential analysis of x86-64 instruction decoders\",\n  booktitle    = \"Proceedings of the Seventh Language-Theoretic Security Workshop~({LangSec}) at the {IEEE} Symposium on Security and Privacy\",\n  year         = \"2021\",\n  month        = \"May\"\n}\n```\n\n## Usage\n\nStart with a clone, including submodules:\n\n```bash\ngit clone --recurse-submodules https://github.com/trailofbits/mishegos\n```\n\n### Building\n\n`mishegos` is most easily built within Docker:\n\n```bash\ndocker build -t mishegos .\n```\n\nAlternatively, you can try building it directly.\n\nMake sure you have `binutils-dev` (or however your system provides `libopcodes`) installed:\n\n```bash\nmake\n# or\nmake debug\n```\n\nBuild specific workers by passing a space-delimited list as the `WORKERS` varable:\n\n```bash\nWORKERS=\"bfd capstone\" make worker\n```\n\n#### macOS\n\nmishegos also builds and runs natively on macOS (including Apple Silicon —\nthe workers are pure decoders, so an x86-64 host is not required).\n\nRequirements:\n\n* macOS 14.4 or newer (the core uses `os_sync_wait_on_address` in place of futexes)\n* Xcode Command Line Tools (`cc`, `make`)\n* `cmake` (e.g. `brew install cmake`) for the `zydis` and `bddisasm` workers\n* A Rust toolchain for the `iced` and `yaxpeax-x86` workers\n* `meson` and `ninja` (`brew install meson ninja`) for the `fadec` worker\n\nThe `dynamorio` worker is Linux-only and is excluded automatically on macOS.\nThe `bfd` worker needs Homebrew `binutils` (see the caveats in\n[`src/worker/bfd/Makefile`](./src/worker/bfd/Makefile)) and the `llvm` worker\nneeds Homebrew `llvm`; neither is regularly tested on macOS, nor is `ghidra`.\n\nWorker shared objects keep their `.so` names on macOS. The default `workers.spec`\nincludes workers that are unavailable or not built by the commands below, so\ncreate a specification containing just the known-good macOS workers:\n\n```bash\nmake mishegos mish2jsonl\nWORKERS=\"bddisasm capstone fadec iced xed yaxpeax-x86 zydis\" make worker\ngrep -E '/(bddisasm|capstone|fadec|iced|xed|yaxpeax-x86|zydis)/' workers.spec \\\n  > /tmp/mishegos-workers.spec\n\n# Decode a NOP through all seven workers and print the JSONL result.\nprintf '90\\n' | ./src/mishegos/mishegos -m manual /tmp/mishegos-workers.spec \\\n  | ./src/mish2jsonl/mish2jsonl\n```\n\nControl build parallelism with the `JOBS` variable (defaults to `nproc`):\n\n```bash\n# Parallel workers, each using all cores (default)\nmake all -j$(nproc)\n\n# Conservative: limit both inter-worker and intra-worker parallelism\nmake all -j4 JOBS=4\n\n# Sequential workers, full internal parallelism per worker\nmake all -j1 JOBS=$(nproc)\n```\n\n### Running\n\nOn macOS, use `/tmp/mishegos-workers.spec` from the build instructions in place\nof `./workers.spec` in the commands below.\n\nRun the fuzzer for a bit:\n\n```bash\n./src/mishegos/mishegos ./workers.spec > /tmp/mishegos\n```\n\n`mishegos` checks for three environment variables:\n\n* `V=1` enables verbose output on `stderr`\n* `D=1` enables the \"dummy\" mutation mode for debugging purposes\n* `M=1` enables the \"manual\" mutation mode (i.e., read from `stdin`)\n* `MODE=mode` can be used to configure the mutation mode in the absence of `D` and `M`\n    * Valid mutation modes are `sliding` (default), `havoc`, and `structured`\n\nConvert mishegos's raw output into JSONL suitable for analysis:\n\n```bash\n./src/mish2jsonl/mish2jsonl /tmp/mishegos > /tmp/mishegos.jsonl\n```\n\n`mish2jsonl` checks for `V=1` to enable verbose output on `stderr`.\n\nRun an analysis/filter pass group on the results:\n\n```bash\n./src/analysis/analysis -p same-size-different-decodings < /tmp/mishegos.jsonl > /tmp/mishegos.interesting\n```\n\nGenerate an ~ugly~ pretty visualization of the filtered results:\n\n```bash\n./src/mishmat/mishmat < /tmp/mishegos.interesting > /tmp/mishegos.html\nopen /tmp/mishegos.html\n```\n\nTip: The HTML file that `mishmat` generates could be hundreds of megabytes large, which will likely result in a bad browser viewing experience. Using the [`split`](https://man7.org/linux/man-pages/man1/split.1.html) tool, you can create multiple smaller HTML files with a specified number of entries per file (10,000 in the following example) and load each of them separately:\n\n```bash\nmkdir /tmp/mishegos-html\nsplit -d --lines=10000 - /tmp/mishegos-html/mishegos_ \\\n    --additional-suffix='.html' --filter='./src/mishmat/mishmat > $FILE' \\\n    < /tmp/mishegos.interesting\n```\n\n### Contributing\n\nWe welcome contributors to mishegos!\n\nA guide for adding new disassembler workers can be found [here](./docs/adding_a_worker.md).\n\n### Performance notes\n\nAll numbers below correspond to the following run:\n\n```bash\nV=1 timeout 60s ./src/mishegos/mishegos ./workers.spec > /tmp/mishegos\n```\n\nOutside Docker:\n\n* On a Linux desktop (Ubuntu 20.04, Ryzen 5 3600, 32GB DDR4):\n    * Commit [`d80063a`](https://github.com/trailofbits/mishegos/commit/d80063a575c4b10d5f787ac88f45d44c8e7f9937)\n    * 8 workers (no `udis86`) + 1 `mishegos` fuzzer process\n    * 8.7M outputs/minute\n    * 9 cores pinned\n\n## TODO\n\n* Performance improvements\n    * Break cohort collection out into a separate process (requires re-addition of semaphores)\n    * Maybe use a better data structure for input/output/cohort slots\n* Add a scaling factor for workers, e.g. spawn `N` of each worker\n* Pre-analysis normalization (whitespace, immediate representation, prefixes)\n* Analysis strategies:\n    * Filter by length, decode status discrepancies\n    * Easy: lexical comparison\n    * Easy: reassembly + effects modeling (maybe with microx?)\n* Scoring ideas:\n    * Low value: Flag/prefix discrepancies\n    * Medium value: Decode success/failure/crash discrepancies\n    * High value: Decode discrepancies with differing control flow, operands, maybe some immediates\n* Visualization ideas:\n    * Basic but not really basic: some kind of mouse-over differential visualization\n\n## License\n\n`mishegos` is licensed and distributed under the [Apache v2.0](LICENSE) license. [Contact us](mailto:opensource@trailofbits.com) if you’re looking for an exception to the terms.\n"
+    },
+    {
+      "path": "src/analysis/pass/dedupe/spec.yml",
+      "sha": null,
+      "content_sha256": "c23dcc8b571cd00cea58e3b19a68375cfef430e71ca6c35d82ff82a2b52d6f5c",
+      "score": 87,
+      "content": "name: dedupe\ndesc: Filter out any duplicate cohorts (by input)\nrun: dedupe\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-ghidra-lock/spec.yml",
+      "sha": null,
+      "content_sha256": "b34a3c422e468d20fc32c405f18a7bde70f3976e9189c96d9d9b5f67d3d93bdb",
+      "score": 87,
+      "content": "name: filter-ghidra-lock\ndesc: Find ghidra results that decode to LOCK\nrun: filter-ghidra-lock\n"
+    },
+    {
+      "path": "src/analysis/pass/normalize/spec.yml",
+      "sha": null,
+      "content_sha256": "e171b897fc42e980203e17c65e0756464210b9dc3184660ea0dae72f6264e908",
+      "score": 87,
+      "content": "name: normalize\ndesc: Normalize analysis results\nrun: normalize\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-bddisasm-salc/spec.yml",
+      "sha": null,
+      "content_sha256": "9341b1fa3d6e426a56a34c5148e29783ea27d3192f67025f205522911c5768f5",
+      "score": 87,
+      "content": "name: filter-bddisasm-salc\ndesc: Find bddisasm results that decode to SALC\nrun: filter-bddisasm-salc\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-destroy-ghidra/spec.yml",
+      "sha": null,
+      "content_sha256": "77cf016fc20bb151396436b6e74abf2b4f2dbbd37b7b8f69dcc7f16196a56f21",
+      "score": 87,
+      "content": "name: filter-destroy-ghidra\ndesc: Find results that only ghidra gets right (or wrong)\nrun: filter-destroy-ghidra\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-all-success/spec.yml",
+      "sha": null,
+      "content_sha256": "27b57e3e481ebda22dd9549e249cf5567a2b9d59e6450d5bbedb81f966cdb826",
+      "score": 87,
+      "content": "name: filter-all-success\ndesc: Remove all cohorts in which each worker succeeded\nrun: filter-all-success\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-all-failure/spec.yml",
+      "sha": null,
+      "content_sha256": "c4b9431bbed3a03e32cb2249dd3d835ac13b50bcb45c99afd318bbc45b2ba34d",
+      "score": 87,
+      "content": "name: filter-all-failure\ndesc: Remove all cohorts in which each worker failed\nrun: filter-all-failure\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-any-failure/spec.yml",
+      "sha": null,
+      "content_sha256": "5bfed7f15ac008583d7d02a21a1a7a821388ec03375e3a4884076bdbacd27c06",
+      "score": 87,
+      "content": "name: filter-any-failure\ndesc: Remove any cohorts in which each worker failed\nrun: filter-any-failure\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-xed-find-overaccept/spec.yml",
+      "sha": null,
+      "content_sha256": "5b758bfa2833a2f44124f3142b7d79262655fc8b8097a685e47b53e8f13bbd9e",
+      "score": 87,
+      "content": "name: filter-xed-find-overaccept\ndesc: Find results that XED potentially overaccepts\nrun: filter-xed-find-overaccept\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-destroy-bddisasm/spec.yml",
+      "sha": null,
+      "content_sha256": "6a1a2937a40801dc9fe703cb4cb1030a1e9b612872c88f560ca6f9317b1a16e9",
+      "score": 87,
+      "content": "name: filter-destroy-bddisasm\ndesc: Find results that only bddisasm gets right (or wrong)\nrun: filter-destroy-bddisasm\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-destroy-capstone/spec.yml",
+      "sha": null,
+      "content_sha256": "e4e98c2388d66cf34913f407f16f77e95331f2105c81ad331c2eda27f557b85b",
+      "score": 87,
+      "content": "name: filter-destroy-capstone\ndesc: Find results that only capstone gets right (or wrong)\nrun: filter-destroy-capstone\n"
+    },
+    {
+      "path": "src/analysis/pass/minimize-input/spec.yml",
+      "sha": null,
+      "content_sha256": "86c0ac9d9602a39702e381dc696bac73387243e43fcf9b09c4f50bb4ce2eba74",
+      "score": 87,
+      "content": "name: minimize-input\ndesc: Trim each cohort's input to no greater than the longest output's decode length\nrun: minimize-input\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-ndecoded-different/spec.yml",
+      "sha": null,
+      "content_sha256": "1f907cac1d620dbd90578e28118f4f37ff1f880c3b0458c1ddbbe9c6fd8bc6ce",
+      "score": 87,
+      "content": "name: filter-ndecoded-different\ndesc: Filter out any cohorts where one or more cohorts consumed different amounts of input\nrun: filter-ndecoded-different\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-ndecoded-same/spec.yml",
+      "sha": null,
+      "content_sha256": "446f0ab38108129fefdcdf640d3a1aad07708a49da246578343f172ec5c27c92",
+      "score": 87,
+      "content": "name: filter-ndecoded-same\ndesc: Filter out any cohorts where all outputs consumed exactly the same number of input bytes\nrun: filter-ndecoded-same\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-incomparable/spec.yml",
+      "sha": null,
+      "content_sha256": "7b29f8a0e5e0fd055859e845d042381eae39474510efb576883fbfb9c13ac79b",
+      "score": 87,
+      "content": "name: filter-incomparable\ndesc: Find out cohorts whose results can't be compared (i.e., that have less than two successes)\nrun: filter-incomparable\n"
+    },
+    {
+      "path": "src/analysis/pass/filter-xed-find-underaccept/spec.yml",
+      "sha": null,
+      "content_sha256": "b8e4f2b2b7ce5f8142c8c6add0110cfa1d631fb0ab2a25c8d832c6e7b5dd2f58",
+      "score": 87,
+      "content": "name: filter-xed-find-underaccept\ndesc: Find results that XED potentially underaccepts\nrun: filter-xed-find-underaccept\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:50:23.518338+00:00"
+}
