@@ -1,0 +1,160 @@
+{
+  "canonical_source": "github:VKCOM/swc-plugin-transform-remove-imports",
+  "repo": "VKCOM/swc-plugin-transform-remove-imports",
+  "revision_sha": "d02a6eddd4d9f9ebb496e0d46c85ec0089c263bc",
+  "default_branch": "main",
+  "pushed_at": "2026-10-19T12:50:06Z",
+  "repo_updated_at": "2026-10-19T12:50:08Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/workflow_test.yml",
+      "sha": null,
+      "content_sha256": "872fbee6697cd0c8c392a00b8a7e4baaa8794b77578b55a537ec3d2d8e346a87",
+      "score": 186,
+      "content": "on:\n  workflow_call:\n    inputs:\n      ref:\n        description: \"The branch, tag or SHA to checkout\"\n        default: ${{ github.ref }}\n        required: false\n        type: string\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n        with:\n          ref: ${{ inputs.ref }}\n\n      - uses: VKCOM/gh-actions/shared/rust/cargo-cache@main\n\n      - name: Run Test\n        run: cargo test --verbose\n\n      - name: Run Clippy\n        run: cargo clippy --all-targets --all-features\n\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n        with:\n          ref: ${{ inputs.ref }}\n\n      - uses: VKCOM/gh-actions/shared/rust/cargo-cache@main\n\n      - name: Run Build\n        run: cargo build-wasip1 --release\n"
+    },
+    {
+      "path": ".github/workflows/branch.yml",
+      "sha": null,
+      "content_sha256": "e5d42e19e6c9c9da886c44f8b432d5d193813d0ed68ce348b7b5c4212012a449",
+      "score": 126,
+      "content": "name: 'Branch'\n\nrun-name: Test ${{ github.ref_name }}\n\non:\n  push:\n    branches:\n      - main\n\nconcurrency:\n  group: test-${{ github.ref_name }}\n  cancel-in-progress: true\n\njobs:\n  test:\n    uses: ./.github/workflows/workflow_test.yml\n"
+    },
+    {
+      "path": ".github/workflows/cargo_update.yml",
+      "sha": null,
+      "content_sha256": "40e8217f3d4d69c8eabd0b6d969479d73b2ba426ab5f497b71401665fe08acc3",
+      "score": 126,
+      "content": "name: \"Cargo update\"\non:\n  schedule:\n    - cron: \"0 5 * * 1\" # Runs at 05:00, only on Monday\n\njobs:\n  cargo-update:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n      pull-requests: write\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v6\n      - name: Update swc_core\n        uses: VKCOM/gh-actions/shared/rust/cargo-update-toml@main\n        with:\n          packages: swc_core\n      - uses: VKCOM/gh-actions/shared/rust/cargo-update-pr@main\n        with:\n          token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n"
+    },
+    {
+      "path": ".github/workflows/pull_request.yml",
+      "sha": null,
+      "content_sha256": "1ec9ca56f5996096858a798b29f8bb5cf9ce361720f35487bdfac980eaccce60",
+      "score": 126,
+      "content": "name: 'Pull Request'\n\non: ['pull_request']\n\nconcurrency:\n  group: pr-${{ github.event.pull_request.number }}\n  cancel-in-progress: true\n\njobs:\n  test:\n    uses: ./.github/workflows/workflow_test.yml\n"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "sha": null,
+      "content_sha256": "ed80161e2392aed0b2965de1009a3d6e4cf2fc6a3d56856811f21a2396d2bee8",
+      "score": 126,
+      "content": "name: \"Publish\"\n\non:\n  workflow_dispatch:\n    inputs:\n      type:\n        description: \"version type:\"\n        required: true\n        type: choice\n        default: \"minor\"\n        options:\n          - patch\n          - minor\n          - major\n      custom_version:\n        description: 'custom version: x.y.z (without \"v\")'\n        required: false\n\nrun-name: Publish ${{ inputs.type }} ${{ inputs.custom_version }}\n\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read # Recommended for actions/setup-node\n      id-token: write # Required for OIDC\n    steps:\n      - uses: actions/checkout@v6\n        with:\n          token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n\n      - uses: actions/setup-node@v6\n        with:\n          node-version-file: \".nvmrc\"\n          cache: \"npm\"\n          always-auth: true\n          registry-url: \"https://registry.npmjs.org\"\n\n      - name: Install wasm target\n        run: |\n          rustup target add wasm32-wasip1\n\n      - run: npm run test\n\n      - run: npm run build\n\n      - name: Set Git credentials\n        run: |\n          git config --local user.email \"actions@github.com\"\n          git config --local user.name \"GitHub Action\"\n\n      - name: Bump by version type\n        if: ${{ !github.event.inputs.custom_version }}\n        run: npm version ${{ github.event.inputs.type }} --no-commit-hooks -m \"v%s\"\n\n      - name: Bump by custom version\n        if: ${{ github.event.inputs.custom_version }}\n        run: npm version ${{ github.event.inputs.custom_version }} --no-commit-hooks -m \"v%s\"\n\n      - name: Pushing changes\n        uses: ad-m/github-push-action@master\n        with:\n          github_token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n          branch: ${{ github.ref }}\n          tags: true\n\n      - name: Publishing release\n        run: npm publish\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "36c8ea18ff3c2f21e7ef39779cadd569d368aaaeb651b83a5f6e5ff9a65c7bc3",
+      "score": 120,
+      "content": "[package]\nname = \"swc-plugin-transform-remove-imports\"\nversion = \"0.1.0\"\nedition = \"2021\"\npublish = false\n\n[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n\n[profile.release]\n# This removes more dead code\ncodegen-units = 1\nlto = true\n\n# Optimize for size\nopt-level = \"s\"\n\n# Strip debug symbols\nstrip = \"symbols\"\n\n[dependencies]\nanyhow = \"1\"\nregex = \"1\"\nserde = { version = \"1\", features = [\"derive\"] }\nserde_json = \"1\"\nswc_cached = \"2\"\nswc_core = { version = \"77\", features = [\"ecma_plugin_transform\"] }\n\n# .cargo/config defines few alias to build plugin.\n# cargo build-wasip1 generates wasm-wasi32 binary\n# cargo build-wasm32 generates wasm32-unknown-unknown binary.\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "cf108fb3c0fffd7c8973c4ff6612376279cd1888e2d24eb5abc031847f9948ca",
+      "score": 120,
+      "content": "{\n  \"name\": \"swc-plugin-transform-remove-imports\",\n  \"version\": \"9.0.0\",\n  \"description\": \"SWC plugin for remove imports\",\n  \"license\": \"MIT\",\n  \"keywords\": [\n    \"swc-plugin\"\n  ],\n  \"homepage\": \"https://github.com/VKCOM/swc-plugin-transform-remove-imports\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/VKCOM/swc-plugin-transform-remove-imports.git\"\n  },\n  \"bugs\": \"https://github.com/VKCOM/swc-plugin-transform-remove-imports/issues\",\n  \"main\": \"swc_plugin_transform_remove_imports.wasm\",\n  \"scripts\": {\n    \"prepack\": \"npm run build\",\n    \"build\": \"cargo build-wasip1 --release\",\n    \"postbuild\": \"cp target/wasm32-wasip1/release/swc_plugin_transform_remove_imports.wasm .\",\n    \"test\": \"cargo test\",\n    \"lint\": \"cargo clippy --all-targets --all-features\"\n  },\n  \"files\": [\n    \"swc_plugin_transform_remove_imports.wasm\"\n  ],\n  \"preferUnplugged\": true\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b31656bf84eb0e4587edd8e572bfe68f4db82d3c25afda64883667eb15b66c78",
+      "score": 100,
+      "content": "# swc-plugin-transform-remove-imports\n\nA Rust versions of [babel-plugin-transform-remove-imports](https://github.com/uiwjs/babel-plugin-transform-remove-imports).\n\nModular import plugin for swc. Also works for cjs to delete imported CSS to avoid compilation errors.\n\n## Installation\n\n**npm:**\n\n```sh\nnpm i -D swc-plugin-transform-remove-imports\n```\n\n**yarn:**\n\n```sh\nyarn add -D swc-plugin-transform-remove-imports\n```\n\nYou can check the compatibility of versions on https://plugins.swc.rs/\n\n## Usage\n\nVia `.swcrc`\n\n```json\n{\n  \"jsc\": {\n    \"experimental\": {\n      \"plugins\": [\n        [\n          \"swc-plugin-transform-remove-imports\",\n          {\n            \"test\": \"\\\\.(less|css)$\"\n          }\n        ]\n      ]\n    }\n  }\n}\n```\n\n### Support import\n\n```js\n// Input Code\nimport \"./index.less\";\nimport \"./index.main.less\";\nimport { Button } from \"uiw\";\nimport { Select } from \"@uiw/core\";\n\n// Output   ↓ ↓ ↓ ↓ ↓ ↓\nimport { Button } from \"uiw\";\nimport { Select } from \"@uiw/core\";\n```\n\nOutput Result\n\n```diff\n- import './index.less';\n- import './index.main.less';\nimport { Button } from 'uiw';\nimport { Select } from '@uiw/core';\n```\n\n#### Support `require`\n\n## Options\n\n### `test`\n\nType: `Regex | Regex[]`\n\nA regular expression to match the imports that will be removed.\n\n### `remove`\n\nOptional. Possible values: `'effects'`\n\nRemoving only side effects imports.\n\n```js\n// Input Code\nimport \"foo\";\nimport Foo from \"foo\";\n\n// Output Code  ↓ ↓ ↓ ↓ ↓ ↓\nimport Foo from \"foo\";\n```\n\n## License\n\n[MIT](./LICENSE)\n"
+    },
+    {
+      "path": "tests/__swc_snapshots__/src/transform.rs/require_effects.js",
+      "sha": null,
+      "content_sha256": "c6274d95ab40905d3b48317d16c7e3d4ae9084d8f9b099c697cd416db1e43f95",
+      "score": 87,
+      "content": "const foo = require('foo');\n"
+    },
+    {
+      "path": "tests/__swc_snapshots__/src/transform.rs/effects.js",
+      "sha": null,
+      "content_sha256": "a65bd0a0ad38492ca540dbfe894f067ad0cc3d19cabc1d12b5f7942fcce26869",
+      "score": 87,
+      "content": "import Foo from 'foo';\n"
+    },
+    {
+      "path": "tests/__swc_snapshots__/src/transform.rs/require_remove_all.js",
+      "sha": null,
+      "content_sha256": "f68382ce7f102149dc6e4cc94af95801bfd3c48f7e3676d5358b57858e8d2310",
+      "score": 87,
+      "content": "const test = \"test\";\n"
+    },
+    {
+      "path": "tests/__swc_snapshots__/src/transform.rs/example.js",
+      "sha": null,
+      "content_sha256": "ac2e8b9077708e810c27c67f4855ad82fb2670bdc339a7e53ca5559062dedbcf",
+      "score": 87,
+      "content": "import { Button } from 'uiw';\nimport { Select } from '@uiw/core';\n"
+    },
+    {
+      "path": "tests/__swc_snapshots__/src/transform.rs/require_example.js",
+      "sha": null,
+      "content_sha256": "a4e57d32ff3eb7f1258f1417f23ebf20a1b7393ef4238d56016af68185afbe2b",
+      "score": 87,
+      "content": "const uiw = require('uiw');\nconst core = require('@uiw/core');\n"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha": null,
+      "content_sha256": "7e042ad918adcbf924873233c07e10616065f92a8b02132c858825a9170f8096",
+      "score": 35,
+      "content": "[toolchain]\nchannel = \"nightly-2026-02-26\"\ncomponents = [\"clippy\"]\ntargets = [\"wasm32-wasip1\"]\nprofile = \"minimal\"\n"
+    },
+    {
+      "path": "package-lock.json",
+      "sha": null,
+      "content_sha256": "839143e2febc5b957565633845482736e6ba52603dc8f6c299493c07eef44515",
+      "score": 35,
+      "content": "{\n  \"name\": \"swc-plugin-transform-remove-imports\",\n  \"version\": \"9.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"swc-plugin-transform-remove-imports\",\n      \"version\": \"9.0.0\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+    },
+    {
+      "path": ".cargo/config.toml",
+      "sha": null,
+      "content_sha256": "4d4b0a17fed17701884ccb717932b6007160d89303935c748a2d6c44b304553d",
+      "score": 33,
+      "content": "# These command aliases are not final, may change\n[alias]\n# Alias to build actual plugin binary for the specified target.\nbuild-wasip1 = \"build --target wasm32-wasip1\"\nbuild-wasm32 = \"build --target wasm32-unknown-unknown\"\n"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha": null,
+      "content_sha256": "cac14032a43a3386a9a46f71291bd1048c87353f8b16d07201fc2256886448c1",
+      "score": 33,
+      "content": "use swc_core::ecma::{ast::*, visit::visit_mut_pass};\nuse swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};\nuse transform::TransformVisitor;\n\nmod transform;\n\n#[plugin_transform]\npub fn process_transform(program: Program, data: TransformPluginProgramMetadata) -> Program {\n    let remove_imports_transform: TransformVisitor = serde_json::from_str(\n        &data\n            .get_transform_plugin_config()\n            .expect(\"failed to get plugin config\"),\n    )\n    .expect(\"invalid config\");\n\n    program.apply(visit_mut_pass(remove_imports_transform))\n}\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "59c5df820ebb5540f78fd5d6f912cc823ad192eac990e34e3ff5966ca8186744",
+      "score": 33,
+      "content": "version: 2\nupdates:\n  # Maintain dependencies for GitHub Actions\n  - package-ecosystem: 'github-actions'\n    directory: '/'\n    schedule:\n      interval: 'daily'\n\n  # Maintain dependencies for npm\n  - package-ecosystem: 'npm'\n    directory: '/'\n    schedule:\n      interval: 'daily'\n    allow:\n      - dependency-type: 'direct'\n\n  # Maintain dependencies for Cargo\n  - package-ecosystem: 'cargo'\n    directory: '/'\n    schedule:\n      interval: 'weekly'\n    allow:\n      - dependency-type: 'indirect'\n"
+    },
+    {
+      "path": "src/transform.rs",
+      "sha": null,
+      "content_sha256": "618083059a43f0bdec6998150715b4e2694db09af64efd41038a67424aa0d450",
+      "score": 33,
+      "content": "#[cfg(test)]\nuse anyhow::Result;\n#[cfg(test)]\nuse swc_core::ecma::visit::visit_mut_pass;\n\nuse serde::Deserialize;\nuse swc_cached::regex::CachedRegex;\nuse swc_core::ecma::visit::VisitMutWith;\nuse swc_core::{\n    common::util::take::Take,\n    ecma::{ast::*, transforms::testing::test, visit::VisitMut},\n};\n\n#[derive(Debug, Default, Clone, Deserialize)]\n#[serde(untagged)]\npub enum Matcher {\n    #[default]\n    None,\n    Regex(CachedRegex),\n    Multi(Vec<Matcher>),\n}\n\nimpl Matcher {\n    #[cfg(test)]\n    pub fn new(input: &str) -> Result<Self> {\n        let r = CachedRegex::new(input)?;\n\n        Ok(Matcher::Regex(r))\n    }\n\n    pub fn matches(&self, text: &str) -> bool {\n        match self {\n            Matcher::None => false,\n\n            Matcher::Regex(re) => re.is_match(text),\n            Matcher::Multi(ref v) => {\n                for m in v {\n                    if m.matches(text) {\n                        return true;\n                    }\n                }\n\n                false\n            }\n        }\n    }\n}\n\n#[derive(Debug, Default, Deserialize)]\nenum Remove {\n    #[default]\n    None,\n\n    /// Removing only side effects imports\n    #[serde(rename = \"effects\")]\n    Effects,\n}\n\n#[derive(Debug, Deserialize)]\npub struct TransformVisitor {\n    /// A regular expression to match the imports that will be removed\n    test: Matcher,\n\n    /// Used with the test option\n    #[serde(default)]\n    remove: Remove,\n}\n\nimpl TransformVisitor {\n    fn is_need_remove_call(&mut self, call: &mut CallExpr) -> bool {\n        if let Callee::Expr(expr) = &mut call.callee {\n            if let Expr::Ident(call_name) = &mut **expr {\n                if call_name.sym.ne(\"require\") || call.args.is_empty() {\n                    return false;\n                }\n\n                if let Expr::Lit(Lit::Str(arg)) = &*call.args[0].expr {\n                    return self\n                        .test\n                        .matches(arg.value.as_str().expect(\"non-utf8 string\"));\n                }\n            }\n        }\n\n        false\n    }\n}\n\nimpl VisitMut for TransformVisitor {\n    fn visit_mut_import_decl(&mut self, n: &mut ImportDecl) {\n        if !self\n            .test\n            .matches(n.src.value.as_str().expect(\"non-utf8 string\"))\n        {\n            return;\n        }\n\n        match &self.remove {\n            Remove::Effects => {\n                if n.specifiers.is_empty() {\n                    n.take();\n                }\n            }\n            _ => {\n                n.take();\n            }\n        }\n    }\n\n    fn visit_mut_var_declarator(&mut self, v: &mut VarDeclarator) {\n        if let Some(expr) = &mut v.init {\n            if let Expr::Call(call) = &mut **expr {\n                if !self.is_need_remove_call(call) {\n                    return;\n                }\n\n                match &self.remove {\n                    Remove::Effects => {}\n                    _ => {\n                        v.name.take();\n                    }\n                }\n            }\n        }\n\n        v.visit_mut_children_with(self);\n    }\n\n    fn visit_mut_var_declarators(&mut self, vars: &mut Vec<VarDeclarator>) {\n        vars.visit_mut_children_with(self);\n\n        vars.retain(|node| {\n            // We want to remove the node, so we should return false.\n            if node.name.is_invalid() {\n                return false;\n            }\n\n            // Return true if we want to keep the node.\n            true\n        });\n    }\n\n    fn visit_mut_stmt(&mut self, s: &mut Stmt) {\n        s.visit_mut_children_with(self);\n\n        match s {\n            Stmt::Decl(Decl::Var(var)) if var.decls.is_empty() => {\n                // Variable declaration without declarator is invalid.\n                //\n                // After this, `s` becomes `Stmt::Empty`.\n                s.take();\n            }\n            Stmt::Expr(expr) => {\n                if let Expr::Call(call) = &mut *expr.expr {\n                    if self.is_need_remove_call(call) {\n                        s.take();\n                    }\n                }\n            }\n            _ => {}\n        }\n    }\n\n    fn visit_mut_stmts(&mut self, stmts: &mut Vec<Stmt>) {\n        stmts.visit_mut_children_with(self);\n\n        // We remove `Stmt::Empty` from the statement list.\n        // This is optional, but it's required if you don't want extra `;` in output.\n        stmts.retain(|s| {\n            // We use `matches` macro as this match is trivial.\n            !matches!(s, Stmt::Empty(..))\n        });\n    }\n\n    fn visit_mut_module_items(&mut self, stmts: &mut Vec<ModuleItem>) {\n        stmts.visit_mut_children_with(self);\n\n        // We do same thing here.\n        stmts.retain(|s| match s {\n            ModuleItem::ModuleDecl(ModuleDecl::Import(x)) => !x.src.is_empty(),\n            ModuleItem::Stmt(Stmt::Empty(..)) => false,\n            _ => true,\n        });\n    }\n}\n\n// TEST //\n\ntest!(\n    Default::default(),\n    |_| visit_mut_pass(TransformVisitor {\n        test: Matcher::new(\"\\\\.(less|css)$\").unwrap(),\n        remove: Remove::None,\n    }),\n    example,\n    r#\"\nimport './index.less';\nimport './index.main.css';\nimport { Button } from 'uiw';\nimport { Select } from '@uiw/core';\n\"#\n);\n\ntest!(\n    Default::default(),\n    |_| visit_mut_pass(TransformVisitor {\n        test: Matcher::new(\"\").unwrap(),\n        remove: Remove::None,\n    }),\n    remove_all,\n    r#\"\nimport './index.less';\nimport './index.main.css';\nimport { Button } from 'uiw';\nimport { Select } from '@uiw/core';\n\"#\n);\n\ntest!(\n    Default::default(),\n    |_| visit_mut_pass(TransformVisitor {\n        test: Matcher::new(\"foo\").unwrap(),\n        remove: Remove::Effects,\n    }),\n    effects,\n    r#\"\nimport 'foo';\nimport Foo from 'foo';\n\"#\n);\n\ntest!(\n    Default::default(),\n    |_| visit_mut_pass(TransformVisitor {\n        test: Matcher::new(\"\\\\.(less|css)$\").unwrap(),\n        remove: Remove::None,\n    }),\n    require_example,\n    r#\"\nrequire('./index.less');\nrequire('./index.main.css');\nconst uiw = require('uiw');\nconst core = require('@uiw/core');\n\"#\n);\n\ntest!(\n    Default::default(),\n    |_| visit_mut_pass(TransformVisitor {\n        test: Matcher::new(\"\").unwrap(),\n        remove: Remove::None,\n    }),\n    require_remove_all,\n    r#\"\nrequire('./index.less');\nrequire('./index.main.css');\nconst uiw = require('uiw');\nconst core = require('@uiw/core');\nconst test = \"test\";\n\"#\n);\n\ntest!(\n    Default::default(),\n    |_| visit_mut_pass(TransformVisitor {\n        test: Matcher::new(\"foo\").unwrap(),\n        remove: Remove::Effects,\n    }),\n    require_effects,\n    r#\"\nrequire('foo');\nconst foo = require('foo');\n\"#\n);\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T02:31:26.803762+00:00"
+}

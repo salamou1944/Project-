@@ -1,0 +1,62 @@
+{
+  "canonical_source": "github:MariaDB/governance",
+  "repo": "MariaDB/governance",
+  "revision_sha": "427736467f8bbda62234f5595d3fd864ef2e08e7",
+  "default_branch": "main",
+  "pushed_at": "2026-09-28T08:25:17Z",
+  "repo_updated_at": "2026-09-28T08:25:17Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/update-lists-on-change.yml",
+      "sha": null,
+      "content_sha256": "d8f4d9516eb259a484f92283fe4540e368d268e64528abfaedde1bef6fe81eac",
+      "score": 126,
+      "content": "name: update_lists_on_change\n\non:\n  push:\n    branches:\n      - main\n    paths:\n      - 'lists/**'\n  workflow_dispatch:\n\nconcurrency:\n  group: update-lists\n  cancel-in-progress: false\n\npermissions:\n  contents: read\n\njobs:\n  update-lists:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n\n      - name: Sync GitHub teams from lists/\n        env:\n          # Needs permission to manage org team membership (Members: read and).\n          # GITHUB_TOKEN cannot usually change org teams; store a PAT or GitHub App\n          # token as TEAM_SYNC_TOKEN.\n          GH_TOKEN: ${{ secrets.TEAM_SYNC_TOKEN || github.token }}\n        run: bash .github/workflows/update_lists.sh \n\n"
+    },
+    {
+      "path": ".github/workflows/update_lists.sh",
+      "sha": null,
+      "content_sha256": "bf3e9cbda3d25d230c0e44f7f6f8049f7f25f46bcaf07e49267d40068167f48d",
+      "score": 126,
+      "content": "#!/bin/bash\n\n# A script to synchronize selected GitHub org teams with the lists in this repo.\n\n# GitHub logins that must remain on both teams even if absent from the lists.\nPROTECTED=(vuvova gkodinov)\n\nset -euo pipefail\nlowercase() {\n  tr '[:upper:]' '[:lower:]'\n}\n\nextract_logins() {\n  local file=\"$1\"\n  if [[ ! -f \"$file\" ]]; then\n    echo \"error: missing $file\" >&2\n    return 1\n  fi\n  grep -E '^[[:space:]]*\\*[[:space:]]+\\[[^]]+\\]\\(https://github\\.com/[a-zA-Z0-9_-]+\\)$' \"$file\" \\\n    | sed -E 's|.*https://github\\.com/([a-zA-Z0-9_-]+)\\)$|\\1|' \\\n    | lowercase \\\n    | sort -u\n}\n\nlist_team_members() {\n  local team=\"$1\"\n  gh api --paginate \"orgs/MariaDB/teams/${team}/members\" --jq '.[].login' \\\n    | lowercase \\\n    | sort -u\n}\n\nadd_member() {\n  local team=\"$1\" user=\"$2\"\n  echo \"ADD  ${team}: ${user}\"\n  gh api --silent -X PUT \"orgs/MariaDB/teams/${team}/memberships/${user}\" -f role=member\n}\n\nremove_member() {\n  local team=\"$1\" user=\"$2\"\n  echo \"REMOVE ${team}: ${user}\"\n  gh api --silent -X DELETE \"orgs/MariaDB/teams/${team}/memberships/${user}\"\n}\n\nin_list() {\n  local needle=\"$1\"\n  shift\n  local item\n  for item in \"$@\"; do\n    [[ \"$item\" == \"$needle\" ]] && return 0\n  done\n  return 1\n}\n\nsync_team() {\n  local team=\"$1\"\n  local list_file=\"$2\"\n  echo \"::group::Sync org team '${team}' from ${list_file}\"\n  desired=()\n  while IFS= read -r line || [[ -n \"$line\" ]]; do\n    [[ -n \"$line\" ]] && desired+=(\"$line\")\n  done < <(extract_logins \"$list_file\")\n  current=()\n  while IFS= read -r line || [[ -n \"$line\" ]]; do\n    [[ -n \"$line\" ]] && current+=(\"$line\")\n  done < <(list_team_members \"$team\")\n  # Protected accounts stay on the team regardless of list contents.\n  local user\n  for user in \"${PROTECTED[@]}\"; do\n    user=\"$(printf '%s' \"$user\" | lowercase)\"\n    if ! in_list \"$user\" \"${desired[@]+\"${desired[@]}\"}\"; then\n      desired+=(\"$user\")\n    fi\n  done\n  echo \"Desired ($(printf '%s' \"${#desired[@]}\")): ${desired[*]:-}\"\n  echo \"Current ($(printf '%s' \"${#current[@]}\")): ${current[*]:-}\"\n  local failed=0\n  for user in \"${current[@]+\"${current[@]}\"}\"; do\n    [[ -n \"$user\" ]] || continue\n    if in_list \"$user\" \"${PROTECTED[@]}\"; then\n      continue\n    fi\n    if ! in_list \"$user\" \"${desired[@]+\"${desired[@]}\"}\"; then\n      if ! remove_member \"$team\" \"$user\"; then\n        echo \"::error::Failed to remove ${user} from ${team}\"\n        failed=1\n      fi\n    fi\n  done\n  for user in \"${desired[@]+\"${desired[@]}\"}\"; do\n    [[ -n \"$user\" ]] || continue\n    if ! in_list \"$user\" \"${current[@]+\"${current[@]}\"}\"; then\n      if ! add_member \"$team\" \"$user\"; then\n        echo \"::error::Failed to add ${user} to ${team} (must already be an org member)\"\n        failed=1\n      fi\n    fi\n  done\n  echo \"::endgroup::\"\n  return \"$failed\"\n}\n\n\nstatus=0\nsync_team committers lists/committers.md || status=1\nsync_team reviewers lists/reviewers.md || status=1\nexit \"$status\"\n"
+    },
+    {
+      "path": ".github/workflows/check-lists-format.yml",
+      "sha": null,
+      "content_sha256": "f1457e101366725e71d19aec72a6cd53fdb960290c7c485bd4d29ddcd4f32a85",
+      "score": 126,
+      "content": "name: Check lists formatting\n\non:\n  pull_request:\n    paths:\n      - 'lists/**'\n\njobs:\n  verify-list-files:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v7\n\n      - name: Verify bullet counts match the required pattern\n        run: |\n          # all lines that start with this:\n          BULLET_RE='^[[:space:]]*\\*[[:space:]]+'\n\n          # must match this:\n          LINK_RE=$BULLET_RE'\\[[^]]+\\]\\(https://github\\.com/[a-zA-Z0-9_-]+\\)$'\n\n          ! grep -hE \"$BULLET_RE\" lists/* | grep -vE \"$LINK_RE\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "f251e282dcb9e67e448ffd7bbaa739404380120f6852c591ee911e65aa7488c5",
+      "score": 100,
+      "content": "# MariaDB Governance\n\nThis repository contains the governance, policies, and related documents for the MariaDB project.\n\n## Purpose\n\nThe goal of this repository is to provide a clear, transparent home for the rules and processes that help the MariaDB community and contributors collaborate effectively. It includes the following documents:\n\n- [Governance of MariaDB Server](governance.md)\n- [Code of Conduct](code-of-conduct.md)\n- [Response Times](response-times.md)\n- [Committers](committers.md)\n- [Maintainers](maintainers.md)\n- [Security policy](security-policy.md)\n- [Deprecation policy](deprecation-policy.md)\n- [Quality Development Rules](quality-development-rules.md)\n- [AI contribution policy](ai-policy.md)\n\nChanging to this repository follow the process described in [Governance. Decision making](governance.md#3-decision-making) and [Maintainers. Voting and Recording decisions](maintainers.md#voting-and-recording-decisions)\n"
+    },
+    {
+      "path": "security-policy.md",
+      "sha": null,
+      "content_sha256": "55fbb204cfade4c6b6abf44fe8eb6204d7663d946e54d2a92ce2f37cf3e0ff70",
+      "score": 80,
+      "content": "# Security policy\n\nMariaDB Foundation is committed to ensuring all security bugs are fixed within stable MariaDB Server versions. Security issues can be reported via security@mariadb.org or under the [HackerOne Program](https://hackerone.com/mariadb).\n\nThe MariaDB Server developers classify all security bugs according to their threat level. The threat level can be one of:\n\n* **Critical:** an exploitable vulnerability that causes arbitrary code execution or allows an  \n  unauthenticated user to crash the server or get access to the data.  \n* **Medium:** everything else.\n\nWe strive to fix any Critical security bug immediately and release fixed MariaDB binaries for all supported MariaDB versions as soon as possible, usually within two weeks.\n\nWe will fix Medium security bugs as soon as possible, but we will not change our planned release schedule to get the fix out earlier.\n\nPlease review our Security Policy and Assets covered within that we have available on our [HackerOne profile](https://hackerone.com/mariadb).\n\nWe will follow responsible disclosure procedures and will alert related projects and forks such as Oracle MySQL and Percona Server if we believe a reported security issue affects those projects as well.\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T02:31:33.401302+00:00"
+}

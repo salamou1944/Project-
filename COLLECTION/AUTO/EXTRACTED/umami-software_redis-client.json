@@ -1,0 +1,97 @@
+{
+  "canonical_source": "github:umami-software/redis-client",
+  "repo": "umami-software/redis-client",
+  "revision_sha": "01a62d30d5cef981e68385f20cd689b7178fb709",
+  "default_branch": "master",
+  "pushed_at": "2025-10-29T22:42:15Z",
+  "repo_updated_at": "2025-10-29T22:42:19Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "9e8c2d91d8d8e8c959d7e6031e8c24b559ebd1e13461398ca3988f73d76d7df6",
+      "score": 120,
+      "content": "{\n  \"name\": \"@umami/redis-client\",\n  \"version\": \"0.30.0\",\n  \"description\": \"Redis client wrapper\",\n  \"main\": \"dist/index.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"files\": [\n    \"dist\"\n  ],\n  \"publishConfig\": {\n    \"access\": \"public\"\n  },\n  \"license\": \"MIT\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/umami-software/redis-client.git\"\n  },\n  \"scripts\": {\n    \"build\": \"rollup -c\"\n  },\n  \"dependencies\": {\n    \"debug\": \"^4.3.4\",\n    \"redis\": \"^4.5.1\"\n  },\n  \"devDependencies\": {\n    \"@rollup/plugin-commonjs\": \"^28.0.6\",\n    \"@rollup/plugin-node-resolve\": \"^16.0.1\",\n    \"@types/node\": \"^18.7.13\",\n    \"@typescript-eslint/eslint-plugin\": \"^6.12.0\",\n    \"@typescript-eslint/parser\": \"^6.12.0\",\n    \"dotenv\": \"^10.0.0\",\n    \"esbuild\": \"^0.25.9\",\n    \"eslint\": \"^7.32.0\",\n    \"eslint-config-prettier\": \"^8.1.0\",\n    \"eslint-plugin-import\": \"^2.22.1\",\n    \"eslint-plugin-jest\": \"^24.3.4\",\n    \"eslint-plugin-prettier\": \"^4.0.0\",\n    \"eslint-plugin-promise\": \"^5.1.0\",\n    \"husky\": \"^7.0.4\",\n    \"jest\": \"^27.2.4\",\n    \"lint-staged\": \"^11.1.2\",\n    \"prettier\": \"^2.2.1\",\n    \"prettier-eslint\": \"^13.0.0\",\n    \"rollup\": \"^4.50.0\",\n    \"rollup-plugin-dts\": \"^5.1.1\",\n    \"rollup-plugin-esbuild\": \"^5.0.0\",\n    \"rollup-plugin-peer-deps-external\": \"^2.2.4\",\n    \"rollup-plugin-ts\": \"^3.4.5\",\n    \"source-map-loader\": \"^3.0.0\",\n    \"typescript\": \"^5.9.2\"\n  },\n  \"pnpm\": {\n    \"onlyBuiltDependencies\": [\n      \"esbuild\"\n    ]\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "7973232c5e0bc6eed6185cb72500ef0129820a75e8065fb50e398ca2dc962670",
+      "score": 100,
+      "content": "# @umami/redis-client\n\nRedis client wrapper\n\n# Installation\n\n```\npnpm add @umami/redis-client\n```\n\n# Usage\n\n```javascript\nimport { UmamiRedisClient } from '@umami/redis-client';\n\nconst redis = new UmamiRedisClient({ url: process.env.REDIS_URL });\n\nawait redis.set('key', 'hello');\n```\n\n\n# License\n\nMIT\n"
+    },
+    {
+      "path": "src/UmamiRedisClient.ts",
+      "sha": null,
+      "content_sha256": "7001024af645f0ec97c5ff3d80302119a4bd0443cf1487602f0cbad0843f7fb8",
+      "score": 93,
+      "content": "import { createClient, RedisClientType } from 'redis';\nimport debug from 'debug';\n\nexport const log = debug('umami:redis-client');\n\nexport const DELETED = '__DELETED__';\n\nconst logError = (err: unknown) => log(err);\n\nexport interface UmamiRedisClientOptions {\n  url: string;\n}\n\nexport class UmamiRedisClient {\n  url: string;\n  client: RedisClientType;\n  isConnected: boolean;\n\n  constructor({ url }: UmamiRedisClientOptions) {\n    const client = createClient({ url }).on('error', logError);\n\n    this.url = url;\n    this.client = client as RedisClientType;\n    this.isConnected = false;\n  }\n\n  async connect() {\n    if (!this.isConnected) {\n      this.isConnected = true;\n\n      await this.client.connect();\n\n      log('Redis connected');\n    }\n  }\n\n  async get(key: string) {\n    await this.connect();\n\n    const data = await this.client.get(key);\n\n    try {\n      return JSON.parse(data as string);\n    } catch {\n      return null;\n    }\n  }\n\n  async set(key: string, value: any) {\n    await this.connect();\n\n    return this.client.set(key, JSON.stringify(value));\n  }\n\n  async del(key: string) {\n    await this.connect();\n\n    return this.client.del(key);\n  }\n\n  async incr(key: string) {\n    await this.connect();\n\n    return this.client.incr(key);\n  }\n\n  async expire(key: string, seconds: number) {\n    await this.connect();\n\n    return this.client.expire(key, seconds);\n  }\n\n  async rateLimit(key: string, limit: number, seconds: number): Promise<boolean> {\n    await this.connect();\n\n    const res = await this.client.incr(key);\n\n    if (res === 1) {\n      await this.client.expire(key, seconds);\n    }\n\n    return res >= limit;\n  }\n\n  async fetch(key: string, query: () => Promise<any>, time: number = 0) {\n    const result = await this.get(key);\n\n    if (result === DELETED) {\n      return null;\n    }\n\n    if (!result && query) {\n      return await Promise.resolve(query()).then(async data => {\n        if (data) {\n          await this.store(key, data, time);\n        }\n\n        return data;\n      });\n    }\n\n    return result;\n  }\n\n  async store(key: string, data: any, time: number = 0) {\n    const result = this.set(key, data);\n\n    if (time > 0) {\n      await this.expire(key, time);\n    }\n\n    return result;\n  }\n\n  async remove(key: string, soft = false) {\n    return soft ? this.set(key, DELETED) : this.del(key);\n  }\n}\n\nexport default UmamiRedisClient;\n"
+    },
+    {
+      "path": "rollup.config.js",
+      "sha": null,
+      "content_sha256": "101fe57740a3cff16373cae6088a404bf9a9259975713470b323be94037a9554",
+      "score": 35,
+      "content": "import resolve from '@rollup/plugin-node-resolve';\nimport commonjs from '@rollup/plugin-commonjs';\nimport esbuild from 'rollup-plugin-esbuild';\nimport dts from 'rollup-plugin-dts';\n\nconst external = ['redis', 'debug'];\n\nexport default [\n  {\n    input: 'src/index.ts',\n    output: [\n      {\n        file: 'dist/index.js',\n        format: 'cjs',\n        exports: 'named',\n      },\n    ],\n    plugins: [resolve(), commonjs(), esbuild()],\n    external,\n  },\n  {\n    input: 'src/index.ts',\n    output: [\n      {\n        file: 'dist/index.d.ts',\n        format: 'es',\n      },\n    ],\n    plugins: [dts()],\n    external,\n  },\n];\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "7de4f4b2ffedea50a75f82d8a16434c4cd1a9cde21c36e2cef67860a55eed0f8",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"declaration\": true,\n    \"emitDeclarationOnly\": true,\n    \"esModuleInterop\": true,\n    \"noImplicitAny\": false,\n    \"preserveConstEnums\": true,\n    \"removeComments\": true,\n    \"sourceMap\": true,\n    \"allowSyntheticDefaultImports\": true,\n    \"allowJs\": true,\n    \"strict\": true,\n    \"outDir\": \"dist/types\",\n    \"target\": \"esnext\",\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"node\",\n    \"jsx\": \"react-jsx\",\n    \"lib\": [\"dom\", \"dom.iterable\", \"esnext\"],\n    \"skipLibCheck\": true,\n    \"baseUrl\": \".\",\n    \"paths\": { \"*\": [\"src/*\"] }\n  },\n  \"include\": [\"src/**/*\"],\n  \"exclude\": [\"node_modules\"]\n}\n"
+    },
+    {
+      "path": "jest.config.js",
+      "sha": null,
+      "content_sha256": "ce4a15483d0edbd3031c9e0c315e8532f88d08347d1f9991a06251f6a521d002",
+      "score": 35,
+      "content": "module.exports = {\n  verbose: true,\n  testEnvironment: 'jsdom',\n  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],\n  moduleNameMapper: {\n    '\\\\.(css|less|jpg|png|svg)$': '<rootDir>/test/mocks/emptyModule.js',\n    '^(components|assets|hooks|styles)(.*)': '<rootDir>/src/$1/$2',\n    '^(icons)': '<rootDir>/src/$1',\n  },\n};\n"
+    },
+    {
+      "path": ".eslintrc.json",
+      "sha": null,
+      "content_sha256": "d3d14a77525a71ef0e32bb9d70e825f4a7cc32d590b168ace1e2f2ca898883bf",
+      "score": 35,
+      "content": "{\n  \"env\": {\n    \"browser\": true,\n    \"commonjs\": true,\n    \"es6\": true,\n    \"node\": true,\n    \"jest\": true\n  },\n\n  \"parser\": \"@typescript-eslint/parser\",\n  \"parserOptions\": {\n    \"ecmaVersion\": 9\n  },\n  \"globals\": {\n    \"JSX\": true\n  },\n  \"extends\": [\n    \"plugin:@typescript-eslint/recommended\",\n    \"eslint:recommended\",\n    \"prettier\"\n  ],\n  \"plugins\": [\n    \"@typescript-eslint\",\n    \"prettier\"\n  ],\n  \"rules\": {\n    \"linebreak-style\": [\"error\", \"unix\"],\n    \"max-len\": [\n      \"error\",\n      {\n        \"code\": 100,\n        \"ignoreComments\": true\n      }\n    ],\n    \"import/no-unresolved\": \"off\",\n    \"no-unused-vars\": \"off\",\n    \"@typescript-eslint/no-explicit-any\": \"off\",\n    \"@typescript-eslint/no-unused-vars\": [\"error\"],\n    \"@typescript-eslint/no-var-requires\": \"off\",\n    \"@typescript-eslint/no-empty-function\": \"off\"\n  }\n}\n"
+    },
+    {
+      "path": ".prettierrc.json",
+      "sha": null,
+      "content_sha256": "a069e5be1509e14ef5ae2946bf80269734fc6ecd3c1e7a9cbf7bb3f5eed75b55",
+      "score": 35,
+      "content": "{\n  \"arrowParens\": \"avoid\",\n  \"endOfLine\": \"lf\",\n  \"printWidth\": 100,\n  \"singleQuote\": true,\n  \"trailingComma\": \"all\"\n}\n"
+    },
+    {
+      "path": "src/declaration.d.ts",
+      "sha": null,
+      "content_sha256": "4aae2bb990b2e03f7ee3a20299eadcb79ee85314700f680f9939d6834c7ee696",
+      "score": 33,
+      "content": "declare module 'debug';\n"
+    },
+    {
+      "path": "src/index.ts",
+      "sha": null,
+      "content_sha256": "ed38cc7d23bea2250556997c8436f2b9b00d89de27d29af881894eddf6a95fc6",
+      "score": 33,
+      "content": "export { UmamiRedisClient, log, DELETED, type UmamiRedisClientOptions } from './UmamiRedisClient';\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T02:31:32.070328+00:00"
+}

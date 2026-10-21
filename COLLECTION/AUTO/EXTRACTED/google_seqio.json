@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:google/seqio",
+  "repo": "google/seqio",
+  "revision_sha": "bfcf0676ed917cdb24dafab0ab8fc9fc4dce4e73",
+  "default_branch": "main",
+  "pushed_at": "2026-10-07T11:29:42Z",
+  "repo_updated_at": "2026-10-07T11:29:45Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "seqio/docs/api_reference/seqio.test_utils.rst",
+      "sha": null,
+      "content_sha256": "239c8e431747f76d6bd0cd887e3535c7bea328a0983712410b59ecf5c0e94655",
+      "score": 199,
+      "content": "seqio.test_utils package\n========================\n\n.. currentmodule:: seqio.test_utils\n\n.. automodule:: seqio.test_utils\n  :members:"
+    },
+    {
+      "path": "seqio/docs/requirements.txt",
+      "sha": null,
+      "content_sha256": "553459e32c7dba33052a55f40f05b4977ebe2da23dce0755fe6746789e167a1b",
+      "score": 151,
+      "content": "sphinx>=4.4.0\nmyst_parser>=0.16.1\nmyst_nb\nsphinx-design\nsphinx-book-theme\napache-beam\n# Must install seqio itself for notebook execution and autodocs to work.\n."
+    },
+    {
+      "path": "seqio/scripts/cache_tasks_test.py",
+      "sha": null,
+      "content_sha256": "809c553e00503d36a433f259acac87e6787552233101f2b9a743263142bd1c9b",
+      "score": 149,
+      "content": "# Copyright 2026 The SeqIO Authors.\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#     http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n\"\"\"Tests for seqio.scripts.cache_tasks_main.\"\"\"\n\nimport functools\nimport os\n\nfrom absl import flags\nfrom absl.testing import absltest\nfrom apache_beam.testing.test_pipeline import TestPipeline\nimport seqio\nfrom seqio.scripts import cache_tasks_main\nimport tensorflow.compat.v2 as tf\n\n\ntf.compat.v1.enable_eager_execution()\n\nflags.FLAGS.min_shards = 0\nTaskRegistry = seqio.TaskRegistry\ntest_utils = seqio.test_utils\n\n\nclass ProcessTaskBeamTest(test_utils.FakeTaskTest):\n\n  def validate_pipeline(\n      self,\n      task_name,\n      expected_task_dir=\"cached_task\",\n      token_preprocessed=False,\n      ndfeatures=False,\n      ragged_features=False,\n      num_shards=2,\n  ):\n    self.assertTrue(TaskRegistry.get(\"cached_task\").cache_dir)\n    task = TaskRegistry.get(task_name)\n    self.assertFalse(task.cache_dir)\n\n    with TestPipeline() as p:\n      output_dirs = cache_tasks_main.run_pipeline(\n          p, [\"cached_task\", task_name], cache_dir=self.test_data_dir\n      )\n\n    actual_task_dir = os.path.join(\n        self.test_data_dir, seqio.get_task_dir_from_name(task_name)\n    )\n    expected_task_dir = os.path.join(\n        test_utils.TEST_DATA_DIR, expected_task_dir\n    )\n    expected_tfrecord_files = [\n        \"train.tfrecord-%05d-of-%05d\" % (i, num_shards)\n        for i in range(num_shards)\n    ]\n    expected_auxiliary_files = [\n        \"stats.train.json\",\n        \"info.train.json\",\n        \"COMPLETED\",\n    ]\n\n    if \"validation\" in task.splits:\n      expected_tfrecord_files.append(\"validation.tfrecord-00000-of-00001\")\n      expected_auxiliary_files.extend(\n          [\"stats.validation.json\", \"info.validation.json\"]\n      )\n    self.assertEqual([actual_task_dir], output_dirs)\n    self.assertCountEqual(\n        expected_tfrecord_files + expected_auxiliary_files,\n        tf.io.gfile.listdir(actual_task_dir),\n    )\n\n    for fname in expected_auxiliary_files:\n      actual_content = tf.io.gfile.GFile(\n          os.path.join(actual_task_dir, fname)\n      ).read()\n      expected_content = tf.io.gfile.GFile(\n          os.path.join(expected_task_dir, fname)\n      ).read()\n\n      # Accept minor formatting difference.\n      actual_content = actual_content.replace(\", \", \",\")\n      # Replace with actual number of shards.\n      expected_content = expected_content.replace(\n          '\"num_shards\": 2', f'\"num_shards\": {num_shards}'\n      )\n      # Replace with actual version.\n      version = seqio.__version__\n      expected_content = expected_content.replace(\n          '\"seqio_version\": \"0.0.0\"', f'\"seqio_version\": \"{version}\"'\n      )\n      self.assertEqual(\n          expected_content, actual_content, f\"Contents of {fname} mismath\"\n      )\n\n    # Check datasets.\n    self.verify_task_matches_fake_datasets(\n        task_name,\n        use_cached=True,\n        splits=task.splits,\n        token_preprocessed=token_preprocessed,\n        ndfeatures=ndfeatures,\n        ragged_features=ragged_features,\n        num_shards=num_shards,\n    )\n\n  def test_tfds_pipeline(self):\n    self.validate_pipeline(\"tfds_task\")\n\n  def test_new_tfds_pipeline(self):\n    self.validate_pipeline(\"t5:tfds_task\")\n\n  def test_text_line_pipeline(self):\n    self.validate_pipeline(\"text_line_task\")\n\n  def test_function_pipeline(self):\n    self.validate_pipeline(\"function_task\", num_shards=1)\n\n  def test_tf_example_pipeline(self):\n    self.validate_pipeline(\"tf_example_task\")\n\n  def test_cache_before_tokenization_ndfeatures_pipeline(self):\n    self.add_task(\n        \"task_tokenized_postcache_ndfeatures\",\n        seqio.dataset_providers.FunctionDataSource(\n            dataset_fn=functools.partial(\n                test_utils.get_fake_dataset, ndfeatures=True\n            ),\n            splits=[\"train\", \"validation\"],\n        ),\n        output_features={\n            \"inputs\": seqio.Feature(test_utils.sentencepiece_vocab()),\n            \"targets\": seqio.Feature(test_utils.sentencepiece_vocab()),\n            \"2d_feature\": seqio.Feature(\n                seqio.PassThroughVocabulary(1000, eos_id=0),\n                add_eos=False,\n                rank=2,\n            ),\n            \"3d_feature\": seqio.Feature(\n                seqio.PassThroughVocabulary(1000, eos_id=0),\n                add_eos=False,\n                rank=3,\n            ),\n        },\n        preprocessors=[\n            test_utils.test_text_preprocessor,\n            seqio.CacheDatasetPlaceholder(),\n            seqio.preprocessors.tokenize,\n            test_utils.token_preprocessor_no_sequence_length,\n            seqio.preprocessors.append_eos_after_trim,\n        ],\n    )\n    self.validate_pipeline(\n        \"task_tokenized_postcache_ndfeatures\",\n        expected_task_dir=\"cached_untokenized_ndfeatures_task\",\n        num_shards=1,\n        token_preprocessed=True,\n        ndfeatures=True,\n    )\n\n  def test_cache_before_tokenization_ragged_features_pipeline(self):\n    self.add_task(\n        \"task_tokenized_postcache_ragged_features\",\n        seqio.dataset_providers.FunctionDataSource(\n            dataset_fn=functools.partial(\n                test_utils.get_fake_dataset, ragged_features=True\n            ),\n            splits=[\"train\", \"validation\"],\n        ),\n        output_features={\n            \"inputs\": seqio.Feature(test_utils.sentencepiece_vocab()),\n            \"targets\": seqio.Feature(test_utils.sentencepiece_vocab()),\n            \"ragged_feature\": seqio.Feature(\n                seqio.PassThroughVocabulary(1000, eos_id=0),\n                add_eos=False,\n                rank=3,\n            ),\n        },\n        preprocessors=[\n            test_utils.test_text_preprocessor,\n            seqio.CacheDatasetPlaceholder(),\n            seqio.preprocessors.tokenize,\n            test_utils.token_preprocessor_no_sequence_length,\n            seqio.preprocessors.append_eos_after_trim,\n        ],\n    )\n    self.validate_pipeline(\n        \"task_tokenized_postcache_ragged_features\",\n        expected_task_dir=\"cached_untokenized_ragged_features_task\",\n        num_shards=1,\n        token_preprocessed=True,\n        ragged_features=True,\n    )\n\n  def test_cache_before_tokenization_pipeline(self):\n    self.add_task(\n        \"task_tokenized_postcache\",\n        self.function_source,\n        preprocessors=[\n            test_utils.test_text_preprocessor,\n            seqio.CacheDatasetPlaceholder(),\n            seqio.preprocessors.tokenize,\n            test_utils.token_preprocessor_no_sequence_length,\n            seqio.preprocessors.append_eos_after_trim,\n        ],\n    )\n    self.validate_pipeline(\n        \"task_tokenized_postcache\",\n        expected_task_dir=\"cached_untokenized_task\",\n        num_shards=1,\n        token_preprocessed=True,\n    )\n\n  def test_overwrite(self):\n    with TestPipeline() as p:\n      _ = cache_tasks_main.run_pipeline(\n          p, [\"uncached_task\"], cache_dir=self.test_data_dir, overwrite=True\n      )\n\n    actual_task_dir = os.path.join(self.test_data_dir, \"uncached_task\")\n    stat_old = tf.io.gfile.stat(\n        os.path.join(actual_task_dir, \"train.tfrecord-00000-of-00002\")\n    )\n\n    with TestPipeline() as p:\n      _ = cache_tasks_main.run_pipeline(\n          p, [\"uncached_task\"], cache_dir=self.test_data_dir, overwrite=True\n      )\n\n    stat_new = tf.io.gfile.stat(\n        os.path.join(actual_task_dir, \"train.tfrecord-00000-of-00002\")\n    )\n\n    self.assertGreater(stat_new.mtime_nsec, stat_old.mtime_nsec)\n\n\n\nif __name__ == \"__main__\":\n  absltest.main()\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ragged_features_task/stats.train.json",
+      "sha": null,
+      "content_sha256": "291b57176193900e017be138b1e6adce00784c999001ca6f03a6ceab2f8f672b",
+      "score": 147,
+      "content": "{\n  \"examples\": 3\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_task/stats.validation.json",
+      "sha": null,
+      "content_sha256": "08662ffa235f2f2890a6363a61040c95e4786ffd0d302f7e50ea9c646403e27d",
+      "score": 147,
+      "content": "{\n  \"examples\": 2,\n  \"inputs_max_tokens\": 12,\n  \"inputs_tokens\": 23,\n  \"targets_max_tokens\": 21,\n  \"targets_tokens\": 36\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_task/stats.train.json",
+      "sha": null,
+      "content_sha256": "11b34634785583fa1b1c10231a7ceebafd07a69cb57bd381d0238e78534c4fff",
+      "score": 147,
+      "content": "{\n  \"examples\": 3,\n  \"inputs_max_tokens\": 13,\n  \"inputs_tokens\": 36,\n  \"targets_max_tokens\": 6,\n  \"targets_tokens\": 18\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_task_with_provenance/stats.validation.json",
+      "sha": null,
+      "content_sha256": "08662ffa235f2f2890a6363a61040c95e4786ffd0d302f7e50ea9c646403e27d",
+      "score": 147,
+      "content": "{\n  \"examples\": 2,\n  \"inputs_max_tokens\": 12,\n  \"inputs_tokens\": 23,\n  \"targets_max_tokens\": 21,\n  \"targets_tokens\": 36\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_task_with_provenance/stats.train.json",
+      "sha": null,
+      "content_sha256": "11b34634785583fa1b1c10231a7ceebafd07a69cb57bd381d0238e78534c4fff",
+      "score": 147,
+      "content": "{\n  \"examples\": 3,\n  \"inputs_max_tokens\": 13,\n  \"inputs_tokens\": 36,\n  \"targets_max_tokens\": 6,\n  \"targets_tokens\": 18\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ragged_features_task/stats.validation.json",
+      "sha": null,
+      "content_sha256": "91dc9cd07e31981b54c130f417e2a9dfc8e0f3725798bd66504c2ff7e505f32f",
+      "score": 147,
+      "content": "{\n  \"examples\": 2\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_task/stats.validation.json",
+      "sha": null,
+      "content_sha256": "91dc9cd07e31981b54c130f417e2a9dfc8e0f3725798bd66504c2ff7e505f32f",
+      "score": 147,
+      "content": "{\n  \"examples\": 2\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ndfeatures_task/stats.validation.json",
+      "sha": null,
+      "content_sha256": "c6f4f5521dffa4f32730d8ed78684d37aa70fec3ae5e3438be1fafe0be782305",
+      "score": 147,
+      "content": "{\n  \"2d_feature_max_tokens\": 3,\n  \"2d_feature_tokens\": 6,\n  \"3d_feature_max_tokens\": 6,\n  \"3d_feature_tokens\": 12,\n  \"examples\": 2\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_task/info.train.json",
+      "sha": null,
+      "content_sha256": "9154cbfb5b39e65628c71f08ce34d1bff8c42bc9fb94bff3ea64f2ba3d26527e",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"inputs\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 1,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_plaintext_task/stats.train.json",
+      "sha": null,
+      "content_sha256": "11b34634785583fa1b1c10231a7ceebafd07a69cb57bd381d0238e78534c4fff",
+      "score": 147,
+      "content": "{\n  \"examples\": 3,\n  \"inputs_max_tokens\": 13,\n  \"inputs_tokens\": 36,\n  \"targets_max_tokens\": 6,\n  \"targets_tokens\": 18\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_task/stats.train.json",
+      "sha": null,
+      "content_sha256": "291b57176193900e017be138b1e6adce00784c999001ca6f03a6ceab2f8f672b",
+      "score": 147,
+      "content": "{\n  \"examples\": 3\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ndfeatures_task/stats.train.json",
+      "sha": null,
+      "content_sha256": "c4d86beacf703d89d90999edd9feb66ec25f8ab716bbd68c2f15535e4ec3ffab",
+      "score": 147,
+      "content": "{\n  \"2d_feature_max_tokens\": 3,\n  \"2d_feature_tokens\": 9,\n  \"3d_feature_max_tokens\": 6,\n  \"3d_feature_tokens\": 18,\n  \"examples\": 3\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ragged_features_task/info.train.json",
+      "sha": null,
+      "content_sha256": "3f81c11a95c0ce4c08d5f4db55a74ac7cf3855bb75e4e80ba2a6aae64568ac2f",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"inputs\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"ragged_feature\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null,\n        null,\n        2\n      ]\n    },\n    \"targets\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 1,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_task/info.validation.json",
+      "sha": null,
+      "content_sha256": "9b2f12047a8f3284940f5e0886f62f73bd983dc2fda59045ed5f9f727542f78d",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"id\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"ids\": {\n      \"dtype\": \"string\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"idx\": {\n      \"dtype\": \"int64\",\n      \"shape\": []\n    },\n    \"idxs\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs_pretokenized\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"targets_pretokenized\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 1,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_task/info.validation.json",
+      "sha": null,
+      "content_sha256": "b95da1e86a5ecc9a68718fa7d02f87efbcd4044f3c0370c4d4e2023d6152c8ae",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"id\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"ids\": {\n      \"dtype\": \"string\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"idx\": {\n      \"dtype\": \"int64\",\n      \"shape\": []\n    },\n    \"idxs\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 1,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_task/info.train.json",
+      "sha": null,
+      "content_sha256": "22c42881bc598a94cc8876bec5e8fb200657932a850bfb3868afcd6f53367d97",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"inputs\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs_pretokenized\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"targets_pretokenized\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 2,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ndfeatures_task/info.train.json",
+      "sha": null,
+      "content_sha256": "acf93081bb213b958f98340abfe1f93257442ada2f637425e2208dba1bb61603",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"2d_feature\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null,\n        3\n      ]\n    },\n    \"3d_feature\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null,\n        2,\n        3\n      ]\n    },\n    \"inputs\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 1,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_task_with_provenance/info.train.json",
+      "sha": null,
+      "content_sha256": "d862d9391291936a18720779b3981998ec25a0cef411e340e580b54de65b1a2e",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"inputs\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs_pretokenized\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"provenance/index_within_shard\": {\n      \"dtype\": \"int32\",\n      \"shape\": []\n    },\n    \"provenance/preprocessors_seed\": {\n      \"dtype\": \"int32\",\n      \"shape\": []\n    },\n    \"provenance/source_shard\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"provenance/source_shard_index\": {\n      \"dtype\": \"int32\",\n      \"shape\": []\n    },\n    \"provenance/task\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"targets_pretokenized\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 2,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ragged_features_task/info.validation.json",
+      "sha": null,
+      "content_sha256": "d6d79d670417a1db96ae7ff86d77474105aef63714606adfd441955d8eae93e4",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"id\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"ids\": {\n      \"dtype\": \"string\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"idx\": {\n      \"dtype\": \"int64\",\n      \"shape\": []\n    },\n    \"idxs\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"ragged_feature\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null,\n        null,\n        2\n      ]\n    },\n    \"targets\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 1,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_plaintext_task/info.train.json",
+      "sha": null,
+      "content_sha256": "f5f27fb0a8dae0b7f4be646a6078f5db5b80c45629dd4854307cd59820ea4ee2",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"inputs\": {\n      \"dtype\": \"int64\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs_plaintext\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"int64\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"targets_plaintext\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 2\n}\n"
+    },
+    {
+      "path": "seqio/test_data/cached_untokenized_ndfeatures_task/info.validation.json",
+      "sha": null,
+      "content_sha256": "387b0df3ce8711b23c5780674c1e6530e65962bd72c23e41f4586ecf7e1a0ce5",
+      "score": 147,
+      "content": "{\n  \"features\": {\n    \"2d_feature\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null,\n        3\n      ]\n    },\n    \"3d_feature\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null,\n        2,\n        3\n      ]\n    },\n    \"id\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"ids\": {\n      \"dtype\": \"string\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"idx\": {\n      \"dtype\": \"int64\",\n      \"shape\": []\n    },\n    \"idxs\": {\n      \"dtype\": \"int32\",\n      \"shape\": [\n        null\n      ]\n    },\n    \"inputs\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    },\n    \"targets\": {\n      \"dtype\": \"string\",\n      \"shape\": []\n    }\n  },\n  \"num_shards\": 1,\n  \"seqio_version\": \"0.0.0\"\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T02:31:19.063954+00:00"
+}

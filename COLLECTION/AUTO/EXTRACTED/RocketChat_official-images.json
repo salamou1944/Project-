@@ -1,0 +1,207 @@
+{
+  "canonical_source": "github:RocketChat/official-images",
+  "repo": "RocketChat/official-images",
+  "revision_sha": "094ec87ed6d32b30ec01f1d31baae2911e19864e",
+  "default_branch": "master",
+  "pushed_at": "2026-10-05T22:14:07Z",
+  "repo_updated_at": "2025-04-04T03:36:38Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/.bashbrew/action.yml",
+      "sha": null,
+      "content_sha256": "7921e3001a5ac0e1eb67d37a20ba233d3a56df2b983c157807cd3ff65ef4cdc3",
+      "score": 206,
+      "content": "# https://github.com/docker-library/official-images/pull/13556#issuecomment-1319181339 🙈\nname: 'Shared Bashbrew Action'\ndescription: 'Install the same version of Bashbrew consistently in all other GitHub Actions'\ninputs:\n  build:\n    default: 'host' # or 'docker' or 'none'\nruns:\n  using: 'composite'\n  steps:\n\n    # these two version numbers are intentionally as close together as I could possibly get them because no matter what I tried, GitHub will not allow me to DRY them (can't have any useful variables in `uses:` and can't even have YAML references to steal it in `env:` or something)\n    - shell: 'bash -Eeuo pipefail -x {0}'\n      run:    echo BASHBREW_VERSION=v0.1.12 >> \"$GITHUB_ENV\"\n    - uses: docker-library/bashbrew@v0.1.12\n      if: inputs.build == 'host'\n\n    - run: docker build --pull --tag oisupport/bashbrew:base \"https://github.com/docker-library/bashbrew.git#$BASHBREW_VERSION\"\n      shell: 'bash -Eeuo pipefail -x {0}'\n      if: inputs.build == 'docker'\n"
+    },
+    {
+      "path": ".github/workflows/test-pr.yml",
+      "sha": null,
+      "content_sha256": "28bcf18f8c8203acab3b85d2da4440c4384dabc2fc228f2b3dfbc01fc5ccbc25",
+      "score": 186,
+      "content": "name: Test PR\n\non:\n  pull_request:\n\ndefaults:\n  run:\n    shell: 'bash -Eeuo pipefail -x {0}'\n\nenv:\n  # https://github.com/docker-library/bashbrew/issues/10\n  GIT_LFS_SKIP_SMUDGE: 1\n  \n# cancel existing runs if user makes another push\nconcurrency:\n  group: ${{ github.ref }}\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n\npermissions:\n  contents: read\n\njobs:\n\n  naughty:\n    name: Naughty\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n      - uses: ./.github/workflows/.bashbrew\n      - name: Check for Common Issues\n        run: .github/workflows/naughty.sh\n\n  generate-jobs:\n    name: Generate Jobs\n    runs-on: ubuntu-latest\n    outputs:\n      strategy: ${{ steps.generate-jobs.outputs.strategy }}\n      length: ${{ steps.generate-jobs.outputs.length }}\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n      - uses: ./.github/workflows/.bashbrew\n      - id: generate-jobs\n        name: Generate Jobs\n        run: |\n          strategy=\"$(.github/workflows/generate.sh)\"\n          echo \"strategy=$strategy\" >> \"$GITHUB_OUTPUT\"\n          jq . <<<\"$strategy\" # sanity check / debugging aid\n          length=\"$(jq <<<\"$strategy\" -r '.matrix.include | length')\"\n          echo \"length=$length\" >> \"$GITHUB_OUTPUT\"\n\n  test:\n    needs: generate-jobs\n    strategy: ${{ fromJSON(needs.generate-jobs.outputs.strategy) }}\n    if: needs.generate-jobs.outputs.length > 0\n    name: ${{ matrix.name }}\n    runs-on: ${{ matrix.os }}\n    steps:\n      - name: Prepare Git\n        run: |\n          # enable symlinks on Windows (https://git-scm.com/docs/git-config#Documentation/git-config.txt-coresymlinks)\n          git config --global core.symlinks true\n          # also, make sure Windows symlinks are *real* symlinks (https://github.com/git-for-windows/git/pull/156)\n          echo 'MSYS=winsymlinks:nativestrict' >> \"$GITHUB_ENV\"\n          # https://github.com/docker-library/bashbrew/blob/a40a54d4d81b9fd2e39b4d7ba3fe203e8b022a67/scripts/github-actions/generate.sh#L146-L149\n        if: runner.os == 'Windows'\n      - uses: actions/checkout@v4\n      - uses: ./.github/workflows/.bashbrew\n      - name: Prepare Environment\n        run: ${{ matrix.runs.prepare }}\n      - name: Pull Dependencies\n        run: ${{ matrix.runs.pull }}\n      - name: Build ${{ matrix.name }}\n        run: ${{ matrix.runs.build }}\n      - name: History ${{ matrix.name }}\n        run: ${{ matrix.runs.history }}\n      - name: Test ${{ matrix.name }}\n        run: ${{ matrix.runs.test }}\n      - name: '\"docker images\"'\n        run: ${{ matrix.runs.images }}\n"
+    },
+    {
+      "path": "test/tests/composer/composer.json",
+      "sha": null,
+      "content_sha256": "933cc477aa35611f2fffa19c5eb7f8f94c16e6236bdda3722bfe745c0519a38f",
+      "score": 174,
+      "content": "{\n    \"require\": {\n        \"composer/composer\": \"^2\"\n    }\n}\n"
+    },
+    {
+      "path": "test/tests/composer/run.sh",
+      "sha": null,
+      "content_sha256": "56fde5390de19d68d7d1a62f755d11fab7650dc9a83d05c471a71d0c9c523e8d",
+      "score": 174,
+      "content": "../run-sh-in-container.sh"
+    },
+    {
+      "path": "test/tests/composer/container.sh",
+      "sha": null,
+      "content_sha256": "8097f397299d6b25ef1ca91b04555658d7d358bd6021868c3912f56029b4fe44",
+      "score": 174,
+      "content": "#!/bin/sh\n\ndir=\"$(mktemp -d)\"\n\ntrap \"rm -rf '$dir'\" EXIT\n\ncp composer.json \"$dir\"\n\ncd \"$dir\"\n\ncomposer --version\ncomposer install --no-interaction --no-progress --no-ansi --profile\n"
+    },
+    {
+      "path": "test/tests/rust-hello-world/container/Cargo.toml",
+      "sha": null,
+      "content_sha256": "c9883102eda0dc6e4f35e3031b51c697be51e43c01bbb4892e8869424c55df4e",
+      "score": 172,
+      "content": "[package]\nname = \"container\"\nversion = \"0.1.0\"\nauthors = [\"Steven Fackler <sfackler@gmail.com>\"]\n\n[dependencies]\nlibc = \"0.2\" # just make sure we can pull dependencies\n"
+    },
+    {
+      "path": "test/tests/haxe-haxelib-install/run.sh",
+      "sha": null,
+      "content_sha256": "76eb94fddd22bdc2442709047974d1e370add94275ce8eb7dfb7c266c5e8f2d0",
+      "score": 171,
+      "content": "../run-haxe-in-container.sh"
+    },
+    {
+      "path": "test/tests/php-ext-install/container.sh",
+      "sha": null,
+      "content_sha256": "0e76fe1720107ed80c07407191668ba0f56ed865120521c573bee4b9163cfa9e",
+      "score": 171,
+      "content": "#!/bin/sh\nset -e\n\ndocker-php-ext-install pdo_mysql 2>&1\nphp -d display_errors=stderr -r 'exit(extension_loaded(\"pdo_mysql\") ? 0 : 1);'\ngrep -q '^extension=' /usr/local/etc/php/conf.d/*pdo_mysql*.ini\n\n# opcache is pre-built by default at least as far back as PHP 5.5\ndocker-php-ext-enable opcache 2>&1\nphp -d display_errors=stderr -r 'exit(extension_loaded(\"Zend OPcache\") ? 0 : 1);'\ngrep -q '^zend_extension=' /usr/local/etc/php/conf.d/*opcache*.ini\n"
+    },
+    {
+      "path": "test/tests/php-ext-install/run.sh",
+      "sha": null,
+      "content_sha256": "56fde5390de19d68d7d1a62f755d11fab7650dc9a83d05c471a71d0c9c523e8d",
+      "score": 171,
+      "content": "../run-sh-in-container.sh"
+    },
+    {
+      "path": "test/tests/mongo-tls-auth/run.sh",
+      "sha": null,
+      "content_sha256": "1f898bcafa0f3ab4f2d6c011622ea946dc6000f312f7167160e9754389b80b33",
+      "score": 169,
+      "content": "../mongo-basics/run.sh"
+    },
+    {
+      "path": "test/tests/mongo-auth-basics/run.sh",
+      "sha": null,
+      "content_sha256": "1f898bcafa0f3ab4f2d6c011622ea946dc6000f312f7167160e9754389b80b33",
+      "score": 169,
+      "content": "../mongo-basics/run.sh"
+    },
+    {
+      "path": "test/tests/haskell-ghci/run.sh",
+      "sha": null,
+      "content_sha256": "e4c3b6f74320df2e9bb96a783f179268546256eb05ca8a6532e0584e8076f15b",
+      "score": 161,
+      "content": "../run-bash-in-container.sh"
+    },
+    {
+      "path": "test/tests/haskell-ghci/container.sh",
+      "sha": null,
+      "content_sha256": "11f67cb6f36df779384d7683a3a9502c080cf59ee7bfd9692d4c2230cb4c9cc9",
+      "score": 161,
+      "content": "#!/bin/bash\nset -e\n\n# Test that the REPL exists and 'works'.\necho | ghci\n"
+    },
+    {
+      "path": "test/README.md",
+      "sha": null,
+      "content_sha256": "72aa4c518b8c3a208d717b4906d03a35497fc353e52357ffe8b21ea9a2e98b2f",
+      "score": 158,
+      "content": "# Official Images Test Suite\n\n## Running Tests\n\n```console\n$ ./run.sh\n\nusage: run.sh [-t test ...] image:tag [...]\n   ie: run.sh debian:bookworm\n       run.sh -t utc python:3\n       run.sh -t utc python:3 -t python-hy\n\nThis script processes the specified Docker images to test their running\nenvironments.\n```\n\nRun all the tests that are applicable to the `debian:bookworm` image:\n\n```console\n$ ./run.sh debian:bookworm\ntesting debian:bookworm\n\t'utc' [1/4]...passed\n\t'no-hard-coded-passwords' [2/4]...passed\n\t'override-cmd' [3/4]...passed\n\t'debian-apt-get' [4/4]...passed\n```\n\nTry to run just the `python-hy` test against the `debian:bookworm` image: (which doesn't contain Python)\n\n```console\n$ ./run.sh -t python-hy debian:bookworm\ntesting debian:bookworm\n\timage has no tests...skipping\n```\n\nRun the `utc` and `python-hy` tests against `python:3`, `pypy:3`, and `debian:bookworm`:\n\n```console\n$ ./run.sh -t utc -t python-hy python:3 pypy:3 debian:bookworm\ntesting python:3\n\t'utc' [1/2]...passed\n\t'python-hy' [2/2]...passed\ntesting pypy:3\n\t'utc' [1/2]...passed\n\t'python-hy' [2/2]...passed\ntesting debian:bookworm\n\t'utc' [1/1]...passed\n```\n\n## Writing Tests\n\n### `tests/<test name>/`\n\nEach test lives in a separate directory inside `tests/`, and `config.sh` determines which images each test applies to.\n\n#### `tests/<test name>/run.sh`\n\nThis is the actual \"test script\". In the script, `$1` is the name of the image we're testing. An exit code of zero indicates success/passing, and a non-zero exit code indicates failure.\n\nFor example, `tests/utc/run.sh` consists of:\n\n```bash\n#!/bin/bash\nset -e\n\ndocker run --rm --entrypoint date \"$1\" +%Z\n```\n\nWhich runs `date` inside the given image, and outputs the current timezone according to `date +%Z`, which should be `UTC`. See `tests/<test name>/expected-std-out.txt` below for the other half of this test.\n\nThere are several pre-written `run.sh` scripts to help with common tasks. See the `tests/run-*-in-container.sh` section below for more details about these.\n\n#### `tests/<test name>/expected-std-out.txt`\n\nIf this file exists, then this test's `run.sh` is expected to output exactly the contents of this file on standard output, and differences will be assumed to denote test failure.\n\nTo continue with our `utc` test example, its contents in this file are simply:\n\n\tUTC\n\nIf a test fails due to having incorrect output, the `diff` between the generated output and the expected output will be displayed:\n\n```console\n$ ./run.sh -t utc fedora:21\ntesting fedora:21\n\t'utc' [1/1]...failed; unexpected output:\n--- tests/utc/expected-std-out.txt\t2015-02-05 16:52:05.013273118 -0700\n+++ -\t2015-03-13 15:11:49.725116569 -0600\n@@ -1 +1 @@\n-UTC\n+EDT\n```\n\n(this is an example of `fedora:21` failing the `utc` test)\n\n#### `tests/run-*-in-container.sh`\n\nThese scripts are intended to be used as symlink targets for test `run.sh` scripts.\n\nFor example, if `tests/python-sometest/run.sh` is a symlink to `../run-python-in-container.sh`, then `tests/run-python-in-container.sh` will execute `python tests/python-sometest/container.py` inside the image.\n\nTo illustrate further:\n\n```console\n$ ls -l tests/hylang-sh/\ntotal 8\n-rw-rw-r-- 1 tianon tianon 167 Mar 11 13:24 container.hy\n-rw-rw-r-- 1 tianon tianon   5 Mar 11 13:24 expected-std-out.txt\nlrwxrwxrwx 1 tianon tianon  25 Mar 11 13:25 run.sh -> ../run-hy-in-container.sh\n$ ls -l tests/python-hy/\ntotal 4\nlrwxrwxrwx 1 tianon tianon 25 Mar 11 13:25 container.hy -> ../hylang-sh/container.hy\n-rw-rw-r-- 1 tianon tianon 56 Mar 11 13:24 container.sh\nlrwxrwxrwx 1 tianon tianon 33 Mar 11 13:25 expected-std-out.txt -> ../hylang-sh/expected-std-out.txt\nlrwxrwxrwx 1 tianon tianon 27 Feb  5 16:52 run.sh -> ../run-bash-in-container.sh\n$ cat tests/python-hy/container.sh\n#!/bin/bash\nset -e\n\npip install -q hy\nhy ./container.hy\n```\n\n## Configuring the Test Suite\n\n### `config.sh`\n\nThis file controls which tests apply (or don't apply) to each image.\n\nWhen testing an image, the list of tests to apply are calculated by doing `globalTests + imageTests[testAlias[image]] + imageTests[image]`. Any tests for which `globalExcludeTests[image_test]` is set are removed. If `-t` is specified one or more times, any tests not specified explicitly via `-t` are also removed.\n\n#### `globalTests=( test ... )`\n\nThis list of tests applies to every image minus combinations listed in `globalExcludeTests` (such as `hello-world` not getting the `utc` test, since it has no `date` binary in order for the test to work).\n\n```bash\nglobalTests+=(\n\tutc\n\tno-hard-coded-passwords\n)\n```\n\n#### `testAlias=( [image]='image' ... )`\n\nThis array defines image aliases -- for example, the `pypy` image should inherit all the standard `python` image tests, since it's a functionally equivalent implementation of Python. As noted in `globalTests`, any image+test combinations that shouldn't or can't be tested as a result of this aliasing can be excluded via `globalExcludeTests`.\n\n```bash\ntestAlias+=(\n\t[pypy]='python'\n\t[jruby]='ruby'\n\n\t[mariadb]='mysql'\n\t[percona]='mysql'\n)\n```\n\n#### `imageTests=( [image]='test ...' ... )`\n\nThis array defines the list of explicit tests for each image. For example, the `mysql` image (and aliased derivatives via `testAlias`) has a test which verifies that basic functionality works, such as starting up the image and connecting to it from a separate container.\n\n```bash\nimageTests+=(\n\t[python]='\n\t\tpython-hy\n\t\tpython-pip-requests-ssl\n\t'\n\t[mysql]='\n\t\tmysql-basics\n\t'\n)\n```\n\n#### `globalExcludeTests=( [image_test]=1 ... )`\n\nDefines image+test combinations which shouldn't ever run (usually because they won't work, like trying to run `date` in the `hello-world` image for the `utc` test, which has only one binary).\n\n```bash\nglobalExcludeTests+=(\n\t# single-binary images\n\t[hello-world_utc]=1\n)\n```\n\n### Alternate config files\n\nIf you would like to run the Official Image tests against your own images, you can use the `-c/--config` flag to specify one or more alternate config files. These config files should configure the same environment variables used by the default `config.sh` (see above).\n\n```bash\nimageTests+=(\n\t[myorg/myimage]='\n\t\tmy-custom-test\n\t'\n)\n```\n\n**Note**: If you do use your own config file, the `config.sh` included here will no longer be loaded by default. If you want to load it in addition to your own config file (for example, to run the `globalTests` against your own image), use an additional `--config` flag.\n\n```console\n$ /path/to/official-images/test/run.sh --config /path/to/official-images/test/config.sh --config ./my-config.sh myimage\n```\n"
+    },
+    {
+      "path": "test/retry.sh",
+      "sha": null,
+      "content_sha256": "53923ff8ef2cb148747c169136c36b206f91c8b26cfda5e7eae50f0323b5d468",
+      "score": 151,
+      "content": "#!/bin/bash\n\nset -e\n\nopts=\"$(getopt -o 'i:c:t:s:' --long 'image:,cid:,tries:,sleep:' -- \"$@\")\"\neval set -- \"$opts\"\nwhile true; do\n\tflag=$1\n\tshift\n\tcase \"$flag\" in\n\t\t--image|-i) image=\"$1\" && shift ;;\n\t\t--cid|-c) cid=\"$1\" && shift ;;\n\t\t--tries|-t) tries=\"$1\" && shift ;;\n\t\t--sleep|-s) sleep=\"$1\" && shift ;;\n\t\t--) break;;\n\tesac\ndone\n\nif [ $# -eq 0 ]; then\n\techo >&2 'retry.sh requires a command to run'\n\tfalse\nfi\n\n: ${tries:=10}\n: ${sleep:=2}\n\nwhile ! eval \"$@\" &> /dev/null; do\n\t(( tries-- ))\n\tif [ $tries -le 0 ]; then\n\t\techo >&2 \"${image:-the container} failed to accept connections in a reasonable amount of time!\"\n\t\t[ \"$cid\" ] && ( set -x && docker logs \"$cid\" ) >&2 || true\n\t\t( set -x && eval \"$@\" ) >&2 || true # to hopefully get a useful error message\n\t\tfalse\n\tfi\n\tif [ \"$cid\" ] && [ \"$(docker inspect -f '{{.State.Running}}' \"$cid\" 2>/dev/null)\" != 'true' ]; then\n\t\techo >&2 \"${image:-the container} stopped unexpectedly!\"\n\t\t( set -x && docker logs \"$cid\" ) >&2 || true\n\t\tfalse\n\tfi\n\techo >&2 -n .\n\tsleep \"$sleep\"\ndone\n"
+    },
+    {
+      "path": "test/tests/postgres-initdb/initdb.sql",
+      "sha": null,
+      "content_sha256": "e101f24fc2b3406c81b2cbb6909f19a0a79754abca899b2096c147a7c6f3317d",
+      "score": 149,
+      "content": "CREATE TABLE test (a INT, b INT, c VARCHAR(255));\nINSERT INTO test VALUES (1, 2, 'hello');\nINSERT INTO test VALUES (2, 3, 'goodbye!');\nDELETE FROM test WHERE a = 1;\n"
+    },
+    {
+      "path": "test/tests/redis-basics-persistent/run.sh",
+      "sha": null,
+      "content_sha256": "12eb646333025db938af42bc6d84c95775c605937fe69403ed13568afce7c457",
+      "score": 149,
+      "content": "#!/bin/bash\nset -eo pipefail\n\ndir=\"$(dirname \"$(readlink -f \"$BASH_SOURCE\")\")\"\n\nimage=\"$1\"\n\ncname=\"redis-container-$RANDOM-$RANDOM\"\ncid=\"$(docker run -d --name \"$cname\" \"$image\")\"\ntrap \"docker rm -vf $cid > /dev/null\" EXIT\n\nredis-cli() {\n\tdocker run --rm -i \\\n\t\t--link \"$cname\":redis \\\n\t\t--entrypoint redis-cli \\\n\t\t\"$image\" \\\n\t\t-h redis \\\n\t\t\"$@\"\n}\n\n# http://redis.io/topics/quickstart#check-if-redis-is-working\n\n. \"$dir/../../retry.sh\" --tries 20 '[ \"$(redis-cli ping)\" = \"PONG\" ]'\n\n[ \"$(redis-cli set mykey somevalue)\" = 'OK' ]\n[ \"$(redis-cli get mykey)\" = 'somevalue' ]\n\ndocker stop \"$cname\"\ndocker start \"$cname\"\n\n. \"$dir/../../retry.sh\" --tries 20 '[ \"$(redis-cli ping)\" = \"PONG\" ]'\n\n[ \"$(redis-cli get mykey)\" = 'somevalue' ]\n"
+    },
+    {
+      "path": "test/tests/redis-basics-tls/run.sh",
+      "sha": null,
+      "content_sha256": "5b73dbaf658ab8128d9c546ab72f1a10ef4aaa311467b4b95aed49a6e5324977",
+      "score": 149,
+      "content": "../redis-basics/run.sh"
+    },
+    {
+      "path": "test/tests/nextcloud-cli-postgres/run.sh",
+      "sha": null,
+      "content_sha256": "cbe9d611d59c4724c8efe29f7390a8c8128521008f001d3924d2b287ae45f3ff",
+      "score": 149,
+      "content": "#!/bin/bash\nset -eo pipefail\n\ndir=\"$(dirname \"$(readlink -f \"$BASH_SOURCE\")\")\"\n\ndbImage='postgres:13-alpine'\n# ensure the dbImage is ready and available\nif ! docker image inspect \"$dbImage\" &> /dev/null; then\n\tdocker pull \"$dbImage\" > /dev/null\nfi\nserverImage=\"$1\"\ndbPass=\"test-$RANDOM-password-$RANDOM-$$\"\ndbName=\"test_${RANDOM}_db\" # dbName has to be set to something that does not require escaping: https://github.com/docker-library/official-images/pull/6252#issuecomment-520095703\ndbUsr=\"test-$RANDOM-db\"\n\n# Create an instance of the container-under-test\n# not setting POSTGRES_DB due to https://github.com/nextcloud/docker/issues/345\ndbCid=\"$(docker run -d \\\n\t-e POSTGRES_USER=\"$dbUsr\" \\\n\t-e POSTGRES_PASSWORD=\"$dbPass\" \\\n\t-e POSTGRES_DB=\"$dbName\" \\\n\t\"$dbImage\")\"\ntrap \"docker rm -vf $dbCid > /dev/null\" EXIT\n# NEXTCLOUD_ADMIN_USER has to be set to something that does not require escaping: https://github.com/docker-library/official-images/pull/6252#issuecomment-520095703\ncid=\"$(docker run -d \\\n\t--link \"$dbCid\":db \\\n\t-e POSTGRES_HOST='db' \\\n\t-e POSTGRES_USER=\"$dbUsr\" \\\n\t-e POSTGRES_PASSWORD=\"$dbPass\" \\\n\t-e POSTGRES_DB=\"$dbName\" \\\n\t-e NEXTCLOUD_ADMIN_USER=\"test_$RANDOM\" \\\n\t-e NEXTCLOUD_ADMIN_PASSWORD=\"[REDACTED]\" \\\n\t\"$serverImage\")\"\ntrap \"docker rm -vf $cid $dbCid > /dev/null\" EXIT\n\n_occ() {\n\tdocker exec -u www-data \"$cid\" php occ \"$@\"\n}\n\n# Give some time to install\n. \"$dir/../../retry.sh\" --tries 10 --sleep 5 '_occ app:list' > /dev/null\n\n# Check if NextCloud is installed\n_occ status | grep -iq 'installed: true'\n_occ check\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "test/tests/redis-basics/run.sh",
+      "sha": null,
+      "content_sha256": "f3e32c705893e1799a95d24fb5ac19c00386acca195973f19c7f08d389e44744",
+      "score": 149,
+      "content": "#!/bin/bash\nset -eo pipefail\n\ndir=\"$(dirname \"$(readlink -f \"$BASH_SOURCE\")\")\"\n\nimage=\"$1\"\n\ncliFlags=( -h redis )\n\ntestDir=\"$(readlink -f \"$(dirname \"$BASH_SOURCE\")\")\"\ntestName=\"$(basename \"$testDir\")\"\nif [[ \"$testName\" == *tls* ]]; then\n\tredisCliHelp=\"$(docker run --rm --entrypoint redis-cli \"$image\" --help 2>&1 || :)\"\n\tif ! grep -q -- '--tls' <<<\"$redisCliHelp\"; then\n\t\techo >&2 \"skipping; not built with TLS support (possibly version < 6.0 or 32bit variant)\"\n\t\texit 0\n\tfi\n\n\ttlsImage=\"$(\"$testDir/../image-name.sh\" librarytest/redis-tls \"$image\")\"\n\t\"$testDir/../docker-build.sh\" \"$testDir\" \"$tlsImage\" <<-EOD\n\t\tFROM alpine:3.19 AS certs\n\t\tRUN apk add --no-cache openssl\n\t\tRUN set -eux; \\\n\t\t\tmkdir /certs; \\\n\t\t\topenssl genrsa -out /certs/ca-private.key 8192; \\\n\t\t\topenssl req -new -x509 \\\n\t\t\t\t-key /certs/ca-private.key \\\n\t\t\t\t-out /certs/ca.crt \\\n\t\t\t\t-days $(( 365 * 30 )) \\\n\t\t\t\t-subj '/CN=lolca'; \\\n\t\t\topenssl genrsa -out /certs/private.key 4096; \\\n\t\t\topenssl req -new -key /certs/private.key \\\n\t\t\t\t-out /certs/cert.csr -subj '/CN=redis'; \\\n\t\t\topenssl x509 -req -in /certs/cert.csr \\\n\t\t\t\t-CA /certs/ca.crt -CAkey /certs/ca-private.key -CAcreateserial \\\n\t\t\t\t-out /certs/cert.crt -days $(( 365 * 30 )); \\\n\t\t\topenssl verify -CAfile /certs/ca.crt /certs/cert.crt\n\n\t\tFROM $image\n\t\tCOPY --from=certs --chown=redis:redis /certs /certs\n\t\tCMD [ \\\n\t\t\t\"--tls-port\", \"6379\", \"--port\", \"0\", \\\n\t\t\t\"--tls-cert-file\", \"/certs/cert.crt\", \\\n\t\t\t\"--tls-key-file\", \"/certs/private.key\", \\\n\t\t\t\"--tls-ca-cert-file\", \"/certs/ca.crt\" \\\n\t\t]\n\tEOD\n\timage=\"$tlsImage\"\n\n\tcliFlags+=(\n\t\t--tls\n\t\t--cert /certs/cert.crt\n\t\t--key /certs/private.key\n\t\t--cacert /certs/ca.crt\n\t)\nfi\n\ncname=\"redis-container-$RANDOM-$RANDOM\"\ncid=\"$(docker run -d --name \"$cname\" \"$image\")\"\ntrap \"docker rm -vf $cid > /dev/null\" EXIT\n\nredis-cli() {\n\tdocker run --rm -i \\\n\t\t--link \"$cname\":redis \\\n\t\t--entrypoint redis-cli \\\n\t\t\"$image\" \\\n\t\t\"${cliFlags[@]}\" \\\n\t\t\"$@\"\n}\n\n# http://redis.io/topics/quickstart#check-if-redis-is-working\n. \"$dir/../../retry.sh\" --tries 20 '[ \"$(redis-cli ping)\" = \"PONG\" ]'\n\n[ \"$(redis-cli set mykey somevalue)\" = 'OK' ]\n[ \"$(redis-cli get mykey)\" = 'somevalue' ]\n"
+    },
+    {
+      "path": "test/tests/postgres-initdb/run.sh",
+      "sha": null,
+      "content_sha256": "9d7e45311a5511a21de5cc8358534f98b8771ad5f1991e17f683cf58d671e569",
+      "score": 149,
+      "content": "#!/bin/bash\nset -eo pipefail\n\ndir=\"$(dirname \"$(readlink -f \"$BASH_SOURCE\")\")\"\n\nimage=\"$1\"\n\nserverImage=\"$(\"$dir/../image-name.sh\" librarytest/postgres-initdb \"$image\")\"\n\"$dir/../docker-build.sh\" \"$dir\" \"$serverImage\" <<EOD\nFROM $image\nCOPY dir/initdb.sql /docker-entrypoint-initdb.d/\nEOD\n\nexport POSTGRES_USER='my cool postgres user'\nexport POSTGRES_PASSWORD='my cool postgres password'\nexport POSTGRES_DB='my cool postgres database'\n\ncname=\"postgres-container-$RANDOM-$RANDOM\"\ncid=\"$(\n\tdocker run -d \\\n\t\t-e POSTGRES_USER \\\n\t\t-e POSTGRES_PASSWORD \\\n\t\t-e POSTGRES_DB \\\n\t\t--name \"$cname\" \\\n\t\t\"$serverImage\"\n)\"\ntrap \"docker rm -vf $cid > /dev/null\" EXIT\n\npsql() {\n\tdocker run --rm -i \\\n\t\t--link \"$cname\":postgres \\\n\t\t--entrypoint psql \\\n\t\t-e PGPASSWORD=\"[REDACTED]\" \\\n\t\t\"$image\" \\\n\t\t--host postgres \\\n\t\t--username \"$POSTGRES_USER\" \\\n\t\t--dbname \"$POSTGRES_DB\" \\\n\t\t--quiet --no-align --tuples-only \\\n\t\t\"$@\"\n}\n\n. \"$dir/../../retry.sh\" --tries \"$POSTGRES_TEST_TRIES\" --sleep \"$POSTGRES_TEST_SLEEP\" \"echo 'SELECT 1' | psql\"\n\n[ \"$(echo 'SELECT COUNT(*) FROM test' | psql)\" = 1 ]\n[ \"$(echo 'SELECT c FROM test' | psql)\" = 'goodbye!' ]\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "test/tests/redis-basics-config/real-run.sh",
+      "sha": null,
+      "content_sha256": "5b73dbaf658ab8128d9c546ab72f1a10ef4aaa311467b4b95aed49a6e5324977",
+      "score": 149,
+      "content": "../redis-basics/run.sh"
+    },
+    {
+      "path": "test/tests/redis-basics-config/run.sh",
+      "sha": null,
+      "content_sha256": "1fd60d4f050f8941bca890c088930b7c03c6450cc8a1e321bce0cb28099a7ff5",
+      "score": 149,
+      "content": "#!/bin/bash\nset -eo pipefail\n\ndir=\"$(dirname \"$(readlink -f \"$BASH_SOURCE\")\")\"\n\nimage=\"$1\"\n\nnewImage=\"$(\"$dir/../image-name.sh\" librarytest/redis-basics-persistent \"$image\")\"\n\"$dir/../docker-build.sh\" \"$dir\" \"$newImage\" <<EOD\nFROM $image\nRUN echo 'save 60 1000' > ../test.conf\nCMD [\"../test.conf\", \"--appendonly\", \"yes\"]\nEOD\n\nexec \"$dir/real-run.sh\" \"$newImage\"\n"
+    },
+    {
+      "path": "test/tests/postgres-basics/run.sh",
+      "sha": null,
+      "content_sha256": "90606e922d7a104f856ec2241337d90312dbdab852b192c8a80d643eb74f2c80",
+      "score": 149,
+      "content": "#!/bin/bash\nset -eo pipefail\n\ndir=\"$(dirname \"$(readlink -f \"$BASH_SOURCE\")\")\"\n\nimage=\"$1\"\n\nexport POSTGRES_USER='my cool postgres user'\nexport POSTGRES_PASSWORD='my cool postgres password'\nexport POSTGRES_DB='my cool postgres database'\n\ncname=\"postgres-container-$RANDOM-$RANDOM\"\ncid=\"$(docker run -d -e POSTGRES_USER -e POSTGRES_PASSWORD -e POSTGRES_DB --name \"$cname\" \"$image\")\"\ntrap \"docker rm -vf $cid > /dev/null\" EXIT\n\npsql() {\n\tdocker run --rm -i \\\n\t\t--link \"$cname\":postgres \\\n\t\t--entrypoint psql \\\n\t\t-e PGPASSWORD=\"[REDACTED]\" \\\n\t\t\"$image\" \\\n\t\t--host postgres \\\n\t\t--username \"$POSTGRES_USER\" \\\n\t\t--dbname \"$POSTGRES_DB\" \\\n\t\t--quiet --no-align --tuples-only \\\n\t\t\"$@\"\n}\n\n. \"$dir/../../retry.sh\" --tries \"$POSTGRES_TEST_TRIES\" --sleep \"$POSTGRES_TEST_SLEEP\" \"echo 'SELECT 1' | psql\"\n\necho 'CREATE TABLE test (a INT, b INT, c VARCHAR(255))' | psql\n[ \"$(echo 'SELECT COUNT(*) FROM test' | psql)\" = 0 ]\npsql <<'EOSQL'\n\tINSERT INTO test VALUES (1, 2, 'hello')\nEOSQL\n[ \"$(echo 'SELECT COUNT(*) FROM test' | psql)\" = 1 ]\npsql <<'EOSQL'\n\tINSERT INTO test VALUES (2, 3, 'goodbye!')\nEOSQL\n[ \"$(echo 'SELECT COUNT(*) FROM test' | psql)\" = 2 ]\necho 'DELETE FROM test WHERE a = 1' | psql\n[ \"$(echo 'SELECT COUNT(*) FROM test' | psql)\" = 1 ]\n[ \"$(echo 'SELECT c FROM test' | psql)\" = 'goodbye!' ]\necho 'DROP TABLE test' | psql\n\n# test jit support to ensure llvm lib is correct\n# SET jit = on; is required for postgres 11; on 12+ it is on by default\n[ \"$(echo 'SET jit = on; SELECT pg_jit_available();' | psql)\" = 't' ]\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T02:31:28.026130+00:00"
+}
