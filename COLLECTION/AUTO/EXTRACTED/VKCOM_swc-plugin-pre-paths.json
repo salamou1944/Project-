@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:VKCOM/swc-plugin-pre-paths",
+  "repo": "VKCOM/swc-plugin-pre-paths",
+  "revision_sha": "7ca045b9607ca880258eb08accdb942008b10509",
+  "default_branch": "main",
+  "pushed_at": "2026-10-19T08:41:52Z",
+  "repo_updated_at": "2026-10-19T08:41:55Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/workflow_test.yml",
+      "sha": null,
+      "content_sha256": "4129d3770fa26c2fd9c55ff17c8e8365a740853b3fd2a76f6862fee1413fb9ad",
+      "score": 186,
+      "content": "\non:\n  workflow_call:\n    inputs:\n      ref:\n        description: 'The branch, tag or SHA to checkout'\n        default: ${{ github.ref }}\n        required: false\n        type: string\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n        with:\n          ref: ${{ inputs.ref }}\n\n      - uses: VKCOM/gh-actions/shared/rust/cargo-cache@main\n\n      - name: Run Test\n        run: cargo test --verbose\n\n      - name: Run Clippy\n        run: cargo clippy --all-targets --all-features\n\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n        with:\n          ref: ${{ inputs.ref }}\n\n      - uses: VKCOM/gh-actions/shared/rust/cargo-cache@main\n\n      - name: Run Build\n        run: cargo build-wasip1 --release\n      \n      "
+    },
+    {
+      "path": ".github/workflows/branch.yml",
+      "sha": null,
+      "content_sha256": "e5d42e19e6c9c9da886c44f8b432d5d193813d0ed68ce348b7b5c4212012a449",
+      "score": 126,
+      "content": "name: 'Branch'\n\nrun-name: Test ${{ github.ref_name }}\n\non:\n  push:\n    branches:\n      - main\n\nconcurrency:\n  group: test-${{ github.ref_name }}\n  cancel-in-progress: true\n\njobs:\n  test:\n    uses: ./.github/workflows/workflow_test.yml\n"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "sha": null,
+      "content_sha256": "ed80161e2392aed0b2965de1009a3d6e4cf2fc6a3d56856811f21a2396d2bee8",
+      "score": 126,
+      "content": "name: \"Publish\"\n\non:\n  workflow_dispatch:\n    inputs:\n      type:\n        description: \"version type:\"\n        required: true\n        type: choice\n        default: \"minor\"\n        options:\n          - patch\n          - minor\n          - major\n      custom_version:\n        description: 'custom version: x.y.z (without \"v\")'\n        required: false\n\nrun-name: Publish ${{ inputs.type }} ${{ inputs.custom_version }}\n\njobs:\n  publish:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read # Recommended for actions/setup-node\n      id-token: write # Required for OIDC\n    steps:\n      - uses: actions/checkout@v6\n        with:\n          token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n\n      - uses: actions/setup-node@v6\n        with:\n          node-version-file: \".nvmrc\"\n          cache: \"npm\"\n          always-auth: true\n          registry-url: \"https://registry.npmjs.org\"\n\n      - name: Install wasm target\n        run: |\n          rustup target add wasm32-wasip1\n\n      - run: npm run test\n\n      - run: npm run build\n\n      - name: Set Git credentials\n        run: |\n          git config --local user.email \"actions@github.com\"\n          git config --local user.name \"GitHub Action\"\n\n      - name: Bump by version type\n        if: ${{ !github.event.inputs.custom_version }}\n        run: npm version ${{ github.event.inputs.type }} --no-commit-hooks -m \"v%s\"\n\n      - name: Bump by custom version\n        if: ${{ github.event.inputs.custom_version }}\n        run: npm version ${{ github.event.inputs.custom_version }} --no-commit-hooks -m \"v%s\"\n\n      - name: Pushing changes\n        uses: ad-m/github-push-action@master\n        with:\n          github_token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n          branch: ${{ github.ref }}\n          tags: true\n\n      - name: Publishing release\n        run: npm publish\n"
+    },
+    {
+      "path": ".github/workflows/cargo_update.yml",
+      "sha": null,
+      "content_sha256": "40e8217f3d4d69c8eabd0b6d969479d73b2ba426ab5f497b71401665fe08acc3",
+      "score": 126,
+      "content": "name: \"Cargo update\"\non:\n  schedule:\n    - cron: \"0 5 * * 1\" # Runs at 05:00, only on Monday\n\njobs:\n  cargo-update:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n      pull-requests: write\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v6\n      - name: Update swc_core\n        uses: VKCOM/gh-actions/shared/rust/cargo-update-toml@main\n        with:\n          packages: swc_core\n      - uses: VKCOM/gh-actions/shared/rust/cargo-update-pr@main\n        with:\n          token: ${{ secrets.DEVTOOLS_GITHUB_TOKEN }}\n"
+    },
+    {
+      "path": ".github/workflows/pull_request.yml",
+      "sha": null,
+      "content_sha256": "1ec9ca56f5996096858a798b29f8bb5cf9ce361720f35487bdfac980eaccce60",
+      "score": 126,
+      "content": "name: 'Pull Request'\n\non: ['pull_request']\n\nconcurrency:\n  group: pr-${{ github.event.pull_request.number }}\n  cancel-in-progress: true\n\njobs:\n  test:\n    uses: ./.github/workflows/workflow_test.yml\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "386cc79611f10e48c0e230cb99bebf8ae92ebaef046ba29347eba18b75d513b7",
+      "score": 120,
+      "content": "[package]\nname = \"swc-plugin-pre-paths\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[lib]\ncrate-type = [\"cdylib\", \"rlib\"]\n\n[profile.release]\n# This removes more dead code\ncodegen-units = 1\nlto = true\n\n# Optimize for size\nopt-level = \"s\"\n\n# Strip debug symbols\nstrip = \"symbols\"\n\n[dependencies]\n\npathdiff = \"0.2\"\npath-absolutize = { version = \"3\", features = [\"use_unix_paths_on_wasm\"] }\n\nserde = \"1\"\nserde_json = \"1\"\nswc_core = { version = \"77\", features = [\n  \"ecma_plugin_transform\",\n  \"ecma_parser\",\n] }\n\nts-rs = \"12\"\n\n[dev-dependencies]\ntesting = \"27\"\n# .cargo/config defines few alias to build plugin.\n# cargo build-wasip1 generates wasm-wasi32 binary\n# cargo build-wasm32 generates wasm32-unknown-unknown binary.\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "e634241a053373a2dcc68698acae62ecc9e94ec950c96ad94c57a25ee2991f57",
+      "score": 120,
+      "content": "{\n  \"name\": \"swc-plugin-pre-paths\",\n  \"version\": \"8.0.0\",\n  \"description\": \"\",\n  \"author\": \"\",\n  \"license\": \"MIT\",\n  \"keywords\": [\n    \"swc-plugin\"\n  ],\n  \"homepage\": \"https://github.com/VKCOM/swc-plugin-pre-paths\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/VKCOM/swc-plugin-pre-paths.git\"\n  },\n  \"bugs\": \"https://github.com/VKCOM/swc-plugin-pre-paths/issues\",\n  \"main\": \"swc_plugin_pre_paths.wasm\",\n  \"types\": \"./bindings/types.d.ts\",\n  \"scripts\": {\n    \"prepack\": \"npm run build\",\n    \"build\": \"cargo build-wasip1 --release\",\n    \"postbuild\": \"cp target/wasm32-wasip1/release/swc_plugin_pre_paths.wasm .\",\n    \"test\": \"cargo test\",\n    \"lint\": \"cargo clippy --all-targets --all-features\"\n  },\n  \"files\": [\n    \"swc_plugin_pre_paths.wasm\",\n    \"bindings/types.d.ts\"\n  ],\n  \"preferUnplugged\": true\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "2c921a1b0a9fd1f0f0a2ab1f2e6cc31a412ced0f1445732dfe9d76b849ffb54a",
+      "score": 100,
+      "content": "# swc-plugin-pre-paths\n\nA [SWC](https://swc.rs) plugin to use [path mapping](https://www.typescriptlang.org/docs/handbook/module-resolution.html#path-mapping).\nThis may be needed in other plugins.\n\n## Installation\n\n**npm:**\n\n```sh\nnpm i -D swc-plugin-pre-paths\n```\n\n**yarn:**\n\n```sh\nyarn add -D swc-plugin-pre-paths\n```\n\nYou can check the compatibility of versions on https://plugins.swc.rs/\n\n## Usage\n\nVia `.swcrc`\n\n```json\n{\n  \"jsc\": {\n    \"experimental\": {\n      \"plugins\": [\n        [\n          \"swc-plugin-pre-paths\",\n          {\n            \"baseUrl\": \".\",\n            \"paths\": {\n              \"app/*\": [\"./src/app/*\"],\n              \"config/*\": [\"./src/app/_config/*\"],\n              \"environment/*\": [\"./src/environments/*\"],\n              \"shared/*\": [\"./src/app/_shared/*\"],\n              \"helpers/*\": [\"./src/helpers/*\"],\n              \"tests/*\": [\"./src/tests/*\"]\n            }\n          }\n        ]\n      ]\n    }\n  }\n}\n```\n\n## Limits\n\nThis don't support multiple fall back locations.\n\n```jsonc\n{\n  \"paths\": {\n    \"*\": [\"*\", \"generated/*\"] // ⛔ don't support\n  }\n}\n```\n"
+    },
+    {
+      "path": "tests/fixture.rs",
+      "sha": null,
+      "content_sha256": "b6cedbc3ffa27409eed552d42d5fe28c8f0c9292b0a9bc3495bb5d5abf99a800",
+      "score": 93,
+      "content": "use std::{env, fs, path::PathBuf};\n\nuse swc_core::ecma::{\n    parser::{EsSyntax, Syntax},\n    transforms::testing::test_fixture,\n    visit::visit_mut_pass,\n};\nuse swc_plugin_pre_paths::{Config, Injector};\n\nfn syntax() -> Syntax {\n    Syntax::Es(EsSyntax {\n        jsx: true,\n        ..Default::default()\n    })\n}\n\n#[testing::fixture(\"tests/fixture/**/input.js\")]\nfn fixture(input: PathBuf) {\n    let output = input.parent().unwrap().join(\"output.js\");\n    let config_path = input.parent().unwrap().join(\"config.json\");\n\n    let config_file = fs::File::open(config_path).expect(\"failed to open config\");\n\n    let config: Config = serde_json::from_reader(config_file).expect(\"invalid config\");\n\n    let cwd = env::current_dir().unwrap();\n\n    test_fixture(\n        syntax(),\n        &|_| {\n            visit_mut_pass(Injector::new(\n                cwd.to_str().unwrap(),\n                input.to_str().unwrap(),\n                config.clone(),\n            ))\n        },\n        &input,\n        &output,\n        Default::default(),\n    );\n}\n"
+    },
+    {
+      "path": "tests/fixture/baseUrl/input.js",
+      "sha": null,
+      "content_sha256": "c728677d8d8fbb26672ca2a903990278796656a01f7cc5c580f35686be62a8bd",
+      "score": 89,
+      "content": "import \"jquery\";\nimport {A} from \"jquery/abc\""
+    },
+    {
+      "path": "tests/fixture/without_baseUrl/input.js",
+      "sha": null,
+      "content_sha256": "c728677d8d8fbb26672ca2a903990278796656a01f7cc5c580f35686be62a8bd",
+      "score": 89,
+      "content": "import \"jquery\";\nimport {A} from \"jquery/abc\""
+    },
+    {
+      "path": "tests/fixture/without_baseUrl/config.json",
+      "sha": null,
+      "content_sha256": "c47e7bbd36aa4223806c2d09bebd1565a43e05d450fdc0f842f7210b0e805e4b",
+      "score": 89,
+      "content": "{\n  \"paths\": {\n    \"jquery\": [\"node_modules/jquery/dist/jquery\"]\n  }\n}\n"
+    },
+    {
+      "path": "tests/fixture/wildcard/input.js",
+      "sha": null,
+      "content_sha256": "795c6d195f9b7ddc76179fe6aca5ba33a3eab97b59dc9fbcc2d64afa1976178e",
+      "score": 89,
+      "content": "import \"app\";\nimport A from \"app/abc\";\nimport { A } from \"config/json\";\n"
+    },
+    {
+      "path": "tests/fixture/baseUrl/output.js",
+      "sha": null,
+      "content_sha256": "7254a52999b01752ba5c5b0af4c4cbb8264cba2b4356fc8454c38d3bf4849f69",
+      "score": 89,
+      "content": "import \"./node_modules/jquery/dist/jquery\";\nimport { A } from \"jquery/abc\";\n"
+    },
+    {
+      "path": "tests/fixture/without_baseUrl/output.js",
+      "sha": null,
+      "content_sha256": "02d8dd086811e08caf9acbcb979ea5fe28dc223fbd6ff4ac80d918d1f86f8c5b",
+      "score": 89,
+      "content": "import \"../../../node_modules/jquery/dist/jquery\";\nimport { A } from \"jquery/abc\";\n"
+    },
+    {
+      "path": "tests/fixture/wildcard/config.json",
+      "sha": null,
+      "content_sha256": "f2dcf3f32036fdbd13a11cbcabc0d471aad9cb537489f7fd5c02cedafbd45015",
+      "score": 89,
+      "content": "{\n  \"baseUrl\": \"./tests/fixture/wildcard\",\n  \"paths\": {\n    \"app/*\": [\"./src/app/*\"],\n    \"config/*\": [\"./src/app/_config/*\"],\n    \"environment/*\": [\"./src/environments/*\"],\n    \"shared/*\": [\"./src/app/_shared/*\"],\n    \"helpers/*\": [\"./src/helpers/*\"],\n    \"tests/*\": [\"./src/tests/*\"]\n  }\n}\n"
+    },
+    {
+      "path": "tests/fixture/baseUrl/config.json",
+      "sha": null,
+      "content_sha256": "41c117e4d113b98d35b3348d7d307965d7ee5dac28300424b800f05e6b2197f5",
+      "score": 89,
+      "content": "{\n  \"baseUrl\": \"./tests/fixture/baseUrl\",\n  \"paths\": {\n    \"jquery\": [\"node_modules/jquery/dist/jquery\"]\n  }\n}\n"
+    },
+    {
+      "path": "tests/fixture/wildcard/output.js",
+      "sha": null,
+      "content_sha256": "ca682a65fdafc101dadf78d00b5574081b15290eaa8acbadef787deab72048c4",
+      "score": 89,
+      "content": "import \"app\";\nimport A from \"./src/app/abc\";\nimport { A } from \"./src/app/_config/json\";\n"
+    },
+    {
+      "path": "package-lock.json",
+      "sha": null,
+      "content_sha256": "786d37e6852be10e3c55853c0799b3e19c88f1cd8973148afd225d30bdd62040",
+      "score": 35,
+      "content": "{\n  \"name\": \"swc-plugin-pre-paths\",\n  \"version\": \"8.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"swc-plugin-pre-paths\",\n      \"version\": \"8.0.0\",\n      \"license\": \"MIT\"\n    }\n  }\n}\n"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha": null,
+      "content_sha256": "ed92a0e071e8226db47f1a62f7b676f054c30d8d84fb43c02e009f41939ada1c",
+      "score": 35,
+      "content": "[toolchain]\nchannel = \"nightly-2026-02-26\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"wasm32-wasip1\"]\nprofile = \"minimal\"\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "59c5df820ebb5540f78fd5d6f912cc823ad192eac990e34e3ff5966ca8186744",
+      "score": 33,
+      "content": "version: 2\nupdates:\n  # Maintain dependencies for GitHub Actions\n  - package-ecosystem: 'github-actions'\n    directory: '/'\n    schedule:\n      interval: 'daily'\n\n  # Maintain dependencies for npm\n  - package-ecosystem: 'npm'\n    directory: '/'\n    schedule:\n      interval: 'daily'\n    allow:\n      - dependency-type: 'direct'\n\n  # Maintain dependencies for Cargo\n  - package-ecosystem: 'cargo'\n    directory: '/'\n    schedule:\n      interval: 'weekly'\n    allow:\n      - dependency-type: 'indirect'\n"
+    },
+    {
+      "path": ".cargo/config.toml",
+      "sha": null,
+      "content_sha256": "4d4b0a17fed17701884ccb717932b6007160d89303935c748a2d6c44b304553d",
+      "score": 33,
+      "content": "# These command aliases are not final, may change\n[alias]\n# Alias to build actual plugin binary for the specified target.\nbuild-wasip1 = \"build --target wasm32-wasip1\"\nbuild-wasm32 = \"build --target wasm32-unknown-unknown\"\n"
+    },
+    {
+      "path": "src/lib.rs",
+      "sha": null,
+      "content_sha256": "af9967456db170e2563b3ce4db65519f783827f2f64aea3c5a66d53845b37d18",
+      "score": 33,
+      "content": "mod config;\nmod injector;\n\npub use config::Config;\npub use injector::Injector;\nuse swc_core::ecma::{ast::Program, visit::visit_mut_pass};\nuse swc_core::plugin::metadata::TransformPluginMetadataContextKind;\nuse swc_core::plugin::{plugin_transform, proxies::TransformPluginProgramMetadata};\n\n#[plugin_transform]\npub fn process_transform(program: Program, metadata: TransformPluginProgramMetadata) -> Program {\n    let config: Config = serde_json::from_str(\n        &metadata\n            .get_transform_plugin_config()\n            .expect(\"failed to get plugin config\"),\n    )\n    .expect(\"invalid config\");\n\n    let filepath = metadata\n        .get_context(&TransformPluginMetadataContextKind::Filename)\n        .expect(\"failed to get filepath\");\n\n    let cwd = metadata\n        .get_context(&TransformPluginMetadataContextKind::Cwd)\n        .expect(\"failed to get cwd\");\n\n    program.apply(visit_mut_pass(Injector::new(\n        cwd.as_str(),\n        filepath.as_str(),\n        config,\n    )))\n}\n"
+    },
+    {
+      "path": "src/config.rs",
+      "sha": null,
+      "content_sha256": "f164bffb06aac2701cc1e30ea6fb6b2354588ecb8ab9164b3128f4ae02f553e7",
+      "score": 33,
+      "content": "use std::{collections::HashMap, path::PathBuf};\n\nuse serde::Deserialize;\nuse ts_rs::TS;\n\n#[derive(Debug, Deserialize, Clone, TS)]\n#[ts(export, export_to = \"types.d.ts\")]\n#[serde(rename_all = \"camelCase\")]\npub struct Config {\n    #[serde(default)]\n    pub base_url: PathBuf,\n    pub paths: HashMap<String, Vec<String>>,\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T21:03:59.636126+00:00"
+}

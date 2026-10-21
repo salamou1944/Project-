@@ -1,0 +1,198 @@
+{
+  "canonical_source": "github:trailofbits/necessist",
+  "repo": "trailofbits/necessist",
+  "revision_sha": "c9425afded6961557c32613624a6ba0cf0d062d3",
+  "default_branch": "main",
+  "pushed_at": "2026-10-20T12:25:17Z",
+  "repo_updated_at": "2026-10-20T15:03:42Z",
+  "license": "AGPL-3.0",
+  "topics": [
+    "mutation",
+    "testing"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "e7d9ef70c7dc2d84bd07d601d3ea82bf63c3e177d1ae0d707c721193ddfee026",
+      "score": 198,
+      "content": "name: CI\n\non:\n  merge_group:\n  pull_request:\n  schedule:\n    - cron: \"0 3 * * tue\"\n  workflow_dispatch:\n\nconcurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: true\n\npermissions:\n  contents: read\n\njobs:\n  check-up-to-dateness:\n    outputs:\n      is-up-to-date: ${{ steps.main.outputs.is-up-to-date }}\n\n    runs-on: ubuntu-latest\n\n    steps:\n      - id: main\n        uses: trailofbits/check-up-to-dateness@v2\n\n  test:\n    needs: [check-up-to-dateness]\n\n    if: needs.check-up-to-dateness.outputs.is-up-to-date != 'true'\n\n    strategy:\n      fail-fast: ${{ github.event_name == 'merge_group' }}\n      matrix:\n        environment: [ubuntu-latest, macos-latest, windows-latest]\n        test: [end_to_end_0, end_to_end_1, trycmd, other]\n        include:\n          - environment: ubuntu-latest\n            test: ci\n\n    runs-on: ${{ matrix.environment }}\n\n    steps:\n      - uses: actions/checkout@v7\n\n      - uses: ./.github/actions/ci\n        env:\n          TESTS: ${{ matrix.test }}\n\n  all-checks:\n    needs: [test]\n\n    # smoelius: From \"Defining prerequisite jobs\"\n    # (https://docs.github.com/en/actions/using-jobs/using-jobs-in-a-workflow#defining-prerequisite-jobs):\n    # > If you would like a job to run even if a job it is dependent on did not succeed, use the\n    # > `always()` conditional expression in `jobs.<job_id>.if`.\n    if: ${{ always() }}\n\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Check results\n        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}\n        run: exit 1\n"
+    },
+    {
+      "path": ".github/workflows/update_end_to_end_tests.yml",
+      "sha": null,
+      "content_sha256": "0aba446d45f593d967faa23880d68e018e26cb00ea6460bb7c553755a18ad810",
+      "score": 186,
+      "content": "name: Update end-to-end tests\n\non:\n  schedule:\n    - cron: \"0 3 * * thu\"\n  workflow_dispatch:\n\nconcurrency:\n  group: update-end-to-end-tests-${{ github.ref }}\n  cancel-in-progress: true\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  update:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n\n      - name: Update end-to-end tests\n        run: |\n          scripts/update_end_to_end_tests.sh\n          scripts/update_go_end_to_end_tests.sh\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      - uses: ./.github/actions/ci\n        env:\n          TESTS: end_to_end_0 end_to_end_1\n          BLESS: \"1\"\n\n      - name: Require that a snapshot changed\n        id: snapshot\n        run: |\n          set +e\n          git diff --quiet -- '*.stdout'\n          status=$?\n          set -e\n          if [ \"$status\" -eq 1 ]; then\n            echo \"changed=true\" >> \"$GITHUB_OUTPUT\"\n          elif [ \"$status\" -ne 0 ]; then\n            exit \"$status\"\n          fi\n\n      # smoelius: After blessing the new output, verify that all tests pass. Note that this only\n      # runs on `ubuntu-latest`, so it is not as thorough as running the CI workflow.\n      - uses: ./.github/actions/ci\n        if: steps.snapshot.outputs.changed == 'true'\n        env:\n          TESTS: end_to_end_0 end_to_end_1 trycmd other ci\n\n      - name: Create pull request\n        if: steps.snapshot.outputs.changed == 'true'\n        uses: peter-evans/create-pull-request@v8\n        with:\n          title: \"Update end-to-end tests\"\n          commit-message: \"Update end-to-end tests\"\n          branch-suffix: random\n"
+    },
+    {
+      "path": ".github/workflows/update_testing_tool_versions.yml",
+      "sha": null,
+      "content_sha256": "0f5734e954824dd31ba03cd5186ca76a16e13589cca3004deb36fd895efa175a",
+      "score": 186,
+      "content": "name: Update testing tool versions\n\non:\n  schedule:\n    - cron: \"0 3 * * wed\"\n  workflow_dispatch:\n\nconcurrency:\n  group: update-testing-tool-versions-${{ github.ref }}\n  cancel-in-progress: true\n\npermissions:\n  contents: write\n  pull-requests: write\n\njobs:\n  update:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v7\n\n      - name: Update testing tool versions\n        run: scripts/update_testing_tool_versions.sh\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Require that a version changed\n        id: snapshot\n        run: |\n          set +e\n          git diff --exit-code -- .github/actions/install-testing-tools/versions.json\n          status=$?\n          set -e\n          if [ \"$status\" -eq 1 ]; then\n            echo \"changed=true\" >> \"$GITHUB_OUTPUT\"\n          elif [ \"$status\" -ne 0 ]; then\n            exit \"$status\"\n          fi\n\n      # smoelius: Verify that all tests pass. Note that this runs only on `ubuntu-latest`, so it is\n      # not as thorough as running the CI workflow.\n      - uses: ./.github/actions/ci\n        env:\n          TESTS: end_to_end_0 end_to_end_1 trycmd other ci\n\n      - name: Create pull request\n        if: steps.snapshot.outputs.changed == 'true'\n        uses: peter-evans/create-pull-request@v8\n        with:\n          title: \"Update testing tool versions\"\n          commit-message: \"Update testing tool versions\"\n          branch-suffix: random\n"
+    },
+    {
+      "path": ".github/actions/ci/action.yml",
+      "sha": null,
+      "content_sha256": "cbcffd74ba0a47c0823754b1f92b6c679771dfc971d83f9e9b4e7fb46dc7c8f5",
+      "score": 183,
+      "content": "name: CI\ndescription: Set up environment, build, and run tests\n\nruns:\n  using: composite\n  steps:\n    - name: Set up environment\n      run: echo 'CARGO_TERM_COLOR=always' >> \"$GITHUB_ENV\"\n      shell: bash\n\n    - uses: actions/cache@v6\n      with:\n        path: |\n          ~/.avm\n          ~/.cargo/bin/\n          ~/.cargo/registry/index/\n          ~/.cargo/registry/cache/\n          ~/.cargo/git/db/\n          ~/.dylint_drivers/\n          ~/.rustup/toolchains/\n          target/dylint/\n        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}\n\n    - uses: taiki-e/install-action@v2.87.29\n      with:\n        tool: cargo-hack, cargo-udeps\n\n    - name: Rustup\n      run: rustup update\n      shell: bash\n\n    - name: Install CI tools\n      if: ${{ contains(env.TESTS, 'ci') }}\n      run: |\n        rustup +nightly component add clippy rustfmt\n        cargo install cargo-dylint --git=https://github.com/trailofbits/dylint --no-default-features --features=cargo-cli || true\n        cargo install dylint-link              || true\n        cargo install cargo-license            || true\n        cargo install cargo-sort               || true\n        cargo install cargo-supply-chain       || true\n        cargo install cargo-unmaintained       || true\n      shell: bash\n\n    - name: Install testing tools\n      if: ${{ env.TESTS != 'ci' }}\n      uses: ./.github/actions/install-testing-tools\n\n    - name: Install sqlite3 on Ubuntu\n      if: ${{ runner.os == 'Linux' }}\n      run: |\n        sudo apt update\n        sudo apt install libsqlite3-dev\n      shell: bash\n\n    - name: Free up space on Ubuntu\n      if: ${{ runner.os == 'Linux' }}\n      run: |\n        # https://github.com/actions/runner-images/issues/2606#issuecomment-772683150\n        sudo rm -rf /usr/local/lib/android\n        sudo rm -rf /usr/share/dotnet\n        sudo rm -rf /usr/share/swift\n      shell: bash\n\n    - name: Install PostgreSQL client libraries on macOS\n      if: ${{ runner.os == 'macOS' }}\n      run: |\n        brew install libpq\n        echo \"LIBRARY_PATH=$(brew --prefix libpq)/lib:$LIBRARY_PATH\" >> \"$GITHUB_ENV\"\n      shell: bash\n\n    - name: Disable incremental compilation on Windows\n      if: ${{ runner.os == 'Windows' }}\n      run: echo 'CARGO_INCREMENTAL=0' >> \"$GITHUB_ENV\"\n      shell: bash\n\n    - name: Enable debug logging\n      if: ${{ runner.debug == 1 }}\n      run: echo 'RUST_LOG=debug' >> \"$GITHUB_ENV\"\n      shell: bash\n\n    - name: Build\n      run: |\n        for TEST in $TESTS; do\n          if [[ \"$TEST\" != 'other' ]]; then\n            $CARGO_TEST -p necessist --test \"$TEST\"\n          else\n            $CARGO_TEST -p necessist --test general\n            $CARGO_TEST -p necessist-backends\n            $CARGO_TEST -p necessist-core\n            $CARGO_TEST -p testing\n          fi\n        done\n      shell: bash\n      env:\n        CARGO_TEST: cargo test --no-run\n\n    - name: Test\n      run: |\n        for TEST in $TESTS; do\n          if [[ \"$TEST\" != 'other' ]]; then\n            cargo test -p necessist --test \"$TEST\" -- --nocapture\n          else\n            cargo test -p necessist --test general\n            cargo test -p necessist-backends\n            cargo test -p necessist-core\n            cargo test -p testing\n          fi\n        done\n      shell: bash\n"
+    },
+    {
+      "path": "testing/Cargo.toml",
+      "sha": null,
+      "content_sha256": "872c613f99125ff95a7175735f8509f1f51d3c03e3189271cba593e27c0b5f01",
+      "score": 178,
+      "content": "[package]\nname = \"testing\"\nversion = \"4.1.0\"\nedition = \"2024\"\nlicense = \"AGPL-3.0\"\npublish = false\n\n[dependencies]\ndunce = \"1.0\"\nregex = \"1.13\"\ntempfile = \"3.27\"\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "fixtures/cli_input/Cargo.toml",
+      "sha": null,
+      "content_sha256": "692516a01eee0a510dcf306d50dceed22def54f5da33090529b1629145d8adf4",
+      "score": 176,
+      "content": "[package]\nname = \"cli-input\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/large_output/Cargo.toml",
+      "sha": null,
+      "content_sha256": "b407382577c8da31a3532acfb2a52a73fc4b9f0e4e50101cfc2efa2695e6ddc9",
+      "score": 176,
+      "content": "[package]\nname = \"large-output\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/basic/Cargo.toml",
+      "sha": null,
+      "content_sha256": "71c42deaa19ff745e42902af7dfa754f3b65fb86a7cb7398a39c30d33ce9a26c",
+      "score": 176,
+      "content": "[package]\nname = \"basic\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/python_basic_framework/pyproject.toml",
+      "sha": null,
+      "content_sha256": "0f792d73d83e29f0fb703a46db10647879b1415b0de84941d5c746117996609f",
+      "score": 176,
+      "content": "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
+    },
+    {
+      "path": "fixtures/python_skip_file/pyproject.toml",
+      "sha": null,
+      "content_sha256": "0f792d73d83e29f0fb703a46db10647879b1415b0de84941d5c746117996609f",
+      "score": 176,
+      "content": "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
+    },
+    {
+      "path": "fixtures/python_basic/pyproject.toml",
+      "sha": null,
+      "content_sha256": "0f792d73d83e29f0fb703a46db10647879b1415b0de84941d5c746117996609f",
+      "score": 176,
+      "content": "[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\n"
+    },
+    {
+      "path": "fixtures/php_basic/composer.json",
+      "sha": null,
+      "content_sha256": "54b06ba17a07dfb6eee1933a5166ee7c1fc3e704fdaa383536966809cdbaa599",
+      "score": 176,
+      "content": "{\n    \"require-dev\": {\n        \"phpunit/phpunit\": \"^12.5\"\n    }\n}\n"
+    },
+    {
+      "path": "fixtures/invalid_utf8/Cargo.toml",
+      "sha": null,
+      "content_sha256": "b359678c85cbbc01bcf2004db7ed878a758604f9b440ffe98e67cf39cfeef311",
+      "score": 176,
+      "content": "[package]\nname = \"invalid_utf8\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/directives/Cargo.toml",
+      "sha": null,
+      "content_sha256": "9b20efcf765b3114ea73a9d488967e81cea7a10858ed2ca96b7d1a8030612cfa",
+      "score": 176,
+      "content": "[package]\nname = \"directives\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/local_function/Cargo.toml",
+      "sha": null,
+      "content_sha256": "ae3e310d52f1c917cd6f2868b3b770d7bcc466561ae5e0396cf8f23f57c8d324",
+      "score": 176,
+      "content": "[package]\nname = \"local_function\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/valid_pattern/Cargo.toml",
+      "sha": null,
+      "content_sha256": "0a57ca9494500cbb17ce693d3876d1ed142634663323ad022585c7962380aa68",
+      "score": 176,
+      "content": "[package]\nname = \"valid_pattern\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/parsing_failure/Cargo.toml",
+      "sha": null,
+      "content_sha256": "515e44bfc41c70c93922ac362a338e143b4c0914ee39cccad9e3b1fafe962574",
+      "score": 176,
+      "content": "[package]\nname = \"parsing_failure\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/skip_invalid_file/Cargo.toml",
+      "sha": null,
+      "content_sha256": "d551aea7c95410df7efbf13850d44ecd0805639ac56575783c16e3667b3cbad4",
+      "score": 176,
+      "content": "[package]\nname = \"skip_invalid_file\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/invalid_pattern/Cargo.toml",
+      "sha": null,
+      "content_sha256": "f77a43672dafa673463bcbc3f58ded8285671a8d3d56c3014fe20987ee83d9a3",
+      "score": 176,
+      "content": "[package]\nname = \"invalid_pattern\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/unknown_keys/Cargo.toml",
+      "sha": null,
+      "content_sha256": "2e2c835b3cc1ceb26c4e2d01e74fd228d0722e6cf0bf64a72382fc4701dda9fc",
+      "score": 176,
+      "content": "[package]\nname = \"unknown_keys\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/dry_run_failure/Cargo.toml",
+      "sha": null,
+      "content_sha256": "f071c62eb6d6d8d60e29188afe293c68b162bba2493f74ae2d729e3cef897190",
+      "score": 176,
+      "content": "[package]\nname = \"dry_run_failure\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": "fixtures/block_ending_in_expression/Cargo.toml",
+      "sha": null,
+      "content_sha256": "f72aead9677974cb1c24411d2bceb1b428387805d5f13d0644b9d26e48c0e163",
+      "score": 176,
+      "content": "[package]\nname = \"block_ending_in_expression\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[workspace]\n"
+    },
+    {
+      "path": ".github/actions/install-testing-tools/versions.json",
+      "sha": null,
+      "content_sha256": "c253fd23b9dc0d6fde064a6b7aa67937e39bcef3652cad92f5ca09aeeb9109e3",
+      "score": 171,
+      "content": "[\n  {\n    \"name\": \"AGAVE\",\n    \"url\": \"https://github.com/anza-xyz/agave\",\n    \"version\": \"4.3.0\"\n  },\n  {\n    \"name\": \"ANCHOR\",\n    \"url\": \"https://github.com/otter-sec/anchor\",\n    \"version\": \"1.2.0\"\n  },\n  {\n    \"name\": \"FOUNDRY\",\n    \"url\": \"https://github.com/foundry-rs/foundry\",\n    \"version\": \"1.8.3\"\n  },\n  {\n    \"name\": \"GO\",\n    \"url\": \"https://github.com/golang/go\",\n    \"version\": \"1.27.1\"\n  }\n]\n"
+    },
+    {
+      "path": ".github/actions/install-testing-tools/action.yml",
+      "sha": null,
+      "content_sha256": "abc53996d659aefd1fa40566c2147bbd5ab51bb194eaa80dcb4f16b39c3b5442",
+      "score": 171,
+      "content": "name: Install testing tools\ndescription: Install tools needed for Necessist tests\n\nruns:\n  using: composite\n  steps:\n    - name: Read versions.json\n      run: |\n        cat .github/actions/install-testing-tools/versions.json |\n        jq -c '.[]' |\n        while read X; do\n          NAME=\"$(echo \"$X\" | jq -r '.name')\"\n          VERSION=\"$(echo \"$X\" | jq -r '.version')\"\n          echo \"$NAME\"_VERSION=\"$VERSION\" >> \"$GITHUB_ENV\"\n        done\n      shell: bash\n\n    # smoelius: https://docs.solana.com/cli/install-solana-cli-tools\n    - name: Install Agave\n      if: ${{ runner.os != 'Windows' }}\n      run: |\n        sh -c \"$(curl -sSfL https://release.anza.xyz/v$AGAVE_VERSION/install)\"\n        echo \"$HOME/.local/share/solana/install/active_release/bin\" >> \"$GITHUB_PATH\"\n      shell: bash\n\n    - name: Install Anchor prerequisites on Ubuntu\n      if: ${{ runner.os == 'Linux' }}\n      run: |\n        sudo apt update\n        sudo apt install libudev-dev\n      shell: bash\n\n    # smoelius: https://www.anchor-lang.com/docs/installation\n    - name: Install Anchor\n      if: ${{ runner.os != 'Windows' }}\n      run: |\n        mkdir -p ~/.config/solana\n        cp backends/src/anchor/rfc8032_test_vector.json ~/.config/solana/id.json\n        if [[ \"$(anchor --version)\" != \"anchor-cli $ANCHOR_VERSION\" ]]; then\n          cargo install --git https://github.com/coral-xyz/anchor --tag v\"$ANCHOR_VERSION\" anchor-cli --force\n        fi\n      shell: bash\n\n    - name: Install Foundry\n      uses: foundry-rs/foundry-toolchain@v1\n      with:\n        version: ${{ env.FOUNDRY_VERSION }}\n\n    - name: Install Go\n      uses: actions/setup-go@v7\n      with:\n        go-version: \"^${{ env.GO_VERSION }}\"\n        cache: false\n\n    - name: Install PHP on Ubuntu\n      if: ${{ runner.os == 'Linux' }}\n      run: |\n        sudo apt update\n        sudo apt install php-cli php-xml composer\n      shell: bash\n\n    - name: Install PHP on macOS\n      if: ${{ runner.os == 'macOS' }}\n      run: brew install php composer\n      shell: bash\n\n    - name: Install pytest\n      run: |\n        if python --version 2>&1 | grep -q '^Python 3\\.'; then\n          PYTHON=python\n        elif python3 --version 2>&1 | grep -q '^Python 3\\.'; then\n          PYTHON=python3\n        else\n          echo 'Failed to find Python 3 interpreter (`python` or `python3`)' >&2\n          exit 1\n        fi\n        \"$PYTHON\" -m pip install pytest\n      shell: bash\n\n    # smoelius: The Chainlink Foundry test requires `node` and `pnpm`.\n    - name: Install Node.js\n      uses: actions/setup-node@v7\n\n    - name: Install Yarn\n      if: ${{ runner.os == 'Windows' }}\n      run: npm install --global yarn\n      shell: bash\n\n    - name: Install pnpm\n      run: npm install --global pnpm\n      shell: bash\n\n    - name: Install Setuptools\n      if: ${{ runner.os == 'macOS' }}\n      run: pip install setuptools\n      shell: bash\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T21:03:56.342251+00:00"
+}

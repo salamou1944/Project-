@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:dlt-hub/rasa_semantic_schema",
+  "repo": "dlt-hub/rasa_semantic_schema",
+  "revision_sha": "0fb5198959efccf0d7777c12516687eb76d5f70d",
+  "default_branch": "master",
+  "pushed_at": "2026-06-15T11:04:59Z",
+  "repo_updated_at": "2026-06-15T12:57:28Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "models/views/actions.sql",
+      "sha": null,
+      "content_sha256": "15f5e8086e9846ae59eeeed620be401a57e0a3c444723c9f7d92c664e257e9a5",
+      "score": 188,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='action_record_hash',\n        on_schema_change='fail',\n        dist='sender_id',\n        sort=['timestamp'],\n        cluster_by='story_action_interaction_sk',\n        partition_by={\n          \"field\": \"timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\nSELECT\n    e._record_hash as action_record_hash, -- primary key\n    --\n    a.confidence,\n    --\n    e.model_id,\n    e.environment,\n    e.timestamp,\n    e.value as action_name,\n    e.sender_id,\n    e.session_nr,\n    e.interaction_nr,\n    e.interaction_id,\n    e.session_id,\n    e.interaction_id as story_action_interaction_sk\n    --\nFROM {{ ref('stg_event_sequence') }} AS e\nJOIN {{ source('events', 'event_action') }} AS a\n    on a._record_hash = e._record_hash and e.sender_id = a.sender_id -- use dist key\n--ORDER BY \"timestamp\"\n"
+    },
+    {
+      "path": "models/staging/stg_interactions.sql",
+      "sha": null,
+      "content_sha256": "1b29468f122562e38e73e1f7ba66e07e66dc0ff71dee17634b6e6722f1d9fd5e",
+      "score": 188,
+      "content": "{{\n    config(\n        materialized='table',\n        schema='staging',\n        dist='sender_id',\n        cluster_by='sender_id'\n\n    )\n}}\n\nSELECT\n  e.interaction_id, --primary key\n  -- \n  e.interaction_nr,\n  e.reverse_interaction_nr,\n  e.sender_id,\n  e.session_id,\n  e.session_nr,\n  e.user_id,\n  min(e.timestamp) as interaction_initiation_timestamp,\n  min(case when e.event = 'user' then e.timestamp else null end) as interaction_start_timestamp,\n  max(e.timestamp) as interaction_end_timestamp,\n  max(active_form) as interaction_active_form,\n  max(e.model_id) as interaction_model_id,\n  max(e.environment) as environment,\n  -- user id comes in session_started or user events metadata. one of those events must be present in each\n  -- interaction, otherwise user id in interaction is unknown\n  -- external session id is passed in the same way as user id\n  max(u.{{ var('external_session_id') }}) as external_session_id,\n  -- detect intents opening a story\n  max(\n    case when u.parse_data__intent__name in ({{ \"\\'\" + var('story_intents')|join(\"\\', \\'\") + \"\\'\" }}) then u.parse_data__intent__name\n    else null end) as story_intent,\n  max(u.parse_data__intent__name) as intent,\n  -- bot quality metrics\n  {{ generate_interactions_count_metrics('e') }}\n  -- keys used for dimension join\n  interaction_id AS interaction_slot_fk ,\n  interaction_id AS interaction_user_fk,\n  interaction_id AS interaction_bot_fk,\n  interaction_id AS interaction_story_action_fk,\n  lag(interaction_id) over (partition by e.sender_id, session_nr order by interaction_nr ) as previous_interaction_user_fk,\n  lag(interaction_id) over (partition by e.sender_id, session_nr order by interaction_nr ) as previous_interaction_bot_fk,\n  lag(interaction_id) over (partition by e.sender_id, session_nr order by interaction_nr ) as previous_interaction_action_fk,\n  lag(interaction_id) over (partition by e.sender_id, session_nr order by interaction_nr ) as previous_interaction_slot_fk\nFROM {{ ref('stg_event_sequence') }} AS e\nLEFT JOIN {{ source('events', 'event_user') }} AS u\n  ON e.event = 'user' AND e._record_hash = u._record_hash  and e.sender_id = u.sender_id -- use dist key\nLEFT JOIN {{ source('events', 'event_session_started') }} AS ss\n  ON e.event = 'session_started' AND e._record_hash = ss._record_hash  and e.sender_id = ss.sender_id -- use dist key\nGROUP BY 1,2,3,4,5,6,7\n--ORDER BY interaction_initiation_timestamp\n"
+    },
+    {
+      "path": "models/views/interactions.sql",
+      "sha": null,
+      "content_sha256": "ebc76e7654618af1f485c095a3d2dba91113710fe45773b23e87ed915e9cac49",
+      "score": 188,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='interaction_id',\n        on_schema_change='fail',\n        dist='sender_id',\n        sort=['interaction_initiation_timestamp'],\n        cluster_by=['user_id', 'sender_id', 'session_id', 'interaction_id'],\n        partition_by={\n          \"field\": \"interaction_initiation_timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\n-- depends_on: {{ ref('stg_senders') }}\nSELECT * FROM {{ ref('stg_interactions') }}\n--ORDER BY interaction_initiation_timestamp"
+    },
+    {
+      "path": "models/views/bot_actions.sql",
+      "sha": null,
+      "content_sha256": "e81fdd33f2393be2fea8e55430bdde1255a25b579ef93a18b78b41ff6976e2da",
+      "score": 188,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='bot_record_hash',\n        on_schema_change='fail',\n        dist='sender_id',\n        sort=['timestamp'],\n        cluster_by='bot_interaction_sk',\n        partition_by={\n          \"field\": \"timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\nSELECT\n    e._record_hash as bot_record_hash,\n    e.model_id,\n    e.environment,\n    -- we could customize text extraction if bot uses formatters, that may require joing with child tables\n    b.text,\n    senders.user_id,\n    --\n    e.timestamp,\n    e.sender_id as sender_id,\n    e.value as utter_action,\n    e.session_nr,\n    e.interaction_nr,\n    e.interaction_id,\n    e.session_id,\n    e.interaction_id as bot_interaction_sk,\n    e.interaction_id as user_interaction_fk,\n    e.interaction_id as action_interaction_fk,\n    (case when e.reverse_interaction_nr = 0 then\n        cast(null as {{ dbt_utils.type_string() }})\n    else\n        {{ dbt_utils.concat(['senders.user_id', \"'/'\", 'e.session_nr',  \"'/'\"  ,'(e.interaction_nr +1)']) }}\n    end\n    )  as next_user_interaction_fk\nFROM {{ ref('stg_event_sequence') }} as e\nINNER JOIN {{ source('events', 'event_bot') }} AS b\n    on b._record_hash = e._record_hash and e.sender_id = b.sender_id -- use dist key\nLEFT JOIN {{ ref('sender_ids') }} AS senders\n    ON senders.sender_id = e.sender_id\n--ORDER BY {{ adapter.quote('timestamp') }}\n"
+    },
+    {
+      "path": ".github/workflows/test_bigquery.yml",
+      "sha": null,
+      "content_sha256": "daa07bc4b77255cbcc17635d249a71841551dc02a87fb1aa97e95d192e52ff43",
+      "score": 186,
+      "content": "\nname: test_bigquery\n\non:\n  pull_request:\n    branches:\n      - master\n\nenv:\n  PROJECT_ID: chat-analytics-rasa-ci\n  BQ_CRED_CLIENT_EMAIL: chat-analytics-loader@chat-analytics-rasa-ci.iam.gserviceaccount.com\n  BQ_CRED_PRIVATE_KEY: ${{ secrets.BQ_CRED_PRIVATE_KEY }}\n  BQ_CRED_TOKEN_URI: https://oauth2.googleapis.com/token\n\njobs:\n  \n  run_test_fixture_carbon_bot_session_cases:\n    name: Runs tests on run_test_fixture_carbon_bot_session_cases\n    runs-on: ubuntu-latest\n\n    strategy:\n      matrix:\n        dbt_vars: [\"{source_schema_prefix: test_fixture_carbon_bot_session_cases, user_id: metadata__user_id,  dest_schema_prefix: test_fixture_carbon_bot_session_cases_github_ci}\",\n                   \"{source_schema_prefix: test_fixture_jm, user_id: metadata__user_id, external_session_id: metadata__mitter_id, dest_schema_prefix: test_fixture_jm_github_ci}\"]\n\n    env:\n      COMMON_CLI_PARAMS: '--profiles-dir . --profile rasa_semantic_schema_bigquery --vars \"${{ matrix.dbt_vars }}\"'\n\n    steps:\n\n      - name: Check out\n        uses: actions/checkout@master\n\n      - uses: actions/setup-python@v1\n        with:\n          python-version: \"3.8.x\"\n\n\n      - name: Install dependencies\n        run: |\n          pip install dbt-bigquery==1.0.0\n          dbt deps\n      \n      - name: Run seeds\n        run: dbt seed ${{ env.COMMON_CLI_PARAMS }}\n\n      - name: Run source prerequisities tests\n        run: dbt test ${{ env.COMMON_CLI_PARAMS }} -s tag:prerequisities\n\n      - name: Run full refresh\n        run: dbt run ${{ env.COMMON_CLI_PARAMS }} --full-refresh --fail-fast\n\n      - name: Test with units\n        run: dbt test ${{ env.COMMON_CLI_PARAMS }}"
+    },
+    {
+      "path": ".github/workflows/test_redshift.yml",
+      "sha": null,
+      "content_sha256": "2113770ff9ac89d86bcdf55c4d4d9abe81d500c00066cb609060ad0888ccd369",
+      "score": 186,
+      "content": "\nname: test_redshift\n\non:\n  pull_request:\n    branches:\n      - master\n\nenv:\n  PG_HOST: 3.73.90.3\n  PG_USER: loader\n  PG_PASSWORD: ${{ secrets.PG_PASSWORD }}\n  PG_DATABASE_NAME: chat_analytics_rasa_ci\n\njobs:\n  \n  run_test_fixture_carbon_bot_session_cases:\n    name: Runs tests on run_test_fixture_carbon_bot_session_cases\n    runs-on: ubuntu-latest\n\n    strategy:\n      matrix:\n        dbt_vars: [\"{source_schema_prefix: test_fixture_carbon_bot_session_cases, user_id: metadata__user_id,  dest_schema_prefix: test_fixture_carbon_bot_session_cases_github_ci}\",\n                   \"{source_schema_prefix: test_fixture_jm, user_id: metadata__user_id, external_session_id: metadata__mitter_id, dest_schema_prefix: test_fixture_jm_github_ci}\"]\n\n    env:\n      COMMON_CLI_PARAMS: '--profiles-dir . --profile rasa_semantic_schema_redshift --vars \"${{ matrix.dbt_vars }}\"'\n\n    steps:\n\n      - name: Check out\n        uses: actions/checkout@master\n\n      - uses: actions/setup-python@v1\n        with:\n          python-version: \"3.8.x\"\n\n\n      - name: Install dependencies\n        run: |\n          pip install dbt-redshift==1.0.1\n          dbt deps\n      \n      - name: Run seeds\n        run: dbt seed ${{ env.COMMON_CLI_PARAMS }}\n\n      - name: Run source prerequisities tests\n        run: dbt test ${{ env.COMMON_CLI_PARAMS }} -s tag:prerequisities\n\n      - name: Run full refresh\n        run: dbt run ${{ env.COMMON_CLI_PARAMS }} --full-refresh --fail-fast\n\n      - name: Test with units\n        run: dbt test ${{ env.COMMON_CLI_PARAMS }}"
+    },
+    {
+      "path": "tests/stg_interactions_expects_one_user_id_per_conv.sql",
+      "sha": null,
+      "content_sha256": "dbb4fecd43f3e3cff45fda71bd10c7dc6864d239b4048dcc1640aeca58f18bb1",
+      "score": 175,
+      "content": "-- one conversation must have one user_id (we also count nulls)\nSELECT sender_id, count(distinct COALESCE(user_id, '__count_nulls__')) as uperc FROM {{ ref('stg_interactions') }}\nGROUP BY sender_id\nHAVING uperc <> 1"
+    },
+    {
+      "path": "tests/stg_interactions_expects_one_ext_session_per_sess_id.sql",
+      "sha": null,
+      "content_sha256": "c8f9206850d75b8ee7ed9e87f2f3c18e3ea01a52c2dce1c8e5452684ad1f8a84",
+      "score": 175,
+      "content": "-- one session must have one external session id\nSELECT session_id, count(distinct COALESCE(user_id, '__count_nulls__')) as extspersid FROM {{ ref('stg_interactions') }}\nGROUP BY session_id\nHAVING extspersid <> 1"
+    },
+    {
+      "path": "tests/test_fixture_carbon_bot_session_cases/test_custom_model_name.sql",
+      "sha": null,
+      "content_sha256": "f4fadefbdc9065cbd8a45e66950a39d916451576fe09ba43bc830bca95c03f10",
+      "score": 166,
+      "content": "{{\n    config(tags=[\"test_fixture_carbon_bot_session_cases\", \"full\", \"incremental\", \"unit\"])\n}}\n\n{%- if var(\"source_schema_prefix\") == \"test_fixture_carbon_bot_session_cases\" -%}\n\nselect * from (\n\n{{ test_expect_distinct_values(\n    ref(\"models\"),\n    \"model_name_custom\",\n    values=['20211207-153335_2.8.12', '20211122-132605_2.8.12', '20211119-094708_2.8.12', '20210601-085248_2.6.1', '20210528-162428_2.6.1', '20210528-105643_2.6.1'])\n}}\n\n)\n\n{%- else -%}\n\nselect null limit 0\n\n{%- endif -%}\n"
+    },
+    {
+      "path": "macros/generate_readable_model_name.sql",
+      "sha": null,
+      "content_sha256": "d0318ac3473f96f74e55ed95578e797728ff48c54b94dfb2108149f1fb6413d6",
+      "score": 108,
+      "content": "{% macro generate_readable_model_name() -%}\n   {{ dbt_utils.concat(['m.name', \"'_'\", 'm.sdk_version']) }}\n{%- endmacro %}"
+    },
+    {
+      "path": "models/sources.yml",
+      "sha": null,
+      "content_sha256": "f4787dd1cb666575cf5e46ab63bdeb0b25c2fa7e67b023b0e2c11a2f1612f3d7",
+      "score": 108,
+      "content": "version: 2\n\nsources:\n  - name: events\n    quoting:\n      database: true\n      schema: true\n      identifier: true\n    schema: \"{{ var('source_schema_prefix') }}_event\"\n    tables:\n      - name: event\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: event_user\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: event_bot\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: event_slot\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: event_action\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: event_active_loop\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: event_session_started\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: _loads\n        schema: \"{{ var('source_schema_prefix') }}_event\"\n      - name: _version\n        schema: \"{{ var('source_schema_prefix') }}_event }}\"\n        columns:\n          - name: version\n            tests:\n              - dbt_expectations.expect_column_to_exist:\n                  config:\n                    tags: prerequisites\n  - name: models\n    quoting:\n      database: true\n      schema: true\n      identifier: true\n    schema: \"{{ var('source_schema_prefix') }}_model\"\n    tables:\n      - name: model\n        schema: \"{{ var('source_schema_prefix') }}_model\"\n        columns:\n          - name: model_id\n            tests:\n              - dbt_expectations.expect_column_to_exist:\n                  config:\n                    tags: prerequisites\n          - name: name\n            tests:\n              - dbt_expectations.expect_column_to_exist:\n                  config:\n                    tags: prerequisites\n\n"
+    },
+    {
+      "path": "models/views/models.sql",
+      "sha": null,
+      "content_sha256": "a74682a78dd37f7ba96a27b88b75c73d2bbee563ae659532f229e7f6642dfa8f",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='table',\n        schema='views',\n        unique_key='model_id',\n        on_schema_change='fail',\n        dist='all',\n        sort=['timestamp'],\n        cluster_by='model_id'\n    )\n}}\n\nSELECT m.*,\n  -- override macro to generate other model names\n  {{ generate_readable_model_name()}} as model_name_custom\nfrom {{ source('models', 'model') }} as m\n"
+    },
+    {
+      "path": "models/staging/load_ids.sql",
+      "sha": null,
+      "content_sha256": "0eb6511bfe6eb14f1a5bc4009a5935616ec3ee01453c88abeac12bf053cc73e7",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='table',\n        schema=\"staging\"\n\n    )\n}}\n\n{% if should_full_refresh() %}\n    -- take all loads when full refresh\n    SELECT load_id FROM {{ source('events', '_loads') }}\n    WHERE status = 0\n{% else %}\n    -- take only loads with status = 0 and no other records\n    SELECT load_id FROM {{ source('events', '_loads') }}\n    GROUP BY 1\n    HAVING SUM(status) = 0\n{% endif %}"
+    },
+    {
+      "path": "models/views/event_sequence.sql",
+      "sha": null,
+      "content_sha256": "0e8859770c8569a52942163519c431dc43942c96e3f8d8da7896377a5f222d75",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='_record_hash',\n        dist='sender_id',\n        sort=['timestamp'],\n        cluster_by=['user_id', 'sender_id', 'session_id', 'interaction_id'],\n        partition_by={\n          \"field\": \"timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\n-- depends_on: {{ ref('stg_senders') }}\nSELECT * FROM {{ ref('stg_event_sequence') }}"
+    },
+    {
+      "path": "models/views/slots.sql",
+      "sha": null,
+      "content_sha256": "b8099888200998b9182fa62d2136df7c1cb77add3a605f7a09baf60221aac48e",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='slot_record_hash',\n        on_schema_change='fail',\n        dist='sender_id',\n        sort=['timestamp'],\n        cluster_by='slots_interaction_sk',\n        partition_by={\n          \"field\": \"timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\nSELECT\n    s.slot_record_hash, -- primary key\n    s.sender_id,\n    s.model_id,\n    s.environment,\n    s.name,\n    s.value,\n    s.slot_name_normalised,\n    s.slot_action_normalised,\n    s.timestamp,\n    s.session_id,\n    s.session_nr,\n    s.interaction_id,\n    s.interaction_nr,\n    s.interaction_id as slots_interaction_sk,\n    -- fill (happens in the same session)\n    s.next_slot_fill_record_hash,\n    f.interaction_id as fill_event_interaction_id,\n    --attempted fill (happens in the same session)\n    s.next_slot_fill_attempt_record_hash,\n    a.interaction_id as fill_attempt_event_interaction_id\nFROM {{ ref('stg_slots') }} AS s\nLEFT JOIN {{ ref('stg_event_sequence') }} as f\n    on s.next_slot_fill_record_hash = f._record_hash and f.sender_id = s.sender_id -- use dist key\nLEFT JOIN {{ ref('stg_event_sequence') }} as a\n    on s.next_slot_fill_attempt_record_hash = a._record_hash and a.sender_id = s.sender_id -- use dist key\n--ORDER BY {{ adapter.quote('timestamp') }}\n"
+    },
+    {
+      "path": "models/staging/events.sql",
+      "sha": null,
+      "content_sha256": "756e9fa25043a9f26ddc62f0a245eed65d1d30ba58dd531b1b9ad76e161409c9",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='table',\n        schema=\"staging\",\n        dist='sender_id',\n        sort=['timestamp'],\n        cluster_by='sender_id'\n\n    )\n}}\n\nSELECT events.*,\n       senders.user_id\n   FROM\n    (SELECT sender_id, _record_hash, event, {{ adapter.quote('timestamp') }}, parse_data__intent__name as value, model_id, _load_id, environment\n        FROM {{ source('events', 'event_user') }} as u\n    union all\n      SELECT  sender_id, _record_hash, event, {{ adapter.quote('timestamp') }}, metadata__utter_action as value, model_id, _load_id, environment\n      FROM {{ source('events', 'event_bot') }} as b\n    union all\n      SELECT  sender_id, _record_hash, event, {{ adapter.quote('timestamp') }}, name as value, model_id, _load_id, environment\n      FROM {{ source('events', 'event_slot') }} as s\n    union all\n      SELECT  sender_id, _record_hash, event, {{ adapter.quote('timestamp') }}, name as value, model_id, _load_id, environment\n      FROM {{ source('events', 'event_action') }} as a\n    union all\n{% if has_active_loop() %}\n      SELECT  sender_id, _record_hash, event, {{ adapter.quote('timestamp') }}, name as value, model_id, _load_id, environment\n      FROM {{ source('events', 'event_active_loop') }} as l\n    union all\n{% endif %}\n      -- contains session metadata\n      SELECT  sender_id, _record_hash, event, {{ adapter.quote('timestamp') }}, NULL as value, model_id, _load_id, environment\n      FROM {{ source('events', 'event_session_started') }} as ss\n    ) AS events\nINNER JOIN {{ ref('sender_ids') }} AS senders ON senders.sender_id = events.sender_id\n"
+    },
+    {
+      "path": "models/views/sessions.sql",
+      "sha": null,
+      "content_sha256": "de53000794e1cf7afa0d5765ae04ad9edbd303163f2fbedf2c5204f63ce0f1f5",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='session_id',\n        on_schema_change='fail',\n        dist='sender_id',\n        sort=['session_initiation_timestamp', 'session_start_timestamp', 'session_end_timestamp'],\n        sort_type='interleaved',\n        cluster_by=['user_id', 'sender_id'],\n        partition_by={\n          \"field\": \"session_initiation_timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n-- Interleaved sort key data structure\n-- https://chartio.com/blog/understanding-interleaved-sort-keys-in-amazon-redshift-part-1/\n\n-- depends_on: {{ ref('stg_senders') }}\nSELECT * FROM {{ ref('stg_sessions') }}"
+    },
+    {
+      "path": "models/views/user_messages.sql",
+      "sha": null,
+      "content_sha256": "14484431eb14a178730e0cac8e2735878a7e90ff523eaee13beeb8a8b06f05f8",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='user_message_record_hash',\n        on_schema_change='fail',\n        dist='sender_id',\n        sort=['timestamp'],\n        cluster_by='user_interaction_sk',\n        partition_by={\n          \"field\": \"timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\nSELECT\n    senders.user_id,\n    u.sender_id,\n    u._record_hash as user_message_record_hash,\n    u.message_id,\n    u.timestamp,\n    u.text,\n    u.parse_data__intent__name as intent_name,\n    u.parse_data__intent__confidence as intent_confidence,\n    u.input_channel,\n    u.model_id,\n    u.environment,\n    e.session_nr,\n    e.interaction_nr,\n    e.interaction_id as interaction_id,\n    e.interaction_id as user_interaction_sk,\n    e.interaction_id as bot_interaction_fk,\n    e.interaction_id as slot_interaction_fk,\n    e.interaction_id as action_interaction_fk,\n    -- do not generate reference to interaction nr 0 - it holds everything that happend before user sent first message\n    (case when e.interaction_nr <= 1 then\n        cast(null as {{ dbt_utils.type_string() }})\n    else\n        {{ dbt_utils.concat(['senders.user_id', \"'/'\", 'e.session_nr',  \"'/'\"  ,'(e.interaction_nr -1)']) }}\n    end\n    ) as previous_bot_interaction_fk\nfrom {{ ref('stg_event_sequence') }} as e\nINNER JOIN {{ source('events', 'event_user') }} AS u\n    on u._record_hash = e._record_hash and e.sender_id = u.sender_id -- use dist key\nLEFT JOIN {{ ref('sender_ids') }} AS senders\n    ON senders.sender_id = e.sender_id\n--ORDER BY {{ adapter.quote('timestamp') }}"
+    },
+    {
+      "path": "models/views/senders.sql",
+      "sha": null,
+      "content_sha256": "65e912fed463fa3a07a4f98e1fbafd3fbc24648cec670cb12f57c73849e5fc52",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='sender_id',\n        on_schema_change='fail',\n        dist='sender_id',\n        sort=['sender_conversation_initiation_timestamp', 'sender_conversation_start_timestamp', 'sender_conversation_end_timestamp'],\n        sort_type='interleaved',\n        cluster_by=['sender_conversation_initiation_timestamp', 'sender_conversation_start_timestamp', 'sender_conversation_end_timestamp'],\n        partition_by={\n          \"field\": \"sender_conversation_start_timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\nSELECT * FROM {{ ref('stg_senders') }}"
+    },
+    {
+      "path": "models/views/_loads.sql",
+      "sha": null,
+      "content_sha256": "1fb434198f3e5ef1b6974ef50627b6a9b93da46779682565b89c87937ba6676a",
+      "score": 106,
+      "content": "-- never do a full refresh or you drop the original loads info\n{{\n    config(\n        materialized='incremental',\n        schema=\"event\",\n        full_refresh = false\n    )\n}}\n-- depends_on: {{ ref('actions') }}\n-- depends_on: {{ ref('bot_actions') }}\n-- depends_on: {{ ref('slots') }}\n-- depends_on: {{ ref('users') }}\n-- depends_on: {{ ref('user_messages') }}\nselect load_id, 1 as status, {{ dbt_utils.current_timestamp() }} as inserted_at from {{ ref('load_ids') }}\n    WHERE load_id NOT IN (\n        SELECT load_id FROM {{ source('events', '_loads') }} WHERE status = 1)\n"
+    },
+    {
+      "path": "models/staging/stg_senders.sql",
+      "sha": null,
+      "content_sha256": "8474e1c13901cf5c1c549e5cdae3eb3ef755e3ca5b8abaeb43b279213007446b",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='table',\n        schema='staging',\n        dist='sender_id',\n        cluster_by='sender_id'\n\n    )\n}}\n\nselect\n    s.sender_id,\n    max(s.user_id) as user_id,\n    min(s.session_initiation_timestamp) as sender_conversation_initiation_timestamp, -- might be initiated without human interaction\n    min(s.session_start_timestamp) as sender_conversation_start_timestamp, -- start with human interaction\n    max(s.session_end_timestamp) as sender_conversation_end_timestamp,\n    max(s.session_nr) as sessions_count,\n    -- only relevant if sender is a conversation rather than user\n    {{ dbt_utils.datediff( 'cast(min(s.session_initiation_timestamp) as timestamp)', 'cast(max(s.session_end_timestamp) as timestamp)', 'second') }} as sender_conversation_duration_seconds\nfrom {{ ref('stg_sessions') }} as s\ngroup by s.sender_id"
+    },
+    {
+      "path": "models/views/users.sql",
+      "sha": null,
+      "content_sha256": "60b2d5b9c2dd4a7b44da45625a06dd8e1eab2bc943fe0a5ed429dd20d0dfe07e",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='incremental',\n        schema='views',\n        unique_key='user_id',\n        dist='user_id',\n        on_schema_change='fail',\n        cluster_by='user_id',\n        partition_by={\n          \"field\": \"first_seen_timestamp\",\n          \"data_type\": \"timestamp\",\n          \"granularity\": \"day\"\n        }\n    )\n}}\n\n-- depends_on: {{ ref('stg_senders') }}\nSELECT distinct\n    s.user_id, -- primary key\n    min(s.session_initiation_timestamp) OVER (PARTITION BY s.user_id rows between unbounded preceding and unbounded following) as first_seen_timestamp,\n    max(s.session_end_timestamp) OVER (PARTITION BY s.user_id rows between unbounded preceding and unbounded following) as last_seen_timestamp,\n    count(s.session_id) OVER (PARTITION BY s.user_id rows between unbounded preceding and unbounded following) as sessions_count,\n    -- count(DISTINCT s.sender_id) OVER (PARTITION BY s.user_id) as senders_count,\n    FIRST_VALUE(s.session_id) OVER (PARTITION BY s.user_id ORDER BY session_initiation_timestamp ASC \n        rows between unbounded preceding and unbounded following) as first_session_id,\n    FIRST_VALUE(s.session_id) OVER (PARTITION BY s.user_id ORDER BY session_initiation_timestamp DESC \n        rows between unbounded preceding and unbounded following) as last_session_id,\n    FIRST_VALUE(s.sender_id) OVER (PARTITION BY s.user_id ORDER BY session_initiation_timestamp ASC\n        rows between unbounded preceding and unbounded following) as first_sender_id,\n    FIRST_VALUE(s.sender_id) OVER (PARTITION BY s.user_id ORDER BY session_initiation_timestamp DESC\n        rows between unbounded preceding and unbounded following) as last_sender_id\n\nFROM {{ ref('sessions') }} AS s WHERE s.user_id IN \n    -- we must get all session for all the user_ids in the incremental load\n    (SELECT DISTINCT user_id FROM {{ ref('stg_sessions') }})\n"
+    },
+    {
+      "path": "models/views/schema.yml",
+      "sha": null,
+      "content_sha256": "3f8b1b06286fe9dd3c8416e50bad8ff8cf0e34546c4bec8ebde121e36bc28e24",
+      "score": 106,
+      "content": "\nversion: 2\n\nmodels:\n  - name: event_sequence\n    columns:\n      - name: _record_hash\n        tests:\n          - unique\n          - not_null  \n  - name: actions\n    columns:\n      - name: action_record_hash\n        tests:\n          - unique\n          - not_null\n  - name: slots\n    columns:\n      - name: slot_record_hash\n        tests:\n          - unique\n          - not_null\n  - name: interactions\n    columns:\n      - name: interaction_id\n        tests:\n          - unique\n          - not_null\n  - name: sessions\n    columns:\n      - name: session_id\n        tests:\n          - unique\n          - not_null\n  - name: senders\n    columns:\n      - name: sender_id\n        tests:\n          - unique\n          - not_null\n  - name: users\n    columns:\n      - name: user_id\n        tests:\n          - unique\n          - not_null\n  - name: bot_actions\n    columns:\n      - name: bot_record_hash\n        tests:\n          - unique\n          - not_null\n      - name: next_user_interaction_fk\n        tests:\n          - relationships:\n              to: ref('interactions')\n              field: interaction_id\n           # next_user_interaction_fk must have non null values\n          - dbt_expectations.expect_column_unique_value_count_to_be_between:\n              min_value: 1\n  - name: user_messages\n    columns:\n      - name: user_message_record_hash\n        tests:\n          - unique\n          - not_null\n      - name: previous_bot_interaction_fk\n        tests:\n          - relationships:\n              to: ref('interactions')\n              field: interaction_id\n           # next_user_interaction_fk must have non null values\n          - dbt_expectations.expect_column_unique_value_count_to_be_between:\n              min_value: 1\n  - name: models\n    columns:\n      - name: model_id\n        tests:\n          - unique\n          - not_null\n"
+    },
+    {
+      "path": "models/staging/sender_ids.sql",
+      "sha": null,
+      "content_sha256": "bfb61815f6b85d7f46c106cc1569d890c89597c29324c2462ad699a56e1dd3a8",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='table',\n        schema=\"staging\",\n        dist=\"sender_id\",\n        cluster_by='sender_id'\n\n    )\n}}\n\nwith sender_user_events as\n    (select distinct  sender_id,\n             _load_id,\n            max(u.{{ var('user_id') }}) over (partition by sender_id\n                                order by _load_id\n                                rows between unbounded preceding and unbounded following) as user_id\n    from {{ source('events', 'event_user') }} as u\n\n    union all\n    -- SDK 2.8 does not send metadata in event_session_started anymore\n    -- select distinct  sender_id,\n    --         _load_id,\n    --         max(ss.{{ var('user_id') }}) over (partition by sender_id\n    --                             order by _load_id\n    --                             rows between unbounded preceding and unbounded following) as user_id\n    -- from {{ source('events', 'event_session_started') }} as ss\n    -- union all\n    -- take pure session bounces where user id was not present\n    select distinct  sender_id,\n            _load_id,\n            cast(null as {{ dbt_utils.type_string() }}) as user_id\n    from {{ source('events', 'event_action') }} as ss\n    where name IN ('action_listen', 'action_session_start')\n),\nsender_users as\n    (select sender_id,\n            _load_id,\n            coalesce(max(user_id), sender_id) as user_id\n     from sender_user_events\n     group by 1,2\n    )\nselect distinct\n    s.sender_id,\n    -- there should not be multiple users per sender,\n    -- but the values are depedent on implementation so we force keep 1st value\n    first_value(s.user_id) over (partition by s.sender_id\n                                order by s._load_id\n                                rows between unbounded preceding and unbounded following)  as user_id\n    from sender_users as s\ninner join sender_users as su_new\n    on s.user_id=su_new.user_id\ninner join {{ ref('load_ids') }} AS l\n    ON su_new._load_id = l.load_id\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T21:04:02.292398+00:00"
+}

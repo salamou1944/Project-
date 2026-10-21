@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:actualbudget/maintainer-dashboard",
+  "repo": "actualbudget/maintainer-dashboard",
+  "revision_sha": "8559fe7f218d566ccf3145645e2d003730fcafd5",
+  "default_branch": "main",
+  "pushed_at": "2026-08-12T06:27:42Z",
+  "repo_updated_at": "2026-06-22T20:36:16Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "ac99eacb678cab24053273ec3078ece7f6ed743c021c498ebcf6d645e6180360",
+      "score": 198,
+      "content": "name: CI\n\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n\npermissions:\n  contents: read\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 22\n          cache: yarn\n\n      - run: yarn install --frozen-lockfile\n\n      - name: Type check\n        run: npx tsc --noEmit\n\n      - name: Build\n        run: yarn build\n        env:\n          VITE_GITHUB_CLIENT_ID: ci-placeholder\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "925e59994f52f449aa59242b6f7d4e89f136e838d9326f64f9fe3d8c728498f4",
+      "score": 120,
+      "content": "{\n  \"name\": \"reviewer-dashboard\",\n  \"private\": true,\n  \"version\": \"1.0.0\",\n  \"type\": \"module\",\n  \"scripts\": {\n    \"dev\": \"netlify dev\",\n    \"build\": \"tsc -b && vite build\",\n    \"preview\": \"vite preview\"\n  },\n  \"dependencies\": {\n    \"@octokit/rest\": \"^21.1.1\",\n    \"react\": \"^18.3.1\",\n    \"react-dom\": \"^18.3.1\"\n  },\n  \"devDependencies\": {\n    \"@tailwindcss/vite\": \"^4.1.3\",\n    \"@types/react\": \"^18.3.18\",\n    \"@types/react-dom\": \"^18.3.5\",\n    \"@vitejs/plugin-react\": \"^4.3.4\",\n    \"tailwindcss\": \"^4.1.3\",\n    \"typescript\": \"^5.7.3\",\n    \"vite\": \"^6.4.3\"\n  }\n}\n"
+    },
+    {
+      "path": "src/hooks/useAuth.ts",
+      "sha": null,
+      "content_sha256": "0416ba6bc565ab34ef7b8bd04228cfc0280b056330570e7bb543cb2e68878f57",
+      "score": 111,
+      "content": "import { useState, useEffect, useCallback } from \"react\";\nimport { GITHUB_CLIENT_ID, GITHUB_OAUTH_URL } from \"../constants\";\nimport type { GitHubUser } from \"../types\";\n\nconst TOKEN_KEY = \"gh_token\";\n\nexport function useAuth() {\n  const [token, setToken] = useState<string | null>(\n    () => localStorage.getItem(TOKEN_KEY),\n  );\n  const [user, setUser] = useState<GitHubUser | null>(null);\n  const [loading, setLoading] = useState(() => !!localStorage.getItem(TOKEN_KEY));\n\n  // Read token from hash fragment on mount\n  useEffect(() => {\n    const hash = window.location.hash;\n    const match = hash.match(/token=([^&]+)/);\n    if (match) {\n      const t = match[1];\n      localStorage.setItem(TOKEN_KEY, t);\n      setToken(t);\n      window.history.replaceState(null, \"\", window.location.pathname);\n    }\n  }, []);\n\n  // Fetch user info when token is available\n  useEffect(() => {\n    if (!token) {\n      setUser(null);\n      return;\n    }\n    setLoading(true);\n    fetch(\"https://api.github.com/user\", {\n      headers: { Authorization: `Bearer ${token}` },\n    })\n      .then((res) => {\n        if (!res.ok) throw new Error(\"Invalid token\");\n        return res.json() as Promise<GitHubUser>;\n      })\n      .then(setUser)\n      .catch(() => {\n        localStorage.removeItem(TOKEN_KEY);\n        setToken(null);\n      })\n      .finally(() => setLoading(false));\n  }, [token]);\n\n  const login = useCallback(() => {\n    const params = new URLSearchParams({\n      client_id: GITHUB_CLIENT_ID,\n      scope: \"read:org\",\n    });\n    window.location.href = `${GITHUB_OAUTH_URL}?${params}`;\n  }, []);\n\n  const logout = useCallback(() => {\n    localStorage.removeItem(TOKEN_KEY);\n    setToken(null);\n    setUser(null);\n  }, []);\n\n  return { token, user, loading, login, logout };\n}\n"
+    },
+    {
+      "path": "netlify/functions/auth-callback.ts",
+      "sha": null,
+      "content_sha256": "fa8cdc7ff18d54259664848fb559a6f9fbcd7ec4253b122142b8c20e2278490b",
+      "score": 111,
+      "content": "import type { Handler } from \"@netlify/functions\";\n\nconst handler: Handler = async (event) => {\n  const code = event.queryStringParameters?.code;\n  if (!code) {\n    return { statusCode: 400, body: \"Missing code parameter\" };\n  }\n\n  const response = await fetch(\"https://github.com/login/oauth/access_token\", {\n    method: \"POST\",\n    headers: {\n      \"Content-Type\": \"application/json\",\n      Accept: \"application/json\",\n    },\n    body: JSON.stringify({\n      client_id: process.env.GITHUB_CLIENT_ID,\n      client_secret: [REDACTED],\n      code,\n    }),\n  });\n\n  const data = (await response.json()) as { access_token?: string; error?: string };\n\n  if (data.error || !data.access_token) {\n    return { statusCode: 401, body: `OAuth error: ${data.error ?? \"no token\"}` };\n  }\n\n  const siteUrl = process.env.SITE_URL || \"http://localhost:5173\";\n\n  return {\n    statusCode: 302,\n    headers: {\n      Location: `${siteUrl}/#token=[REDACTED]}`,\n    },\n    body: \"\",\n  };\n};\n\nexport { handler };\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "src/hooks/useSearchParams.ts",
+      "sha": null,
+      "content_sha256": "e0e267d823d0321df47497dc139fc7bf12d696b1f839e539c44514fc6553f5f4",
+      "score": 106,
+      "content": "import { useCallback, useSyncExternalStore } from \"react\";\n\nfunction getSnapshot() {\n  return window.location.search;\n}\n\nfunction subscribe(callback: () => void) {\n  window.addEventListener(\"popstate\", callback);\n  return () => window.removeEventListener(\"popstate\", callback);\n}\n\n/**\n * Read/write a single URL search parameter.\n * Updates the URL without a page reload and keeps state in sync across components.\n */\nexport function useSearchParam(key: string, defaultValue = \"\"): [string, (value: string) => void] {\n  const search = useSyncExternalStore(subscribe, getSnapshot);\n  const params = new URLSearchParams(search);\n  const value = params.get(key) ?? defaultValue;\n\n  const setValue = useCallback(\n    (next: string) => {\n      const p = new URLSearchParams(window.location.search);\n      if (next === defaultValue || next === \"\") {\n        p.delete(key);\n      } else {\n        p.set(key, next);\n      }\n      const qs = p.toString();\n      const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;\n      window.history.pushState(null, \"\", url);\n      // Notify all subscribers\n      window.dispatchEvent(new PopStateEvent(\"popstate\"));\n    },\n    [key, defaultValue],\n  );\n\n  return [value, setValue];\n}\n\n/** Boolean variant — stores \"1\" / absent. */\nexport function useSearchParamBool(key: string, defaultValue = false): [boolean, (value: boolean) => void] {\n  const [raw, setRaw] = useSearchParam(key, defaultValue ? \"1\" : \"\");\n  const value = raw === \"1\";\n  const setValue = useCallback((v: boolean) => setRaw(v ? \"1\" : \"\"), [setRaw]);\n  return [value, setValue];\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "7d4a77e633551a7cd20401fa813a53c5219cbefa9d7b2a306eac76cae2931852",
+      "score": 100,
+      "content": "# Maintainer Dashboard\n\nA real-time Kanban board for triaging pull requests on [actualbudget/actual](https://github.com/actualbudget/actual).\n\n![Screenshot](docs/screenshot.png)\n\n## Features\n\n- **Board view** — 5-column Kanban: WIP, Ready for Review, AI Approved, In Review, Approved\n- **My Queue** — toggle to show only PRs assigned to you\n- **Merge score** — composite 0–100 score predicting merge likelihood (author history, PR size, review progress, org membership)\n- **CI status** — live check-run indicators with drill-down popover\n- **CodeRabbit** — automatic detection of AI review status\n- **Filtering** — filter by author, reviewer, label, or column via URL-persisted search params\n- **Auto-refresh** — polls GitHub every 2 minutes\n- **Dark theme** — custom dark design with Satoshi font and glass-card aesthetics\n\n## Tech Stack\n\n| Layer       | Technology        |\n| ----------- | ----------------- |\n| UI          | React 18          |\n| Language    | TypeScript 5.7    |\n| Build       | Vite 6.1          |\n| Styling     | Tailwind CSS 4.1  |\n| GitHub API  | Octokit           |\n| Hosting     | Netlify           |\n\n## Getting Started\n\n### Prerequisites\n\n- Node.js 20+\n- Yarn\n- A GitHub OAuth App (for authentication)\n\n### Install\n\n```bash\ngit clone https://github.com/actualbudget/reviewer-dashboard.git\ncd reviewer-dashboard\nyarn install\n```\n\n### Environment\n\nCopy `.env.example` to `.env` and fill in values:\n\n```bash\ncp .env.example .env\n```\n\n| Variable                | Side   | Description                          |\n| ----------------------- | ------ | ------------------------------------ |\n| `VITE_GITHUB_CLIENT_ID` | Client | GitHub OAuth App client ID           |\n| `GITHUB_CLIENT_ID`      | Server | Same client ID (for Netlify Function)|\n| `GITHUB_CLIENT_SECRET`  | Server | GitHub OAuth App client secret       |\n| `SITE_URL`              | Server | Your deployed site URL               |\n\n### Development\n\n```bash\nyarn dev          # starts Netlify Dev (Vite + serverless functions on :8888)\n```\n\n> **Note:** Use `yarn dev` (which runs `netlify dev`), not `yarn vite`. The OAuth callback requires the Netlify Functions proxy.\n\n## Architecture\n\n```\nsrc/\n├── App.tsx                  # Root: auth gate + data fetching orchestration\n├── types.ts                 # Shared TypeScript interfaces\n├── constants.ts             # Repo config, column metadata, intervals\n├── index.css                # Tailwind v4 import + theme tokens + animations\n├── components/\n│   ├── Board.tsx            # Column layout container\n│   ├── Column.tsx           # Single Kanban column\n│   ├── PRCard.tsx           # Pull request card\n│   ├── PRPopover.tsx        # Detailed PR info popover\n│   ├── FilterBar.tsx        # Author/reviewer/label/column filters\n│   ├── Header.tsx           # Top bar with refresh + My Queue toggle\n│   ├── MyQueue.tsx          # Filtered view of assigned PRs\n│   ├── LabelBadge.tsx       # Colored label chip\n│   ├── LoginScreen.tsx      # GitHub OAuth login\n│   └── Spinner.tsx          # Loading indicator\n├── hooks/\n│   ├── useAuth.ts           # OAuth token management\n│   ├── usePullRequests.ts   # Main data-fetching hook\n│   ├── useSearchParams.ts   # URL ↔ state sync via useSyncExternalStore\n│   └── useTimelineEvents.ts # PR timeline event fetching\n├── contexts/\n│   └── TokenContext.tsx      # Auth token context provider\n└── lib/\n    ├── github.ts            # Octokit wrapper, all GitHub API calls\n    ├── classify.ts          # PR → column classification logic\n    ├── mergeScore.ts        # Merge likelihood scoring algorithm\n    ├── concurrency.ts       # Bounded-concurrency Promise helper\n    ├── mergeCache.ts        # localStorage cache for merge stats\n    ├── scoreColors.ts       # Score → color mapping\n    └── format.ts            # Date/number formatting utilities\n\nnetlify/\n└── functions/\n    └── auth-callback.ts     # OAuth code → token exchange\n```\n\n### Data Flow\n\n1. User authenticates via GitHub OAuth (token exchanged through Netlify Function)\n2. `usePullRequests` fetches all open PRs, reviews, CI checks, and merge stats concurrently\n3. `classify.ts` assigns each PR to a column based on labels, review state, and assignees\n4. `mergeScore.ts` computes a composite score from author history, PR size, and review progress\n5. Board re-fetches every 2 minutes; merge stats are cached in localStorage for 30 minutes\n\n## Deployment\n\nDeployed on Netlify. See `netlify.toml` for build and redirect configuration.\n\n## License\n\n[MIT](LICENSE)\n"
+    },
+    {
+      "path": "src/lib/mergeCache.ts",
+      "sha": null,
+      "content_sha256": "46dab946ccaa2d3821b2137647c69b3e9ebc37e69738960a2a28753b8ce036df",
+      "score": 89,
+      "content": "import type { AuthorMergeStats, PRDetails } from \"./github\";\nimport { MERGE_STATS_CACHE_TTL_MS } from \"../constants\";\n\nconst AUTHOR_STATS_KEY = \"merge-author-stats\";\nconst PR_DETAILS_KEY = \"merge-pr-details\";\nconst ORG_MEMBERS_KEY = \"merge-org-members\";\nconst AUTHOR_CREATED_DATES_KEY = \"merge-author-created-dates\";\n\ninterface CachedAuthorStats {\n  timestamp: number;\n  data: Record<string, AuthorMergeStats>;\n}\n\nexport function getCachedAuthorStats(): Map<string, AuthorMergeStats> | null {\n  try {\n    const raw = localStorage.getItem(AUTHOR_STATS_KEY);\n    if (!raw) return null;\n    const cached: CachedAuthorStats = JSON.parse(raw);\n    if (Date.now() - cached.timestamp > MERGE_STATS_CACHE_TTL_MS) return null;\n    return new Map(Object.entries(cached.data));\n  } catch {\n    return null;\n  }\n}\n\nexport function setCachedAuthorStats(stats: Map<string, AuthorMergeStats>): void {\n  const cached: CachedAuthorStats = {\n    timestamp: Date.now(),\n    data: Object.fromEntries(stats),\n  };\n  localStorage.setItem(AUTHOR_STATS_KEY, JSON.stringify(cached));\n}\n\ninterface CachedOrgMembers {\n  timestamp: number;\n  data: string[];\n}\n\nexport function getCachedOrgMembers(): Set<string> | null {\n  try {\n    const raw = localStorage.getItem(ORG_MEMBERS_KEY);\n    if (!raw) return null;\n    const cached: CachedOrgMembers = JSON.parse(raw);\n    if (Date.now() - cached.timestamp > MERGE_STATS_CACHE_TTL_MS) return null;\n    return new Set(cached.data);\n  } catch {\n    return null;\n  }\n}\n\nexport function setCachedOrgMembers(members: Set<string>): void {\n  const cached: CachedOrgMembers = {\n    timestamp: Date.now(),\n    data: [...members],\n  };\n  localStorage.setItem(ORG_MEMBERS_KEY, JSON.stringify(cached));\n}\n\ninterface CachedAuthorCreatedDates {\n  timestamp: number;\n  data: Record<string, string>;\n}\n\nexport function getCachedAuthorCreatedDates(): Map<string, string> | null {\n  try {\n    const raw = localStorage.getItem(AUTHOR_CREATED_DATES_KEY);\n    if (!raw) return null;\n    const cached: CachedAuthorCreatedDates = JSON.parse(raw);\n    if (Date.now() - cached.timestamp > MERGE_STATS_CACHE_TTL_MS) return null;\n    return new Map(Object.entries(cached.data));\n  } catch {\n    return null;\n  }\n}\n\nexport function setCachedAuthorCreatedDates(dates: Map<string, string>): void {\n  const cached: CachedAuthorCreatedDates = {\n    timestamp: Date.now(),\n    data: Object.fromEntries(dates),\n  };\n  localStorage.setItem(AUTHOR_CREATED_DATES_KEY, JSON.stringify(cached));\n}\n\nexport function getCachedPRDetails(): Map<number, PRDetails> {\n  try {\n    const raw = localStorage.getItem(PR_DETAILS_KEY);\n    if (!raw) return new Map();\n    const entries: Array<[number, PRDetails]> = JSON.parse(raw);\n    return new Map(entries);\n  } catch {\n    return new Map();\n  }\n}\n\nexport function setCachedPRDetails(\n  details: Map<number, PRDetails>,\n  openPRNumbers: number[],\n): void {\n  const openSet = new Set(openPRNumbers);\n  const pruned = new Map<number, PRDetails>();\n  for (const [num, d] of details) {\n    if (openSet.has(num)) pruned.set(num, d);\n  }\n  localStorage.setItem(PR_DETAILS_KEY, JSON.stringify([...pruned]));\n}\n"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha": null,
+      "content_sha256": "2b7b4e0d9c841e49714fc0105b08c22ef84348d51b85ea57d177480b60ddab93",
+      "score": 75,
+      "content": "# AGENTS.md\n\nRead `CLAUDE.md` first for build commands, project structure, and key patterns.\n\n## Getting Oriented\n\n1. Start with `src/types.ts` and `src/constants.ts` to understand the data model\n2. Read `src/lib/classify.ts` to understand how PRs are assigned to columns\n3. Read `src/lib/mergeScore.ts` to understand the scoring algorithm\n\n## Before & After Changes\n\n- Run `npx tsc --noEmit` before and after making changes to catch type errors\n- Run `yarn build` to verify the full build passes\n\n## Code Style\n\n- Follow existing patterns — look at neighboring code for conventions\n- No `any` types — use proper typing or `unknown` with narrowing\n- Use Tailwind utility classes for styling, not inline styles or CSS modules\n- Default-export components, named-export hooks and lib functions\n\n## PR Guidelines\n\n- Keep PRs focused — one feature or fix per PR\n- `yarn build` must pass before submitting\n- Type-check with `npx tsc --noEmit`\n\n## Things to Avoid\n\n- Don't add new tooling or dependencies without discussion\n- Don't change the priority chain in `classify.ts` without understanding how it affects column assignment across all PR states\n- Don't bypass the bounded concurrency in `lib/github.ts` — GitHub rate limits are a real constraint\n"
+    },
+    {
+      "path": "vite.config.ts",
+      "sha": null,
+      "content_sha256": "17f7fff409cf4acde70741f4aed8b09d4d937f4189f468e4749a08f14c34d92d",
+      "score": 35,
+      "content": "import { defineConfig } from \"vite\";\nimport react from \"@vitejs/plugin-react\";\nimport tailwindcss from \"@tailwindcss/vite\";\n\nexport default defineConfig({\n  plugins: [react(), tailwindcss()],\n});\n"
+    },
+    {
+      "path": "netlify.toml",
+      "sha": null,
+      "content_sha256": "464d5fa57a0e0ba65677209f886c104eb447d290af2064dd94c6d8c788dbaff3",
+      "score": 35,
+      "content": "[build]\n  command = \"yarn build\"\n  publish = \"dist\"\n  functions = \"netlify/functions\"\n\n[dev]\n  framework = \"#custom\"\n  command = \"yarn vite\"\n  targetPort = 5173\n  port = 8888\n  autoLaunch = false\n\n[[redirects]]\n  from = \"/api/auth/callback\"\n  to = \"/.netlify/functions/auth-callback\"\n  status = 200\n\n[[redirects]]\n  from = \"/*\"\n  to = \"/index.html\"\n  status = 200\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "8c90f229d37238aa2bd57fdac59b8024d75f7b2bf9c9c250024a234c29356610",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES2020\",\n    \"useDefineForClassFields\": true,\n    \"lib\": [\"ES2020\", \"DOM\", \"DOM.Iterable\"],\n    \"module\": \"ESNext\",\n    \"skipLibCheck\": true,\n    \"moduleResolution\": \"bundler\",\n    \"allowImportingTsExtensions\": true,\n    \"isolatedModules\": true,\n    \"moduleDetection\": \"force\",\n    \"noEmit\": true,\n    \"jsx\": \"react-jsx\",\n    \"strict\": true,\n    \"noUnusedLocals\": true,\n    \"noUnusedParameters\": true,\n    \"noFallthroughCasesInSwitch\": true,\n    \"forceConsistentCasingInFileNames\": true\n  },\n  \"include\": [\"src\"]\n}\n"
+    },
+    {
+      "path": "src/vite-env.d.ts",
+      "sha": null,
+      "content_sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
+      "score": 33,
+      "content": "/// <reference types=\"vite/client\" />\n"
+    },
+    {
+      "path": "src/App.tsx",
+      "sha": null,
+      "content_sha256": "ba06cd3e8aec4befbcee67024ceb0f12085cb5dd520061a5d19388bbd77135de",
+      "score": 33,
+      "content": "import { useAuth } from \"./hooks/useAuth\";\nimport { usePullRequests } from \"./hooks/usePullRequests\";\nimport { TokenContext } from \"./contexts/TokenContext\";\nimport LoginScreen from \"./components/LoginScreen\";\nimport Header from \"./components/Header\";\nimport Board from \"./components/Board\";\nimport Spinner from \"./components/Spinner\";\n\nexport default function App() {\n  const { token, user, loading: authLoading, login, logout } = useAuth();\n  const {\n    columns,\n    authors,\n    allLabels,\n    assignees,\n    loading: prLoading,\n    error,\n    lastUpdated,\n    refresh,\n    sortByScore,\n    setSortByScore,\n  } = usePullRequests(token);\n\n  if (authLoading) {\n    return <Spinner />;\n  }\n\n  if (!token || !user) {\n    return <LoginScreen onLogin={login} />;\n  }\n\n  return (\n    <TokenContext.Provider value={token}>\n      <div className=\"flex h-screen flex-col bg-surface-0\">\n        <Header\n          user={user}\n          lastUpdated={lastUpdated}\n          loading={prLoading}\n          onRefresh={refresh}\n          onLogout={logout}\n        />\n        {error && (\n          <div className=\"mx-5 mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400\">\n            {error}\n          </div>\n        )}\n        {prLoading && columns.every((c) => c.prs.length === 0) ? (\n          <Spinner />\n        ) : (\n          <Board columns={columns} authors={authors} allLabels={allLabels} assignees={assignees} currentUser={user.login} sortByScore={sortByScore} onSortToggle={() => setSortByScore(!sortByScore)} />\n        )}\n      </div>\n    </TokenContext.Provider>\n  );\n}\n"
+    },
+    {
+      "path": "src/constants.ts",
+      "sha": null,
+      "content_sha256": "9e4f09e8e5588fc884c4b533645d7e45b96ed73a4d2d6b4a98c5702bf3a2072d",
+      "score": 33,
+      "content": "export const REPO_OWNER = \"actualbudget\";\nexport const REPO_NAME = \"actual\";\n\nexport const LABEL_APPROVED = \":white_check_mark: approved\";\nexport const LABEL_WIP = \":construction: WIP\";\nexport const LABEL_READY = \":mag: ready for review\";\n\nexport const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID as string;\nexport const GITHUB_OAUTH_URL = \"https://github.com/login/oauth/authorize\";\n\nexport const REFRESH_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes\nexport const CONCURRENT_REVIEW_FETCHES = 10;\nexport const MERGE_STATS_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes\nexport const CLOSED_PR_PAGES = 2;\n\nexport const COLUMN_META: Record<\n  string,\n  { title: string; color: string; bgClass: string; glow: string; description: string }\n> = {\n  wip: {\n    title: \"WIP\",\n    color: \"#6b7280\",\n    bgClass: \"bg-gray-500\",\n    glow: \"rgba(107, 114, 128, 0.12)\",\n    description: \"Draft PRs or PRs without the 'ready for review' label\",\n  },\n  ready: {\n    title: \"Ready for Review\",\n    color: \"#3b82f6\",\n    bgClass: \"bg-blue-500\",\n    glow: \"rgba(59, 130, 246, 0.12)\",\n    description: \"PRs labeled 'ready for review', not assigned to anyone, and not yet AI-approved\",\n  },\n  \"ai-approved\": {\n    title: \"AI Approved\",\n    color: \"#8b5cf6\",\n    bgClass: \"bg-violet-500\",\n    glow: \"rgba(139, 92, 246, 0.12)\",\n    description: \"PRs labeled 'ready for review' that have been approved by CodeRabbit but not yet assigned to a human reviewer\",\n  },\n  \"in-review\": {\n    title: \"In Review\",\n    color: \"#eab308\",\n    bgClass: \"bg-yellow-500\",\n    glow: \"rgba(234, 179, 8, 0.12)\",\n    description: \"PRs assigned to a reviewer, or PRs with changes requested by a human reviewer\",\n  },\n  approved: {\n    title: \"Approved\",\n    color: \"#22c55e\",\n    bgClass: \"bg-green-500\",\n    glow: \"rgba(34, 197, 94, 0.12)\",\n    description: \"PRs labeled 'approved' or that have received a human approval\",\n  },\n};\n"
+    },
+    {
+      "path": "src/main.tsx",
+      "sha": null,
+      "content_sha256": "b10869122e05a4e44207e03b20166365f949ffd4ea850a8ffb17b7e41a685c16",
+      "score": 33,
+      "content": "import { StrictMode } from \"react\";\nimport { createRoot } from \"react-dom/client\";\nimport App from \"./App\";\nimport \"./index.css\";\n\ncreateRoot(document.getElementById(\"root\")!).render(\n  <StrictMode>\n    <App />\n  </StrictMode>,\n);\n"
+    },
+    {
+      "path": "src/types.ts",
+      "sha": null,
+      "content_sha256": "769bae88d1659bb3afa900234baae89ddf9e61f95abed9fa6eba4600a32c8a2b",
+      "score": 33,
+      "content": "export interface PRLabel {\n  name: string;\n  color: string;\n}\n\nexport type ColumnId = \"wip\" | \"ready\" | \"ai-approved\" | \"in-review\" | \"approved\";\n\nexport type CodeRabbitStatus = \"approved\" | \"changes_requested\" | \"none\";\n\nexport type CIStatus = \"success\" | \"pending\" | \"failure\";\n\nexport type ReviewerState = \"approved\" | \"changes_requested\" | \"commented\" | \"pending\";\n\nexport interface Reviewer {\n  login: string;\n  avatarUrl: string;\n  state: ReviewerState;\n  lastReviewedAt?: string;\n}\n\nexport interface ClassifiedPR {\n  number: number;\n  title: string;\n  url: string;\n  draft: boolean;\n  createdAt: string;\n  updatedAt: string;\n  author: {\n    login: string;\n    avatarUrl: string;\n  };\n  labels: PRLabel[];\n  reviewers: Reviewer[];\n  humanReviewCount: number;\n  isAI: boolean;\n  codeRabbitStatus: CodeRabbitStatus;\n  ciStatus: CIStatus;\n  ciChecks?: CheckRun[];\n  column: ColumnId;\n  headCommitDate?: string;\n  additions?: number;\n  deletions?: number;\n  mergeScore?: number;\n  mergeScoreBreakdown?: MergeScoreBreakdown;\n  authorCreatedAt?: string;\n}\n\nexport interface CheckRun {\n  name: string;\n  status: \"completed\" | \"in_progress\" | \"queued\";\n  conclusion: string | null;\n  detailsUrl: string | null;\n}\n\nexport interface MergeScoreBreakdown {\n  score: number;\n  authorRate: number;\n  sizeScore: number;\n  reviewScore: number;\n  orgBonus: number;\n  accountAgeBonus: number;\n  rawTotal: number;\n}\n\nexport interface TimelineEvent {\n  type: \"commented\" | \"reviewed\" | \"committed\" | \"assigned\" | \"labeled\" | \"closed\" | \"reopened\" | \"other\";\n  actor: string;\n  actorAvatarUrl?: string;\n  createdAt: string;\n  detail: string;\n}\n\nexport interface GitHubUser {\n  login: string;\n  avatar_url: string;\n}\n"
+    },
+    {
+      "path": "src/components/LabelBadge.tsx",
+      "sha": null,
+      "content_sha256": "5e41dff02b29700a855100acfd28183d699967fec31eb5e7b4f8771e8c23990a",
+      "score": 31,
+      "content": "import type { PRLabel } from \"../types\";\n\ninterface LabelBadgeProps {\n  label: PRLabel;\n}\n\nexport default function LabelBadge({ label }: LabelBadgeProps) {\n  const bg = `#${label.color}`;\n\n  return (\n    <span\n      className=\"inline-block rounded-md px-1.5 py-px text-[10px] font-semibold whitespace-nowrap\"\n      style={{ backgroundColor: `${bg}30`, color: bg }}\n    >\n      {label.name}\n    </span>\n  );\n}\n"
+    },
+    {
+      "path": "src/hooks/useTimelineEvents.ts",
+      "sha": null,
+      "content_sha256": "1cb8e5af9e914cc07b3e61ef524b9f61625419eddc140a34b4aa3513a9fc3c85",
+      "score": 31,
+      "content": "import { useState, useEffect, useRef } from \"react\";\nimport type { TimelineEvent } from \"../types\";\nimport { createOctokit, fetchTimelineEvents } from \"../lib/github\";\n\ninterface CacheEntry {\n  data: TimelineEvent[];\n  fetchedAt: number;\n}\n\nconst CACHE_TTL_MS = 5 * 60 * 1000;\nconst cache = new Map<number, CacheEntry>();\n\nexport function useTimelineEvents(\n  token: string | null,\n  prNumber: number | null,\n): { events: TimelineEvent[] | null; loading: boolean } {\n  const [events, setEvents] = useState<TimelineEvent[] | null>(null);\n  const [loading, setLoading] = useState(false);\n  const abortRef = useRef(false);\n\n  useEffect(() => {\n    abortRef.current = false;\n\n    if (!token || prNumber === null) {\n      setEvents(null);\n      setLoading(false);\n      return;\n    }\n\n    const cached = cache.get(prNumber);\n    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {\n      setEvents(cached.data);\n      setLoading(false);\n      return;\n    }\n\n    setLoading(true);\n    const octokit = createOctokit(token);\n    fetchTimelineEvents(octokit, prNumber)\n      .then((data) => {\n        if (abortRef.current) return;\n        cache.set(prNumber, { data, fetchedAt: Date.now() });\n        setEvents(data);\n      })\n      .catch(() => {\n        if (abortRef.current) return;\n        setEvents([]);\n      })\n      .finally(() => {\n        if (!abortRef.current) setLoading(false);\n      });\n\n    return () => {\n      abortRef.current = true;\n    };\n  }, [token, prNumber]);\n\n  return { events, loading };\n}\n"
+    },
+    {
+      "path": "src/contexts/TokenContext.tsx",
+      "sha": null,
+      "content_sha256": "580d2b6bc51be20cc4777dfffdec7c470bfe0cb673cd1b46123d0e0253f46d2f",
+      "score": 31,
+      "content": "import { createContext, useContext } from \"react\";\n\nexport const TokenContext = createContext<string | null>(null);\nexport const useToken = () => useContext(TokenContext);\n"
+    },
+    {
+      "path": "src/components/Spinner.tsx",
+      "sha": null,
+      "content_sha256": "2d6af4765ac5b4fc10b17b51b256ec1c0c3e4cba960e81f98c8885b7a2eba771",
+      "score": 31,
+      "content": "export default function Spinner() {\n  return (\n    <div className=\"flex flex-col items-center justify-center gap-3 p-12\">\n      <div className=\"relative h-8 w-8\">\n        <div className=\"absolute inset-0 animate-spin rounded-full border-2 border-surface-4 border-t-accent\" />\n      </div>\n      <span className=\"animate-pulse-soft text-xs text-text-tertiary\">Loading pull requests...</span>\n    </div>\n  );\n}\n"
+    },
+    {
+      "path": "src/lib/concurrency.ts",
+      "sha": null,
+      "content_sha256": "9cd776b3c6594fb804b93d21a18a8c3eae26b444157c122825fca2a790e5e734",
+      "score": 31,
+      "content": "/** Run async work over items with bounded concurrency. */\nexport async function mapWithConcurrency<T, R>(\n  items: T[],\n  limit: number,\n  fn: (item: T) => Promise<R>,\n): Promise<R[]> {\n  const results: R[] = new Array(items.length);\n  let nextIndex = 0;\n\n  async function worker() {\n    while (nextIndex < items.length) {\n      const i = nextIndex++;\n      results[i] = await fn(items[i]);\n    }\n  }\n\n  const workers = Array.from(\n    { length: Math.min(limit, items.length) },\n    () => worker(),\n  );\n  await Promise.all(workers);\n  return results;\n}\n"
+    },
+    {
+      "path": "src/lib/scoreColors.ts",
+      "sha": null,
+      "content_sha256": "91e08e01748d7f898eec5dd5fd066ca926f70e467603b1af057332cda8ba065d",
+      "score": 31,
+      "content": "interface ScoreColors {\n  bg10: string;\n  bg15: string;\n  text: string;\n  solid: string;\n}\n\nexport function scoreColors(score: number): ScoreColors {\n  if (score >= 75) return { bg10: \"bg-green-500/10\", bg15: \"bg-green-500/15\", text: \"text-green-400\", solid: \"bg-green-400\" };\n  if (score >= 50) return { bg10: \"bg-yellow-500/10\", bg15: \"bg-yellow-500/15\", text: \"text-yellow-400\", solid: \"bg-yellow-400\" };\n  if (score >= 25) return { bg10: \"bg-orange-500/10\", bg15: \"bg-orange-500/15\", text: \"text-orange-400\", solid: \"bg-orange-400\" };\n  return { bg10: \"bg-red-500/10\", bg15: \"bg-red-500/15\", text: \"text-red-400\", solid: \"bg-red-400\" };\n}\n"
+    },
+    {
+      "path": "src/lib/format.ts",
+      "sha": null,
+      "content_sha256": "c3abf73b5220bd91ad61437b1e99ea51fd372ab09ac7e370745d5a73cd7e330d",
+      "score": 31,
+      "content": "export function timeAgo(dateStr: string): string {\n  const diff = Date.now() - new Date(dateStr).getTime();\n  const mins = Math.floor(diff / 60_000);\n  if (mins < 1) return \"just now\";\n  if (mins < 60) return `${mins}m ago`;\n  const hours = Math.floor(mins / 60);\n  if (hours < 24) return `${hours}h ago`;\n  const days = Math.floor(hours / 24);\n  if (days === 1) return \"1d ago\";\n  return `${days}d ago`;\n}\n"
+    },
+    {
+      "path": "src/lib/mergeScore.ts",
+      "sha": null,
+      "content_sha256": "6ba30b86f98dadea853461145ca1b3a8ece09d1db95313dfe38ff998182ed2c1",
+      "score": 31,
+      "content": "import type { ClassifiedPR, MergeScoreBreakdown } from \"../types\";\nimport type { AuthorMergeStats, PRDetails } from \"./github\";\n\nconst COLUMN_SCORES: Record<string, number> = {\n  approved: 100,\n  \"in-review\": 50,\n  \"ai-approved\": 40,\n  ready: 30,\n  wip: 10,\n};\n\nexport function calculateMergeScore(\n  pr: ClassifiedPR,\n  authorStats: AuthorMergeStats | undefined,\n  prDetails: PRDetails | undefined,\n  isOrgMember: boolean,\n  authorCreatedAt: string | undefined,\n): MergeScoreBreakdown {\n  // Author merge rate (35%) — Bayesian: blend toward 50% prior for small samples.\n  const PRIOR = 0.5;\n  const PRIOR_WEIGHT = 5;\n  let authorRate: number;\n  if (authorStats) {\n    const adjusted =\n      (authorStats.mergeRate * authorStats.sampleSize + PRIOR * PRIOR_WEIGHT) /\n      (authorStats.sampleSize + PRIOR_WEIGHT);\n    authorRate = adjusted * 100;\n  } else {\n    authorRate = 50;\n  }\n  const authorScore = authorRate * 0.35;\n\n  // PR size (35%)\n  let sizeScore: number;\n  if (prDetails) {\n    const totalLines = prDetails.additions + prDetails.deletions;\n    sizeScore = 100 / (1 + Math.pow(totalLines / 200, 1.5));\n  } else {\n    sizeScore = 50;\n  }\n  const sizeComponent = sizeScore * 0.35;\n\n  // Review progress (30%)\n  let reviewScore = COLUMN_SCORES[pr.column] ?? 30;\n\n  if (pr.column === \"in-review\") {\n    const hasApproval = pr.reviewers.some((r) => r.state === \"approved\");\n    if (hasApproval) reviewScore = 70;\n  }\n\n  if (pr.humanReviewCount > 0) reviewScore = Math.min(100, reviewScore + 10);\n\n  const hasChangesRequested = pr.reviewers.some(\n    (r) => r.state === \"changes_requested\",\n  );\n  if (hasChangesRequested) reviewScore = Math.max(0, reviewScore - 15);\n\n  const reviewComponent = reviewScore * 0.3;\n\n  const orgBonus = isOrgMember ? 15 : 0;\n\n  let accountAgeBonus = 0;\n  if (authorCreatedAt) {\n    const ageYears = (Date.now() - new Date(authorCreatedAt).getTime()) / (1000 * 60 * 60 * 24 * 365.25);\n    accountAgeBonus = Math.round(Math.min(ageYears / 5, 1) * 10);\n  }\n\n  const rawTotal = Math.min(100, authorScore + sizeComponent + reviewComponent + orgBonus + accountAgeBonus);\n\n  const normalized = rawTotal / 100;\n  const spread = normalized < 0.5\n    ? 0.5 * Math.pow(2 * normalized, 1.6)\n    : 1 - 0.5 * Math.pow(2 * (1 - normalized), 1.6);\n\n  const score = Math.round(Math.min(100, Math.max(0, spread * 100)));\n\n  return {\n    score,\n    authorRate: Math.round(authorRate),\n    sizeScore: Math.round(sizeScore),\n    reviewScore: Math.round(reviewScore),\n    orgBonus,\n    accountAgeBonus,\n    rawTotal: Math.round(rawTotal),\n  };\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T21:04:02.368289+00:00"
+}

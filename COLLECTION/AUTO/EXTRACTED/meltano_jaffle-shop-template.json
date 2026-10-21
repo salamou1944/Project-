@@ -1,0 +1,193 @@
+{
+  "canonical_source": "github:meltano/jaffle-shop-template",
+  "repo": "meltano/jaffle-shop-template",
+  "revision_sha": "3433bd22fab7dc3e69286a3683bedc21a1b413ad",
+  "default_branch": "main",
+  "pushed_at": "2023-04-07T17:46:54Z",
+  "repo_updated_at": "2026-04-01T22:18:52Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "e4d2ed5adf35b88339ce250a87480764bc389b17559ba31b873b0cb1969f632e",
+      "score": 198,
+      "content": "name: CI\n\non: [pull_request]\n\njobs:\n  e2e-build:\n    runs-on: ubuntu-22.04\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-python@v4\n        with:\n          python-version: \"3.10\"\n      - name: Install Meltano\n        run: pipx install meltano\n      - name: Install dbt and other tools\n        run: meltano install\n      - name: Extract and Load\n        run: meltano run el\n      - name: Transform\n        run: meltano invoke dbt-duckdb:build\n      - name: Upload DuckDB database artifact\n        uses: actions/upload-artifact@v1\n        if: always()\n        with:\n          path: 'reports/jaffle_shop.dev-duckdb'\n          name: ci-build.duckdb\n      - name: Build BI reports\n        run: meltano invoke evidence:build-strict\n      - name: Upload BI reports artifact\n        uses: actions/upload-artifact@v1\n        with:\n          path: 'reports/build'\n          name: ci-build.duckdb\n"
+    },
+    {
+      "path": ".github/workflows/bi_publish.yml",
+      "sha": null,
+      "content_sha256": "03389744d4d5895af4d4ebea533854b59d1e8c0088ced7df1e97cc0a7b3d645c",
+      "score": 126,
+      "content": "# Simple workflow for deploying static content to GitHub Pages\nname: Deploy BI to GitHub Pages\n\non:\n  # Runs on pushes targeting the default branch\n  push:\n    branches: [\"main\"]\n\n  # Allows you to run this workflow manually from the Actions tab\n  workflow_dispatch:\n\n# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages\npermissions:\n  contents: read\n  pages: write\n  id-token: write\n\n# Allow one concurrent deployment\nconcurrency:\n  group: \"pages\"\n  cancel-in-progress: true\n\njobs:\n  build:\n    runs-on: ubuntu-22.04\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-python@v4\n        with:\n          python-version: \"3.10\"\n      - name: Install Meltano\n        run: pipx install meltano\n      - name: Install dbt and other tools\n        run: meltano install\n      - name: Extract, Load, and Transform\n        run: meltano run elt\n      - name: Build Reports\n        # TODO: use `build-strict` once available\n        run: meltano invoke evidence:build-strict\n      - name: Upload artifact\n        uses: actions/upload-pages-artifact@v1\n        with:\n          path: 'reports/build'\n\n  deploy:\n    needs: build\n    environment:\n      name: github-pages\n      url: ${{ steps.deployment.outputs.page_url }}\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v3\n      - name: Setup Pages\n        uses: actions/configure-pages@v3\n      - name: Deploy to GitHub Pages\n        id: deployment\n        uses: actions/deploy-pages@v1\n"
+    },
+    {
+      "path": "reports/package.json",
+      "sha": null,
+      "content_sha256": "ffb8911047d9f712f99da180b3aa554cf339302b003ade6b7ebbb6437b8a0253",
+      "score": 118,
+      "content": "{\n  \"name\": \"jaffle-shop\",\n  \"version\": \"0.0.1\",\n  \"scripts\": {\n    \"build\": \"evidence build\",\n    \"build:strict\": \"evidence build:strict\",\n    \"dev\": \"evidence dev --host 0.0.0.0 --open /\",\n    \"test\": \"evidence build\",\n    \"help\": \"evidence --help\"\n  },\n  \"engines\": {\n    \"npm\": \">=7.0.0\",\n    \"node\": \">=16.14.0\"\n  },\n  \"type\": \"module\",\n  \"dependencies\": {\n    \"@evidence-dev/evidence\": \"15.0.1\",\n    \"@evidence-dev/preprocess\": \"2.2.0\",\n    \"@evidence-dev/components\": \"2.2.1\"\n  },\n  \"overrides\": {\n    \"jsonwebtoken\": \"9.0.0\",\n    \"trim@<0.0.3\": \">0.0.3\",\n    \"sqlite3\": \"5.1.5\"\n  }\n}\n"
+    },
+    {
+      "path": "models/marts/customers.sql",
+      "sha": null,
+      "content_sha256": "d52b515a44fca0a6bbf1799c194710adc10f5c31f365c5a0a3f9a524bf4358a2",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized='table'\n    )\n}}\n\nwith\n\ncustomers as (\n\n    select * from {{ ref('stg_customers') }}\n\n),\n\norders_mart as (\n\n    select * from {{ ref('orders') }}\n\n),\n\norder_summary as (\n\n    select\n        customer_id,\n\n        count(*) as count_lifetime_orders,\n        count(*) > 1 as is_repeat_buyer,\n        min(ordered_at) as first_ordered_at,\n        max(ordered_at) as last_ordered_at,\n\n        sum(subtotal) as lifetime_spend_pretax,\n        sum(order_total) as lifetime_spend\n\n    from orders_mart\n    group by 1\n\n),\n\njoined as (\n\n    select\n        customers.*,\n        order_summary.count_lifetime_orders,\n        order_summary.first_ordered_at,\n        order_summary.last_ordered_at,\n        order_summary.lifetime_spend_pretax,\n        order_summary.lifetime_spend,\n\n        case\n            when order_summary.is_repeat_buyer then 'returning'\n            else 'new'\n        end as customer_type\n\n    from customers\n\n    left join order_summary\n        on customers.customer_id = order_summary.customer_id\n\n)\n\nselect * from joined\n"
+    },
+    {
+      "path": "models/staging/stg_products.sql",
+      "sha": null,
+      "content_sha256": "a905095d3b9612cd67565939cca781946d9a7f7a23910449a74314c5338ef067",
+      "score": 106,
+      "content": "\nwith\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_products') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        sku as product_id,\n\n        ---------- properties\n        name as product_name,\n        type as product_type,\n        description as product_description,\n        (price / 100.0)::float as product_price,\n\n\n        ---------- derived\n        case\n            when type = 'jaffle' then 1\n            else 0\n        end as is_food_item,\n\n        case\n            when type = 'beverage' then 1\n            else 0\n        end as is_drink_item\n\n    from source\n\n)\n\nselect * from renamed\n"
+    },
+    {
+      "path": "models/staging/stg_supplies.sql",
+      "sha": null,
+      "content_sha256": "fa09bf7770c057b7cd205329299ee65f4f0a77013516e9b055ddcf8e3c3e5689",
+      "score": 106,
+      "content": "\nwith\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_supplies') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        {{ dbt_utils.generate_surrogate_key(['id', 'sku']) }} as supply_uuid,\n        id as supply_id,\n        sku as product_id,\n\n        ---------- properties\n        name as supply_name,\n        (cost / 100.0)::float as supply_cost,\n        perishable as is_perishable_supply\n\n    from source\n\n)\n\nselect * from renamed\n"
+    },
+    {
+      "path": "models/staging/stg_orders.sql",
+      "sha": null,
+      "content_sha256": "bbb02a792b27c3898c2176ee3993b6a8775cc8468f7b8ea0ef96e6362d93f5e9",
+      "score": 106,
+      "content": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_orders') }}\n\n    -- data runs to 2026, truncate timespan to desired range,\n    -- current time as default\n    where ordered_at <= {{ var('truncate_timespan_to') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as order_id,\n        store_id as location_id,\n        customer as customer_id,\n\n        ---------- properties\n        (order_total / 100.0)::float as order_total,\n        (tax_paid / 100.0)::float as tax_paid,\n\n        ---------- timestamps\n        ordered_at\n\n    from source\n\n)\n\nselect * from renamed\n"
+    },
+    {
+      "path": "models/staging/stg_customers.sql",
+      "sha": null,
+      "content_sha256": "254f6a11b8a205499bb0a335a36153623d88e00d1c3dbaaabdd529771c850379",
+      "score": 106,
+      "content": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_customers') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as customer_id,\n\n        ---------- properties\n        name as customer_name\n\n    from source\n\n)\n\nselect * from renamed\n"
+    },
+    {
+      "path": "models/staging/stg_order_items.sql",
+      "sha": null,
+      "content_sha256": "e71e64f74a164c73b5b5ecd5c6907f1e37e1eb52c388704b9bd80940e627a1d6",
+      "score": 106,
+      "content": "\nwith\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_items') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as order_item_id,\n        order_id,\n\n        ---------- properties\n        sku as product_id\n\n    from source\n\n)\n\nselect * from renamed\n"
+    },
+    {
+      "path": "models/staging/stg_locations.sql",
+      "sha": null,
+      "content_sha256": "820348ceb266f7cfa31368c5a2ba55a04f7cbd385d2b6c009438dfee3b2b94c4",
+      "score": 106,
+      "content": "\nwith\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_stores') }}\n\n    {# data runs to 2026, truncate timespan to desired range, \n    current time as default #}\n    where opened_at <= {{ var('truncate_timespan_to') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as location_id,\n\n        ---------- properties\n        name as location_name,\n        tax_rate,\n\n        ---------- timestamp\n        opened_at\n\n    from source\n\n)\n\nselect * from renamed\n"
+    },
+    {
+      "path": "models/staging/__sources.yml",
+      "sha": null,
+      "content_sha256": "8078f90d6c14e89e3b4e844a7946477fcec18a01ce2ad4e9682e5834a97a33be",
+      "score": 106,
+      "content": "version: 2\n\nsources:\n  - name: ecom\n    schema: \"{{ env_var('JAFFLE_RAW_SCHEMA', 'jaffle_raw') }}\"\n    description: E-commerce data\n    meta:\n      # If `$JAFFLE_RAW_SCHEMA` is specified, use the provided raw data. Otherwise, use the csv seed data from the repo.\n      external_location: >-\n        {{ '' if env_var('JAFFLE_RAW_SCHEMA', '') else 'read_csv_auto(\"./jaffle-data/{name}.csv\", header=1)' }}\n\n    tables:\n      - name: raw_customers\n        description: One record per person who has purchased one or more items\n      - name: raw_orders\n        description: One record per order (consisting of one or more order items)\n      - name: raw_items\n        description: Items included in an order\n      - name: raw_stores\n        description: One record per physical store location\n      - name: raw_products\n        description: One record per SKU for items sold in stores\n      - name: raw_supplies\n        description: One record per supply per SKU of items sold in stores\n"
+    },
+    {
+      "path": "models/marts/customer_status_histories.py",
+      "sha": null,
+      "content_sha256": "d09ea198aae9ede563d09112260eb652623dda1f15ce35df191ec4597a0707bb",
+      "score": 106,
+      "content": "import pandas as pd\n\n\ndef model(dbt, session):\n    # set length of time considered a churn\n    pd.Timedelta(days=2)\n\n    dbt.config(enabled=False, materialized=\"table\", packages=[\"pandas==1.5.2\"])\n\n    orders_relation = dbt.ref(\"stg_orders\")\n\n    # converting a DuckDB Python Relation into a pandas DataFrame\n    orders_df = orders_relation.df()\n\n    orders_df.sort_values(by=\"ordered_at\", inplace=True)\n    orders_df[\"previous_order_at\"] = orders_df.groupby(\"customer_id\")[\n        \"ordered_at\"\n    ].shift(1)\n    orders_df[\"next_order_at\"] = orders_df.groupby(\"customer_id\")[\"ordered_at\"].shift(\n        -1\n    )\n    return orders_df\n"
+    },
+    {
+      "path": "models/marts/__models.yml",
+      "sha": null,
+      "content_sha256": "0341d8e682b813032e874eb91fc20cb77488e00a2c18a707738b0aa6c67e68af",
+      "score": 106,
+      "content": "version: 2\n\nmodels:\n  - name: customers\n    description: Customer overview data mart, offering key details for each unique customer. One row per customer.\n    columns:\n      - name: customer_id\n        description: The unique key of the orders mart.\n        tests:\n          - not_null\n          - unique\n      - name: customer_name\n        description: Customers' full name.\n      - name: count_lifetime_orders\n        description: Total number of orders a customer has ever placed.\n      - name: first_ordered_at\n        description: The timestamp when a customer placed their first order.\n      - name: last_ordered_at\n        description: The timestamp of a customer's most recent order.\n      - name: lifetime_spend_pretax\n        description: The sum of all the pre-tax subtotals of every order a customer has placed.\n      - name: lifetime_spend\n        description: The sum of all the order totals (including tax) that a customer has ever placed.\n      - name: customer_type\n        description: Options are 'new' or 'returning', indicating if a customer has ordered more than once or has only placed their first order to date.\n        tests:\n          - accepted_values:\n              values: [\"new\", \"returning\"]\n\n  - name: orders\n    description: Order overview data mart, offering key details for each order inlcluding if it's a customer's first order and a food vs. drink item breakdown. One row per order.\n    tests:\n      - dbt_utils.expression_is_true:\n          expression: \"count_food_items + count_drink_items = count_items\"\n      - dbt_utils.expression_is_true:\n          expression: \"subtotal_food_items + subtotal_drink_items = subtotal\"\n    columns:\n      - name: order_id\n        description: The unique key of the orders mart.\n        tests:\n          - not_null\n          - unique\n      - name: customer_id\n        description: The foreign key relating to the customer who placed the order.\n        tests:\n          - relationships:\n              to: ref('stg_customers')\n              field: customer_id\n      - name: location_id\n        description: The foreign key relating to the location the order was placed at.\n      - name: order_total\n        description: The total amount of the order in USD including tax.\n      - name: ordered_at\n        description: The timestamp the order was placed at.\n      - name: count_food_items\n        description: The number of individual food items ordered.\n      - name: count_drink_items\n        description: The number of individual drink items ordered.\n      - name: count_items\n        description: The total number of both food and drink items ordered.\n      - name: subtotal_food_items\n        description: The sum of all the food item prices without tax.\n      - name: subtotal_drink_items\n        description: The sum of all the drink item prices without tax.\n      - name: subtotal\n        description: The sum total of both food and drink item prices without tax.\n      - name: order_cost\n        description: The sum of supply expenses to fulfill the order.\n      - name: location_name\n        description: The full location name of where this order was placed. Denormalized from `stg_locations`.\n      - name: is_first_order\n        description: A boolean indicating if this order is from a new customer placing their first order.\n      - name: is_food_order\n        description: A boolean indicating if this order included any food items.\n      - name: is_drink_order\n        description: A boolean indicating if this order included any drink items.\n"
+    },
+    {
+      "path": "models/marts/orders.sql",
+      "sha": null,
+      "content_sha256": "5a44c73e21cdfdf4a487afe66edfaaa0fdf3ead3dde3f44142502cf8e2d41ef8",
+      "score": 106,
+      "content": "{{\n    config(\n        materialized = 'incremental',\n        unique_key = 'order_id'\n    )\n}}\n\nwith\n\n{#\n     DuckDB will see {{ this }} evaluate to `orders` and a CTE called `orders` as being the same\n     so when using DuckDB we append `_set` to any CTEs with the same name as {{ this }} to indicate\n     we're not executing a recursive statement\n#}\n\norders_set as (\n\n    select * from {{ ref('stg_orders') }}\n\n    where\n        true\n\n        {% if is_incremental() %}\n\n            and ordered_at >= (\n                select max(ordered_at) as most_recent_record from {{ this }}\n            )\n\n        {% endif %}\n\n),\n\norder_items as (\n\n    select * from {{ ref('stg_order_items') }}\n\n),\n\nproducts as (\n\n    select * from {{ ref('stg_products') }}\n\n),\n\nlocations as (\n\n    select * from {{ ref('stg_locations') }}\n\n),\n\nsupplies as (\n\n    select * from {{ ref('stg_supplies') }}\n\n),\n\norder_items_summary as (\n\n    select\n\n        order_items.order_id,\n\n        sum(products.is_food_item) as count_food_items,\n        sum(products.is_drink_item) as count_drink_items,\n        count(*) as count_items,\n        sum(\n            case\n                when products.is_food_item = 1 then products.product_price\n                else 0\n            end\n        ) as subtotal_drink_items,\n        sum(\n            case\n                when products.is_drink_item = 1 then products.product_price\n                else 0\n            end\n        ) as subtotal_food_items,\n        sum(products.product_price) as subtotal\n\n    from order_items\n\n    left join products on order_items.product_id = products.product_id\n\n    group by 1\n\n),\n\norder_supplies_summary as (\n\n    select\n\n        order_items.order_id,\n\n        sum(supplies.supply_cost) as order_cost\n\n    from order_items\n\n    left join supplies on order_items.product_id = supplies.product_id\n\n    group by 1\n\n),\n\njoined as (\n\n    select\n\n        orders_set.*,\n\n        order_items_summary.count_food_items,\n        order_items_summary.count_drink_items,\n        order_items_summary.count_items,\n\n        order_items_summary.subtotal_drink_items,\n        order_items_summary.subtotal_food_items,\n        order_items_summary.subtotal,\n\n        order_supplies_summary.order_cost,\n        locations.location_name\n\n    from orders_set\n\n    left join order_items_summary\n        on orders_set.order_id = order_items_summary.order_id\n    left join order_supplies_summary\n        on orders_set.order_id = order_supplies_summary.order_id\n    left join locations\n        on orders_set.location_id = locations.location_id\n\n),\n\nfinal as (\n\n    select\n\n        *,\n        count_food_items > 0 as is_food_order,\n        count_drink_items > 0 as is_drink_order\n\n    from joined\n\n)\n\nselect * from final\n"
+    },
+    {
+      "path": "models/staging/__models.yml",
+      "sha": null,
+      "content_sha256": "647cfb63b32259bbf2f700172830c813f0841957bec9dfcc79c74f0ce8bf278a",
+      "score": 106,
+      "content": "version: 2\n\nmodels:\n  - name: stg_customers\n    description: Customer data with basic cleaning and transformation applied, one row per customer.\n    columns:\n      - name: customer_id\n        description: The unique key for each customer.\n        tests:\n          - not_null\n          - unique\n\n  - name: stg_locations\n    description: List of open locations with basic cleaning and transformation applied, one row per location.\n    columns:\n      - name: location_id\n        description: The unique key for each location.\n        tests:\n          - not_null\n          - unique\n\n  - name: stg_order_items\n    description: Individual food and drink items that make up our orders, one row per item.\n    columns:\n      - name: order_item_id\n        description: The unique key for each order item.\n        tests:\n          - not_null\n          - unique\n\n  - name: stg_orders\n    description: Order data with basic cleaning and transformation applied, one row per order.\n    columns:\n      - name: order_id\n        description: The unique key for each order.\n        tests:\n          - not_null\n          - unique\n\n  - name: stg_products\n    description: Product (food and drink items that can be ordered) data with basic cleaning and transformation applied, one row per product.\n    columns:\n      - name: product_id\n        description: The unique key for each product.\n        tests:\n          - not_null\n          - unique\n\n  - name: stg_supplies\n    description: >\n      List of our supply expenses data with basic cleaning and transformation applied.\n\n      One row per supply cost, not per supply. As supply costs fluctuate they receive a new row with a new UUID. Thus there can be multiple rows per supply_id.\n    columns:\n      - name: supply_uuid\n        description: The unique key of our supplies per cost.\n        tests:\n          - not_null\n          - unique\n"
+    },
+    {
+      "path": "models/metrics/metrics.yml",
+      "sha": null,
+      "content_sha256": "12b38f450e350a9321d9683065cefdef21dc54f3ae152b7014814635edfaf9e4",
+      "score": 106,
+      "content": "version: 2\n\nmetrics:\n  - name: revenue\n    label: Revenue\n    model: ref('orders')\n    description: \"Income from all orders less tax\"\n\n    calculation_method: sum\n    expression: order_total - tax_paid\n\n    timestamp: ordered_at\n    time_grains: [day, week, month, quarter, year]\n\n    dimensions:\n      - location_name\n      - is_first_order\n\n  - name: customers\n    label: Customers\n    model: ref('orders')\n    description: \"Number of customers with a sale\"\n\n    calculation_method: count_distinct\n    expression: customer_id\n\n    timestamp: ordered_at\n    time_grains: [day, week, month, quarter, year]\n\n    dimensions:\n      - location_name\n\n  - name: expenses\n    label: Expenses\n    model: ref('orders')\n    description: \"Total expenses per order\"\n\n    calculation_method: sum\n    expression: order_cost\n\n    timestamp: ordered_at\n    time_grains: [day, week, month, quarter, year]\n\n    dimensions:\n      - location_name\n      - is_first_order\n\n  - name: gross_profit\n    label: Gross Profit\n    description: \"Revenue minus expenses\"\n\n    calculation_method: derived\n    expression: \"{{ metric('revenue') }} - {{ metric('expenses') }}\"\n\n    timestamp: ordered_at\n    time_grains: [day, week, month, quarter, year]\n\n    dimensions:\n      - location_name\n      - is_first_order\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3e358bf55c8bc664ac698ac50d3ca47763b73db528747115e45e6293f66479bd",
+      "score": 100,
+      "content": "# 🥪 The Jaffle Shop 🦘\n\nThis is a template for creating a fully functional dbt project for teaching, learning, writing, demoing, or any other scenarios where you need a basic project with a synthesized jaffle shop business.\n\n## How to use\n\n### 1. Click the big green 'Use this template' button and 'Create a new repository'.\n\n![Click use template](.github/static/use-template.gif)\n\nThis will create a new repository exactly like this one, and navigate you there. Make sure to execute the next instructions in that repo.\n\n### 2. Click 'Code', then 'Codespaces, then 'Create codespace on main'.\n\n![Create codespace on main](.github/static/open-codespace.gif)\n\nThis will create a new `codespace`, a sandboxed devcontainer with everything you need for a dbt project. Once the codespace is finished setting up, you'll be ready to run a `dbt build`.\n\n### 3. Make sure to wait til the codespace is finished setting up.\n\n![Codespaces setup screen at postCreateCommand](.github/static/codespaces-setup-screen.png)\n\nAfter the container is built and connected to, VSCode will run a few clean up commands and then a `postCreateCommand`, a set of commands run after the container is set up. This is where we install our dependencies, such as dbt, the duckdb adapter, and other necessities, as well as run `dbt deps` to install the dbt packages we want to use. That screen will look something like the above, when its completed it will close and leave you in a fresh terminal prompt. From there you're ready to do some analytics engineering!\n\n## Using with Meltano\n\nThis project is preconfigured with a Meltano configuration file, `meltano.yml`. Meltano can be used as follows:\n\nOne-time workstation setup:\n\n```console\n> meltano install  # Install the plugins declared by the project\n```\n\nSample usage for end-to-end development:\n\n```console\n> meltano run el    # Run the job titled 'el' to extract and load data\n> meltano run t     # Run the job titled 't' to transform data\n> meltano run bi    # Build and serve the Evidence BI reports\n```\n\nDynamically Build and serve the Evidence BI reports:\n\n```\nmeltano invoke evidence:dev    # \n```\n\nDo a full end-to-end build on \"prod\":\n\n```console\n> meltano --environment=prod run elt evidence:build\n```\n\n## Contributing\n\nWe welcome issues and PRs requesting or adding new features. The package that generates the synthetic data, [`jafgen`](https://pypi.org/project/jafgen/), is also under active development, and will add more types of source data to model as we go along. If you have tests, descriptions, new models, metrics, materializations types, or techniques you use this repo to demonstrate, which you feel would make for a more expansive baseline experience, we encourage you to consider contributing them back in so that this project becomes an even better collective tool for exploring and learning dbt over time.\n\n## Anything else?\n\nThat's it! We jaff'd, we cried, we learned about life. If you have any questions or see missing documentation, that's also super helpful to contribute back in via an issue or PR.\n"
+    },
+    {
+      "path": "reports/README.md",
+      "sha": null,
+      "content_sha256": "cab83f3972b737e4cd38b4ce6c80625231f19043c0f574bc3f0c84f924854fd2",
+      "score": 98,
+      "content": "# Jaffle Shop BI Reports\n\nThis project uses [Evidence.dev](https://Evidence.dev) for BI reporting.\n\n## Getting Started\n\nRun the BI server from your local workstation:\n\n```shell\ncd reports\nnpm install\nnpm run dev\n```\n\nThis will launch the Evidence webserver in developer mode.\n\n## Testing for breakages\n\nThe following command can be used to confirm that reports and queries are still valid:\n\n```console\nnpm run build:strict\n```\n\n## Updating to the latest version of Evidence\n\n1. Check your version against the version number for the [latest release]([Evidence.dev Releases](https://github.com/evidence-dev/evidence/releases)).\n2. Run `npm install evidence-dev/evidence@latest` to bump the version in `package.json` and automatically update dependenceis in `package-lock.json`.\n\n## Learning More\n\n- [Getting Started Walkthrough](https://docs.evidence.dev/getting-started/install-evidence)\n- [Project Home Page](https://www.evidence.dev)\n- [Github](https://github.com/evidence-dev/evidence)\n- [Evidence.dev Releases](https://github.com/evidence-dev/evidence/releases)\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "7773dfae6deaa3bc776f927157818ec9f6064b46a11f9a619c457d6e978eb9b3",
+      "score": 85,
+      "content": "dbt-duckdb~=1.4.0\nduckcli~=0.2.1\njafgen~=0.3.1\npandas~=1.5.2\npolars~=0.16.9\npre-commit~=3.0.4\npyarrow~=11.0.0\nsqlfluff-templater-dbt~=2.0.0a5\nsqlfluff~=2.0.0a5\n"
+    },
+    {
+      "path": "reports/pages/stores/[city].md",
+      "sha": null,
+      "content_sha256": "33d4eb64ac7961939bcf0bf3702791807a4ba961e1e582fa78ec16fc635172b3",
+      "score": 66,
+      "content": "# Jaffle Shop {$page.params.city} 🥪\n\n```opening\nselect\n    location_name,\n    min(month) as opened_month_mmmyyyy\nfrom ${monthly_stats}\ngroup by location_name\norder by opened_month_mmmyyyy desc\n```\n\n{#if opening[0].location_name === $page.params.city}\n\n{$page.params.city} is the most recent store opening for Jaffle Shop, opened in <Value data={opening.filter(d => d.location_name === $page.params.city)} column=opened_month_mmmyyyy />.\n\n{:else}\n\nThe {$page.params.city} location was opened in <Value data={opening.filter(d => d.location_name === $page.params.city)} column=opened_month_mmmyyyy />.\n\n{/if}\n\n```monthly_stats\nwith\nmonthly_stats as (\n    select \n        date_trunc('month', ordered_at) as month,\n        location_name,\n        sum(order_total) as revenue_usd1k,\n        count(*)::float as orders,\n        count(distinct customer_id)::float as customers\n\n    from analytics.orders\n    group by month, location_name\n    order by month desc\n)\n\nselect \n    *,\n    revenue_usd1k / (lag(revenue_usd1k, -1) over (order by month desc)) - 1 as revenue_growth_pct1,\n    orders / (lag(orders, -1) over (order by month desc)) - 1 as order_growth_pct1,\n    customers / (lag(customers, -1) over (order by month desc)) - 1 as customer_growth_pct1,\n    monthname(month) as month_name\nfrom monthly_stats\n```\n\n<BigValue\n    data={monthly_stats.filter(data => data.location_name === $page.params.city)}\n    value=revenue_usd1k\n    comparison=revenue_growth_pct1\n    title=\"Monthly Revenue\"\n    comparisonTitle=\"vs. prev. month\"\n/>\n\n<BigValue\n    data={monthly_stats.filter(data => data.location_name === $page.params.city)}\n    value=orders\n    comparison=order_growth_pct1\n    title=\"Monthly Orders\"\n    comparisonTitle=\"vs. prev. month\"\n/>\n\nJaffle Shop {$page.params.city} served <Value data={monthly_stats.filter(d => d.location_name === $page.params.city)} column=customers/> happy customers in <Value data={monthly_stats.filter(d => d.location_name === $page.params.city)} column=month_name/>. This was a change of <Value data={monthly_stats.filter(d => d.location_name === $page.params.city)} column=customer_growth_pct1/> from <Value data={monthly_stats.filter(d => d.location_name === $page.params.city)} column=month_name row=1/>.\n\n```orders_per_week\nselect\n    location_name as city,\n    date_trunc('week', ordered_at) as week,\n    count(*) as orders\n\nfrom analytics.orders\n\ngroup by 1, 2\norder by 1, 2\n```\n\n## Orders Per Week in {$page.params.city}\n\n<LineChart\n    data={orders_per_week.filter(data => data.city === $page.params.city)}\n    x=week\n    y=orders\n    yAxisTitle=\"orders per week in {$page.params.city}\"\n/>"
+    },
+    {
+      "path": "packages.yml",
+      "sha": null,
+      "content_sha256": "8bf103bcaff50a948a329764889905cd7f57d61ca2730587a83a6a1b3a8423a6",
+      "score": 35,
+      "content": "packages:\n  - package: dbt-labs/metrics\n    version: 1.4.0\n  - package: dbt-labs/dbt_utils\n    version: 1.0.0\n"
+    },
+    {
+      "path": ".user.yml",
+      "sha": null,
+      "content_sha256": "07107c0da285b7eccd22cc66337aa1e9a95cb34b7ae88d5b3409c47dc4895c0a",
+      "score": 35,
+      "content": "id: bdc35ce7-c9bf-45be-b2f9-897ab7918ef8\n"
+    },
+    {
+      "path": "profiles.yml",
+      "sha": null,
+      "content_sha256": "6d6a3254e1b34f5cb884db04ffddf7c63a6a271aa0eab4bc7a4e1b4badc09185",
+      "score": 35,
+      "content": "duckdb:\n  outputs:\n    dev:\n      type: duckdb\n      path: \"{{ env_var('JAFFLE_DB_PATH', './reports/jaffle_shop.duckdb') }}\"\n      database: \"{{ env_var('JAFFLE_DB_NAME', 'jaffle_shop') }}\"\n      schema: \"{{ env_var('JAFFLE_TARGET_SCHEMA', 'analytics') }}\"\n      threads: 4\n  target: dev\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [
+    {
+      "path": "tests/.gitkeep",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 1,
+  "generated_at": "2026-10-21T21:04:00.977208+00:00"
+}
