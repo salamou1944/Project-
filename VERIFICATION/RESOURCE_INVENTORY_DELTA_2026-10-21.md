@@ -13,8 +13,8 @@ Supplement to [the full inventory and plan](./RESOURCE_INVENTORY_AND_EXECUTION_P
 
 ## COLLECTION continuation
 
-- Cycle 19 run [39671402767](https://github.com/salamou1944/Project-/actions/runs/39671402767) was still `in_progress` on the latest check. Harvest had completed; downstream validation and commit steps were still running.
-- Do not launch cycle 20 or publish cycle 19 counts until run 39671402767 finishes and its logs provide actual counts.
+- Cycle 19 run [39671402767](https://github.com/salamou1944/Project-/actions/runs/39671402767) completed successfully. It selected 100 repositories, refreshed 76, preserved 24 blocked attempts, and left 18,475 repositories deferred; 5,105 artifacts / 5,129 source rows were retained. The current-main audit passed for 13,097 JSON/JSONC files, zero parse failures, and 927,313,684 bytes. Capability/readiness groups: 46,015; promotion-review items: 31,525; restricted items: 14,490. Installation returned `NO_APPROVED_CANDIDATES` (zero installed).
+- Cycle 20 was triggered by marker commit [4477f0f](https://github.com/salamou1944/Project-/commit/4477f0fab550a5a5796a925f98cd1b7dfc2a366b); verify its final logs before publishing counts.
 - Cycle-18 baseline: 79/100 refreshed, 21 blocked attempts preserved, 5,029 extracted artifacts / 5,050 source rows, 18,551 deferred repositories, 13,021 JSON/JSONC files audited, zero parse failures, and `NO_APPROVED_CANDIDATES`.
 
 ## Next actions
