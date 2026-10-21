@@ -3,14 +3,14 @@
 This short page is the live status pointer. The long [COLLECTION/INDEX.md](./INDEX.md) contains the historical log through cycle 23; this page supersedes it for the current snapshot.
 
 ## COLLECTION
-- Latest completed: [cycle 26 — success](https://github.com/salamou1944/Project-/actions/runs/39675099179).
-- Cycle 26: 69 refreshed, 31 blocked attempts preserved; 5,640 source rows; 5,609 extracted artifacts; 17,971 repositories deferred.
-- Current-main JSON audit: 13,601 JSON/JSONC files, zero parse failures, 993,914,190 bytes.
-- 50,019 capability/readiness groups; 34,313 promotion-review items; 15,706 restricted items.
+- Latest completed: [cycle 27 — success](https://github.com/salamou1944/Project-/actions/runs/39675537201).
+- Cycle 27: 69 refreshed, 31 blocked attempts preserved; 5,709 source rows; 5,678 extracted artifacts; 17,902 repositories deferred.
+- Current-main JSON audit: 13,670 JSON/JSONC files, zero parse failures, 1,003,679,370 bytes.
+- 50,600 capability/readiness groups; 34,751 promotion-review items; 15,849 restricted items.
 - Install result: `NO_APPROVED_CANDIDATES`; zero installed.
-- Cumulative cycles 1–26: 2,138 refreshed sources, 462 blocked attempts preserved.
-- Current cycle: [cycle 27, run 39675537201](https://github.com/salamou1944/Project-/actions/runs/39675537201), currently queued. Do not publish counts until its logs finish.
-- Size warning: `READY.json` 87.8 MB, `CANONICAL-PROMOTION-PLAN.json` 59.3 MB, `PROMOTION-QUEUE.json` 52.0 MB. The 95 MB hard guard is still passing; implement a non-destructive partitioning plan before `READY.json` approaches 95 MB.
+- Cumulative cycles 1–27: 2,207 refreshed sources, 493 blocked attempts preserved.
+- Current cycle: [cycle 28, run 39676042890](https://github.com/salamou1944/Project-/actions/runs/39676042890), currently queued. Do not publish counts until its logs finish.
+- Size warning: `READY.json` 88.9 MB, `CANONICAL-PROMOTION-PLAN.json` 60.1 MB, `PROMOTION-QUEUE.json` 52.6 MB. The 95 MB hard guard is still passing. Cycle 28 is the last bounded cycle before pausing extraction to implement and test non-destructive partitioning.
 
 ## Canonical inventory documents
 - [Full resource inventory and execution plan](../VERIFICATION/RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
