@@ -3,6 +3,13 @@
 Status: INCREMENTAL_COLLECTION
 Updated: 2026-10-21
 
+## Verified update — 2026-10-21 20:44 UTC (cycle 21)
+- [Cycle 21](https://github.com/salamou1944/Project-/actions/runs/39672533341) completed successfully. It selected 100 repositories, refreshed 75, preserved 25 blocked attempts, and left 18,324 repositories deferred. The manifest contains 5,281 source rows and 5,256 extracted artifacts.
+- Current-main JSON audit passed: 13,248 JSON/JSONC files, zero parse failures, 947,285,886 bytes. Historical evidence reconciliation passed with zero unrecoverable prior evidence records.
+- Capability/readiness groups: 47,237; promotion-review items: 32,407; restricted items: 14,830. Installation remains `NO_APPROVED_CANDIDATES`: zero installed and zero ready for verification.
+- Large-file risk continues: `READY.json` is 82,795,962 bytes and `CANONICAL-PROMOTION-PLAN.json` is 55,976,487 bytes. Both exceed GitHub's recommended 50 MB; size and JSON guards passed, but compaction remains open.
+- Across cycles 1–21: 1,785 refreshed sources and 315 blocked source attempts preserved. Continue bounded incremental mode only; do not force refresh or auto-install.
+
 ## Operating inventory references — 2026-10-21
 - [Full resource inventory and execution plan](../VERIFICATION/RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
 - [Current resource verification delta](../VERIFICATION/RESOURCE_INVENTORY_DELTA_2026-10-21.md)
