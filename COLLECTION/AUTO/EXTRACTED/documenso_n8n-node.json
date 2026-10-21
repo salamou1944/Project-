@@ -1,0 +1,202 @@
+{
+  "canonical_source": "github:documenso/n8n-node",
+  "repo": "documenso/n8n-node",
+  "revision_sha": "b6592e866279d9d7ed620c7deb69c9e963ecfbea",
+  "default_branch": "main",
+  "pushed_at": "2026-02-06T07:11:27Z",
+  "repo_updated_at": "2026-08-24T01:17:01Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "914d45d832dd3c910ec024c5d2187729aab755c6d82cc6325ea6944ddfd63789",
+      "score": 198,
+      "content": "name: CI\n\non:\n  pull_request:\n  push:\n    branches: [main]\n\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n\n      - uses: oven-sh/setup-bun@v2\n\n      - name: Install dependencies\n        run: bun install --frozen-lockfile\n\n      - name: Typecheck\n        run: bun run typecheck\n\n      - name: Lint\n        run: bun run lint\n\n      - name: Build\n        run: bun run build\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/recipient/create.operation.ts",
+      "sha": null,
+      "content_sha256": "b870682685ab995b8abba63088fa471c926f1e19f9efc29d8b2201622989952a",
+      "score": 179,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Document/Template ID\",\n    name: \"documentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the document or template to add recipients to\",\n    displayOptions: {\n      show: {\n        resource: [\"recipient\"],\n        operation: [\"create\"],\n      },\n    },\n  },\n  {\n    displayName: \"Recipients\",\n    name: \"recipients\",\n    type: \"fixedCollection\",\n    typeOptions: { multipleValues: true },\n    default: {},\n    placeholder: \"Add Recipient\",\n    displayOptions: {\n      show: {\n        resource: [\"recipient\"],\n        operation: [\"create\"],\n      },\n    },\n    options: [\n      {\n        displayName: \"Recipient\",\n        name: \"recipient\",\n        values: [\n          {\n            displayName: \"Email\",\n            name: \"email\",\n            type: \"string\",\n            required: true,\n            default: \"\",\n            placeholder: \"name@email.com\",\n          },\n          {\n            displayName: \"Name\",\n            name: \"name\",\n            type: \"string\",\n            required: true,\n            default: \"\",\n          },\n          {\n            displayName: \"Role\",\n            name: \"role\",\n            type: \"options\",\n            required: true,\n            default: \"SIGNER\",\n            options: [\n              { name: \"Signer\", value: \"SIGNER\" },\n              { name: \"Approver\", value: \"APPROVER\" },\n              { name: \"CC\", value: \"CC\" },\n              { name: \"Viewer\", value: \"VIEWER\" },\n              { name: \"Assistant\", value: \"ASSISTANT\" },\n            ],\n          },\n          {\n            displayName: \"Signing Order\",\n            name: \"signingOrder\",\n            type: \"number\",\n            default: 0,\n            description: \"Order for sequential signing (0 for parallel)\",\n          },\n        ],\n      },\n    ],\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const documentId = this.getNodeParameter(\"documentId\", itemIndex) as string;\n  \n  const recipientsData = this.getNodeParameter(\"recipients\", itemIndex, {}) as {\n    recipient?: Array<{\n      email: string;\n      name: string;\n      role: string;\n      signingOrder?: number;\n    }>;\n  };\n  \n  const recipients = (recipientsData.recipient || []).map((r) => ({\n    ...r,\n    email: r.email as \"\" | string,\n  }));\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.recipients.createMany({\n      envelopeId: documentId,\n      data: recipients as any,\n    });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/recipient/get.operation.ts",
+      "sha": null,
+      "content_sha256": "bdcdc3b777b2f4d12d9285ef5145c89ba521a1f58b3299b05160e822ab781310",
+      "score": 179,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Recipient ID\",\n    name: \"recipientId\",\n    type: \"number\",\n    required: true,\n    default: 0,\n    description: \"The ID of the recipient to retrieve\",\n    displayOptions: {\n      show: {\n        resource: [\"recipient\"],\n        operation: [\"get\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const recipientId = this.getNodeParameter(\"recipientId\", itemIndex) as number;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.recipients.get({ recipientId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/recipient/update.operation.ts",
+      "sha": null,
+      "content_sha256": "08f59fb706b36be22e4bcefbf1fee8a41115cac2ed2b73798b609cbad65a3171",
+      "score": 179,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Document/Template ID\",\n    name: \"documentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the document or template containing the recipients\",\n    displayOptions: {\n      show: { resource: [\"recipient\"], operation: [\"update\"] },\n    },\n  },\n  {\n    displayName: \"Recipients\",\n    name: \"recipients\",\n    type: \"fixedCollection\",\n    typeOptions: { multipleValues: true },\n    required: true,\n    default: {},\n    placeholder: \"Add Recipient\",\n    displayOptions: {\n      show: { resource: [\"recipient\"], operation: [\"update\"] },\n    },\n    options: [\n      {\n        displayName: \"Recipient\",\n        name: \"recipient\",\n        values: [\n          {\n            displayName: \"Recipient ID\",\n            name: \"id\",\n            type: \"number\",\n            required: true,\n            default: 0,\n            description: \"The ID of the recipient to update\",\n          },\n          {\n            displayName: \"Email\",\n            name: \"email\",\n            type: \"string\",\n            default: \"\",\n            placeholder: \"name@email.com\",\n            description: \"New email address (leave empty to keep current)\",\n          },\n          {\n            displayName: \"Name\",\n            name: \"name\",\n            type: \"string\",\n            default: \"\",\n            description: \"New name (leave empty to keep current)\",\n          },\n          {\n            displayName: \"Role\",\n            name: \"role\",\n            type: \"options\",\n            default: \"\",\n            options: [\n              { name: \"No Change\", value: \"\" },\n              { name: \"Signer\", value: \"SIGNER\" },\n              { name: \"Approver\", value: \"APPROVER\" },\n              { name: \"CC\", value: \"CC\" },\n              { name: \"Viewer\", value: \"VIEWER\" },\n              { name: \"Assistant\", value: \"ASSISTANT\" },\n            ],\n            description: \"New role (select No Change to keep current)\",\n          },\n          {\n            displayName: \"Signing Order\",\n            name: \"signingOrder\",\n            type: \"number\",\n            default: 0,\n            description: \"New signing order (0 to keep current)\",\n          },\n        ],\n      },\n    ],\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const documentId = this.getNodeParameter(\"documentId\", itemIndex) as string;\n  const recipientsData = this.getNodeParameter(\"recipients\", itemIndex, {}) as {\n    recipient?: Array<{\n      id: number;\n      email?: string;\n      name?: string;\n      role?: string;\n      signingOrder?: number;\n    }>;\n  };\n\n  const recipients = (recipientsData.recipient || []).map((r) => {\n    const update: Record<string, any> = { id: r.id };\n\n    if (r.email) {\n      update.email = r.email;\n    }\n\n    if (r.name) {\n      update.name = r.name;\n    }\n\n    if (r.role) {\n      update.role = r.role;\n    }\n\n    if (r.signingOrder) {\n      update.signingOrder = r.signingOrder;\n    }\n\n    return update;\n  });\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.recipients.updateMany({\n      envelopeId: documentId,\n      data: recipients as any,\n    });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/recipient/index.ts",
+      "sha": null,
+      "content_sha256": "c71d2ad6cfba8aeca148e658d5028f232642016c651890e4a17d38c799e32a44",
+      "score": 179,
+      "content": "import type { INodeProperties } from \"n8n-workflow\";\nimport * as create from \"./create.operation\";\nimport * as deleteOp from \"./delete.operation\";\nimport * as get from \"./get.operation\";\nimport * as update from \"./update.operation\";\n\nconst operationProperty: INodeProperties = {\n  displayName: \"Operation\",\n  name: \"operation\",\n  type: \"options\",\n  noDataExpression: true,\n  displayOptions: {\n    show: {\n      resource: [\"recipient\"],\n    },\n  },\n  options: [\n    {\n      name: \"Create\",\n      value: \"create\",\n      description: \"Create recipients on a document or template\",\n      action: \"Create recipients\",\n    },\n    {\n      name: \"Delete\",\n      value: \"delete\",\n      description: \"Delete a recipient\",\n      action: \"Delete a recipient\",\n    },\n    {\n      name: \"Get\",\n      value: \"get\",\n      description: \"Get a recipient by ID\",\n      action: \"Get a recipient\",\n    },\n    {\n      name: \"Update\",\n      value: \"update\",\n      description: \"Update recipients on a document or template\",\n      action: \"Update recipients\",\n    },\n  ],\n  default: \"create\",\n};\n\nexport const descriptions: INodeProperties[] = [\n  operationProperty,\n  ...get.description,\n  ...create.description,\n  ...update.description,\n  ...deleteOp.description,\n];\n\nexport const operations = {\n  get: get.execute,\n  create: create.execute,\n  update: update.execute,\n  delete: deleteOp.execute,\n};\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/recipient/delete.operation.ts",
+      "sha": null,
+      "content_sha256": "614266c7eacf47c32a0295fdd0d692654b3d3938870ed264c9050c32490ee51a",
+      "score": 179,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Recipient ID\",\n    name: \"recipientId\",\n    type: \"number\",\n    required: true,\n    default: 0,\n    description: \"The ID of the recipient to delete\",\n    displayOptions: {\n      show: {\n        resource: [\"recipient\"],\n        operation: [\"delete\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const recipientId = this.getNodeParameter(\"recipientId\", itemIndex) as number;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.recipients.delete({ recipientId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "c6fee7848eeb66dbef46c076019505dae36dec5916cf601c19a65a890bc3e079",
+      "score": 126,
+      "content": "name: Release\n\non:\n  push:\n    tags:\n      - \"v*\"\n\npermissions:\n  contents: write\n  id-token: write\n\njobs:\n  release:\n    name: Release & Publish\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v4\n\n      - name: Create GitHub Release\n        uses: softprops/action-gh-release@v2\n        with:\n          generate_release_notes: true\n          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}\n\n      - name: Setup Bun\n        uses: oven-sh/setup-bun@v2\n\n      - name: Setup Node.js\n        uses: actions/setup-node@v4\n        with:\n          node-version: \"24\"\n          registry-url: \"https://registry.npmjs.org\"\n\n      - name: Install dependencies\n        run: bun install --frozen-lockfile\n\n      - name: Typecheck\n        run: bun run typecheck\n\n      - name: Lint\n        run: bun run lint\n\n      - name: Build\n        run: bun run build\n\n      - name: Determine dist-tag\n        id: dist-tag\n        run: |\n          VERSION=\"${GITHUB_REF_NAME#v}\"\n          if [[ \"$VERSION\" == *\"alpha\"* ]]; then\n            echo \"tag=alpha\" >> $GITHUB_OUTPUT\n          elif [[ \"$VERSION\" == *\"beta\"* ]]; then\n            echo \"tag=beta\" >> $GITHUB_OUTPUT\n          elif [[ \"$VERSION\" == *\"rc\"* ]]; then\n            echo \"tag=rc\" >> $GITHUB_OUTPUT\n          else\n            echo \"tag=latest\" >> $GITHUB_OUTPUT\n          fi\n\n      - name: Publish to npm\n        run: npm publish --provenance --access public --tag ${{ steps.dist-tag.outputs.tag }}\n"
+    },
+    {
+      "path": "docker-compose.yml",
+      "sha": null,
+      "content_sha256": "468705cd0b0aa32f717fbe125669406746b73adae2f93b21f603031c98a5417c",
+      "score": 120,
+      "content": "services:\n  n8n:\n    image: n8nio/n8n\n    ports:\n      - \"5678:5678\"\n    volumes:\n      - n8n_data:/home/node/.n8n\n      - ./dist:/home/node/.n8n/custom/node_modules/@documenso/n8n-nodes-documenso/dist\n      - ./package.json:/home/node/.n8n/custom/node_modules/@documenso/n8n-nodes-documenso/package.json\n    environment:\n      - N8N_LOG_LEVEL=info\n\nvolumes:\n  n8n_data:\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "02249db650177e914114b6c20fac896932e8e531888d0eadfaef39976ca4a378",
+      "score": 120,
+      "content": "{\n  \"name\": \"@documenso/n8n-nodes-documenso\",\n  \"version\": \"0.1.0\",\n  \"description\": \"n8n community node for Documenso - the open source document signing platform\",\n  \"keywords\": [\n    \"n8n-community-node-package\"\n  ],\n  \"author\": {\n    \"name\": \"Documenso\",\n    \"email\": \"support@documenso.com\",\n    \"url\": \"https://documenso.com\"\n  },\n  \"license\": \"MIT\",\n  \"main\": \"dist/index.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"scripts\": {\n    \"build\": \"tsdown\",\n    \"dev\": \"docker compose up\",\n    \"check\": \"biome check --write\",\n    \"lint\": \"biome lint\",\n    \"format\": \"biome format --write\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"release\": \"./scripts/release.sh\"\n  },\n  \"files\": [\n    \"dist\"\n  ],\n  \"n8n\": {\n    \"n8nNodesApiVersion\": 1,\n    \"credentials\": [\n      \"dist/credentials/DocumensoApi.credentials.js\"\n    ],\n    \"nodes\": [\n      \"dist/nodes/Documenso/Documenso.node.js\",\n      \"dist/nodes/DocumensoTrigger/DocumensoTrigger.node.js\"\n    ]\n  },\n  \"dependencies\": {\n    \"@documenso/sdk-typescript\": \"^0.7.0\"\n  },\n  \"devDependencies\": {\n    \"@biomejs/biome\": \"^2.3.14\",\n    \"@n8n/node-cli\": \"^0.19.0\",\n    \"@types/bun\": \"latest\",\n    \"n8n-workflow\": \"^2.7.0\",\n    \"tsdown\": \"^0.20.3\",\n    \"typescript\": \"^5.7.0\"\n  },\n  \"peerDependencies\": {\n    \"n8n-workflow\": \"*\"\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/router.ts",
+      "sha": null,
+      "content_sha256": "bad0ae3a6f6f1f8e7e282d81a1e103ec011d83de1b8d5843bee0d8e58fe90842",
+      "score": 109,
+      "content": "import type { IExecuteFunctions, INodeExecutionData } from \"n8n-workflow\";\nimport * as attachment from \"./attachment\";\nimport * as document from \"./document\";\nimport * as field from \"./field\";\nimport * as file from \"./file\";\nimport * as folder from \"./folder\";\nimport * as recipient from \"./recipient\";\nimport * as template from \"./template\";\n\ntype OperationFunction = (\n  this: IExecuteFunctions,\n  itemIndex: number,\n) => Promise<any>;\n\nconst resourceMap: Record<string, Record<string, OperationFunction>> = {\n  document: document.operations,\n  template: template.operations,\n  recipient: recipient.operations,\n  field: field.operations,\n  file: file.operations,\n  attachment: attachment.operations,\n  folder: folder.operations,\n};\n\nexport async function router(\n  this: IExecuteFunctions,\n): Promise<INodeExecutionData[][]> {\n  const items = this.getInputData();\n  const returnData: INodeExecutionData[] = [];\n  const resource = this.getNodeParameter(\"resource\", 0) as string;\n  const operation = this.getNodeParameter(\"operation\", 0) as string;\n\n  const executeFunction = resourceMap[resource]?.[operation];\n\n  if (!executeFunction) {\n    throw new Error(`Unknown resource/operation: ${resource}/${operation}`);\n  }\n\n  for (let i = 0; i < items.length; i++) {\n    try {\n      const result = await executeFunction.call(this, i);\n      \n      const executionData = this.helpers.constructExecutionMetaData(\n        this.helpers.returnJsonArray(result),\n        { itemData: { item: i } },\n      );\n      \n      returnData.push(...executionData);\n    } catch (error) {\n      if (this.continueOnFail()) {\n        returnData.push({\n          json: { error: (error as Error).message },\n          pairedItem: { item: i },\n        });\n      } else {\n        throw error;\n      }\n    }\n  }\n\n  return [returnData];\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/field/get.operation.ts",
+      "sha": null,
+      "content_sha256": "0a813ead899cf6a73243a5f38062e291f489021919009ab307b85bbfc24d5708",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Field ID\",\n    name: \"fieldId\",\n    type: \"number\",\n    required: true,\n    default: 0,\n    description: \"The ID of the field to retrieve\",\n    displayOptions: {\n      show: {\n        resource: [\"field\"],\n        operation: [\"get\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const fieldId = this.getNodeParameter(\"fieldId\", itemIndex) as number;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.fields.get({ fieldId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/folder/delete.operation.ts",
+      "sha": null,
+      "content_sha256": "0616d2752d65b57136e46c7c6603b1c5a254be719f3e21286c83fabf975f4b2f",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Folder ID\",\n    name: \"folderId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    displayOptions: { show: { resource: [\"folder\"], operation: [\"delete\"] } },\n    description: \"The ID of the folder to delete\",\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const client = await getDocumensoClient(this);\n\n  const folderId = this.getNodeParameter(\"folderId\", itemIndex) as string;\n\n  try {\n    return await client.folders.delete({ folderId });\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/field/delete.operation.ts",
+      "sha": null,
+      "content_sha256": "7a6740c2f8d6b8aeae020a45071bee45ca95540c7e9dbb69030126e9843dffa6",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Field ID\",\n    name: \"fieldId\",\n    type: \"number\",\n    required: true,\n    default: 0,\n    description: \"The ID of the field to delete\",\n    displayOptions: {\n      show: {\n        resource: [\"field\"],\n        operation: [\"delete\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const fieldId = this.getNodeParameter(\"fieldId\", itemIndex) as number;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.fields.delete({ fieldId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/document/duplicate.operation.ts",
+      "sha": null,
+      "content_sha256": "37b1ebae0fc9f80b2c150f5b05b1dac32563d1ab26962eac79996f9d0f53a1c4",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Document ID\",\n    name: \"documentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the document to duplicate\",\n    displayOptions: {\n      show: {\n        resource: [\"document\"],\n        operation: [\"duplicate\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const documentId = this.getNodeParameter(\"documentId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.duplicate({\n      envelopeId: documentId,\n    });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/template/get.operation.ts",
+      "sha": null,
+      "content_sha256": "0a627988e151435fcae485082af56a68d6121566af4e9cb2710c030213ad73de",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Template ID\",\n    name: \"templateId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the template to retrieve\",\n    displayOptions: {\n      show: {\n        resource: [\"template\"],\n        operation: [\"get\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const templateId = this.getNodeParameter(\"templateId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.get({ envelopeId: templateId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/document/delete.operation.ts",
+      "sha": null,
+      "content_sha256": "3fb58581518c37499378178b58aa93865af506b148d6fb43e139ca29a5483452",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Document ID\",\n    name: \"documentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the document to delete\",\n    displayOptions: {\n      show: {\n        resource: [\"document\"],\n        operation: [\"delete\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const documentId = this.getNodeParameter(\"documentId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.delete({ envelopeId: documentId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/document/get.operation.ts",
+      "sha": null,
+      "content_sha256": "63177491c0b02c2c72c3686ce2592a8e679bfd917e2acea8aa53888aa6c75766",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Document ID\",\n    name: \"documentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the document to retrieve\",\n    displayOptions: {\n      show: {\n        resource: [\"document\"],\n        operation: [\"get\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const documentId = this.getNodeParameter(\"documentId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.get({ envelopeId: documentId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/template/delete.operation.ts",
+      "sha": null,
+      "content_sha256": "8cd56f14296d6380de5a6ae360074f020b927614082ae08861ceeb7528f73720",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Template ID\",\n    name: \"templateId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the template to delete\",\n    displayOptions: {\n      show: {\n        resource: [\"template\"],\n        operation: [\"delete\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const templateId = this.getNodeParameter(\"templateId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.delete({ envelopeId: templateId });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/template/duplicate.operation.ts",
+      "sha": null,
+      "content_sha256": "011acaee6bfdef3b12900f5a28de024a4f48e5796806c9e3cb59454f6fa6d2e4",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Template ID\",\n    name: \"templateId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the template to duplicate\",\n    displayOptions: {\n      show: {\n        resource: [\"template\"],\n        operation: [\"duplicate\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const templateId = this.getNodeParameter(\"templateId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.duplicate({\n      envelopeId: templateId,\n    });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/attachment/find.operation.ts",
+      "sha": null,
+      "content_sha256": "777e43f1d996d9a902e4d74815d56778892e4bf876599db868679bc309baa7ad",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Document/Template ID\",\n    name: \"documentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the document or template to find attachments for\",\n    displayOptions: {\n      show: {\n        resource: [\"attachment\"],\n        operation: [\"find\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const documentId = this.getNodeParameter(\"documentId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.attachments.find({\n      envelopeId: documentId,\n    });\n\n    return response.data;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/file/delete.operation.ts",
+      "sha": null,
+      "content_sha256": "6290e2ea2b14dfde6015cee764948efe728b7957930abc46e1ed6d939634ebb5",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Document/Template ID\",\n    name: \"documentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the document or template containing the file\",\n    displayOptions: {\n      show: {\n        resource: [\"file\"],\n        operation: [\"delete\"],\n      },\n    },\n  },\n  {\n    displayName: \"File ID\",\n    name: \"fileId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the file to delete\",\n    displayOptions: {\n      show: {\n        resource: [\"file\"],\n        operation: [\"delete\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const documentId = this.getNodeParameter(\"documentId\", itemIndex) as string;\n  const fileId = this.getNodeParameter(\"fileId\", itemIndex) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.items.delete({\n      envelopeId: documentId,\n      envelopeItemId: fileId,\n    });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/field/index.ts",
+      "sha": null,
+      "content_sha256": "90aeb7455976543083d778c5378750e4e1b4f338a156858958b4a685752be679",
+      "score": 107,
+      "content": "import type { INodeProperties } from \"n8n-workflow\";\nimport * as create from \"./create.operation\";\nimport * as deleteOp from \"./delete.operation\";\nimport * as get from \"./get.operation\";\nimport * as update from \"./update.operation\";\n\nconst operationProperty: INodeProperties = {\n  displayName: \"Operation\",\n  name: \"operation\",\n  type: \"options\",\n  noDataExpression: true,\n  displayOptions: {\n    show: {\n      resource: [\"field\"],\n    },\n  },\n  options: [\n    {\n      name: \"Create\",\n      value: \"create\",\n      description: \"Create fields on a document or template\",\n      action: \"Create fields\",\n    },\n    {\n      name: \"Delete\",\n      value: \"delete\",\n      description: \"Delete a field\",\n      action: \"Delete a field\",\n    },\n    {\n      name: \"Get\",\n      value: \"get\",\n      description: \"Get a field by ID\",\n      action: \"Get a field\",\n    },\n    {\n      name: \"Update\",\n      value: \"update\",\n      description: \"Update fields on a document or template\",\n      action: \"Update fields\",\n    },\n  ],\n  default: \"create\",\n};\n\nexport const descriptions: INodeProperties[] = [\n  operationProperty,\n  ...get.description,\n  ...create.description,\n  ...update.description,\n  ...deleteOp.description,\n];\n\nexport const operations = {\n  get: get.execute,\n  create: create.execute,\n  update: update.execute,\n  delete: deleteOp.execute,\n};\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/folder/index.ts",
+      "sha": null,
+      "content_sha256": "3e2f5de398b205e7746e102c45682307ea732b8bcb34d2a66864103ca2d46cc4",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport * as create from \"./create.operation\";\nimport * as del from \"./delete.operation\";\nimport * as find from \"./find.operation\";\nimport * as update from \"./update.operation\";\n\nexport const descriptions: INodeProperties[] = [\n  {\n    displayName: \"Operation\",\n    name: \"operation\",\n    type: \"options\",\n    noDataExpression: true,\n    displayOptions: { show: { resource: [\"folder\"] } },\n    options: [\n      {\n        name: \"Create\",\n        value: \"create\",\n        action: \"Create a folder\",\n        description: \"Create a new folder\",\n      },\n      {\n        name: \"Delete\",\n        value: \"delete\",\n        action: \"Delete a folder\",\n        description: \"Delete a folder\",\n      },\n      {\n        name: \"Find\",\n        value: \"find\",\n        action: \"Find folders\",\n        description: \"Search for folders\",\n      },\n      {\n        name: \"Update\",\n        value: \"update\",\n        action: \"Update a folder\",\n        description: \"Update a folder\",\n      },\n    ],\n    default: \"find\",\n  },\n  ...find.description,\n  ...create.description,\n  ...update.description,\n  ...del.description,\n];\n\nexport const operations: Record<\n  string,\n  (this: IExecuteFunctions, itemIndex: number) => Promise<any>\n> = {\n  find: find.execute,\n  create: create.execute,\n  update: update.execute,\n  delete: del.execute,\n};\n"
+    },
+    {
+      "path": "src/nodes/Documenso/actions/attachment/delete.operation.ts",
+      "sha": null,
+      "content_sha256": "5393c9cbaeba7f31a4e98654509b809164848d89a2c0a69638a00916a51cd8f2",
+      "score": 107,
+      "content": "import type { IExecuteFunctions, INodeProperties } from \"n8n-workflow\";\nimport {\n  getDocumensoClient,\n  handleDocumensoError,\n} from \"../../GenericFunctions\";\n\nexport const description: INodeProperties[] = [\n  {\n    displayName: \"Attachment ID\",\n    name: \"attachmentId\",\n    type: \"string\",\n    required: true,\n    default: \"\",\n    description: \"The ID of the attachment to delete\",\n    displayOptions: {\n      show: {\n        resource: [\"attachment\"],\n        operation: [\"delete\"],\n      },\n    },\n  },\n];\n\nexport async function execute(\n  this: IExecuteFunctions,\n  itemIndex: number,\n): Promise<any> {\n  const attachmentId = this.getNodeParameter(\n    \"attachmentId\",\n    itemIndex,\n  ) as string;\n\n  try {\n    const client = await getDocumensoClient(this);\n\n    const response = await client.envelopes.attachments.delete({\n      id: attachmentId,\n    });\n\n    return response;\n  } catch (error) {\n    handleDocumensoError(this, error, itemIndex);\n  }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": "src/credentials/DocumensoApi.credentials.ts",
+      "sha": "9980e22d63ada7a4d5f9c9fe159204be283bd8da",
+      "size": 899,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:57:50.405666+00:00"
+}
