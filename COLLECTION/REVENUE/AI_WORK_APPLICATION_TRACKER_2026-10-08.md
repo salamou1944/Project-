@@ -81,3 +81,8 @@
 4. Apply first to the entry-level AI QA and Model Evaluation Engineer role if the user can truthfully meet the English requirement; otherwise prioritize work that matches actual language ability.
 5. Prepare the application using evidence from Salamou-31 CI, API Factory tests, and real code/repository work; do not claim commercial clients or production deployments that are not proven.
 6. Continue the catalog-cleanup paid-pilot experiment as the owned service offer; do not spend money on Upwork Connects or ads.
+
+
+### Prepared application material — 2026-10-21
+- Evidence-backed drafts for both current OpenTrain roles: https://github.com/salamou1944/Project-/blob/main/COLLECTION/REVENUE/OPENTRAIN_APPLICATION_PACK_2026-10-21.md
+- Status remains **DRAFT ONLY / NOT APPLIED**. Applicant must confirm every personal claim, supply their own accurate resume/work history, complete account and payout onboarding, and submit through the official platform.
