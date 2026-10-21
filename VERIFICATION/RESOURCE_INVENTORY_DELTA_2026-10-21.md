@@ -89,3 +89,17 @@ Five automations were found:
 - The current runtime exposes 30 connector namespaces and 1,413 tool definitions, including GitHub, GitLab, Railway, Render, Vercel, Supabase, Replit, Notion, Termalin, OpenAI Platform, AgentMail, Apollo, HubSpot, Shopify, Wix, Canva, Figma, Higgsfield, Upwork, Metricool, and others.
 - Tool count is not the same as installed ChatGPT marketplace plugins, and neither count proves every account is connected or entitled to use every capability.
 - Plugin discovery is query-based, not a complete marketplace export. TinyFish is available but not installed/connected. Do not count it as usable browser automation until the user connects it and an actual browser task is verified.
+
+
+## High-value free ChatGPT/Codex route discovered — 2026-10-21
+
+- Upstream [OmniRoute Codex App-Server guide](https://github.com/cheaper-inference/OmniRoute/blob/39777dfe307994101079b8313339c6b7180176fa/docs/guides/CODEX-APP-SERVER-PROVIDER.md) explicitly distinguishes two routes:
+  - `codex` replays a ChatGPT OAuth token to the Responses API; the guide says this use is not authorized for proxy/router use. Do not use it.
+  - `codex-app-server` drives the official Codex CLI app-server over JSON-RPC/WebSocket; the CLI owns OAuth and refreshes it itself. The guide supports signing in with ChatGPT using device OAuth.
+- OmniRoute is MIT-licensed. This creates a credible route to use an existing ChatGPT/Codex entitlement for coding-agent work without an OpenAI API key, subject to plan limits and current terms. It is not an unlimited API grant or guaranteed production endpoint.
+- The app-server requires a sidecar, internal-only WebSocket with a capability token, and persistent private storage for `~/.codex/auth.json`. The upstream compose profile keeps the sidecar off the public host ports.
+- Current blocker is execution infrastructure, not missing source code: Termalin has zero reachable hosts; the private Windows inventory workflow is queued; Railway has no attached volumes and failed deployment records; Render Free is not verified to offer persistent storage for this use. No OmniRoute/Codex sidecar was installed or deployed.
+- Next step: inspect the upstream compose/Docker configuration and choose a safe isolated target with persistent storage and private networking. Do not use the token-replay mode, expose the app-server publicly, store OAuth auth files in ordinary application data, or deploy into EASY production.
+- Source documents were updated:
+  - [API Factory zero-cost runtime options](https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/FREE-ZERO-COST-RUNTIME-OPTIONS-2026-10-21.md)
+  - [Resource inventory and execution plan](./RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
