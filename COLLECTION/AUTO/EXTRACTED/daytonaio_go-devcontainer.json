@@ -1,0 +1,69 @@
+{
+  "canonical_source": "github:daytonaio/go-devcontainer",
+  "repo": "daytonaio/go-devcontainer",
+  "revision_sha": "d7921785cdaad074abf1d4fdf40e1222aaaf6010",
+  "default_branch": "main",
+  "pushed_at": "2026-06-29T11:22:59Z",
+  "repo_updated_at": "2025-05-12T03:29:19Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/main.yml",
+      "sha": null,
+      "content_sha256": "75608de6537129bfa9a697e1e9bbc050461352270682be9a78ca6694f1cb9bda",
+      "score": 126,
+      "content": "name: 'build'\non:\n  push:\n    branches:\n      - main\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout (GitHub)\n        uses: actions/checkout@v4\n      - name: Set up QEMU for multi-architecture builds\n        uses: docker/setup-qemu-action@v3\n      - name: Setup Docker buildx for multi-architecture builds\n        uses: docker/setup-buildx-action@v3\n        with:\n          use: true\n      - name: Login to GitHub Container Registry\n        uses: docker/login-action@v3\n        with:\n          registry: ghcr.io\n          username: ${{ github.repository_owner }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n      - name: Build and release devcontainer Multi-Platform\n        uses: devcontainers/ci@v0.3\n        env:\n          # see: https://github.com/devcontainers/ci/issues/191#issuecomment-1603857155\n          BUILDX_NO_DEFAULT_ATTESTATIONS: true\n        with:\n          imageName: ghcr.io/daytonaio/go-devcontainer\n          cacheFrom: ghcr.io/daytonaio/go-devcontainer\n          platform: linux/amd64,linux/arm64\n          imageTag: main,latest\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "db4c6e79758f756e65de63fb93d4b82db89d15c7e0f88532940f77f7f266dff8",
+      "score": 126,
+      "content": "name: create-release\non:\n  push:\n    # Sequence of patterns matched against refs/tags\n    tags:\n      - 'v*' # Push events to matching v*, i.e. v1.0, v4.3.1\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout (GitHub)\n        uses: actions/checkout@v4\n      - name: Set up QEMU for multi-architecture builds\n        uses: docker/setup-qemu-action@v3\n      - name: Setup Docker buildx for multi-architecture builds\n        uses: docker/setup-buildx-action@v3\n        with:\n          use: true\n      - name: Docker Tag Metadata\n        id: meta\n        uses: docker/metadata-action@v5\n        with:\n          images: ghcr.io/daytonaio/go-devcontainer\n          sep-tags: \",\"\n          tags: |\n            type=semver,pattern={{major}}.{{minor}}.{{patch}}\n            type=semver,pattern={{major}}.{{minor}}\n            type=semver,pattern={{major}}\n          flavor: |\n            latest=false\n      # Working around devcontainer action not supporting the metadata format\n      # https://github.com/devcontainers/ci/issues/235\n      - name: Update Tags to Fit into devcontainers/cli format\n        id: dcmeta\n        run: |\n          prefix=\"ghcr.io/daytonaio/go-devcontainer\"\n          input_list=\"$DOCKER_METADATA_OUTPUT_TAGS\"\n          delimiter=\",\"\n\n          result_list=$(echo \"$input_list\" | sed \"s|${prefix}:||g\")\n\n          echo \"tags=$result_list\" >> \"$GITHUB_OUTPUT\"\n      - name: Login to GitHub Container Registry\n        uses: docker/login-action@v3\n        with:\n          registry: ghcr.io\n          username: ${{ github.repository_owner }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n      - name: Build and release devcontainer Multi-Platform\n        uses: devcontainers/ci@v0.3\n        env:\n          # see: https://github.com/devcontainers/ci/issues/191#issuecomment-1603857155\n          BUILDX_NO_DEFAULT_ATTESTATIONS: true\n        with:\n          imageName: ghcr.io/daytonaio/go-devcontainer\n          cacheFrom: ghcr.io/daytonaio/go-devcontainer\n          platform: linux/amd64,linux/arm64\n          imageTag: ${{ steps.dcmeta.outputs.tags }}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "9685ee3dd379926c4a81cc5f2bdf03f48cc9e8591463fd62444210d616d00b7f",
+      "score": 100,
+      "content": "# go-devcontainer\nThe base devcontainer for Daytona Go projects\n\nBasically this pulls out the devcontainer from `daytonaio/daytona` into its own repo and sets up a devcontainer prebuild GitHub action. This has a couple advantages.\n1. Its prebuilt and a from scratch env goes from launching in ~5m to >1m (depending on network)\n1. Its can be re-used across Daytona and all the plugins. So the resources usage for folks that develop plugins will drop since its shared.\n1. Centralized also means common versions and only one place to update. Bumping go version for example.\n\nYou can use it with:\n```\n\t\"image\": \"ghcr.io/daytonaio/go-devcontainer:main\"\n```\nWhich will track the main branch of the repo. In the case that we want more stable environments. You can push a tag to the repo and it will automatically built a release version that can be used with (given the tag v0.0.1 as an example).\n```\n\t\"image\": \"ghcr.io/daytonaio/go-devcontainer:0.0.1\"\n    # or\n    \"image\": \"ghcr.io/daytonaio/go-devcontainer:0.0\"\n    # or \n    \"image\": \"ghcr.io/daytonaio/go-devcontainer:0\"\n```\n\nWhen you use `major` or `major.minor` as an image tag, these will be updated on subsequent tags. It will follow semver'ish versioning. \n* The safest is to pin to a specific `major.minor.patch`. \n* If you're ok with bugfixes you can pin to `major.minor`. \n* If don't mind changes so long as the the devcontainer interface (features, user, etc) doesn't change you can pin to `major`."
+    },
+    {
+      "path": ".devcontainer/Dockerfile",
+      "sha": null,
+      "content_sha256": "7864b63c3e1cec992f11057b204bee5e33aeda9fb1ca2fbddfa51d41d06bb447",
+      "score": 83,
+      "content": "FROM ubuntu:22.04\nARG USERNAME=daytona\nARG USER_UID=1000\nARG USER_GID=$USER_UID\n\n# Avoid warnings by switching to noninteractive\nENV DEBIAN_FRONTEND=noninteractive\n\nRUN set -eux; \\\n    apt-get update; \\\n    apt-get install -y --no-install-recommends \\\n        apt-transport-https \\\n        ca-certificates \\\n        curl \\\n        gnupg \\\n        netbase \\\n        wget \\\n# https://bugs.debian.org/929417\n        sudo \\\n        tzdata \\\n        zsh \\\n# daytona specific\n        protobuf-compiler \\\n        libprotobuf-dev  \\\n        openjdk-11-jdk; \\\n    rm -rf /var/lib/apt/lists/*\n\n# Create the user\nRUN groupadd --gid $USER_GID $USERNAME \\\n    && useradd --uid $USER_UID --gid $USER_GID -m -s /bin/zsh $USERNAME \\\n    # Add sudo support. We can omit if we're not going to support adding\n    # software after building the container.\n    && echo $USERNAME ALL=\\(root\\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \\\n    && chmod 0440 /etc/sudoers.d/$USERNAME\n\nUSER $USERNAME"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "20284d1c7b5612329006dc308c4e17888df902f0d255d59adf98b742bda2ea3f",
+      "score": 33,
+      "content": "# To get started with Dependabot version updates, you'll need to specify which\n# package ecosystems to update and where the package manifests are located.\n# Please see the documentation for more information:\n# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates\n# https://containers.dev/guide/dependabot\n\nversion: 2\nupdates:\n - package-ecosystem: \"devcontainers\"\n   directory: \"/\"\n   schedule:\n     interval: weekly\n"
+    },
+    {
+      "path": ".devcontainer/devcontainer.json",
+      "sha": null,
+      "content_sha256": "8a2b43c0825fe4e197a010aadda423931452835ceb92b509a25a1944400e8381",
+      "score": 33,
+      "content": "// For format details, see https://aka.ms/devcontainer.json. For config options, see the\n// README at: https://github.com/devcontainers/templates/tree/main/src/ubuntu\n{\n\t\"name\": \"Daytona Go Development\",\n\t\"build\": {\n\t\t\"dockerfile\": \"Dockerfile\",\n\t\t\"context\": \".\"\n\t},\n\t\"features\": {\n\t\t\"ghcr.io/devcontainers/features/common-utils:2\": {\n\t\t\t\"installZsh\": true,\n\t\t\t\"configureZshAsDefaultShell\": true,\n\t\t\t\"installOhMyZsh\": true,\n\t\t\t\"installOhMyZshConfig\": true,\n\t\t\t\"upgradePackages\": false,\n\t\t\t\"username\": \"automatic\", // We create the daytona user in the Dockerfile\n\t\t\t\"userUid\": \"automatic\", // So let common-utils detect the user\n\t\t\t\"userGid\": \"automatic\" // setting the user here will cause issues\n\t\t},\n\t\t\"ghcr.io/devcontainers/features/docker-in-docker:2\": {\n\t\t\t\"installDockerBuildx\": true,\n\t\t\t\"installDockerComposeSwitch\": true,\n\t\t\t\"version\": \"latest\",\n\t\t\t\"dockerDashComposeVersion\": \"latest\"\n\t\t},\n\t\t\"ghcr.io/devcontainers/features/go:1\": {\n\t\t\t\"version\": \"1.23\",\n\t\t\t\"golangciLintVersion\": \"1.63.4\"\n\t\t},\n\t\t\"ghcr.io/devcontainers/features/node:1\": {\n\t\t\t\"nodeGypDependencies\": true,\n\t\t\t\"version\": \"lts\",\n\t\t\t\"nvmVersion\": \"latest\"\n\t\t},\n\t\t\"ghcr.io/devcontainers-contrib/features/devcontainers-cli:1\": {\n\t\t\t\"version\": \"latest\"\n\t\t},\n\t\t\"ghcr.io/devcontainers-contrib/features/bash-command:1\": {\n\t\t\t// Cache go modules for a faster post create command\n\t\t\t\"command\": \"git clone https://github.com/daytonaio/daytona && cd daytona && go mod tidy && cd .. && rm -rf daytona && go install github.com/swaggo/swag/cmd/swag@v1.16.3 && chown -R daytona:golang /usr/local/go && chown -R daytona:golang /go\"\n\t\t}\n\t},\n\t\"overrideFeatureInstallOrder\": [\n\t\t\"ghcr.io/devcontainers/features/common-utils:2\",\n\t\t\"ghcr.io/devcontainers/features/docker-in-docker:2\",\n\t\t\"ghcr.io/devcontainers/features/go:1\",\n\t\t\"ghcr.io/devcontainers/features/node:1\",\n\t\t\"ghcr.io/devcontainers-contrib/features/devcontainers-cli:1\",\n\t\t\"ghcr.io/devcontainers-contrib/features/bash-command:1\"\n\t]\n}"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:42:52.491059+00:00"
+}

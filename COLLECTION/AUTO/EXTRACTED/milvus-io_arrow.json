@@ -1,0 +1,220 @@
+{
+  "canonical_source": "github:milvus-io/arrow",
+  "repo": "milvus-io/arrow",
+  "revision_sha": "58415d1fac50cb829b3dcf08526033d6db8c30db",
+  "default_branch": "main",
+  "pushed_at": "2026-08-19T02:18:23Z",
+  "repo_updated_at": "2024-08-29T06:27:19Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "ci/scripts/install_gcs_testbench.sh",
+      "sha": null,
+      "content_sha256": "ccd14fdeeb5c23fa2d82e5464574e72fbccb19b9898233976d73c5420e3e5981",
+      "score": 245,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -ex\n\nif [ \"$#\" -ne 1 ]; then\n  echo \"Usage: $0 <storage-testbench version>\"\n  exit 1\nfi\n\ncase \"$(uname -m)\" in\n  aarch64|arm64|x86_64)\n    : # OK\n    ;;\n  *)\n    echo \"GCS testbench is installed only on x86 or arm architectures: $(uname -m)\"\n    exit 0\n    ;;\nesac\n\nversion=$1\nif [[ \"${version}\" -eq \"default\" ]]; then\n  version=\"v0.39.0\"\nfi\n\n: ${PIPX_PYTHON:=$(which python3)}\n\nexport PIP_BREAK_SYSTEM_PACKAGES=1\n${PIPX_PYTHON} -m pip install -U pipx\n\n# This script is run with PYTHON undefined in some places,\n# but those only use older pythons.\nif [[ -z \"${PYTHON_VERSION}\" ]] || [[ \"${PYTHON_VERSION}\" != \"3.13\" ]]; then\n  pipx_flags=--verbose\n  if [[ $(id -un) == \"root\" ]]; then\n    # Install globally as /root/.local/bin is typically not in $PATH\n    pipx_flags=\"${pipx_flags} --global\"\n  fi\n  ${PIPX_PYTHON} -m pipx install ${pipx_flags} \"https://github.com/googleapis/storage-testbench/archive/${version}.tar.gz\"\nfi\n"
+    },
+    {
+      "path": "ci/scripts/install_sccache.sh",
+      "sha": null,
+      "content_sha256": "fdf7e78eddfe8fd938b87528ce154467da0f4c8c09997b6d7715caa97b17ea12",
+      "score": 243,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [  \"$#\" -lt 1 -o \"$#\" -gt 3 ]; then\n    echo \"Usage: $0 <build> <prefix> <version>\"\n    echo \"Will default to version=0.3.0 \"\n    exit 1\nfi\n\nBUILD=$1\nPREFIX=$2\nVERSION=${3:-0.3.0}\nARCH=$(uname -m)\n\nif [ \"${ARCH}\" != x86_64 ] && [ \"${ARCH}\" != aarch64 ]; then\n    echo \"Skipped sccache installation on unsupported arch: ${ARCH}\"\n    exit 0\nfi\n\nSCCACHE_URL=\"https://github.com/mozilla/sccache/releases/download/v$VERSION/sccache-v$VERSION-$ARCH-$BUILD.tar.gz\"\nSCCACHE_ARCHIVE=sccache.tar.gz\n\n# Download archive and checksum\ncurl -L $SCCACHE_URL --output $SCCACHE_ARCHIVE\ncurl -L $SCCACHE_URL.sha256 --output $SCCACHE_ARCHIVE.sha256\necho \"  $SCCACHE_ARCHIVE\" >> $SCCACHE_ARCHIVE.sha256\n\nSHA_ARGS=\"--check --status\"\n\n# Busybox sha256sum uses different flags\nif sha256sum --version 2>&1 | grep -q BusyBox; then\n  SHA_ARGS=\"-sc\"\nfi\n\nsha256sum $SHA_ARGS $SCCACHE_ARCHIVE.sha256\n\nif [ ! -d $PREFIX ]; then\n    mkdir -p $PREFIX\nfi\n\n# Extract only the sccache binary into $PREFIX and ignore README and LICENSE.\n# --wildcards doesn't work on busybox.\ntar -xzvf $SCCACHE_ARCHIVE --strip-component=1 --directory $PREFIX --exclude=\"sccache*/*E*E*\"\nchmod a+x $PREFIX/sccache\n\nif [ -n \"${GITHUB_PATH}\" ]; then\n    echo \"$PREFIX\" >> $GITHUB_PATH\n    # Add executable for windows as mingw workaround.\n    echo \"SCCACHE_PATH=$PREFIX/sccache.exe\" >> $GITHUB_ENV\nfi\n"
+    },
+    {
+      "path": "ci/scripts/ccache_setup.sh",
+      "sha": null,
+      "content_sha256": "9cd9d2a4107ee4a36368714b64e722365a0dee32826cb7d0e05e6a899743f1d8",
+      "score": 243,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -eux\n\necho \"ARROW_USE_CCACHE=ON\" >> $GITHUB_ENV\necho \"CCACHE_COMPILERCHECK=content\" >> $GITHUB_ENV\necho \"CCACHE_COMPRESS=1\" >> $GITHUB_ENV\necho \"CCACHE_COMPRESSLEVEL=6\" >> $GITHUB_ENV\necho \"CCACHE_MAXSIZE=1G\" >> $GITHUB_ENV\n"
+    },
+    {
+      "path": "ci/scripts/install_ccache.sh",
+      "sha": null,
+      "content_sha256": "20e3b6f093d915e7615b8399ac2fd37999a42455564da678dfda701373407625",
+      "score": 243,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -ne 2 ]; then\n  echo \"Usage: $0 <version> <prefix>\"\n  exit 1\nfi\n\nversion=$1\nprefix=$2\n\nmkdir -p /tmp/ccache\ncase $(uname) in\n  MINGW64*)\n    url=\"https://github.com/ccache/ccache/releases/download/v${version}/ccache-${version}-windows-x86_64.zip\"\n    pushd /tmp/ccache\n    curl --fail --location --remote-name ${url}\n    unzip -j ccache-${version}-windows-x86_64.zip\n    chmod +x ccache.exe\n    mv ccache.exe ${prefix}/bin/\n    popd\n    ;;\n  *)\n    url=\"https://github.com/ccache/ccache/archive/v${version}.tar.gz\"\n\n    wget -q ${url} -O - | tar -xzf - --directory /tmp/ccache --strip-components=1\n\n    mkdir /tmp/ccache/build\n    pushd /tmp/ccache/build\n    cmake \\\n      -GNinja \\\n      -DCMAKE_BUILD_TYPE=Release \\\n      -DCMAKE_INSTALL_PREFIX=${prefix} \\\n      -DZSTD_FROM_INTERNET=ON \\\n      ..\n    ninja install\n    popd\n    ;;\nesac\nrm -rf /tmp/ccache\n"
+    },
+    {
+      "path": "ci/docker/python-wheel-manylinux-test.dockerfile",
+      "sha": null,
+      "content_sha256": "3fca4bd2c4a14ac552fc71dd03ed08a8e114ae0abb9406243a6925d4e867dd2c",
+      "score": 213,
+      "content": "# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nARG arch\nARG python_image_tag\nFROM ${arch}/python:${python_image_tag}\n\n# RUN pip install --upgrade pip\n\n# pandas doesn't provide wheel for aarch64 yet, so cache the compiled\n# test dependencies in a docker image\nCOPY python/requirements-wheel-test.txt /arrow/python/\nRUN pip install -r /arrow/python/requirements-wheel-test.txt\n\nCOPY ci/scripts/install_gcs_testbench.sh /arrow/ci/scripts/\nARG python\nRUN PYTHON_VERSION=${python} /arrow/ci/scripts/install_gcs_testbench.sh default\n"
+    },
+    {
+      "path": "ci/docker/python-wheel-windows-test-vs2019.dockerfile",
+      "sha": null,
+      "content_sha256": "38a614adb590c243b0299feb658ca281ca6c7a6254c5e5a52da57039283d7f7c",
+      "score": 213,
+      "content": "# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\n# NOTE: You must update PYTHON_WHEEL_WINDOWS_IMAGE_REVISION in .env\n# when you update this file.\n\n# based on mcr.microsoft.com/windows/servercore:ltsc2019\n# contains choco and vs2019 preinstalled\nFROM abrarov/msvc-2019:2.11.0\n\n# hadolint shell=cmd.exe\n\n# Add unix tools to path\nRUN setx path \"%path%;C:\\Program Files\\Git\\usr\\bin\"\n\n# Remove previous installations of python from the base image\n# NOTE: a more recent base image (tried with 2.12.1) comes with python 3.9.7\n# and the msi installers are failing to remove pip and tcl/tk \"products\" making\n# the subsequent choco python installation step failing for installing python\n# version 3.9.* due to existing python version\nRUN wmic product where \"name like 'python%%'\" call uninstall /nointeractive && \\\n    rm -rf Python*\n\n# Install the GCS testbench using a well-known Python version.\n# NOTE: cannot use pipx's `--fetch-missing-python` because of\n# https://github.com/pypa/pipx/issues/1521, therefore download Python ourselves.\nRUN choco install -r -y --pre --no-progress python --version=3.11.9\nENV PIPX_BIN_DIR=C:\\\\Windows\\\\\nENV PIPX_PYTHON=\"C:\\Python311\\python.exe\"\nCOPY ci/scripts/install_gcs_testbench.bat C:/arrow/ci/scripts/\nRUN call \"C:\\arrow\\ci\\scripts\\install_gcs_testbench.bat\" && \\\n    storage-testbench -h\n\n# Define the full version number otherwise choco falls back to patch number 0 (3.8 => 3.8.0)\nARG python=3.8\nRUN (if \"%python%\"==\"3.8\" setx PYTHON_VERSION \"3.8.10\") & \\\n    (if \"%python%\"==\"3.9\" setx PYTHON_VERSION \"3.9.13\") & \\\n    (if \"%python%\"==\"3.10\" setx PYTHON_VERSION \"3.10.11\") & \\\n    (if \"%python%\"==\"3.11\" setx PYTHON_VERSION \"3.11.9\") & \\\n    (if \"%python%\"==\"3.12\" setx PYTHON_VERSION \"3.12.4\") & \\\n    (if \"%python%\"==\"3.13\" setx PYTHON_VERSION \"3.13.0-rc1\")\n\n# Install archiver to extract xz archives\nRUN choco install -r -y --pre --no-progress --force python --version=%PYTHON_VERSION% && \\\n    choco install --no-progress -r -y archiver\n\nENV PYTHON=$python\n"
+    },
+    {
+      "path": "ci/scripts/install_gcs_testbench.bat",
+      "sha": null,
+      "content_sha256": "10a95ba72669befe7bc5b13c18345b7d4f6330ddc48f104aac1bf5992a53b636",
+      "score": 210,
+      "content": "@rem Licensed to the Apache Software Foundation (ASF) under one\n@rem or more contributor license agreements.  See the NOTICE file\n@rem distributed with this work for additional information\n@rem regarding copyright ownership.  The ASF licenses this file\n@rem to you under the Apache License, Version 2.0 (the\n@rem \"License\"); you may not use this file except in compliance\n@rem with the License.  You may obtain a copy of the License at\n@rem\n@rem   http://www.apache.org/licenses/LICENSE-2.0\n@rem\n@rem Unless required by applicable law or agreed to in writing,\n@rem software distributed under the License is distributed on an\n@rem \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n@rem KIND, either express or implied.  See the License for the\n@rem specific language governing permissions and limitations\n@rem under the License.\n\n@echo on\n\nset GCS_TESTBENCH_VERSION=\"v0.40.0\"\n\nset PIPX_FLAGS=--verbose\nif NOT \"%PIPX_PYTHON%\"==\"\" (\n  set PIPX_FLAGS=--python %PIPX_PYTHON% %PIPX_FLAGS%\n)\n\npython -m pip install -U pipx || exit /B 1\n\n@REM Install GCS testbench %GCS_TESTBENCH_VERSION%\npipx install %PIPX_FLAGS% ^\n        \"https://github.com/googleapis/storage-testbench/archive/%GCS_TESTBENCH_VERSION%.tar.gz\" ^\n        || exit /B 1\n\npipx list --verbose\n"
+    },
+    {
+      "path": "docs/source/cpp/api/support.rst",
+      "sha": null,
+      "content_sha256": "9fece82b73f2ef11917a3895b963810ed6a85f0ec9f555740e77fb4a6bb18f0a",
+      "score": 197,
+      "content": ".. Licensed to the Apache Software Foundation (ASF) under one\n.. or more contributor license agreements.  See the NOTICE file\n.. distributed with this work for additional information\n.. regarding copyright ownership.  The ASF licenses this file\n.. to you under the Apache License, Version 2.0 (the\n.. \"License\"); you may not use this file except in compliance\n.. with the License.  You may obtain a copy of the License at\n\n..   http://www.apache.org/licenses/LICENSE-2.0\n\n.. Unless required by applicable law or agreed to in writing,\n.. software distributed under the License is distributed on an\n.. \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n.. KIND, either express or implied.  See the License for the\n.. specific language governing permissions and limitations\n.. under the License.\n\n.. default-domain:: cpp\n.. highlight:: cpp\n\n===================\nProgramming Support\n===================\n\nGeneral information\n===================\n\n.. doxygenfunction:: arrow::GetBuildInfo\n\n.. doxygenstruct:: arrow::BuildInfo\n   :members:\n\n.. doxygenfunction:: arrow::GetRuntimeInfo\n\n.. doxygenstruct:: arrow::RuntimeInfo\n   :members:\n\nMacro definitions\n-----------------\n\nThese can be useful if you need to decide between different blocks of code\n*at compile time* (for example to conditionally take advantage of a recently\nintroduced API).\n\n.. c:macro:: ARROW_VERSION_MAJOR\n\n   The Arrow major version number, for example ``7`` for Arrow 7.0.1.\n\n.. c:macro:: ARROW_VERSION_MINOR\n\n   The Arrow minor version number, for example ``0`` for Arrow 7.0.1.\n\n.. c:macro:: ARROW_VERSION_PATCH\n\n   The Arrow patch version number, for example ``1`` for Arrow 7.0.1.\n\n.. c:macro:: ARROW_VERSION\n\n   A consolidated integer representing the full Arrow version in an easily\n   comparable form, computed with the formula:\n   ``((ARROW_VERSION_MAJOR * 1000) + ARROW_VERSION_MINOR) * 1000 + ARROW_VERSION_PATCH``.\n\n   For example, this would choose a different block of code if the code is\n   being compiled against a Arrow version equal to or greater than 7.0.1::\n\n      #if ARROW_VERSION >= 7000001\n      // Arrow 7.0.1 or later...\n      #endif\n\n.. c:macro:: ARROW_VERSION_STRING\n\n   A human-readable string representation of the Arrow version, such as\n   ``\"7.0.1\"``.\n\n\nRuntime Configuration\n=====================\n\n.. doxygenstruct:: arrow::GlobalOptions\n   :members:\n\n\n.. doxygenfunction:: arrow::Initialize\n\n\nError return and reporting\n==========================\n\n.. doxygenclass:: arrow::Status\n   :members:\n\n.. doxygenclass:: arrow::StatusDetail\n   :members:\n\n.. doxygenclass:: arrow::Result\n   :members:\n\n.. doxygenclass:: parquet::ParquetException\n   :members:\n\nFunctional macros for error-based control flow\n----------------------------------------------\n\n.. doxygendefine:: ARROW_RETURN_NOT_OK\n\n.. doxygendefine:: ARROW_ASSIGN_OR_RAISE\n\n.. doxygendefine:: PARQUET_THROW_NOT_OK\n\n.. doxygendefine:: PARQUET_ASSIGN_OR_THROW\n"
+    },
+    {
+      "path": "dev/release/setup-gpg-agent.sh",
+      "sha": null,
+      "content_sha256": "57f468383cc3e6f9b699b63e722999af37c263d59f31379b9995136319830aa9",
+      "score": 188,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n#\n\n# source me\neval $(gpg-agent --daemon --allow-preset-passphrase)\ngpg --use-agent -s LICENSE.txt\nrm -rf LICENSE.txt.gpg\n"
+    },
+    {
+      "path": "ci/scripts/conan_setup.sh",
+      "sha": null,
+      "content_sha256": "e55c452094e8616becfd1140fd32ebc807d7195840b37597b656745409c1def3",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -eux\n\nconan config install https://github.com/conan-io/hooks.git -sf hooks -tf hooks\nconan config set hooks.conan-center\n"
+    },
+    {
+      "path": "ci/scripts/install_ceph.sh",
+      "sha": null,
+      "content_sha256": "96f8007328e4ad0dc8624806bc6dfbd9a2a77880b9384bbc89df99b43e38d055",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -ex\n\nARCH=$(uname -m)\nif [ \"$ARCH\" != \"x86_64\" ]; then\n  exit 0\nfi\n\napt update\napt install -y attr ceph-common ceph-fuse ceph-mds ceph-mgr ceph-mon ceph-osd\n"
+    },
+    {
+      "path": "ci/scripts/install_numpy.sh",
+      "sha": null,
+      "content_sha256": "78ab36d39634c81a5b5186da0c6a22878197e32ae54a4db56cdab8382d7f54d5",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ $# -gt 1 ]; then\n  echo \"Usage: $0 <optional numpy version = latest>\"\n  exit 1\nfi\n\nnumpy=${1:-\"latest\"}\n\nif [ \"${numpy}\" = \"latest\" ]; then\n  pip install numpy\nelse\n  pip install numpy==${numpy}\nfi\n"
+    },
+    {
+      "path": "ci/scripts/install_dask.sh",
+      "sha": null,
+      "content_sha256": "5ed6cc3298d9f9caa01ac3ab9e549bb018920b1fe049cdb549190244338704ca",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -ne 1 ]; then\n  echo \"Usage: $0 <dask version>\"\n  exit 1\nfi\n\ndask=$1\n\nif [ \"${dask}\" = \"upstream_devel\" ]; then\n  pip install \"dask[dataframe] @ git+https://github.com/dask/dask.git\"\n  pip install -U git+https://github.com/dask-contrib/dask-expr.git\nelif [ \"${dask}\" = \"latest\" ]; then\n  pip install dask[dataframe]\nelse\n  pip install dask[dataframe]==${dask}\nfi\n\n# additional dependencies needed for dask's s3 tests\n# Moto 5 results in timeouts in s3 tests: https://github.com/dask/dask/issues/10869\npip install \"moto[server]<5\" flask requests\n"
+    },
+    {
+      "path": "ci/scripts/install_ninja.sh",
+      "sha": null,
+      "content_sha256": "ff95935642c7201c2fb1f6c07fb6a4c618c465765ea84c04d130e1a8a30a8833",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -ne 2 ]; then\n  echo \"Usage: $0 <version> <prefix>\"\n  exit 1\nfi\n\nversion=$1\nprefix=$2\n\nurl=\"https://github.com/ninja-build/ninja/archive/v${version}.tar.gz\"\n\nmkdir /tmp/ninja\nwget -q ${url} -O - | tar -xzf - --directory /tmp/ninja --strip-components=1\n\npushd /tmp/ninja\n./configure.py --bootstrap\nmv ninja ${prefix}/bin\npopd\n\nrm -rf /tmp/ninja\n"
+    },
+    {
+      "path": "ci/scripts/install_azurite.sh",
+      "sha": null,
+      "content_sha256": "3626be18354907b79371d5c497f4e010f8d9e961921be9a6abc01114b74e3df4",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nnode_version=\"$(node --version)\"\necho \"node version = ${node_version}\"\n\ncase \"${node_version}\" in\n  v12*)\n    # Pin azurite to 3.29.0 due to https://github.com/apache/arrow/issues/41505\n    azurite_version=v3.29.0\n    ;;\n  *)\n    azurite_version=latest\n    ;;\nesac\n\ncase \"$(uname)\" in\n  Darwin)\n    npm install -g azurite@${azurite_version}\n    which azurite\n    ;;\n  MINGW*)\n    choco install nodejs.install\n    npm install -g azurite@${azurite_version}\n    ;;\n  Linux)\n    npm install -g azurite@${azurite_version}\n    which azurite\n    ;;\nesac\n\necho \"azurite version = $(azurite --version)\"\n"
+    },
+    {
+      "path": "ci/scripts/install_conda.sh",
+      "sha": null,
+      "content_sha256": "0e9b1adc9e86dbdde718b621d654a9e3f02fb37ac00de78bbf94006c44a13e65",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -ne 3 ]; then\n  echo \"Usage: $0 <installer: miniforge or mambaforge> <version> <prefix>\"\n  exit 1\nfi\n\narch=$(uname -m)\nplatform=$(uname)\ninstaller=$1\nversion=$2\nprefix=$3\n\necho \"Downloading Miniconda installer...\"\nwget -nv https://github.com/conda-forge/miniforge/releases/latest/download/${installer^}-${platform}-${arch}.sh -O /tmp/installer.sh\nbash /tmp/installer.sh -b -p ${prefix}\nrm /tmp/installer.sh\n\n# Like \"conda init\", but for POSIX sh rather than bash\nln -s ${prefix}/etc/profile.d/conda.sh /etc/profile.d/conda.sh\n\nexport PATH=/opt/conda/bin:$PATH\n\n# Configure\nconda config --set show_channel_urls True\nconda config --set remote_connect_timeout_secs 12\n\n# Update and clean\nconda clean --all -y\n"
+    },
+    {
+      "path": "ci/scripts/install_spark.sh",
+      "sha": null,
+      "content_sha256": "8b2e5ff83dd636535f839faa9d4e32fa3d8b583fdee3a202f7ac306ca32878fe",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -ne 2 ]; then\n  echo \"Usage: $0 <spark version> <target directory>\"\n  exit 1\nfi\n\nspark=$1\ntarget=$2\n\ngit clone https://github.com/apache/spark \"${target}\"\ngit -C \"${target}\" checkout \"${spark}\"\n"
+    },
+    {
+      "path": "ci/scripts/install_emscripten.sh",
+      "sha": null,
+      "content_sha256": "03aa964c70b9231c2cf3bca7646de7461a58546e7bfb417fa90395624ff7b641",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\n# install emscripten sdk version to match pyodide in $2 to directory $1/emsdk\n\nset -e\n\ntarget_path=$1\npyodide_path=$2\n\nemscripten_version=$(${pyodide_path}/python -c \"import sys;print(*sys._emscripten_info.emscripten_version,sep='.')\")\n\ncd ${target_path}\nif [ ! -d emsdk ]; then\n  git clone https://github.com/emscripten-core/emsdk.git\nfi\ncd emsdk \n./emsdk install ${emscripten_version} \n./emsdk activate ${emscripten_version}\necho \"Installed emsdk to: ${target_path}\""
+    },
+    {
+      "path": "ci/scripts/install_cmake.sh",
+      "sha": null,
+      "content_sha256": "7bacb3d5a56a9db0f7f6bc9cef8978d79539bd45f94a0a9ceeceeaa6d0576b04",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\ndeclare -A archs\narchs=([amd64]=x86_64\n       [arch64]=aarch64\n       [arm64]=aarch64\n       [arm64v8]=aarch64\n       [x86_64]=x86_64)\n\ndeclare -A platforms\nplatforms=([linux]=linux\n           [macos]=macos\n           [windows]=windows)\n\nif [ \"$#\" -ne 4 ]; then\n  echo \"Usage: $0 <architecture> <platform> <version> <prefix>\"\n  exit 1\nfi\n\narch=${archs[$1]}\nplatform=${platforms[$2]}\nversion=$3\nprefix=$4\n\nmkdir -p ${prefix}\nurl=\"https://github.com/Kitware/CMake/releases/download/v${version}/cmake-${version}-${platform}-\"\ncase ${platform} in\n  macos)\n    url+=\"universal.tar.gz\"\n    curl -L ${url} | tar -xzf - --directory ${prefix} --strip-components=1\n    ln -s CMake.app/Contents/bin ${prefix}/bin\n    ;;\n  windows)\n    url+=\"${arch}.zip\"\n    archive_name=$(basename ${url})\n    curl -L -o ${archive_name} ${url}\n    unzip ${archive_name}\n    base_name=$(basename ${archive_name} .zip)\n    mv ${base_name}/* ${prefix}\n    rm -rf ${base_name} ${archive_name}\n    ;;\n  *)\n    url+=\"${arch}.tar.gz\"\n    curl -L ${url} | tar -xzf - --directory ${prefix} --strip-components=1\n    ;;\nesac\n"
+    },
+    {
+      "path": "ci/scripts/install_vcpkg.sh",
+      "sha": null,
+      "content_sha256": "58dc3bdeb6053073fab25a885773c87de90a472fdecfa3654771ae75b99b3ea2",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -lt 1 ]; then\n  echo \"Usage: $0 ``<target-directory> [<vcpkg-version> [<vcpkg-ports-patch>]]\"\n  exit 1\nfi\n\narrow_dir=$(cd -- \"$(dirname -- \"$0\")/../..\" && pwd -P)\ndefault_vcpkg_ports_patch=\"${arrow_dir}/ci/vcpkg/ports.patch\"\n\nvcpkg_destination=$1\nvcpkg_version=${2:-}\nvcpkg_ports_patch=${3:-$default_vcpkg_ports_patch}\n\nif [ -z \"${vcpkg_version}\" ]; then\n  vcpkg_version=$(source \"${arrow_dir}/.env\" && echo \"$VCPKG\")\nfi\n\n# reduce the fetched data using a shallow clone\ngit clone --shallow-since=2021-04-01 https://github.com/microsoft/vcpkg ${vcpkg_destination}\n\npushd ${vcpkg_destination}\n\ngit checkout \"${vcpkg_version}\"\n\nif [[ \"$OSTYPE\" == \"msys\" ]]; then\n  ./bootstrap-vcpkg.bat -disableMetrics\nelse\n  ./bootstrap-vcpkg.sh -disableMetrics\nfi\n\nif [ -f \"${vcpkg_ports_patch}\" ]; then\n  git apply --verbose --ignore-whitespace ${vcpkg_ports_patch}\n  echo \"Patch successfully applied to the VCPKG port files!\"\nfi\n\npopd\n"
+    },
+    {
+      "path": "ci/scripts/install_iwyu.sh",
+      "sha": null,
+      "content_sha256": "8e50fc273fddf51c227f38a1438806bfdc5971e534ea11120206fbf5f75c264d",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one or more\n# contributor license agreements.  See the NOTICE file distributed with\n# this work for additional information regarding copyright ownership.\n# The ASF licenses this file to You under the Apache License, Version 2.0\n# (the \"License\"); you may not use this file except in compliance with\n# the License.  You may obtain a copy of the License at\n#\n#    http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n#\n\nset -eu\n\nsource_dir=${1:-/tmp/iwyu}\ninstall_prefix=${2:-/usr/local}\nclang_tools_version=${3:-8}\n\niwyu_branch_name=\"clang_${clang_tools_version}\"\nif [ ${clang_tools_version} -lt 10 ]; then\n  iwyu_branch_name=\"${iwyu_branch_name}.0\"\nfi\n\ngit clone --single-branch --branch ${iwyu_branch_name} \\\n    https://github.com/include-what-you-use/include-what-you-use.git ${source_dir}\n\nmkdir -p ${source_dir}/build\npushd ${source_dir}/build\n\n# Build IWYU for current Clang\nexport CC=clang-${clang_tools_version}\nexport CXX=clang++-${clang_tools_version}\n\ncmake -DCMAKE_PREFIX_PATH=/usr/lib/llvm-${clang_tools_version} \\\n      -DCMAKE_INSTALL_PREFIX=${install_prefix} \\\n      ${source_dir}\nmake -j4\nmake install\n\npopd\n\nrm -rf ${source_dir}\n"
+    },
+    {
+      "path": "ci/scripts/install_numba.sh",
+      "sha": null,
+      "content_sha256": "3e93becacdf19119ce16e263e89b4e960cf1d19bd3d81237feb99801d335a66a",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -ne 1 ]; then\n  echo \"Usage: $0 <numba version>\"\n  exit 1\nfi\n\nnumba=$1\n\nif [ -n \"${ARROW_PYTHON_VENV:-}\" ]; then\n  . \"${ARROW_PYTHON_VENV}/bin/activate\"\nfi\n\nif [ \"${numba}\" = \"master\" ]; then\n  pip install https://github.com/numba/numba/archive/main.tar.gz#egg=numba\nelif [ \"${numba}\" = \"latest\" ]; then\n  pip install numba\nelse\n  pip install numba==${numba}\nfi\n"
+    },
+    {
+      "path": "ci/scripts/install_substrait_consumer.sh",
+      "sha": null,
+      "content_sha256": "cfae96bade382344784d1240c4d55cd2d53f1ecae81834d775457173e1f6c0b5",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\necho \"Install Substrait Consumer Test Suite\";\n\ngit clone https://github.com/substrait-io/consumer-testing.git\ncd consumer-testing\n# avoid installing pyarrow\ngrep -v 'pyarrow\\|arrow-nightlies' requirements.txt | while read line\ndo\n    pip install $line\ndone\n\npip install -r requirements-build.txt\n# setup substrait-java\ngit submodule init\ngit submodule update --init\n./build-and-copy-isthmus-shadow-jar.sh\n# install substrait_consumer library\npython setup.py install\n"
+    },
+    {
+      "path": "ci/scripts/install_pandas.sh",
+      "sha": null,
+      "content_sha256": "3ca83c9f420ccc5106ee53bae786af02ecc3ac74d7d8ce29b13b09c45c4da1d9",
+      "score": 185,
+      "content": "#!/usr/bin/env bash\n#\n# Licensed to the Apache Software Foundation (ASF) under one\n# or more contributor license agreements.  See the NOTICE file\n# distributed with this work for additional information\n# regarding copyright ownership.  The ASF licenses this file\n# to you under the Apache License, Version 2.0 (the\n# \"License\"); you may not use this file except in compliance\n# with the License.  You may obtain a copy of the License at\n#\n#   http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing,\n# software distributed under the License is distributed on an\n# \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n# KIND, either express or implied.  See the License for the\n# specific language governing permissions and limitations\n# under the License.\n\nset -e\n\nif [ \"$#\" -lt 1 ]; then\n  echo \"Usage: $0 <pandas version> <optional numpy version = latest>\"\n  exit 1\nfi\n\npandas=$1\nnumpy=${2:-\"latest\"}\n\nif [ \"${numpy}\" = \"nightly\" ]; then\n  pip install --extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple --pre numpy\nelif [ \"${numpy}\" = \"latest\" ]; then\n  pip install numpy\nelse\n  pip install numpy==${numpy}\nfi\n\nif [ \"${pandas}\" = \"upstream_devel\" ]; then\n  pip install git+https://github.com/pandas-dev/pandas.git\nelif [ \"${pandas}\" = \"nightly\" ]; then\n  pip install --extra-index-url https://pypi.anaconda.org/scientific-python-nightly-wheels/simple --pre pandas\nelif [ \"${pandas}\" = \"latest\" ]; then\n  pip install pandas\nelse\n  pip install pandas==${pandas}\nfi\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 4,
+  "sensitive_files_skipped": [
+    {
+      "path": ".env",
+      "sha": "21f904c3208f6a3492b75b971e3b084404b7f8a5",
+      "size": 3299,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "java/flight/flight-sql-jdbc-core/src/test/resources/keys/keyStore.jks",
+      "sha": "32a9bedea500a03beaea22af78c5a484f52e504c",
+      "size": 1537,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "java/flight/flight-sql-jdbc-core/src/test/resources/keys/noCertificate.jks",
+      "sha": "071a1ebf97b3e637be5e53a1b3a70ce1b0df04b8",
+      "size": 2545,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "js/.npmrc",
+      "sha": "e55040abad7b9fd5a9573aec8db400199cd1a7cb",
+      "size": 130,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:42:55.297239+00:00"
+}

@@ -1,0 +1,821 @@
+{
+  "canonical_source": "github:opensearch-project/OpenSearch",
+  "repo": "opensearch-project/OpenSearch",
+  "revision_sha": "8e310b012709ead1f0c6b67a1cde0f95689397a3",
+  "default_branch": "main",
+  "pushed_at": "2026-10-20T22:16:40Z",
+  "repo_updated_at": "2026-10-20T21:58:18Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "analytics",
+    "apache2",
+    "foss",
+    "java",
+    "search",
+    "search-engine"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/RetryableActionTests.java",
+      "sha": null,
+      "content_sha256": "0b8e6000feb214bec35adef1fc8bad9c8a50b2d00c5ee7b3af2b507fb6ba982e",
+      "score": 354,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *     http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.OpenSearchException;\nimport org.opensearch.cluster.coordination.DeterministicTaskQueue;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.common.unit.TimeValue;\nimport org.opensearch.core.action.ActionListener;\nimport org.opensearch.core.concurrency.OpenSearchRejectedExecutionException;\nimport org.opensearch.test.OpenSearchTestCase;\nimport org.junit.Before;\n\nimport java.util.concurrent.atomic.AtomicInteger;\n\nimport static org.opensearch.node.Node.NODE_NAME_SETTING;\nimport static org.hamcrest.Matchers.lessThanOrEqualTo;\n\npublic class RetryableActionTests extends OpenSearchTestCase {\n\n    private DeterministicTaskQueue taskQueue;\n\n    @Before\n    public void setUp() throws Exception {\n        super.setUp();\n        Settings settings = Settings.builder().put(NODE_NAME_SETTING.getKey(), \"node\").build();\n        taskQueue = new DeterministicTaskQueue(settings, random());\n    }\n\n    public void testRetryableActionNoRetries() {\n        final AtomicInteger executedCount = new AtomicInteger();\n        final PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();\n        final RetryableAction<Boolean> retryableAction = new RetryableAction<Boolean>(\n            logger,\n            taskQueue.getThreadPool(),\n            TimeValue.timeValueMillis(10),\n            TimeValue.timeValueSeconds(30),\n            future\n        ) {\n\n            @Override\n            public void tryAction(ActionListener<Boolean> listener) {\n                executedCount.getAndIncrement();\n                listener.onResponse(true);\n            }\n\n            @Override\n            public boolean shouldRetry(Exception e) {\n                return true;\n            }\n        };\n        retryableAction.run();\n        taskQueue.runAllRunnableTasks();\n\n        assertEquals(1, executedCount.get());\n        assertTrue(future.actionGet());\n    }\n\n    public void testRetryableActionWillRetry() {\n        int expectedRetryCount = randomIntBetween(1, 8);\n        final AtomicInteger remainingFailedCount = new AtomicInteger(expectedRetryCount);\n        final AtomicInteger retryCount = new AtomicInteger();\n        final PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();\n        final RetryableAction<Boolean> retryableAction = new RetryableAction<Boolean>(\n            logger,\n            taskQueue.getThreadPool(),\n            TimeValue.timeValueMillis(10),\n            TimeValue.timeValueSeconds(30),\n            future\n        ) {\n\n            @Override\n            public void tryAction(ActionListener<Boolean> listener) {\n                if (remainingFailedCount.getAndDecrement() == 0) {\n                    listener.onResponse(true);\n                } else {\n                    if (randomBoolean()) {\n                        listener.onFailure(new OpenSearchRejectedExecutionException());\n                    } else {\n                        throw new OpenSearchRejectedExecutionException();\n                    }\n                }\n            }\n\n            @Override\n            public boolean shouldRetry(Exception e) {\n                retryCount.getAndIncrement();\n                return e instanceof OpenSearchRejectedExecutionException;\n            }\n        };\n        retryableAction.run();\n        taskQueue.runAllRunnableTasks();\n        long previousDeferredTime = 0;\n        for (int i = 0; i < expectedRetryCount; ++i) {\n            assertTrue(taskQueue.hasDeferredTasks());\n            final long deferredExecutionTime = taskQueue.getLatestDeferredExecutionTime();\n            final long millisBound = 10 << i;\n            assertThat(deferredExecutionTime, lessThanOrEqualTo(millisBound + previousDeferredTime));\n            previousDeferredTime = deferredExecutionTime;\n            taskQueue.advanceTime();\n            taskQueue.runAllRunnableTasks();\n        }\n\n        assertEquals(expectedRetryCount, retryCount.get());\n        assertTrue(future.actionGet());\n    }\n\n    public void testRetryableActionTimeout() {\n        final AtomicInteger retryCount = new AtomicInteger();\n        final PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();\n        final RetryableAction<Boolean> retryableAction = new RetryableAction<Boolean>(\n            logger,\n            taskQueue.getThreadPool(),\n            TimeValue.timeValueMillis(10),\n            TimeValue.timeValueSeconds(1),\n            future\n        ) {\n\n            @Override\n            public void tryAction(ActionListener<Boolean> listener) {\n                if (randomBoolean()) {\n                    listener.onFailure(new OpenSearchRejectedExecutionException());\n                } else {\n                    throw new OpenSearchRejectedExecutionException();\n                }\n            }\n\n            @Override\n            public boolean shouldRetry(Exception e) {\n                retryCount.getAndIncrement();\n                return e instanceof OpenSearchRejectedExecutionException;\n            }\n        };\n        retryableAction.run();\n        taskQueue.runAllRunnableTasks();\n        long previousDeferredTime = 0;\n        while (previousDeferredTime < 1000) {\n            assertTrue(taskQueue.hasDeferredTasks());\n            previousDeferredTime = taskQueue.getLatestDeferredExecutionTime();\n            taskQueue.advanceTime();\n            taskQueue.runAllRunnableTasks();\n        }\n\n        assertFalse(taskQueue.hasDeferredTasks());\n        assertFalse(taskQueue.hasRunnableTasks());\n\n        expectThrows(OpenSearchRejectedExecutionException.class, future::actionGet);\n    }\n\n    public void testTimeoutOfZeroMeansNoRetry() {\n        final AtomicInteger executedCount = new AtomicInteger();\n        final PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();\n        final RetryableAction<Boolean> retryableAction = new RetryableAction<Boolean>(\n            logger,\n            taskQueue.getThreadPool(),\n            TimeValue.timeValueMillis(10),\n            TimeValue.timeValueSeconds(0),\n            future\n        ) {\n\n            @Override\n            public void tryAction(ActionListener<Boolean> listener) {\n                executedCount.getAndIncrement();\n                throw new OpenSearchRejectedExecutionException();\n            }\n\n            @Override\n            public boolean shouldRetry(Exception e) {\n                return e instanceof OpenSearchRejectedExecutionException;\n            }\n        };\n        retryableAction.run();\n        taskQueue.runAllRunnableTasks();\n\n        assertEquals(1, executedCount.get());\n        expectThrows(OpenSearchRejectedExecutionException.class, future::actionGet);\n    }\n\n    public void testFailedBecauseNotRetryable() {\n        final AtomicInteger executedCount = new AtomicInteger();\n        final PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();\n        final RetryableAction<Boolean> retryableAction = new RetryableAction<Boolean>(\n            logger,\n            taskQueue.getThreadPool(),\n            TimeValue.timeValueMillis(10),\n            TimeValue.timeValueSeconds(30),\n            future\n        ) {\n\n            @Override\n            public void tryAction(ActionListener<Boolean> listener) {\n                executedCount.getAndIncrement();\n                throw new IllegalStateException();\n            }\n\n            @Override\n            public boolean shouldRetry(Exception e) {\n                return e instanceof OpenSearchRejectedExecutionException;\n            }\n        };\n        retryableAction.run();\n        taskQueue.runAllRunnableTasks();\n\n        assertEquals(1, executedCount.get());\n        expectThrows(IllegalStateException.class, future::actionGet);\n    }\n\n    public void testRetryableActionCancelled() {\n        final AtomicInteger executedCount = new AtomicInteger();\n        final PlainActionFuture<Boolean> future = PlainActionFuture.newFuture();\n        final RetryableAction<Boolean> retryableAction = new RetryableAction<Boolean>(\n            logger,\n            taskQueue.getThreadPool(),\n            TimeValue.timeValueMillis(10),\n            TimeValue.timeValueSeconds(30),\n            future\n        ) {\n\n            @Override\n            public void tryAction(ActionListener<Boolean> listener) {\n                if (executedCount.incrementAndGet() == 1) {\n                    throw new OpenSearchRejectedExecutionException();\n                } else {\n                    listener.onResponse(true);\n                }\n            }\n\n            @Override\n            public boolean shouldRetry(Exception e) {\n                return e instanceof OpenSearchRejectedExecutionException;\n            }\n        };\n        retryableAction.run();\n        taskQueue.runAllRunnableTasks();\n        assertTrue(taskQueue.hasDeferredTasks());\n        taskQueue.advanceTime();\n\n        retryableAction.cancel(new OpenSearchException(\"Cancelled\"));\n        taskQueue.runAllRunnableTasks();\n\n        // A second run will not occur because it is cancelled\n        assertEquals(1, executedCount.get());\n        expectThrows(OpenSearchException.class, future::actionGet);\n    }\n}\n"
+    },
+    {
+      "path": "server/src/internalClusterTest/java/org/opensearch/action/support/replication/TransportReplicationActionRetryOnClosedNodeIT.java",
+      "sha": null,
+      "content_sha256": "4741420a6aabacc65ec7649e977331202378751bb5ffd20c5bdaab14e84da508",
+      "score": 352,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support.replication;\n\nimport org.opensearch.action.ActionRequest;\nimport org.opensearch.action.ActionType;\nimport org.opensearch.action.support.ActionFilters;\nimport org.opensearch.cluster.action.shard.ShardStateAction;\nimport org.opensearch.cluster.metadata.IndexMetadata;\nimport org.opensearch.cluster.service.ClusterService;\nimport org.opensearch.common.inject.Inject;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.common.util.concurrent.ThreadContext;\nimport org.opensearch.core.action.ActionListener;\nimport org.opensearch.core.action.ActionResponse;\nimport org.opensearch.core.common.io.stream.NamedWriteableRegistry;\nimport org.opensearch.core.common.io.stream.StreamInput;\nimport org.opensearch.core.index.shard.ShardId;\nimport org.opensearch.core.transport.TransportResponse;\nimport org.opensearch.index.shard.IndexShard;\nimport org.opensearch.indices.IndicesService;\nimport org.opensearch.plugins.ActionPlugin;\nimport org.opensearch.plugins.NetworkPlugin;\nimport org.opensearch.plugins.Plugin;\nimport org.opensearch.plugins.PluginsService;\nimport org.opensearch.test.InternalTestCluster;\nimport org.opensearch.test.OpenSearchIntegTestCase;\nimport org.opensearch.test.transport.MockTransportService;\nimport org.opensearch.threadpool.ThreadPool;\nimport org.opensearch.transport.Transport;\nimport org.opensearch.transport.TransportInterceptor;\nimport org.opensearch.transport.TransportRequest;\nimport org.opensearch.transport.TransportRequestOptions;\nimport org.opensearch.transport.TransportResponseHandler;\nimport org.opensearch.transport.TransportService;\nimport org.hamcrest.Matchers;\n\nimport java.io.IOException;\nimport java.util.Arrays;\nimport java.util.Collection;\nimport java.util.List;\nimport java.util.concurrent.CountDownLatch;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.atomic.AtomicReference;\n\nimport static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;\n\n@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST, numDataNodes = 0)\npublic class TransportReplicationActionRetryOnClosedNodeIT extends OpenSearchIntegTestCase {\n\n    @Override\n    protected Collection<Class<? extends Plugin>> nodePlugins() {\n        return Arrays.asList(TestPlugin.class, MockTransportService.TestPlugin.class);\n    }\n\n    public static class Request extends ReplicationRequest<Request> {\n        public Request(ShardId shardId) {\n            super(shardId);\n        }\n\n        public Request(StreamInput in) throws IOException {\n            super(in);\n        }\n\n        @Override\n        public String toString() {\n            return \"test-request\";\n        }\n    }\n\n    public static class Response extends ReplicationResponse {\n        public Response() {}\n\n        public Response(StreamInput in) throws IOException {\n            super(in);\n        }\n    }\n\n    public static class TestAction extends TransportReplicationAction<Request, Request, Response> {\n        private static final String ACTION_NAME = \"internal:test-replication-action\";\n        private static final ActionType<Response> TYPE = new ActionType<>(ACTION_NAME, Response::new);\n\n        @Inject\n        public TestAction(\n            Settings settings,\n            TransportService transportService,\n            ClusterService clusterService,\n            IndicesService indicesService,\n            ThreadPool threadPool,\n            ShardStateAction shardStateAction,\n            ActionFilters actionFilters\n        ) {\n            super(\n                settings,\n                ACTION_NAME,\n                transportService,\n                clusterService,\n                indicesService,\n                threadPool,\n                shardStateAction,\n                actionFilters,\n                Request::new,\n                Request::new,\n                ThreadPool.Names.GENERIC\n            );\n        }\n\n        @Override\n        protected Response newResponseInstance(StreamInput in) throws IOException {\n            return new Response(in);\n        }\n\n        @Override\n        protected void shardOperationOnPrimary(\n            Request shardRequest,\n            IndexShard primary,\n            ActionListener<PrimaryResult<Request, Response>> listener\n        ) {\n            listener.onResponse(new PrimaryResult<>(shardRequest, new Response()));\n        }\n\n        @Override\n        protected void shardOperationOnReplica(Request shardRequest, IndexShard replica, ActionListener<ReplicaResult> listener) {\n            listener.onResponse(new ReplicaResult());\n        }\n    }\n\n    public static class TestPlugin extends Plugin implements ActionPlugin, NetworkPlugin {\n        private CountDownLatch actionRunningLatch = new CountDownLatch(1);\n        private CountDownLatch actionWaitLatch = new CountDownLatch(1);\n        private volatile String testActionName;\n\n        public TestPlugin() {}\n\n        @Override\n        public List<ActionHandler<? extends ActionRequest, ? extends ActionResponse>> getActions() {\n            return Arrays.asList(new ActionHandler<>(TestAction.TYPE, TestAction.class));\n        }\n\n        @Override\n        public List<TransportInterceptor> getTransportInterceptors(\n            NamedWriteableRegistry namedWriteableRegistry,\n            ThreadContext threadContext\n        ) {\n            return Arrays.asList(new TransportInterceptor() {\n                @Override\n                public AsyncSender interceptSender(AsyncSender sender) {\n                    return new AsyncSender() {\n                        @Override\n                        public <T extends TransportResponse> void sendRequest(\n                            Transport.Connection connection,\n                            String action,\n                            TransportRequest request,\n                            TransportRequestOptions options,\n                            TransportResponseHandler<T> handler\n                        ) {\n                            // only activated on primary\n                            if (action.equals(testActionName)) {\n                                actionRunningLatch.countDown();\n                                try {\n                                    actionWaitLatch.await(10, TimeUnit.SECONDS);\n                                } catch (InterruptedException e) {\n                                    throw new AssertionError(e);\n                                }\n                            }\n                            sender.sendRequest(connection, action, request, options, handler);\n                        }\n                    };\n                }\n            });\n        }\n    }\n\n    public void testRetryOnStoppedTransportService() throws Exception {\n        internalCluster().startClusterManagerOnlyNodes(2);\n        String primary = internalCluster().startDataOnlyNode();\n        assertAcked(\n            prepareCreate(\"test\").setSettings(\n                Settings.builder()\n                    .put(indexSettings())\n                    .put(IndexMetadata.SETTING_NUMBER_OF_SHARDS, 1)\n                    .put(IndexMetadata.SETTING_NUMBER_OF_REPLICAS, 1)\n            )\n        );\n\n        String replica = internalCluster().startDataOnlyNode();\n        String coordinator = internalCluster().startCoordinatingOnlyNode(Settings.EMPTY);\n        ensureGreen(\"test\");\n\n        TestPlugin primaryTestPlugin = getTestPlugin(primary);\n        // this test only provoked an issue for the primary action, but for completeness, we pick the action randomly\n        primaryTestPlugin.testActionName = TestAction.ACTION_NAME + (randomBoolean() ? \"[p]\" : \"[r]\");\n        logger.info(\"--> Test action {}, primary {}, replica {}\", primaryTestPlugin.testActionName, primary, replica);\n\n        AtomicReference<Object> response = new AtomicReference<>();\n        CountDownLatch doneLatch = new CountDownLatch(1);\n        client(coordinator).execute(\n            TestAction.TYPE,\n            new Request(new ShardId(resolveIndex(\"test\"), 0)),\n            ActionListener.runAfter(\n                ActionListener.wrap(r -> assertTrue(response.compareAndSet(null, r)), e -> assertTrue(response.compareAndSet(null, e))),\n                doneLatch::countDown\n            )\n        );\n\n        assertTrue(primaryTestPlugin.actionRunningLatch.await(10, TimeUnit.SECONDS));\n\n        MockTransportService primaryTransportService = (MockTransportService) internalCluster().getInstance(\n            TransportService.class,\n            primary\n        );\n        // we pause node after TransportService has moved to stopped, but before closing connections, since if connections are closed\n        // we would not hit the transport service closed case.\n        primaryTransportService.addOnStopListener(() -> {\n            primaryTestPlugin.actionWaitLatch.countDown();\n            try {\n                assertTrue(doneLatch.await(10, TimeUnit.SECONDS));\n            } catch (InterruptedException e) {\n                throw new AssertionError(e);\n            }\n        });\n        internalCluster().stopRandomNode(InternalTestCluster.nameFilter(primary));\n\n        assertTrue(doneLatch.await(10, TimeUnit.SECONDS));\n        if (response.get() instanceof Exception) {\n            throw new AssertionError(response.get());\n        }\n    }\n\n    private TestPlugin getTestPlugin(String node) {\n        PluginsService pluginsService = internalCluster().getInstance(PluginsService.class, node);\n        List<TestPlugin> testPlugins = pluginsService.filterPlugins(TestPlugin.class);\n        assertThat(testPlugins, Matchers.hasSize(1));\n        return testPlugins.get(0);\n    }\n}\n"
+    },
+    {
+      "path": "server/src/internalClusterTest/java/org/opensearch/action/admin/cluster/node/tasks/TaskStorageRetryIT.java",
+      "sha": null,
+      "content_sha256": "b11268cd4c0b4c7fb3105399096ace35d9687c953e7079287a914d3a059acf2a",
+      "score": 348,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.admin.cluster.node.tasks;\n\nimport org.opensearch.action.admin.cluster.node.tasks.get.GetTaskResponse;\nimport org.opensearch.action.support.PlainListenableActionFuture;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.core.tasks.TaskId;\nimport org.opensearch.plugins.Plugin;\nimport org.opensearch.tasks.Task;\nimport org.opensearch.test.OpenSearchSingleNodeTestCase;\nimport org.opensearch.threadpool.ThreadPool;\nimport org.opensearch.transport.client.node.NodeClient;\n\nimport java.util.Arrays;\nimport java.util.Collection;\nimport java.util.concurrent.CyclicBarrier;\nimport java.util.concurrent.TimeUnit;\n\nimport static java.util.Collections.emptyMap;\nimport static java.util.Collections.singletonMap;\n\n/**\n * Makes sure that tasks that attempt to store themselves on completion retry if\n * they don't succeed at first.\n */\npublic class TaskStorageRetryIT extends OpenSearchSingleNodeTestCase {\n    @Override\n    protected Collection<Class<? extends Plugin>> getPlugins() {\n        return Arrays.asList(TestTaskPlugin.class);\n    }\n\n    /**\n     * Lower the queue sizes to be small enough that both bulk and searches will time out and have to be retried.\n     */\n    @Override\n    protected Settings nodeSettings() {\n        return Settings.builder().put(super.nodeSettings()).put(\"thread_pool.write.size\", 2).put(\"thread_pool.write.queue_size\", 0).build();\n    }\n\n    public void testRetry() throws Exception {\n        logger.info(\"block the write executor\");\n        CyclicBarrier barrier = new CyclicBarrier(2);\n        getInstanceFromNode(ThreadPool.class).executor(ThreadPool.Names.WRITE).execute(() -> {\n            try {\n                barrier.await();\n                logger.info(\"blocking the write executor\");\n                barrier.await();\n                logger.info(\"unblocked the write executor\");\n            } catch (Exception e) {\n                throw new RuntimeException(e);\n            }\n        });\n        barrier.await();\n        Task task;\n        PlainListenableActionFuture<TestTaskPlugin.NodesResponse> future = PlainListenableActionFuture.newListenableFuture();\n        try {\n            logger.info(\"start a task that will store its results\");\n            TestTaskPlugin.NodesRequest req = new TestTaskPlugin.NodesRequest(\"foo\");\n            req.setShouldStoreResult(true);\n            req.setShouldBlock(false);\n            task = nodeClient().executeLocally(TestTaskPlugin.TestTaskAction.INSTANCE, req, future);\n\n            logger.info(\"verify that the task has started and is still running\");\n            assertBusy(() -> {\n                GetTaskResponse runningTask = client().admin()\n                    .cluster()\n                    .prepareGetTask(new TaskId(nodeClient().getLocalNodeId(), task.getId()))\n                    .get();\n                assertNotNull(runningTask.getTask());\n                assertFalse(runningTask.getTask().isCompleted());\n                assertEquals(emptyMap(), runningTask.getTask().getErrorAsMap());\n                assertEquals(emptyMap(), runningTask.getTask().getResponseAsMap());\n                assertFalse(future.isDone());\n            });\n        } finally {\n            logger.info(\"unblock the write executor\");\n            barrier.await();\n        }\n\n        logger.info(\"wait for the task to finish\");\n        future.get(10, TimeUnit.SECONDS);\n\n        logger.info(\"check that it was written successfully\");\n        GetTaskResponse finishedTask = client().admin()\n            .cluster()\n            .prepareGetTask(new TaskId(nodeClient().getLocalNodeId(), task.getId()))\n            .get();\n        assertTrue(finishedTask.getTask().isCompleted());\n        assertEquals(emptyMap(), finishedTask.getTask().getErrorAsMap());\n        assertEquals(singletonMap(\"failure_count\", 0), finishedTask.getTask().getResponseAsMap());\n    }\n\n    /**\n     * Get the {@linkplain NodeClient} local to the node being tested.\n     */\n    private NodeClient nodeClient() {\n        /*\n         * Luckilly our test infrastructure already returns it, but we can't\n         * change the return type in the superclass because it is wrapped other\n         * places.\n         */\n        return (NodeClient) client();\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/bootstrap/SecurityTests.java",
+      "sha": null,
+      "content_sha256": "9ce2d226a09756850f7cb4d0c03fca754074497664672b045bbb20332dde0016",
+      "score": 318,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.bootstrap;\n\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.IOException;\nimport java.net.URI;\nimport java.net.URL;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.util.Map;\n\npublic class SecurityTests extends OpenSearchTestCase {\n\n    public void testEnsureExists() throws IOException {\n        Path p = createTempDir();\n\n        // directory exists\n        Path exists = p.resolve(\"exists\");\n        Files.createDirectory(exists);\n        Security.ensureDirectoryExists(exists);\n        Files.createTempFile(exists, null, null);\n    }\n\n    public void testEnsureNotExists() throws IOException {\n        Path p = createTempDir();\n\n        // directory does not exist: create it\n        Path notExists = p.resolve(\"notexists\");\n        Security.ensureDirectoryExists(notExists);\n        Files.createTempFile(notExists, null, null);\n    }\n\n    public void testEnsureRegularFile() throws IOException {\n        Path p = createTempDir();\n\n        // regular file\n        Path regularFile = p.resolve(\"regular\");\n        Files.createFile(regularFile);\n        try {\n            Security.ensureDirectoryExists(regularFile);\n            fail(\"didn't get expected exception\");\n        } catch (IOException expected) {}\n    }\n\n    public void testReadPolicyWithCodebases() throws IOException {\n        final Map<String, URL> codebases = Map.of(\n            \"test-netty-tcnative-boringssl-static-2.0.61.Final-linux-x86_64.jar\",\n            URI.create(\"file://test-netty-tcnative-boringssl-static-2.0.61.Final-linux-x86_64.jar\").toURL(),\n            \"test-kafka-server-common-3.6.1.jar\",\n            URI.create(\"file://test-kafka-server-common-3.6.1.jar\").toURL(),\n            \"test-kafka-server-common-3.6.1-test.jar\",\n            URI.create(\"file://test-kafka-server-common-3.6.1-test.jar\").toURL(),\n            \"test-lucene-core-9.11.0-snapshot-8a555eb.jar\",\n            URI.create(\"file://test-lucene-core-9.11.0-snapshot-8a555eb.jar\").toURL(),\n            \"test-zstd-jni-1.5.6-1.jar\",\n            URI.create(\"file://test-zstd-jni-1.5.6-1.jar\").toURL()\n        );\n\n        Security.readPolicy(SecurityTests.class.getResource(\"test-codebases.policy\"), codebases);\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/bootstrap/SecurityProviderManagerFipsTests.java",
+      "sha": null,
+      "content_sha256": "d97cefe3c9194772e65b52a1d4dd31d745a1e17c1ae7724780db084d351ff8f0",
+      "score": 318,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.bootstrap;\n\nimport org.junit.After;\nimport org.junit.AfterClass;\n\nimport javax.crypto.Cipher;\n\nimport java.security.Provider;\nimport java.security.Security;\nimport java.util.Arrays;\n\npublic class SecurityProviderManagerFipsTests extends SecurityProviderManagerTests {\n\n    @After\n    @Override\n    public void tearDown() throws Exception {\n        addSunJceProvider();\n        super.tearDown();\n    }\n\n    @AfterClass\n    // restore the same state as before running the tests.\n    public static void afterClass() throws Exception {\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n    }\n\n    public void testCipherAES() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(AES);\n        assertEquals(AES, cipher.getAlgorithm());\n        assertEquals(BC_FIPS, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        cipher = Cipher.getInstance(AES);\n        assertEquals(AES, cipher.getAlgorithm());\n        assertEquals(BC_FIPS, cipher.getProvider().getName());\n    }\n\n    public void testCipher3Des() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(TRIPLE_DES);\n        assertEquals(TRIPLE_DES, cipher.getAlgorithm());\n        assertEquals(BC_FIPS, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        cipher = Cipher.getInstance(TRIPLE_DES);\n        assertEquals(TRIPLE_DES, cipher.getAlgorithm());\n        assertEquals(BC_FIPS, cipher.getProvider().getName());\n    }\n\n    protected static void addSunJceProvider() throws Exception {\n        if (Arrays.stream(java.security.Security.getProviders()).noneMatch(provider -> SUN_JCE.equals(provider.getName()))) {\n            var sunJceClass = Class.forName(\"com.sun.crypto.provider.SunJCE\");\n            var originalSunProvider = (Provider) sunJceClass.getConstructor().newInstance();\n            Security.addProvider(originalSunProvider);\n        }\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/bootstrap/SecurityDataFusionSpillDirSubstitutionTests.java",
+      "sha": null,
+      "content_sha256": "e7a2ecdb338b225ff1770db470428e37103ca1a65ba133a47e050a30527b15cf",
+      "score": 318,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.bootstrap;\n\nimport org.opensearch.common.SuppressForbidden;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.FilePermission;\nimport java.nio.charset.StandardCharsets;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.security.CodeSource;\nimport java.security.Permission;\nimport java.security.Policy;\nimport java.security.cert.Certificate;\nimport java.util.Collections;\nimport java.util.Enumeration;\n\n/**\n * End-to-end test for the policy substitution mechanism that backs the DataFusion plugin's\n * narrowed FilePermission grant. Verifies that:\n *  - When opensearch.datafusion.spill_directory is set, PolicyFile resolves\n *    {@code ${{opensearch.datafusion.spill_directory}}/-} to the configured path + \"/-\".\n *  - When the property is unset, the resolver leaves the literal {@code ${{...}}/-} in place,\n *    granting no real filesystem path.\n *\n * This is the test that would catch a regression where the plugin policy is written with\n * single-brace ${...} instead of double-brace ${{...}} (which is hardcoded to a small allowlist\n * in PolicyFile and would silently produce a useless permission).\n */\n@SuppressWarnings(\"removal\")\n@SuppressForbidden(reason = \"https://github.com/opensearch-project/OpenSearch/issues/19640\")\npublic class SecurityDataFusionSpillDirSubstitutionTests extends OpenSearchTestCase {\n\n    private static final String PROPERTY = \"opensearch.datafusion.spill_directory\";\n\n    public void testFilePermissionResolvesWhenSpillDirectoryConfigured() throws Exception {\n        Path policy = writePluginStylePolicy();\n        Settings settings = Settings.builder().put(\"datafusion.spill_directory\", \"/tmp/test-spill\").build();\n        Policy parsed = Security.readPolicy(policy.toUri().toURL(), Collections.emptyMap(), settings);\n        FilePermission resolved = firstFilePermission(parsed);\n        assertEquals(\"/tmp/test-spill/-\", resolved.getName());\n        // The property must not leak past readPolicy.\n        assertNull(System.getProperty(PROPERTY));\n    }\n\n    public void testFilePermissionLeavesLiteralWhenSpillDirectoryEmpty() throws Exception {\n        Path policy = writePluginStylePolicy();\n        Policy parsed = Security.readPolicy(policy.toUri().toURL(), Collections.emptyMap(), Settings.EMPTY);\n        FilePermission resolved = firstFilePermission(parsed);\n        assertEquals(\"${{\" + PROPERTY + \"}}/-\", resolved.getName());\n        assertNull(System.getProperty(PROPERTY));\n    }\n\n    private Path writePluginStylePolicy() throws Exception {\n        Path policy = createTempDir().resolve(\"plugin.policy\");\n        Files.writeString(\n            policy,\n            \"grant {\\n\" + \"  permission java.io.FilePermission \\\"${{\" + PROPERTY + \"}}/-\\\", \\\"read,write,delete\\\";\\n\" + \"};\\n\",\n            StandardCharsets.UTF_8\n        );\n        return policy;\n    }\n\n    private static FilePermission firstFilePermission(Policy policy) {\n        CodeSource cs = new CodeSource(null, (Certificate[]) null);\n        Enumeration<Permission> permissions = policy.getPermissions(cs).elements();\n        while (permissions.hasMoreElements()) {\n            Permission p = permissions.nextElement();\n            if (p instanceof FilePermission) {\n                return (FilePermission) p;\n            }\n        }\n        throw new AssertionError(\"No FilePermission found in parsed policy\");\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/bootstrap/SecuritySpillDirectoryGrantTests.java",
+      "sha": null,
+      "content_sha256": "dd0cfbb8b654712ba355f75570f302fa151aeb2eda6cfaa198e9da704ddae32b",
+      "score": 318,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.bootstrap;\n\nimport org.opensearch.common.SuppressForbidden;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.env.Environment;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.FilePermission;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.security.Permission;\nimport java.security.Permissions;\nimport java.util.Enumeration;\n\n/**\n * Verifies the core-side FilePermission ledger entry for the operator-configured\n * {@code datafusion.spill_directory} setting. This grant is required because\n * {@link org.opensearch.node.Node#assertCanWritePluginHealthPaths} and\n * {@link org.opensearch.monitor.fs.FsHealthService} probe the spill directory from\n * core code (not plugin code), so the plugin policy alone is insufficient.\n *\n * <p>The behavior under test:\n * <ul>\n *   <li>Setting unset/empty: no grant added; no exception.</li>\n *   <li>Setting points at an existing directory: grant added covering both the\n *       directory itself and its recursive contents.</li>\n *   <li>Setting points at a nonexistent path: boot fails loudly with a clear message\n *       (no auto-create — the spill directory must be on a pre-mounted volume).</li>\n *   <li>Setting points at a regular file: same boot-failure behavior.</li>\n * </ul>\n */\n@SuppressWarnings(\"removal\")\n@SuppressForbidden(reason = \"https://github.com/opensearch-project/OpenSearch/issues/19640\")\npublic class SecuritySpillDirectoryGrantTests extends OpenSearchTestCase {\n\n    public void testSpillSettingUnsetAddsNoGrant() throws Exception {\n        Permissions policy = runAddFilePermissions(Settings.EMPTY);\n        assertFalse(\n            \"no spill-directory FilePermission should be granted when the setting is unset\",\n            hasFilePermissionMatching(policy, \"datafusion-spill-marker-not-present\")\n        );\n    }\n\n    public void testSpillSettingEmptyStringAddsNoGrant() throws Exception {\n        Settings settings = Settings.builder().put(\"datafusion.spill_directory\", \"\").build();\n        Permissions policy = runAddFilePermissions(settings);\n        assertFalse(\n            \"no spill-directory FilePermission should be granted when the setting is empty\",\n            hasFilePermissionMatching(policy, \"datafusion-spill-marker-not-present\")\n        );\n    }\n\n    public void testSpillSettingPointsToExistingDirectoryAddsBothGrants() throws Exception {\n        Path spillDir = createTempDir();\n        Settings settings = Settings.builder().put(\"datafusion.spill_directory\", spillDir.toString()).build();\n        Permissions policy = runAddFilePermissions(settings);\n        assertTrue(\n            \"expected FilePermission on the directory itself (\" + spillDir + \")\",\n            hasFilePermissionExact(policy, spillDir.toString())\n        );\n        assertTrue(\n            \"expected recursive FilePermission on files under the directory (\" + spillDir + \"/-)\",\n            hasFilePermissionExact(policy, spillDir.toString() + spillDir.getFileSystem().getSeparator() + \"-\")\n        );\n    }\n\n    public void testSpillSettingMissingDirectoryFailsBoot() {\n        Path missing = createTempDir().resolve(\"does_not_exist_subdir\");\n        Settings settings = Settings.builder().put(\"datafusion.spill_directory\", missing.toString()).build();\n        IllegalStateException ex = expectThrows(IllegalStateException.class, () -> runAddFilePermissions(settings));\n        assertTrue(\n            \"expected error message to reference the missing path; got: \" + ex.getMessage(),\n            ex.getMessage().contains(missing.toString())\n        );\n        assertTrue(\n            \"expected error message to mention mounting the spill volume; got: \" + ex.getMessage(),\n            ex.getMessage().contains(\"spill volume\")\n        );\n        // Confirm no auto-create happened on the wrong filesystem.\n        assertFalse(\"Security.addFilePermissions must NOT auto-create the spill directory\", Files.exists(missing));\n    }\n\n    public void testSpillSettingPointsToRegularFileFailsBoot() throws Exception {\n        Path file = createTempDir().resolve(\"regular_file\");\n        Files.write(file, new byte[] { 0x00 });\n        Settings settings = Settings.builder().put(\"datafusion.spill_directory\", file.toString()).build();\n        IllegalStateException ex = expectThrows(IllegalStateException.class, () -> runAddFilePermissions(settings));\n        assertTrue(\"expected error message to reference the bad path; got: \" + ex.getMessage(), ex.getMessage().contains(file.toString()));\n    }\n\n    /**\n     * Build a minimal {@link Environment} from a {@link Settings} object and run\n     * {@link Security#addFilePermissions} into a fresh {@link Permissions}.\n     */\n    private Permissions runAddFilePermissions(Settings extraSettings) throws Exception {\n        Settings nodeSettings = Settings.builder()\n            .put(Environment.PATH_HOME_SETTING.getKey(), createTempDir().toString())\n            .put(extraSettings)\n            .build();\n        Environment environment = new Environment(nodeSettings, null);\n        Permissions policy = new Permissions();\n        Security.addFilePermissions(policy, environment);\n        return policy;\n    }\n\n    private static boolean hasFilePermissionExact(Permissions policy, String name) {\n        Enumeration<Permission> e = policy.elements();\n        while (e.hasMoreElements()) {\n            Permission p = e.nextElement();\n            if (p instanceof FilePermission && p.getName().equals(name)) {\n                return true;\n            }\n        }\n        return false;\n    }\n\n    /** Returns true iff any FilePermission's name *contains* the given marker — used for negative assertions. */\n    private static boolean hasFilePermissionMatching(Permissions policy, String marker) {\n        Enumeration<Permission> e = policy.elements();\n        while (e.hasMoreElements()) {\n            Permission p = e.nextElement();\n            if (p instanceof FilePermission && p.getName().contains(marker)) {\n                return true;\n            }\n        }\n        return false;\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/bootstrap/SecurityProviderManagerTests.java",
+      "sha": null,
+      "content_sha256": "e28bd12e2f3d0867bed9443128cb78e117935a55861a9ad4a83f2c1818995ede",
+      "score": 318,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.bootstrap;\n\nimport org.opensearch.test.OpenSearchTestCase;\nimport org.junit.Before;\n\nimport javax.crypto.Cipher;\n\nimport java.security.NoSuchAlgorithmException;\nimport java.security.Provider;\nimport java.security.Security;\nimport java.util.Arrays;\n\npublic class SecurityProviderManagerTests extends OpenSearchTestCase {\n\n    protected static final String BC_FIPS = \"BCFIPS\";\n    protected static final String SUN_JCE = \"SunJCE\";\n    protected static final String AES = \"AES\";\n    protected static final String RC_4 = \"RC4\";\n    protected static final String TRIPLE_DES = \"DESedeWrap\";\n    protected static final String DES = \"DES\";\n    protected static final String PBE = \"PBE\";\n    protected static final String BLOWFISH = \"Blowfish\";\n\n    @Before\n    @Override\n    public void setUp() throws Exception {\n        super.setUp();\n        addSunJceProvider();\n    }\n\n    public void testCipherRC4() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(RC_4);\n        assertEquals(RC_4, cipher.getAlgorithm());\n        assertEquals(SUN_JCE, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        expectThrows(NoSuchAlgorithmException.class, () -> Cipher.getInstance(RC_4));\n    }\n\n    public void testCipherAES() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(AES);\n        assertEquals(AES, cipher.getAlgorithm());\n        assertEquals(SUN_JCE, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        expectThrows(NoSuchAlgorithmException.class, () -> Cipher.getInstance(AES));\n    }\n\n    public void testCipher3Des() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(TRIPLE_DES);\n        assertEquals(TRIPLE_DES, cipher.getAlgorithm());\n        assertEquals(SUN_JCE, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        expectThrows(NoSuchAlgorithmException.class, () -> Cipher.getInstance(TRIPLE_DES));\n    }\n\n    public void testCipherDes() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(DES);\n        assertEquals(DES, cipher.getAlgorithm());\n        assertEquals(SUN_JCE, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        expectThrows(NoSuchAlgorithmException.class, () -> Cipher.getInstance(DES));\n    }\n\n    public void testCipherPBE() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(PBE);\n        assertEquals(PBE, cipher.getAlgorithm());\n        assertEquals(SUN_JCE, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        expectThrows(NoSuchAlgorithmException.class, () -> Cipher.getInstance(PBE));\n    }\n\n    public void testCipherBlowfish() throws Exception {\n        // given\n        var cipher = Cipher.getInstance(BLOWFISH);\n        assertEquals(BLOWFISH, cipher.getAlgorithm());\n        assertEquals(SUN_JCE, cipher.getProvider().getName());\n\n        // when\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n\n        // then\n        expectThrows(NoSuchAlgorithmException.class, () -> Cipher.getInstance(BLOWFISH));\n    }\n\n    public void testGetPosition() {\n        assertTrue(SUN_JCE + \" is installed\", SecurityProviderManager.getPosition(SUN_JCE) > 0);\n        SecurityProviderManager.removeNonCompliantFipsProviders();\n        assertTrue(SUN_JCE + \" is uninstalled\", SecurityProviderManager.getPosition(SUN_JCE) < 0);\n    }\n\n    protected static void addSunJceProvider() throws Exception {\n        if (Arrays.stream(Security.getProviders()).noneMatch(provider -> SUN_JCE.equals(provider.getName()))) {\n            var sunJceClass = Class.forName(\"com.sun.crypto.provider.SunJCE\");\n            var originalSunProvider = (Provider) sunJceClass.getConstructor().newInstance();\n            Security.addProvider(originalSunProvider);\n        }\n    }\n\n}\n"
+    },
+    {
+      "path": "qa/evil-tests/src/test/java/org/opensearch/bootstrap/EvilSecurityTests.java",
+      "sha": null,
+      "content_sha256": "3a76a0629947dab82340472488919ecfe2b1fa00490e9255ea27f6c9ced66411",
+      "score": 316,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.bootstrap;\n\nimport org.apache.lucene.util.Constants;\nimport org.opensearch.common.SuppressForbidden;\nimport org.opensearch.common.io.PathUtils;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.env.Environment;\nimport org.opensearch.env.TestEnvironment;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.FilePermission;\nimport java.io.IOException;\nimport java.nio.file.Files;\nimport java.nio.file.Path;\nimport java.security.PermissionCollection;\nimport java.security.Permissions;\nimport java.util.Set;\n\nimport static org.hamcrest.Matchers.containsString;\nimport static org.hamcrest.Matchers.hasToString;\n\n@SuppressForbidden(reason = \"modifies system properties and attempts to create symbolic links intentionally\")\npublic class EvilSecurityTests extends OpenSearchTestCase {\n\n    /** test generated permissions */\n    public void testGeneratedPermissions() throws Exception {\n        Path path = createTempDir();\n        // make a fake ES home and ensure we only grant permissions to that.\n        Path esHome = path.resolve(\"esHome\");\n        Settings.Builder settingsBuilder = Settings.builder();\n        settingsBuilder.put(Environment.PATH_HOME_SETTING.getKey(), esHome.toString());\n        Settings settings = settingsBuilder.build();\n\n        Path fakeTmpDir = createTempDir();\n        String realTmpDir = System.getProperty(\"java.io.tmpdir\");\n        Permissions permissions;\n        try {\n            System.setProperty(\"java.io.tmpdir\", fakeTmpDir.toString());\n            Environment environment = TestEnvironment.newEnvironment(settings);\n            permissions = Security.createPermissions(environment);\n        } finally {\n            System.setProperty(\"java.io.tmpdir\", realTmpDir);\n        }\n\n        // the fake es home\n        assertNoPermissions(esHome, permissions);\n        // its parent\n        assertNoPermissions(esHome.getParent(), permissions);\n        // some other sibling\n        assertNoPermissions(esHome.getParent().resolve(\"other\"), permissions);\n        // double check we overwrote java.io.tmpdir correctly for the test\n        assertNoPermissions(PathUtils.get(realTmpDir), permissions);\n    }\n\n    /** test generated permissions for all configured paths */\n    @SuppressWarnings(\"deprecation\") // needs to check settings for deprecated path\n    @SuppressForbidden(reason = \"to create FilePermission object\")\n    public void testEnvironmentPaths() throws Exception {\n        Path path = createTempDir();\n        // make a fake ES home and ensure we only grant permissions to that.\n        Path esHome = path.resolve(\"esHome\");\n\n        Settings.Builder settingsBuilder = Settings.builder();\n        settingsBuilder.put(Environment.PATH_HOME_SETTING.getKey(), esHome.resolve(\"home\").toString());\n        settingsBuilder.putList(Environment.PATH_DATA_SETTING.getKey(), esHome.resolve(\"data1\").toString(),\n                esHome.resolve(\"data2\").toString());\n        settingsBuilder.put(Environment.PATH_SHARED_DATA_SETTING.getKey(), esHome.resolve(\"custom\").toString());\n        settingsBuilder.put(Environment.PATH_LOGS_SETTING.getKey(), esHome.resolve(\"logs\").toString());\n        settingsBuilder.put(Environment.NODE_PIDFILE_SETTING.getKey(), esHome.resolve(\"test.pid\").toString());\n        Settings settings = settingsBuilder.build();\n\n        Path fakeTmpDir = createTempDir();\n        String realTmpDir = System.getProperty(\"java.io.tmpdir\");\n        Permissions permissions;\n        Environment environment;\n        try {\n            System.setProperty(\"java.io.tmpdir\", fakeTmpDir.toString());\n            environment = new Environment(settings, esHome.resolve(\"conf\"));\n            permissions = Security.createPermissions(environment);\n        } finally {\n            System.setProperty(\"java.io.tmpdir\", realTmpDir);\n        }\n\n        // the fake es home\n        assertNoPermissions(esHome, permissions);\n        // its parent\n        assertNoPermissions(esHome.getParent(), permissions);\n        // some other sibling\n        assertNoPermissions(esHome.getParent().resolve(\"other\"), permissions);\n        // double check we overwrote java.io.tmpdir correctly for the test\n        assertNoPermissions(PathUtils.get(realTmpDir), permissions);\n\n        // check that all directories got permissions:\n\n        // bin file: ro\n        assertExactPermissions(new FilePermission(environment.binDir().toString(), \"read,readlink\"), permissions);\n        // lib file: ro\n        assertExactPermissions(new FilePermission(environment.libDir().toString(), \"read,readlink\"), permissions);\n        // modules file: ro\n        assertExactPermissions(new FilePermission(environment.modulesDir().toString(), \"read,readlink\"), permissions);\n        // config file: ro\n        assertExactPermissions(new FilePermission(environment.configDir().toString(), \"read,readlink\"), permissions);\n        // plugins: ro\n        assertExactPermissions(new FilePermission(environment.pluginsDir().toString(), \"read,readlink\"), permissions);\n\n        // data paths: r/w\n        for (Path dataPath : environment.dataFiles()) {\n            assertExactPermissions(new FilePermission(dataPath.toString(), \"read,readlink,write,delete\"), permissions);\n        }\n        assertExactPermissions(new FilePermission(environment.sharedDataDir().toString(), \"read,readlink,write,delete\"), permissions);\n        // logs: r/w\n        assertExactPermissions(new FilePermission(environment.logsDir().toString(), \"read,readlink,write,delete\"), permissions);\n        // temp dir: r/w\n        assertExactPermissions(new FilePermission(fakeTmpDir.toString(), \"read,readlink,write,delete\"), permissions);\n        // PID file: delete only (for the shutdown hook)\n        assertExactPermissions(new FilePermission(environment.pidFile().toString(), \"delete\"), permissions);\n    }\n\n    public void testDuplicateDataPaths() throws IOException {\n        assumeFalse(\"https://github.com/elastic/elasticsearch/issues/44558\", Constants.WINDOWS);\n        final Path path = createTempDir();\n        final Path home = path.resolve(\"home\");\n        final Path data = path.resolve(\"data\");\n        final Path duplicate;\n        if (randomBoolean()) {\n            duplicate = data;\n        } else {\n            duplicate = createTempDir().toAbsolutePath().resolve(\"link\");\n            Files.createSymbolicLink(duplicate, data);\n        }\n\n        final Settings settings =\n                Settings\n                        .builder()\n                        .put(Environment.PATH_HOME_SETTING.getKey(), home.toString())\n                        .putList(Environment.PATH_DATA_SETTING.getKey(), data.toString(), duplicate.toString())\n                        .build();\n\n        final Environment environment = TestEnvironment.newEnvironment(settings);\n        final IllegalStateException e = expectThrows(IllegalStateException.class, () -> Security.createPermissions(environment));\n        assertThat(e, hasToString(containsString(\"path [\" + duplicate.toRealPath() + \"] is duplicated by [\" + duplicate + \"]\")));\n    }\n\n    public void testEnsureSymlink() throws IOException {\n        Path p = createTempDir();\n\n        Path exists = p.resolve(\"exists\");\n        Files.createDirectory(exists);\n\n        // symlink\n        Path linkExists = p.resolve(\"linkExists\");\n        try {\n            Files.createSymbolicLink(linkExists, exists);\n        } catch (UnsupportedOperationException | IOException e) {\n            assumeNoException(\"test requires filesystem that supports symbolic links\", e);\n        } catch (SecurityException e) {\n            assumeNoException(\"test cannot create symbolic links with security manager enabled\", e);\n        }\n        Security.ensureDirectoryExists(linkExists);\n        Files.createTempFile(linkExists, null, null);\n    }\n\n    public void testEnsureBrokenSymlink() throws IOException {\n        Path p = createTempDir();\n\n        // broken symlink\n        Path brokenLink = p.resolve(\"brokenLink\");\n        try {\n            Files.createSymbolicLink(brokenLink, p.resolve(\"nonexistent\"));\n        } catch (UnsupportedOperationException | IOException e) {\n            assumeNoException(\"test requires filesystem that supports symbolic links\", e);\n        } catch (SecurityException e) {\n            assumeNoException(\"test cannot create symbolic links with security manager enabled\", e);\n        }\n        try {\n            Security.ensureDirectoryExists(brokenLink);\n            fail(\"didn't get expected exception\");\n        } catch (IOException expected) {}\n    }\n\n    /** When a configured dir is a symlink, test that permissions work on link target */\n    public void testSymlinkPermissions() throws IOException {\n        // see https://github.com/elastic/elasticsearch/issues/12170\n        assumeFalse(\"windows does not automatically grant permission to the target of symlinks\", Constants.WINDOWS);\n        Path dir = createTempDir();\n\n        Path target = dir.resolve(\"target\");\n        Files.createDirectory(target);\n\n        // symlink\n        Path link = dir.resolve(\"link\");\n        try {\n            Files.createSymbolicLink(link, target);\n        } catch (UnsupportedOperationException | IOException e) {\n            assumeNoException(\"test requires filesystem that supports symbolic links\", e);\n        } catch (SecurityException e) {\n            assumeNoException(\"test cannot create symbolic links with security manager enabled\", e);\n        }\n        Permissions permissions = new Permissions();\n        FilePermissionUtils.addDirectoryPath(permissions, \"testing\", link, \"read\", false);\n        assertExactPermissions(new FilePermission(link.toString(), \"read\"), permissions);\n        assertExactPermissions(new FilePermission(link.resolve(\"foo\").toString(), \"read\"), permissions);\n        assertExactPermissions(new FilePermission(target.toString(), \"read\"), permissions);\n        assertExactPermissions(new FilePermission(target.resolve(\"foo\").toString(), \"read\"), permissions);\n    }\n\n    /**\n     * checks exact file permissions, meaning those and only those for that path.\n     */\n    @SuppressForbidden(reason = \"to create FilePermission object\")\n    static void assertExactPermissions(FilePermission expected, PermissionCollection actual) {\n        String target = expected.getName(); // see javadocs\n        Set<String> permissionSet = asSet(expected.getActions().split(\",\"));\n        boolean read = permissionSet.remove(\"read\");\n        boolean readlink = permissionSet.remove(\"readlink\");\n        boolean write = permissionSet.remove(\"write\");\n        boolean delete = permissionSet.remove(\"delete\");\n        boolean execute = permissionSet.remove(\"execute\");\n        assertTrue(\"unrecognized permission: \" + permissionSet, permissionSet.isEmpty());\n        assertEquals(read, actual.implies(new FilePermission(target, \"read\")));\n        assertEquals(readlink, actual.implies(new FilePermission(target, \"readlink\")));\n        assertEquals(write, actual.implies(new FilePermission(target, \"write\")));\n        assertEquals(delete, actual.implies(new FilePermission(target, \"delete\")));\n        assertEquals(execute, actual.implies(new FilePermission(target, \"execute\")));\n    }\n\n    /**\n     * checks that this path has no permissions\n     */\n    @SuppressForbidden(reason = \"to create FilePermission object\")\n    static void assertNoPermissions(Path path, PermissionCollection actual) {\n        String target = path.toString();\n        assertFalse(actual.implies(new FilePermission(target, \"read\")));\n        assertFalse(actual.implies(new FilePermission(target, \"readlink\")));\n        assertFalse(actual.implies(new FilePermission(target, \"write\")));\n        assertFalse(actual.implies(new FilePermission(target, \"delete\")));\n        assertFalse(actual.implies(new FilePermission(target, \"execute\")));\n    }\n}\n"
+    },
+    {
+      "path": "server/src/main/java/org/opensearch/SpecialPermission.java",
+      "sha": null,
+      "content_sha256": "4dfaf3813996444a0b3224541590d771c5fcf1433561d99d6cb6a4a3a91baeba",
+      "score": 310,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *     http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch;\n\nimport java.security.BasicPermission;\n\n/**\n * OpenSearch-specific permission to check before entering\n * {@code AccessController.doPrivileged()} blocks.\n * <p>\n * We try to avoid these blocks in our code and keep security simple,\n * but we need them for a few special places to contain hacks for third\n * party code, or dangerous things used by scripting engines.\n * <p>\n * All normal code has this permission, but checking this before truncating the stack\n * prevents unprivileged code (e.g. scripts), which do not have it, from gaining elevated\n * privileges.\n * <p>\n * In other words, don't do this:\n * <br>\n * <pre><code>\n *   // throw away all information about caller and run with our own privs\n *   AccessController.doPrivileged(\n *    ...\n *   );\n * </code></pre>\n * <br>\n * Instead do this;\n * <br>\n * <pre><code>\n *   // check caller first, to see if they should be allowed to do this\n *   SecurityManager sm = System.getSecurityManager();\n *   if (sm != null) {\n *     sm.checkPermission(new SpecialPermission());\n *   }\n *   // throw away all information about caller and run with our own privs\n *   AccessController.doPrivileged(\n *    ...\n *   );\n * </code></pre>\n *\n * @opensearch.internal\n */\npublic final class SpecialPermission extends BasicPermission {\n\n    public static final SpecialPermission INSTANCE = new SpecialPermission();\n\n    /**\n     * Creates a new SpecialPermision object.\n     */\n    public SpecialPermission() {\n        // TODO: if we really need we can break out name (e.g. \"hack\" or \"scriptEngineService\" or whatever).\n        // but let's just keep it simple if we can.\n        super(\"*\");\n    }\n\n    /**\n     * Creates a new SpecialPermission object.\n     * This constructor exists for use by the {@code Policy} object to instantiate new Permission objects.\n     *\n     * @param name ignored\n     * @param actions ignored\n     */\n    public SpecialPermission(String name, String actions) {\n        this();\n    }\n\n    /**\n     * Check that the current stack has {@link SpecialPermission} access according to the {@link SecurityManager}.\n     */\n    @SuppressWarnings(\"removal\")\n    public static void check() {\n        SecurityManager sm = System.getSecurityManager();\n        if (sm != null) {\n            sm.checkPermission(INSTANCE);\n        }\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/SpecialPermissionTests.java",
+      "sha": null,
+      "content_sha256": "d90c511c0734c21f417bfe710af508bfdce56bb75bd83a7d28fba5506cfb23f4",
+      "score": 310,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch;\n\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.security.AllPermission;\n\n/** Very simple sanity checks for {@link SpecialPermission} */\npublic class SpecialPermissionTests extends OpenSearchTestCase {\n\n    public void testEquals() {\n        assertEquals(new SpecialPermission(), new SpecialPermission());\n        assertEquals(SpecialPermission.INSTANCE, new SpecialPermission());\n        assertFalse(new SpecialPermission().equals(new AllPermission()));\n        assertFalse(SpecialPermission.INSTANCE.equals(new AllPermission()));\n    }\n\n    public void testImplies() {\n        assertTrue(SpecialPermission.INSTANCE.implies(new SpecialPermission()));\n        assertTrue(SpecialPermission.INSTANCE.implies(SpecialPermission.INSTANCE));\n        assertFalse(new SpecialPermission().implies(new AllPermission()));\n        assertFalse(SpecialPermission.INSTANCE.implies(new AllPermission()));\n    }\n}\n"
+    },
+    {
+      "path": "distribution/tools/fips-demo-installer-cli/src/test/java/org/opensearch/tools/cli/fips/truststore/SecurityConfigurationPrinterTests.java",
+      "sha": null,
+      "content_sha256": "204cffd250011f141fe46f1758cbcd098bd49dcbb486291a403c129bd5537e32",
+      "score": 308,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.tools.cli.fips.truststore;\n\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.PrintWriter;\nimport java.io.StringWriter;\nimport java.security.Security;\nimport java.util.Arrays;\n\nimport picocli.CommandLine;\n\npublic class SecurityConfigurationPrinterTests extends OpenSearchTestCase {\n\n    private CommandLine.Model.CommandSpec spec;\n    private StringWriter outputCapture;\n\n    @Override\n    public void setUp() throws Exception {\n        super.setUp();\n\n        @CommandLine.Command\n        class DummyCommand {}\n\n        outputCapture = new StringWriter();\n        CommandLine commandLine = new CommandLine(new DummyCommand());\n        commandLine.setOut(new PrintWriter(outputCapture, true));\n        spec = commandLine.getCommandSpec();\n    }\n\n    public void testPrintCurrentConfigurationBasicStructure() {\n        // given\n        var providers = Security.getProviders();\n\n        // when\n        SecurityConfigurationPrinter.printCurrentConfiguration(spec);\n\n        // then\n        String output = outputCapture.toString();\n\n        assertFalse(output.isEmpty());\n        assertTrue(output.contains(\"Available Security Providers:\"));\n        assertTrue(output.contains(\"  1.\"));\n        assertTrue(output.contains(\"(version\"));\n\n        long numberedItems = output.lines().filter(line -> line.trim().matches(\"^\\\\d+\\\\..*\")).count();\n        assertEquals(providers.length, numberedItems);\n\n        var firstProvider = providers[0];\n        assertTrue(output.contains(firstProvider.getName()));\n        String expectedVersionFormat = firstProvider.getName() + \" (version \" + firstProvider.getVersionStr() + \")\";\n        assertTrue(output.contains(expectedVersionFormat));\n    }\n\n    public void testPrintCurrentConfigurationKeyStoreServices() {\n        // given\n        var keyStoreAlgorithms = Arrays.stream(Security.getProviders())\n            .flatMap(provider -> provider.getServices().stream())\n            .filter(service -> \"KeyStore\".equals(service.getType()))\n            .map(java.security.Provider.Service::getAlgorithm)\n            .toList();\n\n        // when\n        SecurityConfigurationPrinter.printCurrentConfiguration(spec);\n\n        // then\n        String output = outputCapture.toString();\n\n        if (!keyStoreAlgorithms.isEmpty()) {\n            assertTrue(output.contains(\"└─ KeyStore.\"));\n\n            for (String algorithm : keyStoreAlgorithms) {\n                assertTrue(output.contains(\"KeyStore.\" + algorithm));\n            }\n        }\n    }\n}\n"
+    },
+    {
+      "path": "server/src/internalClusterTest/java/org/opensearch/action/ingest/AsyncIngestProcessorIT.java",
+      "sha": null,
+      "content_sha256": "9b11644b39214e0e9f13fdc99e000ca210805131eb795ea2188f324c5875527e",
+      "score": 308,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.ingest;\n\nimport org.opensearch.action.bulk.BulkRequest;\nimport org.opensearch.action.bulk.BulkResponse;\nimport org.opensearch.action.get.GetRequest;\nimport org.opensearch.action.get.GetResponse;\nimport org.opensearch.action.index.IndexRequest;\nimport org.opensearch.cluster.metadata.IndexNameExpressionResolver;\nimport org.opensearch.cluster.service.ClusterService;\nimport org.opensearch.core.common.bytes.BytesArray;\nimport org.opensearch.core.common.bytes.BytesReference;\nimport org.opensearch.core.common.io.stream.NamedWriteableRegistry;\nimport org.opensearch.core.xcontent.MediaTypeRegistry;\nimport org.opensearch.core.xcontent.NamedXContentRegistry;\nimport org.opensearch.env.Environment;\nimport org.opensearch.env.NodeEnvironment;\nimport org.opensearch.ingest.AbstractProcessor;\nimport org.opensearch.ingest.IngestDocument;\nimport org.opensearch.ingest.Processor;\nimport org.opensearch.plugins.IngestPlugin;\nimport org.opensearch.plugins.Plugin;\nimport org.opensearch.repositories.RepositoriesService;\nimport org.opensearch.script.ScriptService;\nimport org.opensearch.test.OpenSearchSingleNodeTestCase;\nimport org.opensearch.threadpool.ThreadPool;\nimport org.opensearch.transport.client.Client;\nimport org.opensearch.watcher.ResourceWatcherService;\n\nimport java.util.Collection;\nimport java.util.Collections;\nimport java.util.HashMap;\nimport java.util.Map;\nimport java.util.function.BiConsumer;\nimport java.util.function.Supplier;\n\nimport static org.hamcrest.Matchers.equalTo;\n\n/**\n * The purpose of this test is to verify that when a processor executes an operation asynchronously that\n * the expected result is the same as if the same operation happens synchronously.\n * <p>\n * In this test two test processor are defined that basically do the same operation, but a single processor\n * executes asynchronously. The result of the operation should be the same and also the order in which the\n * bulk responses are returned should be the same as how the corresponding index requests were defined.\n */\npublic class AsyncIngestProcessorIT extends OpenSearchSingleNodeTestCase {\n\n    @Override\n    protected Collection<Class<? extends Plugin>> getPlugins() {\n        return Collections.singleton(TestPlugin.class);\n    }\n\n    public void testAsyncProcessorImplementation() {\n        // A pipeline with 2 processors: the test async processor and sync test processor.\n        BytesReference pipelineBody = new BytesArray(\"{\\\"processors\\\": [{\\\"test-async\\\": {}, \\\"test\\\": {}}]}\");\n        client().admin().cluster().putPipeline(new PutPipelineRequest(\"_id\", pipelineBody, MediaTypeRegistry.JSON)).actionGet();\n\n        BulkRequest bulkRequest = new BulkRequest();\n        int numDocs = randomIntBetween(8, 256);\n        for (int i = 0; i < numDocs; i++) {\n            bulkRequest.add(new IndexRequest(\"foobar\").id(Integer.toString(i)).source(\"{}\", MediaTypeRegistry.JSON).setPipeline(\"_id\"));\n        }\n        BulkResponse bulkResponse = client().bulk(bulkRequest).actionGet();\n        assertThat(bulkResponse.getItems().length, equalTo(numDocs));\n        for (int i = 0; i < numDocs; i++) {\n            String id = Integer.toString(i);\n            assertThat(bulkResponse.getItems()[i].getId(), equalTo(id));\n            GetResponse getResponse = client().get(new GetRequest(\"foobar\", id)).actionGet();\n            // The expected result of async test processor:\n            assertThat(getResponse.getSource().get(\"foo\"), equalTo(\"bar-\" + id));\n            // The expected result of sync test processor:\n            assertThat(getResponse.getSource().get(\"bar\"), equalTo(\"baz-\" + id));\n        }\n    }\n\n    public static class TestPlugin extends Plugin implements IngestPlugin {\n\n        private ThreadPool threadPool;\n\n        @Override\n        public Collection<Object> createComponents(\n            Client client,\n            ClusterService clusterService,\n            ThreadPool threadPool,\n            ResourceWatcherService resourceWatcherService,\n            ScriptService scriptService,\n            NamedXContentRegistry xContentRegistry,\n            Environment environment,\n            NodeEnvironment nodeEnvironment,\n            NamedWriteableRegistry namedWriteableRegistry,\n            IndexNameExpressionResolver expressionResolver,\n            Supplier<RepositoriesService> repositoriesServiceSupplier\n        ) {\n            this.threadPool = threadPool;\n            return Collections.emptyList();\n        }\n\n        @Override\n        public Map<String, Processor.Factory> getProcessors(Processor.Parameters parameters) {\n            Map<String, Processor.Factory> processors = new HashMap<>();\n            processors.put(\"test-async\", (factories, tag, description, config) -> {\n                return new AbstractProcessor(tag, description) {\n\n                    @Override\n                    public void execute(IngestDocument ingestDocument, BiConsumer<IngestDocument, Exception> handler) {\n                        threadPool.generic().execute(() -> {\n                            String id = (String) ingestDocument.getSourceAndMetadata().get(\"_id\");\n                            ingestDocument.setFieldValue(\"foo\", \"bar-\" + id);\n                            handler.accept(ingestDocument, null);\n                        });\n                    }\n\n                    @Override\n                    public IngestDocument execute(IngestDocument ingestDocument) throws Exception {\n                        throw new UnsupportedOperationException();\n                    }\n\n                    @Override\n                    public String getType() {\n                        return \"test-async\";\n                    }\n                };\n            });\n            processors.put(\"test\", (processorFactories, tag, description, config) -> {\n                return new AbstractProcessor(tag, description) {\n                    @Override\n                    public IngestDocument execute(IngestDocument ingestDocument) throws Exception {\n                        String id = (String) ingestDocument.getSourceAndMetadata().get(\"_id\");\n                        ingestDocument.setFieldValue(\"bar\", \"baz-\" + id);\n                        return ingestDocument;\n                    }\n\n                    @Override\n                    public String getType() {\n                        return \"test\";\n                    }\n                };\n            });\n            return processors;\n        }\n    }\n\n}\n"
+    },
+    {
+      "path": "plugins/telemetry-otel/src/test/java/org/opensearch/telemetry/tracing/sampler/ProbabilisticTransportActionSamplerTests.java",
+      "sha": null,
+      "content_sha256": "3d04f9a133ede2e854da01ad56e34b0a657922f3a155654b826fcc07aeb5fc1e",
+      "score": 304,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.telemetry.tracing.sampler;\n\nimport org.opensearch.common.settings.ClusterSettings;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.telemetry.TelemetrySettings;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.util.Collections;\nimport java.util.Set;\n\nimport io.opentelemetry.api.common.Attributes;\nimport io.opentelemetry.api.trace.SpanKind;\nimport io.opentelemetry.context.Context;\nimport io.opentelemetry.sdk.trace.samplers.Sampler;\nimport io.opentelemetry.sdk.trace.samplers.SamplingResult;\n\nimport static org.opensearch.telemetry.TelemetrySettings.TRACER_ENABLED_SETTING;\nimport static org.opensearch.telemetry.TelemetrySettings.TRACER_SAMPLER_PROBABILITY;\nimport static org.opensearch.telemetry.tracing.AttributeNames.TRANSPORT_ACTION;\nimport static org.mockito.Mockito.mock;\n\npublic class ProbabilisticTransportActionSamplerTests extends OpenSearchTestCase {\n\n    public void testGetSamplerWithActionSamplingRatio() {\n        ClusterSettings clusterSettings = new ClusterSettings(Settings.EMPTY, Set.of(TRACER_SAMPLER_PROBABILITY, TRACER_ENABLED_SETTING));\n\n        TelemetrySettings telemetrySettings = new TelemetrySettings(Settings.EMPTY, clusterSettings);\n\n        // ProbabilisticTransportActionSampler\n        Sampler probabilisticTransportActionSampler = ProbabilisticTransportActionSampler.create(telemetrySettings, Settings.EMPTY, null);\n\n        SamplingResult result = probabilisticTransportActionSampler.shouldSample(\n            mock(Context.class),\n            \"00000000000000000000000000000000\",\n            \"spanName\",\n            SpanKind.INTERNAL,\n            Attributes.builder().put(TRANSPORT_ACTION, \"dummy_action\").build(),\n            Collections.emptyList()\n        );\n        // Verify that ProbabilisticTransportActionSampler returned SamplingResult.recordAndSample() as all actions will be sampled\n        assertEquals(SamplingResult.recordAndSample(), result);\n        assertEquals(0.001, ((ProbabilisticTransportActionSampler) probabilisticTransportActionSampler).getSamplingRatio(), 0.000d);\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/resources/org/opensearch/bootstrap/truststore/README.md",
+      "sha": null,
+      "content_sha256": "9e64786f94b487482b4ff5b6f511393af3e1b8022c845146c84e7c2b89cff707",
+      "score": 301,
+      "content": "# generate BCFKS trust store for FipsTrustStoreValidatorTests.java\n```bash\nprintf 'y\\nnotarealpasswordphrase\\nnotarealpasswordphrase' | sh ./opensearch-fips-demo-installer generated\n```\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/ActionRequestMetadataTests.java",
+      "sha": null,
+      "content_sha256": "f516b347a44f24ca7b9aab6c4d9ea8991089f527fede4597df941cf459e0df7d",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.action.ActionRequest;\nimport org.opensearch.action.ActionRequestValidationException;\nimport org.opensearch.cluster.metadata.OptionallyResolvedIndices;\nimport org.opensearch.cluster.metadata.ResolvedIndices;\nimport org.opensearch.core.action.ActionListener;\nimport org.opensearch.core.action.ActionResponse;\nimport org.opensearch.tasks.Task;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.util.Set;\n\npublic class ActionRequestMetadataTests extends OpenSearchTestCase {\n    public void testResolvedIndices() {\n        ActionRequestMetadata<?, ?> subject = new ActionRequestMetadata<>(\n            new TestTransportAction(),\n            new TestRequest(\"my_resolution_result\")\n        );\n        OptionallyResolvedIndices resolvedIndices = subject.resolvedIndices();\n        assertEquals(ResolvedIndices.of(\"my_resolution_result\"), resolvedIndices);\n    }\n\n    public void testResolvedIndices_unknown() {\n        ActionRequestMetadata<?, ?> subject = new ActionRequestMetadata<>(\n            new TestTransportActionUnsupported(),\n            new TestRequest(\"my_resolution_result\")\n        );\n        OptionallyResolvedIndices resolvedIndices = subject.resolvedIndices();\n        assertFalse(resolvedIndices instanceof ResolvedIndices);\n    }\n\n    static class TestTransportAction extends TransportAction<TestRequest, ActionResponse>\n        implements\n            TransportIndicesResolvingAction<TestRequest> {\n\n        protected TestTransportAction() {\n            super(\"action\", new ActionFilters(Set.of()), null);\n        }\n\n        @Override\n        protected void doExecute(Task task, TestRequest request, ActionListener<ActionResponse> listener) {\n\n        }\n\n        @Override\n        public OptionallyResolvedIndices resolveIndices(TestRequest request) {\n            return ResolvedIndices.of(request.resolutionResult);\n        }\n    }\n\n    static class TestRequest extends ActionRequest {\n        final String resolutionResult;\n\n        TestRequest(String resolutionResult) {\n            this.resolutionResult = resolutionResult;\n        }\n\n        @Override\n        public ActionRequestValidationException validate() {\n            return null;\n        }\n    }\n\n    static class TestTransportActionUnsupported extends TransportAction<TestRequest, ActionResponse> {\n\n        protected TestTransportActionUnsupported() {\n            super(\"action\", new ActionFilters(Set.of()), null);\n        }\n\n        @Override\n        protected void doExecute(Task task, TestRequest request, ActionListener<ActionResponse> listener) {\n\n        }\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/RefreshPolicyTests.java",
+      "sha": null,
+      "content_sha256": "86a2de4f09cdab86221ad07749f9f77f9861c6ec0680dc3f31bc69a32f799be8",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.common.io.stream.BytesStreamOutput;\nimport org.opensearch.core.common.io.stream.StreamInput;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.IOException;\n\npublic class RefreshPolicyTests extends OpenSearchTestCase {\n\n    public void testSerialization() throws IOException {\n        final WriteRequest.RefreshPolicy refreshPolicy = randomFrom(WriteRequest.RefreshPolicy.values());\n        try (BytesStreamOutput out = new BytesStreamOutput()) {\n            refreshPolicy.writeTo(out);\n            try (StreamInput in = out.bytes().streamInput()) {\n                WriteRequest.RefreshPolicy deserializedRefreshPolicy = WriteRequest.RefreshPolicy.readFrom(in);\n                assertEquals(refreshPolicy, deserializedRefreshPolicy);\n            }\n        }\n    }\n\n    public void testParse() throws IOException {\n        final String refreshPolicyValue = randomFrom(WriteRequest.RefreshPolicy.values()).getValue();\n        assertEquals(refreshPolicyValue, WriteRequest.RefreshPolicy.parse(refreshPolicyValue).getValue());\n    }\n\n    public void testParseEmpty() throws IOException {\n        assertEquals(WriteRequest.RefreshPolicy.IMMEDIATE, WriteRequest.RefreshPolicy.parse(\"\"));\n    }\n\n    public void testParseUnknown() throws IOException {\n        IllegalArgumentException e = expectThrows(IllegalArgumentException.class, () -> WriteRequest.RefreshPolicy.parse(\"unknown\"));\n        assertEquals(\"Unknown value for refresh: [unknown].\", e.getMessage());\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/AdapterActionFutureTests.java",
+      "sha": null,
+      "content_sha256": "50d5d6da3cb6cc85bad0f6af93e90a2179ce92b6e079f26ece7ab31a68bc17f3",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.OpenSearchException;\nimport org.opensearch.common.unit.TimeValue;\nimport org.opensearch.common.util.concurrent.UncategorizedExecutionException;\nimport org.opensearch.test.OpenSearchTestCase;\nimport org.opensearch.transport.RemoteTransportException;\n\nimport java.util.Objects;\nimport java.util.concurrent.BrokenBarrierException;\nimport java.util.concurrent.CyclicBarrier;\nimport java.util.concurrent.ExecutionException;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.atomic.AtomicBoolean;\n\npublic class AdapterActionFutureTests extends OpenSearchTestCase {\n\n    public void testInterruption() throws Exception {\n        final AdapterActionFuture<String, Integer> adapter = new AdapterActionFuture<String, Integer>() {\n            @Override\n            protected String convert(final Integer listenerResponse) {\n                return Objects.toString(listenerResponse);\n            }\n        };\n\n        // test all possible methods that can be interrupted\n        final Runnable runnable = () -> {\n            final int method = randomIntBetween(0, 4);\n            switch (method) {\n                case 0:\n                    adapter.actionGet();\n                    break;\n                case 1:\n                    adapter.actionGet(\"30s\");\n                    break;\n                case 2:\n                    adapter.actionGet(30000);\n                    break;\n                case 3:\n                    adapter.actionGet(TimeValue.timeValueSeconds(30));\n                    break;\n                case 4:\n                    adapter.actionGet(30, TimeUnit.SECONDS);\n                    break;\n                default:\n                    throw new AssertionError(method);\n            }\n        };\n\n        final CyclicBarrier barrier = new CyclicBarrier(2);\n        final Thread main = Thread.currentThread();\n        final Thread thread = new Thread(() -> {\n            try {\n                barrier.await();\n            } catch (final BrokenBarrierException | InterruptedException e) {\n                throw new RuntimeException(e);\n            }\n            main.interrupt();\n        });\n        thread.start();\n\n        final AtomicBoolean interrupted = new AtomicBoolean();\n\n        barrier.await();\n\n        try {\n            runnable.run();\n        } catch (final IllegalStateException e) {\n            interrupted.set(Thread.interrupted());\n        }\n        // we check this here instead of in the catch block to ensure that the catch block executed\n        assertTrue(interrupted.get());\n\n        thread.join();\n    }\n\n    public void testUnwrapException() {\n        checkUnwrap(new RemoteTransportException(\"test\", new RuntimeException()), RuntimeException.class, RemoteTransportException.class);\n        checkUnwrap(\n            new RemoteTransportException(\"test\", new Exception()),\n            UncategorizedExecutionException.class,\n            RemoteTransportException.class\n        );\n        checkUnwrap(new Exception(), UncategorizedExecutionException.class, Exception.class);\n        checkUnwrap(new OpenSearchException(\"test\", new Exception()), OpenSearchException.class, OpenSearchException.class);\n    }\n\n    private void checkUnwrap(Exception exception, Class<? extends Exception> actionGetException, Class<? extends Exception> getException) {\n        final AdapterActionFuture<Void, Void> adapter = new AdapterActionFuture<Void, Void>() {\n            @Override\n            protected Void convert(Void listenerResponse) {\n                fail();\n                return null;\n            }\n        };\n\n        adapter.onFailure(exception);\n        assertEquals(actionGetException, expectThrows(RuntimeException.class, adapter::actionGet).getClass());\n        assertEquals(actionGetException, expectThrows(RuntimeException.class, () -> adapter.actionGet(10, TimeUnit.SECONDS)).getClass());\n        assertEquals(getException, expectThrows(ExecutionException.class, () -> adapter.get()).getCause().getClass());\n        assertEquals(getException, expectThrows(ExecutionException.class, () -> adapter.get(10, TimeUnit.SECONDS)).getCause().getClass());\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/search/SearchRequestOperationsListenerSupport.java",
+      "sha": null,
+      "content_sha256": "ef1c74a40196b8cf685f95f6c50960f30751194c81fc1769379874fe2eb61b7c",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\npackage org.opensearch.action.search;\n\nimport org.apache.logging.log4j.LogManager;\n\nimport java.util.List;\n\n/**\n * Helper interface to access package protected {@link SearchRequestOperationsListener} from test cases.\n */\npublic interface SearchRequestOperationsListenerSupport {\n    default void onPhaseStart(SearchRequestOperationsListener listener, SearchPhaseContext context) {\n        listener.onPhaseStart(context);\n    }\n\n    default void onPhaseEnd(SearchRequestOperationsListener listener, SearchPhaseContext context) {\n        listener.onPhaseEnd(\n            context,\n            new SearchRequestContext(\n                new SearchRequestOperationsListener.CompositeListener(List.of(), LogManager.getLogger()),\n                new SearchRequest(),\n                () -> null\n            )\n        );\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/ListenableActionFutureTests.java",
+      "sha": null,
+      "content_sha256": "1ec1dd6fb845d23001fb268b6516fba983197796a4193f49c8d2c9e4eeb95dde",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.common.util.concurrent.AbstractRunnable;\nimport org.opensearch.core.action.ActionListener;\nimport org.opensearch.test.OpenSearchTestCase;\nimport org.opensearch.threadpool.TestThreadPool;\nimport org.opensearch.threadpool.ThreadPool;\nimport org.opensearch.transport.Transports;\n\nimport java.util.concurrent.CountDownLatch;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.atomic.AtomicReference;\n\npublic class ListenableActionFutureTests extends OpenSearchTestCase {\n\n    public void testListenerIsCallableFromNetworkThreads() throws Throwable {\n        ThreadPool threadPool = new TestThreadPool(\"testListenerIsCallableFromNetworkThreads\");\n        try {\n            final PlainListenableActionFuture<Object> future = PlainListenableActionFuture.newListenableFuture();\n            final CountDownLatch listenerCalled = new CountDownLatch(1);\n            final AtomicReference<Throwable> error = new AtomicReference<>();\n            final Object response = new Object();\n            future.addListener(new ActionListener<Object>() {\n                @Override\n                public void onResponse(Object o) {\n                    listenerCalled.countDown();\n                }\n\n                @Override\n                public void onFailure(Exception e) {\n                    error.set(e);\n                    listenerCalled.countDown();\n                }\n            });\n            Thread networkThread = new Thread(new AbstractRunnable() {\n                @Override\n                public void onFailure(Exception e) {\n                    error.set(e);\n                    listenerCalled.countDown();\n                }\n\n                @Override\n                protected void doRun() throws Exception {\n                    future.onResponse(response);\n                }\n            }, Transports.TEST_MOCK_TRANSPORT_THREAD_PREFIX + \"_testListenerIsCallableFromNetworkThread\");\n            networkThread.start();\n            networkThread.join();\n            listenerCalled.await();\n            if (error.get() != null) {\n                throw error.get();\n            }\n        } finally {\n            ThreadPool.terminate(threadPool, 10, TimeUnit.SECONDS);\n        }\n    }\n\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/ListenerTimeoutsTests.java",
+      "sha": null,
+      "content_sha256": "51b0340c220b7207bd8a84c5283d70aecc41115432ca724abae3a4197820a1b1",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.OpenSearchTimeoutException;\nimport org.opensearch.cluster.coordination.DeterministicTaskQueue;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.common.unit.TimeValue;\nimport org.opensearch.core.action.ActionListener;\nimport org.opensearch.test.OpenSearchTestCase;\nimport org.opensearch.threadpool.ThreadPool;\nimport org.junit.Before;\n\nimport java.io.IOException;\nimport java.util.concurrent.atomic.AtomicBoolean;\nimport java.util.concurrent.atomic.AtomicReference;\n\nimport static org.opensearch.node.Node.NODE_NAME_SETTING;\nimport static org.hamcrest.core.IsInstanceOf.instanceOf;\n\npublic class ListenerTimeoutsTests extends OpenSearchTestCase {\n\n    private final TimeValue timeout = TimeValue.timeValueMillis(10);\n    private final String generic = ThreadPool.Names.GENERIC;\n    private DeterministicTaskQueue taskQueue;\n\n    @Before\n    public void setUp() throws Exception {\n        super.setUp();\n        Settings settings = Settings.builder().put(NODE_NAME_SETTING.getKey(), \"node\").build();\n        taskQueue = new DeterministicTaskQueue(settings, random());\n    }\n\n    public void testListenerTimeout() {\n        AtomicBoolean success = new AtomicBoolean(false);\n        AtomicReference<Exception> exception = new AtomicReference<>();\n        ActionListener<Void> listener = wrap(success, exception);\n\n        ActionListener<Void> wrapped = ListenerTimeouts.wrapWithTimeout(taskQueue.getThreadPool(), listener, timeout, generic, \"test\");\n        assertTrue(taskQueue.hasDeferredTasks());\n        taskQueue.advanceTime();\n        taskQueue.runAllRunnableTasks();\n\n        wrapped.onResponse(null);\n        wrapped.onFailure(new IOException(\"incorrect exception\"));\n\n        assertFalse(success.get());\n        assertThat(exception.get(), instanceOf(OpenSearchTimeoutException.class));\n    }\n\n    public void testFinishNormallyBeforeTimeout() {\n        AtomicBoolean success = new AtomicBoolean(false);\n        AtomicReference<Exception> exception = new AtomicReference<>();\n        ActionListener<Void> listener = wrap(success, exception);\n\n        ActionListener<Void> wrapped = ListenerTimeouts.wrapWithTimeout(taskQueue.getThreadPool(), listener, timeout, generic, \"test\");\n        wrapped.onResponse(null);\n        wrapped.onFailure(new IOException(\"boom\"));\n        wrapped.onResponse(null);\n\n        assertTrue(taskQueue.hasDeferredTasks());\n        taskQueue.advanceTime();\n        taskQueue.runAllRunnableTasks();\n\n        assertTrue(success.get());\n        assertNull(exception.get());\n    }\n\n    public void testFinishExceptionallyBeforeTimeout() {\n        AtomicBoolean success = new AtomicBoolean(false);\n        AtomicReference<Exception> exception = new AtomicReference<>();\n        ActionListener<Void> listener = wrap(success, exception);\n\n        ActionListener<Void> wrapped = ListenerTimeouts.wrapWithTimeout(taskQueue.getThreadPool(), listener, timeout, generic, \"test\");\n        wrapped.onFailure(new IOException(\"boom\"));\n\n        assertTrue(taskQueue.hasDeferredTasks());\n        taskQueue.advanceTime();\n        taskQueue.runAllRunnableTasks();\n\n        assertFalse(success.get());\n        assertThat(exception.get(), instanceOf(IOException.class));\n    }\n\n    private ActionListener<Void> wrap(AtomicBoolean success, AtomicReference<Exception> exception) {\n        return new ActionListener<Void>() {\n\n            private final AtomicBoolean completed = new AtomicBoolean();\n\n            @Override\n            public void onResponse(Void aVoid) {\n                assertTrue(completed.compareAndSet(false, true));\n                assertTrue(success.compareAndSet(false, true));\n            }\n\n            @Override\n            public void onFailure(Exception e) {\n                assertTrue(completed.compareAndSet(false, true));\n                assertTrue(exception.compareAndSet(null, e));\n            }\n        };\n    }\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/ContextPreservingActionListenerTests.java",
+      "sha": null,
+      "content_sha256": "fe7d5721f3956ec2c871422913799f56f80be885831220fbfca99a14888c2b9c",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.common.util.concurrent.ThreadContext;\nimport org.opensearch.core.action.ActionListener;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.IOException;\n\nimport static org.hamcrest.Matchers.allOf;\nimport static org.hamcrest.Matchers.containsString;\n\npublic class ContextPreservingActionListenerTests extends OpenSearchTestCase {\n\n    public void testOriginalContextIsPreservedAfterOnResponse() throws IOException {\n        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);\n        final boolean nonEmptyContext = randomBoolean();\n        if (nonEmptyContext) {\n            threadContext.putHeader(\"not empty\", \"value\");\n        }\n        final ContextPreservingActionListener<Void> actionListener;\n        try (ThreadContext.StoredContext ignore = threadContext.stashContext()) {\n            threadContext.putHeader(\"foo\", \"bar\");\n            final ActionListener<Void> delegate = new ActionListener<Void>() {\n                @Override\n                public void onResponse(Void aVoid) {\n                    assertEquals(\"bar\", threadContext.getHeader(\"foo\"));\n                    assertNull(threadContext.getHeader(\"not empty\"));\n                }\n\n                @Override\n                public void onFailure(Exception e) {\n                    throw new RuntimeException(\"onFailure shouldn't be called\", e);\n                }\n            };\n            if (randomBoolean()) {\n                actionListener = new ContextPreservingActionListener<>(threadContext.newRestorableContext(true), delegate);\n            } else {\n                actionListener = ContextPreservingActionListener.wrapPreservingContext(delegate, threadContext);\n            }\n        }\n\n        assertNull(threadContext.getHeader(\"foo\"));\n        assertEquals(nonEmptyContext ? \"value\" : null, threadContext.getHeader(\"not empty\"));\n\n        actionListener.onResponse(null);\n\n        assertNull(threadContext.getHeader(\"foo\"));\n        assertEquals(nonEmptyContext ? \"value\" : null, threadContext.getHeader(\"not empty\"));\n    }\n\n    public void testOriginalContextIsPreservedAfterOnFailure() throws Exception {\n        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);\n        final boolean nonEmptyContext = randomBoolean();\n        if (nonEmptyContext) {\n            threadContext.putHeader(\"not empty\", \"value\");\n        }\n        final ContextPreservingActionListener<Void> actionListener;\n        try (ThreadContext.StoredContext ignore = threadContext.stashContext()) {\n            threadContext.putHeader(\"foo\", \"bar\");\n            final ActionListener<Void> delegate = new ActionListener<Void>() {\n                @Override\n                public void onResponse(Void aVoid) {\n                    throw new RuntimeException(\"onResponse shouldn't be called\");\n                }\n\n                @Override\n                public void onFailure(Exception e) {\n                    assertEquals(\"bar\", threadContext.getHeader(\"foo\"));\n                    assertNull(threadContext.getHeader(\"not empty\"));\n                }\n            };\n\n            if (randomBoolean()) {\n                actionListener = new ContextPreservingActionListener<>(threadContext.newRestorableContext(true), delegate);\n            } else {\n                actionListener = ContextPreservingActionListener.wrapPreservingContext(delegate, threadContext);\n            }\n\n        }\n\n        assertNull(threadContext.getHeader(\"foo\"));\n        assertEquals(nonEmptyContext ? \"value\" : null, threadContext.getHeader(\"not empty\"));\n\n        actionListener.onFailure(null);\n\n        assertNull(threadContext.getHeader(\"foo\"));\n        assertEquals(nonEmptyContext ? \"value\" : null, threadContext.getHeader(\"not empty\"));\n    }\n\n    public void testOriginalContextIsWhenListenerThrows() throws Exception {\n        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);\n        final boolean nonEmptyContext = randomBoolean();\n        if (nonEmptyContext) {\n            threadContext.putHeader(\"not empty\", \"value\");\n        }\n        final ContextPreservingActionListener<Void> actionListener;\n        try (ThreadContext.StoredContext ignore = threadContext.stashContext()) {\n            threadContext.putHeader(\"foo\", \"bar\");\n            final ActionListener<Void> delegate = new ActionListener<Void>() {\n                @Override\n                public void onResponse(Void aVoid) {\n                    assertEquals(\"bar\", threadContext.getHeader(\"foo\"));\n                    assertNull(threadContext.getHeader(\"not empty\"));\n                    throw new RuntimeException(\"onResponse called\");\n                }\n\n                @Override\n                public void onFailure(Exception e) {\n                    assertEquals(\"bar\", threadContext.getHeader(\"foo\"));\n                    assertNull(threadContext.getHeader(\"not empty\"));\n                    throw new RuntimeException(\"onFailure called\");\n                }\n            };\n\n            if (randomBoolean()) {\n                actionListener = new ContextPreservingActionListener<>(threadContext.newRestorableContext(true), delegate);\n            } else {\n                actionListener = ContextPreservingActionListener.wrapPreservingContext(delegate, threadContext);\n            }\n        }\n\n        assertNull(threadContext.getHeader(\"foo\"));\n        assertEquals(nonEmptyContext ? \"value\" : null, threadContext.getHeader(\"not empty\"));\n\n        RuntimeException e = expectThrows(RuntimeException.class, () -> actionListener.onResponse(null));\n        assertEquals(\"onResponse called\", e.getMessage());\n\n        assertNull(threadContext.getHeader(\"foo\"));\n        assertEquals(nonEmptyContext ? \"value\" : null, threadContext.getHeader(\"not empty\"));\n\n        e = expectThrows(RuntimeException.class, () -> actionListener.onFailure(null));\n        assertEquals(\"onFailure called\", e.getMessage());\n\n        assertNull(threadContext.getHeader(\"foo\"));\n        assertEquals(nonEmptyContext ? \"value\" : null, threadContext.getHeader(\"not empty\"));\n    }\n\n    public void testToStringIncludesDelegate() {\n        ThreadContext threadContext = new ThreadContext(Settings.EMPTY);\n        final ContextPreservingActionListener<Void> actionListener;\n        try (ThreadContext.StoredContext ignore = threadContext.stashContext()) {\n            final ActionListener<Void> delegate = new ActionListener<Void>() {\n                @Override\n                public void onResponse(Void aVoid) {}\n\n                @Override\n                public void onFailure(Exception e) {}\n\n                @Override\n                public String toString() {\n                    return \"test delegate\";\n                }\n            };\n\n            actionListener = ContextPreservingActionListener.wrapPreservingContext(delegate, threadContext);\n        }\n\n        assertThat(actionListener.toString(), allOf(containsString(\"test delegate\"), containsString(\"ContextPreservingActionListener\")));\n    }\n\n}\n"
+    },
+    {
+      "path": "server/src/test/java/org/opensearch/action/support/GroupedActionListenerTests.java",
+      "sha": null,
+      "content_sha256": "b4a14859b071a0b561e1df10f894400b6f5f016318b400c45f859356bab7a364",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.core.action.ActionListener;\nimport org.opensearch.test.OpenSearchTestCase;\n\nimport java.io.IOException;\nimport java.util.ArrayList;\nimport java.util.Collection;\nimport java.util.Collections;\nimport java.util.concurrent.CyclicBarrier;\nimport java.util.concurrent.ExecutorService;\nimport java.util.concurrent.Executors;\nimport java.util.concurrent.TimeUnit;\nimport java.util.concurrent.atomic.AtomicInteger;\nimport java.util.concurrent.atomic.AtomicReference;\n\nimport static org.hamcrest.CoreMatchers.instanceOf;\nimport static org.hamcrest.CoreMatchers.nullValue;\nimport static org.hamcrest.Matchers.equalTo;\nimport static org.hamcrest.Matchers.not;\n\npublic class GroupedActionListenerTests extends OpenSearchTestCase {\n\n    public void testNotifications() throws InterruptedException {\n        AtomicReference<Collection<Integer>> resRef = new AtomicReference<>();\n        ActionListener<Collection<Integer>> result = new ActionListener<Collection<Integer>>() {\n            @Override\n            public void onResponse(Collection<Integer> integers) {\n                resRef.set(integers);\n            }\n\n            @Override\n            public void onFailure(Exception e) {\n                throw new AssertionError(e);\n            }\n        };\n        final int groupSize = randomIntBetween(10, 1000);\n        AtomicInteger count = new AtomicInteger();\n        GroupedActionListener<Integer> listener = new GroupedActionListener<>(result, groupSize);\n        int numThreads = randomIntBetween(2, 5);\n        Thread[] threads = new Thread[numThreads];\n        CyclicBarrier barrier = new CyclicBarrier(numThreads);\n        for (int i = 0; i < numThreads; i++) {\n            threads[i] = new Thread(() -> {\n                try {\n                    barrier.await(10, TimeUnit.SECONDS);\n                } catch (Exception e) {\n                    throw new AssertionError(e);\n                }\n                int c;\n                while ((c = count.incrementAndGet()) <= groupSize) {\n                    listener.onResponse(c - 1);\n                }\n            });\n            threads[i].start();\n        }\n        for (Thread t : threads) {\n            t.join();\n        }\n        assertNotNull(resRef.get());\n        ArrayList<Integer> list = new ArrayList<>(resRef.get());\n        Collections.sort(list);\n        assertEquals(groupSize, resRef.get().size());\n        int expectedValue = 0;\n        for (int i = 0; i < groupSize; i++) {\n            assertEquals(Integer.valueOf(expectedValue++), list.get(i));\n        }\n    }\n\n    public void testFailed() {\n        AtomicReference<Collection<Integer>> resRef = new AtomicReference<>();\n        AtomicReference<Exception> excRef = new AtomicReference<>();\n\n        ActionListener<Collection<Integer>> result = new ActionListener<Collection<Integer>>() {\n            @Override\n            public void onResponse(Collection<Integer> integers) {\n                resRef.set(integers);\n            }\n\n            @Override\n            public void onFailure(Exception e) {\n                excRef.set(e);\n            }\n        };\n        int size = randomIntBetween(3, 4);\n        GroupedActionListener<Integer> listener = new GroupedActionListener<>(result, size);\n        listener.onResponse(0);\n        IOException ioException = new IOException();\n        RuntimeException rtException = new RuntimeException();\n        listener.onFailure(rtException);\n        listener.onFailure(ioException);\n        if (size == 4) {\n            listener.onResponse(2);\n        }\n        assertNotNull(excRef.get());\n        assertEquals(rtException, excRef.get());\n        assertEquals(1, excRef.get().getSuppressed().length);\n        assertEquals(ioException, excRef.get().getSuppressed()[0]);\n        assertNull(resRef.get());\n        listener.onResponse(1);\n        assertNull(resRef.get());\n    }\n\n    public void testConcurrentFailures() throws InterruptedException {\n        AtomicReference<Exception> finalException = new AtomicReference<>();\n        int numGroups = randomIntBetween(10, 100);\n        GroupedActionListener<Void> listener = new GroupedActionListener<>(ActionListener.wrap(r -> {}, finalException::set), numGroups);\n        ExecutorService executorService = Executors.newFixedThreadPool(numGroups);\n        for (int i = 0; i < numGroups; i++) {\n            executorService.submit(() -> listener.onFailure(new IOException()));\n        }\n\n        executorService.shutdown();\n        executorService.awaitTermination(10, TimeUnit.SECONDS);\n\n        Exception exception = finalException.get();\n        assertNotNull(exception);\n        assertThat(exception, instanceOf(IOException.class));\n        assertEquals(numGroups - 1, exception.getSuppressed().length);\n    }\n\n    /*\n     * It can happen that the same exception causes a grouped listener to be notified of the failure multiple times. Since we suppress\n     * additional exceptions into the first exception, we have to guard against suppressing into the same exception, which could occur if we\n     * are notified of with the same failure multiple times. This test verifies that the guard against self-suppression remains.\n     */\n    public void testRepeatNotificationForTheSameException() {\n        final AtomicReference<Exception> finalException = new AtomicReference<>();\n        final GroupedActionListener<Void> listener = new GroupedActionListener<>(ActionListener.wrap(r -> {}, finalException::set), 2);\n        final Exception e = new Exception();\n        // repeat notification for the same exception\n        listener.onFailure(e);\n        listener.onFailure(e);\n        assertThat(finalException.get(), not(nullValue()));\n        assertThat(finalException.get(), equalTo(e));\n    }\n\n}\n"
+    },
+    {
+      "path": "server/src/internalClusterTest/java/org/opensearch/action/support/WaitActiveShardCountIT.java",
+      "sha": null,
+      "content_sha256": "d44abbd6c805ae8459970015f60e524ec6e993b88f67e60723d05ec0c6d27d09",
+      "score": 296,
+      "content": "/*\n * SPDX-License-Identifier: Apache-2.0\n *\n * The OpenSearch Contributors require contributions made to\n * this file be licensed under the Apache-2.0 license or a\n * compatible open source license.\n */\n\n/*\n * Licensed to Elasticsearch under one or more contributor\n * license agreements. See the NOTICE file distributed with\n * this work for additional information regarding copyright\n * ownership. Elasticsearch licenses this file to you under\n * the Apache License, Version 2.0 (the \"License\"); you may\n * not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing,\n * software distributed under the License is distributed on an\n * \"AS IS\" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\n * KIND, either express or implied.  See the License for the\n * specific language governing permissions and limitations\n * under the License.\n */\n\n/*\n * Modifications Copyright OpenSearch Contributors. See\n * GitHub history for details.\n */\n\npackage org.opensearch.action.support;\n\nimport org.opensearch.action.UnavailableShardsException;\nimport org.opensearch.action.admin.cluster.health.ClusterHealthResponse;\nimport org.opensearch.action.admin.indices.create.CreateIndexResponse;\nimport org.opensearch.cluster.health.ClusterHealthStatus;\nimport org.opensearch.common.Priority;\nimport org.opensearch.common.settings.Settings;\nimport org.opensearch.core.rest.RestStatus;\nimport org.opensearch.core.xcontent.MediaTypeRegistry;\nimport org.opensearch.test.OpenSearchIntegTestCase;\n\nimport static org.opensearch.common.unit.TimeValue.timeValueMillis;\nimport static org.opensearch.common.unit.TimeValue.timeValueSeconds;\nimport static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;\nimport static org.hamcrest.Matchers.equalTo;\nimport static org.hamcrest.Matchers.startsWith;\n\n/**\n * Tests setting the active shard count for replication operations (e.g. index) operates correctly.\n */\npublic class WaitActiveShardCountIT extends OpenSearchIntegTestCase {\n    public void testReplicationWaitsForActiveShardCount() throws Exception {\n        CreateIndexResponse createIndexResponse = prepareCreate(\n            \"test\",\n            1,\n            Settings.builder().put(\"index.number_of_shards\", 1).put(\"index.number_of_replicas\", 2)\n        ).get();\n\n        assertAcked(createIndexResponse);\n\n        // indexing, by default, will work (waiting for one shard copy only)\n        client().prepareIndex(\"test\").setId(\"1\").setSource(source(\"1\", \"test\"), MediaTypeRegistry.JSON).execute().actionGet();\n        try {\n            client().prepareIndex(\"test\")\n                .setId(\"1\")\n                .setSource(source(\"1\", \"test\"), MediaTypeRegistry.JSON)\n                .setWaitForActiveShards(2) // wait for 2 active shard copies\n                .setTimeout(timeValueMillis(100))\n                .execute()\n                .actionGet();\n            fail(\"can't index, does not enough active shard copies\");\n        } catch (UnavailableShardsException e) {\n            assertThat(e.status(), equalTo(RestStatus.SERVICE_UNAVAILABLE));\n            assertThat(\n                e.getMessage(),\n                startsWith(\"[test][0] Not enough active copies to meet shard count of [2] (have 1, needed 2). Timeout: [100ms]\")\n            );\n            // but really, all is well\n        }\n\n        allowNodes(\"test\", 2);\n\n        ClusterHealthResponse clusterHealth = client().admin()\n            .cluster()\n            .prepareHealth()\n            .setWaitForEvents(Priority.LANGUID)\n            .setWaitForActiveShards(2)\n            .setWaitForYellowStatus()\n            .execute()\n            .actionGet();\n        logger.info(\"Done Cluster Health, status {}\", clusterHealth.getStatus());\n        assertThat(clusterHealth.isTimedOut(), equalTo(false));\n        assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.YELLOW));\n\n        // this should work, since we now have two\n        client().prepareIndex(\"test\")\n            .setId(\"1\")\n            .setSource(source(\"1\", \"test\"), MediaTypeRegistry.JSON)\n            .setWaitForActiveShards(2)\n            .setTimeout(timeValueSeconds(1))\n            .execute()\n            .actionGet();\n\n        try {\n            client().prepareIndex(\"test\")\n                .setId(\"1\")\n                .setSource(source(\"1\", \"test\"), MediaTypeRegistry.JSON)\n                .setWaitForActiveShards(ActiveShardCount.ALL)\n                .setTimeout(timeValueMillis(100))\n                .execute()\n                .actionGet();\n            fail(\"can't index, not enough active shard copies\");\n        } catch (UnavailableShardsException e) {\n            assertThat(e.status(), equalTo(RestStatus.SERVICE_UNAVAILABLE));\n            assertThat(\n                e.getMessage(),\n                startsWith(\n                    \"[test][0] Not enough active copies to meet shard count of [\"\n                        + ActiveShardCount.ALL\n                        + \"] (have 2, needed 3). Timeout: [100ms]\"\n                )\n            );\n            // but really, all is well\n        }\n\n        allowNodes(\"test\", 3);\n        clusterHealth = client().admin()\n            .cluster()\n            .prepareHealth()\n            .setWaitForEvents(Priority.LANGUID)\n            .setWaitForActiveShards(3)\n            .setWaitForGreenStatus()\n            .execute()\n            .actionGet();\n        logger.info(\"Done Cluster Health, status {}\", clusterHealth.getStatus());\n        assertThat(clusterHealth.isTimedOut(), equalTo(false));\n        assertThat(clusterHealth.getStatus(), equalTo(ClusterHealthStatus.GREEN));\n\n        // this should work, since we now have all shards started\n        client().prepareIndex(\"test\")\n            .setId(\"1\")\n            .setSource(source(\"1\", \"test\"), MediaTypeRegistry.JSON)\n            .setWaitForActiveShards(ActiveShardCount.ALL)\n            .setTimeout(timeValueSeconds(1))\n            .execute()\n            .actionGet();\n    }\n\n    private String source(String id, String nameValue) {\n        return \"{ \\\"type1\\\" : { \\\"id\\\" : \\\"\" + id + \"\\\", \\\"name\\\" : \\\"\" + nameValue + \"\\\" } }\";\n    }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 103,
+  "sensitive_files_skipped": [
+    {
+      "path": "buildSrc/src/main/resources/test/ssl/test-client.jks",
+      "sha": "e2ed37ec7cf032e2410ebe5a079560a8af70f721",
+      "size": 3673,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "buildSrc/src/main/resources/test/ssl/test-node.jks",
+      "sha": "59e995321a94387e1d37d110092be90d1002cdaf",
+      "size": 3669,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "buildSrc/src/test/resources/ca.p12",
+      "sha": "cc44494515b9f415b10e5a1680a351004f36336e",
+      "size": 1130,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "buildSrc/src/test/resources/ca.pem",
+      "sha": "8dda1767e4838ec63bcaa2302d2205bfd4ac2dd8",
+      "size": 1414,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "client/rest-high-level/src/test/resources/org/opensearch/client/security/delegate_pki/testClient.key",
+      "sha": "186e6f86745f1b61b72ccfadae08c20bcc3e20a0",
+      "size": 1679,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "client/rest-high-level/src/test/resources/org/opensearch/client/security/delegate_pki/testIntermediateCA.key",
+      "sha": "5147725f4486adb8f5442e0d747652a4243db5d9",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "client/rest-high-level/src/test/resources/org/opensearch/client/security/delegate_pki/testRootCA.key",
+      "sha": "148bbd52bd76fa4d501389f7c253e5eabd600d13",
+      "size": 1679,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "client/rest-high-level/testnode.jks",
+      "sha": "ebe6146124e8fd607e46a1a3129bdf9b4de0370d",
+      "size": 9360,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "client/rest/src/test/resources/test.der",
+      "sha": "454bfd286bd97937020cb8d1535c7cb3eec43557",
+      "size": 1218,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "client/rest/src/test/resources/test_truststore.jks",
+      "sha": "d27635fec5040d63969f7d124d499fa1b4788d1b",
+      "size": 1097,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "client/rest/src/test/resources/testks.jks",
+      "sha": "cd706db5e3834f4b44493530bca17697f32d8de2",
+      "size": 2381,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/nio/src/test/resources/testks.jks",
+      "sha": "cd706db5e3834f4b44493530bca17697f32d8de2",
+      "size": 2381,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/README.md",
+      "sha": "24bddffc3cb668986da9e6d5634fdb6ba02d7813",
+      "size": 5893,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca-all/ca.bcfks",
+      "sha": "f27717d0ce67aa8d1beb0c87410c9201633c1f95",
+      "size": 2909,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca-all/ca.jks",
+      "sha": "0c00ff13d906ff3cb4e584dea41e702d31eab693",
+      "size": 2460,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca-all/ca.p12",
+      "sha": "6f13fc1a92747450321079c6aa6790819564a142",
+      "size": 2818,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca-all/ca_nomac.p12",
+      "sha": "b63b10209855bd3bb6c0208cdafbb2fa46c80c98",
+      "size": 5280,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca1-b/ca.crt",
+      "sha": "22c33082c31efd806bde1ef3d359468a3d12a4b5",
+      "size": 1115,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca1-b/ca.key",
+      "sha": "9409623bc4d2ecea0d6ed4a30e8f47917fe48ac1",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca1/ca.bcfks",
+      "sha": "cc3d63d89644bbd744cce2a80889ff970e7d13fb",
+      "size": 1245,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca1/ca.crt",
+      "sha": "08e351d886c2ff4b7c241af11e62db1dfeb64750",
+      "size": 1115,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca1/ca.key",
+      "sha": "990ad2d005d343e79052c6ab4faec22e5dba6e65",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca1/ca.p12",
+      "sha": "0fd23865b718dbe636d5858e2df48de3de29f2c3",
+      "size": 1066,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca2/ca.bcfks",
+      "sha": "b67eb1fe2e613782b543b17fe56fdfbe2a46c5fd",
+      "size": 1245,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca2/ca.crt",
+      "sha": "1abadd52667e59c7e98c53bfdb7096c759799b42",
+      "size": 1115,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca2/ca.key",
+      "sha": "7616591a75ad51a26d6f8bf75f2f35293f6df0fe",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca2/ca.p12",
+      "sha": "fdd374531870cbfdb2f77452b5f0c4958342b5b9",
+      "size": 1066,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca3/ca.bcfks",
+      "sha": "8bc54fc133d32b83971ebcabd917d661bf028c83",
+      "size": 1246,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca3/ca.crt",
+      "sha": "3f408375378d4c81798d2875222afc62ded80d82",
+      "size": 1115,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca3/ca.key",
+      "sha": "3626d71ba2032097d9a05f1659e95a9aa8eaa8bf",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/ca3/ca.p12",
+      "sha": "1331cec05d77efa8874e1488cdd01ff1d86fc940",
+      "size": 1066,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert-all/certs.bcfks",
+      "sha": "1eab5af506b2c643aca321c6e8c59ff7322d8c50",
+      "size": 4901,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert-all/certs.jks",
+      "sha": "4cf839ce8d046fa5e18de403210a79844870d002",
+      "size": 4268,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert-all/certs.p12",
+      "sha": "73912976ca7cc61d310d02f1f8805d35ea75f612",
+      "size": 4895,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert-all/empty.jks",
+      "sha": "1327d550f61fd92422fecc4cb63ad35cdd2bc6d4",
+      "size": 32,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert1/cert1-pkcs1.crt",
+      "sha": "51f39295f62e30a105d299abf751956539c5b94e",
+      "size": 1139,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert1/cert1-pkcs1.key",
+      "sha": "461ae5ee31ba70c55483557c05dc31e9889eb7c8",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert1/cert1.crt",
+      "sha": "576de3bb28fb4ad1d79a4ad2116dbf3fbda3b461",
+      "size": 1123,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert1/cert1.key",
+      "sha": "b7ad0d595d7b7cbe88d72ae365b784a7ebe6b1df",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert1/cert1.p12",
+      "sha": "af4918e031995a3b12e6b0c42682d86dc078ddb8",
+      "size": 2606,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert2/cert2-pkcs1.crt",
+      "sha": "3b7ca01e48bae9fa387361bc0e19707fb08c1101",
+      "size": 1139,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert2/cert2-pkcs1.key",
+      "sha": "1384b2daf309a28b1a2ca8642e8b5c3902316806",
+      "size": 1751,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert2/cert2.crt",
+      "sha": "6438d1e56e90666317ff11c4c693d88738bb7089",
+      "size": 1123,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert2/cert2.key",
+      "sha": "6d631e7ddffdd2556f0cb888d32c1e1899fa9295",
+      "size": 1886,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/cert2/cert2.p12",
+      "sha": "5222f8cf3c691aba8d5a8226c2f1fa5ce8fe5c1f",
+      "size": 2606,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/README.md",
+      "sha": "d71cdb1d5033129764203035aaa59790925d014e",
+      "size": 9566,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/certificate_secp256r1.pem",
+      "sha": "c31ca5ba3e06906ea5d3c7ca21674bc4de89814e",
+      "size": 765,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/certificate_secp384r1.pem",
+      "sha": "287fe2a93db8e0b6ed91185e1dfb5253ac16408c",
+      "size": 847,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/certificate_secp521r1.pem",
+      "sha": "e7952c35a37e2840b81471912854149f79dab013",
+      "size": 948,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/corrupted_key_pkcs8_plain.pem",
+      "sha": "4b2271a6f3971ab00bae0fda4947e2a7983e240a",
+      "size": 1523,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/dsa_key_openssl_encrypted.pem",
+      "sha": "6dafbae6a7785cc561c430c4d33345222a8e926b",
+      "size": 1288,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/dsa_key_openssl_plain.pem",
+      "sha": "40290ff1c2b1df43b86f92225b46f79ce41358ad",
+      "size": 1212,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/dsa_key_openssl_plain_with_params.pem",
+      "sha": "a57dbe80015c61ad2affd07e7d24a019140545f5",
+      "size": 1488,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/dsa_key_pkcs8_encrypted.pem",
+      "sha": "1b20aa20e1f2901861d23fbf3ebb612a3d1f063c",
+      "size": 1062,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/dsa_key_pkcs8_plain.pem",
+      "sha": "d9f6e6108d227a643a602106194bd2027523d4d4",
+      "size": 879,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/ec_key_openssl_encrypted.pem",
+      "sha": "374467e05e2803d2828db16684e704def3c9bd67",
+      "size": 299,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/ec_key_openssl_plain.pem",
+      "sha": "e8009c1d2d520e22386cb3bbb72b10eb8cc31be1",
+      "size": 227,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/ec_key_openssl_plain_with_params.pem",
+      "sha": "c5bed51ef1f86830262e30d3366b74ff0f26a941",
+      "size": 302,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/ec_key_pkcs8_encrypted.pem",
+      "sha": "d36c120ab938613943821165f06672e613cef6be",
+      "size": 322,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/ec_key_pkcs8_plain.pem",
+      "sha": "7e6de54424702d60659ad9dd04dc621f17f2fbcc",
+      "size": 148,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/empty.pem",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "size": 0,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/key_DSA_enc_pbkdf2.pem",
+      "sha": "bb1655d2e954895aada06bf904ee28635c1e4637",
+      "size": 1062,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/key_EC_enc_pbkdf2.pem",
+      "sha": "b851058d17217068caf63aef109db29fa79a9a08",
+      "size": 306,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/key_PKCS8_enc_pbkdf2.pem",
+      "sha": "445d50f1cafe23b1b87e063ad2b9016cea671721",
+      "size": 1886,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/key_pkcs8_encrypted.pem",
+      "sha": "28059d5a2266d52edd6f8a0306cedb5b7dd98676",
+      "size": 1785,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/key_unsupported.pem",
+      "sha": "96f95848d099f8ebc3cbc8eb751482e42a32d6a2",
+      "size": 411,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/private_secp256r1.pem",
+      "sha": "dc137112a4691c3e645e45e53924c69ad96e6ab3",
+      "size": 302,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/private_secp384r1.pem",
+      "sha": "38578d6334a89ac5357484f0a3cbee7969a8ca28",
+      "size": 359,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/private_secp521r1.pem",
+      "sha": "0ccf7ea9ce322bdf3fb3a48a1df571aa8376d921",
+      "size": 436,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/rsa_key_pkcs8_plain.pem",
+      "sha": "dd1675957f69f68446ddc7c0b430f947f80f9c29",
+      "size": 1708,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode-aes128.pem",
+      "sha": "b4448ec8afaf3ea4348b82eacaea319aa3640722",
+      "size": 1766,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode-aes192.pem",
+      "sha": "4696e77bd3f64fceb2537a4c51f987cdbb121995",
+      "size": 1766,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode-aes256.pem",
+      "sha": "64c765456a1ff16168abccd2e6041d6b47cb3a19",
+      "size": 1766,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode-unprotected.pem",
+      "sha": "1602461b11517ab88ee00b3d67cfbd152f37ced2",
+      "size": 1679,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode.bcfks",
+      "sha": "8d1a016d790b10dfe792cbaa4abf1582116aebec",
+      "size": 6009,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode.crt",
+      "sha": "08c160bcea5ffe5e40ea1a8c05b2d587be934264",
+      "size": 1387,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode.jks",
+      "sha": "1502bbad4eaedce7194d7e28acfe87e6b86c29b4",
+      "size": 15253,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode.pem",
+      "sha": "5a67e1033440d9c9bdb4050d0540870929f88c68",
+      "size": 1751,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "libs/ssl-config/src/test/resources/certs/pem-utils/testnode_with_bagattrs.pem",
+      "sha": "ce8299cd070fc89c47a00522c819446edc347c8b",
+      "size": 1857,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/reindex/src/test/resources/org/opensearch/index/reindex/ca.key",
+      "sha": "a04c18c994359c986d8f4ba542bb3721d22906ab",
+      "size": 1886,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/reindex/src/test/resources/org/opensearch/index/reindex/ca.p12",
+      "sha": "332a75aec64c19fcb8a944b1b1300d353748b32f",
+      "size": 2527,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/reindex/src/test/resources/org/opensearch/index/reindex/ca.pem",
+      "sha": "615f00e468ae6ee69fd7715483acf3a4f79daae1",
+      "size": 1342,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/reindex/src/test/resources/org/opensearch/index/reindex/client/client.key",
+      "sha": "ca0c6ba868047bd3ea1d488e639ceae9e10fab62",
+      "size": 1886,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/reindex/src/test/resources/org/opensearch/index/reindex/http/http.key",
+      "sha": "68b61c6d6e03e9a55a5b1359b9e32c5bdbe8c5e8",
+      "size": 1886,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-grpc/src/test/resources/client.key",
+      "sha": "2813772b5bf7fe5b9a64b03306c6656442b40216",
+      "size": 1886,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-grpc/src/test/resources/netty4-client-secure.jks",
+      "sha": "6e6c05e16967f2415fb57ee492eff2786c42c36c",
+      "size": 2772,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-grpc/src/test/resources/netty4-client-secure.p12",
+      "sha": "00a70268a9ffa599704e6655a68e7b6792470f86",
+      "size": 2748,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-grpc/src/test/resources/netty4-server-secure.jks",
+      "sha": "d5c2a578da89d1729e5fbefb5ddd27a516b6e94f",
+      "size": 2772,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-grpc/src/test/resources/netty4-server-secure.p12",
+      "sha": "6d0a86df3684fdd029fedd68cd0790cdb19846a8",
+      "size": 2748,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-grpc/src/test/resources/server.key",
+      "sha": "dcad678784d8db99953dd7cda869d452dc044ae5",
+      "size": 1886,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-netty4/src/test/resources/netty4-client-truststore.jks",
+      "sha": "704620dcc916b2b199d0d72de2db73adcaa91c83",
+      "size": 1158,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-netty4/src/test/resources/netty4-client-truststore.p12",
+      "sha": "1790c6721859cb94114ac475934f98a3ed496775",
+      "size": 1158,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-netty4/src/test/resources/netty4-server-keystore.jks",
+      "sha": "7decaf5d816f9b88c981fe33867f0b31c77cbc01",
+      "size": 2856,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-netty4/src/test/resources/netty4-server-keystore.p12",
+      "sha": "7c4f40e5d6d99a10221455b98c52632c3f08d682",
+      "size": 2840,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-netty4/src/test/resources/root.key",
+      "sha": "641650ec29e1febdbd7034db1f3abcbe122b536c",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "modules/transport-netty4/src/test/resources/server.key",
+      "sha": "746431674d6e8e64eb48cceb5ec45138185efb74",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "plugins/repository-gcs/src/test/resources/google.p12",
+      "sha": "9f7953100f34bcbd2c69c3ba23722aa9bfc3bd76",
+      "size": 76476,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "plugins/repository-s3/src/yamlRestTest/resources/rest-api-spec/test/repository_s3/20_repository_permanent_credentials.yml",
+      "sha": "5590122e26b86be141548735bf01a79e880fabd2",
+      "size": 8944,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "plugins/repository-s3/src/yamlRestTest/resources/rest-api-spec/test/repository_s3/30_repository_temporary_credentials.yml",
+      "sha": "741e96110ea961bae338fad6dd5ff865f99c4877",
+      "size": 6464,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "plugins/repository-s3/src/yamlRestTest/resources/rest-api-spec/test/repository_s3/40_repository_ec2_credentials.yml",
+      "sha": "8d4349845a1f6dd9da934a38a94b6b0ffa7bf407",
+      "size": 6050,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "plugins/repository-s3/src/yamlRestTest/resources/rest-api-spec/test/repository_s3/50_repository_ecs_credentials.yml",
+      "sha": "8650af2d2985231cb1bb8a05362865f8ad172138",
+      "size": 6038,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "plugins/repository-s3/src/yamlRestTest/resources/rest-api-spec/test/repository_s3/60_repository_eks_credentials.yml",
+      "sha": "e01d3e87eb35f058f22c231a9345215590b9e191",
+      "size": 6154,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "server/src/test/resources/org/opensearch/action/admin/invalid.txt.keystore",
+      "sha": "a18f3707ac0d933bf6f71a583a7b0d9c758e18ad",
+      "size": 25,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:42:45.699009+00:00"
+}

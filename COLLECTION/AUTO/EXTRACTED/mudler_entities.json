@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:mudler/entities",
+  "repo": "mudler/entities",
+  "revision_sha": "357f29254cc54b4d008b7fb883fbe991e1a1b730",
+  "default_branch": "master",
+  "pushed_at": "2026-05-14T10:19:52Z",
+  "repo_updated_at": "2026-07-22T18:41:09Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "d7dfa5c28f8f1f72dccc69cb62910d762d01d77d95c8cc041a70301af828a81b",
+      "score": 100,
+      "content": "# :lock_with_ink_pen: Entities\n\nModern go identity manager for UNIX systems.\n\nEntities parses includes file to generate UNIX-compliant `/etc/passwd` , `/etc/shadow` and `/etc/groups` files.\nIt can be used to handle identities management and honors already existing entities in the system.\n\n\n```\n\n$> entities apply <entity.yaml>\n$> entities delete <entity.yaml>\n$> entities create <entity.yaml>\n\n```\n\n## Entities file format\n\n### Passwd\n\n```yaml\nkind: \"user\"\nusername: \"foo\"\npassword: \"pass\"\nuid: 0\ngid: 0\ninfo: \"Foo!\"\nhomedir: \"/home/foo\"\nshell: \"/bin/bash\"\n```\n\nTo use dynamic uid allocation set the `uid` field with value `-1`:\n\n```yaml\nkind: \"user\"\nusername: \"foo\"\npassword: \"pass\"\nuid: -1\ngid: 500\ninfo: \"Foo!\"\nhomedir: \"/home/foo\"\nshell: \"/bin/bash\"\n```\n\n`entities` will searching for the first available range specified by the env variable\n`ENTITY_DYNAMIC_RANGE` or by the default the range `500-999`.\n\n\nTo set gid with a dynamic id based by the group name you can set the `group` attribute:\n```yaml\nkind: \"user\"\nusername: \"foo\"\npassword: \"pass\"\nuid: 100\ngroup: \"foogroup\"\ninfo: \"Foo!\"\nhomedir: \"/home/foo\"\nshell: \"/bin/bash\"\n```\n\n`entities` will retrieve the `gid` from existing `/etc/group` file.\n\n\n### Gshadow\n\n```yaml\nkind: \"gshadow\"\nname: \"postmaster\"\npassword: \"foo\"\nadministrators: \"barred\"\nmembers: \"baz\"\n```\n\n### Shadow\n\n```yaml\nkind: \"shadow\"\nusername: \"foo\"\npassword: \"bar\"\nlast_changed: 1\nminimum_changed: 2\nmaximum_changed: 3\nwarn: 4\ninactive: 5\nexpire: 6\n```\n\nTo define `last_changed` with a value equal to current days from 1970 use `now`.\n\n### Group\n\n```yaml\nkind: \"group\"\ngroup_name: \"sddm\"\npassword: \"xx\"\ngid: 1\nusers: \"one,two,tree\"\n```\n\nTo assign a dynamic gid it's possible to use the value `-1`:\n\n```yaml\nkind: \"group\"\ngroup_name: \"foogroup\"\npassword: \"xx\"\ngid: -1\nusers: \"one,two,tree\"\n```\n\n`entities` will searching for the first available range specified by the env variable\n`ENTITY_DYNAMIC_RANGE` or by the default the range `500-999`.\n"
+    },
+    {
+      "path": "pkg/entities/entities_suite_test.go",
+      "sha": null,
+      "content_sha256": "b848a1e67531dd570f1ba96786865e7c43422f249cbb85911225f307b626d409",
+      "score": 91,
+      "content": "/*\nCopyright © 2020 Ettore Di Giacinto <mudler@mocaccino.org>\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n    http://www.apache.org/licenses/LICENSE-2.0\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage entities_test\n\nimport (\n\t\"os\"\n\t\"testing\"\n\n\t. \"github.com/onsi/ginkgo\"\n\t. \"github.com/onsi/gomega\"\n)\n\nfunc TestSolver(t *testing.T) {\n\tRegisterFailHandler(Fail)\n\tRunSpecs(t, \"Entities Suite\")\n}\n\nvar _ = BeforeSuite(func() {\n\tos.Setenv(\"ENTITY_DEFAULT_DELAY\", \"100ms\")\n\tos.Setenv(\"ENTITY_DEFAULT_INTERVAL\", \"10ms\")\n})\n\nvar _ = AfterSuite(func() {\n\tos.Unsetenv(\"ENTITY_DEFAULT_DELAY\")\n\tos.Unsetenv(\"ENTITY_DEFAULT_INTERVAL\")\n})\n"
+    },
+    {
+      "path": "pkg/entities/group_test.go",
+      "sha": null,
+      "content_sha256": "478c7a7060d4b98520ff673867f4a9e3e05df3c0a9b34e20cf14063719e3c164",
+      "score": 91,
+      "content": "/*\nCopyright © 2020 Ettore Di Giacinto <mudler@mocaccino.org>\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n    http://www.apache.org/licenses/LICENSE-2.0\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage entities_test\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\t\"path/filepath\"\n\n\t\"github.com/gofrs/flock\"\n\t. \"github.com/mudler/entities/pkg/entities\"\n\n\t. \"github.com/onsi/ginkgo\"\n\t. \"github.com/onsi/gomega\"\n)\n\nvar _ = Describe(\"Group\", func() {\n\tContext(\"Loading entities via yaml\", func() {\n\t\tp := &Parser{}\n\n\t\tIt(\"Changes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/group/group\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/group/update.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Group).Name).Should(Equal(\"sddm\"))\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`nm-openconnect:x:979:\nsddm:xx:1:one,two,tree\nopenvpn:x:977:\nnm-openvpn:x:976:\nminetest:x:975:\nabrt:x:974:\ngeoclue:x:973:\nntp:x:123:\n`))\n\t\t})\n\n\t\tIt(\"Adds and deletes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/group/group\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/group/group.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Group).Name).Should(Equal(\"foo\"))\n\n\t\t\tentity.Apply(tmpFile.Name(), false)\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`nm-openconnect:x:979:\nsddm:x:978:\nopenvpn:x:977:\nnm-openvpn:x:976:\nminetest:x:975:\nabrt:x:974:\ngeoclue:x:973:\nntp:x:123:\nfoo:xx:1:one,two,tree\n`))\n\n\t\t\tentity, err = p.ReadEntity(\"../../testing/fixtures/group/group_add.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Group).Name).Should(Equal(\"foo\"))\n\n\t\t\tentity.Apply(tmpFile.Name(), false)\n\n\t\t\tdat, err = os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`nm-openconnect:x:979:\nsddm:x:978:\nopenvpn:x:977:\nnm-openvpn:x:976:\nminetest:x:975:\nabrt:x:974:\ngeoclue:x:973:\nntp:x:123:\nfoo:xx:1:one,two,tree,four\n`))\n\n\t\t\tentity.Delete(tmpFile.Name())\n\t\t\tdat, err = os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`nm-openconnect:x:979:\nsddm:x:978:\nopenvpn:x:977:\nnm-openvpn:x:976:\nminetest:x:975:\nabrt:x:974:\ngeoclue:x:973:\nntp:x:123:\n`))\n\t\t})\n\n\t\tIt(\"works with locks\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/group/group\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/group/update.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Group).Name).Should(Equal(\"sddm\"))\n\n\t\t\tbaseName := filepath.Base(tmpFile.Name())\n\t\t\tfileLock := flock.New(fmt.Sprintf(\"/run/lock/%s.lock\", baseName))\n\t\t\tdefer os.Remove(fileLock.Path())\n\t\t\tlocked, err := fileLock.TryLock()\n\t\t\tExpect(err).To(BeNil())\n\t\t\tExpect(locked).To(BeTrue())\n\t\t\tdefer fileLock.Close()\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).ToNot(BeNil())\n\t\t\tExpect(err.Error()).To(ContainSubstring(\"Failed locking file\"))\n\t\t})\n\t})\n})\n"
+    },
+    {
+      "path": "pkg/entities/gshadow_test.go",
+      "sha": null,
+      "content_sha256": "8cf1738c455de7ab0ec4d69d85d936ac46978aeeecea88a713b13c88bc828888",
+      "score": 91,
+      "content": "/*\nCopyright © 2020 Ettore Di Giacinto <mudler@mocaccino.org>\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n    http://www.apache.org/licenses/LICENSE-2.0\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage entities_test\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\n\t. \"github.com/mudler/entities/pkg/entities\"\n\n\t. \"github.com/onsi/ginkgo\"\n\t. \"github.com/onsi/gomega\"\n)\n\nvar _ = Describe(\"GShadow\", func() {\n\tContext(\"Loading entities via yaml\", func() {\n\t\tp := &Parser{}\n\n\t\tIt(\"Changes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/gshadow/gshadow\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/gshadow/update.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(GShadow).Name).Should(Equal(\"postmaster\"))\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`systemd-bus-proxy:!::\nsystemd-coredump:!::\nsystemd-journal-gateway:!::\nsystemd-journal-remote:!::\nsystemd-journal-upload:!::\nsystemd-network:!::\nsystemd-resolve:!::\nsystemd-timesync:!::\nnetdev:!::\navahi:!::\navahi-autoipd:!::\nmail:!::\npostmaster:foo:barred:baz\nldap:!::\n`))\n\t\t})\n\n\t\tIt(\"Adds and deletes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/gshadow/gshadow\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/gshadow/gshadow.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(GShadow).Name).Should(Equal(\"test\"))\n\n\t\t\tentity.Apply(tmpFile.Name(), false)\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`systemd-bus-proxy:!::\nsystemd-coredump:!::\nsystemd-journal-gateway:!::\nsystemd-journal-remote:!::\nsystemd-journal-upload:!::\nsystemd-network:!::\nsystemd-resolve:!::\nsystemd-timesync:!::\nnetdev:!::\navahi:!::\navahi-autoipd:!::\nmail:!::\npostmaster:!::\nldap:!::\ntest:!:foo,bar:foo,baz\n`))\n\n\t\t\tentity.Delete(tmpFile.Name())\n\t\t\tdat, err = os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`systemd-bus-proxy:!::\nsystemd-coredump:!::\nsystemd-journal-gateway:!::\nsystemd-journal-remote:!::\nsystemd-journal-upload:!::\nsystemd-network:!::\nsystemd-resolve:!::\nsystemd-timesync:!::\nnetdev:!::\navahi:!::\navahi-autoipd:!::\nmail:!::\npostmaster:!::\nldap:!::\n`))\n\t\t})\n\t})\n})\n"
+    },
+    {
+      "path": "pkg/entities/user_test.go",
+      "sha": null,
+      "content_sha256": "1fcc12aef7ac5e7830546f032a69de8a48df487325b92456f2c2f08c46c60992",
+      "score": 91,
+      "content": "/*\nCopyright © 2020 Ettore Di Giacinto <mudler@mocaccino.org>\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n    http://www.apache.org/licenses/LICENSE-2.0\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage entities_test\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\t\"path/filepath\"\n\n\t\"github.com/gofrs/flock\"\n\t. \"github.com/mudler/entities/pkg/entities\"\n\n\t. \"github.com/onsi/ginkgo\"\n\t. \"github.com/onsi/gomega\"\n)\n\nvar _ = Describe(\"User\", func() {\n\tContext(\"Loading entities via yaml\", func() {\n\t\tp := &Parser{}\n\n\t\tIt(\"Changes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/simple/passwd\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/simple/update.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(UserPasswd).Username).Should(Equal(\"root\"))\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`root:x:0:0:Foo!:/home/foo:/bin/bash\nbin:x:1:1:bin:/bin:/bin/false\ndaemon:x:2:2:daemon:/sbin:/bin/false\nadm:x:3:4:adm:/var/adm:/bin/false\nlp:x:4:7:lp:/var/spool/lpd:/bin/false\nsync:x:5:0:sync:/sbin:/bin/sync\nshutdown:x:6:0:shutdown:/sbin:/sbin/shutdown\nunbound:x:999:955:added by portage for unbound:/etc/unbound:/sbin/nologin\ngpsd:x:139:14:added by portage for gpsd:/dev/null:/sbin/nologin\n`))\n\t\t})\n\n\t\tIt(\"Adds and deletes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/simple/passwd\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/simple/user.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(UserPasswd).Username).Should(Equal(\"foo\"))\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`root:x:0:0:root:/root:/bin/bash\nbin:x:1:1:bin:/bin:/bin/false\ndaemon:x:2:2:daemon:/sbin:/bin/false\nadm:x:3:4:adm:/var/adm:/bin/false\nlp:x:4:7:lp:/var/spool/lpd:/bin/false\nsync:x:5:0:sync:/sbin:/bin/sync\nshutdown:x:6:0:shutdown:/sbin:/sbin/shutdown\nunbound:x:999:955:added by portage for unbound:/etc/unbound:/sbin/nologin\ngpsd:x:139:14:added by portage for gpsd:/dev/null:/sbin/nologin\nfoo:pass:0:0:Foo!:/home/foo:/bin/bash\n`))\n\n\t\t\tentity.Delete(tmpFile.Name())\n\t\t\tdat, err = os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`root:x:0:0:root:/root:/bin/bash\nbin:x:1:1:bin:/bin:/bin/false\ndaemon:x:2:2:daemon:/sbin:/bin/false\nadm:x:3:4:adm:/var/adm:/bin/false\nlp:x:4:7:lp:/var/spool/lpd:/bin/false\nsync:x:5:0:sync:/sbin:/bin/sync\nshutdown:x:6:0:shutdown:/sbin:/sbin/shutdown\nunbound:x:999:955:added by portage for unbound:/etc/unbound:/sbin/nologin\ngpsd:x:139:14:added by portage for gpsd:/dev/null:/sbin/nologin\n`))\n\t\t})\n\n\t\tIt(\"Read broken file\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\texpectedMap := map[string]UserPasswd{\n\t\t\t\t\"root\": {\n\t\t\t\t\tUsername: \"root\",\n\t\t\t\t\tPassword: \"x\",\n\t\t\t\t\tUid:      0,\n\t\t\t\t\tGid:      0,\n\t\t\t\t\tGroup:    \"\",\n\t\t\t\t\tInfo:     \"Foo!\",\n\t\t\t\t\tHomedir:  \"/home/foo\",\n\t\t\t\t\tShell:    \"/bin/bash\",\n\t\t\t\t},\n\t\t\t\t\"brokenuid\": {\n\t\t\t\t\tUsername: \"brokenuid\",\n\t\t\t\t\tPassword: \"x\",\n\t\t\t\t\tUid:      0,\n\t\t\t\t\tGid:      100,\n\t\t\t\t\tGroup:    \"\",\n\t\t\t\t\tInfo:     \"group\",\n\t\t\t\t\tHomedir:  \"/home/broken\",\n\t\t\t\t\tShell:    \"/bin/bash\",\n\t\t\t\t},\n\t\t\t\t\"brokengid\": {\n\t\t\t\t\tUsername: \"brokengid\",\n\t\t\t\t\tPassword: \"x\",\n\t\t\t\t\tUid:      100,\n\t\t\t\t\tGid:      100,\n\t\t\t\t\tGroup:    \"\",\n\t\t\t\t\tInfo:     \"group\",\n\t\t\t\t\tHomedir:  \"/home/broken\",\n\t\t\t\t\tShell:    \"/bin/bash\",\n\t\t\t\t},\n\t\t\t}\n\n\t\t\tdat := `root:x:0:0:Foo!:/home/foo:/bin/bash\nbrokenuid:x::100:group:/home/broken:/bin/bash\nbrokengid:x:100::group:/home/broken:/bin/bash\n`\n\n\t\t\ttmpFile.WriteString(dat)\n\t\t\ttmpFile.Close()\n\n\t\t\tm, err := ParseUser(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(m).Should(Equal(expectedMap))\n\n\t\t})\n\n\t\tIt(\"Works with locks\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/simple/passwd\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/simple/update.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(UserPasswd).Username).Should(Equal(\"root\"))\n\n\t\t\tbaseName := filepath.Base(tmpFile.Name())\n\t\t\tfileLock := flock.New(fmt.Sprintf(\"/run/lock/%s.lock\", baseName))\n\t\t\tdefer os.Remove(fileLock.Path())\n\t\t\tlocked, err := fileLock.TryLock()\n\t\t\tExpect(err).To(BeNil())\n\t\t\tExpect(locked).To(BeTrue())\n\t\t\tdefer fileLock.Close()\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).ToNot(BeNil())\n\t\t\tExpect(err.Error()).To(ContainSubstring(\"Failed locking file\"))\n\t\t})\n\t})\n})\n"
+    },
+    {
+      "path": "pkg/entities/parser_test.go",
+      "sha": null,
+      "content_sha256": "5e4e77893d6ffef95c88808c6591946fd71fc384015070387daf29ab6314a22a",
+      "score": 91,
+      "content": "/*\nCopyright © 2020 Ettore Di Giacinto <mudler@mocaccino.org>\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n    http://www.apache.org/licenses/LICENSE-2.0\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage entities_test\n\nimport (\n\t. \"github.com/mudler/entities/pkg/entities\"\n\n\t. \"github.com/onsi/ginkgo\"\n\t. \"github.com/onsi/gomega\"\n)\n\nvar _ = Describe(\"Parser\", func() {\n\tContext(\"Loading entities via yaml\", func() {\n\t\tp := &Parser{}\n\t\tIt(\"understands the user kind\", func() {\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/simple/user.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(UserPasswd).Username).Should(Equal(\"foo\"))\n\t\t})\n\t\tIt(\"understands the shadow kind\", func() {\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/shadow/user.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Shadow).Username).Should(Equal(\"foo\"))\n\t\t})\n\t\tIt(\"understands the group kind\", func() {\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/group/group.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Group).Name).Should(Equal(\"foo\"))\n\t\t})\n\t\tIt(\"understands the gshadow kind\", func() {\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/gshadow/gshadow.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(GShadow).Name).Should(Equal(\"test\"))\n\t\t})\n\t})\n})\n"
+    },
+    {
+      "path": "pkg/entities/shadow_test.go",
+      "sha": null,
+      "content_sha256": "836af0c0af98617fb568212528708eb756170ccc27d4862eb2ef7077368500e8",
+      "score": 91,
+      "content": "/*\nCopyright © 2020 Ettore Di Giacinto <mudler@mocaccino.org>\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nYou may obtain a copy of the License at\n    http://www.apache.org/licenses/LICENSE-2.0\nUnless required by applicable law or agreed to in writing, software\ndistributed under the License is distributed on an \"AS IS\" BASIS,\nWITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n*/\n\npackage entities_test\n\nimport (\n\t\"fmt\"\n\t\"io\"\n\t\"os\"\n\t\"path/filepath\"\n\t\"time\"\n\n\t\"github.com/gofrs/flock\"\n\t. \"github.com/mudler/entities/pkg/entities\"\n\n\t. \"github.com/onsi/ginkgo\"\n\t. \"github.com/onsi/gomega\"\n)\n\nfunc copy(src, dst string) (int64, error) {\n\tsourceFileStat, err := os.Stat(src)\n\tif err != nil {\n\t\treturn 0, err\n\t}\n\n\tif !sourceFileStat.Mode().IsRegular() {\n\t\treturn 0, fmt.Errorf(\"%s is not a regular file\", src)\n\t}\n\n\tsource, err := os.Open(src)\n\tif err != nil {\n\t\treturn 0, err\n\t}\n\tdefer source.Close()\n\n\tdestination, err := os.Create(dst)\n\tif err != nil {\n\t\treturn 0, err\n\t}\n\tdefer destination.Close()\n\tnBytes, err := io.Copy(destination, source)\n\treturn nBytes, err\n}\n\nvar _ = Describe(\"Shadow\", func() {\n\tContext(\"Loading entities via yaml\", func() {\n\t\tp := &Parser{}\n\n\t\tIt(\"Changes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/shadow/shadow\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/shadow/update.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Shadow).Username).Should(Equal(\"halt\"))\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(MatchRegexp(`halt\\:\\$.*\\:1:2:3:4:5:6:`))\n\t\t\tExpect(string(dat)).To(ContainSubstring(\n\t\t\t\t`operator:*:9797:0:::::\nshutdown:*:9797:0:::::\nsync:*:9797:0:::::\nbin:*:9797:0:::::\ndaemon:*:9797:0:::::\nadm:*:9797:0:::::\nlp:*:9797:0:::::\nnews:*:9797:0:::::\nuucp:*:9797:0:::::\n`))\n\t\t})\n\n\t\tIt(\"Adds and deletes an entry\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/shadow/shadow\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/shadow/user.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Shadow).Username).Should(Equal(\"foo\"))\n\n\t\t\tentity.Apply(tmpFile.Name(), false)\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`halt:*:9797:0:::::\noperator:*:9797:0:::::\nshutdown:*:9797:0:::::\nsync:*:9797:0:::::\nbin:*:9797:0:::::\ndaemon:*:9797:0:::::\nadm:*:9797:0:::::\nlp:*:9797:0:::::\nnews:*:9797:0:::::\nuucp:*:9797:0:::::\nfoo:$bar:1:2:3:4:5:6:\n`))\n\n\t\t\tentity.Delete(tmpFile.Name())\n\t\t\tdat, err = os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\n\t\t\t\t`halt:*:9797:0:::::\noperator:*:9797:0:::::\nshutdown:*:9797:0:::::\nsync:*:9797:0:::::\nbin:*:9797:0:::::\ndaemon:*:9797:0:::::\nadm:*:9797:0:::::\nlp:*:9797:0:::::\nnews:*:9797:0:::::\nuucp:*:9797:0:::::\n`))\n\t\t})\n\n\t\tIt(\"works with locks\", func() {\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\t_, err = copy(\"../../testing/fixtures/shadow/shadow\", tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\n\t\t\tentity, err := p.ReadEntity(\"../../testing/fixtures/shadow/update.yaml\")\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(entity.(Shadow).Username).Should(Equal(\"halt\"))\n\n\t\t\tbaseName := filepath.Base(tmpFile.Name())\n\t\t\tfileLock := flock.New(fmt.Sprintf(\"/run/lock/%s.lock\", baseName))\n\t\t\tdefer os.Remove(fileLock.Path())\n\t\t\tlocked, err := fileLock.TryLock()\n\t\t\tExpect(err).To(BeNil())\n\t\t\tExpect(locked).To(BeTrue())\n\t\t\tdefer fileLock.Close()\n\n\t\t\terr = entity.Apply(tmpFile.Name(), false)\n\t\t\tExpect(err).ToNot(BeNil())\n\t\t\tExpect(err.Error()).To(ContainSubstring(\"Failed locking file\"))\n\t\t})\n\t})\n\n\tIt(\"test Prepare\", func() {\n\n\t\tBy(\"Giving a specific user\", func() {\n\t\t\tt := time.Now()\n\t\t\tdays := t.Unix() / 24 / 60 / 60\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\ts1 := &Shadow{\n\t\t\t\tUsername:    \"user1\",\n\t\t\t\tPassword:    \"$!\",\n\t\t\t\tLastChanged: \"now\",\n\t\t\t}\n\n\t\t\ts1.Apply(tmpFile.Name(), false)\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(Equal(\"user1:$!:\" + fmt.Sprintf(\"%d\", days) + \"::::::\\n\"))\n\n\t\t})\n\n\t\tBy(\"Giving a specific user\", func() {\n\t\t\tt := time.Now()\n\t\t\tdays := t.Unix() / 24 / 60 / 60\n\t\t\ttmpFile, err := os.CreateTemp(os.TempDir(), \"pre-\")\n\t\t\tif err != nil {\n\t\t\t\tfmt.Println(\"Cannot create temporary file\", err)\n\t\t\t}\n\n\t\t\t// cleaning up by removing the file\n\t\t\tdefer os.Remove(tmpFile.Name())\n\n\t\t\ts1 := &Shadow{\n\t\t\t\tUsername:    \"user1\",\n\t\t\t\tPassword:    \"pass\",\n\t\t\t\tLastChanged: \"now\",\n\t\t\t}\n\n\t\t\ts1.Apply(tmpFile.Name(), false)\n\n\t\t\tdat, err := os.ReadFile(tmpFile.Name())\n\t\t\tExpect(err).Should(BeNil())\n\t\t\tExpect(string(dat)).To(MatchRegexp(`user1\\:\\$.*\\:` + fmt.Sprintf(\"%d\", days) + \":.*\"))\n\n\t\t})\n\n\t})\n\n})\n"
+    },
+    {
+      "path": "testing/fixtures/group/update.yaml",
+      "sha": null,
+      "content_sha256": "910a4094300f59d3b089164a7c52e424904783314752fa9d5a4370ea4fb7e963",
+      "score": 89,
+      "content": "kind: \"group\"\ngroup_name: \"sddm\"\npassword: \"xx\"\ngid: 1\nusers: \"one,two,tree\""
+    },
+    {
+      "path": "testing/fixtures/group/group.yaml",
+      "sha": null,
+      "content_sha256": "04cc452f0773a950527c0d175af366137d057c2eb1ffe938053d18e36bd94558",
+      "score": 89,
+      "content": "kind: \"group\"\ngroup_name: \"foo\"\npassword: \"xx\"\ngid: 1\nusers: \"one,two,tree\""
+    },
+    {
+      "path": "testing/fixtures/group/group_add.yaml",
+      "sha": null,
+      "content_sha256": "6864c3bd7736486e0e062289abd9ff5dd51883778b671c689ccdc7624373bd69",
+      "score": 89,
+      "content": "kind: \"group\"\ngroup_name: \"foo\"\nusers: \"four\""
+    },
+    {
+      "path": "testing/fixtures/gshadow/update.yaml",
+      "sha": null,
+      "content_sha256": "2f130988a7c61b5d27d2a08b51d97a829f997d2b75bb4c11672d4cfb2e7fc17a",
+      "score": 89,
+      "content": "kind: \"gshadow\"\nname: \"postmaster\"\npassword: \"foo\"\nadministrators: \"barred\"\nmembers: \"baz\""
+    },
+    {
+      "path": "testing/fixtures/gshadow/gshadow.yaml",
+      "sha": null,
+      "content_sha256": "281446afc64f047f766a0a19576e6bf887abf649c1ba08b4d5e88e823e3fa40a",
+      "score": 89,
+      "content": "kind: \"gshadow\"\nname: \"test\"\npassword: \"!\"\nadministrators: \"foo,bar\"\nmembers: \"foo,baz\""
+    },
+    {
+      "path": "testing/fixtures/simple/update.yaml",
+      "sha": null,
+      "content_sha256": "a6a18782fb362f0ac32e983472690a12e861715a456b8d61efc4b7b2f8f28b2c",
+      "score": 89,
+      "content": "kind: \"user\"\nusername: \"root\"\npassword: \"x\"\nuid: 0\ngid: 0\ninfo: \"Foo!\"\nhomedir: \"/home/foo\"\nshell: \"/bin/bash\""
+    },
+    {
+      "path": "testing/fixtures/shadow/user.yaml",
+      "sha": null,
+      "content_sha256": "69401e9d5bc19607db277512568ccef7be20f8a3cd8e9ff3241ed50c8eed16e1",
+      "score": 89,
+      "content": "kind: \"shadow\"\nusername: \"foo\"\npassword: \"$bar\"\nlast_changed: 1\nminimum_changed: 2\nmaximum_changed: 3\nwarn: 4\ninactive: 5\nexpire: 6"
+    },
+    {
+      "path": "testing/fixtures/shadow/update.yaml",
+      "sha": null,
+      "content_sha256": "0432ad9cf4eabcb1809bd2c52caa2911457d9633549d88f691370534d28dca85",
+      "score": 89,
+      "content": "kind: \"shadow\"\nusername: \"halt\"\npassword: \"bar\"\nlast_changed: 1\nminimum_changed: 2\nmaximum_changed: 3\nwarn: 4\ninactive: 5\nexpire: 6"
+    },
+    {
+      "path": "testing/fixtures/simple/user.yaml",
+      "sha": null,
+      "content_sha256": "6389a111eb56d700d9ad7e744be872b272b29b26567ee98cb8c3d4c67d0ddf2a",
+      "score": 89,
+      "content": "kind: \"user\"\nusername: \"foo\"\npassword: \"pass\"\nuid: 0\ngid: 0\ninfo: \"Foo!\"\nhomedir: \"/home/foo\"\nshell: \"/bin/bash\""
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "349bebd0772c411462630cf24b7398248ea248662487f4b146ac3ca7a818d3a7",
+      "score": 85,
+      "content": "NAME ?= entities\nPACKAGE_NAME ?= $(NAME)\nPACKAGE_CONFLICT ?= $(PACKAGE_NAME)-beta\nREVISION := $(shell git rev-parse --short HEAD || echo dev)\nVERSION := $(shell git describe --tags || echo $(REVISION))\nVERSION := $(shell echo $(VERSION) | sed -e 's/^v//g')\nITTERATION := $(shell date +%s)\nBUILD_PLATFORMS ?= -osarch=\"linux/amd64\" -osarch=\"linux/386\" -osarch=\"linux/arm\"\nROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))\n\n.PHONY: all\nall: deps build\n\n.PHONY: fmt\nfmt:\n\tgo fmt ./...\n\n.PHONY: test\ntest:\n\tGO111MODULE=off go get github.com/onsi/ginkgo/ginkgo\n\tGO111MODULE=off go get github.com/onsi/gomega/...\n\tginkgo -race -r ./...\n\n.PHONY: coverage\ncoverage:\n\tgo test ./... -race -coverprofile=coverage.txt -covermode=atomic\n\n.PHONY: help\nhelp:\n\t# make all => deps test lint build\n\t# make deps - install all dependencies\n\t# make test - run project tests\n\t# make lint - check project code style\n\t# make build - build project for all supported OSes\n\n.PHONY: clean\nclean:\n\trm -rf release/\n\n.PHONY: deps\ndeps:\n\tgo env\n\t# Installing dependencies...\n\tGO111MODULE=off go get golang.org/x/lint/golint\n\tGO111MODULE=off go get github.com/mitchellh/gox\n\tGO111MODULE=off go get golang.org/x/tools/cmd/cover\n\tGO111MODULE=off go get github.com/onsi/ginkgo/ginkgo\n\tGO111MODULE=off go get github.com/onsi/gomega/...\n\n.PHONY: build\nbuild:\n\tCGO_ENABLED=0 go build\n\n.PHONY: gox-build\ngox-build:\n\tCGO_ENABLED=0 gox $(BUILD_PLATFORMS) -output=\"release/$(NAME)-$(VERSION)-{{.OS}}-{{.Arch}}\"\n\n.PHONY: lint\nlint:\n\tgolint ./... | grep -v \"be unexported\"\n\n.PHONY: vendor\nvendor:\n\tgo mod vendor\n\n.PHONY: multiarch-build\nmultiarch-build: gox-build\n"
+    },
+    {
+      "path": "go.mod",
+      "sha": null,
+      "content_sha256": "ff54bb1e7a1e9eaf0cb1ab19bd46e048ea13a1b4816f03441bccc82b87320568",
+      "score": 85,
+      "content": "module github.com/mudler/entities\n\ngo 1.26\n\nrequire (\n\tgithub.com/gofrs/flock v0.13.0\n\tgithub.com/mauromorales/xpasswd v0.4.7\n\tgithub.com/olekukonko/tablewriter v0.0.5\n\tgithub.com/onsi/ginkgo v1.16.5\n\tgithub.com/onsi/gomega v1.40.0\n\tgithub.com/phayes/permbits v0.0.0-20190612203442-39d7c581d2ee\n\tgithub.com/pkg/errors v0.9.1\n\tgithub.com/spf13/cobra v1.10.2\n\tgithub.com/tredoe/osutil v1.5.0\n\tgopkg.in/yaml.v3 v3.0.1\n)\n\nrequire (\n\tgithub.com/clipperhouse/uax29/v2 v2.7.0 // indirect\n\tgithub.com/fsnotify/fsnotify v1.10.1 // indirect\n\tgithub.com/google/go-cmp v0.7.0 // indirect\n\tgithub.com/inconshreveable/mousetrap v1.1.0 // indirect\n\tgithub.com/kr/text v0.2.0 // indirect\n\tgithub.com/mattn/go-runewidth v0.0.23 // indirect\n\tgithub.com/nxadm/tail v1.4.11 // indirect\n\tgithub.com/spf13/pflag v1.0.10 // indirect\n\tgo.yaml.in/yaml/v3 v3.0.4 // indirect\n\tgolang.org/x/net v0.54.0 // indirect\n\tgolang.org/x/sys v0.44.0 // indirect\n\tgolang.org/x/text v0.37.0 // indirect\n\tgopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect\n)\n"
+    },
+    {
+      "path": "testing/fixtures/group/group",
+      "sha": null,
+      "content_sha256": "7cf925b40d7789cac398a9a7b2f9cfd3b8a4af042c701b3dc42ca80b38780074",
+      "score": 54,
+      "content": "nm-openconnect:x:979:\nsddm:x:978:\nopenvpn:x:977:\nnm-openvpn:x:976:\nminetest:x:975:\nabrt:x:974:\ngeoclue:x:973:\nntp:x:123:\n"
+    },
+    {
+      "path": "testing/fixtures/shadow/shadow",
+      "sha": null,
+      "content_sha256": "886977f454568a90f68832704416028f3c310c814ff2c3df1c8bb4cbce41418a",
+      "score": 54,
+      "content": "halt:*:9797:0:::::\noperator:*:9797:0:::::\nshutdown:*:9797:0:::::\nsync:*:9797:0:::::\nbin:*:9797:0:::::\ndaemon:*:9797:0:::::\nadm:*:9797:0:::::\nlp:*:9797:0:::::\nnews:*:9797:0:::::\nuucp:*:9797:0:::::\n"
+    },
+    {
+      "path": "testing/fixtures/simple/passwd",
+      "sha": null,
+      "content_sha256": "2453fa3370d9267965d72fbeb27c305132e26049a76e8c944fb5f441c401dc98",
+      "score": 54,
+      "content": "root:x:0:0:root:/root:/bin/bash\nbin:x:1:1:bin:/bin:/bin/false\ndaemon:x:2:2:daemon:/sbin:/bin/false\nadm:x:3:4:adm:/var/adm:/bin/false\nlp:x:4:7:lp:/var/spool/lpd:/bin/false\nsync:x:5:0:sync:/sbin:/bin/sync\nshutdown:x:6:0:shutdown:/sbin:/sbin/shutdown\nunbound:x:999:955:added by portage for unbound:/etc/unbound:/sbin/nologin\ngpsd:x:139:14:added by portage for gpsd:/dev/null:/sbin/nologin\n"
+    },
+    {
+      "path": "testing/fixtures/gshadow/gshadow",
+      "sha": null,
+      "content_sha256": "c9dc74ffe7f5b71eeeae309a866b93ff31c7858ea45ef8820c084f35bb814d66",
+      "score": 54,
+      "content": "systemd-bus-proxy:!::\nsystemd-coredump:!::\nsystemd-journal-gateway:!::\nsystemd-journal-remote:!::\nsystemd-journal-upload:!::\nsystemd-network:!::\nsystemd-resolve:!::\nsystemd-timesync:!::\nnetdev:!::\navahi:!::\navahi-autoipd:!::\nmail:!::\npostmaster:!::\nldap:!::\n"
+    },
+    {
+      "path": ".travis.yml",
+      "sha": null,
+      "content_sha256": "70ef0811009bb63bf18d9a7c0ef2646c716e5844fa69cef66fc3a7095610f1d6",
+      "score": 35,
+      "content": "language: go\ngo:\n  - \"1.13\"\nenv:\n  - \"GO15VENDOREXPERIMENT=1\"\nbefore_install:\n  - make deps\nscript:\n  - make build test\n"
+    },
+    {
+      "path": "main.go",
+      "sha": null,
+      "content_sha256": "9f80b566fcb9b35e3ec29732cb31e286a5c908571004e6022bc4dca4044e684b",
+      "score": 35,
+      "content": "// Copyright © 2020 Ettore Di Giacinto <mudler@gentoo.org>\n//\n// This program is free software: you can redistribute it and/or modify\n// it under the terms of the GNU General Public License as published by\n// the Free Software Foundation, either version 3 of the License, or\n// (at your option) any later version.\n//\n// This program is distributed in the hope that it will be useful,\n// but WITHOUT ANY WARRANTY; without even the implied warranty of\n// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n// GNU General Public License for more details.\n//\n// You should have received a copy of the GNU General Public License\n// along with this program. If not, see <http://www.gnu.org/licenses/>.\n\npackage main\n\nimport \"github.com/mudler/entities/cmd\"\n\nfunc main() {\n\tcmd.Execute()\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:42:50.065185+00:00"
+}
