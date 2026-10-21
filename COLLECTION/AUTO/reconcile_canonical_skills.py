@@ -11,6 +11,7 @@ import json,re,urllib.request
 from pathlib import Path
 
 from process_collection import atomic_json_write
+from collection_json_io import load_collection_json, write_collection_json
 
 QUEUE=Path("COLLECTION/MASTER/PROMOTION-QUEUE.json")
 DECISIONS=Path("COLLECTION/MASTER/CANONICAL-DECISIONS.json")
@@ -25,7 +26,7 @@ def load_skills():
     return sorted(x["name"] for x in data if x.get("type")=="dir")
 
 def main():
-    queue=json.loads(QUEUE.read_text()) if QUEUE.exists() else {"items":[]}
+    queue=load_collection_json(QUEUE) if QUEUE.exists() else {"items":[]}
     explicit=json.loads(DECISIONS.read_text()) if DECISIONS.exists() else {}
     skills=load_skills()
     skill_tokens={s:norm(s) for s in skills}
@@ -50,7 +51,7 @@ def main():
         plan.append({**item,"terminal_decision":decision,"canonical_skill":best[1],"reason":reason,"decision_source":"reconciler"})
     summary={}
     for p in plan: summary[p["terminal_decision"]]=summary.get(p["terminal_decision"],0)+1
-    atomic_json_write(OUT, {"schema_version":"canonical-promotion-plan/v1","canonical_repo":"salamou1944/agent-skills","source_queue_generated_at":queue.get("generated_at"),"skill_count":len(skills),"summary":summary,"items":plan}, compact_array_keys={"items"})
+    write_collection_json(OUT, {"schema_version":"canonical-promotion-plan/v1","canonical_repo":"salamou1944/agent-skills","source_queue_generated_at":queue.get("generated_at"),"skill_count":len(skills),"summary":summary,"items":plan}, array_key="items", monolithic_writer=atomic_json_write)
     print(json.dumps({"skills":len(skills),"items":len(plan),"summary":summary},sort_keys=True))
 
 if __name__=="__main__": main()
