@@ -3,7 +3,7 @@
 This short page is the live status pointer. The long [COLLECTION/INDEX.md](./INDEX.md) contains the historical log through cycle 23; this page supersedes it for the current snapshot.
 
 ## COLLECTION
-- Latest completed: [cycle 27 — success](https://github.com/salamou1944/Project-/actions/runs/39675537201).
+- Latest completed: [cycle 28 — success](https://github.com/salamou1944/Project-/actions/runs/39676042890).
 - Cycle 27: 69 refreshed, 31 blocked attempts preserved; 5,709 source rows; 5,678 extracted artifacts; 17,902 repositories deferred.
 - Current-main JSON audit: 13,670 JSON/JSONC files, zero parse failures, 1,003,679,370 bytes.
 - 50,600 capability/readiness groups; 34,751 promotion-review items; 15,849 restricted items.
