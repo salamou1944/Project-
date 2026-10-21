@@ -103,3 +103,10 @@ Five automations were found:
 - Source documents were updated:
   - [API Factory zero-cost runtime options](https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/FREE-ZERO-COST-RUNTIME-OPTIONS-2026-10-21.md)
   - [Resource inventory and execution plan](./RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
+
+
+### Outreach deliverability check
+- `api-pilot@agentmail.to`: 6 threads returned; all six are delivery-failure/bounce notifications, including the two previously sent outreach subjects. No customer reply is evidenced in these threads.
+- `easy@agentmail.to`: 5 threads returned; all five are delivery-failure notifications. No customer reply is evidenced in these threads.
+- `pastel-realtime-e2e@agentmail.to`: zero threads.
+- This check covers these AgentMail inboxes only; it does not inspect the user's separate personal mailbox or prove the status of messages sent outside AgentMail. Do not repeat outreach to these addresses until each recipient is revalidated from an official source and deliverability is corrected.
