@@ -3,6 +3,14 @@
 Status: INCREMENTAL_COLLECTION
 Updated: 2026-10-21
 
+## Operating inventory references — 2026-10-21
+- [Full resource inventory and execution plan](../VERIFICATION/RESOURCE_INVENTORY_AND_EXECUTION_PLAN_2026-10-21.md)
+- [Current resource verification delta](../VERIFICATION/RESOURCE_INVENTORY_DELTA_2026-10-21.md)
+- [Revenue and creator account inventory](../VERIFICATION/REVENUE_ASSET_INVENTORY_2026-10-21.md)
+- [Railway runtime triage](../VERIFICATION/RAILWAY_RUNTIME_TRIAGE_2026-10-21.md)
+- [ChatGPT plugin discovery](../VERIFICATION/CHATGPT_PLUGIN_DISCOVERY_2026-10-21.md)
+- [Cycle status](../VERIFICATION/COLLECTION_CYCLE_STATUS_2026-10-21.md)
+
 ## Verified update — 2026-10-21 20:41 UTC (cycle 20)
 - [Cycle 20](https://github.com/salamou1944/Project-/actions/runs/39671950554) completed successfully. It selected 100 repositories, refreshed 76, preserved 24 blocked attempts, and left 18,399 repositories deferred. The manifest contains 5,205 source rows and 5,181 extracted artifacts.
 - Current-main JSON audit passed: 13,173 JSON/JSONC files, zero parse failures, 937,688,348 bytes. Historical evidence reconciliation passed with zero unrecoverable prior evidence records.
