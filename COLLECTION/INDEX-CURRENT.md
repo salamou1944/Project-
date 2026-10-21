@@ -20,7 +20,7 @@ This short page is the live status pointer. The older [COLLECTION/INDEX.md](./IN
 - [Railway authorization boundary](../VERIFICATION/RAILWAY_AUTH_BOUNDARY_2026-10-21.md)
 - [API Factory runtime observations](../VERIFICATION/API_FACTORY_RUNTIME_OBSERVATIONS_2026-10-21.md)
 - [ChatGPT plugin discovery](../VERIFICATION/CHATGPT_PLUGIN_DISCOVERY_2026-10-21.md)
-- [Cycle 20–21 status note](../VERIFICATION/COLLECTION_PROGRESS_2026-10-21_2.md) — historical note; cycle 24 values above supersede it.
+- [Historical Collection log](./INDEX.md) — latest completed cycle is summarized above.
 
 ## API Factory / zero-cost model path
 - API Factory Test passed on [run 39673899087](https://github.com/salamou1944/Salamou-31/actions/runs/39673899087).
