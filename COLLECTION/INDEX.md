@@ -603,3 +603,11 @@ No completion claim is made. Collection remains active.
 - Capability output: 28,195 groups, 19,440 promotion-review items, 8,755 restricted items. No asset was auto-installed or promoted to runtime readiness.
 - High-value source packets include `apache/casbin-mcp-gateway`, `cisco-ai-defense/litellm`, `agentclientprotocol/codex-acp`, `n8n-io/self-hosted-ai-starter-kit`, `openai/openai-cua-sample-app`, `pietrozullo/browser-use`, `browser-use/benchmark`, `Infisical/agent-vault`, `openbao/openbao-plugins`, `ollama/ollama-js`, `anomalyco/opencode`, and `vercel-labs/coding-agent-template`. These remain source-only pending security/license/dedupe review.
 - Fourth bounded batch [39187362819](https://github.com/salamou1944/Project-/actions/runs/39187362819) is queued from marker commit `e3c161936e1796cb5140acde439718bd3b653e0e`.
+
+
+## Verified update — 2026-10-21 02:30 UTC (cycle 18)
+- [Cycle 18](https://github.com/salamou1944/Project-/actions/runs/39533389021) completed successfully. It selected 100 repositories, refreshed 79, preserved 21 blocked attempts, and left 18,551 repositories deferred. The manifest contains 5,050 source rows and 5,029 extracted artifacts.
+- The current-main JSON audit passed: 13,021 JSON/JSONC files, zero parse failures, 916,967,626 bytes. The persisted audit validator passed.
+- Capability/readiness groups: 45,415; promotion review items: 31,108; restricted items: 14,307. Historical evidence reconciliation passed with zero unrecoverable prior evidence records.
+- Install gate returned `NO_APPROVED_CANDIDATES`: zero assets installed and zero ready for verification. This is a safe no-op, not a completed installation.
+- Generated files remain large: `READY.json` 79,542,593 bytes and `CANONICAL-PROMOTION-PLAN.json` 53,727,383 bytes; both exceed GitHub's recommended 50 MB size. The JSON validity and size-budget guards passed, but file-size optimization remains open.
