@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:GlitchTip/benchmarks-ai-io",
+  "repo": "GlitchTip/benchmarks-ai-io",
+  "revision_sha": "e0125d04700bf0652b9e0afc42c798a9dd16b9a0",
+  "default_branch": "main",
+  "pushed_at": "2025-10-09T01:46:31Z",
+  "repo_updated_at": "2025-11-25T19:17:23Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "176d56f110d0d3d65f667ceeed61f49acdd5bfbc15d01e7594a9f6893dc18f90",
+      "score": 100,
+      "content": "# benchmarks-ai-io\nOpen, reproducible benchmarks and practical recipes to surface storage and data-path bottlenecks in AI training and large-scale inference—whether you have a rack of GPUs or only CPUs and a laptop.\n\n## Project vision\n- Build a neutral, scriptable harness that emulates common AI workloads and isolates the storage layer.\n- Produce portable CSV/YAML outputs so teams can compare runs across clouds, filesystems, and hardware.\n- Provide “good, better, best” optimization playbooks that translate benchmark wins into model performance and $/token savings.\n\n## How AI workloads stress storage\nModern models mix bursty metadata traffic with sustained throughput requirements. The balance shifts depending on whether you are training or serving, creating different stress profiles for the I/O stack.\n\n### Training profile\n- **Checkpointing & snapshots:** Periodic multi-GB writes (and reads for restarts) demand fast, durable storage; inconsistent latency leads to idle accelerators.\n- **Dataset enumeration:** Epoch resets or shuffle stages have to list and shard millions of files; metadata latency inflates time-to-first-batch.\n- **Streaming & prefetch:** Background workers pull data continuously; they rely on predictable bandwidth and low jitter to keep device queues full.\n- **Gradient logging & artifacts:** Auxiliary outputs (metrics, tensor dumps) create write amplification that competes with primary data reads.\n\n### Inference / bulk decoding profile\n- **Request fan-out:** Serving pipelines fetch model weights, tokenizer state, and prompt/context files; cold starts punish metadata-heavy workloads.\n- **Hot/cold splits:** Popular models or prefixes live in cache while long-tail requests round-trip to cloud storage; caching strategy defines tail latencies.\n- **Batch assembly:** Micro-batching and sequence packing touch many small objects, which stresses metadata services differently than streaming large shards.\n\n## Critical I/O behaviors to measure\n- **Listing & metadata fan-out:** Determines time-to-first-batch and controls the number of RPCs the filesystem or object store must service. Small directories vs. deep trees show different scaling characteristics.\n- **Checkpoint throughput & replay:** Drives how quickly training recovers from failures and whether mid-epoch checkpoints starve compute.\n- **Data loading & prefetch depth:** Captures the end-to-end impact of loaders, compression, shuffling, and caching on steady-state throughput.\n- **Intermediate artifact handling:** Evaluates how logs, embeddings, and temporary tensors interact with burst buffers or local SSD tiers.\n\n## Framework and model considerations\nDifferent stacks exercise storage in distinct ways:\n- **PyTorch DataLoader / DataPipes:** Configurable prefetch, pinned memory, and shared-memory queues can hide latency or amplify it if mis-sized.\n- **TensorFlow tf.data / JAX input pipelines:** Vectorized graph execution may issue wider prefetch bursts, demanding higher baseline throughput.\n- **DeepSpeed, Megatron, FSDP, ZeRO:** Sharded checkpoints and optimizer states increase metadata operations and require aligned partition storage.\n- **Diffusion vs. autoregressive models:** Diffusion workloads stream large images/audio; autoregressive decoders juggle many small JSON/token files.\nBenchmarking these combinations reveals whether throttling stems from metadata, throughput, or application-level settings.\n\n## Cloud-provider storage optimizations (awareness checklist)\n- **AWS:** S3 Express One Zone reduces metadata latency; S3 Multi-GET and Transfer Acceleration improve parallel reads; FSx for Lustre and FSx for ONTAP offer POSIX semantics with warm caches; EBS io2 and instance-store SSDs provide consistent checkpoint bandwidth.\n- **Google Cloud:** GCS Turbo Replication and Requester Pays tuning affect listing throughput; Filestore (Zonal & High Scale), Cloud Storage FUSE with caching, and local SSDs attached to GCE or TPU VMs reduce cold-start penalties.\n- **Azure:** Premium SSD v2 and Ultra Disk sustain high checkpoint IOPS; Azure Blob Storage with hierarchical namespaces optimizes metadata scans; Azure NetApp Files and HPC Cache bridge NFS semantics with object storage backends.\nThe benchmarks in this repository let you validate how these features behave under your workload shapes, quantify tail behavior, and test tuning (prefetch, pagination, sharding) before touching production clusters.\n\n## Benchmarks in this repository\n- **Listing Emulated Benchmark (LEB)** — located in `listing_folder_benchmarks/`. Focuses on metadata latency, pagination cost, and enumeration concurrency. Ideal for sizing manifest caches, comparing filesystem mounts, or validating new object-store regions.\n- **Serving Benchmarks** — located in `serving_benchmarks/`. Emulates batch inference workloads, measuring microbatch data-loader latency, tail behavior, and the knock-on effects on GPU utilization and cost.\n- **Checkpointing Benchmarks** — located in `checkpointing_benchmarks/`. Simulates shard-write/read cycles with tunable concurrency, fsync, and retention policies to expose throughput limits and tail latencies across storage tiers.\n- **Upcoming modules (roadmap)** — distributed shuffle loaders, streaming dataset replay, and mixed workload stressors that combine listing + checkpoint + streaming phases.\n\nEach module is designed to run on commodity hardware without GPUs, yet scales to GPU-backed clusters when you want to observe device utilization side-by-side.\n\n## Getting started\n1. Clone the repo and create a Python environment (3.10+ recommended):\n   ```bash\n   python -m venv .venv && source .venv/bin/activate\n   pip install -r listing_folder_benchmarks/requirements.txt\n   pip install -r serving_benchmarks/requirements.txt\n   ```\n2. Choose a benchmark:\n   - Listing: see `listing_folder_benchmarks/README.md` for configs such as `config/flat_tree.yaml`.\n   - Serving: see `serving_benchmarks/README.md` and associated scripts in `serving_benchmarks/scripts/`.\n3. Run locally or on a remote machine (GPU optional). All results land under `./metrics/<run-name>/`.\n\nBenchmarks emit structured outputs (CSV + YAML) that capture per-call timings, tail percentiles, throughput, configuration knobs, and environment metadata. Version these artifacts or feed them into dashboards to track regressions.\n\n## How this project helps you\n- **Validate storage tiers before deployment:** Measure listing latency on S3 vs. FSx, or compare Azure Blob tiers with and without hierarchical namespaces.\n- **Tune application knobs safely:** Experiment with PyTorch DataLoader workers, tf.data pipeline fusion, or checkpoint intervals and observe real latency/throughput changes.\n- **Quantify ROI of provider features:** Demonstrate the impact of AWS S3 Express, GCS metadata caching, or Azure Premium SSD upgrades on time-to-first-batch and $/token.\n- **Share reproducible results:** Use the portable outputs and configuration files to publish, compare, or reproduce runs across teams and vendors.\n\n## Roadmap & contributions\n- Near-term additions: checkpoint churn simulator, streaming dataloader stress tests, and mixed workloads that model full training steps.\n- Contributions are welcome—open an issue with the workload you want to emulate or submit a PR with a new module/config.\n- All code is released under the `LICENSE` file in this repo; please review before contributing.\n\n## Support & feedback\nQuestions, tuning tips, or benchmark requests? File an issue or start a discussion. Real-world traces and anonymized metrics help us refine scenarios and defaults for other practitioners.\n"
+    },
+    {
+      "path": "checkpointing_benchmarks/README.md",
+      "sha": null,
+      "content_sha256": "def1676794888717f0546f46b3e89ecb372f0b927eb1e24781f80305d8c4b5d2",
+      "score": 98,
+      "content": "# Checkpointing Benchmarks — AI I/O & Storage (Platform-agnostic)\n\nVendor-neutral, reproducible workloads that isolate the storage paths exercised by **model checkpoint write and restore** phases. Use them to profile local SSDs, network filesystems, or object-store mounts before pointing large training jobs at an unfamiliar storage tier.\n\n---\n\n## Why checkpointing throughput and latency matter\n\n- **Training safety nets:** Periodic snapshots protect multi-day runs from preemption or host failure. Slow writes lengthen step times and leave accelerators idle.\n- **Restart latency:** Restoring hundreds of gigabytes determines how quickly distributed jobs recover after a failure or planned maintenance.\n- **Optimizer and shard layout:** ZeRO, FSDP, and tensor-parallel checkpoints splinter states across many files; metadata thrash and small-file overhead can dominate.\n- **Mixed storage tiers:** Modern clusters layer NVMe caches, network-attached POSIX stores, and object storage. Understanding hand-off penalties avoids costly regressions.\n\nThis benchmark emulates configurable checkpoint shards, concurrent writers/readers, retention policies, and fsync behavior so you can measure throughput, tail latencies, and amplification without standing up a cluster-scale training job.\n\n---\n\n## Quick start\n\n### 1) Environment\n```bash\npython3 -m venv .venv && source .venv/bin/activate\npip install -r checkpointing_benchmarks/requirements.txt\n```\n\n### 2) Run a local demo (write + read)\n```bash\nbash checkpointing_benchmarks/scripts/run_local_small.sh\n```\n\nor directly:\n```bash\npython -m checkpointing_benchmarks.src.run \\\n  --run-name cpb-demo \\\n  --storage-root ./data/checkpoints \\\n  --iterations 2 \\\n  --shard-count 8 \\\n  --shard-size-mb 16 \\\n  --concurrency 4 \\\n  --mode write-read\n```\n\n### 3) Outputs\n```\n./metrics/<run-name>/checkpoint_shards.csv       # per-shard timings, throughput, paths\n./metrics/<run-name>/checkpoint_iterations.csv   # per-iteration totals (write/read)\n./metrics/<run-name>/checkpoint_summary.yaml     # aggregated metrics (p50/p95/p99, throughput)\n./metrics/<run-name>/metadata.yaml               # parameters + environment snapshot\n```\n\n---\n\n## What this benchmark measures\n- **Checkpoint write performance:** Concurrent shard writers with configurable fsync, chunk size, and retention, emulating optimizer state flushes.\n- **Restore / read performance:** Sequential or interleaved restores with adjustable buffer sizes to mimic loader threads.\n- **Amplification knobs:** Explore the effect of shard counts, shard size, and retention on storage metadata traffic.\n- **Throughput vs. latency trade-offs:** Observe how concurrency scaling, cache warm-up, and flushing impact write/read tail latencies.\n\nAll outputs are plain CSV/YAML so downstream plotting and comparisons stay transparent.\n\n---\n\n## Configuration & CLI\n\nYAML configs live in `checkpointing_benchmarks/config/`. Key sections:\n\n- `run.name` — labels the output directory under `./metrics/`.\n- `storage.root` — directory where synthetic checkpoints are placed (create tmpfs/NVMe mounts to test different tiers).\n- `storage.shard_count` / `storage.shard_size_mb` — number and size of shards per checkpoint.\n- `benchmark.iterations` — number of checkpoint cycles (write, read, or both).\n- `benchmark.mode` — `write`, `read`, or `write-read`.\n- `benchmark.concurrency` — threads used for each phase.\n- `benchmark.retention` — how many checkpoints to keep on disk before pruning (0 disables pruning).\n- `benchmark.fsync` — forces fsync after each shard write.\n- `benchmark.chunk_mb` — write chunk size (simulates streaming vs. large buffered writes).\n- `benchmark.read_buffer_kb` — buffer size for read loops.\n- `benchmark.cleanup_after` — delete generated checkpoints after the run (useful for scratch disks).\n- `output.dir` — base directory for metrics artifacts.\n\nAll options can also be provided as CLI flags (run `python -m checkpointing_benchmarks.src.run --help`).\n\n---\n\n## Sample report format (synthetic data)\n\n### Scenario overview\n| Run ID | Storage tier | Mode | Shards × Size | Concurrency | fsync | Notes |\n| --- | --- | --- | --- | --- | --- | --- |\n| cpb-nvme-baseline | Local NVMe | write-read | 8 × 16 MiB | 4 | false | Warm cache |\n| cpb-nvme-fsync | Local NVMe | write-read | 8 × 16 MiB | 4 | true | Explicit fsync |\n| cpb-nfs-shard32 | NFS mount | write-read | 32 × 8 MiB | 8 | false | Metadata-heavy |\n| cpb-object-cache | Object storage (cached) | read | 16 × 64 MiB | 6 | false | Manifest warmed |\n\n### Metric snapshot (synthetic)\n| Run ID | Write p95 (s) | Write mean MB/s | Read p95 (s) | Read mean MB/s | Bytes/checkpoint (GiB) | Notes |\n| --- | --- | --- | --- | --- | --- | --- |\n| cpb-nvme-baseline | 0.42 | 740 | 0.28 | 910 | 0.125 | Baseline |\n| cpb-nvme-fsync | 0.88 | 360 | 0.31 | 885 | 0.125 | Flush amplification |\n| cpb-nfs-shard32 | 1.96 | 210 | 1.44 | 260 | 0.256 | Metadata constrained |\n| cpb-object-cache | — | — | 0.67 | 470 | 1.000 | Read-only benchmark |\n\n### Chart sketches (replace with real figures)\n````text\nWrite Throughput (MB/s)\ncpb-nvme-baseline |████████████████████████████████████ 740\ncpb-nvme-fsync    |█████████████████ 360\ncpb-nfs-shard32   |██████████ 210\n\nRead Throughput (MB/s)\ncpb-nvme-baseline |██████████████████████████████████████ 910\ncpb-nvme-fsync    |███████████████████████████████████ 885\ncpb-nfs-shard32   |█████████████████ 260\ncpb-object-cache  |██████████████████████████████ 470\n\nWrite Tail (p95 seconds – lower is better)\ncpb-nvme-baseline |███ 0.42\ncpb-nvme-fsync    |███████ 0.88\ncpb-nfs-shard32   |████████████████████ 1.96\n````\n\n> Suggested figure export paths: `docs/figures/cpb_write_throughput.png`, `docs/figures/cpb_read_throughput.png`, `docs/figures/cpb_tail_latency.png`. Include axis units, sample counts, and environment summaries on each figure.\n\n### Reporting checklist\n- Attach `metrics/<run-id>/checkpoint_shards.csv`, `checkpoint_iterations.csv`, and `checkpoint_summary.yaml`.\n- Capture storage mount options, kernel version, and cache state in `metadata.yaml` or an experiment log.\n- Note retention policies, fsync toggles, and differences between cold/warm runs.\n- If publishing, include cost and energy estimates derived from throughput deltas when possible.\n\n---\n\n## Typical workflow\n1. **Baseline:** Run the default config against your target storage tier (cold and warm cache runs).\n2. **Single knob experiments:** Adjust one dimension—shard count, concurrency, fsync, or chunk size—and re-run.\n3. **Compare:** Plot throughput and tail latencies across runs to pinpoint bottlenecks or wins.\n4. **Document:** Log commands, configs, and environment notes so teammates can reproduce the scenario.\n\nHave ideas for additional checkpoint shapes or integrations? Open an issue or PR—community contributions keep the benchmark neutral and broadly useful.\n"
+    },
+    {
+      "path": "listing_folder_benchmarks/README.md",
+      "sha": null,
+      "content_sha256": "e1a93670697ea74ec54149b738876d4d6c9c68d8312de79914403574146ae5c2",
+      "score": 98,
+      "content": "# Listing Emulated Benchmark (LEB)\n*Platform-agnostic, reproducible benchmark for **listing/enumeration** in AI data pipelines — designed to quantify and reduce I/O stalls that degrade model performance in **training** and **batch inference**.*\n\n---\n\n## Why listing matters for model performance\n\nAI pipelines repeatedly enumerate data: building epoch shards, discovering checkpoints/artifacts, scanning prefixes for serving jobs. Slow or jittery listing increases **time-to-first-batch (TTFB)**, depresses **GPU utilization**, inflates **tail latency (P95/P99)**, and ultimately hurts **throughput**, **$ / token**, and **energy per sample**.\n\nLEB isolates the **listing/enumeration path** and measures how tuning (prefetch, page size, concurrency, caching, manifest-based enumeration) changes outcomes. It emits portable CSV/YAML so anyone can re-run, compare and plot without vendor SDKs.\n\n### Core metrics\n\n- **Entries/s** — effective listing throughput\n- **TTFB** — time from start until the first usable batch of paths\n- **Tail latency** — P95/P99 of list RPCs and end-to-end enumeration\n- **Request amplification** — list calls per K entries (pagination/filters)\n- **GPU util impact (proxy)** — expected idle reduction when TTFB shrinks\n- **$ / token & Energy/sample (proxy)** — derived from runtime changes using public price sheets / documented method\n\n> This benchmark is **public & vendor-neutral**: no proprietary code, no internal links; outputs are local by default.\n\n---\n\n## Quick start\n\n### 1) Environment\n\n```bash\npython -m venv .venv && source .venv/bin/activate\npip install -r requirements.txt\n```\n\n### 2) Run a small listing demo\n\nUsing helper scripts:\n\n```bash\nbash scripts/run_local_flat.sh\nbash scripts/run_local_deep.sh\n```\n\nOr call the Python entry directly:\n\n```bash\npython -m src.listing_bench.run \\\n  --run-name leb-demo \\\n  --root ./data/emulated_tree \\\n  --entries-per-dir 2000 \\\n  --depth 3 \\\n  --concurrency 8 \\\n  --page-size 1000 \\\n  --warm-cache false\n```\n\n### 3) Outputs\n\n```\n./metrics/<run-name>/listing_raw.csv       # per-call records (start, end, count, path)\n./metrics/<run-name>/listing_summary.yaml  # entries/s, P50/P95/P99, TTFB, amplification\n./metrics/<run-name>/metadata.yaml         # environment + parameters + summary\n```\n\n---\n\n## What LEB measures\n\n- **Listing patterns:** flat vs. deep trees; recursive vs. manifest-based enumeration\n- **Caching:** cold vs. warm, optional local metadata cache\n- **Concurrency scaling:** threads/processes and saturation analysis\n- **Pagination cost:** page size, prefetch distance (simulated for local FS)\n- **Negative lookups:** nonexistent prefixes and throttling behavior\n\n### Methods (concise)\n\n- Exclude warm-up from steady-state stats; report TTFB separately.\n- Record per-call wall-clock times, compute P95/P99, derive entries/s and amplification.\n- GPU utilization/$ / token/energy are proxies derived from TTFB/throughput deltas (method in METHODS.md).\n- Figures must be black/white friendly with units, sample size, time window, and an environment table.\n- See `METHODS.md` for full protocol and plotting notes.\n\n## CLI & Config\n\n**Common flags:**\n\n- `--run-name` : output subdir under `./metrics/`\n- `--root` : root directory to enumerate (created if synthetic tree is enabled)\n- `--entries-per-dir`, `--depth` : synthetic tree parameters\n- `--concurrency` : lister threads/processes\n- `--page-size` : emulated pagination size for iteration\n- `--warm-cache` : true|false\n\nYAML examples live in `configs/`:\n\n- `flat_tree.yaml` — many files in few dirs\n- `deep_tree.yaml` — deep hierarchy with small pages\n- `default.yaml` — sensible defaults for local runs\n\n---\n\n## Interpreting results → model performance\n\n- **Lower TTFB** → faster first batch → fewer idle accelerators during warm-up/epoch reset.\n- **Higher entries/s and lower amplification** → fewer metadata calls and less contention → higher steady-state throughput.\n- **Lower P95/P99** → fewer long-tail stalls → smoother step times and better GPU utilization.\n\nTogether these reduce $ / token and energy per sample.\n\n---\n\n## Sample report format\n\n### Scenario overview\n| Run ID | Tree shape | Entries/dir | Depth | Concurrency | Page size | Cache state |\n| --- | --- | --- | --- | --- | --- | --- |\n| leb-flat-cold | Flat | 4096 | 2 | 16 threads | 2048 | Cold |\n| leb-flat-warm | Flat | 4096 | 2 | 16 threads | 2048 | Warm (metadata cache primed) |\n| leb-deep-cold | Deep | 512 | 6 | 32 threads | 256 | Cold |\n| leb-deep-prefetch | Deep | 512 | 6 | 32 threads | 256 | Cold + manifest prefetch |\n\n### Metric snapshot (synthetic)\n| Run ID | Entries/s | TTFB (s) | P95 list latency (ms) | P99 list latency (ms) | Request amplification | GPU idle reduction (proxy %) |\n| --- | --- | --- | --- | --- | --- | --- |\n| leb-flat-cold | 8,950 | 4.2 | 38 | 82 | 1.92 | 11 |\n| leb-flat-warm | 12,480 | 1.6 | 17 | 29 | 1.05 | 19 |\n| leb-deep-cold | 2,430 | 9.8 | 142 | 311 | 4.87 | 4 |\n| leb-deep-prefetch | 5,120 | 5.1 | 76 | 158 | 2.03 | 9 |\n\n### Chart sketches (replace with real figures)\n````text\nEntries/s (higher is better)\nleb-flat-warm       |█████████████████████████████████████████████ 12.5k\nleb-flat-cold       |███████████████████████ 8.9k\nleb-deep-prefetch   |███████████ 5.1k\nleb-deep-cold       |█████ 2.4k\n\nTTFB (lower is better)\nleb-flat-warm       |██ 1.6s\nleb-flat-cold       |████ 4.2s\nleb-deep-prefetch   |███████ 5.1s\nleb-deep-cold       |███████████ 9.8s\n\nTail latency (P95 / ms)\nleb-flat-warm       |████ 17\nleb-flat-cold       |██████████ 38\nleb-deep-prefetch   |████████████████ 76\nleb-deep-cold       |██████████████████████████████ 142\n````\n\n### Reporting checklist\n- Attach `metrics/<run-id>/listing_summary.yaml` and `metadata.yaml`.\n- Include environment notes (cloud region, filesystem mount options, kernel version).\n- Document the command lines and config diffs in `EXPERIMENT_LOG.md`.\n"
+    },
+    {
+      "path": "serving_benchmarks/README.md",
+      "sha": null,
+      "content_sha256": "d80152f968d6e86a80ef10ca8abb14e420df70c59422817597f3432fc4912edf",
+      "score": 98,
+      "content": "# Serving Benchmarks — AI I/O & Storage (Platform-agnostic)\n\nVendor-neutral, reproducible benchmarks for **batch inference / serving** pipelines, focused on **data I/O and storage**. The goal is to quantify and reduce I/O bottlenecks so accelerators spend more time on useful compute and less time waiting for data.\n\n**Core metrics**\n\n- **Throughput** — requests/s or tokens/s  \n- **Tail latency** — P95 / P99 of per-request or per-step latency  \n- **GPU utilization** — if available  \n- **$ / token** — estimated from public price sheets × measured runtime  \n- **Energy per sample** — simple, documented estimation method\n\n> This component is **public and vendor-neutral**: no proprietary code, no internal links, and all outputs write to the local `./metrics/` directory by default.\n\n---\n\n## Quick start\n\n### 1) Environment\n```bash\npython -m venv .venv && source .venv/bin/activate\npip install -r requirements.txt\n```\n\n### 2) Run a small serving demo\n\nUse the helper script:\n\n```bash\nbash serving_benchmarks/scripts/run_infer_local.sh\n```\n\nOr call the Python entry directly:\n\n```bash\npython serving_benchmarks/src/train.py \\\n  --run-name demo-infer \\\n  --steps 200 \\\n  --gbs 256 \\\n  --mbs 1 \\\n  --num-workers 4 \\\n  --mode infer\n```\n\n### 3) Outputs\n\nAfter a run you should see:\n\n- `./metrics/<run-name>/per_microbatch_data_loading_time/<rank>.csv`\n- `./metrics/<run-name>/per_step_data_loading_time/<rank>.csv`\n- `./metrics/<run-name>/metadata.yaml`\n\n  - CSVs contain per-microbatch / per-step timings.\n  - `metadata.yaml` records run name, timestamp, environment, summary metrics.\n\n---\n\n## What this benchmark measures (Serving focus)\n\nThis benchmark emulates (or integrates with) a serving pipeline to capture the end-to-end impact of data access on inference. It records:\n\n- Fetch path behavior (object storage / local SSD)\n- Sharding & prefetch effects on hotspots and read amplification\n- Jitter / tail effects at steady load\n- Overall efficiency (throughput, GPU utilization) and cost/energy estimates\n\nResults are saved as portable CSV/YAML so third parties can regenerate plots without vendor SDKs.\n\n---\n\n## Configuration & CLI\n\nConfigs live in `serving_benchmarks/config/` (add your own). Most options are also CLI flags.\n\n**Common flags:**\n\n- `--run-name`: subdirectory under `./metrics/`\n- `--steps`: number of iterations\n- `--gbs` / `--mbs`: global / micro batch sizes (for request batching)\n- `--num-workers`: data-loader workers\n- `--mode`: infer (serving; default here). A training demo exists but is out of scope for this component.\n\n**Environment overrides (optional):**\n\n- `MASTER_ADDR`, `MASTER_PORT`, `DIST_BACKEND` — basic distributed init knobs (default single process)\n\n---\n\n## Methods (concise)\n\n- Exclude warm-up steps from statistics (configurable).\n- Record per-microbatch and per-step wall-clock times → compute P95/P99.\n- Derive throughput from measured latencies and effective batch size.\n- GPU utilization is recorded if available; otherwise omitted.\n- $ / token comes from measured runtime × public price sheets (cite your source in notes).\n- Energy per sample via on-node telemetry or documented conversion factors; always state the window/assumptions.\n\nFor a full protocol (definitions, plotting, black-&-white-friendly figure templates), keep or add a project-level `METHODS.md`.\n\n---\n\n## Typical workflow\n\n1. Baseline — run the default config and export CSV/YAML + metadata.\n2. Enable a single knob — e.g., prefetch or alternative sharding; re-run.\n3. Compare — generate two black-and-white figures (throughput, P95/P99), each one per page with units, sample sizes, and environment table.\n4. Document — note the change and command line in your experiment log (e.g., `CHANGELOG.md`).\n---\n\n## Sample report format\n\n### Scenario overview\n| Run ID | Hardware | Model size | Global batch | Loader workers | Storage tier | Notes |\n| --- | --- | --- | --- | --- | --- | --- |\n| infer-baseline-cpu | 32-core CPU | 7B | 256 | 4 | NFS mount | Cold start, no caching |\n| infer-cached-gpu | 2×A100 | 13B | 512 | 8 | NVMe cache + S3 | Weights preloaded |\n| infer-high-tail | 2×A100 | 13B | 512 | 8 | S3 (no cache) | Simulated throttling |\n| infer-optimized | 2×A100 | 13B | 512 | 8 | NVMe cache + S3 | Async prefetch + packed batches |\n\n### Metric snapshot (synthetic)\n| Run ID | Throughput (tokens/s) | P95 latency (ms) | P99 latency (ms) | GPU util (%) | $ / 1M tokens (est.) | Energy / 1K samples (kJ) |\n| --- | --- | --- | --- | --- | --- | --- |\n| infer-baseline-cpu | 18,200 | 152 | 207 | 0 (CPU only) | 9.10 | 4.8 |\n| infer-cached-gpu | 142,000 | 48 | 61 | 82 | 2.45 | 1.6 |\n| infer-high-tail | 97,500 | 141 | 213 | 63 | 3.62 | 2.1 |\n| infer-optimized | 158,400 | 39 | 52 | 88 | 2.18 | 1.4 |\n\n### Chart sketches (replace with real figures)\n````text\nThroughput (tokens/s)\ninfer-optimized    |██████████████████████████████████████ 158k\ninfer-cached-gpu   |███████████████████████████████ 142k\ninfer-high-tail    |█████████████████████ 97k\ninfer-baseline-cpu |████ 18k\n\nLatency P95 (ms) – lower is better\ninfer-optimized    |███ 39\ninfer-cached-gpu   |████ 48\ninfer-high-tail    |██████████████████████ 141\ninfer-baseline-cpu |███████████████████████ 152\n\nGPU Utilization (%)\ninfer-optimized    |███████████████████████████████████ 88\ninfer-cached-gpu   |█████████████████████████████ 82\ninfer-high-tail    |███████████████████ 63\ninfer-baseline-cpu | 0\n````\n\n### Reporting checklist\n- Attach `metrics/<run-id>/per_microbatch_data_loading_time/*.csv`, `per_step_data_loading_time/*.csv`, and `metadata.yaml`.\n- Document model card, tokenizer settings, and prompt mix used for the run.\n- Capture any throttling, cache warm-up, or retry events in `EXPERIMENT_LOG.md`.\n"
+    },
+    {
+      "path": "serving_benchmarks/src/storage_utils.py",
+      "sha": null,
+      "content_sha256": "a8881ecba3276c7dee21470af1eff5e01319c5e4411e7bbf34ea6aac33ac29f4",
+      "score": 91,
+      "content": "import os\nfrom .outputs import write_csv_local, write_yaml_local\n\ndef write_csv(base_dir: str, object_name: str, rows):\n    out = os.path.join(base_dir, object_name)\n    write_csv_local(out, rows)\n\ndef write_yaml(base_dir: str, object_name: str, data):\n    out = os.path.join(base_dir, object_name)\n    write_yaml_local(out, data)"
+    },
+    {
+      "path": "serving_benchmarks/requirements.txt",
+      "sha": null,
+      "content_sha256": "86b3c5bc9d88994f8458f868399bc30a5b0c1d525b07e870760d9f341d1d0680",
+      "score": 83,
+      "content": "PyYAML\n# Optional (uncomment and pin in your environment as needed):\n# torch\n# numpy\n# matplotlib"
+    },
+    {
+      "path": "listing_folder_benchmarks/requirements.txt",
+      "sha": null,
+      "content_sha256": "98538d308061a5186ecff82e27eb6233e2f5c3f14f4db337ba57f323912298b9",
+      "score": 83,
+      "content": "PyYAML\n# Optional for plotting in your local environment:\n# matplotlib\n# pandas\n"
+    },
+    {
+      "path": "checkpointing_benchmarks/requirements.txt",
+      "sha": null,
+      "content_sha256": "86c1e12a9d651927ed845bd88a4a6e4482398a2ae6cb1feee1bd3b7de803d14c",
+      "score": 83,
+      "content": "PyYAML\n# Optional (local analysis / plotting):\n# pandas\n# matplotlib\n"
+    },
+    {
+      "path": "serving_benchmarks/docker/Dockerfile",
+      "sha": null,
+      "content_sha256": "5415c8fc39b12f0bcfc28f525789a1b4be4fe60fcd24f8709ed3e60d95e50abf",
+      "score": 81,
+      "content": "FROM python:3.11-slim\n\nWORKDIR /app\nCOPY requirements.txt /app/\nRUN pip install --no-cache-dir -r requirements.txt\n\nCOPY . /app\nCMD [\"python\", \"-m\", \"src.io_bench.training\", \"--run-name\", \"demo-train\", \"--steps\", \"50\", \"--mode\", \"train\"]"
+    },
+    {
+      "path": "checkpointing_benchmarks/src/__init__.py",
+      "sha": null,
+      "content_sha256": "863a6fb5dfa3f8e524e475b955d0e3a36e96009a92af50078ff2f6d54593b503",
+      "score": 31,
+      "content": "\"\"\"Checkpointing benchmark helpers.\"\"\"\n\n"
+    },
+    {
+      "path": "serving_benchmarks/src/__init__.py",
+      "sha": null,
+      "content_sha256": "0811e4dd2bf61d47b6104587312c133a99a8bb79798dbbdc49bd22e87457154c",
+      "score": 31,
+      "content": "__all__ = [\"initialization\", \"training\", \"outputs\", \"storage_utils\"]\n__version__ = \"0.1.0\""
+    },
+    {
+      "path": "listing_folder_benchmarks/src/init.py",
+      "sha": null,
+      "content_sha256": "2fd459b4dc9fae20bcb2405c68e51a5baadb925924b1f20816fdbeb9bb1175d2",
+      "score": 31,
+      "content": "__all__ = [\"run\", \"synthetic_tree\", \"fs_lister\", \"outputs\"]\n__version__ = \"0.1.0\"\n"
+    },
+    {
+      "path": "serving_benchmarks/config/train_small.yaml",
+      "sha": null,
+      "content_sha256": "d91e927e0ef5366df997f20742f4b7ee8aaa4df782ebc2c06bf1d3c13da054ff",
+      "score": 31,
+      "content": "run:\n  name: train-small\ntrainer:\n  max_steps: 100\nmodel:\n  global_batch_size: 128\n  micro_batch_size: 8\ndata:\n  num_workers: 4\noutput:\n  dir: metrics\n"
+    },
+    {
+      "path": "listing_folder_benchmarks/scripts/run_local_deep.sh",
+      "sha": null,
+      "content_sha256": "8c642bc9881016034a8c32c6656e7a7201bf27947a9ebf67dc6e9a7c817a406c",
+      "score": 31,
+      "content": "#!/usr/bin/env bash\nset -euo pipefail\npython -m src.listing_bench.run --config configs/deep_tree.yaml\n"
+    },
+    {
+      "path": "listing_folder_benchmarks/config/default.yaml",
+      "sha": null,
+      "content_sha256": "86fab3f0125dae86e80c84cab9377bdb220068b9602a9a8c69979c6918481f29",
+      "score": 31,
+      "content": "run:\n  name: leb-default\ndata:\n  root: ./data/emulated_tree\n  entries_per_dir: 2000\n  depth: 3\nbenchmark:\n  concurrency: 8\n  page_size: 1000\n  warm_cache: false\noutput:\n  dir: metrics\n"
+    },
+    {
+      "path": "listing_folder_benchmarks/config/deep_tree.yaml",
+      "sha": null,
+      "content_sha256": "841cbefbc37a70d8b8e72cb806a5665971773c69f9456442c36579e4987804d9",
+      "score": 31,
+      "content": "run: { name: leb-deep }\ndata: { root: ./data/deep, entries_per_dir: 400, depth: 5 }\nbenchmark: { concurrency: 8, page_size: 200, warm_cache: false }\noutput: { dir: metrics }\n"
+    },
+    {
+      "path": "listing_folder_benchmarks/scripts/run_local_flat.sh",
+      "sha": null,
+      "content_sha256": "9dd19d55f0603fc1db2a17b0e2d63ff2140ed814b96736b566d1c33b66c83ce9",
+      "score": 31,
+      "content": "#!/usr/bin/env bash\nset -euo pipefail\npython -m src.listing_bench.run --config configs/flat_tree.yaml\n"
+    },
+    {
+      "path": "serving_benchmarks/config/infer_small.yaml",
+      "sha": null,
+      "content_sha256": "21f25382be1d91b1df21fd8cd7f5e1c2f187ce12dc38afa4b9823728a95125a7",
+      "score": 31,
+      "content": "run:\n  name: infer-small\ntrainer:\n  max_steps: 200\nmodel:\n  global_batch_size: 256\n  micro_batch_size: 1\ndata:\n  num_workers: 4\noutput:\n  dir: metrics"
+    },
+    {
+      "path": "serving_benchmarks/scripts/run_train_local.sh",
+      "sha": null,
+      "content_sha256": "09aad9410b9e654583219cfff89be9042685feefd387e47ce73a24bdfeb71015",
+      "score": 31,
+      "content": "#!/usr/bin/env bash\nset -euo pipefail\npython -m src.io_bench.training --run-name train-small --steps 100 --gbs 128 --mbs 8 --num-workers 4 --mode train"
+    },
+    {
+      "path": "listing_folder_benchmarks/config/flat_tree.yaml",
+      "sha": null,
+      "content_sha256": "5172e651f8f01dc79ba08280d0c79d859b0c925829900f968e128d351ee42d83",
+      "score": 31,
+      "content": "run: { name: leb-flat }\ndata: { root: ./data/flat, entries_per_dir: 5000, depth: 1 }\nbenchmark: { concurrency: 16, page_size: 2000, warm_cache: false }\noutput: { dir: metrics }\n"
+    },
+    {
+      "path": "serving_benchmarks/scripts/run_infer_local.sh",
+      "sha": null,
+      "content_sha256": "67ff0c4ba42843df504ed4e3e5a2e665d0a55caf43be5fd075bbc2d99434b4e0",
+      "score": 31,
+      "content": "#!/usr/bin/env bash\nset -euo pipefail\npython -m src.io_bench.training --run-name infer-small --steps 200 --gbs 256 --mbs 1 --num-workers 4 --mode infer"
+    },
+    {
+      "path": "serving_benchmarks/config/default.yaml",
+      "sha": null,
+      "content_sha256": "73bd62c27543b4e34d88fb53730b73fb7f66e84fa4e03b62c983fe23af065b1b",
+      "score": 31,
+      "content": "run:\n  name: demo-run\ntrainer:\n  max_steps: 50\nmodel:\n  global_batch_size: 64\n  micro_batch_size: 8\ndata:\n  num_workers: 4\n  source: local\noutput:\n  dir: metrics"
+    },
+    {
+      "path": "checkpointing_benchmarks/config/read_only.yaml",
+      "sha": null,
+      "content_sha256": "e16d3976480506c8bccbdc5bb8fc2534d9cf56eac87c2e79746e713cb9c6aea0",
+      "score": 31,
+      "content": "run:\n  name: cpb-read-test\nstorage:\n  root: ./data/checkpoints\n  shard_count: 8\n  shard_size_mb: 16\nbenchmark:\n  iterations: 3\n  concurrency: 6\n  mode: read\n  retention: 0\n  fsync: false\n  chunk_mb: 4\n  read_buffer_kb: 2048\n  cleanup_after: false\noutput:\n  dir: metrics\n"
+    },
+    {
+      "path": "checkpointing_benchmarks/config/default.yaml",
+      "sha": null,
+      "content_sha256": "42e9e4a33959ee21a8c5cc8283ca2db82fea85b4aaa8cf358b7d0131d7cf018a",
+      "score": 31,
+      "content": "run:\n  name: cpb-demo\nstorage:\n  root: ./data/checkpoints\n  shard_count: 8\n  shard_size_mb: 16\nbenchmark:\n  iterations: 3\n  concurrency: 4\n  mode: write-read\n  retention: 2\n  fsync: false\n  chunk_mb: 4\n  read_buffer_kb: 1024\n  cleanup_after: false\noutput:\n  dir: metrics\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T20:54:28.198765+00:00"
+}
