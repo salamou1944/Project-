@@ -1,0 +1,112 @@
+{
+  "canonical_source": "github:meltano/.github",
+  "repo": "meltano/.github",
+  "revision_sha": "f706a964900dc1b973df57b85a7ce0119b53727f",
+  "default_branch": "main",
+  "pushed_at": "2026-09-28T22:07:35Z",
+  "repo_updated_at": "2026-09-28T22:07:40Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/actions/sync_labels/package.json",
+      "sha": null,
+      "content_sha256": "034189f171425eef983971c0d468586e60f68867a97f0a259d1658c05089c356",
+      "score": 196,
+      "content": "{\n    \"dependencies\": {\n        \"@actions/core\": \"^1.10.0\",\n        \"@actions/github\": \"^5.1.1\",\n        \"github-label-sync\": \"^2.2.0\",\n        \"js-yaml\": \"^4.1.0\"\n    }\n}\n"
+    },
+    {
+      "path": ".github/workflows/sync_labels.yml",
+      "sha": null,
+      "content_sha256": "2c3e8aa97f25a9c9a7223e428db887d9194175e2279d7e0974b1a141b0ef9515",
+      "score": 126,
+      "content": "name: Sync Labels\n\non:\n  push:\n    branches:\n      - 'main'\n    paths:\n      - 'labels.yaml'\n      - '.github/actions/sync_labels/**'\n      - '.github/workflows/sync_labels.yml'\n  workflow_dispatch:\n    inputs:\n      dry-run:\n        description: dry run\n        type: boolean\n        required: true\n        default: false\n\n# Do not allow multiple label sync workflows to run in parallel\nconcurrency:\n  group: ${{ github.workflow }}\n  cancel-in-progress: true\n\njobs:\n  sync-labels:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n      - uses: ./.github/actions/sync_labels\n        with:\n          token: ${{ secrets.MELTYBOT_GITHUB_AUTH_TOKEN }}\n"
+    },
+    {
+      "path": ".github/actions/sync_labels/index.js",
+      "sha": null,
+      "content_sha256": "bbdb2d87a3e63b999a5dd79def7a78ce642e6fea907d1b781c416d6a800b68fd",
+      "score": 111,
+      "content": "const core = require('@actions/core');\nconst fs = require('fs');\nconst github = require('@actions/github');\nconst githubLabelSync = require('github-label-sync');\nconst process = require('process');\nconst yaml = require('js-yaml');\n\nconst config = yaml.load(fs.readFileSync(core.getInput('config'), 'utf8'));\nconst octokit = github.getOctokit(core.getInput('token'));\n\nconst logAndExit = function (err) {\n    console.log(err);\n    process.exit(1);\n}\n\nString.prototype.toTitleCase = function() {\n    return this.replace(/(^|[\\s\\/\\:\\-])\\S/g, (x) => { return x.toUpperCase(); });\n}\n\n// Auto-generates aliases from the label name and manually specified aliases.\n// Generates alernative aliases with the text:\n// - UPPERCASE\n// - lowercase\n// - Title Case\n// - With '::' repalced by '/'\n// - With '/' repalced by '::'\n// For example, a label named 'valuestream/Meltano' would receive the following aliases:\n// - 'VALUESTREAM/MELTANO'\n// - 'valuestream/meltano'\n// - 'Valuestream/Meltano'\n// - 'valuestream::Meltano'\n// - 'VALUESTREAM::MELTANO'\n// - 'valuestream::meltano'\n// - 'Valuestream::Meltano'\n// A label named 'wont fix' with the alias 'wontfix' would receive the following aliases:\n// - 'WONT FIX'\n// - 'Wont Fix'\n// - 'wontfix'\n// - 'WONTFIX'\n// - 'Wontfix'\nconst generateAliases = function (labels) {\n    for (const label of labels) {\n        const aliases = new Set(\n            [label['name'], ...(label['aliases'] ?? [])].flatMap((text) => {\n                return [\n                    text,\n                    text.toUpperCase(),\n                    text.toLowerCase(),\n                    text.toTitleCase(),\n                ].flatMap((text) => {\n                    return [\n                        text.replace('::', '/'),\n                        text.replace('/', '::'),\n                    ];\n                });\n            })\n        );\n        aliases.delete(label['name']);\n        label['aliases'] = Array.from(aliases);\n    }\n    return labels;\n}\n\nfor (const org of config['orgs']) {\n    octokit.rest.repos.listForOrg({ org: org }).then((data) => {\n        for (const repo of data['data']) {\n            if (repo['archived']) continue;\n            githubLabelSync({\n                // Avoid broadly destructive actions - if allowAddedLabels is\n                // false all labels not specified in the config will be deleted\n                allowAddedLabels: true,\n                accessToken: [REDACTED]'token'),\n                dryRun: core.getBooleanInput('dry-run'),\n                labels: generateAliases(config['labels']),\n                repo: repo['full_name'],\n            }).then((diff) => {\n                console.log(`\\n\\n ${repo['full_name']}:\\n${JSON.stringify(diff, null, 4)}`)\n            }).catch(logAndExit);\n        }\n    }).catch(logAndExit);\n}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".github/actions/sync_labels/action.yml",
+      "sha": null,
+      "content_sha256": "7bc9a40dfe12a33292bf13de19fa4fbf5991f95825201dd6c2a4d660d8c203bc",
+      "score": 111,
+      "content": "name: Sync Labels\ndescription: Sync labels across all repositories specified in the config\ninputs:\n  token:\n    [REDACTED] GitHub token with access to read and write labels, and list repositories in the Meltano and MeltanoLabs orgs\n    required: true\n  config:\n    description: The path to the label sync config file\n    default: labels.yaml\n  dry-run:\n    description: Compute label changes required, but do not apply them\n    default: 'false'\n\nruns:\n  using: node16\n  main: index.js\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "9c54d2264b7281c8f6f58443cb66e67e6a4740a623585901fc19ae57694ea672",
+      "score": 100,
+      "content": "# .github repository\n\nThis repository contains config files and workflows for all repositories in the [meltano](https://github.com/meltano) GitHub org (and occasionally the [MeltanoLabs](https://github.com/MeltanoLabs) GitHub org too).\n\n## Label Synchronization\n\nThe file [`labels.yaml`](https://github.com/meltano/.github/blob/main/labels.yaml) specifies labels which are synchronized across all repositories in the [meltano](https://github.com/meltano) and [MeltanoLabs](https://github.com/MeltanoLabs) GitHub orgs. They are updated when the file is updated on the `main` branch, or when the label sync workflow is run manually.\n\nTo add a new label, add new entry to [`labels.yaml`](https://github.com/meltano/.github/blob/main/labels.yaml) under the `labels` key:\n\n```yaml\n  - name: \"label name\"\n    description: \"label description\n    color: \"0075CA\" #hex color\n    aliases:\n     - \"other labels to rename\"\n```\n\nTo test a PR, run the [\"Sync Labels\" workflow](https://github.com/meltano/.github/actions/workflows/sync_labels.yml) on your branch with the \"dry run\" option selected.\n\nNote that no labels will currently be deleted if they do not match the configuration.\n"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha": null,
+      "content_sha256": "1369ece9e1b13d4ea5015f3771f229c0f9f391dbca0048dffa1b43c9a9a7b912",
+      "score": 80,
+      "content": "# Security Policy\n\n## Reporting a Vulnerability\n\nPlease email `security@meltano.com` to report any security vulnerabilities.\nWe will acknowledge receipt of your vulnerability report the next business day\nand strive to send you regular updates about our progress.\nIf you're curious about the status of your disclosure please feel free to email us again.\n"
+    },
+    {
+      "path": "labels.yaml",
+      "sha": null,
+      "content_sha256": "7def312f060cc7b201fbbbd94edf27cd30f2edbda13172be25b9ca8243996866",
+      "score": 35,
+      "content": "orgs:\n- meltano\n- MeltanoLabs\n\nlabels: []\n"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "sha": null,
+      "content_sha256": "42041a174f0170ccd17f87dd02cd1dec839688fca58a2cab01836a39b4bdf61a",
+      "score": 35,
+      "content": "ci:\n  autofix_commit_msg: |\n    [pre-commit.ci] auto fixes from pre-commit.ci hooks\n\n    for more information, see https://pre-commit.ci\n  autofix_prs: true\n  autoupdate_commit_msg: \"chore: pre-commit autoupdate\"\n  autoupdate_schedule: weekly\n\nrepos:\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v6.0.0\n    hooks:\n      - id: trailing-whitespace\n      - id: end-of-file-fixer\n      - id: check-json\n      - id: check-toml\n      - id: check-yaml\n      - id: pretty-format-json\n        args: [\"--autofix\", \"--indent=4\", \"--no-sort-keys\"]\n      - id: check-added-large-files\n      - id: check-merge-conflict\n\n  - repo: https://github.com/python-jsonschema/check-jsonschema\n    rev: 0.38.2\n    hooks:\n      - id: check-renovate\n"
+    },
+    {
+      "path": "renovate/base.json",
+      "sha": null,
+      "content_sha256": "216bda0969ec5d61ec2afb9923cf7bf5eb00f4e6bb6cfc21f139046af8a4de01",
+      "score": 33,
+      "content": "{\n    \"$schema\": \"https://docs.renovatebot.com/renovate-schema.json\",\n    \"extends\": [\n        \"config:recommended\",\n        \":disableDependencyDashboard\",\n        \"schedule:automergeOfficeHours\",\n        \"schedule:earlyMondays\"\n    ],\n    \"platformAutomerge\": true,\n    \"labels\": [\n        \"dependencies\"\n    ],\n    \"lockFileMaintenance\": {\n        \"enabled\": true,\n        \"automerge\": true\n    },\n    \"rebaseWhen\": \"conflicted\",\n    \"minimumReleaseAge\": \"7 days\",\n    \"packageRules\": [\n        {\n            \"description\": \"Group minor and patch updates to Python dependencies\",\n            \"matchManagers\": [\n                \"pep621\"\n            ],\n            \"matchUpdateTypes\": [\n                \"minor\",\n                \"patch\"\n            ],\n            \"groupName\": \"Minor and patch updates to Python dependencies\",\n            \"groupSlug\": \"python-minor-patch\",\n            \"automerge\": true\n        },\n        {\n            \"description\": \"Group minor and patch updates to docs dependencies\",\n            \"matchManagers\": [\n                \"npm\"\n            ],\n            \"matchUpdateTypes\": [\n                \"minor\",\n                \"patch\"\n            ],\n            \"groupName\": \"Minor and patch updates to docs dependencies\",\n            \"groupSlug\": \"docs-minor-patch\",\n            \"automerge\": true\n        },\n        {\n            \"description\": \"Group minor and patch updates to pre-commit hooks\",\n            \"matchManagers\": [\n                \"pre-commit\"\n            ],\n            \"matchUpdateTypes\": [\n                \"minor\",\n                \"patch\"\n            ],\n            \"groupName\": \"Minor and patch updates to pre-commit hooks\",\n            \"groupSlug\": \"pre-commit-minor-patch\",\n            \"automerge\": true\n        },\n        {\n            \"description\": \"Group minor and patch updates to docker-compose dependencies\",\n            \"matchManagers\": [\n                \"docker-compose\"\n            ],\n            \"matchUpdateTypes\": [\n                \"minor\",\n                \"patch\"\n            ],\n            \"groupName\": \"Minor and patch updates to docker-compose dependencies\",\n            \"groupSlug\": \"docker-compose-minor-patch\",\n            \"automerge\": true\n        },\n        {\n            \"description\": \"Group other minor and patch updates to GitHub Actions\",\n            \"matchManagers\": [\n                \"github-actions\"\n            ],\n            \"matchUpdateTypes\": [\n                \"minor\",\n                \"patch\"\n            ],\n            \"groupName\": \"Minor and patch updates to GitHub Actions\",\n            \"groupSlug\": \"github-actions-minor-patch\",\n            \"automerge\": true\n        },\n        {\n            \"description\": \"Group GitHub upload & download artifact actions\",\n            \"matchPackageNames\": [\n                \"actions/upload-artifact\",\n                \"actions/download-artifact\"\n            ],\n            \"groupName\": \"GitHub artifact actions\"\n        },\n        {\n            \"description\": \"Disable minimum release age checks for lock file maintenance\",\n            \"matchUpdateTypes\": [\n                \"lockFileMaintenance\"\n            ],\n            \"minimumReleaseAge\": null\n        },\n        {\n            \"matchUpdateTypes\": [\n                \"pin\",\n                \"digest\"\n            ],\n            \"automerge\": true\n        }\n    ]\n}\n"
+    },
+    {
+      "path": ".github/stale.yml",
+      "sha": null,
+      "content_sha256": "88d38aa07cba94ac7fa44db508eb9340b44e28b0f01081cfddd2964e04568a22",
+      "score": 33,
+      "content": "# Number of days of inactivity before an issue becomes stale\ndaysUntilStale: 365\n\n# Number of days of inactivity before a stale issue is closed\ndaysUntilClose: 21\n\n# Set to true to ignore issues in a project\nexemptProjects: false\n\n# Set to true to ignore issues in a milestone\nexemptMilestones: true\n\n# Set to true to ignore issues with an assignee\nexemptAssignees: true\n\n# Issues/PRs with these labels will never be considered stale\nexemptLabels:\n  - evergreen\n\n# Label to use when marking an issue as stale\nstaleLabel: stale\n\n# Comment to post when marking an issue as stale\nmarkComment: >\n  This has been marked as stale because it is unassigned, and has not had\n  recent activity. It will be closed after 21 days if no further activity\n  occurs. If this should never go stale, please add the `evergreen` label, or\n  request that it be added.\n\n# Comment to post when closing a stale issue. Set to `false` to disable\ncloseComment: false\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": ".github/actions/sync_labels/node_modules/psl/.env",
+      "sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "size": 0,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T21:00:56.869480+00:00"
+}

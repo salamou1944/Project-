@@ -1,0 +1,55 @@
+{
+  "canonical_source": "github:MariaDB/wp-cli-commands",
+  "repo": "MariaDB/wp-cli-commands",
+  "revision_sha": "fc523c4b3a2efc303117d1ce45e6021f5f1ca5a3",
+  "default_branch": "main",
+  "pushed_at": "2024-03-18T10:18:24Z",
+  "repo_updated_at": "2026-09-17T17:22:20Z",
+  "license": "GPL-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "composer.json",
+      "sha": null,
+      "content_sha256": "f94d9826e4cb1734882959a9bf920bc6846f4759643c11a00e562ea384baccdc",
+      "score": 120,
+      "content": "{\n    \"name\": \"mariadb/wp-cli-commands\",\n    \"description\": \"WP-CLI commands for MariaDB\",\n    \"type\": \"wp-cli-package\",\n    \"license\": \"GPL-2.0-or-later\",\n    \"minimum-stability\": \"dev\",\n    \"prefer-stable\": true,\n    \"autoload\": {\n        \"classmap\": [\n            \"src/\"\n        ],\n        \"files\": [\n            \"maria-db-commands.php\"\n        ]\n    },\n    \"require\": {\n        \"wp-cli/wp-cli\": \"^2\",\n        \"mariadb/catalogs-php\": \"dev-main\"\n    },\n    \"require-dev\": {\n        \"wp-cli/wp-cli-tests\": \"^4\"\n    },\n    \"scripts\": {\n        \"lint\": \"run-linter-tests\",\n        \"phpcs\": \"run-phpcs-tests\",\n        \"phpcbf\": \"run-phpcbf-cleanup\",\n        \"phpunit\": \"run-php-unit-tests\",\n        \"behat\": \"run-behat-tests\",\n        \"prepare-tests\": \"install-package-tests\",\n        \"test\": [\n            \"@lint\",\n            \"@phpcs\",\n            \"@phpunit\",\n            \"@behat\"\n        ]\n    },\n    \"extra\": {\n        \"commands\": [\n            \"mariadb\"\n        ]\n    },\n    \"config\": {\n        \"allow-plugins\": {\n            \"dealerdirect/phpcodesniffer-composer-installer\": true\n        }\n    }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "fe27920cdb62f4a03d0d4965f9f3ff157419d9c0f64493af6efa7f406652d98d",
+      "score": 100,
+      "content": "# wp-cli-commands\nMariaDB specific WP-CLI commands. Created as part of CloudFest Hackathon 2024\n"
+    },
+    {
+      "path": "maria-db-commands.php",
+      "sha": null,
+      "content_sha256": "75c3c96763747d6a5e7454d1a57a36d5aecece2b288aa1b5e64589e9da4944c3",
+      "score": 35,
+      "content": "<?php\n\nif ( ! class_exists( 'WP_CLI' ) ) {\n\treturn;\n}\n\n$wpcli_mariadb_autoloader = __DIR__ . '/vendor/autoload.php';\nif ( file_exists( $wpcli_mariadb_autoloader ) ) {\n\trequire_once $wpcli_mariadb_autoloader;\n}\n\n\\WP_CLI::add_command( 'mariadb catalog', 'Catalog_Command' );\n"
+    },
+    {
+      "path": "src/Catalog_Command.php",
+      "sha": null,
+      "content_sha256": "fc4f315e48bbefbe0f69f76e9be5e84fc33a895eeb56e3c80e2b51d35151d591",
+      "score": 33,
+      "content": "<?php\n\nclass Catalog_Command extends \\WP_CLI_Command {\n\n\t/**\n\t * @var \\Mariadb\\CatalogsPHP\\CatalogManager\n\t */\n\tprotected $mariadb_connection;\n\n\tprotected function get_mariadb_connection() {\n\n\t\tif ( ! empty( $this->mariadb_connection ) ) {\n\t\t\treturn $this->mariadb_connection;\n\t\t}\n\n\t\t// Check if the required constants are defined\n\t\tif ( ! defined( 'DB_HOST' ) || ! defined( 'DB_USER' ) || ! defined( 'DB_PASSWORD' ) ) {\n\t\t\t\\WP_CLI::error( 'The database constants are not defined.' );\n\t\t}\n\n\t\t// TODO check if these constants are defined.\n\t\t$db_host = \\DB_HOST; // TODO check if the constant has a port.\n\t\t$db_port = 3306;\n\t\t$db_user = \\DB_NAME;\n\t\t$db_pass = \\DB_PASSWORD;\n\n\t\t// TODO: exception handling.\n\t\t$this->mariadb_connection = new \\Mariadb\\CatalogsPHP\\CatalogManager( $db_host, $db_port, $db_user, $db_pass );\n\t}\n\n\t/**\n\t * Create a catalog with the specified name.\n\t *\n\t * ## OPTIONS\n\t *\n\t * <catalog_name>\n\t * : Name of the catalog.\n\t *\n\t * ## EXAMPLES\n\t *\n\t *     # Create a catalog with the specified name.\n\t *     $ wp mariadb catalog create \"test\"\n\t *     3307\n\t *\n\t * @when before_wp_load\n\t */\n\tpublic function create( $args, $assoc_args ) {\n\t\t$catalog_name = $args[0];\n\n\t\ttry {\n\t\t\t$port = $this->get_mariadb_connection()->create( $catalog_name );\n\t\t\t\\WP_CLI::log( absint( $port ) );\n\t\t} catch ( Exception $e ) {\n\t\t\t\\WP_CLI::error( sprintf( 'Error creating catalog: %s', $e->getMessage() ) );\n\t\t}\n\t}\n\n\t/**\n\t * Checks if catalogs are enabled.\n\t *\n\t * Determines whether catalogs are enabbled on the given servcer.\n\t *\n\t * ## EXAMPLES\n\t *\n\t *     # Check if catalogs are enabled.\n\t *     if wp mariadb catalog is-enabled 2>/dev/null; then\n\t *         # Catalogs are enabled.\n\t *         # Create a catalog here.\n\t *     fi\n\n\t *\n\t * @when before_wp_load\n\t */\n\tpublic function is_enabled( $args, $assoc_args ) {\n\n\t\t$enabled = $this->get_mariadb_connection()->isCatalogSupported();\n\n\t\tif ( $enabled ) {\n\t\t\t\\WP_CLI::halt( 0 );\n\t\t} else {\n\t\t\t\\WP_CLI::halt( 1 );\n\t\t}\n\t}\n\n\t/**\n\t * Retrieve the port of the given catalog.\n\t *\n\t * ## OPTIONS\n\t *\n\t * <catalog_name>\n\t * : Name of the catalog.\n\t *\n\t * ## EXAMPLES\n\t *\n\t *     # Port a catalog to the specified port.\n\t *     $ wp mariadb catalog port \"test\"\n\t *     3307\n\t *\n\t * @when before_wp_load\n\t */\n\tpublic function port( $args, $assoc_args ) {\n\t\t$catalog_name = $args[0];\n\n\t\ttry {\n\t\t\t$port = $this->get_mariadb_connection()->getPort( $catalog_name );\n\t\t\t\\WP_CLI::log( absint( $port ) );\n\t\t} catch ( Exception $e ) {\n\t\t\t\\WP_CLI::error( sprintf( 'Error creating catalog: %s', $e->getMessage() ) );\n\t\t}\n\t}\n\n\tpublic function list( $args, $assoc_args ) {\n\t}\n\n\t/**\n\t * Deletes a catalog with the specified name.\n\t *\n\t * ## OPTIONS\n\t *\n\t * <catalog_name>\n\t * : Name of the catalog to delete.\n\t *\n\t * ## EXAMPLES\n\t *\n\t *     # Delete a catalog by name.\n\t *     $ wp mariadb catalog delete \"test\"\n\t *\n\t * @when before_wp_load\n\t */\n\tpublic function delete( $args, $assoc_args ) {\n\t\t$catalog_name = $args[0];\n\n\t\ttry {\n\t\t\t// Assuming the delete method returns true on successful deletion,\n\t\t\t// false otherwise.\n\t\t\t$this->get_mariadb_connection()->drop( $catalog_name );\n\t\t\t\\WP_CLI::success( 'Catalog dropped.' );\n\t\t} catch ( Exception $e ) {\n\t\t\t\\WP_CLI::error( sprintf( 'Error deleting catalog: %s', $e->getMessage() ) );\n\t\t}\n\t}\n\n\n\t/**\n\t * Lists all databases in the catalog.\n\t */\n\tpublic function databases( $args, $assoc_args ) {\n\t}\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-21T21:00:58.116852+00:00"
+}
