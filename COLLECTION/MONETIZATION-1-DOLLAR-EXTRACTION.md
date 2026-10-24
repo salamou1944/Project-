@@ -324,3 +324,62 @@ Read-only HubSpot CRM search returned 0 deals, 2 sample contacts and 1 company r
 
 
 Post-automation inbox recheck (2026-10-19): API Pilot 6 threads, latest 2026-09-27; EASY 5 threads, latest 2026-09-22; PASTEL E2E 0 threads. No new sends or replies were evidenced. Keep the 11 bounced recipients suppressed.
+
+## 2026-10-23/24 sweep — current inbox, opportunities, and free inference changes
+
+### Scope and evidence cutoff
+- Research window: 2026-10-22T00:00:00Z through 2026-10-24T03:10:00Z.
+- Canonical sources checked: AgentMail inbox threads, live Upwork account/job details, `salamou1944/Salamou-31` API Factory persistence documentation, and the current `mnfst/awesome-free-llm-apis` repository.
+- No credentials were read or written. No paid provider, trial, subscription, lead-credit pack, or Upwork Connects were purchased.
+
+### AgentMail and outreach
+- Checked `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to` for threads received at or after 2026-10-22T00:00:00Z.
+- Result: 0 new threads in all three inboxes.
+- Upwork invitation inbox: 0 invitations.
+- Outbound messages sent during this sweep: 0. No reply, acceptance, contract, invoice, or payment evidence was found.
+
+### Live opportunity checks — candidates only
+1. **Part-time automation developer: Node.js, Python and n8n (remote)**  
+   Source: https://www.upwork.com/jobs/~022113716902791054598  
+   Published 2026-10-23; hourly range $10–$35; client payment method verified. Scope includes Python/PowerShell test harnesses, n8n Code nodes, Google Sheets/Drive/Gmail, IMAP/webhooks/OAuth, and a WhatsApp Cloud API permit workflow. The job explicitly requires an existing worked example and asks whether the applicant has shipped an official WhatsApp Cloud API integration. Live job detail reports 19 Connects required, 0 available, no hires/contracts yet for this client, and active status at lookup. No proposal submitted: the application is not available without Connects, and our evidence does not prove a previously shipped WhatsApp Cloud API integration. Do not claim that experience.
+2. **AI Automation Engineer for UAT Test Management & Defect Reporting**  
+   Source: https://www.upwork.com/jobs/~022113521010388700795  
+   Published 2026-10-23; $200 fixed price; payment verified. Live client record shows $48,366.49 total spend, 100 contracts, 62 reviews, and 5.0 feedback score. The task requires Azure DevOps API integration and QA/UAT process knowledge. It costs 18 Connects, with 0 available. No proposal submitted; Azure DevOps delivery is not a verified capability and no upfront spend is permitted.
+3. **AI Inbox & Invoice Processing Agent with Approval Queue**  
+   Source: https://www.upwork.com/jobs/~0221137701610850731  
+   Published 2026-10-23; $5 fixed budget, 20–50 proposals, client payment verified but only $25 recorded lifetime spend. Its PDF/OCR, inbox classification, approval queue and Sheets/Drive workflow resembles a real service category, but the advertised budget is not viable for the stated scope. Do not apply or use the listing as revenue evidence.
+4. **Experienced AI Agent & Automation Builder**  
+   Source: https://www.upwork.com/jobs/~022113779149286507782  
+   Published 2026-10-23; $20–$40/hour, payment verified, 50+ proposals. The client explicitly requires personally built and deployed similar systems. Our internal assets and test evidence do not establish equivalent client deployments. No proposal submitted.
+- Upwork balance check: 0 Connects (0 free, 0 paid). No Connects or lead credits purchased. No job was saved, hidden, or messaged.
+
+### Free LLM catalogue — verified changes and use gates
+- Current source file: https://github.com/mnfst/awesome-free-llm-apis/blob/main/data.json
+- Current `data.json` blob SHA: `82bb5417348e9ee2fb360cb91c1b0781c0ada5bf`; `lastUpdated`: `2026-10-23`; 17 providers. The prior sweep reported blob SHA `68c9af9cf216f5d1aa0cd511a754547b986dbf9d`; current content is different, so re-check rather than relying on old snapshots.
+- Recent repository evidence: https://github.com/mnfst/awesome-free-llm-apis/commit/5897a7ca049887e9e10149e638ec09e3519ba616 (merge of PR #179) replaces SiliconFlow's `Qwen/Qwen3-8B` entry with `tencent/Hunyuan-MT-7B` and `XingChenAGI/Xing4.0-29B`. The catalogue does not specify context or rate limits for these rows. The upstream change is based on SiliconFlow's official pricing page; no live inference call was made. Treat both as discovery candidates only until account access, quotas, commercial terms and real responses are verified.
+- Catalogue correction: Gemini 3.5 Flash-Lite and Gemini 3.1 Flash-Lite are listed at 15 RPM / 500 RPD, not the older 30 RPM / 1,500 RPD values. Source issue: https://github.com/mnfst/awesome-free-llm-apis/issues/118. Do not budget from stale limits.
+- **Groq / `qwen/qwen3.8-27b`** is listed with 30 RPM, 1,000 RPD, 8,000 TPM and 200,000 TPD. Official published limits: https://console.groq.com/docs/rate-limits. It is a candidate for bounded classification/extraction, but no account key or live call was used here. Check current model availability, commercial-use terms, account-specific quota, data policy, error handling and output quality before any paid delivery.
+- **IteraCompute / `qwen/qwen3.8-27b`**: official page advertises up to 30M tokens/month free without a card, 160,000 TPM, 128K context and an 8,192-token output cap. Free capacity is shared, may queue, has fair-use limits and no SLA; exhausted quota returns HTTP 429 without automatic paid overage. Sources: https://iteracompute.com/free/ and https://iteracompute.com/pricing/. Its privacy policy says model-call content is not used to train general-purpose models without explicit authorization: https://www.iteracompute.com/privacy.html. No account/key was created and no live request was sent. Candidate for synthetic tests or non-sensitive, customer-approved workloads only after provider terms and actual API behavior are checked.
+- **Gonka Broker** appears in the current catalogue with a shared monthly free grant and phone verification. Official documentation says the free tier requires a verified mobile number and renews monthly: https://docs.gonkabroker.com/guides/billing-and-deposits/; https://gonkabroker.com/free-llm-api/. The provider advertises OpenAI-compatible endpoints and says prompt content is not stored, but its free-tier FAQ specifically frames eligibility around personal projects/learning. Commercial eligibility for a paid customer service remains unverified. Do not activate for paid delivery until written commercial permission, data terms, quota and live reliability are confirmed.
+- **Google Gemini 3.8 Flash / 3.7 Flash** are listed with no request-rate figures in the current catalogue. Google's official Gemini 3.8 page lists paid introductory pricing of $0.75/M input and $3.75/M output tokens through 2026-12-31, then higher standard pricing from 2027-01-01: https://ai.google.dev/gemini-api/docs/latest-model. Do not assume the model has a usable free quota just because the catalogue lists a free tier for the provider. Free-tier prompts may be used to improve products according to Google's pricing documentation: https://ai.google.dev/gemini-api/docs/pricing. No confidential customer data should be sent through a free tier without explicit customer approval and a policy review.
+- **Cloudflare Workers AI**: official pricing documents 10,000 Neurons/day on the Free Workers plan; requests exceeding a free limit fail, and some models require a paid billing method. Source: https://developers.cloudflare.com/workers-ai/platform/pricing/. Model-specific billing and free eligibility must be checked; no paid upgrade is approved.
+- **Catalogue safety / drift warning**: issue #147 reports dead providers, retired model IDs, a wrong Cohere compatibility URL and keyless-auth quirks in the separate free-LLM skill: https://github.com/mnfst/awesome-free-llm-apis/issues/147. This is a reported audit, not proof every claim has been independently reproduced in this sweep. Treat the repository as a read-only discovery index; do not run its scripts/workflows or trust sample model IDs without current provider-side evidence.
+- No hosted provider was activated; no API key was created; no live inference request or customer-data submission occurred. Free listing, free quota, and model capability are not revenue or customer evidence.
+
+### Reusable platform leverage and commercial hypothesis
+- API Factory persistence source: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md (blob SHA `f6686604369a1d5c563720a77abb5ab0f79a505e`).
+- The main Render service is documented as returning HTTP 503 `DURABLE_STORAGE_REQUIRED` because registry/artifact storage is local-file. The preview has verified remote registry/artifact read-write paths through the dedicated Supabase Edge Function gateway. That does not make generated APIs' own quota, idempotency, usage or business state durable. Keep the factory fail-closed and do not advertise it as production-ready.
+- Reusable technical evidence: provider-neutral API adapter boundaries, REST/webhook/OAuth patterns, test harnesses and fail-closed readiness checks. Potential small paid offer (hypothesis, not launched): an **AI workflow/model compatibility audit** that scans customer-approved n8n exports for retired model IDs, checks live provider/model catalogs, identifies deprecated endpoints and produces a migration plan plus regression test cases. Only sell a bounded audit until the scanner, source provenance and test coverage are implemented and demonstrated.
+- Zero-upfront implementation leverage: local/deterministic classification before LLM inference; local inference for development; route only ambiguous cases to a hosted model after privacy and quota checks. Candidate n8n community nodes and third-party document connectors require license, dependency, data-flow and accuracy review before reuse; they are not treated as production-tested components.
+
+### Commercial state after this sweep
+- Confirmed customer: **0**
+- Accepted contract: **0**
+- Confirmed revenue/payment: **$0**
+- New outbound outreach sent: **0**
+- New replies/acceptances: **0**
+- Upwork proposals submitted: **0**
+- Paid lead credits / Connects / API credits spent: **$0**
+- Provider activations: **0**
+- Evidence status: candidates and technical leverage only; no listing, outreach attempt, model, quota, or repository capability is counted as a customer or revenue event.
+
