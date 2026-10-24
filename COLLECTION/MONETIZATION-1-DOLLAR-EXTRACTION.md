@@ -328,7 +328,7 @@ Post-automation inbox recheck (2026-10-19): API Pilot 6 threads, latest 2026-09-
 ## 2026-10-23/24 sweep — current inbox, opportunities, and free inference changes
 
 ### Scope and evidence cutoff
-- Research window: 2026-10-22T00:00:00Z through 2026-10-24T03:10:00Z.
+- Research window: 2026-10-22T00:00:00Z through 2026-10-24T03:06:46Z.
 - Canonical sources checked: AgentMail inbox threads, live Upwork account/job details, `salamou1944/Salamou-31` API Factory persistence documentation, and the current `mnfst/awesome-free-llm-apis` repository.
 - No credentials were read or written. No paid provider, trial, subscription, lead-credit pack, or Upwork Connects were purchased.
 
