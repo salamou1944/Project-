@@ -90,8 +90,15 @@ def audit_manifest_preservation() -> list[dict]:
     # active/current readiness; it only prevents silent evidence loss.
     missing_sources = []
     historically_preserved_sources = 0
+    retired_blocked_only_sources = 0
     for source in missing_sources_in_current:
-        if read_exact_historical_artifact(source, old_by_source[source], ["HEAD", MANIFEST_BEFORE, BEFORE]):
+        row = old_by_source[source]
+        # These rows never had an extracted revision or artifact. They are failed
+        # discovery attempts, not harvested source evidence; their exact row remains
+        # in the immutable MANIFEST_BEFORE Git snapshot.
+        if row.get("state") == "BLOCKED_EXTERNAL_ACCESS" and not row.get("revision_sha") and not row.get("path"):
+            retired_blocked_only_sources += 1
+        elif read_exact_historical_artifact(source, row, ["HEAD", MANIFEST_BEFORE, BEFORE]):
             historically_preserved_sources += 1
         else:
             missing_sources.append(source)
@@ -133,6 +140,7 @@ def audit_manifest_preservation() -> list[dict]:
     print(f"MANIFEST_SOURCES_AFTER={len(new_sources)}")
     print(f"MANIFEST_PRIOR_SOURCES_MISSING_IN_CURRENT={len(missing_sources_in_current)}")
     print(f"MANIFEST_PRIOR_SOURCES_PRESERVED_IN_HISTORY={historically_preserved_sources}")
+    print(f"MANIFEST_PRIOR_BLOCKED_ONLY_ROWS_RETIRED={retired_blocked_only_sources}")
     print(f"MANIFEST_PRIOR_SOURCES_UNPRESERVED={len(missing_sources)}")
     print("MANIFEST_PRIOR_SOURCES_UNPRESERVED_DETAILS=" + json.dumps([{"source": source, "revision_sha": old_by_source[source].get("revision_sha"), "state": old_by_source[source].get("state"), "path": old_by_source[source].get("path"), "license": old_by_source[source].get("license"), "mode": old_by_source[source].get("mode")} for source in missing_sources]))
     print("MANIFEST_PRIOR_SOURCES_MISSING_SAMPLE=" + json.dumps(missing_sources[:30], ensure_ascii=False))
