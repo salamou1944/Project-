@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:opensearch-project/security-analytics-dashboards-plugin",
+  "repo": "opensearch-project/security-analytics-dashboards-plugin",
+  "revision_sha": "892c99e8b9ed44e179a8839233529ded3a97ed98",
+  "default_branch": "main",
+  "pushed_at": "2026-10-22T00:17:17Z",
+  "repo_updated_at": "2026-10-24T12:58:25Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/verify-binary-installation.yml",
+      "sha": null,
+      "content_sha256": "55464eb23268b69332b5a99687853c67e61264bb9b1eaeb0e50c701f5dc91e24",
+      "score": 208,
+      "content": "name: 'Install Dashboards with Plugin via Binary'\n\non: [push, pull_request]\nenv:\n  OPENSEARCH_VERSION: '3.1.0'\n  CI: 1\n  # avoid warnings like \"tput: No value for $TERM and no -T specified\"\n  TERM: xterm\n\njobs:\n  verify-binary-installation:\n    name: Run binary installation\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [ubuntu-latest]\n        # TODO: add windows support when OSD core is stable on windows\n    runs-on: ${{ matrix.os }}\n    steps:\n      - name: Checkout Branch\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n\n      - name: Set up JDK\n        uses: actions/setup-java@91d3aa4956ec4a53e477c4907347b5e3481be8c9 # v2\n        with:\n          distribution: temurin # Temurin is a distribution of adoptium\n          java-version: 21\n\n      - name: Set env\n        run: |\n          opensearch_version=$(node -p \"require('./opensearch_dashboards.json').opensearchDashboardsVersion\")\n          plugin_version=$(node -p \"require('./opensearch_dashboards.json').version\")\n          echo \"OPENSEARCH_VERSION=$opensearch_version\" >> $GITHUB_ENV\n          echo \"PLUGIN_VERSION=$plugin_version\" >> $GITHUB_ENV\n        shell: bash\n\n      - name: Run Opensearch\n        uses: opensearch-project/opensearch-build/.github/actions/start-opensearch@643b632712710159088d5f0798de7e91c1f2b8f7\n        with:\n          opensearch-version: ${{ env.OPENSEARCH_VERSION }}\n          security-enabled: false\n          jdk-version: 21\n          snapshot: false\n\n      - name: Run Dashboard\n        id: setup-dashboards\n        uses: opensearch-project/opensearch-build/.github/actions/setup-opensearch-dashboards@643b632712710159088d5f0798de7e91c1f2b8f7\n        with:\n          plugin_name: security-analytics-dashboards-plugin\n          built_plugin_name: security-analytics-dashboards\n          install_zip: true\n          snapshot: true\n\n      - name: Start the binary\n        run: |\n          nohup ./bin/opensearch-dashboards &\n        working-directory: ${{ steps.setup-dashboards.outputs.dashboards-binary-directory }}\n        shell: bash\n\n      - name: Health check\n        run: |\n          timeout 300 bash -c 'while [[ \"$(curl http://localhost:5601/api/status | jq -r '.status.overall.state')\" != \"green\" ]]; do sleep 5; done'\n        shell: bash\n"
+    },
+    {
+      "path": ".github/workflows/unit-tests-workflow.yml",
+      "sha": null,
+      "content_sha256": "60cd34879df2cf45cb232495b94df0ebbadfb6c521f40531fa9ca73496fc396e",
+      "score": 186,
+      "content": "name: Unit tests workflow\non:\n  pull_request:\n    branches:\n      - \"*\"\n  push:\n    branches:\n      - \"*\"\nenv:\n  OPENSEARCH_DASHBOARDS_VERSION: 'main'\njobs:\n  Get-CI-Image-Tag:\n    uses: opensearch-project/opensearch-build/.github/workflows/get-ci-image-tag.yml@main\n    with:\n      product: opensearch-dashboards\n\n  tests-linux:\n    needs: Get-CI-Image-Tag\n    name: Run Test Linux\n    strategy:\n      matrix:\n        os: [ubuntu-latest]\n    runs-on: ${{ matrix.os }}\n    container:\n      # using the same image which is used by opensearch-build team to build the OpenSearch Distribution\n      # this image tag is subject to change as more dependencies and updates will arrive over time\n      image: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-version-linux }}\n      # need to switch to root so that github actions can install runner binary on container without permission issues.\n      options: --user root\n\n    steps:\n      - name: Checkout OpenSearch-Dashboards\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n        with:\n          repository: opensearch-project/OpenSearch-Dashboards\n          ref: ${{ env.OPENSEARCH_DASHBOARDS_VERSION }}\n          path: OpenSearch-Dashboards\n      - name: Checkout Security Analytics Dashboards plugin\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n        with:\n          path: OpenSearch-Dashboards/plugins/security-analytics-dashboards-plugin\n      - name: Bootstrap plugin/OpenSearch-Dashboards and unit tests\n        run: |\n          chown -R 1000:1000 `pwd`\n          cd ./OpenSearch-Dashboards/\n          su `id -un 1000` -c \"source $NVM_DIR/nvm.sh && nvm install && nvm use && node -v &&\n                               YARN_VERSION=\\$(node -p \\\"require('./package.json').engines.yarn\\\") &&\n                               npm i -g yarn@\\${YARN_VERSION} && yarn -v &&\n                               cd ./plugins/security-analytics-dashboards-plugin &&\n                               whoami && yarn osd bootstrap --single-version=loose && yarn run test:jest --coverage\"\n\n      - name: Upload coverage report artifact\n        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' }}\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4\n        with:\n          name: jest-coverage-report\n          path: OpenSearch-Dashboards/plugins/security-analytics-dashboards-plugin/coverage\n          retention-days: 1\n          if-no-files-found: error\n\n  upload-coverage:\n    needs: tests-linux\n    name: Upload coverage report to Codecov\n    if: ${{ !cancelled() && github.repository == 'opensearch-project/security-analytics-dashboards-plugin' }}\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout Security Analytics Dashboards plugin\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n\n      - name: Download coverage report\n        id: download-coverage\n        continue-on-error: true\n        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4\n        with:\n          name: jest-coverage-report\n          path: coverage\n\n      - name: Uploads coverage\n        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0\n        if: steps.download-coverage.outcome == 'success'\n        with:\n          directory: coverage\n          token: ${{ secrets.CODECOV_TOKEN }}\n\n  tests-windows:\n    name: Run Tests Windows\n    strategy:\n      matrix:\n        os: [windows-latest]\n    runs-on: ${{ matrix.os }}\n    steps:\n      # Enable longer filenames for windows\n      - name: Enable longer filenames\n        if: ${{ matrix.os == 'windows-latest' }}\n        run: git config --system core.longpaths true\n      - name: Checkout OpenSearch-Dashboards\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n        with:\n          repository: opensearch-project/OpenSearch-Dashboards\n          ref: ${{ env.OPENSEARCH_DASHBOARDS_VERSION }}\n          path: OpenSearch-Dashboards\n      - name: Setup Node\n        uses: actions/setup-node@3235b876344d2a9aa001b8d1453c930bba69e610 # v3\n        with:\n          node-version-file: './OpenSearch-Dashboards/.nvmrc'\n          registry-url: 'https://registry.npmjs.org'\n      - name: Install Yarn\n        # Need to use bash to avoid having a windows/linux specific step\n        shell: bash\n        run: |\n          YARN_VERSION=$(node -p \"require('./OpenSearch-Dashboards/package.json').engines.yarn\")\n          echo \"Installing yarn@$YARN_VERSION\"\n          npm i -g yarn@$YARN_VERSION\n      - run: node -v\n      - run: yarn -v\n      - name: Checkout Security Analytics Dashboards plugin\n        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2\n        with:\n          path: OpenSearch-Dashboards/plugins/security-analytics-dashboards-plugin\n      - name: Bootstrap plugin/OpenSearch-Dashboards\n        run: |\n          cd OpenSearch-Dashboards/plugins/security-analytics-dashboards-plugin\n          yarn osd bootstrap --single-version=loose\n      - name: Run tests\n        run: |\n          cd OpenSearch-Dashboards/plugins/security-analytics-dashboards-plugin\n          yarn run test:jest --coverage\n"
+    },
+    {
+      "path": "test/setupTests.ts",
+      "sha": null,
+      "content_sha256": "92f65e3d7ce939394e9e8c0b39196b3eb547d79e5bf69efe82d86ae8086842fd",
+      "score": 175,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nrequire('babel-polyfill');\n"
+    },
+    {
+      "path": "test/setup.jest.ts",
+      "sha": null,
+      "content_sha256": "3137c1d2ba0ab15426d46194212b1ed3c4ce9ca45ec78bac4ffc2eac9aec268f",
+      "score": 175,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport 'jest-canvas-mock';\nimport '@testing-library/jest-dom';\nimport { configure } from '@testing-library/react';\nimport Enzyme from 'enzyme';\n// @ts-ignore\nimport Adapter from '@cfaester/enzyme-adapter-react-18';\nimport { mockContexts } from './mocks/useContext.mock';\nimport { DataStore } from '../public/store/DataStore';\nimport services from './mocks/services';\nimport notificationsStartMock from './mocks/services/notifications/NotificationsStart.mock';\nimport replaceAllInserter from 'string.prototype.replaceall';\nreplaceAllInserter.shim();\n\nEnzyme.configure({ adapter: new Adapter() });\n\nconfigure({ testIdAttribute: 'data-test-subj' });\n\njest.mock('@elastic/eui/lib/eui_components/form/form_row/make_id', () => () => 'some_make_id');\n\njest.mock('@elastic/eui/lib/services/accessibility/html_id_generator', () => ({\n  htmlIdGenerator: () => {\n    return () => 'some_html_id';\n  },\n}));\n\n// @ts-ignore\nwindow.Worker = function () {\n  this.postMessage = () => {};\n  // @ts-ignore\n  this.terminate = () => {};\n};\n\n// @ts-ignore\nwindow.URL = {\n  createObjectURL: () => {\n    return '';\n  },\n};\n\n// https://github.com/elastic/eui/issues/2530\njest.mock('@elastic/eui/lib/eui_components/icon', () => ({\n  EuiIcon: () => 'EuiIconMock',\n  __esModule: true,\n  IconPropType: require('@elastic/eui/lib/eui_components/icon/icon').IconPropType,\n  ICON_TYPES: require('@elastic/eui/lib/eui_components/icon/icon').TYPES,\n  ICON_SIZES: require('@elastic/eui/lib/eui_components/icon/icon').SIZES,\n  ICON_COLORS: require('@elastic/eui/lib/eui_components/icon/icon').COLORS,\n}));\n\n/**\n * Moment timezones are not working from jest so here we mock\n * moment.tz.names function\n *\n * Also, format function is mocked to return always the same value so that we can correctly test\n * functions that call this\n */\njest.mock('moment', () => {\n  const moment = jest.requireActual('moment');\n\n  // Set moment tz mock\n  if (!moment.tz) moment.tz = {};\n  moment.tz.names = () => ['Pacific/Tahiti'];\n  const momentInstance = moment();\n\n  momentInstance.format = jest.fn().mockReturnValue('2023-01-25T10:05');\n\n  function fakeMoment() {\n    return momentInstance;\n  }\n\n  Object.assign(fakeMoment, moment);\n\n  return fakeMoment;\n});\n\n/**\n * React useContext is mocked to return the mocked services\n * so that this works in all tests\n */\njest.mock('react', () => {\n  const ActualReact = jest.requireActual('react');\n  return {\n    ...ActualReact,\n    useContext: () => mockContexts,\n  };\n});\n\n/**\n * Mocks the vega view renderer\n */\njest.mock('vega/build/vega.js', () => {\n  const vega = jest.requireActual('vega/build/vega.js');\n  return {\n    ...vega,\n    View: jest.fn().mockReturnValue({\n      tooltip: jest.fn(),\n      runAsync: jest.fn().mockReturnValue(new Promise(jest.fn())),\n    }),\n  };\n});\n\nDataStore.init(services, notificationsStartMock);\n\n// jest-location-mock uses process.env.HOST as the base URL for its window.location mock.\n// Set it to match testEnvironmentOptions.url so window.location.origin is 'http://localhost:5601'\n// in all jsdom tests, consistent with the rest of the suite.\nprocess.env.HOST = 'http://localhost:5601';\n\n// jsdom 26 marks window.localStorage and window.sessionStorage as non-configurable.\n// Re-declare them as configurable once here so individual tests can override them\n// with Object.defineProperty without hitting \"Cannot redefine property\" errors.\n['localStorage', 'sessionStorage'].forEach((key) => {\n  const descriptor = Object.getOwnPropertyDescriptor(window, key);\n  if (descriptor && !descriptor.configurable) {\n    Object.defineProperty(window, key, {\n      configurable: true,\n      writable: true,\n      value: descriptor.value,\n    });\n  }\n});\n\njest.setTimeout(10000); // in milliseconds\n"
+    },
+    {
+      "path": "public/components/ContentPanel/ContentPanelActions.test.tsx",
+      "sha": null,
+      "content_sha256": "924cceb9b0d364861bc302afb0c1dc5df289ce94736f49e47430cc9b065adf9c",
+      "score": 171,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport React from 'react';\nimport { render, fireEvent } from '@testing-library/react';\nimport ContentPanelActions from './ContentPanelActions';\n\ndescribe('<ContentPanelActions /> spec', () => {\n  it('renders the component', () => {\n    const actions = [{ text: 'ContentPanelActions' }];\n    const { container } = render(<ContentPanelActions actions={actions} />);\n    expect(container.firstChild).toMatchSnapshot();\n  });\n\n  it('renders a button to click', () => {\n    const spy = jest.fn();\n    const actions = [{ text: 'ContentPanelActions', buttonProps: { onClick: spy } }];\n    const { getByTestId } = render(<ContentPanelActions actions={actions} />);\n    fireEvent.click(getByTestId('ContentPanelActionsButton'));\n    expect(spy).toHaveBeenCalledTimes(1);\n  });\n\n  it('passes rest of props to button', () => {\n    const spy = jest.fn();\n    const actions = [\n      { text: 'ContentPanelActions', buttonProps: { onClick: spy, disabled: true } },\n    ];\n    const { getByTestId } = render(<ContentPanelActions actions={actions} />);\n    fireEvent.click(getByTestId('ContentPanelActionsButton'));\n    expect(spy).toHaveBeenCalledTimes(0);\n    expect(getByTestId('ContentPanelActionsButton')).toBeDisabled();\n  });\n});\n"
+    },
+    {
+      "path": "test/mocks/services/browserHistory.mock.ts",
+      "sha": null,
+      "content_sha256": "6c365dd7bce6e17d6d009223ec9af9827dfa50ab85d1dd3ee7df319a5fb025b2",
+      "score": 164,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport { RouteComponentProps } from 'react-router-dom';\n\nexport default ({\n  replace: jest.fn(),\n  listen: jest.fn(),\n  location: {\n    pathname: '',\n  },\n  push: jest.fn(),\n} as unknown) as RouteComponentProps['history'];\n"
+    },
+    {
+      "path": "test/mocks/CreateDetector/components/ConfigureAlerts/components/AlertCondition/TriggerAction.mock.ts",
+      "sha": null,
+      "content_sha256": "d0bcacf660ac56b0d2baba780b7d90f91f84bac5d73b58ab8f40fcf7628975cb",
+      "score": 163,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport { TriggerAction } from '../../../../../../../models/interfaces';\n\nexport default {\n  id: 'trigger_id_1',\n  destination_id: 'some_destination_id_1',\n  subject_template: {\n    source: 'some_source',\n    lang: 'some_lang',\n  },\n  name: 'some_name',\n  throttle_enabled: true,\n  message_template: {\n    source: 'some_source',\n    lang: 'some_lang',\n  },\n  throttle: {\n    unit: 'minutes',\n    value: 1,\n  },\n} as TriggerAction;\n"
+    },
+    {
+      "path": "public/pages/Detectors/components/DetectorBasicDetailsView/DetectorBasicDetailsView.test.tsx",
+      "sha": null,
+      "content_sha256": "4e9c1de8da24e9b928929472c0ffd2854dd2f9db761bda791a2950ac67aa2c6a",
+      "score": 157,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport React from 'react';\nimport { render } from '@testing-library/react';\nimport { DetectorBasicDetailsView } from './DetectorBasicDetailsView';\nimport props from '../../../../../test/mocks/Detectors/components/DetectorBasicDetailsView/DetectorBasicDetailsView.mock';\nimport { expect } from '@jest/globals';\n\ndescribe('<DetectorBasicDetailsView /> spec', () => {\n  it('renders the component', () => {\n    const view = render(<DetectorBasicDetailsView {...props} />);\n    expect(view).toMatchSnapshot();\n  });\n});\n"
+    },
+    {
+      "path": "test/mocks/Detectors/components/UpdateDetectorBasicDetails/UpdateDetectorBasicDetails.mock.ts",
+      "sha": null,
+      "content_sha256": "71051a1f2dceb144610bab8755642622eae01ee240bd2d37d011c1e47c030da6",
+      "score": 157,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport notificationsStartMock from '../../../services/notifications/NotificationsStart.mock';\nimport detectorHitMock from '../../containers/Detectors/DetectorHit.mock';\nimport browserHistoryMock from '../../../services/browserHistory.mock';\nimport { UpdateDetectorBasicDetailsProps } from '../../../../../public/pages/Detectors/components/UpdateBasicDetails/UpdateBasicDetails';\n\nexport default {\n  notifications: notificationsStartMock,\n  detectorHit: detectorHitMock,\n  location: {\n    pathname: '/edit-detector-details/detector_id_1',\n    search: '',\n    state: { detectorHit: detectorHitMock },\n    hash: '',\n  },\n  history: browserHistoryMock,\n  match: {\n    isExact: false,\n    path: '',\n    url: '',\n    params: { id: '1' },\n  },\n} as UpdateDetectorBasicDetailsProps;\n"
+    },
+    {
+      "path": "public/pages/Detectors/components/UpdateBasicDetails/UpdateDetectorBasicDetails.test.tsx",
+      "sha": null,
+      "content_sha256": "e9e8fc2cb5b923d267e62b1f76afc247bc2dab90f5ac0bfbfeb0f960304dc94f",
+      "score": 157,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport React from 'react';\nimport props from '../../../../../test/mocks/Detectors/components/UpdateDetectorBasicDetails/UpdateDetectorBasicDetails.mock';\nimport { expect } from '@jest/globals';\nimport { UpdateDetectorBasicDetails } from './UpdateBasicDetails';\nimport { act } from '@testing-library/react';\nimport { mount } from 'enzyme';\nimport { coreContextMock, mockContexts } from '../../../../../test/mocks/useContext.mock';\nimport { setupCoreStart } from '../../../../../test/utils/helpers';\n\nbeforeAll(() => {\n  setupCoreStart();\n});\n\ndescribe('<UpdateDetectorBasicDetails /> spec', () => {\n  it('renders the component', async () => {\n    let wrapper: any;\n    await act(async () => {\n      jest\n        .spyOn(React, 'useContext')\n        .mockImplementation(() => ({ ...mockContexts, ...coreContextMock }));\n      wrapper = mount(<UpdateDetectorBasicDetails {...props} />);\n    });\n    wrapper.update();\n    expect(wrapper).toMatchSnapshot();\n  });\n});\n"
+    },
+    {
+      "path": "test/mocks/Detectors/components/DetectorBasicDetailsView/DetectorBasicDetailsView.mock.ts",
+      "sha": null,
+      "content_sha256": "b96dd3f2d824d1de9993dd50488bd05790f6f4683579ea11486b928037356d97",
+      "score": 157,
+      "content": "/*\n * Copyright OpenSearch Contributors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport detectorMock from '../../containers/Detectors/Detector.mock';\nimport { DetectorBasicDetailsView } from '../../../../../public/pages/Detectors/components/DetectorBasicDetailsView/DetectorBasicDetailsView';\n\nexport default ({\n  detector: detectorMock,\n  rulesCanFold: true,\n  enabled_time: 1,\n  last_update_time: 1,\n  onEditClicked: () => jest.fn(),\n  isEditable: true,\n} as unknown) as typeof DetectorBasicDetailsView;\n"
+    },
+    {
+      "path": "release-notes/opensearch-dashboards-securityAnalyticsDashboards.release-notes-3.2.0.0.md",
+      "sha": null,
+      "content_sha256": "99f836da4b7a69c393657ec404268df6dcb8aeda78136ab4f21b5e208db702f2",
+      "score": 153,
+      "content": "## Version 3.2.0 Release Notes\n\nCompatible with OpenSearch and OpenSearch Dashboards version 3.2.0\n\n### Bug Fixes\n* Remove correlated findings bar chart that uses vega ([#1313](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1313))\n* Update API call to get IOC types ([#1312](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1312))\n\n### Maintenance\n* [AUTO] Increment version to 3.2.0.0 ([#1316](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1316))"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards.release-notes-3.0.0.0-alpha1.md",
+      "sha": null,
+      "content_sha256": "3856625f67c350fe1c8ca222d7026239360bc3e31b601960f3c032d6fda90873",
+      "score": 153,
+      "content": "## Version 3.0.0.0-alpha1 Release Notes\n\nCompatible with OpenSearch 3.0.0.0-alpha1\n\n### Maintenance\n* [Release 3.0] Add alpha1 qualifier. ([#1218](https://github.com/opensearch-project/alerting-dashboards-plugin/pull/1218))\n* Fix CVE. ([#1270](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1270))\n\n### Refactoring\n* Temporarily removed visualizations for 3.0-alpha1. ([#1272](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1272))\n\n### Features\n* Add support for custom ioc schema in threat intel source ([#1266](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1266))"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards.release-notes-3.0.0.0-beta1.md",
+      "sha": null,
+      "content_sha256": "264c94eadb140764c6cfeeb7d588c928fc27bea0f3d248742837ee113d36c977",
+      "score": 153,
+      "content": "## Version 3.0.0.0-beta1 Release Notes\n\nCompatible with OpenSearch 3.0.0.0-beta1\n\n### Maintenance\n* Update version qualifier to beta1. ([#1275](https://github.com/opensearch-project/alerting-dashboards-plugin/pull/1275))\n* Fix CVE 2025 27789. ([#1276](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1276))\n"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards.release-notes-2.11.1.0.md",
+      "sha": null,
+      "content_sha256": "150f27a93fbfcd018742aeb16bfb86c83dd7feab6dd94bc3828526293f567b2b",
+      "score": 153,
+      "content": "## Version 2.11.1.0 2023-11-20\n\nCompatible with OpenSearch Dashboards 2.11.1\n\n### Maintenance\n* Increment version to 2.11.1.0. ([#771](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/771))\n\n### Bug Fixes\n* Omit field from mapping payload if it matches index field; Abort detector creation when mapping has failed. ([#752](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/752))\n\n### Documentation\n* Added release notes for 2.11.1 ([#785](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/785))"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards-plugin.release-notes-3.3.0.0.md",
+      "sha": null,
+      "content_sha256": "f0681851bee0688b1de7c8a982f025c632ed52548a5aa7b13f4875ee81c0c1a1",
+      "score": 153,
+      "content": "## Version 3.3.0 Release Notes\n\nCompatible with OpenSearch and OpenSearch Dashboards version 3.3.0\n\n### Maintenance\n* [AUTO] Increment version to 3.3.0.0 ([#1325](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1325))\n\n### Bug Fixes\n* Security fix: upgrade js-yaml to v4.1 ([#1330](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1330))"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards-plugin.release-notes-3.8.0.0.md",
+      "sha": null,
+      "content_sha256": "d3624f1683bfe57382e4a4c3f4db03d3583410c8a4840709e20450afdec45ed9",
+      "score": 153,
+      "content": "## Version 3.8.0 Release Notes\n\nCompatible with OpenSearch and OpenSearch Dashboards version 3.8.0\n\n### Infrastructure\n\n* Migrate ESLint configuration to ESLint 10 flat config format ([#1552](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1552))\n* Migrate Jest test suite to Jest 30 and jsdom 26 for compatibility with OpenSearch Dashboards core ([#1555](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1555))\n\n### Maintenance\n\n* Resolve CVE-2026-2739, CVE-2025-69873, and GHSA-5c6j-r48x-rmv by updating bn.js and serialize-javascript dependencies ([#1541](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1541))\n* Bump Babel packages to ^7.29.7 for OpenSearch Dashboards 3.8 compatibility ([#1556](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1556))\n"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards.release-notes-3.1.0.0.md",
+      "sha": null,
+      "content_sha256": "625b70ccadab577bbb6eccb52021914fd86139b9cd9953504073eded28dc3ac8",
+      "score": 153,
+      "content": "## Version 3.1.0.0 Release Notes\n\nCompatible with OpenSearch 3.1.0.0\n\n### Maintenance\n* Increment version to 3.1.0.0. ([#1301](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1301))\n\n### Bug Fixes\n* Replace deprecated safeDump with dump ([#1281](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1281))\n* Change browser to firefox, fix integ tests ([#1280](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1280))\n"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards-plugin.release-notes-3.9.0.0.md",
+      "sha": null,
+      "content_sha256": "e504af71b8197d93fe4feb76ba14f08c8d79ee94473bdea2e4228ce498070cf9",
+      "score": 153,
+      "content": "## Version 3.9.0 Release Notes\n\nCompatible with OpenSearch and OpenSearch Dashboards version 3.9.0\n\n### Features\n\n* Integrate centralized resource-sharing share button for detectors and correlation rules ([#1564](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1564))\n\n### Bug Fixes\n\n* Fix query-string import crash and Access column overflow on OpenSearch Dashboards 3.9 ([#1575](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1575))\n* Fix CVE-2026-44705 by pinning tmp dependency to ^0.2.7 ([#1561](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1561))\n\n### Infrastructure\n\n* Fix code-coverage GitHub Action ([#1574](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1574))\n\n### Maintenance\n\n* Clean up dependency resolutions and align versions with OpenSearch Dashboards 3.8, addressing multiple CVEs ([#1559](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1559))\n"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards.release-notes-2.19.0.0.md",
+      "sha": null,
+      "content_sha256": "2e32c5a073bdfc2fd4e8f0b42ba10bfee2027c2978841608de3c8088aea59021",
+      "score": 153,
+      "content": "## Version 2.19.0.0 2025-02-03\n\nCompatible with OpenSearch Dashboards 2.19.0\n\n### Maintenance\n* Increment version to 2.19.0.0 ([#1229](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1229))\n* Bump cypress, and cross-spawn version. ([#1251](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1251))\n\n### Refactoring\n* show selected rules on edit; options should only include enabled rules on edit ([#1231](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1231))\n* Remove threat intel checkbox detector creation ([#1232](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1232))\n* Updating Preview Message functionality while setting notifications in detector alerts ([#1241](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1241))\n\n### Documentation\n* Added 2.19.0 release notes. ([#1256](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1256))"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards.release-notes-2.14.0.0.md",
+      "sha": null,
+      "content_sha256": "c50a5ecb6504d658a4488897b32bec3283f04c440539b60bcc34a331815824bc",
+      "score": 153,
+      "content": "## Version 2.14.0.0 2024-04-30\n\nCompatible with OpenSearch Dashboards 2.14.0\n\n### Maintenance\n* [AUTO] Increment version to 2.14.0.0 ([#990](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/990))\n* Updated dependencies ([#984](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/984))\n\n### Refactoring\n* Update vega-lite specs with theme based colors ([#978](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/978))\n\n### Bug Fixes\n* Wait longer for action button to become enabled ([#983](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/983))\n\n### Documentation\n* Added release notes for 2.14.0 ([#997](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/997))"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards.release-notes-2.11.0.0.md",
+      "sha": null,
+      "content_sha256": "b4e58b9887066179860ef57cdf1ff46f64b05df0007ee405ad887f4be04b7626",
+      "score": 153,
+      "content": "## Version 2.11.0.0 2023-10-11\n\nCompatible with OpenSearch Dashboards 2.11.0\n\n### Maintenance\n* Increment version to 2.11.0.0. ([#720](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/720))\n\n### Enhancements\n* Ux improvements for correlations page. ([#732](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/732))\n* Simplify detector creation UX. ([#738](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/738))\n* Added categories for log types. ([#741](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/741))\n* Enhance log type filters correlations. ([#745](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/745))\n\n### Documentation\n* Added 2.11.0 release notes. ([#756](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/756))"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards-plugin.release-notes-3.6.0.0.md",
+      "sha": null,
+      "content_sha256": "fbe7d931531fdbae34a67e6beec6642d72857a6afeeaebea54a9ecb55e596073",
+      "score": 153,
+      "content": "## Version 3.6.0 Release Notes\n\nCompatible with OpenSearch and OpenSearch Dashboards version 3.6.0\n\n### Bug Fixes\n\n* Fix empty severity column in findings table ([#1392](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1392))\n* Fix empty alerts table, detector creation failure propagation, blank details page redirect after successful creation, and silent failures ([#1376](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1376))\n\n### Infrastructure\n\n* Upgrade to React 18 and update unit tests to accommodate the upgrade ([#1376](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1376))\n\n### Maintenance\n\n* Resolve CVE-2026-26996, CVE-2026-2739, and CVE-2025-15284 ([#1389](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1389))\n* Update lodash to 4.18.1 to address CVE-2026-4800 ([#1394](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1394))\n"
+    },
+    {
+      "path": "release-notes/opensearch-security-analytics-dashboards-plugin.release-notes-3.7.0.0.md",
+      "sha": null,
+      "content_sha256": "694195767326dd3cca7e8eefecd11ba7c9b20f04f3394b207246894ea131e5a9",
+      "score": 153,
+      "content": "## Version 3.7.0 Release Notes\n\nCompatible with OpenSearch and OpenSearch Dashboards version 3.7.0\n\n### Bug Fixes\n\n* Migrate plugin to TypeScript 6.0.2 compatibility by removing conflicting dependencies ([#1525](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1525))\n\n### Infrastructure\n\n* Add issues write permission to untriaged label workflow to fix 403 error ([#1529](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1529))\n\n### Documentation\n\n* Update bug report template with instructions to not include sensitive information ([#1526](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1526))\n\n### Maintenance\n\n* Baseline maintainers list ([#1401](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1401))\n* Resolve CVE-2026-33750 by bumping brace-expansion to ^5.0.5 ([#1407](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1407))\n* Resolve CVE-2026-27904, CVE-2026-33532, and CVE-2026-33672 by bumping minimatch to ^3.1.4 ([#1431](https://github.com/opensearch-project/security-analytics-dashboards-plugin/pull/1431))\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T02:12:10.318615+00:00"
+}
