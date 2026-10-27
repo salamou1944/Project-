@@ -699,7 +699,7 @@ def main():
             "canonical_source": data["canonical_source"], "state": data["state"],
             "path": str(out), "files_extracted": len(data["files"]),
             "tree_truncated": data.get("tree_truncated", False), "mode": "cached",
-            "revision_sha": data.get("revision_sha"),
+            "revision_sha": data.get("revision_sha"), "license": data.get("license"),
         })
 
     preserved_after_refresh_failure_count = 0
@@ -722,7 +722,7 @@ def main():
                         "canonical_source": data["canonical_source"], "state": data["state"],
                         "path": str(out), "files_extracted": len(data["files"]),
                         "tree_truncated": data["tree_truncated"], "mode": mode,
-                        "revision_sha": data.get("revision_sha"),
+                        "revision_sha": data.get("revision_sha"), "license": data.get("license"),
                     }
                     cache_states[item["full_name"]] = "EXTRACTED_THIS_RUN"
                 else:
