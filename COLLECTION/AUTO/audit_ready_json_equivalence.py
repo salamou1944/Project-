@@ -11,6 +11,9 @@ is tested separately by test_ready_json_compaction.py.
 from __future__ import annotations
 import json
 import subprocess
+from pathlib import Path
+
+from collection_json_io import load_collection_json
 
 PATH = "COLLECTION/MASTER/READY.json"
 MANIFEST_PATH = "COLLECTION/AUTO/EXTRACTED/MANIFEST.json"
@@ -20,19 +23,11 @@ AFTER = "HEAD"
 
 
 def load_revision(revision: str):
-    proc = subprocess.run(
-        ["git", "show", f"{revision}:{PATH}"],
-        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
-    return json.loads(proc.stdout)
+    return load_collection_json(PATH, git_ref=revision, repo_root=Path.cwd())
 
 
 def load_revision_path(revision: str, path: str):
-    proc = subprocess.run(
-        ["git", "show", f"{revision}:{path}"],
-        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
-    return json.loads(proc.stdout)
+    return load_collection_json(path, git_ref=revision, repo_root=Path.cwd())
 
 
 def audit_manifest_preservation() -> list[dict]:
