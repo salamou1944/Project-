@@ -50,6 +50,7 @@ def main() -> None:
     queue_gates = Counter()
     source_gates = Counter()
     shortlist = []
+    high_value_shortlist = []
     seen = set()
 
     for item in items:
@@ -66,6 +67,13 @@ def main() -> None:
         queue_gates[f"security_gate:{security}"] += 1
 
         sources = item.get("sources", [])
+        capability = str(item.get("capability_key") or "").lower()
+        noise_terms = ("test", "fixture", "mock", "benchmark", "readme", "docs", "runbook", "example", "sample", "demo")
+        priority = item.get("priority", [0])
+        if isinstance(priority, (list, tuple)):
+            priority_score = int(priority[0]) if priority and str(priority[0]).lstrip("-").isdigit() else 0
+        else:
+            priority_score = int(priority) if str(priority).lstrip("-").isdigit() else 0
         if not isinstance(sources, list):
             source_gates["malformed_sources_list"] += 1
             continue
@@ -100,6 +108,20 @@ def main() -> None:
                 continue
             source_gates["source_level_eligible_before_approval"] += 1
             identity = (repo, revision.lower())
+            if not any(term in capability for term in noise_terms) and any(term in (capability + " " + repo.lower()) for term in ("api", "gateway", "provider", "mcp", "router", "agent", "quota", "validation", "model", "skill", "workflow", "runtime")):
+                high_value_shortlist.append({
+                    "priority_score": priority_score,
+                    "operator_action": item.get("operator_action"),
+                    "capability_key": item.get("capability_key"),
+                    "repo": repo,
+                    "revision": revision,
+                    "license": row.get("license"),
+                    "mode": row.get("mode"),
+                    "files_extracted": row.get("files_extracted"),
+                    "install_approval": approval,
+                    "integration_gate": integration,
+                    "security_gate": security,
+                })
             if identity in seen:
                 continue
             seen.add(identity)
@@ -116,6 +138,7 @@ def main() -> None:
                 "security_gate": security,
             })
 
+    high_value_shortlist.sort(key=lambda row: (row["priority_score"], row["capability_key"], row["repo"]), reverse=True)
     report = {
         "status": "DIAGNOSIS_ONLY_NO_INSTALLS",
         "manifest_sources": len(rows),
@@ -127,6 +150,7 @@ def main() -> None:
         "source_gate_counts": dict(sorted(source_gates.items())),
         "source_level_eligible_but_not_authorized_count": len(shortlist),
         "review_shortlist": shortlist[:12],
+        "high_value_review_shortlist": high_value_shortlist[:30],
         "policy_note": "No approval is inferred. Each installation requires explicit approval and independently evidenced PASS integration/security gates.",
     }
     print(json.dumps(report, ensure_ascii=False, sort_keys=True))
