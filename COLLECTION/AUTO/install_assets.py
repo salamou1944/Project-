@@ -192,7 +192,8 @@ def select_explicit_approval_candidates(manifest, approvals, max_candidates=5, q
         row = by_source.get("github:" + repo)
         if not isinstance(row, dict):
             continue
-        if row.get("revision_sha", "").lower() != revision:
+        row_revision = row.get("revision_sha")
+        if not isinstance(row_revision, str) or row_revision.lower() != revision:
             continue
         if row.get("state") != "extracted" or row.get("license") != approval["license"]:
             continue
