@@ -134,6 +134,7 @@ def audit_manifest_preservation() -> list[dict]:
     print(f"MANIFEST_PRIOR_SOURCES_MISSING_IN_CURRENT={len(missing_sources_in_current)}")
     print(f"MANIFEST_PRIOR_SOURCES_PRESERVED_IN_HISTORY={historically_preserved_sources}")
     print(f"MANIFEST_PRIOR_SOURCES_UNPRESERVED={len(missing_sources)}")
+    print("MANIFEST_PRIOR_SOURCES_UNPRESERVED_DETAILS=" + json.dumps([{"source": source, "revision_sha": old_by_source[source].get("revision_sha"), "state": old_by_source[source].get("state"), "path": old_by_source[source].get("path"), "license": old_by_source[source].get("license"), "mode": old_by_source[source].get("mode")} for source in missing_sources]))
     print("MANIFEST_PRIOR_SOURCES_MISSING_SAMPLE=" + json.dumps(missing_sources[:30], ensure_ascii=False))
     print(f"MANIFEST_EXTRACTED_STATE_REGRESSIONS={len(state_regressions)}")
     print("MANIFEST_STATE_REGRESSION_SAMPLE=" + json.dumps(state_regressions[:30], ensure_ascii=False))
