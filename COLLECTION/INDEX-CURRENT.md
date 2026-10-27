@@ -2,7 +2,14 @@
 
 This page is the current operational status pointer. Historical notes remain in [COLLECTION/INDEX.md](./INDEX.md).
 
-## COLLECTION — latest status (cycle 30)
+## COLLECTION — latest status (cycle 31)
+
+- Latest full cycle: [cycle 31 — success](https://github.com/salamou1944/Project-/actions/runs/40562723175).
+- The approved MIT `mnfst/modelparams.dev` source is installed at exact revision `0d09d9a3fb642770430fb357e3c72f8e7d9f1f67` and is now `PROVEN_CALLABLE` in CI; 1 proven callable, 0 awaiting verification, 0 size-blocked. See [installed queue](./VERIFICATION/INSTALLED-QUEUE.json) and [callable evidence](./VERIFICATION/MODELPARAMS-CALLABLE-EVIDENCE.json).
+- Verification: exact source comparison, 77 tests on upstream and installed copy, both builds passed, 0 production dependency vulnerabilities, source-boundary checks passed, and installed runtime smoke passed: [review run](https://github.com/salamou1944/Project-/actions/runs/40561509691). Real Gemini completion through API Factory also passed: [run](https://github.com/salamou1944/Salamou-31/actions/runs/40560609748).
+- Production deployment remains **NOT_DEPLOYED**: Railway services are offline and the Railway account trial has expired. No paid upgrade was made. A free Render path is prepared but requires explicit workspace selection before provisioning.
+- Full results: [CYCLE-31-RESULT.md](./CYCLE-31-RESULT.md). Cycle 30 and 29 details remain below as historical evidence.
+
 
 - Latest full cycle: [cycle 30 — success](https://github.com/salamou1944/Project-/actions/runs/40445025946); install-selection contract: [PASS](https://github.com/salamou1944/Project-/actions/runs/40445025703).
 - One exact-revision MIT asset is installed: `mnfst/modelparams.dev` at `0d09d9a3fb642770430fb357e3c72f8e7d9f1f67`. Installation outcome: 1 installed, 1 ready for verification, 0 size-blocked.
