@@ -16,6 +16,7 @@ def test_preserved_record_source_is_bound_to_artifact_data():
     end = source.index("\ndef main()", start)
     body = source[start:end]
     assert 'for f in data.get("files", [])' in body
+    assert 'kept["license"] = data.get("license")' in body
     assert "for f in files" not in body
 
 
