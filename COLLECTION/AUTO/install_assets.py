@@ -209,7 +209,8 @@ def select_explicit_approval_candidates(manifest, approvals, max_candidates=5, q
         if row.get("state") != "extracted" or row.get("license") != approval["license"]:
             skip(approval, "current_source_state_or_license_mismatch")
             continue
-        if row.get("mode") not in {"cached", "refreshed"}:
+        # `preserved_not_selected` is still an exact extracted manifest row; it simply was not in this run's bounded refresh batch. Explicit revision-pinned approvals may use it. A failed refresh remains blocked.
+        if row.get("mode") not in {"cached", "refreshed", "preserved_not_selected"}:
             skip(approval, "current_source_mode_not_installable:" + str(row.get("mode")))
             continue
         try:
