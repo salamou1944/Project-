@@ -155,7 +155,7 @@ class InstallSelectionTests(unittest.TestCase):
     def test_explicit_approval_requires_exact_current_revision_and_two_evidence_runs(self):
         revision = "d" * 40
         manifest = {"sources": [
-            source("mnfst/modelparams.dev", revision=revision, license_name="MIT", mode="cached"),
+            source("mnfst/modelparams.dev", revision=revision, license_name="MIT", mode="preserved_not_selected"),
             source("owner/other", revision="e" * 40),
         ]}
         approvals = {"schema_version": "collection-install-approvals/v1", "items": [
@@ -181,6 +181,23 @@ class InstallSelectionTests(unittest.TestCase):
             select_explicit_approval_candidates(
                 manifest, {"schema_version": "collection-install-approvals/v1", "items": [bad_url]}
             )
+
+    def test_explicit_approval_still_blocks_failed_refresh_preservation(self):
+        revision = "d" * 40
+        manifest = {"sources": [
+            source("mnfst/modelparams.dev", revision=revision, license_name="MIT", mode="preserved_after_refresh_failure")
+        ]}
+        approvals = {"schema_version": "collection-install-approvals/v1", "items": [
+            approval_item("mnfst/modelparams.dev", revision)
+        ]}
+        diagnostics = []
+        self.assertEqual(
+            select_explicit_approval_candidates(
+                manifest, approvals, quarantined_revisions=set(), diagnostics=diagnostics
+            ),
+            [],
+        )
+        self.assertEqual(diagnostics[0]["reason"], "current_source_mode_not_installable:preserved_after_refresh_failure")
 
     def test_explicit_approval_never_bypasses_quarantine_or_source_license(self):
         revision = "d" * 40
