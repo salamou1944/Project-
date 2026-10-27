@@ -1,0 +1,63 @@
+{
+  "canonical_source": "github:MariaDB/demos",
+  "repo": "MariaDB/demos",
+  "revision_sha": "aa87906ba45b6e055a20ad40518f3b90fc5c3c08",
+  "default_branch": "main",
+  "pushed_at": "2025-05-19T12:35:15Z",
+  "repo_updated_at": "2026-09-20T20:10:20Z",
+  "license": "BSD-3-Clause",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "987b219dd0be99af454a1049132e6d9ea38bcd22d5398d17af73a8cfbd4b6dd2",
+      "score": 100,
+      "content": "# MariaDB Demos\nA collection of use cases using MariaDB. \n\n## Content\n\n* **mariadb-kb-rag** - An example of doing AI RAG with MariaDB Vector using as content over one thousand articles scraped from the MariaDB Knowledge Base [mariadb.com/kb/](http://mariadb.com/kb). As described in blog [Try RAG with MariaDB Vector on your own MariaDB data!](https://mariadb.org/rag-with-mariadb-vector/).\n\n\n## How to add a demo? \n1. Fork the repo. \n2. Add a folder to the repo and insert the demo code into it. \n3. Updated README.md with a description of the demo including (if applicable) a link to the original repo."
+    },
+    {
+      "path": "mariadb-kb-rag/README.md",
+      "sha": null,
+      "content_sha256": "fe544e34d1056d01103d1aaf27050f7300ca0ce18e4d7197306297edd6d9eb9e",
+      "score": 98,
+      "content": "# Demo: RAG with MariaDB Vector\n\nA Python script that implements Retrieval-Augmented Generation (RAG) on the MariaDB Knowledge Base using MariaDB's vector database capabilities, OpenAI's embedding model, and OpenAI's LLM.\n\n## Features\n\n1. Reads MariaDB Knowledge Base articles from a JSONL file\n2. Splits articles into manageable \"chunks\"\n3. Creates vectors (embeddings) for each chunk using OpenAI's embedding model\n4. Inserts content and vectors into MariaDB\n5. Takes a user input and vectorizes it\n6. Searches for most relevant chunks in MariaDB using nearest neighbor search\n7. Generates response for user by prompting OpenAI's LLM with user input and relevant chunks\n\n## Prerequisites\n\n- Docker\n- Python 3.x (developed with 3.13)\n- OpenAI API key\n- MariaDB 11.7.1 or later\n\n## Setup\n\n1. Start MariaDB 11.7.1 with Docker: \n\n```bash\ndocker run -p 127.0.0.1:3306:3306  --name mdb_117 -e MARIADB_ROOT_PASSWORD=[REDACTED] -d mariadb:11.7-rc\n```\n\nIf needed, access MariaDB with:\n\n```bash\ndocker exec -it mdb_1171 mariadb --user root -pPassword123!\n```\n\nIf needed, install Docker with:\n\n```bash\nbrew install docker\n```\n\n2. Add your OpenAI API key to your environment variables. Create a key at https://platform.openai.com/api-keys. \n\n```bash\nexport OPENAI_API_KEY='[REDACTED]'\n```\n\n3. Set up a virtual environment\n\n```bash\npython -m venv venv\nsource venv/bin/activate  # On Unix/macOS\n```\n\n4. Install the required Python packages with pip\n\n```bash\npip install -r requirements.txt\n```\n\n## Usage\n\nRunning the following  at the moment does everything from setting up the database, to printing a LLM response to a question.\n\n```bash\npython mariadb_kb_rag.py\n```\n\n## Possible ways to develop further\n\n- Separate preparation and running questions to own python files\n- Test other embedding and LLM models\n- Add a graphical GUI with flask, vue, streamlit, gradio, etc.\n- Add timer to see how long database operations vs OpenAI calls take (>1s for OpenAI calls, less than 0.1s for database operations)\n- Try out more advanced chunking solutions, like https://github.com/bhavnicksm/chonkie/\n\n## Resources used to put this together\n\n- Cursor https://www.cursor.com/\n- MariaDB Vector https://mariadb.com/kb/en/vector-overview/\n- Installing and Using MariaDB via Docker https://mariadb.com/kb/en/installing-and-using-mariadb-via-docker/\n- OpenAI Embeddings https://platform.openai.com/docs/guides/embeddings\n- OpenAI Chat Completions https://platform.openai.com/docs/guides/text-generation",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "mariadb-kb-rag/requirements.txt",
+      "sha": null,
+      "content_sha256": "7362ad7728b9a915a0ef0b21a6ac45acb078d8d0a3b10a2a8f2771501708239b",
+      "score": 83,
+      "content": "mariadb==1.1.9\nopenai==1.12.0"
+    },
+    {
+      "path": "mariadb-kb-rag/mariadb_kb_rag.py",
+      "sha": null,
+      "content_sha256": "226a1bd68a8a996d8fade2d18e7e93e93c24fce161746689b20362591deb5eff",
+      "score": 33,
+      "content": "# Demo of RAG with MariaDB Vector using content from the MariaDB Knowledge Base\n\nimport mariadb\nfrom openai import OpenAI\nimport json\nimport os\n\n# To run MariaDB 11.7.1 with Docker:\n# docker run -p 127.0.0.1:3306:3306  --name mdb_117 -e MARIADB_ROOT_PASSWORD=[REDACTED] -d mariadb:11.7-rc\n\n# For embedding, OpenAI API key is needed. Create at https://platform.openai.com/api-keys and add to system variables with export OPENAI_API_KEY='[REDACTED]'.\nclient = OpenAI(api_key=os.getenv(\"OPENAI_API_KEY\"))\n\nconn = mariadb.connect(\n    host=\"127.0.0.1\", port=3306, user=\"root\", password=\"[REDACTED]\"\n)\ncur = conn.cursor()\n\n\ndef prepare_database():\n    print(\"Delete database\")\n    cur.execute(\"\"\"DROP DATABASE IF EXISTS kb_rag;\"\"\")\n\n    print(\"Create database and table\")\n    cur.execute(\n        \"\"\"\n        CREATE DATABASE IF NOT EXISTS kb_rag;\n        \"\"\"\n    )\n    cur.execute(\n        \"\"\"\n        CREATE TABLE kb_rag.content (\n            title VARCHAR(255) NOT NULL,\n            url VARCHAR(255) NOT NULL,\n            content LONGTEXT NOT NULL,\n            embedding VECTOR(1536) NOT NULL,\n            VECTOR INDEX (embedding)\n        ); \n        \"\"\"\n    )\n\n\nprepare_database()\n\n\ndef read_kb_from_file(filename):\n    with open(filename, \"r\") as file:\n        return [json.loads(line) for line in file]\n\n\n# chunkify by paragraphs, headers, etc.\ndef chunkify(content, min_chars=1000, max_chars=10000):\n    lines = content.split(\"\\n\")\n    chunks, chunk, length, start = [], [], 0, 0\n    for i, line in enumerate(lines + [\"\"]):\n        if (\n            chunk\n            and (\n                line.lstrip().startswith(\"#\")\n                or not line.strip()\n                or length + len(line) > max_chars\n            )\n            and length >= min_chars\n        ):\n            chunks.append(\n                {\n                    \"content\": \"\\n\".join(chunk).strip(),\n                    \"start_line\": start,\n                    \"end_line\": i - 1,\n                }\n            )\n            chunk, length, start = [], 0, i\n        chunk.append(line)\n        length += len(line) + 1\n    return chunks\n\n\ndef embed(text):\n    response = client.embeddings.create(\n        input=text,\n        model=\"text-embedding-3-small\",  # max 8192 tokens (roughly 32k chars)\n    )\n    return response.data[0].embedding\n\n\ndef insert_kb_into_db():\n    kb_pages = read_kb_from_file(\"kb_scraped_md_excerpt.jsonl\") # alternatively kb_scraped_md_full.jsonl\n    for p in kb_pages:\n        chunks = chunkify(p[\"content\"])\n        for chunk in chunks:\n            print(\n                f\"Embedding chunk (length {len(chunk[\"content\"])}) from '{p[\"title\"]}'\"\n            )\n            embedding = embed(chunk[\"content\"])\n            cur.execute(\n                \"\"\"INSERT INTO kb_rag.content (title, url, content, embedding)\n                        VALUES (%s, %s, %s, VEC_FromText(%s))\"\"\",\n                (p[\"title\"], p[\"url\"], chunk[\"content\"], str(embedding)),\n            )\n        conn.commit()\n\n\ninsert_kb_into_db()\n\n\ndef search_for_closest_content(text, n):\n    embedding = embed(text)  # using same embedding model as in preparations\n    cur.execute(\n        \"\"\"\n        SELECT title, url, content, \n               VEC_DISTANCE_EUCLIDEAN(embedding, VEC_FromText(%s)) AS distance\n        FROM kb_rag.content\n        ORDER BY distance ASC\n        LIMIT %s;\n    \"\"\",\n        (str(embedding), n),\n    )\n\n    closest_content = [\n        {\"title\": title, \"url\": url, \"content\": content, \"distance\": distance}\n        for title, url, content, distance in cur\n    ]\n    return closest_content\n\n\nuser_input = \"Can MariaDB be used instead of an Oracle database?\"\nprint(f\"Prompting:\\n'{user_input}'\")\nclosest_content = search_for_closest_content(user_input, 5)\n\n\ndef prompt_chat(system_prompt, prompt):\n    response = client.chat.completions.create(\n        model=\"gpt-4o-mini\",\n        messages=[\n            {\"role\": \"system\", \"content\": system_prompt},\n            {\"role\": \"user\", \"content\": prompt},\n        ],\n    )\n    return response.choices[0].message.content\n\n\nsystem_prompt_with_rag = \"\"\"\nYou are a helpful assistant that answers questions using exclusively content from the MariaDB Knowledge Base that you are provided with. \nEnd your answer with a link to the most relevant content given to you.\n\"\"\"\nprompt_with_rag = f\"\"\" \n    The user asked: '{user_input}'.  \n    Relevant content from the MariaDB Knowledge Base:\n    '{str(closest_content)}'\n    \"\"\"\nprint(\n    f\"\"\"\n    LLM response with RAG:'\n    {prompt_chat(system_prompt_with_rag,prompt_with_rag)}'\n    \"\"\"\n)\n\nsystem_prompt_no_rag = \"\"\"\nYou are a helpful assistant that only answers questions about MariaDB. \nEnd your answer with a link to a relevant source.\n\"\"\"\nprompt_no_rag = f\"\"\" \n   The user asked: '{user_input}'.\n   \"\"\"\nprint(\n    f\"\"\"\n   LLM response without RAG:\n   '{prompt_chat(system_prompt_no_rag, prompt_no_rag)}'\n   \"\"\"\n)\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:36:23.345607+00:00"
+}

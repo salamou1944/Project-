@@ -1,0 +1,292 @@
+import { describe, it, expect } from "vitest";
+import { buildCapabilityFacets, buildCatalog, uniqueProviders } from "../src/data/catalog.js";
+import { describeApplicability } from "../src/data/applicability.js";
+import {
+  apiSurfaceLabel,
+  apiSurfaceSdkMethod,
+  buildApiSurfaceFacets,
+} from "../src/data/api-surfaces.js";
+import { modelFullLabel, modelLabel, paramLabel, providerLabel } from "../src/data/display.js";
+import {
+  findModelParams,
+  listModelParamsResponses,
+  modelParamSlug,
+  modelParamsResponse,
+} from "../src/data/model-params.js";
+import { loadAllModels } from "../src/data/load.js";
+import { modelId } from "../src/schema/model.js";
+import type { Model } from "../src/schema/model.js";
+
+function makeModel(overrides: Partial<Model> = {}): Model {
+  return {
+    provider: "anthropic",
+    authType: "api_key",
+    apiSurface: "anthropic-messages",
+    model: "claude-opus-4-7",
+    params: [
+      {
+        path: "temperature",
+        type: "number",
+        label: "Temperature",
+        description: "x",
+        default: 1,
+        group: "sampling",
+      },
+      {
+        path: "logprobs",
+        type: "boolean",
+        label: "Log probabilities",
+        description: "y",
+        default: false,
+        group: "observability",
+      },
+    ],
+    ...overrides,
+  } as Model;
+}
+
+describe("buildCatalog", () => {
+  it("wraps models with metadata", () => {
+    const catalog = buildCatalog([makeModel()]);
+    expect(catalog.count).toBe(1);
+    expect(catalog.models).toHaveLength(1);
+    expect(catalog.$schema).toBe("https://modelparams.dev/api/v1/schema.json");
+    expect(typeof catalog.generatedAt).toBe("string");
+  });
+});
+
+describe("buildCapabilityFacets", () => {
+  it("counts unique parameter paths across models, sorted by frequency", () => {
+    const m1 = makeModel();
+    const m2 = makeModel({
+      provider: "openai",
+      model: "gpt-4o",
+      params: [
+        { path: "temperature", type: "number", label: "T", description: "x", group: "sampling" },
+        { path: "top_p", type: "number", label: "P", description: "y", group: "sampling" },
+      ],
+    });
+    const facets = buildCapabilityFacets([m1, m2]);
+    expect(facets[0]).toEqual({ path: "temperature", count: 2 });
+    expect(facets.map((f) => f.path)).toContain("logprobs");
+    expect(facets.map((f) => f.path)).toContain("top_p");
+  });
+});
+
+describe("buildApiSurfaceFacets", () => {
+  it("counts each API-surface-specific model entry", () => {
+    const chat = makeModel({
+      provider: "openai",
+      model: "gpt-5.5",
+      apiSurface: "openai-chat-completions",
+    });
+    const responses = makeModel({
+      provider: "openai",
+      model: "gpt-5.5",
+      authType: "subscription",
+      apiSurface: "openai-responses",
+    });
+    expect(buildApiSurfaceFacets([responses, chat])).toEqual([
+      { apiSurface: "openai-chat-completions", count: 1 },
+      { apiSurface: "openai-responses", count: 1 },
+    ]);
+  });
+});
+
+describe("uniqueProviders", () => {
+  it("returns sorted unique providers", () => {
+    const result = uniqueProviders([
+      makeModel({ provider: "openai" }),
+      makeModel({ provider: "anthropic" }),
+      makeModel({ provider: "openai", model: "gpt-4o" }),
+    ]);
+    expect(result).toEqual(["anthropic", "openai"]);
+  });
+});
+
+describe("providerless model params", () => {
+  it("uses -subscription as the model slug variant", () => {
+    expect(modelParamSlug(makeModel())).toBe("claude-opus-4-7");
+    expect(modelParamSlug(makeModel({ authType: "subscription" }))).toBe(
+      "claude-opus-4-7-subscription",
+    );
+  });
+
+  it("returns only model slug and params", () => {
+    const response = modelParamsResponse(makeModel());
+    expect(response).toEqual({
+      model: "claude-opus-4-7",
+      params: makeModel().params,
+    });
+  });
+
+  it("finds api-key and subscription params by providerless slug", () => {
+    const apiKey = makeModel();
+    const subscription = makeModel({
+      authType: "subscription",
+      params: [
+        {
+          path: "thinking.type",
+          type: "enum",
+          label: "Thinking",
+          description: "Thinking mode.",
+          values: ["disabled", "enabled"],
+          group: "reasoning",
+        },
+      ],
+    });
+
+    expect(findModelParams([apiKey, subscription], "claude-opus-4-7")).toEqual(
+      modelParamsResponse(apiKey),
+    );
+    expect(findModelParams([apiKey, subscription], "claude-opus-4-7-subscription")).toEqual(
+      modelParamsResponse(subscription),
+    );
+    expect(findModelParams([apiKey, subscription], "unknown")).toBeNull();
+  });
+
+  it("deduplicates identical providerless model param sets", () => {
+    const one = makeModel({ provider: "anthropic" });
+    const two = makeModel({ provider: "openrouter" });
+
+    expect(listModelParamsResponses([one, two])).toEqual([modelParamsResponse(one)]);
+  });
+
+  it("omits providerless slugs whose serving providers disagree on params", () => {
+    const one = makeModel({ provider: "anthropic" });
+    const two = makeModel({
+      provider: "openrouter",
+      params: [
+        {
+          path: "top_p",
+          type: "number",
+          label: "Top P",
+          description: "Nucleus sampling.",
+          group: "sampling",
+        },
+      ],
+    });
+
+    expect(listModelParamsResponses([one, two])).toEqual([]);
+  });
+});
+
+describe("display helpers", () => {
+  it("labels API surfaces with their representative SDK method", () => {
+    expect(apiSurfaceLabel("openai-responses")).toBe("Responses API");
+    expect(apiSurfaceSdkMethod("openai-responses")).toBe("responses.create");
+  });
+
+  it("knows the canonical provider names", () => {
+    expect(providerLabel("anthropic")).toBe("Anthropic");
+    expect(providerLabel("openai")).toBe("OpenAI");
+    expect(providerLabel("xai")).toBe("xAI");
+  });
+
+  it("uses overrides for known model display names", () => {
+    expect(modelLabel({ provider: "openai", model: "gpt-4o" })).toBe("GPT-4o");
+    expect(modelLabel({ provider: "openai", model: "o3-mini" })).toBe("o3-mini");
+  });
+
+  it("title-cases unknown model slugs and joins versions with dots", () => {
+    expect(modelLabel({ provider: "anthropic", model: "claude-sonnet-4-6" })).toBe(
+      "Claude Sonnet 4.6",
+    );
+    expect(modelLabel({ provider: "anthropic", model: "claude-opus-4-1-20250805" })).toBe(
+      "Claude Opus 4.1 20250805",
+    );
+  });
+
+  it("normalizes drifting parameter labels at display time", () => {
+    expect(paramLabel("max_completion_tokens", "Max tokens")).toBe("Max completion tokens");
+    expect(paramLabel("temperature", "Temperature")).toBe("Temperature");
+  });
+
+  it("keeps date stamps separate from version numbers", () => {
+    // An 8-digit date stamp must not fuse onto the version (the "4.20250514" bug).
+    expect(modelLabel({ provider: "anthropic", model: "claude-opus-4-20250514" })).toBe(
+      "Claude Opus 4 20250514",
+    );
+    // A hyphenated YYYY-MM-DD date reads as a date, not a dotted version.
+    expect(modelLabel({ provider: "openai", model: "gpt-4-turbo-2024-04-09" })).toBe(
+      "GPT-4 Turbo 2024-04-09",
+    );
+  });
+
+  it("spells brand tokens the way the vendor does", () => {
+    expect(modelLabel({ provider: "openai", model: "gpt-5.1" })).toBe("GPT-5.1");
+    expect(modelLabel({ provider: "openai", model: "gpt-oss-120b" })).toBe("GPT-OSS 120B");
+    expect(modelLabel({ provider: "alibaba", model: "qwq-plus" })).toBe("QwQ Plus");
+    expect(modelLabel({ provider: "google", model: "gemma-3-4b-it" })).toBe("Gemma 3 4B IT");
+    expect(modelLabel({ provider: "nvidia", model: "nemotron-3-nano-30b-a3b" })).toBe(
+      "Nemotron 3 Nano 30B A3B",
+    );
+    expect(modelLabel({ provider: "nvidia", model: "llama-3.3-nemotron-super-49b-v1.5" })).toBe(
+      "Llama 3.3 Nemotron Super 49B v1.5",
+    );
+  });
+
+  it("does not repeat the provider when the model name already carries it", () => {
+    expect(modelFullLabel({ provider: "deepseek", model: "deepseek-chat" })).toBe("DeepSeek Chat");
+    expect(modelFullLabel({ provider: "minimax", model: "minimax-m3" })).toBe("MiniMax M3");
+    expect(modelFullLabel({ provider: "mistral", model: "mistral-large-latest" })).toBe(
+      "Mistral Large Latest",
+    );
+    // ...but a model that doesn't carry the brand still gets it prefixed.
+    expect(modelFullLabel({ provider: "openai", model: "gpt-5.1" })).toBe("OpenAI GPT-5.1");
+    expect(modelFullLabel({ provider: "z-ai", model: "glm-5.2" })).toBe("Z.ai GLM-5.2");
+  });
+});
+
+describe("describeApplicability", () => {
+  it("returns empty arrays when no applicability", () => {
+    expect(describeApplicability(undefined)).toEqual({ only: [], except: [] });
+  });
+
+  it("formats only rules", () => {
+    const out = describeApplicability({ only: { "thinking.type": "enabled" } });
+    expect(out.only).toEqual(['thinking.type = "enabled"']);
+    expect(out.except).toEqual([]);
+  });
+
+  it("formats except with array values using ∈", () => {
+    const out = describeApplicability({
+      except: { "thinking.type": ["adaptive", "enabled"] },
+    });
+    expect(out.except[0]).toContain("thinking.type");
+    expect(out.except[0]).toContain("∈");
+  });
+
+  it("formats `not` expressions with ≠", () => {
+    const out = describeApplicability({ except: [{ temperature: { not: 1 } }] });
+    expect(out.except[0]).toBe("temperature ≠ 1");
+  });
+});
+
+describe("provider catalog rows", () => {
+  it("keeps Z.ai Coding Plan params aligned with the API-key rows", async () => {
+    const { models, issues } = await loadAllModels();
+    expect(issues).toEqual([]);
+
+    const byId = new Map(models.map((model) => [modelId(model), model]));
+    const sharedModels = [
+      "glm-5.1",
+      "glm-5.2",
+      "glm-5-turbo",
+      "glm-5",
+      "glm-4.7",
+      "glm-4.6",
+      "glm-4.5",
+      "glm-4.5-air",
+    ];
+
+    for (const model of sharedModels) {
+      const apiKey = byId.get(`z-ai/${model}`);
+      const subscription = byId.get(`z-ai/${model}-subscription`);
+
+      expect(subscription?.params.map((param) => param.path)).toEqual(
+        apiKey?.params.map((param) => param.path),
+      );
+    }
+  });
+});

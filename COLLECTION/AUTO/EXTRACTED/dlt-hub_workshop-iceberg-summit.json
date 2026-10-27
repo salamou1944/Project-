@@ -1,0 +1,210 @@
+{
+  "canonical_source": "github:dlt-hub/workshop-iceberg-summit",
+  "repo": "dlt-hub/workshop-iceberg-summit",
+  "revision_sha": "c7be597972b6c771129d5e1369ffbbb92217e08f",
+  "default_branch": "main",
+  "pushed_at": "2025-04-08T07:52:16Z",
+  "repo_updated_at": "2026-01-21T06:50:00Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "9b731b008b0c3d58128583015fa46f4c72acbb35c27b9a95eea989b2489f8d50",
+      "score": 120,
+      "content": "[project]\nname = \"dlt-portable-data-lake-demo\"\nversion = \"0.1.3\"\ndescription = \"A dlt package with a demo of portable data lake on Delta tables\"\nreadme = \"README.md\"\nlicense = { file = \"LICENSE.md\" }\nrequires-python = \">=3.10\"\n\ndependencies = [\n    \"dlt[duckdb,parquet,deltalake,filesystem,snowflake,pyiceberg]==1.9.1a0\",\n    \"dlt-plus[dbt,mcp]==0.9.1a0\",\n    \"enlighten\",\n    \"duckdb>=1.2.0\",\n    \"arrow>=1.3.0\",\n    \"pandas>=2.2.3\",\n    \"numpy>1.24.4\",\n    \"pyarrow>=17.0.0\",\n    \"ibis-framework[duckdb]>=10.0.0\",\n]\n\n\n[dependency-groups]\ndev = [\n    \"dlt-plus-tests>=0.7.0\",\n    \"ipykernel\",\n    \"jupyter\",\n    \"streamlit\",\n    \"ruff>=0.2.1\",\n    \"mypy>=1.8.0\",\n]\n\n[project.entry-points.dlt_package]\ndlt-project = \"dlt_portable_data_lake_demo\"\n\n[[tool.uv.index]]\nname = \"dlt-hub\"\nurl = \"https://pypi.dlthub.com\"\nexplicit = true\n\n[tool.uv.sources]\ndlt-plus-tests = { index = \"dlt-hub\" }\n\n[tool.pytest.ini_options]\nnorecursedirs = \".env .eggs build dist\"\naddopts = \"-v --showlocals --durations 10\"\nxfail_strict = true\nlog_cli = 1\nlog_cli_level = \"INFO\"\nfilterwarnings = \"ignore::DeprecationWarning\"\n\n[tool.hatch.build.targets.sdist]\npackages = [\"dlt_portable_data_lake_demo\"]\n\n[tool.hatch.build.targets.wheel]\npackages = [\"dlt_portable_data_lake_demo\"]\n\n\n[build-system]\nrequires = [\"hatchling>=1.20.0\"]\nbuild-backend = \"hatchling.build\"\n"
+    },
+    {
+      "path": "lakekeeper_playground/docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "7534ae14d2f208b3f71cf7856ae8d2020df66d4acb2f4f2a8929409a63d05360",
+      "score": 118,
+      "content": "services:\n  lakekeeper:\n    image: &lakekeeper-image ${LAKEKEEPER__SERVER_IMAGE:-quay.io/lakekeeper/catalog:latest-main}\n    pull_policy: &lakekeeper-pull-policy always\n    environment: &lakekeeper-environment\n      - LAKEKEEPER__PG_ENCRYPTION_KEY=This-is-NOT-Secure!\n      - LAKEKEEPER__PG_DATABASE_URL_READ=postgresql://postgres:postgres@db:5432/postgres\n      - LAKEKEEPER__PG_DATABASE_URL_WRITE=postgresql://postgres:postgres@db:5432/postgres\n      - LAKEKEEPER__AUTHZ_BACKEND=allowall\n      # Externally taken from environment variables if set\n      - LAKEKEEPER__OPENID_PROVIDER_URI\n      - LAKEKEEPER__OPENID_AUDIENCE\n      - LAKEKEEPER__OPENID_ADDITIONAL_ISSUERS\n      - LAKEKEEPER__UI__OPENID_CLIENT_ID\n      - LAKEKEEPER__UI__OPENID_SCOPE\n    command: [ \"serve\" ]\n    healthcheck:\n      test: [ \"CMD\", \"/home/nonroot/iceberg-catalog\", \"healthcheck\" ]\n      interval: 1s\n      timeout: 10s\n      retries: 3\n      start_period: 3s\n    depends_on:\n      migrate:\n        condition: service_completed_successfully\n    ports:\n      - \"8181:8181\"\n    networks:\n      iceberg_net:\n\n  migrate:\n    image: *lakekeeper-image\n    pull_policy: *lakekeeper-pull-policy\n    environment: *lakekeeper-environment\n    restart: \"no\"\n    command: [ \"migrate\" ]\n    depends_on:\n      db:\n        condition: service_healthy\n    networks:\n      iceberg_net:\n\n  db:\n    image: bitnami/postgresql:16.6.0\n    environment:\n      - POSTGRESQL_USERNAME=postgres\n      - POSTGRESQL_PASSWORD=postgres\n      - POSTGRESQL_DATABASE=postgres\n    healthcheck:\n      test: [ \"CMD-SHELL\", \"pg_isready -U postgres -p 5432 -d postgres\" ]\n      interval: 2s\n      timeout: 10s\n      retries: 2\n      start_period: 10s\n    volumes:\n      - volume-lakekeeper:/bitnami/postgresql\n    networks:\n      iceberg_net:\n\n  bucket:\n    image: minio/minio\n    command: server /minio/minio --console-address \":9001\"\n    healthcheck:\n      test: [\"CMD\", \"mc\", \"ready\", \"local\"]\n      interval: 5s\n      timeout: 5s\n      retries: 5\n    ports:\n      - \"9000:9000\"\n      - \"9001:9001\"\n    volumes:\n      - volume-lakekeeper:/minio/minio\n    networks:\n      iceberg_net:\n\nnetworks:\n  iceberg_net:\n\nvolumes:\n  volume-lakekeeper:\n"
+    },
+    {
+      "path": "lakekeeper_playground/src/bootstrap.py",
+      "sha": null,
+      "content_sha256": "82a6e3623ab2485ad806b61103eafa43a95651996621f200cc8b2f7102a0f68a",
+      "score": 113,
+      "content": "import json\nimport requests\n\nfrom typing import Final\nfrom urllib.parse import urlunparse, urlparse\n\nLAKEKEEPER_DEMO_SCHEME: Final = \"http\"\nLAKEKEEPER_DEMO_NET_LOCATION: Final = \"lakekeeper:8181\"\n\nLAKEKEEPER_BOOTSTRAP_ROUTE: Final = \"/management/v1/bootstrap\"\nLAKEKEEPER_BOOTSTRAP_ACCEPT_EULA_KEY: Final = \"accept-terms-of-use\"\n\n\nbootstrap_url: str = urlunparse(\n    urlparse(LAKEKEEPER_BOOTSTRAP_ROUTE)._replace(\n        scheme=LAKEKEEPER_DEMO_SCHEME,\n        netloc=LAKEKEEPER_DEMO_NET_LOCATION,\n    ),\n)\n\n\ndef make_bootstrap_request():\n    bootstrap_response = requests.post(\n        bootstrap_url,\n        json={LAKEKEEPER_BOOTSTRAP_ACCEPT_EULA_KEY: True},\n    )\n\n    def _extract_error(r):\n        return json.loads(r.content).get(\"error\", {}).get(\"type\", \"\")\n\n    if (\n        bootstrap_response.status_code == 400\n        and _extract_error(bootstrap_response) == \"CatalogAlreadyBootstrapped\"\n    ):\n        print(\"Catalog already bootstrapped!\")\n    elif bootstrap_response.status_code == 204:\n        print(\"Success!\")\n    else:\n        print(\"Status unknown!\")\n        print(f\"Status code: {bootstrap_response.status_code}\")\n        print(f\"Response content: {bootstrap_response.content}\")\n\n\nif __name__ == \"__main__\":\n    make_bootstrap_request()\n    print(\"Goodbye!\")\n"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/sources.yml",
+      "sha": null,
+      "content_sha256": "4ef61f00724f0535e952b77c0b0eb4b09197590f967a3724528a1df7c7310b5e",
+      "score": 102,
+      "content": "version: 2\nsources:\n  - name: raw_data\n    schema: '{{ var (\"source_dataset_name\") }}'\n    tables:\n      - name: _dlt_loads\n      - name: customers\n      - name: items\n      - name: products\n      - name: supplies\n      - name: stores\n      - name: orders\n      - name: orders__items\n  - name: transformed_data\n    schema: '{{ var (\"destination_dataset_name\") }}'\n    tables:\n      - name: dlt_processed_load_ids\n\nmodels:\n      - name: dlt_processed_load_ids\n        description: \"This table contains all processed load ids for incremental loading\"\n      - name: _dlt_loads\n        description: \"Created by DLT. Tracks completed loads\"\n        columns:\n          - name: load_id\n            tests:\n              - not_null\n          - name: schema_name\n          - name: status\n            tests:\n              - not_null\n          - name: inserted_at\n            tests:\n              - not_null\n          - name: schema_version_hash\n      - name: customers\n        columns:\n          - name: id\n          - name: name\n          - name: _dlt_load_id\n            tests:\n              - not_null\n          - name: _dlt_id\n            tests:\n              - not_null\n              - unique\n      - name: items\n        columns:\n          - name: id\n          - name: order_id\n          - name: sku\n          - name: _dlt_load_id\n            tests:\n              - not_null\n          - name: _dlt_id\n            tests:\n              - not_null\n              - unique\n      - name: products\n        columns:\n          - name: sku\n          - name: name\n          - name: type\n          - name: price\n          - name: description\n          - name: _dlt_load_id\n            tests:\n              - not_null\n          - name: _dlt_id\n            tests:\n              - not_null\n              - unique\n      - name: supplies\n        columns:\n          - name: id\n          - name: name\n          - name: cost\n          - name: perishable\n          - name: sku\n          - name: _dlt_load_id\n            tests:\n              - not_null\n          - name: _dlt_id\n            tests:\n              - not_null\n              - unique\n      - name: stores\n        columns:\n          - name: id\n          - name: name\n          - name: opened_at\n          - name: tax_rate\n          - name: _dlt_load_id\n            tests:\n              - not_null\n          - name: _dlt_id\n            tests:\n              - not_null\n              - unique\n      - name: orders\n        columns:\n          - name: id\n          - name: customer_id\n          - name: store_id\n          - name: ordered_at\n          - name: subtotal\n          - name: tax_paid\n          - name: order_total\n          - name: _dlt_load_id\n            tests:\n              - not_null\n          - name: _dlt_id\n            tests:\n              - not_null\n              - unique\n      - name: orders__items\n        columns:\n          - name: id\n          - name: order_id\n          - name: sku\n          - name: _dlt_parent_id\n            tests:\n              - not_null\n          - name: _dlt_list_idx\n            tests:\n              - not_null\n          - name: _dlt_id\n            tests:\n              - not_null\n              - unique"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/dlt_active_load_ids.sql",
+      "sha": null,
+      "content_sha256": "7295645d3ff3dcf7273461f855a951facd4b332ab3d381d8316abff747fa13a6",
+      "score": 102,
+      "content": "/* check if the destination already has a list of processed ids\nif not we will process all loads with status 0 (==success) */\n{% set active_ids_exist = adapter.get_relation(\n        database=this.database ,\n        schema=this.schema,\n        identifier=\"dlt_processed_load_ids\" ) %}\n\nSELECT load_id FROM {{  source('raw_data', '_dlt_loads') }}\nWHERE status = 0\n/* exclude already processed load_ids */\n{% if active_ids_exist and not should_full_refresh() %}\nAND load_id NOT IN (SELECT load_id FROM {{ source('transformed_data', 'dlt_processed_load_ids') }})\n{% endif %}"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/dlt_processed_load_ids.sql",
+      "sha": null,
+      "content_sha256": "a2af1235e7a60f248c23da685dd821c2e7598ce3d5746bfeae7557adf6a736d8",
+      "score": 102,
+      "content": "{{\n    config(\n        materialized='incremental'\n    )\n}}\n-- depends_on: {{ ref('dim__dlt_loads') }}\n-- depends_on: {{ ref('dim_customers') }}\n-- depends_on: {{ ref('dim_items') }}\n-- depends_on: {{ ref('dim_products') }}\n-- depends_on: {{ ref('dim_supplies') }}\n-- depends_on: {{ ref('dim_stores') }}\n-- depends_on: {{ ref('dim_orders') }}\n-- depends_on: {{ ref('dim_orders__items') }}\n/* we save all currently active load ids into the processed ids table */\nselect load_id, {{ current_timestamp() }} as inserted_at FROM {{ ref('dlt_active_load_ids') }}"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim_items.sql",
+      "sha": null,
+      "content_sha256": "72653d9bf5e8f6c1115ce6d04850070976d3d5513b2c92dbf1c5ae6aa6b9c817",
+      "score": 100,
+      "content": "/* Table: items */\n{{\n    config(\n        materialized='incremental'\n    )\n}}\nSELECT\n    t.id,\n    t.order_id,\n    t.sku,\n    t._dlt_load_id,\n    t._dlt_id,\nFROM  {{ ref('stg_items') }} as t"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim__dlt_loads.sql",
+      "sha": null,
+      "content_sha256": "553cf8582390a073b3cb3af113cd217b8c7bfebaa28a69102836aceb6e5437e7",
+      "score": 100,
+      "content": "/* Table: _dlt_loads */\n{{\n    config(\n        materialized='incremental'\n    )\n}}\n/* Description: Created by DLT. Tracks completed loads */\nSELECT\n    t.load_id,\n    t.schema_name,\n    t.status,\n    t.inserted_at,\n    t.schema_version_hash,\nFROM  {{ ref('stg__dlt_loads') }} as t"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg__dlt_loads.sql",
+      "sha": null,
+      "content_sha256": "d0d509e1fe91665b30e5ca56dfe4392d32c304cd667165f2d7832756b33ede07",
+      "score": 100,
+      "content": "/* Table: _dlt_loads */\n/* Description: Created by DLT. Tracks completed loads */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n\nSELECT\n/* select which columns will be available for table '_dlt_loads' */\n    load_id,\n    schema_name,\n    status,\n    inserted_at,\n    schema_version_hash,\nFROM {{ source('raw_data', '_dlt_loads') }}\n"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim_supplies.sql",
+      "sha": null,
+      "content_sha256": "3df8db76aba92c867d6f27740270288f11e883cc1cfb830a52bf774b8ad3b031",
+      "score": 100,
+      "content": "/* Table: supplies */\n{{\n    config(\n        materialized='incremental'\n    )\n}}\nSELECT\n    t.id,\n    t.name,\n    t.cost,\n    t.perishable,\n    t.sku,\n    t._dlt_load_id,\n    t._dlt_id,\nFROM  {{ ref('stg_supplies') }} as t\n\n"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim_stores.sql",
+      "sha": null,
+      "content_sha256": "e2c1c2ca0c0c5963b778d29790017a345c98f82de6b1e2f5c0cfcec0ba62fda7",
+      "score": 100,
+      "content": "/* Table: stores */\n{{\n    config(\n        materialized='incremental'\n    )\n}}\nSELECT\n    t.id,\n    t.name,\n    t.opened_at,\n    t.tax_rate,\n    t._dlt_load_id,\n    t._dlt_id,\nFROM  {{ ref('stg_stores') }} as t"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg_items.sql",
+      "sha": null,
+      "content_sha256": "a3e33a9efae96496f699398c5acab16bd3936e80847394e0c27d9fe130ae543b",
+      "score": 100,
+      "content": "/* Table: items */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n\nSELECT\n/* select which columns will be available for table 'items' */\n    id,\n    order_id,\n    sku,\n    _dlt_load_id,\n    _dlt_id,\nFROM {{ source('raw_data', 'items') }}\n\n/* we only load table items of the currently active load ids into the staging table */\nWHERE _dlt_load_id IN ( SELECT load_id FROM  {{ ref('dlt_active_load_ids') }} )"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg_customers.sql",
+      "sha": null,
+      "content_sha256": "0f7a48b65bfa94674c1bad39706eb7b903998fb1cf3b5d79dc50a0f3775327b0",
+      "score": 100,
+      "content": "/* Table: customers */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n\nSELECT\n/* select which columns will be available for table 'customers' */\n    id as customer_id,\n    name,\n    _dlt_load_id,\n    _dlt_id,\nFROM {{ source('raw_data', 'customers') }}\n\n/* we only load table items of the currently active load ids into the staging table */\nWHERE _dlt_load_id IN ( SELECT load_id FROM  {{ ref('dlt_active_load_ids') }} )"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg_stores.sql",
+      "sha": null,
+      "content_sha256": "2a279b4b8fd1df54eada2410f9126ed29efa75214de3d648c9e11afec4d5bb48",
+      "score": 100,
+      "content": "/* Table: stores */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n\nSELECT\n/* select which columns will be available for table 'stores' */\n    id,\n    name,\n    opened_at,\n    tax_rate,\n    _dlt_load_id,\n    _dlt_id,\nFROM {{ source('raw_data', 'stores') }}\n\n/* we only load table items of the currently active load ids into the staging table */\nWHERE _dlt_load_id IN ( SELECT load_id FROM  {{ ref('dlt_active_load_ids') }} )"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim_customers.sql",
+      "sha": null,
+      "content_sha256": "fb8258d6adda8cc681aa91205a142ae9d6cb6135a72e9c4e7df0e7cfc3a31e55",
+      "score": 100,
+      "content": "with\n\ncustomers as (\n\n    select * from {{ ref('stg_customers') }}\n\n),\n\norders as (\n\n    select * from {{ ref('stg_orders') }}\n\n),\n\ncustomer_orders_summary as (\n\n    select\n        orders.customer_id,\n\n        count(distinct orders.order_id) as count_lifetime_orders,\n        count(distinct orders.order_id) > 1 as is_repeat_buyer,\n        min(orders.ordered_at) as first_ordered_at,\n        max(orders.ordered_at) as last_ordered_at,\n        sum(orders.subtotal) as lifetime_spend_pretax,\n        sum(orders.tax_paid) as lifetime_tax_paid,\n        sum(orders.subtotal) as lifetime_spend\n\n    from orders\n\n    group by 1\n\n),\n\njoined as (\n\n    select\n        customers.*,\n\n        customer_orders_summary.count_lifetime_orders,\n        customer_orders_summary.first_ordered_at,\n        customer_orders_summary.last_ordered_at,\n        customer_orders_summary.lifetime_spend_pretax,\n        customer_orders_summary.lifetime_tax_paid,\n        customer_orders_summary.lifetime_spend,\n\n        case\n            when customer_orders_summary.is_repeat_buyer then 'returning'\n            else 'new'\n        end as customer_type\n\n    from customers\n\n    left join customer_orders_summary\n        on customers.customer_id = customer_orders_summary.customer_id\n\n)\n\nselect * from joined\n"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg_orders__items.sql",
+      "sha": null,
+      "content_sha256": "e2ed87831d022a40b0f72c2916c6a529dec5815b66149b3fb70360f4bb8a77de",
+      "score": 100,
+      "content": "/* Table: orders__items */\n/* Parent: { parent }} */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n-- depends_on: {{ ref('stg_orders') }}\n\nSELECT\n/* select which columns will be available for table 'orders__items' */\n    id as order_item_id,\n    order_id,\n    sku,\n    _dlt_parent_id,\n    _dlt_list_idx,\n    _dlt_id,\nFROM {{ source('raw_data', 'orders__items') }}\n\n/* we only load table items if the parent table has the parent item */\nWHERE _dlt_parent_id IN ( SELECT _dlt_id FROM {{ ref('stg_orders') }} )\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "0d6d9f54abfd5c1f512ab7cf23f51c19f1add25fa641bb19c7c78c05de5db1fb",
+      "score": 100,
+      "content": "# 🏗️ Lakehouse Architecture with Iceberg\n\nWelcome to your deep dive into the world of Lakehouses with Apache Iceberg! 🚢❄️\n\nIn this hands-on workshop, we’ll build our own mini data lakehouse. We’ll be ingesting data from a REST API, writing it into Iceberg tables, and exploring how everything is tied together with a catalog. Let’s go! 🧙‍📊\n\n## 🚀 Step 0: Prep your environment\n\nIn this workshop we'll be using [uv](https://github.com/astral-sh/uv) package manager for managing the Python \nenvironment. It's a fast Python package and project manager, written in Rust. \n\nIf you don’t have it yet, install it with:\n\n```shell\npip install uv\n```\nor\n\n```shell\n# On macOS and Linux.\ncurl -LsSf https://astral.sh/uv/install.sh | sh\n# On Windows.\npowershell -ExecutionPolicy ByPass -c \"irm https://astral.sh/uv/install.ps1 | iex\"\n```\n\nOnce that’s done, setting up your whole dev environment is as simple as:\n```shell\nmake dev\n```\n\n❗ Don't have `make`? No worries – just run the full installation command below:\n```shell\nuv sync --reinstall-package dlt --upgrade-package dlt --reinstall-package dlt-plus --upgrade-package dlt-plus --all-extras --group dev --no-managed-python\n```\n\n## 🛫 Step 1: Bring in some data\n\nLet’s start ingesting data into our data lake! 🎉\n\nBut before we jump into configuring our API source, here's a quick intro to what kind of project we’re actually working with.\n\n### 🧩 What is a dlt+ Project?\nThis workshop is powered by a dlt+ Project, which gives you a declarative and structured way to build data workflows. \nInstead of jumping between scripts and configs, everything lives in one clear place – the `dlt.yml` manifest file. \nThink of it as your project’s single source of truth for data sources, pipelines, destinations, and transformations. 📘✨\n\nThe project layout includes:\n\n* 📄 dlt.yml – the heart of your project, defining all key data entities\n* 📁 .dlt/ – holds secrets and metadata (like credentials), fully compatible with OSS dlt\n* 💾 _data/ – used for pipeline state and local files (automatically excluded from Git)\n\nNow that you're familiar with the structure, let’s put it into action by defining our first data source!\n\nWe’ll be using the famous [jaffle-shop](https://github.com/dbt-labs/jaffle-shop) dataset – a mock e-commerce store that’s perfect for data modeling fun.\nWe created a REST API just for this workshop (you're welcome 😉).\n\n* 📚 Check out the auto-generated API docs here:\n👉 [API docs](https://fast-api-jaffle-shop-jz2mh.ondigitalocean.app/docs)\n* More context on the project:\n👉 [GitHub Repo](https://github.com/dlt-hub/fast-api-jaffle-shop)\n* The API url:\n👉https://jaffle-shop.dlthub.com/api/v1\n\nLet’s set up our source inside the `dlt_portable_data_lake_demo/dlt.yml` file. You'll see a `sources` section with a `jaffle_shop` placeholder. Your job is to fill in the missing bits.\n\n### ✏️ Exercise 1: Complete the source config\n\nUse the API [docs](https://fast-api-jaffle-shop-jz2mh.ondigitalocean.app/docs) to fill in the correct values: \n\n```yaml\n  jaffle_shop:\n    type: rest_api\n    client:\n      base_url: # Insert API base URL here\n      paginator: auto\n    resource_defaults:\n      write_disposition: replace\n    resources:\n      - customers\n      - # Add up to 4 more bulk endpoints\n      -\n        name: orders\n        endpoint:\n          path: orders\n          params:\n            start_date:\n              type: incremental\n              cursor_path: # What field in the response contains the timestamp? \n        write_disposition: append\n```\n\n## 🧊 Step 2: Connect to iceberg\n\nWe’re setting up our destination as Apache Iceberg – a table format that brings data lake magic to your files! \nFor starters, to make things easier, we’ll keep it local: Iceberg tables will be located on disk, and an SQLite database will be used as a catalog.\n\nHere's the destination config in `dlt.yml`:\n\n```yaml\ndestinations:\n  iceberg_lake:\n    type: iceberg\n    catalog_type: sql\n```\n\nWe put some additional configuration specific for our setup into \n```yaml\nprofiles:\n  dev: &dev_profile\n    destinations:\n      iceberg_lake:\n        credentials:\n          drivername: sqlite\n          database: catalog.db\n        capabilities:\n          register_new_tables: true\n        filesystem:\n          bucket_url: raw_data\n```\nThis will make it easier to switch to any other configuration.\n\nAnd now, define your pipeline! This is what moves the data from source to destination:\n```yaml\npipelines:\n  api_to_lake:\n    source: jaffle_shop\n    destination: iceberg_lake\n    dataset_name: jaffle_shop_dataset\n    progress: log\n```\nNice! We're all set to get data flowing \n\n## ▶️ Step 3: Run the pipeline\n\nTime to load some data! Just run the following command:\n\n```shell\nuv run dlt pipeline api_to_lake run --limit 2\n```\nWhat’s happening here:\n- `uv run` - is needed for every command we're using to utilize our environment\n- `dlt pipeline <pipeline_name> run` - will run our pipeline\n- `--limit 2` - will help us to keep things fast. It will limit our requests for each endpoint by only 2. \nIf you want to load all available data, you can remove this option, but this will take a while.\n\n### ✏️ Exercise 2: Kick off your first load\n\nAfter running this command you should see the following output:\n\n```shell\n1 load package(s) were loaded to destination iceberg_lake and into dataset jaffle_shop_dataset\nThe iceberg_lake destination used sqlite:////Users/vmishechk/PycharmProjects/dlt-portable-data-lake-demo/dlt_portable_data_lake_demo/_data/dev/local/catalog.db location to store data\n```\n\n### ✏️ Exercise 3: Look at the results\n\nTo look at the ingested data use the following command:\n\n```shell\nuv run dlt pipeline api_to_lake show\n```\n\n🧠 Question: How many `stores` are present in a data? \n\n## 🔬 Step 4: Inspect what we got\n\nLet’s explore the files! Head to `dlt_portable_data_lake_demo/_data/dev/local` and you’ll see a beautiful structure: each endpoint has its own folder with Parquet files and metadata.\n\nOur catalog (a simple SQLite DB) knows where everything lives. To inspect catalog and data, let’s launch a Jupyter Notebook!\n\n1. First, register your environment as a Jupyter kernel:\n```shell\nuv run python -m ipykernel install --user --name .venv --display-name \"uv kernel\"\n```\n\n2. Then, run:\n\n```shell\nuv run jupyter notebook\n```\n\n3. Open `notebooks/workshop.ipynb` and start exploring 🚀\n\n## ☁️ Step 5 [Advanced]: Go production-grade with Lakekeeper\n\n🎉 You’ve made it this far – you've ingested data, stored it in Iceberg tables, explored it locally, and gotten familiar \nwith how to get access to your data with the help of DuckDB in a hands-on way. \nBut so far, we've been playing in a local sandbox: storing data on your machine and using a lightweight SQLite database as our catalog. \nThat’s perfect for development and testing – but what about the real world?\n\nIn production, you’d want to:\n\n* Store your data on scalable, durable cloud storage (like S3, Azure Blob, or GCS)\n* Use a robust Iceberg catalog service to track your datasets (Lakekeeper, Dremio, AWS Glue, Nessie, Polaris)\n* Share and query data across teams, tools, and environments with zero hassle\n\nThat’s where Lakekeeper comes in – an open-source, production-grade Iceberg catalog. It’s easy to set up, plays well with any cloud storage, and lets you build real \ndata platforms without needing to set up heavy-duty infrastructure.\n\nIn this step, we’ll show you how to:\n\n* Configure a new destination profile that uses Lakekeeper as the catalog\n* Launch a local Lakekeeper + MinIO instance with Docker\n* Load data into a real Iceberg lake backed by cloud-like storage ✨\n\nThis is your \"from dev to prod\" moment. Let’s get your lakehouse production-ready! 💪🏽🌊\n\nHere’s how to define a new `prod` profile in `dlt.yml`:\n\n```yaml\nprofiles:\n  prod:\n    destinations:\n      iceberg_lake:\n        catalog_type: rest\n        credentials:\n          uri: http://localhost:8181/catalog\n          warehouse: demo_wh\n        capabilities:\n          # where on s3 tables will be created. note that this must match bucket and key prefix on Lakekeeper\n          # you may also use absolute uri: including s3://bucket\n          table_location_layout: \"s3://demo/new_location/lakekeeper_demo_4/{dataset_name}/{table_name}\"\n```\n\n✨ Note: The data location is handled by Lakekeeper – all you provide is access to the Lakekeeper. In real-world \nuse-case you will also provide an access token to Lakekeeper. You can put it to `.dlt/secrets.toml`.\n\n### 🛠️ Let’s Spin Up Lakekeeper + Minio\n\nWe’ll use a prebuilt playground. Type in your terminal:\n```shell\ncd lakekeeper_playground\ndocker compose --project-name iceberg_demo up -d\n```\n\nIt could take some time. Once that’s ready, run this helper script to set up a demo S3 bucket and link it to Lakekeeper:\n\n```shell\ndocker run --network iceberg_demo_iceberg_net --rm -it $(docker build -q .)\n```\n\nNow you can access both Lakekeeper UI and Minio:\n\n- To see the LakeKeeper UI, navigate to the url: [`http://localhost:8181`](http://localhost:8181)\n\n- To see the Minio (S3) UI, navigate to the url: [`http://localhost:9001`](http://localhost:9001)\n\n  - Username: `minioadmin`\n  - Password: [REDACTED]\n\n### 🐳 Docker shenanigans\n\nBecause Docker uses an internal network, accessing the MinIO bucket from your host (using the S3-style URL provided by Lakekeeper) needs a little trick.\nYou’ll need to add an alias so that bucket resolves to your local machine:\n\n* on Windows: open `C:\\Windows\\System32\\drivers\\etc\\hosts` as Administrator and add\n```text\n127.0.0.1 bucket\n```\n* on Mac / Linux: run `sudo nano /etc/hosts`, add the line\n```text\n127.0.0.1 bucket\n```\nThis lets your system resolve S3-style requests like http://bucket:9000 back to MinIO running on localhost.\n\n### Run the pipeline\n\nFinally, run your pipeline with the new profile:\n\n```shell\nuv run dlt pipeline --profile prod api_to_lake run --limit 2\n```\n\n## 🧠 Step 6 [Pro]: Run SQL Workflows with dbt\n\nSo far, you've built a complete data pipeline from scratch:\n✅ You ingested data from an API\n✅ Stored it in Iceberg tables\n✅ Explored it with SQL, Ibis, and pandas\n✅ Even scaled things up with a production-grade catalog\n\nBut we’ve almost skipped one big piece of the modern data platform puzzle... 🧩 analytics and reporting!\n\nAnd that’s where dbt comes into play. If you're not familiar, dbt lets you define SQL models (i.e. transformations) using version-controlled, modular queries – and it’s become the go-to tool for data teams worldwide.\n\n### 💡 So how do you run dbt models on Iceberg?\nHere’s the magic: since DuckDB can create views over your Iceberg tables, you can treat them just like any regular SQL tables. That means you can write dbt models on top of your Iceberg lake, and run them locally with fast DuckDB execution. ⚡\n\nEven better – once your transformations are done, you can push the results to any modern data warehouse (like Snowflake, BigQuery, Redshift). Or wherever your analytics live!\nThis means you can build efficient, low-cost data pipelines with Iceberg + DuckDB + dbt, and only push your final curated datasets to your warehouse for BI or ML use cases. It’s the best of both worlds.\n\n### ⚙️ Let's run the transformations\nWe’ve prepared a ready-to-go dbt project and config for dlt+ Project which includes transformations. Replace your current `dlt.yml` with the contents of `dlt_manifest_full.yml`.\nThis enables dlt+ Cache, which auto-creates a DuckDB layer for your dbt models.\n\nThen run the following command:\n\n```shell\nuv run dlt transformation get_reports run\n```\nThis will run the pre-configured dbt models and generate reporting tables on top of your Iceberg data lake.\n\nIf you want to take a look at your fresh dbt tables, run the jupyter notebook again:\n```shell\nuv run jupyter notebook\n```\nThen open `notebooks/workshop.ipynb` and scroll to the last section. \n\n### 📘 More information\n\nIf you’re curious to explore this step more, check out the guide:\n👉 [Running Transformations with dlt+](https://dlthub.com/docs/plus/features/transformations/setup)\n\nThis covers:\n\n* How dlt+ automatically spins up a DuckDB cache for your models\n* How to configure dbt to run against that cache\n* And how to export your final datasets to your favorite cloud platform\n\n✨ This is your gateway into modern ELT workflows, combining open formats (Iceberg), high-performance compute (DuckDB), and powerful modeling (dbt). You’re ready to join the big leagues 🏆\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg_supplies.sql",
+      "sha": null,
+      "content_sha256": "6c100ed8b24a997ed2edfc49167c7a2f9d1a4d5f850a4017213d1e2362bba4a4",
+      "score": 100,
+      "content": "/* Table: supplies */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n\nSELECT\n/* select which columns will be available for table 'supplies' */\n    id,\n    name,\n    cost::integer as cost,\n    perishable,\n    sku,\n    _dlt_load_id,\n    _dlt_id,\nFROM {{ source('raw_data', 'supplies') }}\n\n/* we only load table items of the currently active load ids into the staging table */\nWHERE _dlt_load_id IN ( SELECT load_id FROM  {{ ref('dlt_active_load_ids') }} )"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim_orders__items.sql",
+      "sha": null,
+      "content_sha256": "e4c1cce7778d1a760e3a52f43000fb2af5f905c9afaa38ef027484c08c14423c",
+      "score": 100,
+      "content": "with\n\norder_items as (\n\n    select * from {{ ref('stg_orders__items') }}\n\n),\n\n\norders as (\n\n    select * from {{ ref('stg_orders') }}\n\n),\n\nproducts as (\n\n    select * from {{ ref('stg_products') }}\n\n),\n\nsupplies as (\n\n    select * from {{ ref('stg_supplies') }}\n\n),\n\norder_supplies_summary as (\n\n    select\n        sku,\n\n        sum(cost) as supply_cost\n\n    from supplies\n\n    group by 1\n\n),\n\njoined as (\n\n    select\n        order_items.*,\n\n        orders.ordered_at,\n\n        products.product_name,\n        products.product_price,\n\n        order_supplies_summary.supply_cost\n\n    from order_items\n\n    left join orders on order_items.order_id = orders.order_id\n\n    left join products on order_items.sku = products.sku\n\n    left join order_supplies_summary\n        on order_items.sku = order_supplies_summary.sku\n\n)\n\nselect * from joined"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim_products.sql",
+      "sha": null,
+      "content_sha256": "b02b440e9c260bbf83dbff957eacc3edf778d197c63a22da56fae7c554462092",
+      "score": 100,
+      "content": "with\n\nproducts as (\n\n    select * from {{ ref('stg_products') }}\n\n)\n\nselect * from products"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/marts/dim_orders.sql",
+      "sha": null,
+      "content_sha256": "715d166c7b2807fb3921b20ba6efc958f427b64b515f686fb0d04f64a6c75832",
+      "score": 100,
+      "content": "{{\n    config(\n        materialized='incremental'\n    )\n}}\n\nwith\n\norders as (\n\n    select * from {{ ref('stg_orders') }}\n\n),\n\norder_items as (\n\n    select * from {{ ref('dim_orders__items') }}\n\n),\n\norder_items_summary as (\n\n    select\n        order_id,\n\n        sum(supply_cost) as order_cost,\n        sum(product_price) as order_items_subtotal,\n        count(order_item_id) as count_order_items,\n\n    from order_items\n\n    group by 1\n\n),\n\ncompute_booleans as (\n\n    select\n        orders.*,\n\n        order_items_summary.order_cost,\n        order_items_summary.order_items_subtotal,\n        order_items_summary.count_order_items,\n\n    from orders\n\n    left join\n        order_items_summary\n        on orders.order_id = order_items_summary.order_id\n\n),\n\ncustomer_order_count as (\n\n    select\n        *,\n\n        row_number() over (\n            partition by customer_id\n            order by ordered_at asc\n        ) as customer_order_number\n\n    from compute_booleans\n\n)\n\nselect * from customer_order_count\n"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg_products.sql",
+      "sha": null,
+      "content_sha256": "b5d7080c13c163d69843586624ff1a77a95a197e4a83b900c33525f81d8a8a88",
+      "score": 100,
+      "content": "/* Table: products */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n\nSELECT\n/* select which columns will be available for table 'products' */\n    sku,\n    name as product_name,\n    type,\n    price::integer as product_price,\n    description,\n    _dlt_load_id,\n    _dlt_id,\nFROM {{ source('raw_data', 'products') }}\n\n/* we only load table items of the currently active load ids into the staging table */\nWHERE _dlt_load_id IN ( SELECT load_id FROM  {{ ref('dlt_active_load_ids') }} )"
+    },
+    {
+      "path": "dlt_portable_data_lake_demo/transformations/dbt_get_reports/models/staging/stg_orders.sql",
+      "sha": null,
+      "content_sha256": "4d960e76a147cc96d543333ed15da5862f7800165d20977d5c077e13380f4eb1",
+      "score": 100,
+      "content": "/* Table: orders */\n{{\n    config(\n        materialized='view'\n    )\n}}\n-- depends_on: {{ ref('dlt_active_load_ids') }}\n\nSELECT\n/* select which columns will be available for table 'orders' */\n    id as order_id,\n    customer_id,\n    store_id,\n    ordered_at,\n    subtotal::integer as subtotal,\n    tax_paid:: integer as tax_paid,\n    order_total,\n    _dlt_load_id,\n    _dlt_id,\nFROM {{ source('raw_data', 'orders') }}\n\n/* we only load table items of the currently active load ids into the staging table */\nWHERE _dlt_load_id IN ( SELECT load_id FROM  {{ ref('dlt_active_load_ids') }} )"
+    },
+    {
+      "path": "lakekeeper_playground/README.md",
+      "sha": null,
+      "content_sha256": "3f87ec3ec257ccd107d6855a92db6435a165cab2aa783150657c60d63eb4103b",
+      "score": 98,
+      "content": "# Demonstrating PyIceberg + LakeKeeper\n\n## Run Demo\n\n```sh\ndocker compose --project-name iceberg_demo up -d\ndocker run --network iceberg_demo_iceberg_net --rm -it $(docker build -q .)\n```\n\n## See UIs\n\n- To see the LakeKeeper UI, navigate to the url: [`http://localhost:8181`](http://localhost:8181)\n\n- To see the Minio (S3) UI, navigate to the url: [`http://localhost:9001`](http://localhost:9001)\n\n  - Username: `minioadmin`\n\n  - Password: [REDACTED]\n\n## Cleanup Demo\n\n```sh\ndocker compose down -v\ndocker image prune\ndocker volume prune\n```\n\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": "dlt_portable_data_lake_demo/.dlt/secrets.toml",
+      "sha": "d65436bf3d219c49806459d580b1c5efe9ea0cff",
+      "size": 1074,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:36:22.164703+00:00"
+}

@@ -1,0 +1,254 @@
+# Contributing
+
+Thanks for helping build the catalog. There are two main ways to contribute: **adding/updating model data**, and **improving the site itself**.
+
+The formal catalog convention is the [Model Parameters convention](docs/model-parameters-schema.md).
+
+## Found a problem, or want something added?
+
+Open an issue. The [issue forms](https://github.com/mnfst/modelparams.dev/issues/new/choose) cover the usual cases:
+
+- Add a model, when a provider we already track is missing one of its models.
+- Add a provider, for a maker that isn't in the catalog yet.
+- Add or fix parameters, when a model is listed but its parameters are incomplete or stale.
+- Report incorrect data, when a default, range, value, or rule is wrong.
+
+You don't need to know the schema to file one. A link to the official docs is the most useful thing you can include.
+
+## Adding or updating a model
+
+1. **Pick the filename.** API-key models are bare; subscription models get a `-subscription` suffix.
+   - `provider` is the maker's short name in kebab-case: `anthropic`, `openai`, `google`, `mistral`.
+   - `model` is the model name in kebab-case: `claude-opus-4-7`, `gpt-4o-mini`, `gemini-2-5-pro`.
+   - For `authType: api_key`: `models/<provider>/<model>.yaml` — e.g. `models/anthropic/claude-opus-4-7.yaml`.
+   - For `authType: subscription`: `models/<provider>/<model>-subscription.yaml` — e.g. `models/anthropic/claude-opus-4-7-subscription.yaml`.
+
+2. **Start the file with the schema header** so your editor gives you autocomplete:
+
+   ```yaml
+   # yaml-language-server: $schema=https://modelparams.dev/api/v1/schema.json
+   ```
+
+3. **Required top-level fields:** `provider`, `authType` (`api_key` or `subscription`),
+   `apiSurface`, `model`, `params`.
+
+   `apiSurface` names the API or SDK request family that accepts these paths.
+   Use one of the values in the [schema convention](docs/model-parameters-schema.md#catalog-entry).
+   Do not mix Chat Completions and Responses fields, or any other two surfaces,
+   in one entry.
+
+   Optional lifecycle fields are `status` (`active`, `deprecated`, or
+   `retired`), `replacement` (a provider-qualified model id), and `shutdownOn`
+   (ISO `YYYY-MM-DD`). Omit `status` when lifecycle status has not been tracked.
+
+4. **Parameter shape:** each item in `params` has:
+   - `path` (required): exact provider API request parameter path; supports dot notation for nested fields (`thinking.type`, `generationConfig.topK`).
+   - `type` (required): one of `boolean`, `enum`, `integer`, `number`, `string`.
+   - `label` (required): human-readable name (e.g. `"Max tokens"`).
+   - `description` (required): one sentence, ≤500 chars.
+   - `group` (required): one of `generation_length`, `sampling`, `reasoning`, `tooling`, `output_format`, `observability`, `provider_metadata`.
+   - `default` (optional): a JSON value matching the type.
+   - For `enum`: `values: [...]` (required).
+   - For `number` / `integer`: `range: { min, max, step }` (optional).
+   - `applicability` (optional): conditional rules.
+
+5. **Applicability rules** describe when a parameter is meaningful:
+   - `only`: object (or array of objects) of `path: value-or-array`. The parameter applies only when _all_ listed paths match.
+   - `except`: object (or array of objects) of `path: value-or-array`. The parameter does _not_ apply when any of the listed conditions match.
+   - You can also use `{ not: <value> }` to say "any value except this one".
+   - See the [schema doc](docs/model-parameters-schema.md#applicability) for the exact rule syntax and evaluation semantics.
+
+   These rules are **enforced at runtime**, not just rendered on the site. The
+   `modelparams` package rejects parameter combinations your rules forbid, so a rule
+   that's too strict makes someone's valid request fail validation. Check it against
+   the provider's docs. When a rule references a parameter the request didn't set,
+   evaluation falls back to that parameter's `default`, because that is what the
+   provider applies in its place.
+
+6. **Auth-type rules of thumb:**
+   - **`api_key`:** list parameters from the official API reference. Don't invent ones the API doesn't accept.
+   - **`subscription`:** list user-facing toggles and presets the consumer can actually set. Skip implementation details.
+
+7. **Validate locally** before opening the PR:
+
+   ```bash
+   npm install
+   npm run validate
+   npm test
+   npm run codegen --workspace=modelparams
+   npm run codegen:python
+   ```
+
+   The two codegen commands regenerate the npm and Python package catalogs
+   from the model YAML — commit those changes along with yours. CI fails the
+   PR if the committed generated files are out of sync.
+
+## Example
+
+```yaml
+# yaml-language-server: $schema=https://modelparams.dev/api/v1/schema.json
+provider: anthropic
+authType: api_key
+apiSurface: anthropic-messages
+model: claude-sonnet-4-6
+params:
+  - path: max_tokens
+    type: integer
+    label: Max tokens
+    description: Maximum number of output tokens the model may generate.
+    default: 4096
+    range:
+      min: 1
+    group: generation_length
+
+  - path: temperature
+    type: number
+    label: Temperature
+    description: Controls randomness. Lower values are more focused; higher values are more varied.
+    default: 1
+    range:
+      min: 0
+      max: 1
+      step: 0.1
+    group: sampling
+    applicability:
+      except:
+        thinking.type: [adaptive, enabled]
+
+  - path: thinking.type
+    type: enum
+    label: Thinking mode
+    description: Controls whether extended or adaptive thinking is enabled for this model.
+    default: disabled
+    values: [disabled, adaptive, enabled]
+    group: reasoning
+
+  - path: thinking.budget_tokens
+    type: integer
+    label: Thinking budget tokens
+    description: Maximum token budget for extended thinking before producing the final answer.
+    default: 4096
+    range:
+      min: 1024
+    group: reasoning
+    applicability:
+      only:
+        thinking.type: enabled
+```
+
+## Fewer parameters can be correct
+
+A model's parameter list is exactly what its API accepts today — not a superset of
+what older models in the family accepted. Providers drop knobs on newer models, and
+reasoning-focused releases in particular tend to remove sampling controls
+(`temperature`, `top_p`, `top_k`) and fixed thinking budgets. So a newer model with
+_fewer_ parameters than its predecessor is usually correct, not incomplete.
+
+Two examples already in the catalog:
+
+- **Anthropic Claude Opus 4.7 / 4.8** list four parameters where Opus 4.5 / 4.6 list
+  eight. `temperature`, `top_p`, `top_k`, and `thinking.budget_tokens` were removed:
+  extended thinking with a fixed budget is gone, so `thinking.type` no longer offers
+  `enabled` — only adaptive thinking remains.
+- **OpenAI GPT-5 and the `o`-series** expose only `max_completion_tokens` and
+  `reasoning_effort` — sampling parameters don't apply to those models.
+
+Before reporting a model's parameters as incomplete, check the provider's current
+API reference for that specific model. If the API no longer accepts a parameter, it
+does not belong in the catalog — even if a sibling model still lists it. Adding it
+back would describe a request the model rejects.
+
+## Removing parameters is blocked
+
+Once a parameter is published for a model, **it cannot be removed**. People using
+that model in [Manifest](https://manifest.build/) may already have the parameter
+configured; dropping it from the catalog takes away their ability to see or change
+that setting and breaks their setup.
+
+CI enforces this. The `Param guard` workflow (`npm run guard:params`) compares your
+PR against `main` and **fails if any parameter `path` that exists on a model is gone**
+— this includes renaming a `path` (the old name counts as removed). The comparison
+runs against the merge base, so parameters `main` gained after you branched are not
+counted against you. You can run the same check locally before opening a PR:
+
+```bash
+npm run guard:params            # compares against origin/main
+npm run guard:params -- --base <ref>   # compare against a specific ref
+```
+
+What is _not_ blocked: adding new parameters, editing a parameter's metadata
+(label, description, default, range, values, applicability), and removing a whole
+model file. Only the disappearance of a `path` from a model that still exists is
+treated as a breaking removal.
+
+If a removal is genuinely necessary (e.g. a parameter was added by mistake), a
+maintainer must add the **`allow-param-removal`** label to the PR. The label
+re-runs the check and skips the guard, leaving a visible warning on the run.
+
+## Site changes
+
+The website code lives under `src/`:
+
+- `src/schema/` — Zod types (single source of truth) and JSON Schema generator.
+- `src/data/` — YAML loader, catalog builder, display helpers, applicability formatter.
+- `src/views/` — EJS templates (layout, partials, index page).
+- `src/client/` — browser-side TypeScript (search, filter, dark mode), Tailwind entry, and the vendored Outfit fonts under `fonts/` that social cards are rendered with.
+- `src/build/` — SSG pipeline (renders pages, compiles assets, emits JSON API, generates a social card per page).
+- `src/server/` — Express dev server.
+- `src/tracking/` — API usage tracking; the root `middleware.ts` posts one Web Analytics custom event per JSON API request at the edge.
+
+Everything the catalog ships beyond the static site:
+
+- `api/` — Vercel Functions, currently `POST /api/v1/validate`. These serve paths the
+  static build doesn't emit; the rest of `/api/v1/*` stays static JSON from `dist/`.
+- `packages/modelparams/` — the npm package: generated types plus the runtime
+  validation helpers. `src/generated/` is committed and CI checks it against the YAML,
+  so run `npm run codegen --workspace=modelparams` after changing the catalog.
+- `packages/modelparams-mcp/` — the MCP server. Not published to npm; its
+  `createServer()` is what `api/mcp.ts` serves over HTTP at `/mcp`.
+- `skills/` — agent skills, installable with `npx skills add mnfst/modelparams.dev`.
+
+Conventions:
+
+- TypeScript, ES modules, strict mode.
+- No file over 300 lines, no function over 50 lines.
+- Format with Prettier, lint with ESLint. `npm run format` and `npm run lint` will set you straight.
+- Tests live under `tests/` and run with Vitest. Each package has its own suite;
+  `npm test --workspaces` runs them.
+- `npm run typecheck` covers the site and `api/` (via `tsconfig.api.json`).
+
+## Pull requests
+
+The PR description starts from a template with a short "type of change" checklist. Tick what fits so a reviewer can see at a glance what the PR does. It's a hint, not a gate.
+
+- One change per PR, small and focused.
+- Make sure CI is green before requesting review.
+- A bot labels your PR by the files it touches (`model`, `provider`, `site`, `meta`). Nothing for you to do.
+- For a new provider, link the official docs and add a logo at `src/client/logos/<slug>.svg`. Without one, the site shows a generic mark.
+
+## Releases
+
+Merging your PR does **not** publish a package. Releases are batched: every merge
+to `main` runs `Prepare release`, which recomputes what the next version would be
+given everything unreleased, and force-pushes a single open PR titled
+`chore: release modelparams@x.y.z`. A day of merged model PRs collects into that
+one PR instead of a version per merge.
+
+Merging the release PR is what publishes — it lands the version bump in
+`packages/modelparams/package.json` and `packages/modelparams-python/pyproject.toml`,
+and the two release workflows publish the version they find committed there.
+
+The bump level is derived from the catalog, not declared by hand:
+
+- a parameter removed from a model that still exists → **major**
+- any other catalog change → **patch**
+- nothing semantic changed → no release PR
+
+Each release PR carries a generated changelog of the models added, models removed,
+and parameters added, removed, or edited since the last release, which is also
+written to each package's `CHANGELOG.md` and used as the GitHub release body.
+
+Maintainers can run `Prepare release` manually from the Actions tab (with an
+optional forced bump level), and can re-run a release workflow via
+`workflow_dispatch` to republish the version `main` already declares — useful
+when a publish step fails partway.

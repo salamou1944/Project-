@@ -1,0 +1,83 @@
+{
+  "canonical_source": "github:mailru/sumbur-ruby",
+  "repo": "mailru/sumbur-ruby",
+  "revision_sha": "d5387557635b657ac104c0a92d371bbd2412506a",
+  "default_branch": "master",
+  "pushed_at": "2013-12-09T08:31:27Z",
+  "repo_updated_at": "2026-03-22T20:01:19Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "fdae0f7d3687cea4a98a68c7433d37991420bb943c20b2dfd714279ef4b6ea83",
+      "score": 100,
+      "content": "# Sumbur\n\nIt is an implementation of Sumbur consistent spreading algorithm authored by Maksim Kalinchenko uint32@mail.ru\n\nHere is an explanation of algorithm as far as I could understand it:\n\n    Initially we have 1 server (#0) and 72 items:\n    0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000\n    \n    Then we add second server (#1),\n    so that we move 72 / 1 - 72 / 2 = 36 items from first to second server :\n    1111 1111 1111 1111 1111 1111 1111 1111 1111 0000 0000 0000 0000 0000 0000 0000 0000 0000\n\n    Then we add third server (#2),\n    and we move 72 / 2 - 72 / 3 = 72 / (2 * 3) = 12 items from each server to third :\n    2222 2222 2222 1111 1111 1111 1111 1111 1111 2222 2222 2222 0000 0000 0000 0000 0000 0000\n\n    forth server (#3), 72 / (3 * 4) = 6 items from each server to forth:\n    3333 3322 2222 3333 3311 1111 1111 1111 1111 2222 2222 2222 3333 3300 0000 0000 0000 0000\n    \n    Algorithm operates on 2**32 items space, and you ought to map your values with good hashing function\n    into that space (with good avalance of high bits). But when such mapping is provided, Sumbur\n    guarantees that values are sufficiently uniformly spreaded across the servers, and when new servers\n    are added, values are moved only from old servers to new in a sufficiently equal amounts.\n\nIt seems like component of kind of consistent hashing, but:\na) it doesn't lock hash function (you should provide it),\nb) it doesn't provide tools to handle falling of random server.\n\nb) - is the reason, why I avoid to call it \"consistent hashing\". It is more like a way to handle\nspreading/sharding items across increasing number of shards/servers in an environment, where you\nhandle replication and failover by your self. It is mostly used in an environment, where database\nservers are organized in a kind of RAID0+1: items are spread over number of shards, each shard is\nprotected by replication. While \"consistent hashing\" mostly assumes, that items are replicated over\nnumber of shards.\n\nClosest analog I've seen so far is Guava Google Library's [consistentHash function](http://code.google.com/p/guava-libraries/source/browse/guava/src/com/google/common/hash/Hashing.java?name=release12#197).\nIt has some benefit cause it randomize input integer, so that doesn't require separate hash function.\nAlso it is a bit faster with huge number of shards. But in most cases Sumbur gives slightly better\nspreading.\n\n## Installation\n\nAdd this line to your application's Gemfile:\n\n    gem 'sumbur'\n\nAnd then execute:\n\n    $ bundle\n\nOr install it yourself as:\n\n    $ gem install sumbur\n\n## Usage\nStrict dependency: you ought to provide 32bit unsigned hash function with good spreading of high bits.\nFor example, you could use `Zlib.crc32` or [MurmurHash3](https://github.com/funny-falcon/murmurhash3-ruby).\n\n```ruby\n  require 'sumbur'\n\n  servers = [server0, server1, server2]\n  server_nom = Sumbur.sumbur(unsigned_32bit_hashof(value), servers.size) # => 0 <= int < servers.size\n  use servers[server_nom]\n\n  class Class\n    include Sumbur\n    def method\n      servers[ sumbur(unsigned_32bit_hashof(value), servers.size) ]\n    end\n  end\n```\n\nIn case of monotonically increasing integer keys (record id) following function could be used as hash given\nunbeatably good spreading with sumbur:\n\n```ruby\n  def unsigned_32bit_hashof(id)\n    h = ((id+1) * 0x531a5229) & 0xffffffff\n  end\n```\n\n## Contributing\n\n1. Fork it\n2. Create your feature branch (`git checkout -b my-new-feature`)\n3. Commit your changes (`git commit -am 'Added some feature'`)\n4. Push to the branch (`git push origin my-new-feature`)\n5. Create new Pull Request\n"
+    },
+    {
+      "path": "test/test_sumbur.rb",
+      "sha": null,
+      "content_sha256": "6f140bac2de98871a81d077922b1e4328b137face42ed3b130f99029815d2a93",
+      "score": 93,
+      "content": "require 'minitest/spec'\nrequire 'minitest/autorun'\n\n$spread_cache = {}\n\nHASHED = (1..1_000_000).map{|i|\n  h = i ^ (i >> 16)\n  h = (h * 0x85ebca6b) & 0xFFffFFff\n  h ^= h >> 13\n  h = (h * 0xc2b2ae35) & 0xFFffFFff\n  [h ^ (h >> 16), i]\n}\n\ndef spread(num, capa, sumbur)\n  start = Time.now\n  #v = $spread_cache[ [num, capa, sumbur] ] ||=\n  v = HASHED[0, num].\n      map{|hash, int| [sumbur.sumbur(hash, capa), int]}.\n      group_by{|serv, int| serv}\n  d = Time.now - start\n  puts format(\"%s %.4f\", [num, capa, sumbur].inspect, d)  if d > 0.01\n  v\nend\n\nshared_example = proc do\n  it \"should spread capacity\" do\n    for num, eps in [[100_000, 0.05], [1_000_000, 0.011]]\n      for capa in [2,3,7,8,17,18]\n        spread(num, capa, sumbur).each{|serv, ints|\n          ints.size.must_be_within_epsilon num/capa, eps\n        }\n      end\n    end\n  end\n\n  it \"should reshard values cleanly\" do\n    for num, eps in [[100_000, 0.2], [1_000_000, 0.05]]\n      for capa in [2,3,7,8,17,18]\n        cur = spread(num, capa, sumbur)\n        nxt = spread(num, capa+1, sumbur)\n        moved = 0\n        for i in 0...capa\n          (nxt[i] - cur[i]).must_be_empty\n          moved += mvd = (cur[i] - nxt[i]).size\n          mvd.must_be_within_epsilon (num/capa - num/(capa+1)), eps\n        end\n        moved.must_be_within_epsilon num/(capa+1), eps\n      end\n    end\n  end\nend\n\nrequire 'sumbur/pure_ruby'\ndescribe \"Pure Ruby\" do\n  def sumbur\n    Sumbur::PureRuby\n  end\n  class_exec &shared_example\nend\n\nbegin\n  if RUBY_ENGINE == 'jruby'\n    require 'sumbur/sumbur.jar'\n  else\n    require 'sumbur/native_sumbur'\n  end\n\n  describe \"Native\" do\n    def sumbur\n      if RUBY_ENGINE == 'jruby'\n        Sumbur::Java\n      else\n        Sumbur::NativeSumbur\n      end\n    end\n    class_exec &shared_example\n\n    it \"should produce same spread as pure ruby version\" do\n      for capa in [2,3,4,7,8,9,17,18,19,100]\n        spread(1_000_000, capa, sumbur).must_equal spread(1_000_000, capa, Sumbur::PureRuby)\n      end\n    end\n  end\nrescue LoadError\n  puts \"Native version is not tested\"\nend\n"
+    },
+    {
+      "path": "sumbur.gemspec",
+      "sha": null,
+      "content_sha256": "64e360e2e62d514829f3deca99ebc42a2a8bfc21d010606897a5665cbccd9003",
+      "score": 60,
+      "content": "# -*- encoding: utf-8 -*-\nrequire File.expand_path('../lib/sumbur/version', __FILE__)\n\nGem::Specification.new do |gem|\n  gem.authors       = [\"Sokolov Yura 'funny-falcon'\", \"Maksim Kalinchenko\"]\n  gem.email         = [\"funny.falcon@gmail.com\", \"uint32@mail.ru\"]\n  gem.description   = %q{Sumbur - consistent spreading for server balancing}\n  gem.summary       = %q{Sumbur - consistent spreading for server balancing}\n  gem.homepage      = \"https://github.com/mailru/sumbur-ruby\"\n  gem.license       = \"MIT\"\n\n  if RUBY_ENGINE == 'ruby'\n    gem.extensions    = [\"ext/sumbur/extconf.rb\"]\n    gem.require_paths = [\"lib\", \"ext\"]\n    gem.files         = Dir['ext/**/*'].grep(/\\.(rb|c)$/) +\n                      (Dir['lib/**/*'] + Dir['test/**/*']).grep(/\\.rb$/)\n  elsif RUBY_ENGINE == 'jruby'\n    gem.files         = (Dir['lib/**/*'] + Dir['test/**/*']).grep(/\\.(rb|jar)$/)\n    gem.platform = 'jruby'\n    gem.require_paths = [\"lib\"]\n  end\n  gem.test_files    = gem.files.grep(%r{^test/})\n  gem.name          = \"sumbur\"\n  gem.version       = Sumbur::VERSION\nend\n"
+    },
+    {
+      "path": "lib/sumbur.rb",
+      "sha": null,
+      "content_sha256": "045b84e15177b5b4063c04c3e9deda56e76931d1f780ea31253cca850a0e1c08",
+      "score": 33,
+      "content": "require \"sumbur/version\"\n\nmodule Sumbur\n  begin\n    require 'sumbur/native_sumbur'\n    include NativeSumbur\n    extend NativeSumbur\n  rescue LoadError\n    require 'sumbur/pure_ruby'\n    include PureRuby\n    extend PureRuby\n  end\nend\n"
+    },
+    {
+      "path": "lib/sumbur/version.rb",
+      "sha": null,
+      "content_sha256": "8222e62109c1474d4bdc3d90773f393b37f4f82d97c54d852e00fd6bb6d22062",
+      "score": 31,
+      "content": "module Sumbur\n  VERSION = \"0.1.2.2\"\nend\n"
+    },
+    {
+      "path": "ext/sumbur/extconf.rb",
+      "sha": null,
+      "content_sha256": "2d91415733be8af08959ce69cb9fa7a03584a4171fccf0e2c640616ef3ff148b",
+      "score": 31,
+      "content": "if RUBY_ENGINE == 'ruby'\n  require 'mkmf'\n  create_makefile(\"native_sumbur\")\nelse\n  File.open(File.dirname(__FILE__) + \"/Makefile\", 'w') do |f|\n    f.write(\"install:\\n\\t#nothing to build\")\n  end\nend\n"
+    },
+    {
+      "path": "lib/sumbur/pure_ruby.rb",
+      "sha": null,
+      "content_sha256": "3dd56c63e6643088e5c8dd60c5285bf5603c423593053cc53c942cbb256e9be2",
+      "score": 31,
+      "content": "module Sumbur\n  module PureRuby\n    extend self\n\n    def sumbur(hashed_integer, cluster_capacity)\n      raise ArgumentError, \"Sumbur is not applicable to empty cluster\"    if cluster_capacity == 0\n      raise ArgumentError, \"Sumbur accepts only positive 32bit integers\"  if hashed_integer < 0 || hashed_integer > 0xFFFFFFFF\n\n      l = 0xFFFFFFFF\n      part = l / cluster_capacity\n\n      return 0  if l - hashed_integer < part\n\n      h = hashed_integer\n      n = 1\n      i = 2\n      while i <= cluster_capacity\n        c = l / (i * (i-1))\n        if c <= h\n          h -= c\n        else\n          h += c * (i-n-1)\n          n = i\n          break if l / n - h < part\n        end\n        i += 1\n      end\n      n - 1\n    end\n  end\nend\n"
+    },
+    {
+      "path": "ext/java/sumbur/SumburService.java",
+      "sha": null,
+      "content_sha256": "316dfad1862b95754f7700c75d438dcb285cb0b6253ffa1b94887358e84ab2b5",
+      "score": 29,
+      "content": "package sumbur;\n\nimport org.jruby.Ruby;\nimport org.jruby.RubyFixnum;\nimport org.jruby.RubyModule;\nimport org.jruby.runtime.ThreadContext;\nimport org.jruby.runtime.builtin.IRubyObject;\nimport org.jruby.runtime.load.BasicLibraryService;\nimport org.jruby.anno.JRubyMethod;\n\npublic class SumburService implements BasicLibraryService {\n    public boolean basicLoad(Ruby ruby) {\n        RubyModule sumbur = ruby.defineModule(\"Sumbur\");\n        RubyModule javas = sumbur.defineModuleUnder(\"Java\");\n        javas.defineAnnotatedMethod(SumburService.class, \"sumbur\");\n        javas.extend_object(javas);\n        return true;\n    }\n\n    static final long L = 0xFFFFFFFFL;\n    static final long L2 = L / 2;\n    static final long L3 = L / 3;\n    static final long L4 = L / 4;\n    static final long L5 = L / 5;\n    static final long L6 = L / 6;\n    static final long L7 = L / 7;\n    static final long L8 = L / 8;\n    static final long L12 = L / 12;\n    static final long L20 = L / 20;\n    static final long L30 = L / 30;\n    static final long L42 = L / 42;\n    static final long L56 = L / 56;\n    static final long[] L9_62 = {L / 9, L / 10, L / 11, L / 12, L / 13, L / 14,\n                                 L / 15, L / 16, L / 17, L / 18, L / 19, L / 20,\n                                 L / 21, L / 22, L / 23, L / 24, L / 25, L / 26,\n                                 L / 27, L / 28, L / 29, L / 30, L / 31, L / 32,\n                                 L / 33, L / 34, L / 35, L / 36, L / 37, L / 38,\n                                 L / 39, L / 40, L / 41, L / 42, L / 43, L / 44,\n                                 L / 45, L / 46, L / 47, L / 48, L / 49, L / 50,\n                                 L / 51, L / 52, L / 53, L / 54, L / 55, L / 56,\n                                 L / 57, L / 58, L / 59, L / 60, L / 61, L / 62\n                                 };\n    static final long[] LL9_62 = {L/(8*9), L/(9*10), L/(10*11), L/(11*12), L/(12*13), L/(13*14),\n                                  L/(14*15), L/(15*16), L/(16*17), L/(17*18), L/(18*19), L/(19*20),\n                                  L/(20*21), L/(21*22), L/(22*23), L/(23*24), L/(24*25), L/(25*26),\n                                  L/(26*27), L/(27*28), L/(28*29), L/(29*30), L/(30*31), L/(31*32),\n                                  L/(32*33), L/(33*34), L/(34*35), L/(35*36), L/(36*37), L/(37*38),\n                                  L/(38*39), L/(39*40), L/(40*41), L/(41*42), L/(42*43), L/(43*44),\n                                  L/(44*45), L/(45*46), L/(46*47), L/(47*48), L/(48*49), L/(49*50),\n                                  L/(50*51), L/(51*52), L/(52*53), L/(53*54), L/(54*55), L/(55*56),\n                                  L/(56*57), L/(57*58), L/(58*59), L/(59*60), L/(60*61), L/(61*62)\n                                 };\n\n    @JRubyMethod\n    public static IRubyObject sumbur(ThreadContext context, IRubyObject self, IRubyObject hashed, IRubyObject capacity)\n    {\n        long h = RubyFixnum.fix2long(hashed) & L;\n        long capa = RubyFixnum.fix2long(capacity);\n\n        if (capa == 0) {\n            throw context.runtime.newArgumentError(\"Sumbur is not applicable to empty cluster\");\n        }\n\n        long part = L / capa;\n        if (L - h < part) return RubyFixnum.zero(context.runtime);\n\n        long c;\n        int n = 1, i;\n\n        do {\n            if (h >= L2) h -= L2;\n            else {\n                n = 2;\n                if (L2 - h < part) break;\n            }\n            if (capa == 2) break;\n\n            if (h >= L6) h -= L6;\n            else {\n                h += L6 * (2 - n);\n                n = 3;\n                if (L3 - h < part) break;\n            }\n            if (capa == 3) break;\n\n            if (h >= L12) h -= L12;\n            else {\n                h += L12 * (3 - n);\n                n = 4;\n                if (L4 - h < part) break;\n            }\n            if (capa == 4) break;\n\n            if (h >= L20) h -= L20;\n            else {\n                h += L20 * (4 - n);\n                n = 5;\n                if (L5 - h < part) break;\n            }\n            if (capa == 5) break;\n\n            if (h >= L30) h -= L30;\n            else {\n                h += L30 * (5 - n);\n                n = 6;\n                if (L6 - h < part) break;\n            }\n            if (capa == 6) break;\n\n            if (h >= L42) h -= L42;\n            else {\n                h += L42 * (6 - n);\n                n = 7;\n                if (L7 - h < part) break;\n            }\n            if (capa == 7) break;\n\n            if (h >= L56) h -= L56;\n            else {\n                h += L56 * (7 - n);\n                n = 8;\n                if (L8 - h < part) break;\n            }\n            if (capa == 8) break;\n\n            for (i = 9; i <= capa && i <= 62; i++) {\n                c = LL9_62[i-9];\n                if (c <= h) {\n                    h -= c;\n                }\n                else {\n                    h += c * (i - n - 1);\n                    n = i;\n                    if (L9_62[i-9] - h < part) break;\n                }\n            }\n\n            for (i = 63; i <= capa; i++) {\n                c = L / (i * (i - 1));\n                if (c <= h) {\n                    h -= c;\n                }\n                else {\n                    h += c * (i - n - 1);\n                    n = i;\n                    if (L / i - h < part) break;\n                }\n            }\n        } while (false);\n        return RubyFixnum.newFixnum(context.runtime, n - 1);\n    }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:36:21.034720+00:00"
+}

@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:SigNoz/signoz-railway-template",
+  "repo": "SigNoz/signoz-railway-template",
+  "revision_sha": "e808d33f4d10eaa4f67539de4b94ef9a86a95d72",
+  "default_branch": "main",
+  "pushed_at": "2026-07-02T09:14:31Z",
+  "repo_updated_at": "2026-10-13T13:51:20Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "deployment/signoz/Dockerfile",
+      "sha": null,
+      "content_sha256": "1f37f62a397e9dacfc01d0bc8639be04f278e998772105b14804324e30506215",
+      "score": 153,
+      "content": "FROM signoz/signoz:latest\nENV SIGNOZ_SQLSTORE_PROVIDER=sqlite\nENV SIGNOZ_SQLSTORE_SQLITE_PATH=/var/lib/signoz/signoz.db\nENV SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_DSN=tcp://signoz-telemetrystore-clickhouse.railway.internal:9000\nENV SIGNOZ_TELEMETRYSTORE_PROVIDER=clickhouse"
+    },
+    {
+      "path": "deployment/ingester/Dockerfile",
+      "sha": null,
+      "content_sha256": "6660b60cd837c7ff6c765909c57d9505ee67c55ec1f12e79dd05ce766d2da774",
+      "score": 153,
+      "content": "FROM signoz/signoz-otel-collector:latest\n\nCOPY ingester.yaml /etc/otel-collector-config.yaml\nCOPY opamp.yaml /etc/opamp-config.yaml\n\n\nENV SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN=tcp://signoz-telemetrystore-clickhouse.railway.internal:9000\n\nENV SIGNOZ_OTEL_COLLECTOR_TIMEOUT=10m"
+    },
+    {
+      "path": "deployment/telemetrystore/Dockerfile",
+      "sha": null,
+      "content_sha256": "5190f29bd86b7c11a3e348a8e704d66b82c2e3e237684eed9437b7dfe422bf78",
+      "score": 153,
+      "content": "FROM clickhouse/clickhouse-server:25.12.5\n\nCOPY config.d/ /etc/clickhouse-server/\n\nRUN mkdir -p /etc/clickhouse-server/user_scripts/ \\\n    && chown clickhouse:clickhouse /etc/clickhouse-server/user_scripts\n\nARG VERSION=v0.0.1\n\nENV CLICKHOUSE_CONFIG=/etc/clickhouse-server/config-0-0.yaml\nENV CLICKHOUSE_SKIP_USER_SETUP=1\n\n# Download and install histogram-quantile binary\nRUN cat > /tmp/install-histogram-quantile.sh <<'EOF'\n#!/bin/bash\nset -euo pipefail\n\nnode_os=$(uname -s | tr '[:upper:]' '[:lower:]')\nnode_arch=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/')\n\necho \"Fetching histogram-quantile for ${node_os}/${node_arch}\"\n\ncd /tmp\nwget -O histogram-quantile.tar.gz \\\n  \"https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F${VERSION}/histogram-quantile_${node_os}_${node_arch}.tar.gz\"\n\ntar -xzf histogram-quantile.tar.gz\nmv histogram-quantile /etc/clickhouse-server/user_scripts/histogramQuantile\nrm histogram-quantile.tar.gz\n\necho \"histogram-quantile installed successfully\"\nEOF\n\nRUN chmod +x /tmp/install-histogram-quantile.sh \\\n    && /tmp/install-histogram-quantile.sh \\\n    && rm /tmp/install-histogram-quantile.sh"
+    },
+    {
+      "path": "deployment/telemetrystore-migrator/Dockerfile",
+      "sha": null,
+      "content_sha256": "30f35b1b4b5dbf858ac4825599535f66b9457cbb0ca22556eb2cd55f97cd180f",
+      "score": 153,
+      "content": "FROM signoz/signoz-otel-collector:latest\n\n\nENV SIGNOZ_OTEL_COLLECTOR_CLICKHOUSE_DSN=tcp://signoz-telemetrystore-clickhouse.railway.internal:9000\n\nENV SIGNOZ_OTEL_COLLECTOR_TIMEOUT=10m"
+    },
+    {
+      "path": "deployment/telemetrykeeper/Dockerfile",
+      "sha": null,
+      "content_sha256": "3614f98fb2bf7ae549dccb7349a6d1cdcfe92f2cad2cf975b8ec673355dc98c2",
+      "score": 153,
+      "content": "FROM clickhouse/clickhouse-keeper:25.12.5\n\n# Copy all keeper config files\nCOPY keeper.d/ /etc/clickhouse-keeper/\n# Create entrypoint script to dynamically select config based on replica index\nRUN cat > /entrypoint.sh <<'EOF'\n#!/bin/bash\nset -euo pipefail\n\n# Extract replica index from service name, default to 0\nREPLICA_INDEX=$(echo \"${RAILWAY_SERVICE_NAME:-}\" | grep -oE \"[0-9]+$\" || echo \"0\")\nCONFIG_FILE=\"/etc/clickhouse-keeper/keeper-${REPLICA_INDEX}.yaml\"\n\n# Fallback to keeper-0.yaml if replica-specific config doesn't exist\nif [ ! -f \"$CONFIG_FILE\" ]; then\n  echo \"Config $CONFIG_FILE not found, falling back to keeper-0.yaml\"\n  CONFIG_FILE=\"/etc/clickhouse-keeper/keeper-0.yaml\"\nfi\n\necho \"Starting ClickHouse Keeper with config: $CONFIG_FILE\"\nexec /usr/bin/clickhouse-keeper --config-file=\"$CONFIG_FILE\" \"$@\"\nEOF\n\nRUN chmod +x /entrypoint.sh\n\nENTRYPOINT [\"/entrypoint.sh\"]"
+    },
+    {
+      "path": "deployment/telemetrystore/railway.json",
+      "sha": null,
+      "content_sha256": "b6fb5bde87dea83126a654435e878043a67df91632b025e6d62b0a9e51319d56",
+      "score": 103,
+      "content": "{\n  \"build\": {\n    \"builder\": \"DOCKERFILE\",\n    \"dockerfilePath\": \"Dockerfile\"\n  },\n  \"deploy\": {\n    \"numReplicas\": 1,\n    \"healthcheckPath\": \"/ping\",\n    \"healthcheckTimeout\": 300,\n    \"restartPolicyType\": \"ON_FAILURE\",\n    \"restartPolicyMaxRetries\": 5,\n    \"requiredMountPath\": \"/var/lib/clickhouse/\"\n  }\n}\n"
+    },
+    {
+      "path": "deployment/telemetrystore-migrator/railway.json",
+      "sha": null,
+      "content_sha256": "77c993e596d1a3a4bc04b2a860cf961b3aae7a99f284a75968927fc67c7c732a",
+      "score": 103,
+      "content": "{\n  \"build\": {\n    \"builder\": \"DOCKERFILE\",\n    \"dockerfilePath\": \"Dockerfile\"\n  },\n  \"deploy\": {\n    \"numReplicas\": 1,\n    \"startCommand\": \"/bin/sh -c '/signoz-otel-collector migrate ready && /signoz-otel-collector migrate bootstrap && /signoz-otel-collector migrate sync up && /signoz-otel-collector migrate async up'\",\n    \"restartPolicyType\": \"NEVER\"\n  }\n}\n"
+    },
+    {
+      "path": "deployment/signoz/railway.json",
+      "sha": null,
+      "content_sha256": "e421e8f59cbda7c75ee7391d7b59eacbe3300e27f695a58ee0e964f614346a12",
+      "score": 103,
+      "content": "{\n  \"build\": {\n    \"builder\": \"DOCKERFILE\",\n    \"dockerfilePath\": \"Dockerfile\"\n  },\n  \"deploy\": {\n    \"numReplicas\": 1,\n    \"healthcheckPath\": \"/api/v1/health\",\n    \"healthcheckTimeout\": 300,\n    \"restartPolicyType\": \"ON_FAILURE\",\n    \"restartPolicyMaxRetries\": 5,\n    \"requiredMountPath\": \"/var/lib/signoz/\"\n  }\n}\n"
+    },
+    {
+      "path": "deployment/ingester/railway.json",
+      "sha": null,
+      "content_sha256": "4264ddc40c7da54ccbde6e0fc2b5bdb7e8fc977d08ae509bfc57eee047f6b8e6",
+      "score": 103,
+      "content": "{\n  \"build\": {\n    \"builder\": \"DOCKERFILE\",\n    \"dockerfilePath\": \"Dockerfile\"\n  },\n  \"deploy\": {\n    \"numReplicas\": 1,\n    \"startCommand\": \"/bin/sh -c '/signoz-otel-collector migrate sync check &&  /signoz-otel-collector --config=/etc/otel-collector-config.yaml --manager-config=/etc/opamp-config.yaml --copy-path=/var/tmp/collector-config.yaml'\",\n    \"restartPolicyType\": \"ON_FAILURE\",\n    \"restartPolicyMaxRetries\": 5\n  }\n}\n"
+    },
+    {
+      "path": "deployment/ingester/ingester.yaml",
+      "sha": null,
+      "content_sha256": "3db68f544fcfeb721086d14c1f62e9f968611296a4502ce576413345f34bc320",
+      "score": 103,
+      "content": "connectors:\n  signozmeter:\n    dimensions:\n    - name: service.name\n    - name: deployment.environment\n    - name: host.name\n    metrics_flush_interval: 1h\nexporters:\n  clickhouselogsexporter:\n    dsn: tcp://signoz-telemetrystore-clickhouse.railway.internal:9000/signoz_logs\n    sending_queue:\n      enabled: false\n    timeout: 45s\n    use_new_schema: true\n  clickhousetraces:\n    datasource: tcp://signoz-telemetrystore-clickhouse.railway.internal:9000/signoz_traces\n    low_cardinal_exception_grouping: ${env:LOW_CARDINAL_EXCEPTION_GROUPING}\n    sending_queue:\n      enabled: false\n    timeout: 45s\n    use_new_schema: true\n  metadataexporter:\n    cache:\n      provider: in_memory\n    dsn: tcp://signoz-telemetrystore-clickhouse.railway.internal:9000/signoz_metadata\n    enabled: true\n    timeout: 45s\n  signozclickhousemeter:\n    dsn: tcp://signoz-telemetrystore-clickhouse.railway.internal:9000/signoz_meter\n    sending_queue:\n      enabled: false\n    timeout: 45s\n  signozclickhousemetrics:\n    dsn: tcp://signoz-telemetrystore-clickhouse.railway.internal:9000/signoz_metrics\n    sending_queue:\n      enabled: false\n    timeout: 45s\nextensions:\n  pprof:\n    endpoint: 0.0.0.0:1777\n  signoz_health_check:\n    endpoint: 0.0.0.0:13133\nprocessors:\n  batch:\n    send_batch_max_size: 55000\n    send_batch_size: 50000\n    timeout: 5s\n  batch/meter:\n    send_batch_max_size: 25000\n    send_batch_size: 20000\n    timeout: 5s\n  signozspanmetrics/delta:\n    aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA\n    dimensions:\n    - default: default\n      name: service.namespace\n    - default: default\n      name: deployment.environment\n    - name: signoz.collector.id\n    - name: service.version\n    dimensions_cache_size: 100000\n    enable_exp_histogram: true\n    latency_histogram_buckets:\n    - 100us\n    - 1ms\n    - 2ms\n    - 6ms\n    - 10ms\n    - 50ms\n    - 100ms\n    - 250ms\n    - 500ms\n    - 1000ms\n    - 1400ms\n    - 2000ms\n    - 5s\n    - 10s\n    - 20s\n    - 40s\n    - 60s\n    metrics_exporter: signozclickhousemetrics\n    metrics_flush_interval: 60s\nreceivers:\n  otlp:\n    protocols:\n      grpc:\n        endpoint: 0.0.0.0:4317\n      http:\n        endpoint: 0.0.0.0:4318\nservice:\n  extensions:\n  - signoz_health_check\n  - pprof\n  pipelines:\n    logs:\n      exporters:\n      - clickhouselogsexporter\n      - signozmeter\n      - metadataexporter\n      processors:\n      - batch\n      receivers:\n      - otlp\n    metrics:\n      exporters:\n      - signozclickhousemetrics\n      - signozmeter\n      - metadataexporter\n      processors:\n      - batch\n      receivers:\n      - otlp\n    metrics/meter:\n      exporters:\n      - signozclickhousemeter\n      processors:\n      - batch/meter\n      receivers:\n      - signozmeter\n    traces:\n      exporters:\n      - clickhousetraces\n      - signozmeter\n      - metadataexporter\n      processors:\n      - signozspanmetrics/delta\n      - batch\n      receivers:\n      - otlp\n  telemetry:\n    logs:\n      encoding: json\n"
+    },
+    {
+      "path": "deployment/ingester/opamp.yaml",
+      "sha": null,
+      "content_sha256": "fc9fb18dec564f7da6653c7f201c77cedc0e5ea0db03f78b72f173d708753098",
+      "score": 103,
+      "content": "server_endpoint: ws://signoz-signoz.railway.internal:4320/v1/opamp\n"
+    },
+    {
+      "path": "deployment/telemetrykeeper/railway.json",
+      "sha": null,
+      "content_sha256": "1f580e8ce7d7e097728becbb269695617d7e80fd26b83426530bbe6f5914dc80",
+      "score": 103,
+      "content": "{\n  \"build\": {\n    \"builder\": \"DOCKERFILE\",\n    \"dockerfilePath\": \"Dockerfile\"\n  },\n  \"deploy\": {\n    \"numReplicas\": 1,\n    \"healthcheckPath\": \"/ready\",\n    \"healthcheckTimeout\": 300,\n    \"restartPolicyType\": \"ON_FAILURE\",\n    \"restartPolicyMaxRetries\": 5,\n    \"requiredMountPath\": \"/var/lib/clickhouse-keeper/\"\n  }\n}\n"
+    },
+    {
+      "path": "deployment/telemetrystore/config.d/functions.yaml",
+      "sha": null,
+      "content_sha256": "d524615eb67b5ff8f2612da89e62335048758ba0523a61e3002ae6b4dcd00c50",
+      "score": 101,
+      "content": "functions:\n  argument:\n  - name: buckets\n    type: Array(Float64)\n  - name: counts\n    type: Array(Float64)\n  - name: quantile\n    type: Array(Float64)\n  command: ./histogramQuantile\n  format: CSV\n  name: histogramQuantile\n  return_type: Float64\n  type: executable\n"
+    },
+    {
+      "path": "deployment/telemetrykeeper/keeper.d/keeper-0.yaml",
+      "sha": null,
+      "content_sha256": "3eebdc30e86d100d339795d2908ebdc1df6d11de99788d57b61899769cadebdb",
+      "score": 101,
+      "content": "keeper_server:\n  coordination_settings:\n    force_sync: false\n    operation_timeout_ms: 10000\n    raft_logs_level: warning\n    session_timeout_ms: 30000\n    snapshot_distance: 100000\n    snapshots_to_keep: 3\n  four_letter_word_white_list: '*'\n  http_control:\n    endpoint: /ready\n    port: 9182\n  log_storage_path: /var/lib/clickhouse/coordination/log\n  raft_configuration:\n    server:\n    - hostname: localhost\n      id: 0\n      port: 9234\n  server_id: 0\n  snapshot_storage_path: /var/lib/clickhouse/coordination/snapshots\n  tcp_port: 9181\nlisten_host: '::'\nlogger:\n  console: true\n  level: information\n"
+    },
+    {
+      "path": "deployment/telemetrystore/config.d/config-0-0.yaml",
+      "sha": null,
+      "content_sha256": "eb8cac64f646fe9f88cceef321a7d00c529c3302cb28c0940e33fffd19ce9a4f",
+      "score": 101,
+      "content": "asynchronous_metric_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\ndictionaries_config: '*_dictionary.xml'\ndisplay_name: cluster\ndistributed_ddl:\n  path: /clickhouse/task_queue/ddl\nerror_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\nformat_schema_path: /var/lib/clickhouse/format_schemas/\nhttp_port: 8123\ninterserver_http_port: 9009\nlatency_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\nlisten_host: '::'\nlogger:\n  console: 1\n  count: 10\n  formatting:\n    type: console\n  level: information\n  size: 1000M\nmacros:\n  replica: \"00\"\n  shard: \"00\"\nmetric_log:\n  flush_interval_milliseconds: 30000\n  ttl: event_date + INTERVAL 1 DAY DELETE\npart_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\npath: /var/lib/clickhouse/\nprocessors_profile_log:\n  flush_interval_milliseconds: 30000\n  ttl: event_date + INTERVAL 1 DAY DELETE\nprofiles:\n  default:\n    allow_simdjson: 0\n    load_balancing: random\n    log_queries: 1\nquery_log:\n  flush_interval_milliseconds: 30000\n  partition_by: toYYYYMM(event_date)\n  ttl: event_date + INTERVAL 1 DAY DELETE\nquery_metric_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\nquery_thread_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\nquery_views_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\nquotas:\n  default:\n    interval:\n      duration: 3600\n      errors: 0\n      execution_time: 0\n      queries: 0\n      read_rows: 0\n      result_rows: 0\nremote_servers:\n  cluster:\n    shard:\n    - replica:\n        host: localhost\n        port: 9000\nsession_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\ntcp_port: 9000\ntext_log:\n  flush_interval_milliseconds: 30000\n  ttl: event_date + INTERVAL 1 DAY DELETE\ntmp_path: /var/lib/clickhouse/tmp/\ntrace_log:\n  flush_interval_milliseconds: 30000\n  ttl: event_date + INTERVAL 1 DAY DELETE\nuser_defined_executable_functions_config: '*function.yaml'\nuser_directories:\n  users_xml:\n    path: users.xml\nuser_files_path: /var/lib/clickhouse/user_files/\nuser_scripts_path: /etc/clickhouse-server/user_scripts/\nusers:\n  default:\n    access_management: 1\n    named_collection_control: 1\n    networks:\n      ip: ::/0\n    password: \"\"\n    profile: default\n    quota: default\n    show_named_collection: 1\n    show_named_collection_secrets: 1\nzookeeper:\n  node:\n  - host: signoz-telemetrykeeper-clickhousekeeper.railway.internal\n    port: 9181\nzookeeper_log:\n  ttl: event_date + INTERVAL 1 DAY DELETE\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b6ebdfb517d3a59d91d917f41310e8ac50b004e7e5ff92740fdff00a4e1eef68",
+      "score": 100,
+      "content": "# Deploy and Host SigNoz on Railway\n\n[SigNoz](https://signoz.io) is an open-source observability platform that lets you collect, store, and analyze your application's **traces, metrics, and logs** using the OpenTelemetry standard.\n\n> [!IMPORTANT]\n> The template layout has changed. New deployments use the new layout automatically. If you deployed this template earlier, do **not** use Railway's \"Update\" button to move to it, as it will not apply cleanly and can break your install. Follow [MIGRATION.md](./docs/MIGRATION.md) to migrate on your own schedule. The previous layout stays available for now, so existing installs keep running until you choose to migrate.\n\n## About Hosting SigNoz\n\nDeploying this template provisions the SigNoz stack:\n\n- **SigNoz** (UI and query service)\n- **SigNoz OpenTelemetry Collector** (ingester)\n- **ClickHouse** (telemetry store)\n- **ClickHouse Keeper** (coordination)\n- **Schema migrator** (one-time job that prepares the ClickHouse schema)\n\nThe template wires these services together with the environment variables, health checks, and persistent storage they need. Point your application's OpenTelemetry SDK or agent at the collector's ingest endpoint, and SigNoz begins visualizing your service dependencies, latency, and errors.\n\n## Common Use Cases\n\n- **Application Performance Monitoring**: monitor metrics, logs, and traces across your Railway stack.\n- **Debugging and Troubleshooting**: correlate logs, metrics, and traces to find and fix issues quickly.\n- **Infrastructure Observability**: track system health, resource usage, and service dependencies.\n- **Alerting and Incident Response**: set alerts on metric and log patterns for proactive response.\n\n## Accessing SigNoz\n\n- The SigNoz UI is served on port **8080** and exposed on the SigNoz service's public domain.\n- Send telemetry to the collector over OTLP (gRPC on **4317**, HTTP on **4318**). Expose the port you need under the collector service's networking settings.\n\n## Upgrading\n\nFor moving an existing install to the current layout, see [MIGRATION.md](MIGRATION.md).\n\n## Why Deploy on Railway\n\nRailway hosts your full infrastructure stack so you can deploy and scale SigNoz without managing the underlying servers. Host your services, databases, and observability stack together on one platform.\n\n## Resources\n\n- [SigNoz Documentation](https://signoz.io/docs/)\n- [OpenTelemetry Specification](https://opentelemetry.io/docs/)\n- [ClickHouse Documentation](https://clickhouse.com/docs/)\n"
+    },
+    {
+      "path": "signoz/signoz/prometheus.yml",
+      "sha": null,
+      "content_sha256": "88751f2955ffb6da9d5b3f73a8dec40e86f36baf80f917c6afa1108ac23af46e",
+      "score": 91,
+      "content": "# my global config\nglobal:\n  scrape_interval:     5s # Set the scrape interval to every 15 seconds. Default is every 1 minute.\n  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.\n  # scrape_timeout is set to the global default (10s).\n\n# Alertmanager configuration\nalerting:\n  alertmanagers:\n  - static_configs:\n    - targets:\n      - alertmanager:9093\n\n# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.\nrule_files: []\n  # - \"first_rules.yml\"\n  # - \"second_rules.yml\"\n  # - 'alerts.yml'\n\n# A scrape configuration containing exactly one endpoint to scrape:\n# Here it's Prometheus itself.\nscrape_configs: []\n\nremote_read:\n  - url: tcp://clickhouse:9000/signoz_metrics\n"
+    },
+    {
+      "path": "clickhouse/Dockerfile.clickhouse",
+      "sha": null,
+      "content_sha256": "fa3dff87fe793283d716d4e9e244ab65d1b6d45c5f882d1e59afc1776272cffb",
+      "score": 83,
+      "content": "FROM clickhouse/clickhouse-server:25.5.6\n\nCOPY configs/config.xml /etc/clickhouse-server/config.xml\nCOPY configs/users.xml /etc/clickhouse-server/users.xml\nCOPY configs/custom-function.xml /etc/clickhouse-server/custom-function.xml\nCOPY configs/user_scripts /var/lib/clickhouse/user_scripts/\nCOPY configs/cluster.xml /etc/clickhouse-server/config.d/cluster.xml\n\nRUN mkdir -p /var/lib/clickhouse/user_scripts/ \\\n    && chown clickhouse:clickhouse /var/lib/clickhouse/user_scripts\n\nARG VERSION=v0.0.1\nRUN set -eux; \\\n    node_os=$(uname -s | tr '[:upper:]' '[:lower:]'); \\\n    node_arch=$(uname -m | sed 's/aarch64/arm64/' | sed 's/x86_64/amd64/'); \\\n    echo \"Fetching histogram-quantile for ${node_os}/${node_arch}\"; \\\n    cd /tmp; \\\n    wget -O histogram-quantile.tar.gz \\\n      \"https://github.com/SigNoz/signoz/releases/download/histogram-quantile%2F${VERSION}/histogram-quantile_${node_os}_${node_arch}.tar.gz\"; \\\n    tar -xvzf histogram-quantile.tar.gz; \\\n    mv histogram-quantile /var/lib/clickhouse/user_scripts/histogramQuantile; \\\n    rm histogram-quantile.tar.gz\n"
+    },
+    {
+      "path": "signoz/Dockerfile.signoz",
+      "sha": null,
+      "content_sha256": "00cb0d854f5c0b679a16fc28b20ea3c2fa598de88f411a20af4c966f9ffb55fc",
+      "score": 83,
+      "content": "FROM signoz/signoz:latest\n\nCOPY signoz/prometheus.yml /root/config/prometheus.yml\nCOPY dashboards /root/config/dashboards\n"
+    },
+    {
+      "path": "signoz/Dockerfile.otel",
+      "sha": null,
+      "content_sha256": "857a5cc8185a4b66b6f6522b9e9a5ad521ae87219da019a4620a18d628b812bd",
+      "score": 83,
+      "content": "FROM signoz/signoz-otel-collector:latest\n\nCOPY ./otel-collector-config.yaml /etc/otel-collector-config.yaml\nCOPY signoz/otel-collector-opamp-config.yaml /etc/manager-config.yaml\n"
+    },
+    {
+      "path": "docs/MIGRATION.md",
+      "sha": null,
+      "content_sha256": "ac3b5ce093a084636e4eb27efdf75cfa93116b545fa0b2caab44c07a17301c58",
+      "score": 68,
+      "content": "# Migrate your Railway install to the new SigNoz template\n\nTags: Self-Host, Railway\n\n## What changed\n\nThe SigNoz Railway template moved to a new layout. Services are renamed, each service's config moves into its own folder under `deployment/`, ClickHouse coordination moves from ZooKeeper to ClickHouse Keeper, and a single `signoz-telemetrystore-migrator` replaces the old schema-migrator jobs.\n\nRailway's template \"Update\" only refreshes files inside services that already exist. It cannot rename services, add new ones, or change a service's folder, so this move is done by hand.\n\n| Old service | New service | Root directory | Volume (mount path) |\n| --- | --- | --- | --- |\n| `clickhouse` | `signoz-telemetrystore-clickhouse` | `/deployment/telemetrystore` | keep, `/var/lib/clickhouse/` |\n| `zookeeper` | `signoz-telemetrykeeper-clickhousekeeper` | `/deployment/telemetrykeeper` | new, `/var/lib/clickhouse-keeper/` |\n| `signoz` | `signoz-signoz` | `/deployment/signoz` | keep, `/var/lib/signoz/` |\n| `signoz-otel-collector` | `signoz-ingester` | `/deployment/ingester` | none |\n| `schema-migrator-sync` / `-async` | `signoz-telemetrystore-migrator` | `/deployment/telemetrystore-migrator` | none |\n\nEach service builds from a `Dockerfile` and reads its `railway.json` config from its root directory. Keep the new service names exactly as above; the configs resolve each other over `*.railway.internal` by service name.\n\n## Before you begin\n\nDo not use Railway's \"Update available\" button to move to this layout. The update only refreshes files inside your existing services, so it cannot make this change and will break the install. Migrate on your own schedule by following the steps below. The old layout stays in the template until it is deprecated, so there is no rush.\n\nBack up your volumes: open the ClickHouse and SigNoz services in Railway and take a volume backup. Deleted volumes are recoverable for 48 hours.\n\n## Steps\n\n### Step 1: Repoint ClickHouse\n\n1. Rename the `clickhouse` service to `signoz-telemetrystore-clickhouse`.\n2. In **Settings > Source**, set **Root Directory** to `/deployment/telemetrystore`.\n3. Keep its volume attached at `/var/lib/clickhouse/`. Its data stays on disk.\n\n### Step 2: Add ClickHouse Keeper\n\n1. Add a new service from the template repo with **Root Directory** `/deployment/telemetrykeeper`, named `signoz-telemetrykeeper-clickhousekeeper`.\n2. Give it a fresh volume mounted at `/var/lib/clickhouse-keeper/`.\n3. You can remove the old `zookeeper` service once ClickHouse is healthy on Keeper (Step 6).\n\n### Step 3: Repoint SigNoz\n\n1. Rename the `signoz` service to `signoz-signoz`.\n2. Set **Root Directory** to `/deployment/signoz`.\n3. Keep its volume mounted at `/var/lib/signoz/`. Your dashboards, alerts, and users live there.\n4. Keep the public domain on this service for the UI.\n\n### Step 4: Repoint the collector\n\n1. Rename the `signoz-otel-collector` service to `signoz-ingester`.\n2. Set **Root Directory** to `/deployment/ingester`.\n3. Under **Settings > Networking**, expose the OTLP port (`4318`, and `4317` if you use gRPC) with a TCP proxy so your applications can reach it.\n\n### Step 5: Add the migrator\n\n1. Add a new service from the template repo with **Root Directory** `/deployment/telemetrystore-migrator`, named `signoz-telemetrystore-migrator` (mind the spelling: `telemetrystore`).\n2. It is a run-once job (restart policy `NEVER`) that runs `migrate ready`, `bootstrap`, `sync up`, and `async up`.\n\n### Step 6: Bring ClickHouse data back online\n\nThe new Keeper starts empty, so your existing replicated tables come up read-only until their coordination metadata is rebuilt from the data on disk.\n\n1. Start `signoz-telemetrystore-clickhouse` and `signoz-telemetrykeeper-clickhousekeeper`.\n2. Connect to ClickHouse and check:\n\n   ```sql\n   SELECT database, table FROM system.replicas WHERE is_readonly;\n   ```\n\n3. For each read-only table across the SigNoz databases (`signoz_traces`, `signoz_logs`, `signoz_metrics`, `signoz_metadata`, `signoz_meter`):\n\n   ```sql\n   SYSTEM RESTORE REPLICA <database>.<table>;\n   SYSTEM SYNC REPLICA <database>.<table>;\n   ```\n\nDo this before running the migrator, so the migrator applies new migrations on top of healthy, writable tables.\n\n### Step 7: Apply in order\n\nDeploy in this order: ClickHouse and Keeper first, then run the migrator, then SigNoz and the ingester.\n\n### Step 8: Validate\n\n1. The `signoz-telemetrystore-migrator` deployment finishes and exits successfully.\n2. `SELECT database, table FROM system.replicas WHERE is_readonly;` returns no rows.\n3. Open SigNoz on its public domain: your dashboards and alerts are present and you can log in.\n4. Point your applications at the `signoz-ingester` OTLP endpoint (its TCP proxy domain and port) and confirm new data arrives.\n\n## Troubleshooting\n\n### ClickHouse tables are read-only after the move\n\n**Symptoms:** SigNoz shows no data, and `system.replicas` lists tables with `is_readonly = 1`.\n\n**Likely causes:** the move to a fresh Keeper means the replicated tables cannot find their coordination metadata.\n\n**Resolution:** run `SYSTEM RESTORE REPLICA` then `SYSTEM SYNC REPLICA` for each affected table (Step 6).\n\n### The ingester keeps restarting\n\n**Symptoms:** `signoz-ingester` crashes on start and retries.\n\n**Likely causes:** the ingester runs `migrate sync check` at startup. If `signoz-telemetrystore-migrator` has not finished its sync migrations, the check fails and the ingester exits.\n\n**Resolution:** wait for the migrator to finish, then redeploy the ingester.\n\n### SigNoz starts with no dashboards or users\n\n**Symptoms:** SigNoz loads, but your dashboards, alerts, and users are gone.\n\n**Likely causes:** the SigNoz volume is not mounted at `/var/lib/signoz/`, so the metastore is not found.\n\n**Resolution:** set the SigNoz service volume mount path to `/var/lib/signoz/` and redeploy.\n\n### The migrator exits with an error\n\n**Symptoms:** `signoz-telemetrystore-migrator` exits with a non-zero code.\n\n**Likely causes:** it cannot reach ClickHouse, or ClickHouse cannot reach Keeper.\n\n**Resolution:** confirm `signoz-telemetrystore-clickhouse` is healthy and `signoz-telemetrykeeper-clickhousekeeper` is running, then re-run the migrator.\n"
+    },
+    {
+      "path": "clickhouse/configs/storage.xml",
+      "sha": null,
+      "content_sha256": "589dc9c8acce4bdc1795fbbca0f430689f177753dfeb1fa670dd326c3c12f4ba",
+      "score": 56,
+      "content": "<?xml version=\"1.0\"?>\n<clickhouse>\n<storage_configuration>\n    <disks>\n        <default>\n            <keep_free_space_bytes>10485760</keep_free_space_bytes>\n        </default>\n        <s3>\n            <type>s3</type>\n            <!-- For S3 cold storage,\n                    if region is us-east-1, endpoint can be https://<bucket-name>.s3.amazonaws.com\n                    if region is not us-east-1, endpoint should be https://<bucket-name>.s3-<region>.amazonaws.com\n                For GCS cold storage,\n                    endpoint should be https://storage.googleapis.com/<bucket-name>/data/\n                -->\n            <endpoint>https://BUCKET-NAME.s3-REGION-NAME.amazonaws.com/data/</endpoint>\n            <access_key_id>ACCESS-KEY-ID</access_key_id>\n            <secret_access_key>SECRET-ACCESS-KEY</secret_access_key>\n            <!-- In case of S3, uncomment the below configuration in case you want to read\n                AWS credentials from the Environment variables if they exist. -->\n            <!-- <use_environment_credentials>true</use_environment_credentials> -->\n            <!-- In case of GCS, uncomment the below configuration, since GCS does\n                not support batch deletion and result in error messages in logs. -->\n            <!-- <support_batch_delete>false</support_batch_delete> -->\n        </s3>\n   </disks>\n   <policies>\n       <tiered>\n           <volumes>\n                <default>\n                    <disk>default</disk>\n                </default>\n                <s3>\n                    <disk>s3</disk>\n                    <perform_ttl_move_on_insert>0</perform_ttl_move_on_insert>\n                </s3>\n            </volumes>\n        </tiered>\n    </policies>\n</storage_configuration>\n</clickhouse>\n"
+    },
+    {
+      "path": "casting.yaml",
+      "sha": null,
+      "content_sha256": "c9742c9297b32977db0cc0284c13163a670457ba81cde2edc5a961682316c2b0",
+      "score": 35,
+      "content": "apiVersion: v1alpha1\nkind: Installation\nmetadata:\n  name: signoz\nspec:\n  deployment:\n    platform: railway\n    flavor: template\n  metastore:\n    kind: sqlite"
+    },
+    {
+      "path": "signoz/otel-collector-config.yaml",
+      "sha": null,
+      "content_sha256": "eae0bb7287b51bc411130e520fb35927c8e8e267131aaf59a527254d984df3d0",
+      "score": 33,
+      "content": "receivers:\n  otlp:\n    protocols:\n      grpc:\n        endpoint: 0.0.0.0:4317\n      http:\n        endpoint: 0.0.0.0:4318\n  prometheus:\n    config:\n      global:\n        scrape_interval: 60s\n      scrape_configs:\n        - job_name: otel-collector\n          static_configs:\n          - targets:\n              - localhost:8888\n            labels:\n              job_name: otel-collector\nprocessors:\n  batch:\n    send_batch_size: 10000\n    send_batch_max_size: 11000\n    timeout: 10s\n  resourcedetection:\n    # Using OTEL_RESOURCE_ATTRIBUTES envvar, env detector adds custom labels.\n    detectors: [env, system]\n    timeout: 2s\n  signozspanmetrics/delta:\n    metrics_exporter: signozclickhousemetrics\n    metrics_flush_interval: 60s\n    latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 50ms, 100ms, 250ms, 500ms, 1000ms, 1400ms, 2000ms, 5s, 10s, 20s, 40s, 60s ]\n    dimensions_cache_size: 100000\n    aggregation_temporality: AGGREGATION_TEMPORALITY_DELTA\n    enable_exp_histogram: true\n    dimensions:\n      - name: service.namespace\n        default: default\n      - name: deployment.environment\n        default: default\n      # This is added to ensure the uniqueness of the timeseries\n      # Otherwise, identical timeseries produced by multiple replicas of\n      # collectors result in incorrect APM metrics\n      - name: signoz.collector.id\n      - name: service.version\n      - name: browser.platform\n      - name: browser.mobile\n      - name: k8s.cluster.name\n      - name: k8s.node.name\n      - name: k8s.namespace.name\n      - name: host.name\n      - name: host.type\n      - name: container.name\nextensions:\n  health_check:\n    endpoint: 0.0.0.0:13133\n  pprof:\n    endpoint: 0.0.0.0:1777\nexporters:\n  clickhousetraces:\n    datasource: tcp://clickhouse:9000/signoz_traces\n    low_cardinal_exception_grouping: ${env:LOW_CARDINAL_EXCEPTION_GROUPING}\n    use_new_schema: true\n  signozclickhousemetrics:\n    dsn: tcp://clickhouse:9000/signoz_metrics\n  clickhouselogsexporter:\n    dsn: tcp://clickhouse:9000/signoz_logs\n    timeout: 10s\n    use_new_schema: true\nservice:\n  telemetry:\n    logs:\n      encoding: json\n  extensions:\n    - health_check\n    - pprof\n  pipelines:\n    traces:\n      receivers: [otlp]\n      processors: [signozspanmetrics/delta, batch]\n      exporters: [clickhousetraces]\n    metrics:\n      receivers: [otlp]\n      processors: [batch]\n      exporters: [signozclickhousemetrics]\n    metrics/prometheus:\n      receivers: [prometheus]\n      processors: [batch]\n      exporters: [signozclickhousemetrics]\n    logs:\n      receivers: [otlp]\n      processors: [batch]\n      exporters: [clickhouselogsexporter]\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:36:20.546270+00:00"
+}

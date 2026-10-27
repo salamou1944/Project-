@@ -1,0 +1,236 @@
+# Model Parameters Convention
+
+The Model Parameters Schema (MPS) convention is the JSON/YAML shape used by
+modelparams.dev to describe the request parameters available for a specific
+provider, model, auth type, and API/SDK surface.
+
+This catalog is metadata. It describes knobs a consumer can put into an outbound
+model request, such as `temperature`, `top_p`, `max_tokens`,
+`thinking.type`, or `generationConfig.topK`. It does not describe API transport
+capabilities, proxy behavior, authentication flows, endpoint compatibility,
+pricing, or UI control types.
+
+The public runtime sources are:
+
+- `https://modelparams.dev/api/v1/models.json`
+- `https://modelparams.dev/api/v1/schema.json`
+
+## Catalog Entry
+
+Each entry describes exactly one provider/model/auth/API-surface tuple and its available
+parameters.
+
+```json
+{
+  "provider": "anthropic",
+  "authType": "api_key",
+  "apiSurface": "anthropic-messages",
+  "model": "claude-haiku-4-5",
+  "status": "active",
+  "params": [
+    {
+      "path": "top_p",
+      "type": "number",
+      "label": "Top P",
+      "description": "Controls nucleus sampling by limiting generation to tokens whose cumulative probability reaches this value.",
+      "default": 1,
+      "range": { "min": 0, "max": 1, "step": 0.01 },
+      "group": "sampling",
+      "applicability": {
+        "except": [{ "thinking.type": ["adaptive", "enabled"] }, { "temperature": { "not": 1 } }]
+      }
+    }
+  ]
+}
+```
+
+Conventions:
+
+- `provider`, `model`, `authType`, and `apiSurface` scope one parameter set.
+- `model` reuses the slug the catalog already uses for that model elsewhere,
+  when the vendor publishes it first-party. `bedrock/claude-sonnet-4-5` matches
+  `anthropic/claude-sonnet-4-5` on purpose: the provider axis only means
+  something if the same model carries the same slug on every host.
+- `provider` is a kebab-case slug.
+- `model` is the provider-native model id without path separators. Preserve
+  upstream casing; it may contain dots or colons when the upstream model id does.
+- `wireId` is optional: the exact string to put in the request's own `model`
+  field, for hosts whose wire id cannot be a slug — a pathed id
+  (`accounts/fireworks/models/kimi-k3`) or one wrapped in vendor and version
+  segments (`anthropic.claude-sonnet-4-5-20250929-v1:0`). **When it is absent,
+  send `model` as-is.** It may contain the placeholder `{scope}`, which the
+  caller substitutes with a routing geography (`us`, `eu`, `apac`, `jp`, `au`,
+  `ca`, `sa`, `global`); one placeholder replaces a per-region id map that would
+  go stale the next time the host adds a region. Availability per region is
+  account state and is deliberately not recorded here.
+- `authType` is `api_key` or `subscription`.
+- `apiSurface` identifies the request and SDK family whose field names appear in
+  `params`. For example, OpenAI Chat Completions uses
+  `max_completion_tokens`, while OpenAI Responses uses
+  `max_output_tokens`. Do not combine fields from two surfaces in one entry.
+  Supported values are `openai-chat-completions`, `openai-responses`,
+  `anthropic-messages`, `google-generate-content`,
+  `amazon-bedrock-converse`, `google-vertex-generate-content`, and
+  `cohere-chat`.
+- `status` is `active`, `deprecated`, or `retired`. Omit it when lifecycle
+  status has not been tracked; generated catalog data preserves the omission.
+- `replacement` is an optional provider-qualified model id, such as
+  `anthropic/claude-opus-4-8`.
+- `shutdownOn` is an optional provider-published shutdown date in ISO
+  `YYYY-MM-DD` format.
+- `params` is the non-empty list of parameters for that exact route.
+- `path` is the exact provider API request parameter path in dot notation. Use
+  the provider's documented field casing, such as `top_p`,
+  `thinking.budget_tokens`, or `generationConfig.topK`.
+- `stream` is reserved for API-level streaming capability metadata and is not a
+  valid MPS parameter path.
+- `type` is the semantic data type, not a UI control kind.
+- `label` is user-facing copy.
+- `description` explains the raw provider parameter.
+- `default` is the provider default to display when known.
+- `values` is required for `enum` and is allowed only for finite choices.
+- `range` describes numeric bounds and optional step.
+- `group` is a semantic grouping for ordering and display.
+- `applicability` is optional. Omitted means always available.
+
+## Lifecycle Metadata
+
+Lifecycle fields sit beside `params`; they are not request parameters.
+
+```yaml
+status: deprecated
+replacement: anthropic/claude-opus-4-8
+shutdownOn: 2026-10-01
+```
+
+Omit `replacement` or `shutdownOn` when the provider has not published one.
+Use the provider-qualified catalog id for `replacement` so consumers can look
+up the target directly.
+
+## Parameter Scope
+
+MPS entries should describe only parameters the user or consumer can configure
+for the selected provider/model/auth/API-surface tuple.
+
+For `authType: api_key`, list parameters from the official provider API
+reference. Do not invent request fields the upstream API does not accept.
+
+For `authType: subscription`, list user-facing toggles and presets the consumer
+can actually set. Skip implementation details needed only by the subscription
+adapter.
+
+Do not model transport or platform capabilities as parameters. Examples that do
+not belong in `params`:
+
+- streaming support
+- proxy or passthrough behavior
+- OAuth or API key setup details
+- fallback behavior
+- pricing and rate limits
+- UI-only control metadata
+
+A model's parameter list reflects what its API accepts today, not what earlier
+models in the same family accepted. Providers routinely drop knobs on newer
+models; reasoning-tuned releases in particular tend to remove sampling controls
+(`temperature`, `top_p`, `top_k`) and fixed thinking budgets. A newer model that
+exposes fewer parameters than its predecessor is expected, not a sign of an
+incomplete entry. List exactly what the current API reference documents — do not
+carry a parameter forward only because a sibling model still has it.
+
+For example, Anthropic's Claude Opus 4.7 and 4.8 drop `temperature`, `top_p`,
+`top_k`, and `thinking.budget_tokens` (fixed-budget extended thinking is gone, so
+`thinking.type` no longer offers `enabled` — only adaptive thinking remains).
+Each lists four parameters where Opus 4.5 and 4.6 list eight. OpenAI's GPT-5 and
+`o`-series reasoning models expose only `max_completion_tokens` and
+`reasoning_effort` for the same reason. Sending a removed parameter returns an
+API error, so listing it would describe a request the model rejects.
+
+## Applicability
+
+`applicability` controls whether a parameter is available for the current draft
+or request params.
+
+The convention uses two top-level keys:
+
+- `only`: the parameter is available only when the rule matches.
+- `except`: the parameter is unavailable when the rule matches.
+
+Use at least one of `only` or `except`.
+
+## Rule Shape
+
+A rule is either:
+
+- one non-empty match object
+- a non-empty array of match objects
+
+Array rules use OR semantics. A single match object uses AND semantics.
+
+```json
+{
+  "except": [{ "thinking.type": ["adaptive", "enabled"] }, { "temperature": { "not": 1 } }]
+}
+```
+
+This means: disable the parameter when `thinking.type` is `adaptive` or
+`enabled`, or when `temperature` exists and is not `1`.
+
+## Match Values
+
+Each match key is a provider API request parameter path. Each match value uses one of:
+
+- JSON primitive: string, number, boolean, or null
+- non-empty array of JSON primitives
+- `{ "not": <primitive or non-empty primitive array> }`
+
+Examples:
+
+```json
+{ "thinking.type": "enabled" }
+```
+
+```json
+{ "thinking.type": ["adaptive", "enabled"] }
+```
+
+```json
+{ "temperature": { "not": 1 } }
+```
+
+## Evaluation Semantics
+
+Consumers evaluate rules against the current params object after dot-path
+expansion.
+
+For a normal match:
+
+- primitive value matches by JSON equality
+- array value matches if any primitive item equals the actual value
+- missing paths do not match
+
+For `{ "not": value }`:
+
+- missing paths do not match
+- present paths match when the actual value is not equal to `value`
+
+For a parameter spec:
+
+1. If `only` is present and does not match, the parameter is unavailable.
+2. If `except` is present and matches, the parameter is unavailable.
+3. Otherwise the parameter is available.
+
+## Adding A New Rule
+
+Prefer expressing provider behavior with the existing `applicability` syntax.
+
+Introduce new convention syntax only when a provider rule cannot be represented
+with:
+
+- exact match
+- one-of match
+- negated match
+- OR of match objects
+- AND within one match object
+
+When extending the language, update this document and the generated catalog
+format together.
