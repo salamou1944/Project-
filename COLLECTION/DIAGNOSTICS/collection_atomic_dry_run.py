@@ -6,7 +6,14 @@ Stops at the first blocked stage and reports the exact gate.
 """
 from __future__ import annotations
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "AUTO"))
+from collection_json_io import load_collection_json
+from collection_state_guard import validate_manifest_source_count
+
+from collection_json_io import load_collection_json
 
 ROOT = Path(__file__).resolve().parents[2]
 STAGES = []
@@ -29,7 +36,7 @@ def load_json(path):
     if path.stat().st_size == 0:
         raise RuntimeError(f"empty file: {path.relative_to(ROOT)}")
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return load_collection_json(path)
     except Exception as exc:
         raise RuntimeError(f"invalid JSON {path.relative_to(ROOT)}: {exc}")
 
@@ -42,21 +49,15 @@ def main():
         manifest = load_json(manifest_path)
         if not isinstance(manifest.get("sources"), list):
             raise RuntimeError("manifest.sources is not a list")
-        repo_count = int(manifest.get("repo_count", 0) or 0)
-        gist_count = int(manifest.get("gist_count", 0) or 0)
-        preserved_count = int(manifest.get("preserved_sources_after_refresh_failure", 0) or 0)
-        expected_rows = repo_count + gist_count + preserved_count
+        expected_rows = validate_manifest_source_count(manifest)
         actual_rows = len(manifest["sources"])
-        if expected_rows != actual_rows:
-            raise RuntimeError(
-                "manifest inventory mismatch: "
-                f"repo_count={repo_count} + gist_count={gist_count} + "
-                f"preserved_sources_after_refresh_failure={preserved_count} "
-                f"equals {expected_rows}, but sources has {actual_rows} rows"
-            )
         return (
-            f"accounts={manifest.get('account_count',0)} repos={repo_count} "
-            f"gists={gist_count} preserved={preserved_count} sources={actual_rows}"
+            f"accounts={manifest.get('account_count',0)} inventory_repos={manifest.get('repo_count',0)} "
+            f"processed_repos={manifest.get('processed_repo_count', manifest.get('repo_count',0))} "
+            f"processed_gists={manifest.get('processed_gist_count', manifest.get('gist_count',0))} "
+            f"preserved={manifest.get('preserved_sources_after_refresh_failure',0)} "
+            f"preserved_not_selected={manifest.get('preserved_prior_sources_not_selected',0)} "
+            f"sources={actual_rows} accounting_expected={expected_rows}"
         )
     gate("1_manifest", manifest_gate)
 

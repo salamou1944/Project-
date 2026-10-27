@@ -12,6 +12,8 @@ import json
 from pathlib import Path
 import sys
 
+from collection_json_io import SHARD_SCHEMA, load_collection_json
+
 ROOT = Path(__file__).resolve().parents[2]
 RECOMMENDED_BYTES = 50_000_000
 BLOCK_COMMIT_BYTES = 95_000_000
@@ -54,6 +56,44 @@ def audit(path: Path) -> dict:
             "error": f"{type(exc).__name__}: {exc}",
         }
 
+    if isinstance(payload, dict) and payload.get("schema_version") == SHARD_SCHEMA:
+        try:
+            reconstructed = load_collection_json(path)
+            shards = payload.get("shards", [])
+            shard_sizes = [entry.get("bytes", 0) for entry in shards if isinstance(entry, dict)]
+            max_file_bytes = max([len(raw), *shard_sizes])
+            result = {
+                "path": display_path,
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size_status": size_status(max_file_bytes),
+                "status": "PASS",
+                "root_type": type(reconstructed).__name__,
+                "storage_format": "sharded",
+                "item_count": payload.get("item_count"),
+                "shard_count": len(shards),
+                "total_shard_bytes": payload.get("total_shard_bytes"),
+                "max_shard_bytes": max(shard_sizes, default=0),
+                "max_file_bytes": max_file_bytes,
+                "integrity_verified": True,
+            }
+            if isinstance(reconstructed, dict):
+                result["top_level_keys"] = sorted(reconstructed.keys())
+                for key in ("items", "decisions", "sources", "entries", "results"):
+                    value = reconstructed.get(key)
+                    if isinstance(value, (list, dict)):
+                        result[f"{key}_count"] = len(value)
+            return result
+        except Exception as exc:
+            return {
+                "path": display_path,
+                "bytes": len(raw),
+                "sha256": hashlib.sha256(raw).hexdigest(),
+                "size_status": size_status(len(raw)),
+                "status": "INVALID_SHARDS",
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+
     result = {
         "path": display_path,
         "bytes": len(raw),
@@ -93,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
         report = audit(path)
         reports.append(report)
         failed = failed or report["status"] != "PASS"
-        if enforce_size and report.get("bytes", 0) >= BLOCK_COMMIT_BYTES:
+        if enforce_size and report.get("max_file_bytes", report.get("bytes", 0)) >= BLOCK_COMMIT_BYTES:
             failed = True
     print(json.dumps({"schema_version": "collection-readonly-json-audit/v1", "files": reports}, ensure_ascii=False, sort_keys=True))
     return 1 if failed else 0

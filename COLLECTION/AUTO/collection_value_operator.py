@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from collection_json_io import load_collection_json
+
 ROOT = Path(__file__).resolve().parents[2]
 QUEUE = ROOT / "COLLECTION/MASTER/PROMOTION-QUEUE.json"
 OUT = ROOT / "COLLECTION/MASTER/VALUE-OPERATOR-QUEUE.json"
@@ -33,7 +35,7 @@ def score(item: dict) -> tuple[int, int, int]:
 def main() -> None:
     if not QUEUE.exists() or QUEUE.stat().st_size == 0:
         raise SystemExit("promotion queue is missing or empty; Collection must finish process_collection first")
-    doc = json.loads(QUEUE.read_text(encoding="utf-8"))
+    doc = load_collection_json(QUEUE)
     plan = []
     for item in doc.get("items", []):
         families = item.get("evidence", [{}])[0].get("families", [])

@@ -5,6 +5,7 @@ must resolve quarantine locks independently of the invoking working directory.
 """
 from pathlib import Path
 import json
+from collection_json_io import load_collection_json
 from process_collection import is_quarantined, load_quarantine_locks
 from collection_state_guard import validate_manifest_source_count
 
@@ -53,7 +54,7 @@ def main():
         f"manifest unexpectedly shrank to {len(sources)} rows; require reviewed recovery/migration"
     )
     test_sticky_quarantine()
-    promotion = json.loads(PROMOTION.read_text())
+    promotion = load_collection_json(PROMOTION)
     restricted = json.loads(RESTRICTED.read_text())
     readiness = json.loads(READINESS.read_text())
     declarations = json.loads(DECLARATIONS.read_text())

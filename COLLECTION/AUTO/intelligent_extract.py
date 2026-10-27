@@ -633,6 +633,9 @@ def preserved_record(item, mode="preserved_after_refresh_failure"):
     if item.get("revision_sha") and data.get("revision_sha") != item.get("revision_sha"):
         return None
     kept = dict(item)
+    if not kept.get("license") and data.get("license"):
+        kept["license"] = data.get("license")
+        kept["license_source"] = "github_repository_metadata_at_extraction"
     kept["files_extracted"] = sum(
         1 for f in data.get("files", [])
         if isinstance(f, dict) and not f.get("error")
@@ -699,7 +702,7 @@ def main():
             "canonical_source": data["canonical_source"], "state": data["state"],
             "path": str(out), "files_extracted": len(data["files"]),
             "tree_truncated": data.get("tree_truncated", False), "mode": "cached",
-            "revision_sha": data.get("revision_sha"),
+            "revision_sha": data.get("revision_sha"), "license": data.get("license"),
         })
 
     preserved_after_refresh_failure_count = 0
@@ -722,7 +725,7 @@ def main():
                         "canonical_source": data["canonical_source"], "state": data["state"],
                         "path": str(out), "files_extracted": len(data["files"]),
                         "tree_truncated": data["tree_truncated"], "mode": mode,
-                        "revision_sha": data.get("revision_sha"),
+                        "revision_sha": data.get("revision_sha"), "license": data.get("license"),
                     }
                     cache_states[item["full_name"]] = "EXTRACTED_THIS_RUN"
                 else:

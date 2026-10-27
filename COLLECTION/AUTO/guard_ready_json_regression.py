@@ -5,6 +5,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from collection_json_io import load_collection_json
+
 ROOT = Path(__file__).resolve().parents[2]
 READY = ROOT / "COLLECTION/MASTER/READY.json"
 HISTORY = ROOT / "COLLECTION/AUTO/EXTRACTED/HISTORY"
@@ -13,7 +15,7 @@ artifact_cache = {}
 
 
 def load_json(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    return load_collection_json(path)
 
 
 def decisions(data):
@@ -104,10 +106,7 @@ def evidence_map(decision_map):
 
 def main():
     try:
-        baseline = json.loads(subprocess.run(
-            ["git", "show", "HEAD:COLLECTION/MASTER/READY.json"],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        ).stdout)
+        baseline = load_collection_json("COLLECTION/MASTER/READY.json", git_ref="HEAD", repo_root=ROOT)
         current = load_json(READY)
     except Exception as exc:
         raise SystemExit(f"cannot load baseline/current READY.json: {type(exc).__name__}: {exc}")
