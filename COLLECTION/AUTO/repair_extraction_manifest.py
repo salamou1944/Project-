@@ -3,11 +3,15 @@
 
 This is a recovery gate, not a second harvester: it never fetches sources or deletes
 artifacts. Invalid rows are marked blocked and remain retryable by intelligent_extract.py.
+Valid artifact metadata is authoritative for fields copied from GitHub at extraction
+time, including SPDX license identifiers omitted by older manifest writers.
 """
 from __future__ import annotations
+
 import datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,13 +25,17 @@ def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def main() -> int:
-    manifest = load_json(MANIFEST)
+def repair_manifest(manifest_path: Path = MANIFEST, root: Path = ROOT, extracted_root: Path = EXTRACTED) -> dict:
+    manifest_path = Path(manifest_path).resolve()
+    root = Path(root).resolve()
+    extracted_root = Path(extracted_root).resolve()
+    manifest = load_json(manifest_path)
     sources = manifest.get("sources")
     if not isinstance(sources, list):
         raise SystemExit("manifest.sources must be a list")
 
     repaired = 0
+    repaired_licenses = 0
     blocked = 0
     valid = 0
     for item in sources:
@@ -36,14 +44,15 @@ def main() -> int:
         raw = item.get("path")
         reason = None
         artifact = None
+        candidate = None
         if not isinstance(raw, str) or not raw:
             reason = "missing_artifact_path"
         else:
             candidate = Path(raw)
             if not candidate.is_absolute():
-                candidate = ROOT / candidate
+                candidate = root / candidate
             candidate = candidate.resolve()
-            if EXTRACTED.resolve() not in candidate.parents or candidate.name == "MANIFEST.json" or candidate.suffix != ".json":
+            if extracted_root not in candidate.parents or candidate.name == "MANIFEST.json" or candidate.suffix != ".json":
                 reason = "artifact_path_outside_extracted_root"
             else:
                 try:
@@ -51,7 +60,7 @@ def main() -> int:
                 except (OSError, ValueError, json.JSONDecodeError):
                     reason = "missing_empty_or_invalid_json_artifact"
 
-        if reason is None and artifact is not None:
+        if reason is None and artifact is not None and candidate is not None:
             if artifact.get("state") != "extracted":
                 reason = "artifact_state_mismatch"
             elif artifact.get("canonical_source") != item.get("canonical_source"):
@@ -75,6 +84,12 @@ def main() -> int:
                         if int(item.get("files_extracted", 0) or 0) != actual:
                             item["files_extracted"] = actual
                             repaired += 1
+                        license_id = artifact.get("license")
+                        if (not item.get("license") and isinstance(license_id, str)
+                                and license_id.strip()):
+                            item["license"] = license_id.strip()
+                            item["license_source"] = "github_repository_metadata_at_extraction"
+                            repaired_licenses += 1
                         item["artifact_bytes"] = candidate.stat().st_size
                         item["artifact_sha256"] = hashlib.sha256(candidate.read_bytes()).hexdigest()
                         valid += 1
@@ -85,21 +100,29 @@ def main() -> int:
             item["blocked_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             blocked += 1
 
-    manifest["manifest_repair"] = {
+    report = {
         "checked_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "valid_extracted_artifacts": valid,
         "blocked_invalid_artifacts": blocked,
         "corrected_file_counts": repaired,
-        "policy": "preserve bytes; block invalid manifest rows; retry through normal harvester"
+        "backfilled_license_ids": repaired_licenses,
+        "policy": "preserve bytes; backfill only missing license metadata from revision-validated artifacts; block invalid rows; retry through normal harvester",
     }
-    tmp = MANIFEST.with_name("MANIFEST.json.tmp")
+    manifest["manifest_repair"] = report
+    tmp = manifest_path.with_name(manifest_path.name + ".tmp")
     with tmp.open("w", encoding="utf-8", newline="\n") as handle:
         json.dump(manifest, handle, ensure_ascii=False, indent=2)
         handle.write("\n")
         handle.flush()
-    tmp.replace(MANIFEST)
-    print(json.dumps(manifest["manifest_repair"], sort_keys=True))
-    if valid == 0:
+        os.fsync(handle.fileno())
+    tmp.replace(manifest_path)
+    return report
+
+
+def main() -> int:
+    report = repair_manifest()
+    print(json.dumps(report, sort_keys=True))
+    if report["valid_extracted_artifacts"] == 0:
         raise SystemExit("no valid extracted artifacts remain after manifest reconciliation")
     return 0
 
