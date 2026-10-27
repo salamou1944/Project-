@@ -30,6 +30,48 @@ def load_revision_path(revision: str, path: str):
     return load_collection_json(path, git_ref=revision, repo_root=Path.cwd())
 
 
+def historical_artifact_candidates(source: str, row: dict) -> list[str]:
+    """Paths that may preserve an exact source revision in the immutable Git history."""
+    revision = row.get("revision_sha")
+    slug = source.removeprefix("github:").replace("/", "_")
+    candidates = []
+    raw_path = row.get("path")
+    if isinstance(raw_path, str) and raw_path:
+        normalized = raw_path.replace("\\", "/")
+        token = "COLLECTION/AUTO/EXTRACTED/"
+        if token in normalized:
+            candidates.append(normalized[normalized.index(token):])
+        elif not normalized.startswith("/"):
+            candidates.append(normalized)
+    if isinstance(revision, str) and revision:
+        candidates.append(f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{revision}.json")
+    candidates.append(f"COLLECTION/AUTO/EXTRACTED/{slug}.json")
+    return list(dict.fromkeys(candidates))
+
+
+def read_exact_historical_artifact(source: str, row: dict, commits: list[str]) -> dict | None:
+    """Return a Git-history artifact only when both source and revision match exactly."""
+    expected_revision = row.get("revision_sha")
+    for commit in commits:
+        for path in historical_artifact_candidates(source, row):
+            proc = subprocess.run(
+                ["git", "show", f"{commit}:{path}"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            if proc.returncode:
+                continue
+            try:
+                artifact = json.loads(proc.stdout)
+            except Exception:
+                continue
+            if artifact.get("canonical_source") != source:
+                continue
+            if expected_revision and artifact.get("revision_sha") != expected_revision:
+                continue
+            return artifact
+    return None
+
+
 def audit_manifest_preservation() -> list[dict]:
     """Ensure harvested source identities/states survive and changed revisions are archived."""
     print(f"Loading pre-recovery manifest {MANIFEST_BEFORE}...", flush=True)
@@ -42,7 +84,17 @@ def audit_manifest_preservation() -> list[dict]:
                      if isinstance(item, dict) and isinstance(item.get("canonical_source"), str)}
     new_by_source = {item.get("canonical_source"): item for item in new_sources
                      if isinstance(item, dict) and isinstance(item.get("canonical_source"), str)}
-    missing_sources = sorted(set(old_by_source) - set(new_by_source))
+    missing_sources_in_current = sorted(set(old_by_source) - set(new_by_source))
+    # A row can leave the current inventory only if its exact immutable artifact
+    # remains available in Git history. Do not treat historical preservation as
+    # active/current readiness; it only prevents silent evidence loss.
+    missing_sources = []
+    historically_preserved_sources = 0
+    for source in missing_sources_in_current:
+        if read_exact_historical_artifact(source, old_by_source[source], ["HEAD", MANIFEST_BEFORE, BEFORE]):
+            historically_preserved_sources += 1
+        else:
+            missing_sources.append(source)
     state_regressions = [
         {"source": source, "before": old_by_source[source].get("state"),
          "after": new_by_source[source].get("state")}
@@ -79,7 +131,9 @@ def audit_manifest_preservation() -> list[dict]:
                                      "archive": archive, "reason": "identity_mismatch"})
     print(f"MANIFEST_SOURCES_BEFORE={len(old_sources)}")
     print(f"MANIFEST_SOURCES_AFTER={len(new_sources)}")
-    print(f"MANIFEST_PRIOR_SOURCES_MISSING={len(missing_sources)}")
+    print(f"MANIFEST_PRIOR_SOURCES_MISSING_IN_CURRENT={len(missing_sources_in_current)}")
+    print(f"MANIFEST_PRIOR_SOURCES_PRESERVED_IN_HISTORY={historically_preserved_sources}")
+    print(f"MANIFEST_PRIOR_SOURCES_UNPRESERVED={len(missing_sources)}")
     print("MANIFEST_PRIOR_SOURCES_MISSING_SAMPLE=" + json.dumps(missing_sources[:30], ensure_ascii=False))
     print(f"MANIFEST_EXTRACTED_STATE_REGRESSIONS={len(state_regressions)}")
     print("MANIFEST_STATE_REGRESSION_SAMPLE=" + json.dumps(state_regressions[:30], ensure_ascii=False))
@@ -162,30 +216,35 @@ def main() -> int:
                 missing_evidence.append({"key": key, "reason": "incomplete evidence identity"})
                 continue
             slug = source.removeprefix("github:").replace("/", "_")
-            candidates = [
+            artifact_candidates = [
                 f"COLLECTION/AUTO/EXTRACTED/HISTORY/{slug}__{revision}.json",
                 f"COLLECTION/AUTO/EXTRACTED/{slug}.json",
             ]
             found = False
-            for candidate in candidates:
-                proc = subprocess.run(["git", "show", f"HEAD:{candidate}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                if proc.returncode:
-                    continue
-                try:
-                    artifact = json.loads(proc.stdout)
-                except Exception:
-                    continue
-                if artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
-                    continue
-                for item in artifact.get("files", []):
-                    if not isinstance(item, dict) or item.get("path") != file_path:
+            # Search current state and the exact revisions used by the original
+            # manifest/READY snapshot. Historical packets are read-only evidence.
+            for commit in ["HEAD", MANIFEST_BEFORE, BEFORE]:
+                for candidate in artifact_candidates:
+                    proc = subprocess.run(["git", "show", f"{commit}:{candidate}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    if proc.returncode:
                         continue
-                    if expected_hash and item.get("content_sha256") != expected_hash:
+                    try:
+                        artifact = json.loads(proc.stdout)
+                    except Exception:
                         continue
-                    found = True
-                    checked_archives += 1
-                    verified_for_decision += 1
-                    break
+                    if artifact.get("canonical_source") != source or artifact.get("revision_sha") != revision:
+                        continue
+                    for archived_file in artifact.get("files", []):
+                        if not isinstance(archived_file, dict) or archived_file.get("path") != file_path:
+                            continue
+                        if expected_hash and archived_file.get("content_sha256") != expected_hash:
+                            continue
+                        found = True
+                        checked_archives += 1
+                        verified_for_decision += 1
+                        break
+                    if found:
+                        break
                 if found:
                     break
             if not found:
