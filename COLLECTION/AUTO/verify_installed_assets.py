@@ -8,16 +8,42 @@ Callable promotion still requires a real local entrypoint and execution evidence
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORT = ROOT / "COLLECTION/MASTER/INSTALLATION-REPORT.json"
 INSTALLED = ROOT / "COLLECTION/INSTALLED"
 OUT = ROOT / "COLLECTION/VERIFICATION/INSTALLED-QUEUE.json"
+CALLABLE_EVIDENCE = ROOT / "COLLECTION/VERIFICATION/MODELPARAMS-CALLABLE-EVIDENCE.json"
+ACTIONS_RUN = re.compile(r"^https://github\\.com/[^/]+/[^/]+/actions/runs/[0-9]+$")
+
+
+def load_callable_evidence() -> dict:
+    if not CALLABLE_EVIDENCE.is_file():
+        return {}
+    try:
+        evidence = json.loads(CALLABLE_EVIDENCE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    if not isinstance(evidence, dict) or evidence.get("schema_version") != "collection-callable-evidence/v1":
+        return {}
+    installed_smoke = evidence.get("installed_package_smoke")
+    integration = evidence.get("api_factory_integration")
+    if not isinstance(installed_smoke, dict) or not isinstance(integration, dict):
+        return {}
+    if installed_smoke.get("status") != "success" or integration.get("status") != "success":
+        return {}
+    if not ACTIONS_RUN.fullmatch(str(installed_smoke.get("workflow_run", ""))):
+        return {}
+    if not ACTIONS_RUN.fullmatch(str(integration.get("workflow_run", ""))):
+        return {}
+    return evidence
 
 
 def main() -> int:
     report = json.loads(REPORT.read_text(encoding="utf-8"))
+    callable_evidence = load_callable_evidence()
     items = []
     counts = {}
 
@@ -54,8 +80,25 @@ def main() -> int:
             checks["marker_valid"] = False
 
         verified = all(checks.values())
-        state = "READY_FOR_VERIFICATION" if verified else "INSTALLATION_INTEGRITY_FAILED"
-        callable_state = "NOT_CALLABLE_UNTIL_RUNTIME_ENTRYPOINT_AND_EXECUTION_EVIDENCE"
+        installed_path = str(target.relative_to(ROOT)) if target.is_relative_to(ROOT) else str(target)
+        evidence_matches = (
+            callable_evidence.get("repo") == repo
+            and callable_evidence.get("revision") == item.get("revision")
+            and callable_evidence.get("installed_path") == installed_path
+            and callable_evidence.get("execution_status") == "PROVEN_CALLABLE"
+            and bool(callable_evidence.get("entrypoint"))
+        )
+        proven_callable = verified and evidence_matches
+        state = (
+            "INSTALLATION_INTEGRITY_FAILED" if not verified
+            else "PROVEN_CALLABLE" if proven_callable
+            else "READY_FOR_VERIFICATION"
+        )
+        callable_state = (
+            "CALLABLE_IN_CI_ONLY_NOT_PRODUCTION_DEPLOYED"
+            if proven_callable
+            else "NOT_CALLABLE_UNTIL_RUNTIME_ENTRYPOINT_AND_EXECUTION_EVIDENCE"
+        )
 
         row = {
             "repo": repo,
@@ -65,7 +108,14 @@ def main() -> int:
             "verification_state": state,
             "callable_state": callable_state,
             "checks": checks,
+            "callable_evidence": {
+                "installed_package_smoke": callable_evidence.get("installed_package_smoke", {}).get("workflow_run"),
+                "api_factory_integration": callable_evidence.get("api_factory_integration", {}).get("workflow_run"),
+                "production_deployment": callable_evidence.get("production_deployment", {}).get("status"),
+            } if proven_callable else None,
             "next_gate": (
+                "production deployment and live health verification remain separate gates"
+                if proven_callable else
                 "identify narrow entrypoint/adapter, register only after smoke execution evidence"
                 if verified else "repair installation integrity before any promotion"
             ),
