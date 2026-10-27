@@ -16,7 +16,7 @@ REPORT = ROOT / "COLLECTION/MASTER/INSTALLATION-REPORT.json"
 INSTALLED = ROOT / "COLLECTION/INSTALLED"
 OUT = ROOT / "COLLECTION/VERIFICATION/INSTALLED-QUEUE.json"
 CALLABLE_EVIDENCE = ROOT / "COLLECTION/VERIFICATION/MODELPARAMS-CALLABLE-EVIDENCE.json"
-ACTIONS_RUN = re.compile(r"^https://github\\.com/[^/]+/[^/]+/actions/runs/[0-9]+$")
+ACTIONS_RUN = re.compile(r"^https://github\.com/[^/]+/[^/]+/actions/runs/[0-9]+$")
 
 
 def load_callable_evidence() -> dict:
