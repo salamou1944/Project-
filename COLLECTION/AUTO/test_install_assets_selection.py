@@ -163,8 +163,13 @@ class InstallSelectionTests(unittest.TestCase):
             approval_item("owner/other", "f" * 40),
             approval_item("owner/not-reviewed", "e" * 40, security_gate="UNVERIFIED"),
         ]}
-        selected = select_explicit_approval_candidates(manifest, approvals, quarantined_revisions=set())
+        diagnostics = []
+        selected = select_explicit_approval_candidates(
+            manifest, approvals, quarantined_revisions=set(), diagnostics=diagnostics
+        )
         self.assertEqual([item["repo"] for item in selected], ["mnfst/modelparams.dev"])
+        self.assertIn("revision_does_not_match_current_manifest", {item["reason"] for item in diagnostics})
+        self.assertIn("integration_or_security_gate_not_pass", {item["reason"] for item in diagnostics})
         self.assertEqual(selected[0]["source_record"], "COLLECTION/MASTER/INSTALL-APPROVALS.json")
         self.assertEqual(selected[0]["approval_evidence"]["reviewed_at"], "2026-10-27")
 

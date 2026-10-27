@@ -141,7 +141,7 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5, quarant
     return selected
 
 
-def select_explicit_approval_candidates(manifest, approvals, max_candidates=5, quarantined_revisions=None):
+def select_explicit_approval_candidates(manifest, approvals, max_candidates=5, quarantined_revisions=None, diagnostics=None):
     """Select exact-revision approvals only when both evidence-backed gates are PASS."""
     if not isinstance(max_candidates, int) or isinstance(max_candidates, bool) or not 0 <= max_candidates <= 20:
         raise ValueError("max_candidates must be between 0 and 20")
@@ -160,10 +160,14 @@ def select_explicit_approval_candidates(manifest, approvals, max_candidates=5, q
     }
     blocked = {(repo, revision.lower()) for repo, revision in (quarantined_revisions or set())}
     selected, seen = [], set()
+    diagnostics = diagnostics if diagnostics is not None else []
+    def skip(approval, reason):
+        diagnostics.append({"repo": approval.get("repo"), "revision_sha": approval.get("revision_sha"), "reason": reason})
     for approval in items:
         if not isinstance(approval, dict):
             raise ValueError("install approval entries must be objects")
         if approval.get("decision") != "INSTALL_APPROVED":
+            skip(approval, "decision_not_install_approved")
             continue
         required = (
             "repo", "revision_sha", "license", "install_approval", "integration_gate",
@@ -179,33 +183,43 @@ def select_explicit_approval_candidates(manifest, approvals, max_candidates=5, q
         if not re.fullmatch(r"[0-9a-f]{40}", revision):
             raise ValueError("approved install revision must be a full commit SHA")
         if approval["install_approval"] != "APPROVED":
+            skip(approval, "install_approval_not_approved")
             continue
         if approval["integration_gate"] != "PASS" or approval["security_gate"] != "PASS":
+            skip(approval, "integration_or_security_gate_not_pass")
             continue
         for evidence_key in ("integration_evidence", "security_evidence"):
             parsed = urlparse(approval[evidence_key])
             if parsed.scheme != "https" or parsed.netloc != "github.com" or "/actions/runs/" not in parsed.path:
                 raise ValueError(f"{evidence_key} must link to a GitHub Actions run")
         if approval["license"] not in ALLOWED:
+            skip(approval, "approval_license_not_allowed")
             continue
         if (repo, revision) in blocked:
+            skip(approval, "revision_quarantined")
             continue
         row = by_source.get("github:" + repo)
         if not isinstance(row, dict):
+            skip(approval, "source_missing_from_current_manifest")
             continue
         row_revision = row.get("revision_sha")
         if not isinstance(row_revision, str) or row_revision.lower() != revision:
+            skip(approval, "revision_does_not_match_current_manifest")
             continue
         if row.get("state") != "extracted" or row.get("license") != approval["license"]:
+            skip(approval, "current_source_state_or_license_mismatch")
             continue
         if row.get("mode") not in {"cached", "refreshed"}:
+            skip(approval, "current_source_mode_not_installable:" + str(row.get("mode")))
             continue
         try:
             if int(row.get("files_extracted", 0) or 0) <= 0:
+                skip(approval, "current_source_has_no_extracted_files")
                 continue
         except (TypeError, ValueError):
             continue
         if repo in seen:
+            skip(approval, "duplicate_approved_repo")
             continue
         selected.append({
             "source_record": "COLLECTION/MASTER/INSTALL-APPROVALS.json",
@@ -240,9 +254,16 @@ def source_records(max_auto_candidates=5):
         try:
             canonical_data = json.loads(canonical_manifest.read_text(encoding="utf-8"))
             approval_data = json.loads(INSTALL_APPROVALS.read_text(encoding="utf-8"))
+            approval_diagnostics = []
             explicit = select_explicit_approval_candidates(
-                canonical_data, approval_data, max_auto_candidates, quarantined_revisions
+                canonical_data, approval_data, max_auto_candidates, quarantined_revisions,
+                diagnostics=approval_diagnostics,
             )
+            print("EXPLICIT_INSTALL_APPROVAL_DIAGNOSTICS=" + json.dumps({
+                "approval_records": len(approval_data.get("items", [])),
+                "selected_repos": [item["repo"] for item in explicit],
+                "skipped": approval_diagnostics,
+            }, sort_keys=True))
             out.extend(explicit)
             seen = {item["repo"] for item in out}
             remaining = max_auto_candidates - len(out)
