@@ -8,6 +8,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from collection_json_io import load_collection_json
+
 ROOT = Path(__file__).resolve().parents[2]
 STAGES = []
 
@@ -29,7 +31,7 @@ def load_json(path):
     if path.stat().st_size == 0:
         raise RuntimeError(f"empty file: {path.relative_to(ROOT)}")
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return load_collection_json(path)
     except Exception as exc:
         raise RuntimeError(f"invalid JSON {path.relative_to(ROOT)}: {exc}")
 
