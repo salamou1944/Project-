@@ -15,6 +15,6 @@ Proposed use: static, zero-runtime-dependency catalog and validator for provider
 
 ## Gate status
 
-- Integration: pending this exact-source review workflow.
-- Security: pending this exact-source review workflow.
-- Install approval: NOT APPROVED until both gates have direct passing evidence.
+- Integration: PASS — [API Factory test on merged commit e3981dd](https://github.com/salamou1944/Salamou-31/actions/runs/40443294502) and [external smoke](https://github.com/salamou1944/Salamou-31/actions/runs/40443294594) succeeded.
+- Security: PASS — [pinned-source review workflow](https://github.com/salamou1944/Project-/actions/runs/40443521733) verified the exact SHA, MIT/version/dependency boundary, package tests/build, production dependency audit, and runtime-source boundary scan.
+- Install approval: proposed for the exact revision in [PR #56](https://github.com/salamou1944/Project-/pull/56). The source remains uninstalled until the approval merges and the Collection cycle verifies the current manifest row matches the exact revision.
