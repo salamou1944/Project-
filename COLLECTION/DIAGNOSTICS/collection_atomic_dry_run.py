@@ -6,7 +6,11 @@ Stops at the first blocked stage and reports the exact gate.
 """
 from __future__ import annotations
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "AUTO"))
+from collection_json_io import load_collection_json
 
 from collection_json_io import load_collection_json
 
