@@ -6,7 +6,7 @@ This page is the current operational status pointer. Historical notes remain in 
 
 - Latest full cycle: [cycle 30 — success](https://github.com/salamou1944/Project-/actions/runs/40445025946); install-selection contract: [PASS](https://github.com/salamou1944/Project-/actions/runs/40445025703).
 - One exact-revision MIT asset is installed: `mnfst/modelparams.dev` at `0d09d9a3fb642770430fb357e3c72f8e7d9f1f67`. Installation outcome: 1 installed, 1 ready for verification, 0 size-blocked.
-- Important distinction: installed does not mean callable. The verification queue still marks the asset `NOT_CALLABLE_UNTIL_RUNTIME_ENTRYPOINT_AND_EXECUTION_EVIDENCE`. PR #60 adds byte-for-byte source comparison and tests/build/audit against the installed copy before the status can be advanced.
+- Important distinction: installed does not mean callable. The verification queue still marks the asset `NOT_CALLABLE_UNTIL_RUNTIME_ENTRYPOINT_AND_EXECUTION_EVIDENCE`. The installed-copy gate passed in [run 40561005649](https://github.com/salamou1944/Project-/actions/runs/40561005649): byte-for-byte source comparison passed, 77 tests passed on both source and installed copy, both builds succeeded, production dependency audit found 0 vulnerabilities, and the runtime-source boundary scan passed. This proves CI-callable library execution, not a production deployment.
 - API Factory integration has a successful real Gemini completion after fixing missing dependency installation in the workflow: [run evidence](https://github.com/salamou1944/Salamou-31/actions/runs/40560497900).
 - Full cycle result: [CYCLE-30-RESULT.md](./CYCLE-30-RESULT.md). Cycle 29 details remain below as historical evidence.
 
