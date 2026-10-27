@@ -17,6 +17,8 @@ import datetime, hashlib, json, re, os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+from collection_json_io import load_collection_json, write_collection_json
+
 # Resolve every collection path from this file, not the caller's working directory.
 # process_collection.py lives at <repo>/COLLECTION/AUTO/process_collection.py.
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,7 +33,7 @@ def load_previous_quarantine_keys(path=MASTER/"READY.json"):
     if not path.exists():
         return set()
     try:
-        previous=json.loads(path.read_text(encoding="utf-8"))
+        previous=load_collection_json(path)
     except (OSError, ValueError) as exc:
         raise SystemExit(f"existing READY.json is invalid; refusing to lose quarantine state: {exc}")
     decisions=previous.get("decisions")
@@ -267,10 +269,10 @@ def main():
     }
 
     ready={"generated_at":now,"pipeline":["extract","normalize","classify","dedupe","decide","verify"],"counts":counts,"decisions":decisions}
-    atomic_json_write(MASTER/"READY.json", ready, compact_array_keys={"decisions"})
+    write_collection_json(MASTER/"READY.json", ready, array_key="decisions", monolithic_writer=atomic_json_write)
 
     queue=[d for d in decisions if d["action"]!="QUARANTINE"]
-    atomic_json_write(MASTER/"PROMOTION-QUEUE.json", {"generated_at":now,"items":queue}, compact_array_keys={"items"})
+    write_collection_json(MASTER/"PROMOTION-QUEUE.json", {"generated_at":now,"items":queue}, array_key="items", monolithic_writer=atomic_json_write)
 
     restricted_queue=[d for d in decisions if d["action"]=="QUARANTINE"]
     atomic_json_write(VERIFY/"RESTRICTED-QUEUE.json", {"generated_at":now,"items":restricted_queue}, compact_array_keys={"items"})
