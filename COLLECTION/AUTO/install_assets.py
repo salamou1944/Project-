@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse, concurrent.futures, json, os, re, shutil, subprocess, tempfile
 from pathlib import Path
 
+from collection_json_io import load_collection_json
+
 ROOT = Path(__file__).resolve().parents[2]
 INSTALLED = ROOT / "COLLECTION" / "INSTALLED"
 REPORT = ROOT / "COLLECTION" / "MASTER" / "INSTALLATION-REPORT.json"
@@ -150,7 +152,7 @@ def source_records(max_auto_candidates=5):
     if max_auto_candidates:
         try:
             canonical_data = json.loads(canonical_manifest.read_text(encoding="utf-8"))
-            value_data = json.loads(value_queue_path.read_text(encoding="utf-8"))
+            value_data = load_collection_json(value_queue_path)
             out.extend(select_collected_candidates(canonical_data, value_data, max_auto_candidates, quarantined_revisions))
         except (OSError, ValueError) as exc:
             raise SystemExit(f"invalid Collection shortlist input; refusing automatic install selection: {exc}")
