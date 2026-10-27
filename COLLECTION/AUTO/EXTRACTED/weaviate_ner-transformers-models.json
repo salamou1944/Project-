@@ -1,0 +1,151 @@
+{
+  "canonical_source": "github:weaviate/ner-transformers-models",
+  "repo": "weaviate/ner-transformers-models",
+  "revision_sha": "77b8dbde72a32cd493dc34f931b08120d335bcd5",
+  "default_branch": "master",
+  "pushed_at": "2024-09-15T19:32:31Z",
+  "repo_updated_at": "2025-11-12T22:04:22Z",
+  "license": "BSD-3-Clause",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "cicd/test.sh",
+      "sha": null,
+      "content_sha256": "c5fcbebdbcfffaaee705c2dec962ec7af9cf7ffb9d8e08d97f23c3f1ac5e5f92",
+      "score": 165,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\nlocal_repo=${LOCAL_REPO?Variable LOCAL_REPO is required}\n\npip3 install -r requirements-test.txt\n\ndocker run -d -it -p \"8000:8080\" \"$local_repo\"\n\npython3 smoke_test.py"
+    },
+    {
+      "path": ".github/workflows/main.yaml",
+      "sha": null,
+      "content_sha256": "d76ab9e43a65642078af449f9010afaaf21cb276ed301a948d1f160ce6d16638",
+      "score": 126,
+      "content": "name: Main\n\non:\n  push:\n    branches:\n      - main\n    tags:\n      - '**'\n    paths-ignore:\n      - README.md\n      - LICENSE\n  pull_request:\n\njobs:\n  build-image:\n    name: Build image\n    runs-on: ubuntu-latest-4-cores\n    strategy:\n      matrix:\n        include:\n          - model_name: dbmdz/bert-large-cased-finetuned-conll03-english\n            model_tag_name: dbmdz-bert-large-cased-finetuned-conll03-english\n          - model_name: dslim/bert-base-NER\n            model_tag_name: dslim-bert-base-NER\n          - model_name: urchade/gliner_multi-v2.1\n            model_tag_name: urchade-gliner_multi-v2.1\n    env:\n      LOCAL_REPO: ner-transformers\n      REMOTE_REPO: semitechnologies/ner-transformers\n      MODEL_NAME: ${{matrix.model_name}}\n      MODEL_TAG_NAME: ${{matrix.model_tag_name}}\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-python@v4\n        with:\n          python-version: \"3.10\"\n      - name: Login to Docker Hub\n        if: ${{ !github.event.pull_request.head.repo.fork }}\n        uses: docker/login-action@v2\n        with:\n          username: ${{secrets.DOCKER_USERNAME}}\n          password: [REDACTED]}}\n      - name: Build and test\n        run: |\n          cicd/build.sh || exit 1\n          cicd/test.sh || exit 1\n      - name: Deploy\n        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')\n        env:\n          DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}\n          DOCKER_PASSWORD: [REDACTED]}}\n        run: |\n          export GIT_TAG=${GITHUB_REF##*/}\n          cicd/docker_push.sh || exit 1\n  build-custom-image:\n    name: Build custom image\n    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')\n    runs-on: ubuntu-latest\n    env:\n      LOCAL_REPO: ner-transformers\n      REMOTE_REPO: semitechnologies/ner-transformers\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-python@v4\n        with:\n          python-version: \"3.10\"\n      - name: Login to Docker Hub\n        uses: docker/login-action@v2\n        with:\n          username: ${{secrets.DOCKER_USERNAME}}\n          password: [REDACTED]}}\n      - name: Deploy\n        env:\n          DOCKER_USERNAME: ${{secrets.DOCKER_USERNAME}}\n          DOCKER_PASSWORD: [REDACTED]}}\n        run: |\n          export GIT_TAG=${GITHUB_REF##*/}\n          cicd/build_custom_base.sh || exit 1\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "cicd/docker_push.sh",
+      "sha": null,
+      "content_sha256": "201d6ed1a4d83bbb0bbe8a9af403db47975ac2a10bd8ec0a220590a48df9a22f",
+      "score": 105,
+      "content": "#!/usr/bin/env bash\n\nset -e pipefail\n\n# Docker push rules\n# If not on main\n# - nothing is pushed\n# If on main and not PR\n# - any commit is pushed as :<model>-<7-digit-hash> \n# If on tag (e.g. 1.0.0)\n# - any commit is pushed as :<model>-<semver>\n# - any commit is pushed as :<model>-latest\n# - any commit is pushed as :<model>\ngit_hash=\npr=\nremote_repo=${REMOTE_REPO?Variable REMOTE_REPO is required}\nmodel_name=${MODEL_NAME?Variable MODEL_NAME is required}\noriginal_model_name=$model_name\ndocker_username=${DOCKER_USERNAME?Variable DOCKER_USERNAME is required}\ndocker_password=[REDACTED] DOCKER_PASSWORD is required}\n\nfunction main() {\n  init\n  echo \"git branch is $GIT_BRANCH\"\n  echo \"git tag is $GIT_TAG\"\n  echo \"pr is $pr\"\n  push_main\n  push_tag\n}\n\nfunction init() {\n  if [ ! -z \"$MODEL_TAG_NAME\" ]; then\n    # a model tag name was specified to overwrite the model name. This is the\n    # case, for example, when the original model name contains characters we\n    # can't use in the docker tag\n    model_name=\"$MODEL_TAG_NAME\"\n  fi\n\n  git_hash=\"$(git rev-parse HEAD | head -c 7)\"\n  pr=false\n  if [ ! -z \"$GIT_PULL_REQUEST\" ]; then\n    pr=\"$GIT_PULL_REQUEST\"\n  fi\n\n  docker run --rm --privileged multiarch/qemu-user-static --reset -p yes\n  docker buildx create --use\n  echo \"$docker_password\" | docker login -u \"$docker_username\" --password-stdin\n}\n\n# Note that some CI systems, such as travis, will not provide the branch, but\n# the tag on a tag-push. So this method will not be called on a tag-run.\nfunction push_main() {\n  if [ \"$GIT_BRANCH\" == \"main\" ] && [ \"$pr\" == \"false\" ]; then\n    # The ones that are always pushed\n\n    tag=\"$remote_repo:$model_name-$git_hash\"\n    docker buildx build --platform=linux/arm64,linux/amd64 \\\n      --build-arg \"MODEL_NAME=$original_model_name\" \\\n      --push \\\n      --tag \"$tag\" .\n  fi\n}\n\nfunction push_tag() {\n  if [ ! -z \"$GIT_TAG\" ]; then\n    tag_git=\"$remote_repo:$model_name-$GIT_TAG\"\n    tag_latest=\"$remote_repo:$model_name-latest\"\n    tag=\"$remote_repo:$model_name\"\n\n    echo \"Tag & Push $tag, $tag_latest, $tag_git\"\n    docker buildx build --platform=linux/arm64,linux/amd64 \\\n      --build-arg \"MODEL_NAME=$original_model_name\" \\\n      --push \\\n      --tag \"$tag_git\" \\\n      --tag \"$tag_latest\" \\\n      --tag \"$tag\" \\\n      .\n  fi\n}\n\nmain \"${@}\"\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "cicd/build_custom_base.sh",
+      "sha": null,
+      "content_sha256": "c7580a8fd1146e0a610ec21b40444b89d9a977753fb83226517b43b2c34b169c",
+      "score": 105,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\nfunction build() {\n  docker build -f custom.Dockerfile -t \"custom-base\" .\n}\n\ngit_hash=\npr=\nremote_repo=${REMOTE_REPO?Variable REMOTE_REPO is required}\ndocker_username=${DOCKER_USERNAME?Variable DOCKER_USERNAME is required}\ndocker_password=[REDACTED] DOCKER_PASSWORD is required}\n\nfunction main() {\n  init\n  echo \"git branch is $GIT_BRANCH\"\n  echo \"git tag is $GIT_TAG\"\n  echo \"pr is $pr\"\n  push_main\n  push_tag\n}\n\nfunction init() {\n  git_hash=\"$(git rev-parse HEAD | head -c 7)\"\n  pr=false\n  if [ ! -z \"$GIT_PULL_REQUEST\" ]; then\n    pr=\"$GIT_PULL_REQUEST\"\n  fi\n\n  docker run --rm --privileged multiarch/qemu-user-static --reset -p yes\n  docker buildx create --use\n\n  echo \"$docker_password\" | docker login -u \"$docker_username\" --password-stdin\n}\n\n# Note that some CI systems, such as travis, will not provide the branch, but\n# the tag on a tag-push. So this method will not be called on a tag-run.\nfunction push_main() {\n  if [ \"$GIT_BRANCH\" == \"main\" ] && [ \"$pr\" == \"false\" ]; then\n    # The ones that are always pushed\n\n    tag=\"$remote_repo:custom-$git_hash\"\n    docker buildx build --platform=linux/arm64,linux/amd64 -f custom.Dockerfile \\\n      --tag \"$tag\" \\\n      --push \\\n      .\n  fi\n}\n\nfunction push_tag() {\n  if [ ! -z \"$GIT_TAG\" ]; then\n    tag_git=\"$remote_repo:custom-$GIT_TAG\"\n    tag_latest=\"$remote_repo:custom-latest\"\n    tag=\"$remote_repo:custom\"\n\n    echo \"Tag & Push $tag, $tag_latest, $tag_git\"\n    docker tag \"custom-base\" \"$tag\" && docker push \"$tag\"\n\n    docker buildx build --platform=linux/arm64,linux/amd64 -f custom.Dockerfile \\\n      --tag \"$tag\" \\\n      --tag \"$tag_latest\" \\\n      --tag \"$tag_git\" \\\n      --push \\\n      .\n  fi\n}\n\nmain \"${@}\"\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "cicd/build.sh",
+      "sha": null,
+      "content_sha256": "95797f33ed9ad8a3c70856eeda5c1c6f9bf329dea18131aabd489d9d5ea7057b",
+      "score": 105,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\nlocal_repo=${LOCAL_REPO?Variable LOCAL_REPO is required}\nmodel_name=${MODEL_NAME?Variable MODEL_NAME is required}\n\ndocker build --build-arg \"MODEL_NAME=$model_name\" -t \"$local_repo\" ."
+    },
+    {
+      "path": "cicd/travis_yml_to_markdown_table.py",
+      "sha": null,
+      "content_sha256": "5ddfcf4bb6d8edce7e30cb129054620148247935954d8ba7ffe17e2f20faebda",
+      "score": 105,
+      "content": "#!/usr/bin/env python3\n\nimport yaml\n\nprint(\"|Model Name|Image Name|\")\nprint(\"|---|---|\")\n\nwith open(\".travis.yml\", 'r') as stream:\n    try:\n        travis = yaml.safe_load(stream)\n        for model in travis['jobs']['include']:\n            if model['stage'] != \"buildanddeploy\":\n                continue\n\n            model_name = model['env']['MODEL_NAME']\n            tag = model_name\n            if 'MODEL_TAG_NAME' in model['env']:\n                tag = model['env']['MODEL_TAG_NAME']\n\n            image_name = 'semitechnologies/ner-transformers:' + tag\n            link = 'https://huggingface.co/' + model_name\n            print(\"|`{}` ([Info]({}))|`{}`|\".format(model_name, link, image_name))\n    except yaml.YAMLError as exc:\n        print(exc)"
+    },
+    {
+      "path": "readme.md",
+      "sha": null,
+      "content_sha256": "013cbc9aa9158a6181062e60d2e2bc26882e6c7d4112df3d7b7531fddc7459cd",
+      "score": 100,
+      "content": "# ner-transformers-models\n\nThe inference container for the NER (Named Entity Recognition or Token Classification) Weaviate module.\n\n## Documentation\n\nDocumentation for this module can be found [here](https://weaviate.io/developers/weaviate/current/retriever-vectorizer-modules/text2vec-transformers.html).\n\n## Information\n\nThis model works with [NER (Token Classification) Transformer models from Huggingface](https://huggingface.co/models?pipeline_tag=token-classification), such as [bert-base-NER](https://huggingface.co/dslim/bert-base-NER). The code for the application in this repo works well with models that take in a text input like `My name is Sarah and I live in London` and return information in JSON format like this:\n\n```json\n[\n  {\n    \"entity_group\": \"PER\",\n    \"score\": 0.9985478520393372,\n    \"word\": \"Sarah\",\n    \"start\": 11,\n    \"end\": 16\n  },\n  {\n    \"entity_group\": \"LOC\",\n    \"score\": 0.999621570110321,\n    \"word\": \"London\",\n    \"start\": 31,\n    \"end\": 37\n  }\n]\n```\n\nThe Weaviate NER Module then takes this output and processes this to GraphQL output.\n\n### Pre-built images\n\n|Model Name|Image Name|\n|---|---|\n|`dbmdz-bert-large-cased-finetuned-conll03-english` ([Info](https://huggingface.co/dbmdz/bert-large-cased-finetuned-conll03-english?text=Eric+H.+Taylor+writes+nothing))|`semitechnologies/dbmdz-bert-large-cased-finetuned-conll03-english`|\n| `dslim-bert-base-NER` ([Info](https://huggingface.co/dslim/bert-base-NER)) | `semitechnologies/dslim-bert-base-NER` | \n\n## Build Docker Container\n\n```sh\nLOCAL_REPO=\"ner-transformers\" MODEL_NAME=\"dbmdz/bert-large-cased-finetuned-conll03-english\" ./cicd/build.sh\n```\n\n## Choose your model\n\n**Make sure that the model gives the output as stated above, otherwise a good-working model isn't ensured!** You can always make a [custom inference container](https://weaviate.io/developers/weaviate/current/modules/custom-modules.html#a-replace-parts-of-an-existing-module) (and take this repo as an example) or [custom Weaviate model](https://weaviate.io/developers/contributor-guide/current/weaviate-module-system/how-to-build-a-new-module.html) if your NER model gives different outputs or you want to change the GraphQL design of the NER module entirely. \n\n### Custom build with any token classification huggingface model\n\nCreate a new `Dockerfile` (you do not need to clone this repository, any folder\non your machine is fine), we will name it `camembert-ner.Dockerfile`. Add the\nfollowing lines to it:\n\n```\nFROM semitechnologies/ner-transformers:custom\nRUN MODEL_NAME=Jean-Baptiste/camembert-ner ./download.py\n```\n\nNow you just need to build and tag your Dockerfile, we will tag it as\n`jean-baptiste-camembert-ner`:\n\n```\ndocker build -f camembert-ner.Dockerfile -t jean-baptiste-camembert-ner .\n```\n\nThat's it! You can now push your image to your favorite registry or reference\nit locally in your Weaviate `docker-compose.yaml` using the docker tag\n`jean-baptiste-camembert-ner`.\n\n### Custom build with a private / local model\n\nIn the following example, we are going to build a custom image for a non-public\nmodel which we have locally stored at `./my-model`.\n\nCreate a new `Dockerfile` (you do not need to clone this repository, any folder\non your machine is fine), we will name it `my-model.Dockerfile`. Add the\nfollowing lines to it:\n\n```\nFROM semitechnologies/ner-transformers:custom\nCOPY ./my-model /app/models/model\n```\n\nThe above will make sure that your model end ups in the image at\n`/app/models/model`. This path is important, so that the application can find the\nmodel.\n\nNow you just need to build and tag your Dockerfile, we will tag it as\n`my-model-inference`:\n\n```\ndocker build -f my-model.Dockerfile -t my-model-inference .\n```\n\nThat's it! You can now push your image to your favorite registry or reference\nit locally in your Weaviate `docker-compose.yaml` using the docker tag\n`my-model-inference`.\n\n# More Information\n\nFor more information, visit the [official documentation](https://weaviate.io/developers/weaviate/current/modules/).\n"
+    },
+    {
+      "path": "smoke_test.py",
+      "sha": null,
+      "content_sha256": "0596edabe2927542adad9e07ed46238521327ad76737ecfd6ccc0d6d50895f84",
+      "score": 95,
+      "content": "import unittest\nimport requests\nimport time\n\nclass SmokeTest(unittest.TestCase):\n    def _waitForStartup(self):\n        url = 'http://localhost:8000/.well-known/ready'\n\n        for i in range(0, 100):\n            try:\n                res = requests.get(url)\n                if res.status_code == 204:\n                    return\n                else:\n                    raise Exception(\n                            \"status code is {}\".format(res.status_code))\n            except Exception as e:\n                print(\"Attempt {}: {}\".format(i, e))\n                time.sleep(1)\n\n        raise Exception(\"did not start up\")\n\n    def testNer(self):\n        self._waitForStartup()\n        url = 'http://localhost:8000/ner/'\n\n        req_body = {'text': 'John works in Berlin'}\n        res = requests.post(url, json=req_body)\n        resBody = res.json()\n        \n        expected_result = {'text': 'John works in Berlin', 'tokens': [{'word': 'John', 'entity': 'I-PER', 'certainty': 0.9974473714828491, 'startPosition': 0, 'endPosition': 4}, {'word': 'Berlin', 'entity': 'I-LOC', 'certainty': 0.9994735717773438, 'startPosition': 14, 'endPosition': 20}]}\n        \n        self.assertEqual(200, res.status_code)\n        self.assertEqual(req_body['text'], resBody['text'])\n        self.assertEqual(len(resBody['tokens']), len(expected_result['tokens']))\n\n        req_body = {'text': 'Hello how are you doing'}\n        res = requests.post(url, json=req_body)\n        resBody = res.json()\n\n        expected_result = {'text': 'Hello how are you doing', 'tokens': []}\n        \n        self.assertEqual(200, res.status_code)\n        self.assertEqual(req_body['text'], resBody['text'])\n        self.assertCountEqual(resBody['tokens'], expected_result['tokens'])\n\n        req_body = {'text': ''}\n        res = requests.post(url, json=req_body)\n        resBody = res.json()\n\n        expected_result = {'text': '', 'tokens': None}\n\n        self.assertEqual(200, res.status_code)\n        self.assertEqual(req_body['text'], resBody['text'])\n        self.assertTrue(resBody['tokens'] is None or resBody['tokens'] == [])\n\n\nif __name__ == \"__main__\":\n    unittest.main()\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "e69c47e3584cdbe262f1e55e10c77b3c38e30b36b3e9051a2181598cd89750b5",
+      "score": 85,
+      "content": "pydantic==1.10.7\ntransformers==4.38.2\ntorch==2.0.0\nfastapi==0.95.1\nuvicorn==0.21.1\ngliner==0.2.11\nnumpy==1.25.2\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "f3f20611fb9fbd5674a0b29f50ab5fd97704e39eeb4541d28e3c7fd9ddae45bf",
+      "score": 85,
+      "content": "FROM python:3.11-slim AS base_image\n\nWORKDIR /app\n\nRUN apt-get update\nRUN pip install --upgrade pip setuptools\n\nCOPY requirements.txt .\nRUN pip3 install -r requirements.txt\n\nFROM base_image AS download_model\n\nWORKDIR /app\n\nARG MODEL_NAME\nCOPY download.py .\nRUN chmod +x ./download.py\nRUN ./download.py\n\nFROM base_image AS ner_transformers\n\nWORKDIR /app\nCOPY --from=download_model /app/models /app/models\nCOPY . .\n\nENTRYPOINT [\"/bin/sh\", \"-c\"]\nCMD [\"uvicorn app:app --host 0.0.0.0 --port 8080\"]\n"
+    },
+    {
+      "path": "custom.Dockerfile",
+      "sha": null,
+      "content_sha256": "391bd5405d64f405346a11659f9e8003bf3ecb9439c96a032841508eb0812ad1",
+      "score": 85,
+      "content": "FROM python:3.11-slim\n\nWORKDIR /app\n\nCOPY requirements.txt .\nRUN apt-get update && apt-get upgrade && apt-get -y install curl build-essential && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && pip3 install -r requirements.txt && apt remove -y curl build-essential && apt -y autoremove\nENV PATH=\"$PATH:/root/.cargo/bin\"\n\nCOPY . .\n\nENTRYPOINT [\"/bin/sh\", \"-c\"]\nCMD [\"uvicorn app:app --host 0.0.0.0 --port 8080\"]"
+    },
+    {
+      "path": "requirements-test.txt",
+      "sha": null,
+      "content_sha256": "ece89bef904ff7b820527560f89d1edf50a19422e906982a5e08cd5733c66a0c",
+      "score": 60,
+      "content": "requests==2.22.0"
+    },
+    {
+      "path": "meta.py",
+      "sha": null,
+      "content_sha256": "ddb344a5b85f3b64286a4bbcb98e6017874aeb283ea87e9d622848c2a642f3ab",
+      "score": 35,
+      "content": "import json\nfrom transformers import AutoConfig\n\nclass Meta:\n    def __init__(self, model_path: str, model_name: str):\n        if model_name.startswith(\"urchade\"):\n            with open(f\"{model_path}/model_config.json\", \"r\") as f:\n                self.config = json.load(f)\n        else:\n            config = AutoConfig.from_pretrained(model_path)\n            self.config = config.to_dict()\n\n    def get(self):\n        return {\n            'model': self.config\n        }\n"
+    },
+    {
+      "path": "download.py",
+      "sha": null,
+      "content_sha256": "24563bd723f90759ab74c6a190e4d322bdd6eb17c6146f139f440e5198eb10fe",
+      "score": 35,
+      "content": "#!/usr/bin/env python3\n\nimport os\nimport sys\nimport json\nfrom transformers import AutoModelForTokenClassification, AutoTokenizer\nfrom gliner import GLiNER\n\nmodel_dir = \"./models/model\"\nmodel_name = os.getenv('MODEL_NAME')\nif model_name is None or model_name == \"\":\n    print(\"Fatal: MODEL_NAME is required\")\n    sys.exit(1)\n\n# download model\nif \"gliner\" in model_name.lower():\n    print(\"Downloading GLiNER model {}\".format(model_name))\n    model = GLiNER.from_pretrained(model_name, cache_dir=model_dir)\n    # save model config\n    with open(f\"{model_dir}/model_config.json\", \"w\") as f:\n        json.dump(model.config.to_dict(), f)\nelse:\n    print(\"Downloading model {} from huggingface model hub\".format(model_name))\n\n    model = AutoModelForTokenClassification.from_pretrained(model_name)\n    tokenizer = AutoTokenizer.from_pretrained(model_name)\n\n    model.save_pretrained(model_dir)\n    tokenizer.save_pretrained(model_dir)\n\n# save model name\nwith open(f\"{model_dir}/model_name\", \"w\") as f:\n    f.write(model_name)\n\nprint(\"Success\")\n"
+    },
+    {
+      "path": "ner.py",
+      "sha": null,
+      "content_sha256": "48eae1842a81979be1a4be99fbdc01d822c73f47a826066e12582aac813c3742",
+      "score": 35,
+      "content": "from transformers import AutoModelForTokenClassification, AutoTokenizer, pipeline\nfrom pydantic import BaseModel\nfrom gliner import GLiNER\nfrom typing import Optional\n\nclass NerInput(BaseModel):\n    text: str\n    labels: Optional[list]\n\n\nclass NerResult(BaseModel):\n    entity: str\n    word: str\n    certainty: float\n    startPosition: int\n    endPosition: int\n\n\nclass Ner:\n    def __init__(self, model_path: str, model_name: str, cuda_support: bool, cuda_core: str):\n        if \"gliner\" in model_name:\n            self.ner = GlinerModel(model_path, model_name, cuda_support, cuda_core)\n        else:\n            self.ner = BaseNer(model_path, cuda_support, cuda_core)\n\n    async def do(self, input: NerInput):\n        return self.ner.do(input)\n\n\nclass BaseNer:\n    model: AutoModelForTokenClassification\n    tokenizer: AutoTokenizer\n    cuda: bool\n    cuda_core: str\n\n    def __init__(self, model_path: str, cuda_support: bool, cuda_core: str):\n        self.cuda = cuda_support\n        self.cuda_core = cuda_core\n        self.model = AutoModelForTokenClassification.from_pretrained(model_path)\n        device = -1\n        if self.cuda:\n            self.model.to(self.cuda_core)\n            device = int(cuda_core[5:]) # form is e.g. cuda:3\n        self.model.eval() # make sure we're in inference mode, not training\n\n        self.tokenizer = AutoTokenizer.from_pretrained(model_path)\n\n        self.nlp = pipeline(\"ner\", model=self.model, tokenizer=self.tokenizer, device=device)\n\n    def do(self, input: NerInput):\n        text = input.text\n        if len(text) == 0:\n            return None\n        \n        ner_results = self.nlp(text)\n\n        '''\n        this is how it looks like:\n        ner_results = [{\n            \"entity\": \"LOC\",\n            \"score\": 0.9996141791343689,\n            \"word\": \"Berlin\",\n            \"start\": 38,\n            \"end\": 44\n        }]\n\n        this is how it should look:\n        ner_results = [{\n            \"entity\": \"LOC\",\n            \"word\": \"string\",\n            \"certainty\": 0.9996141791343689,\n            \"startPosition\": 38,\n            \"endPosition: 44\n        }]\n        '''\n        \n        for item in ner_results:\n            # convert numpy.int64 values to native python int values\n            item['certainty'] = float(item.pop('score'))\n            item['startPosition'] = item.pop('start')\n            item['endPosition'] = item.pop('end')\n            del item['index']\n\n        return ner_results\n\n\nclass GlinerModel:\n    model: GLiNER\n    cuda: bool\n    cuda_core: str\n    default_labels: list[str]\n\n    def __init__(self, model_path: str, model_name: str, cuda_support: bool, cuda_core: str):\n        self.cuda = cuda_support\n        self.cuda_core = cuda_core\n        self.default_labels = [\"person\", \"organization\", \"location\", \"miscellaneous\"]\n        self.model = GLiNER.from_pretrained(model_name, cache_dir=model_path)\n        if self.cuda:\n            self.model.to(self.cuda_core)\n        self.model.eval()\n\n    def do(self, input: NerInput):\n        labels = self.default_labels\n        if input.labels is not None and len(input.labels) > 0:\n            labels = input.labels\n\n        entities = self.model.predict_entities(input.text, labels)\n\n        ner_results = list()\n        for entity in entities:\n            res = NerResult(entity=entity[\"label\"],\n                            word=entity[\"text\"],\n                            certainty=entity[\"score\"],\n                            startPosition=entity[\"start\"],\n                            endPosition=entity[\"end\"])\n            ner_results.append(res)\n\n        return ner_results\n"
+    },
+    {
+      "path": "app.py",
+      "sha": null,
+      "content_sha256": "9a56c978142f69d1c4183ba9e48324940b400b9cc2d55aecf3a36665ec4f0695",
+      "score": 35,
+      "content": "import os\nfrom logging import getLogger\nfrom fastapi import FastAPI, Response, status\nfrom ner import Ner, NerInput\nfrom meta import Meta\n\napp = FastAPI()\nner : Ner\nmeta_config : Meta\nlogger = getLogger('uvicorn')\n\n\n@app.on_event(\"startup\")\ndef startup_event():\n    global ner\n    global meta_config\n\n    model_dir = \"./models/model\"\n\n    def get_model_name() -> (str):\n        if os.path.exists(f\"{model_dir}/model_name\"):\n            with open(f\"{model_dir}/model_name\", \"r\") as f:\n                model_name = f.read()\n                return model_name\n        return \"\"\n\n    cuda_env = os.getenv(\"ENABLE_CUDA\")\n    cuda_support=False\n    cuda_core=\"\"\n\n    if cuda_env is not None and cuda_env == \"true\" or cuda_env == \"1\":\n        cuda_support=True\n        cuda_core = os.getenv(\"CUDA_CORE\")\n        if cuda_core is None or cuda_core == \"\":\n            cuda_core = \"cuda:0\"\n        logger.info(f\"CUDA_CORE set to {cuda_core}\")\n    else:\n        logger.info(\"Running on CPU\")\n\n    ner = Ner(model_dir, get_model_name(), cuda_support, cuda_core)\n    meta_config = Meta(model_dir, get_model_name())\n\n\n@app.get(\"/.well-known/live\", response_class=Response)\n@app.get(\"/.well-known/ready\", response_class=Response)\ndef live_and_ready(response: Response):\n    response.status_code = status.HTTP_204_NO_CONTENT\n\n\n@app.get(\"/meta\")\ndef meta():\n    return meta_config.get()\n\n\n@app.post(\"/ner\")\n@app.post(\"/ner/\")\nasync def read_item(item: NerInput, response: Response):\n    try:\n        tokens = await ner.do(item)\n\n        jsonToReturn = {\n            \"text\": item.text,\n            \"tokens\": tokens\n        }\n\n        '''\n        tokens = [{\n                \"entity\": \"string\",\n                \"word\": \"string\",\n                \"certainty\": 0.9     # float\n                \"startPosition\": 1   # int\n                \"endPosition: 2      # int\n            }] # Or None\n\n        text = \"string\"\n        '''\n\n        return jsonToReturn\n\n    except Exception as e:\n        logger.exception(\n            'Something went wrong while extracting data.'\n        )\n        response.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR\n        return {\"error\": str(e)}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:25:35.704475+00:00"
+}

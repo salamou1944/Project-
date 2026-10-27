@@ -1,0 +1,200 @@
+{
+  "canonical_source": "github:frappe/semgrep-rules",
+  "repo": "frappe/semgrep-rules",
+  "revision_sha": "81a6e3d47a328249e8ddf04c586e493dd5553002",
+  "default_branch": "develop",
+  "pushed_at": "2026-09-30T15:06:29Z",
+  "repo_updated_at": "2026-10-16T16:22:59Z",
+  "license": "MIT",
+  "topics": [
+    "erpnext",
+    "frappe-framework",
+    "lint",
+    "semgrep"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "fc410c9524b4b87cc569394c00e1924976c20e725a9fcfbe9961a6a68c0ca1cc",
+      "score": 198,
+      "content": "name: tests\n\non:\n  pull_request:\n    branches: [develop]\n  push:\n    branches: [develop]\n\njobs:\n  tests:\n    runs-on: ubuntu-latest\n    name: Test Rules\n    steps:\n    - uses: actions/checkout@v4\n    - name: test-rules\n      run: |\n        pip install semgrep\n        make test\n"
+    },
+    {
+      "path": "rules/security/authorization.yml",
+      "sha": null,
+      "content_sha256": "b7c1acaa87ee259d572fea5dc3843aa30f5e79278ef26bc05159042fdfe4eee2",
+      "score": 111,
+      "content": "rules:\n- id: relaxed-permissions\n  patterns:\n  - pattern: |\n      {\n        \"role\": \"All\",\n        ...\n      }\n  message: |\n    Avoid using \"All\" role. It's available to every user, including website user.\n  languages: [json]\n  severity: WARNING\n\n- id: frappe-setuser\n  patterns:\n  - pattern-either:\n    - pattern: frappe.set_user(...)\n  paths:\n    exclude:\n      - \"**/test_*.py\"\n  message: |\n    Detected the use of functions that can be  dangerous if used incorrectly.\n    This code should be manually audited by security team.\n  languages: [python]\n  severity: WARNING\n"
+    },
+    {
+      "path": "rules/security/format_string_injection.yml",
+      "sha": null,
+      "content_sha256": "8c293287700304086f4cca45eb2a7b1a78368107bfce061762ed0770f24056d7",
+      "score": 111,
+      "content": "rules:\n- id: frappe-format-string-injection\n  patterns:\n  - pattern-either:\n    - pattern: _(\"...\").format(..., $ERR, ...)\n    - pattern: _(\"...\").format($ERR, ...)\n    - pattern: _(\"...\").format($ERR)\n  - pattern-not: _(\"...\").format(..., str($ERR), ...)\n  - pattern-not: _(\"...\").format(str($ERR), ...)\n  - pattern-not: _(\"...\").format(str($ERR))\n  - pattern-not: _(\"...\").format(..., cstr($ERR), ...)\n  - pattern-not: _(\"...\").format(cstr($ERR), ...)\n  - pattern-not: _(\"...\").format(cstr($ERR))\n  - pattern-not: _(\"...\").format(..., repr($ERR), ...)\n  - pattern-not: _(\"...\").format(repr($ERR), ...)\n  - pattern-not: _(\"...\").format(repr($ERR))\n  - metavariable-pattern:\n      metavariable: $ERR\n      pattern: $ERR\n  - pattern-inside: |\n      try:\n          ...\n      except $ETYPE as $ERR:\n          ...\n  message: |\n    Exception object passed directly to `.format()` on a translated string.\n    Use `str($ERR)` to convert the exception to a plain string first.\n  languages: [python]\n  severity: ERROR\n  paths:\n    exclude:\n      - \"**/test_*.py\"\n"
+    },
+    {
+      "path": "rules/security/sql.yml",
+      "sha": null,
+      "content_sha256": "219f3436665cfb2cf57df4bf783c137afcfa86e13a98b693b0814edf73c34d7c",
+      "score": 111,
+      "content": "rules:\n  - id: frappe-sql-format-injection\n    languages: [python]\n    severity: WARNING\n    message: >-\n      Detected use of '.format()' or f-string in a Frappe SQL call.\n      This can lead to SQL injection. Use parameterized queries instead.\n    patterns:\n      - pattern-either:\n          - pattern: frappe.db.sql(\"...\".format(...), ...)\n          - pattern: frappe.db.sql(f\"...\", ...)\n          - pattern: frappe.db.multisql(\"...\".format(...), ...)\n          - pattern: frappe.db.multisql(f\"...\", ...)\n          # Matches cases where the string is formatted beforehand\n          - pattern: |\n              $QUERY = \"...\".format(...)\n              ...\n              frappe.db.sql($QUERY, ...)\n          - pattern: |\n              $QUERY = f\"...\"\n              ...\n              frappe.db.sql($QUERY, ...)\n    paths:\n      exclude:\n        - \"**/test_*.py\"\n"
+    },
+    {
+      "path": "rules/security/rce.yml",
+      "sha": null,
+      "content_sha256": "ef3613a991be46cafde7e9caf8a418a94ddc17763bcb434945d31c6b6b0c671a",
+      "score": 111,
+      "content": "rules:\n- id: frappe-codeinjection-eval\n  patterns:\n  - pattern-either:\n    - pattern: eval(...)\n    - pattern: exec(...)\n    - pattern: safe_exec(...)\n    - pattern: safe_eval(...)\n    - pattern: get_attr(...)\n    - pattern: frappe.call(...)\n  message: |\n    Detected the use of functions that can be  dangerous if used to evaluate\n    dynamic content. This code should be manually audited by security team.\n  languages: [python]\n  severity: ERROR\n  paths:\n    exclude:\n      - \"**/test_*.py\"\n\n- id: frappe-ssti\n  patterns:\n  - pattern-either:\n    - pattern: render_template($ARG, ...)\n    - pattern: frappe.render_template($ARG, ...)\n  message: |\n    Detected the use of render_template, make sure $ARG comes from trusted\n    source. This code should be audited by security team.\n  languages: [python]\n  severity: ERROR\n  paths:\n    exclude:\n      - \"**/test_*.py\"\n"
+    },
+    {
+      "path": "rules/security/rce.py",
+      "sha": null,
+      "content_sha256": "9115fc011565cb6486b7d2503f9c1b6efc648f979981124f5e5d0c644780bc1b",
+      "score": 111,
+      "content": "def function_name(input):\n\t# ruleid: frappe-codeinjection-eval\n\teval(input)\n"
+    },
+    {
+      "path": "rules/security/whitelisted.yml",
+      "sha": null,
+      "content_sha256": "64a1b4f2b34eb927d1bd9f71298d30497af88f47580306d533a32621fab5cd21",
+      "score": 111,
+      "content": "rules:\n  - id: missing-argument-type-hint\n    languages: [python]\n    severity: WARNING\n    patterns:\n      - pattern: |\n          @frappe.whitelist(...)\n          def $FUNC(..., $ARG, ...): ...\n      - pattern-not: |\n          @frappe.whitelist(...)\n          def $FUNC(..., $ARG: $TYPE, ...): ...\n      - metavariable-regex:\n          metavariable: $ARG\n          # Exclude 'self', 'cls', and '*' as they typically don't take hints\n          regex: ^(?!self$|cls$|\\*$).*$\n    message: \"The argument '$ARG' in function '$FUNC' is missing a type hint.\"\n  - id: guest-whitelisted-method\n    languages: [python]\n    severity: WARNING\n    patterns:\n      - pattern: |\n          @frappe.whitelist(..., allow_guest=True, ...)\n          def $FUNC(...): ...\n    message: \"Whitelisted method that's accesible to guest should be manually reviewed by security team.\"\n  - id: whitelisted-side-effect-on-get\n    languages: [python]\n    severity: ERROR\n    patterns:\n      - pattern-either:\n          # methods unset allows all methods, including GET\n          - patterns:\n              - pattern-inside: |\n                  @frappe.whitelist(...)\n                  def $FUNC(...): ...\n              - pattern-not-inside: |\n                  @frappe.whitelist(..., methods=$METHODS, ...)\n                  def $FUNC(...): ...\n          # methods explicitly includes a safe method (see SAFE_HTTP_METHODS in frappe/auth.py)\n          - patterns:\n              - pattern-inside: |\n                  @frappe.whitelist(..., methods=$METHODS, ...)\n                  def $FUNC(...): ...\n              - metavariable-regex:\n                  metavariable: $METHODS\n                  regex: .*\\b(GET|HEAD|OPTIONS|QUERY)\\b\n      - pattern-either:\n          - pattern: frappe.db.commit(...)\n          # enqueue_doc forwards its kwargs to enqueue\n          - patterns:\n              - pattern: frappe.$ENQUEUE(...)\n              - metavariable-regex:\n                  metavariable: $ENQUEUE\n                  regex: ^enqueue(_doc)?$\n              # deferred jobs are dropped by the GET rollback, unless now=True runs them at once\n              - pattern-not: frappe.$ENQUEUE(..., enqueue_after_commit=True, ...)\n          - pattern: frappe.enqueue(..., enqueue_after_commit=True, now=True, ...)\n          - pattern: frappe.enqueue_doc(..., enqueue_after_commit=True, now=True, ...)\n          - pattern: frappe.sendmail(...)\n          - pattern: frappe.db.sql_ddl(...)\n          - pattern: frappe.db.add_index(...)\n          - pattern: frappe.db.add_unique(...)\n          - pattern: frappe.db.truncate(...)\n          - pattern: frappe.db.rename_table(...)\n          - pattern: frappe.db.change_column_type(...)\n    message: >-\n      '$FUNC' accepts GET requests (`methods=` is unset or includes a safe method), which skip CSRF checks.\n      GET changes are rolled back at the end of the request, but this call escapes that rollback.\n      Set `methods=[\"POST\"]` (or another unsafe method only) on `@frappe.whitelist`.\n"
+    },
+    {
+      "path": "rules/security/filesystem.yml",
+      "sha": null,
+      "content_sha256": "21b0e501b6710731917d09148234f41ce82d8d02379d357b77c457f27177e05e",
+      "score": 111,
+      "content": "rules:\n- id: frappe-security-file-traversal\n  patterns:\n  - pattern-either:\n    - pattern: open(...)\n  message: |\n    Detected the file system access. This code should be manually audited by\n    security team to avoid file traversal issues.\n  languages: [python]\n  severity: WARNING\n  paths:\n    exclude:\n      - \"**/test_*.py\"\n"
+    },
+    {
+      "path": "rules/security/format_string_injection.py",
+      "sha": null,
+      "content_sha256": "c424d4f3d0a42d52e7defb1586ea0a829bbebbdfb66dc84b3cfb472d6a1a8451",
+      "score": 111,
+      "content": "from frappe import _\n\n\ndef bad_examples():\n\ttry:\n\t\tsome_method()\n\texcept Exception as e:\n\t\t# ruleid: frappe-format-string-injection\n\t\t_(\"Failed to get method {0} with {1}\").format(cmd, e)\n\n\ttry:\n\t\tsome_method()\n\texcept Exception as e:\n\t\t# ruleid: frappe-format-string-injection\n\t\t_(\"Error: {}\").format(e)\n\n\ndef good_examples():\n\ttry:\n\t\tsome_method()\n\texcept Exception as e:\n\t\t# ok: frappe-format-string-injection\n\t\t_(\"Failed to get method {0} with {1}\").format(cmd, str(e))\n\n\ttry:\n\t\tsome_method()\n\texcept Exception as e:\n\t\t# ok: frappe-format-string-injection\n\t\t_(\"Error: {}\").format(str(e))\n\n\t# ok: frappe-format-string-injection\n\t_(\"Hello {0}\").format(user_name)\n\n\ttry:\n\t\tsome_method()\n\texcept Exception as e:\n\t\t# ok: frappe-format-string-injection\n\t\t_(\"Error: {}\").format(cstr(e))\n"
+    },
+    {
+      "path": "rules/security/whitelisted.py",
+      "sha": null,
+      "content_sha256": "92205341d2fed4269830bca58317e2682a0ccaeee07b3eb50d2c98c14f964919",
+      "score": 111,
+      "content": "from typing import Any\nimport frappe\n\n\n\n# ruleid: missing-argument-type-hint\n@frappe.whitelist()\ndef function_name(inject, abc):\n\tpass\n\n# ok: missing-argument-type-hint\n@frappe.whitelist()\ndef function_name(inject: str, abc: str):\n\tpass\n\n# ok: missing-argument-type-hint\n@frappe.whitelist()\ndef function_name():\n\tpass\n\n# ok: missing-argument-type-hint\n@frappe.whitelist()\ndef function_name(abc: Any):\n\tpass\n\n\n# ruleid: missing-argument-type-hint\n@frappe.whitelist()\ndef function_name(inject, abc: str): # only one typed\n\tpass\n\n\n@frappe.whitelist()\ndef commit_without_methods():\n\tfrappe.db.set_value(\"ToDo\", \"x\", \"status\", \"Closed\")\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.db.commit()\n\n\n@frappe.whitelist()\ndef enqueue_without_methods():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.enqueue(\"app.module.job\", queue=\"long\")\n\n\n@frappe.whitelist()\ndef sendmail_without_methods():\n\tif True:\n\t\t# ruleid: whitelisted-side-effect-on-get\n\t\tfrappe.sendmail(recipients=[\"a@example.com\"], subject=\"Hi\")\n\n\n@frappe.whitelist()\ndef ddl_without_methods():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.db.add_index(\"ToDo\", [\"status\"])\n\n\n@frappe.whitelist(methods=[\"POST\"])\ndef commit_with_methods():\n\t# ok: whitelisted-side-effect-on-get\n\tfrappe.db.commit()\n\n\n@frappe.whitelist(methods=\"POST\")\ndef enqueue_with_methods():\n\t# ok: whitelisted-side-effect-on-get\n\tfrappe.enqueue(\"app.module.job\")\n\n\n@frappe.whitelist()\ndef enqueue_after_commit_without_methods():\n\t# ok: whitelisted-side-effect-on-get\n\tfrappe.enqueue(\"app.module.job\", enqueue_after_commit=True)\n\n\n@frappe.whitelist()\ndef enqueue_now_without_methods():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.enqueue(\"app.module.job\", now=True, enqueue_after_commit=True)\n\n\n@frappe.whitelist()\ndef enqueue_doc_without_methods():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.enqueue_doc(\"ToDo\", \"x\", \"run\")\n\n\n@frappe.whitelist()\ndef enqueue_doc_after_commit_without_methods():\n\t# ok: whitelisted-side-effect-on-get\n\tfrappe.enqueue_doc(\"ToDo\", \"x\", \"run\", enqueue_after_commit=True)\n\n\n@frappe.whitelist()\ndef enqueue_doc_now_without_methods():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.enqueue_doc(\"ToDo\", \"x\", \"run\", now=True, enqueue_after_commit=True)\n\n\n@frappe.whitelist(methods=[\"GET\"])\ndef commit_with_get():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.db.commit()\n\n\n@frappe.whitelist(methods=\"GET\")\ndef sendmail_with_get_string():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.sendmail(recipients=[\"a@example.com\"], subject=\"Hi\")\n\n\n@frappe.whitelist(methods=[\"GET\", \"POST\"])\ndef commit_with_get_and_post():\n\t# ruleid: whitelisted-side-effect-on-get\n\tfrappe.db.commit()\n\n\n@frappe.whitelist(methods=(\"PUT\", \"DELETE\"))\ndef commit_with_unsafe_methods():\n\t# ok: whitelisted-side-effect-on-get\n\tfrappe.db.commit()\n\n\ndef not_whitelisted():\n\t# ok: whitelisted-side-effect-on-get\n\tfrappe.db.commit()\n\n\n@frappe.whitelist()\ndef read_only():\n\t# ok: whitelisted-side-effect-on-get\n\treturn frappe.db.get_value(\"ToDo\", \"x\", \"status\")\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "d3b5a787526b35c0e94c755e7ab48986651f88c36e01b58b9e0e15c4c0918ac5",
+      "score": 100,
+      "content": "# Frappe Semgrep rules\n\nSemgrep rules specific to [Frappe Framework](https://github.com/frappe/frappe)\n\nThese rules guard against typical mistakes or bad practices while working on Frappe Framework apps. Frappe's own apps also use this to simplify repetitive checks in code review process.\n\n## How to Use in my app\n\n### Github Action\n\nYou can use a GitHub Action to automatically validate changes with semgrep rules on all PRs. \n\n```yaml\nname: Linters\n\non:\n  pull_request: { }\n\njobs:\n  linters:\n    name: Frappe Linter\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n\n      - name: Set up Python\n        uses: actions/setup-python@v4\n        with:\n          python-version: '3.10'\n\n      - name: Download Semgrep rules\n        run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules\n\n      - name: Download semgrep\n        run: pip install semgrep\n\n      - name: Run Semgrep rules\n        run: semgrep ci --config ./frappe-semgrep-rules/rules\n```\n\n\n### Manually / running semgrep locally\n\n- Install and verify that semgrep works `semgrep --version`\n- clone the rules repository with `git clone`\n- Run semgrep specifying rules folder as config `semgrep --config=~/path/to/frappe-semgrep-rules/rules your_app_folder`\n\n\nTip: You can optionally pass `--severity=ERROR` to ignore rules that produce warnings and only catch errors. \n\n\n## How to contribute new rules\n\n- Read how Semgrep works: [Getting started with semgrep rules](https://semgrep.dev/docs/writing-rules/overview/)\n- Write a rule. Make sure it doesn't have too many false positives.\n- Write positive and negative test cases for rule you are adding: [Testing rules](https://semgrep.dev/docs/writing-rules/testing-rules/)\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "5384a3bc9c00948ac6eeaf1af4d8a30ccbffd05f9c9b85065b6dbd3ac55fbb44",
+      "score": 85,
+      "content": "test:\n\tsemgrep --validate --config=$$PWD/rules $$PWD\n\tsemgrep --test --strict --test-ignore-todo $$PWD\n"
+    },
+    {
+      "path": "rules/frappe_correctness.js",
+      "sha": null,
+      "content_sha256": "489f2cdd3e8855d3b087ef9869116f9b9f40f2ed7e2f36dd89f7c8548caf3fc5",
+      "score": 33,
+      "content": "\n// ruleid: frappe-incorrect-debounce\nfrappe.utils.debounce(() => {}, 1000)();\n"
+    },
+    {
+      "path": "rules/code_quality.yml",
+      "sha": null,
+      "content_sha256": "50406a71656e54d3840b5757e5f8db435f3c576f71cc2eaa06a6c1d9b3de9e07",
+      "score": 33,
+      "content": "rules:\n- id: overusing-args\n  patterns:\n    - pattern: |\n        def $FUNC(args):\n          ...\n  message: |\n    Using args as argument in functions reduces readability and allows passing ill-specified arguments. Avoid using `args` as only argument unless absolutely necessary.\n  languages: [python]\n  severity: WARNING\n\n- id: use-vanilla-js-include\n  pattern: in_list($LIST, $ITEM)\n  fix: $LIST.includes($ITEM)\n  message: |\n    in_list(list, item) is simple wrapper around list.includes(item), avoid use of such wrappers.\n  languages: [javascript]\n  severity: WARNING\n\n- id: useless-get-doc-dict\n  pattern: frappe.get_doc(dict($X=$Y, $...OTHER_KEYS))\n  fix: frappe.get_doc($X=$Y, $...OTHER_KEYS)\n  message: |\n    get_doc(dict(k=v)) is same as get_doc(k=v)\n  languages: [python]\n  severity: WARNING\n\n- id: unchecked-frappe-permission-call\n  languages:\n    - python\n  message: >-\n    Found a call to `frappe.has_permission` where the return value is ignored.\n    Unless `throw=True` is passed, this function only returns a boolean and\n    does not enforce security on its own.\n  severity: ERROR\n  patterns:\n    - pattern: frappe.has_permission(...)\n    - pattern-not: frappe.has_permission(..., throw=True, ...)\n    - pattern-not: frappe.has_permission(..., throw=$SOMETHING, ...)\n    - pattern-not-inside: $VAR = frappe.has_permission(...)\n    - pattern-not-inside: \"return ...\"\n    - pattern-not-inside: \"if <... frappe.has_permission(...) ...> : ...\"\n    - pattern-not-inside: \"$PRED_TRUE if frappe.has_permission(...) else $PRED_FALSE\"\n    - pattern-not-inside: assert frappe.has_permission(...)\n    # value used as a comprehension predicate (list / set / dict / generator)\n    - pattern-not-inside: \"[$EL for $V in $IT if <... frappe.has_permission(...) ...>]\"\n    - pattern-not-inside: \"{$EL for $V in $IT if <... frappe.has_permission(...) ...>}\"\n    - pattern-not-inside: \"{$K: $VAL for $V in $IT if <... frappe.has_permission(...) ...>}\"\n    - pattern-not-inside: \"($EL for $V in $IT if <... frappe.has_permission(...) ...>)\"\n  paths:\n    exclude:\n      - \"**/test_*.py\"\n"
+    },
+    {
+      "path": "rules/code_quality.py",
+      "sha": null,
+      "content_sha256": "1f64166dae8ae97ef91ac981511dd2bd68e71167aee103ed06c0f9e22e641775",
+      "score": 33,
+      "content": "# ruleid:overusing-args\ndef function(args):\n  args.updates = 1\n  return args\n\n# ok: overusing-args\ndef func(*args, **kwargs):\n  acceptable = 1\n  return acceptable\n\n# ok: overusing-args\ndef func(*args):\n  return 1\n\n\nimport frappe\n\ndoctypes = [\"DocType A\", \"DocType B\"]\n\n\n# ruleid: unchecked-frappe-permission-call\nfrappe.has_permission(\"DocType\", \"read\")\n\n# ok: unchecked-frappe-permission-call\nfrappe.has_permission(\"DocType\", \"read\", throw=True)\n\n# ok: unchecked-frappe-permission-call\nallowed = frappe.has_permission(\"DocType\", \"read\")\n\n# ok: unchecked-frappe-permission-call\nif frappe.has_permission(\"DocType\", \"read\"):\n  pass\n\n# ok: unchecked-frappe-permission-call\nverdict = \"yes\" if frappe.has_permission(\"DocType\", \"read\") else \"no\"\n\n# ok: unchecked-frappe-permission-call\nassert frappe.has_permission(\"DocType\", \"read\")\n\n\ndef returns_permission():\n  # ok: unchecked-frappe-permission-call\n  return frappe.has_permission(\"DocType\", \"read\")\n\n\n# value used as a comprehension predicate — not a discarded call\n\n# ok: unchecked-frappe-permission-call\npermitted_list = [d for d in doctypes if frappe.has_permission(d, \"read\")]\n\n# ok: unchecked-frappe-permission-call\npermitted_negated = [d for d in doctypes if not frappe.has_permission(d, \"read\")]\n\n# ok: unchecked-frappe-permission-call\npermitted_set = {d for d in doctypes if frappe.has_permission(d, \"read\")}\n\n# ok: unchecked-frappe-permission-call\npermitted_map = {d: 1 for d in doctypes if frappe.has_permission(d, \"read\")}\n\n# ok: unchecked-frappe-permission-call\nhas_any = any(d for d in doctypes if frappe.has_permission(d, \"read\"))\n"
+    },
+    {
+      "path": "rules/report.yml",
+      "sha": null,
+      "content_sha256": "9603dd9b751d3db14999f0a8516c0bdcbf5faf45622d674a891ab2197859ece5",
+      "score": 33,
+      "content": "rules:\n- id: frappe-missing-translate-function-in-report-python\n  paths:\n    include:\n    - \"**/report\"\n    - \"report.py\"\n    exclude:\n    - \"**/regional\"\n    - \"**/test_*\"\n  pattern-either:\n  - patterns:\n      - pattern: |\n          {..., \"label\": \"...\", ...}\n      - pattern-not: |\n          {..., \"label\": _(\"...\"), ...}\n  - patterns:\n      - pattern: dict(..., label=\"...\", ...)\n      - pattern-not: dict(..., label=_(\"...\"), ...)\n  message: |\n      All user facing text must be wrapped in translate function. Please refer to translation documentation. https://frappeframework.com/docs/user/en/guides/basics/translations\n  languages: [python]\n  severity: WARNING\n\n- id: frappe-translated-values-in-business-logic\n  paths:\n    include:\n    - \"**/report\"\n  patterns:\n    - pattern-inside: |\n        {..., filters: [...], ...}\n    - pattern: |\n        {..., options: [..., __(\"...\"), ...], ...}\n  message: |\n      Using translated values in options field will require you to translate the values while comparing in business logic. Instead of passing translated labels provide objects that contain both label and value. e.g. { label: __(\"Option value\"), value: \"Option value\"}\n  languages: [javascript]\n  severity: WARNING\n"
+    },
+    {
+      "path": "rules/translate.py",
+      "sha": null,
+      "content_sha256": "8a42ff0bd7c11e871ccc1703b1404e57e1c7990e93f6ff705009c438a12271ee",
+      "score": 33,
+      "content": "# Examples taken from https://frappeframework.com/docs/user/en/translations\n# This file is used for testing the tests.\n\nfrom frappe import _\n\nfull_name = \"Jon Doe\"\n# ok: frappe-translation-python-formatting\n_('Welcome {0}, get started with ERPNext in just a few clicks.').format(full_name)\n\n# ruleid: frappe-translation-python-formatting\n_('Welcome %s, get started with ERPNext in just a few clicks.' % full_name)\n# ruleid: frappe-translation-python-formatting\n_('Welcome %(name)s, get started with ERPNext in just a few clicks.' % {'name': full_name})\n\n# ruleid: frappe-translation-python-formatting\n_('Welcome {0}, get started with ERPNext in just a few clicks.'.format(full_name))\n\n# ruleid: frappe-translation-python-formatting\nmsg = \"Welcome %s, get started with ERPNext in just a few clicks.\"  % full_name\nrandom_statement = \"random statement\"\n_(msg)\n\n# ruleid: frappe-translation-python-formatting\nmsg = \"Welcome {0}, get started with ERPNext in just a few clicks.\".format(full_name)\nrandom_statement = \"random statement\"\n_(msg)\n\nsubscribers = [\"Jon\", \"Doe\"]\n# ok: frappe-translation-python-formatting\n_('You have {0} subscribers in your mailing list.').format(len(subscribers))\n\n# ok: frappe-translation-python-splitting\n_('You have {0} subscribers') \\\n    + 'in your mailing list'\n\n# ok: frappe-translation-python-splitting\n_(\n\t'You have {0} subscribers'\n) + 'in your mailing list'\n\n# ruleid: frappe-translation-trailing-spaces\nmsg = _(\" You have {0} pending invoice \")\n# ruleid: frappe-translation-trailing-spaces\nmsg = _(\"You have {0} pending invoice \")\n# ruleid: frappe-translation-trailing-spaces\nmsg = _(\" You have {0} pending invoice\")\n\n# ok: frappe-translation-trailing-spaces\nmsg = ' ' + _(\"You have {0} pending invoices\") + ' '\n\n# ruleid: frappe-translation-python-splitting\n_(f\"what\" + f\"this is also not cool\")\n\n\n# ruleid: frappe-translation-empty-string\n_(\"\")\n# ruleid: frappe-translation-empty-string\n_('')\n\n# ruleid: frappe-translation-variable-only\n_(\"{0}\")\n# ruleid: frappe-translation-variable-only\n_(\"{0} {1}\")\n# ruleid: frappe-translation-variable-only\n_(\"{}\")\n\nclass Test:\n\t# ok: frappe-translation-python-splitting\n\tdef __init__(\n\t\t\targs\n\t\t\t):\n\t\tpass\n"
+    },
+    {
+      "path": "rules/ux.js",
+      "sha": null,
+      "content_sha256": "7893dd2133a2f9e18a3ee87fabf95dc6649770354ad760cc453c16a9d13c47be",
+      "score": 33,
+      "content": "\n// ok: frappe-missing-translate-function-js\nfrappe.msgprint('{{ _(\"Both login and password required\") }}');\n\n// ruleid: frappe-missing-translate-function-js\nfrappe.msgprint('What');\n\n// ok: frappe-missing-translate-function-js\nfrappe.show_alert(__('What'));\n\n// ruleid: frappe-missing-translate-function-js\nfrappe.show_alert('What');\n\n// ok: frappe-missing-translate-function-js\nfrappe.throw('  {{ _(\"Both login and password required\") }}.  ');\n\n\n// ruleid: frappe-missing-translation-button-text\nfrm.add_custom_button(\"Transfer Asset\", function() {\n\n})\n\n// ok: frappe-missing-translation-button-text\nfrm.add_custom_button(__(\"Transfer Asset\"), function() {\n\n})\n\n"
+    },
+    {
+      "path": "rules/ux.yml",
+      "sha": null,
+      "content_sha256": "b8f42126483ec70341a8928b9768440e43dd9061a15d923ef4fb667f7fd62e3a",
+      "score": 33,
+      "content": "rules:\n- id: frappe-missing-translate-function-python\n  pattern-either:\n  - patterns:\n      - pattern: frappe.msgprint(\"...\", ...)\n      - pattern-not: frappe.msgprint(_(\"...\"), ...)\n  - patterns:\n      - pattern: frappe.throw(\"...\", ...)\n      - pattern-not: frappe.throw(_(\"...\"), ...)\n  - patterns:\n      - pattern: frappe.throw(\"...\" + ..., ...)\n      - pattern-not: frappe.throw(_(\"...\") + ..., ...)\n  - patterns:\n      - pattern: frappe.msgprint(\"...\" + ..., ...)\n      - pattern-not: frappe.msgprint(_(\"...\") + ..., ...)\n  - patterns:\n      - pattern: frappe.throw(..., title=\"...\")\n      - pattern-not: frappe.throw(..., title=_(\"...\"))\n  - patterns:\n      - pattern: frappe.msgprint(..., title=\"...\")\n      - pattern-not: frappe.msgprint(..., title=_(\"...\"))\n  message: |\n      All user facing text must be wrapped in translate function. Please refer to translation documentation. https://frappeframework.com/docs/user/en/guides/basics/translations\n  languages: [python]\n  severity: WARNING\n\n- id: frappe-missing-translate-function-js\n  pattern-either:\n  - patterns:\n      - pattern: frappe.msgprint(\"...\", ...)\n      - pattern-not: frappe.msgprint(__(\"...\"), ...)\n      # ignore microtemplating e.g. msgprint(\"{{ _(\"server side translation\") }}\")\n      - pattern-not: frappe.msgprint(\"=~/\\{\\{.*\\_.*\\}\\}/i\", ...)\n  - patterns:\n      - pattern: frappe.throw(\"...\", ...)\n      - pattern-not: frappe.throw(__(\"...\"), ...)\n      # ignore microtemplating\n      - pattern-not: frappe.throw(\"=~/\\{\\{.*\\_.*\\}\\}/i\", ...)\n  - patterns:\n      - pattern: frappe.show_alert(\"...\", ...)\n      - pattern-not: frappe.show_alert(__(\"...\"), ...)\n  message: |\n      All user facing text must be wrapped in translate function. Please refer to translation documentation. https://frappeframework.com/docs/user/en/guides/basics/translations\n  languages: [javascript]\n  severity: WARNING\n\n- id: frappe-missing-translation-button-text\n  pattern-either:\n  - patterns:\n      - pattern: frm.add_custom_button(\"...\", ...)\n      - pattern-not: frm.add_custom_button(__(\"...\"), ...)\n      # ignore microtemplating e.g. msgprint(\"{{ _(\"server side translation\") }}\")\n      - pattern-not: frm.add_custom_button(\"=~/\\{\\{.*\\_.*\\}\\}/i\", ...)\n  message: |\n      All user facing button text must be wrapped in translate function. Please refer to translation documentation. https://frappeframework.com/docs/user/en/guides/basics/translations\n  languages: [javascript]\n  severity: WARNING\n"
+    },
+    {
+      "path": "rules/hooks.yml",
+      "sha": null,
+      "content_sha256": "e3cd2cab1c7585b963a024d00118bcd6e9ae6d565ba7937e2d483ee8c06c7995",
+      "score": 33,
+      "content": "rules:\n- id: override-doctype-class\n  languages: [python]\n  message: |\n    Avoid `override_doctype_class` in hooks.py. It replaces the controller class of a\n    DocType, so only one app can override a DocType and the override breaks silently\n    when the original controller changes.\n    Use document events (`doc_events`) or `extend_doctype_class`.\n  severity: ERROR\n  patterns:\n    - pattern: override_doctype_class = $VALUE\n    - pattern-not-inside: |\n        def $FUNC(...):\n          ...\n  paths:\n    include:\n      - \"hooks.py\"\n"
+    },
+    {
+      "path": "rules/report.py",
+      "sha": null,
+      "content_sha256": "1a8051a8b7664f7abd3ed7df4f90d92f7c8bfe48fdfdbc1d7bcb47e96b5f834f",
+      "score": 33,
+      "content": "from frappe import _\n\n\n# ruleid: frappe-missing-translate-function-in-report-python\n{\"label\": \"Field Label\"}\n\n# ruleid: frappe-missing-translate-function-in-report-python\ndict(label=\"Field Label\")\n\n\n# ok: frappe-missing-translate-function-in-report-python\n{\"label\": _(\"Field Label\")}\n\n# ok: frappe-missing-translate-function-in-report-python\ndict(label=_(\"Field Label\"))\n"
+    },
+    {
+      "path": "rules/hooks.py",
+      "sha": null,
+      "content_sha256": "3d535f0447ed91c73846e601e8fbe791aac42f472cc3862cc106febee4b9e5a4",
+      "score": 33,
+      "content": "app_name = \"test_app\"\n\n# ruleid: override-doctype-class\noverride_doctype_class = {\"ToDo\": \"test_app.overrides.CustomToDo\"}\n\n# ruleid: override-doctype-class\noverride_doctype_class = {\n\t\"User\": [\"test_app.overrides.CustomUser\"],\n}\n\n# ok: override-doctype-class\noverride_whitelisted_methods = {\"frappe.desk.doctype.event.event.get_events\": \"test_app.event.get_events\"}\n\n# ok: override-doctype-class\ndoc_events = {\n\t\"ToDo\": {\n\t\t\"on_update\": \"test_app.todo.on_update\",\n\t}\n}\n\n\ndef build_hooks():\n\t# ok: override-doctype-class\n\toverride_doctype_class = {\"ToDo\": \"test_app.overrides.CustomToDo\"}\n\treturn override_doctype_class\n"
+    },
+    {
+      "path": "rules/translate.js",
+      "sha": null,
+      "content_sha256": "7d8bc9486abbbd006b46c5f34fbb0e95aa6fd1b04a459b478cfe08f08cc5643b",
+      "score": 33,
+      "content": "// ruleid: frappe-translation-empty-string\n__(\"\")\n// ruleid: frappe-translation-empty-string\n__('')\n\n// ruleid: frappe-translation-variable-only\n__(\"{0}\")\n// ruleid: frappe-translation-variable-only\n__(\"{0} {1}\")\n// ruleid: frappe-translation-variable-only\n__(\"{}\")\n\n// ok: frappe-translation-js-formatting\n__('Welcome {0}, get started with ERPNext in just a few clicks.', [full_name]);\n\n// ruleid: frappe-translation-js-formatting\n__(`Welcome ${full_name}, get started with ERPNext in just a few clicks.`);\n\n// ok: frappe-translation-js-formatting\n__('This is fine');\n\n\n// ok: frappe-translation-trailing-spaces\n__('This is fine');\n\n// ruleid: frappe-translation-trailing-spaces\n__(' this is not ok ');\n// ruleid: frappe-translation-trailing-spaces\n__('this is not ok ');\n// ruleid: frappe-translation-trailing-spaces\n__(' this is not ok');\n\n// ok: frappe-translation-js-splitting\n__('You have {0} subscribers in your mailing list.', [subscribers.length])\n\n// todoruleid: frappe-translation-js-splitting\n__('You have') + subscribers.length + __('subscribers in your mailing list.')\n\n// ruleid: frappe-translation-js-splitting\n__('You have' + 'subscribers in your mailing list.')\n\n// ruleid: frappe-translation-js-splitting\n__('You have {0} subscribers' +\n    'in your mailing list', [subscribers.length])\n\n// ok: frappe-translation-js-splitting\n__(\"Ctrl+Enter to add comment\")\n\n// ruleid: frappe-translation-js-splitting\n__('You have {0} subscribers \\\n    in your mailing list', [subscribers.length])\n"
+    },
+    {
+      "path": "rules/ux.py",
+      "sha": null,
+      "content_sha256": "f95e8c80fcf082210ec3db496609099e2aac48cccc9c2ca0b78769c360377518",
+      "score": 33,
+      "content": "import frappe\nfrom frappe import msgprint, throw, _\n\n\n# ruleid: frappe-missing-translate-function-python\nthrow(\"Error Occured\")\n\n# ruleid: frappe-missing-translate-function-python\nfrappe.throw(\"Error Occured\")\n\n# ruleid: frappe-missing-translate-function-python\nfrappe.msgprint(\"Useful message\")\n\n# ruleid: frappe-missing-translate-function-python\nmsgprint(\"Useful message\")\n\n\n# ok: frappe-missing-translate-function-python\ntranslatedmessage = _(\"Hello\")\n\n# ok: frappe-missing-translate-function-python\nthrow(translatedmessage)\n\n# ok: frappe-missing-translate-function-python\nmsgprint(translatedmessage)\n\n# ok: frappe-missing-translate-function-python\nmsgprint(_(\"Helpful message\"))\n\n# ok: frappe-missing-translate-function-python\nfrappe.throw(_(\"Error occured\"))\n\nnot_translated = \"abc\"\n\n# ruleid: frappe-missing-translate-function-python\nfrappe.throw(\"Some Text\" + not_translated + \"More text\")\n\n# ok: frappe-missing-translate-function-python\nfrappe.throw(_(\"Some Text\") + not_translated)\n\n# ok: frappe-missing-translate-function-python\nfrappe.throw(_(\"Some Text\") + not_translated, title=_(\"None\"))\n\n# ruleid: frappe-missing-translate-function-python\nfrappe.throw(_(\"Some Text\"), title=\"Warning\")\n\n# ok: frappe-missing-translate-function-python\nfrappe.throw(_(\"Some Text\"), title=_(\"Warning\"))\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:25:33.765212+00:00"
+}

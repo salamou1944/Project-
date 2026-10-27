@@ -1,0 +1,382 @@
+{
+  "canonical_source": "github:duckdb/duckdb-httpfs",
+  "repo": "duckdb/duckdb-httpfs",
+  "revision_sha": "77392a72077a85897db2519fae11e2c0da972b8a",
+  "default_branch": "main",
+  "pushed_at": "2026-10-19T12:12:01Z",
+  "repo_updated_at": "2026-10-19T12:12:04Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/IntegrationTests.yml",
+      "sha": null,
+      "content_sha256": "cd34bee44c8916df3a528465713b924f0c2769c1e8ad6cd995c5059ba510c91f",
+      "score": 186,
+      "content": "name: Integration Tests\non: [push, pull_request,repository_dispatch]\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}\n  cancel-in-progress: true\ndefaults:\n  run:\n    shell: bash\n\njobs:\n  linux-tests-httpfs:\n    name: MinIO Tests\n    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}\n    env:\n      S3_TEST_SERVER_AVAILABLE: 1\n      AWS_DEFAULT_REGION: eu-west-1\n      AWS_ACCESS_KEY_ID: minio_duckdb_user\n      AWS_SECRET_ACCESS_KEY: minio_duckdb_user_password\n      DUCKDB_S3_ENDPOINT: duckdb-minio.com:9000\n      DUCKDB_S3_USE_SSL: false\n      HTTP_PROXY_PUBLIC: localhost:3128\n      TEST_PERSISTENT_SECRETS_AVAILABLE: true\n      CORE_EXTENSIONS: \"parquet;json;tpch\"\n      GEN: ninja\n      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake\n      VCPKG_TARGET_TRIPLET: x64-linux\n      PYTHON_HTTP_SERVER_URL: http://localhost:8008\n      PYTHON_HTTP_SERVER_DIR: /tmp/python_test_server\n\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n          submodules: 'true'\n\n      - uses: actions/setup-python@v6\n        with:\n          python-version: '3.10'\n\n      - name: Install Ninja\n        shell: bash\n        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build squid\n\n      - name: Setup Ccache\n        uses: hendrikmuhs/ccache-action@main\n        with:\n          key: ${{ github.job }}\n          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb-httpfs' }}\n\n      - name: Setup vcpkg\n        uses: lukka/run-vcpkg@v11.1\n        with:\n          vcpkgGitCommitId: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24\n\n      - name: Fix permissions of test secrets\n        shell: bash\n        run: chmod -R 700 data/secrets\n\n      - name: Run & Populate Python test server\n        shell: bash\n        run: |\n          mkdir -p \"$PYTHON_HTTP_SERVER_DIR\"\n          cd \"$PYTHON_HTTP_SERVER_DIR\"\n          python3 -m http.server 8008 &\n\n      - name: Build\n        shell: bash\n        run: make\n\n      - name: Run HTTPFS C++ unit tests\n        shell: bash\n        run: |\n          cmake --build build/release --target unittest_httpfs\n          ./build/release/test/unittest_httpfs \"[httpfs][s3]\"\n\n      - name: Install test server\n        shell: bash\n        run: |\n          sudo ./scripts/install_s3_test_server.sh\n          ./scripts/generate_presigned_url.sh\n\n      # Squid reads /etc/hosts at startup, so start it after the MinIO hostnames are installed.\n      # TODO: fix the authenticated proxy here\n      - name: Install and run http proxy squid\n        shell: bash\n        run: |\n          ./scripts/run_squid.sh --port 3128 --log_dir squid_logs &\n\n      - name: Run tests\n        shell: bash\n        run: |\n          make test_minio\n\n      - name: Stop test server\n        if: always()\n        shell: bash\n        run: |\n          ./scripts/cleanup_s3_test_server.sh\n"
+    },
+    {
+      "path": "scripts/install_s3_test_server.sh",
+      "sha": null,
+      "content_sha256": "5cc7fa13558a50f21a2a20cfee6570a760a873a40daef21e4344ac6d6fcf33f1",
+      "score": 175,
+      "content": "#!/usr/bin/env bash\n# Note: needs sudo\n\nunamestr=$(uname)\nif [[ \"$unamestr\" == 'Linux' ]]; then\n\tapt-get install -y docker.io\nfi\n\ndocker --version\necho '127.0.0.1 duckdb-minio.com' >> /etc/hosts\necho '127.0.0.1 test-bucket.duckdb-minio.com' >> /etc/hosts\necho '127.0.0.1 test-bucket-2.duckdb-minio.com' >> /etc/hosts\necho '127.0.0.1 test-bucket-public.duckdb-minio.com' >> /etc/hosts"
+    },
+    {
+      "path": "test/sql/storage/external_file_cache/external_file_cache_read_blob.test_slow",
+      "sha": null,
+      "content_sha256": "e6fff25164a80575ab9066d3f75f0ebce1b5d782200bc79f1e4489bbf674c2f3",
+      "score": 170,
+      "content": "# name: test/sql/storage/external_file_cache/external_file_cache_read_blob.test_slow\n# description: Test the external file cache for read_blob HTTPFS reads\n# group: [external_file_cache]\n\nrequire parquet\n\nrequire httpfs\n\nstatement ok\nCALL enable_logging('HTTP');\n\n# first read_blob should do 1 GET\nstatement ok\nfrom read_blob('https://blobs.duckdb.org/data/shakespeare.parquet');\n\nstatement ok\nfrom read_blob('https://blobs.duckdb.org/data/shakespeare.parquet');\n\nstatement ok\nfrom 'https://blobs.duckdb.org/data/shakespeare.parquet';\n\nquery IIIII\nFROM (FROM (FROM duckdb_logs_parsed('HTTP') WHERE response.status != 'ServiceUnavailable_503' AND response.status != 'TooManyRequests_429') SELECT count(*), sum(request.type == 'HEAD') head, sum(request.type == 'GET') get, sum(request.type == 'POST') post, sum(request.type == 'PUT') put GROUP BY context_id ORDER BY context_id);\n----\n2\t1\t1\t0\t0\n1\t1\t0\t0\t0\n1\t1\t0\t0\t0\n"
+    },
+    {
+      "path": "test/sql/storage/external_file_cache/external_file_cache_httpfs.test",
+      "sha": null,
+      "content_sha256": "05e0bbb3b92a077e7e03d8bc2280f2b786a1e3e282edfa1e37319a8c61088004",
+      "score": 170,
+      "content": "# name: test/sql/storage/external_file_cache/external_file_cache_httpfs.test\n# description: Test the external file cache for HTTPFS reads\n# group: [external_file_cache]\n\nrequire parquet\n\nrequire httpfs\n\n# first query caches the data\nstatement ok\nfrom 'https://blobs.duckdb.org/data/shakespeare.parquet';\n\n# second query should only have a head request, no gets\nquery II\nexplain analyze from 'https://blobs.duckdb.org/data/shakespeare.parquet';\n----\nanalyzed_plan\t<REGEX>:.*GET: 0.*\n\nstatement ok\nSET enable_http_metadata_cache = true;\n\n# first query saves the metadata (and data, but that was already there)\nstatement ok\nfrom 'https://blobs.duckdb.org/data/shakespeare.parquet';\n\n# second query should do no HEAD and no GET\nquery II\nexplain analyze from 'https://blobs.duckdb.org/data/shakespeare.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HEAD: 0.*\n"
+    },
+    {
+      "path": "test/README.md",
+      "sha": null,
+      "content_sha256": "c8aaab5a76170338c3f3eb76c573492150292a75f94639c38278de373ecfb700",
+      "score": 158,
+      "content": "\nIn order to test these locally, [SeaweedFS](https://github.com/seaweedfs/seaweedfs) serves the S3 API. This requires Docker to be installed.\n\n### Installing Docker on MacOS\n\nInstall `docker` using `homebrew`.\n\n\n```bash\nbrew install docker --cask\n```\n\nThen open `/Applications/Docker`. Note that the first time you open the application you need to go to the `Applications` folder, right-click `Docker` and select `open`.\n\n### Setting Up Docker\n\nIn order to finish setting up Docker, you need to open the Docker application, and login to your Docker account. Create a Docker account if you do not have one and finish setting up.\n\n### Running Minio\n\nRun the `install_s3_test_server` script. This requires root. This makes a few changes to your system, specifically to `/etc/hosts` to set up a few redirect interfaces to localhost. This only needs to be run once.\n\n```bash\nsudo ./scripts/install_s3_test_server.sh\n```\n\nThen, if this has not been done yet, we need to generate some data:\n\n```\n./scripts/generate_presigned_url.sh\n```\n\nThen run the test server in the back-ground using Docker. Note that Docker must be opened for this to work. On MacOS you can open the docker gui (`/Applications/Docker`) and leave it open to accomplish this.\n\n\n```bash\nsource ./scripts/run_s3_test_server.sh\n```\n\nNow set up the following environment variables using the `set_s3_test_server_variables.sh` script to enable running of the tests.\n\n```bash\n# use source so it sets the environment variables in your current environment\nsource scripts/set_s3_test_server_variables.sh\n```\n\nNow you should be able to run the S3 tests against SeaweedFS, e.g.:\n\n```bash\nbuild/debug/test/unittest test/sql/copy/s3/s3_hive_partition.test\n```\n\n> The S3 gateway uses port 9000. Clickhouse also uses port 9000. If the tests are not working and you have a running Clickhouse service - try killing it first, e.g. using `killall -9 clickhouse`\n\n#### Test Data\n\nThe configuration for SeaweedFS is stored in `scripts/seaweedfs_s3.yml`; users and anonymous access are defined in `scripts/seaweedfs_s3_config.json`. Data is stored in `/tmp/minio_test_data`. The hostnames, credentials and paths keep their `minio` names so the tests and CI environment stay unchanged."
+    },
+    {
+      "path": "test/sql/secret/gcs_oauth.test",
+      "sha": null,
+      "content_sha256": "b9ac5b87adf6bec7767516df49c745cdb842055807cd2d73510ce83a2e284be1",
+      "score": 134,
+      "content": "# name: test/sql/secret/gcs_oauth.test\n# description: Test GCS OAuth2 bearer token support\n# group: [secret]\n\nrequire httpfs\n\n\n# Test creating a GCS secret with OAuth2 bearer token\nstatement ok\nCREATE SECRET gcs_oauth_test (\n    TYPE GCS,\n    bearer_token 'test_oauth2_token_12345',\n    user_project 'test-billing-project'\n);\n\n# Verify the secret was created\nquery I\nSELECT COUNT(*) FROM duckdb_secrets() WHERE name = 'gcs_oauth_test' AND type = 'gcs';\n----\n1\n\n# Verify bearer token is redacted\nquery I\nSELECT COUNT(*) FROM duckdb_secrets() WHERE name = 'gcs_oauth_test' AND secret_string LIKE '%bearer_token=redacted%';\n----\n1\n\n# The billing project is configuration metadata and remains visible\nquery I\nSELECT COUNT(*) FROM duckdb_secrets() WHERE name = 'gcs_oauth_test' AND secret_string LIKE '%user_project=test-billing-project%';\n----\n1\n\n# Test creating a GCS secret with HMAC keys (backward compatibility)\nstatement ok\nCREATE SECRET gcs_hmac_test (\n    TYPE GCS,\n    key_id 'test_key_id',\n    secret 'test_secret'\n);\n\n# Verify both secrets exist\nquery II\nSELECT name, type FROM duckdb_secrets() WHERE name IN ('gcs_oauth_test', 'gcs_hmac_test') ORDER BY name;\n----\ngcs_hmac_test\tgcs\ngcs_oauth_test\tgcs\n\n# Test creating a GCS secret with both bearer token and HMAC (bearer token should take precedence)\nstatement ok\nCREATE SECRET gcs_mixed_test (\n    TYPE GCS,\n    bearer_token 'oauth_token',\n    key_id 'hmac_key',\n    secret 'hmac_secret'\n);\n\n# Verify all three secrets exist\nquery I\nSELECT COUNT(*) FROM duckdb_secrets() WHERE name LIKE 'gcs_%test';\n----\n3\n\n# Clean up\nstatement ok\nDROP SECRET gcs_oauth_test;\n\nstatement ok\nDROP SECRET gcs_hmac_test;\n\nstatement ok\nDROP SECRET gcs_mixed_test;\n\n# Verify all secrets are removed\nquery I\nSELECT COUNT(*) FROM duckdb_secrets() WHERE name LIKE 'gcs_%test';\n----\n0\n\n# Test that bearer_token parameter is not allowed for S3 secrets\nstatement error Unknown named parameter\nCREATE SECRET s3_with_bearer (\n    TYPE S3,\n    bearer_token 'should_not_work'\n);\n----\n\n# Test that bearer_token parameter is not allowed for R2 secrets  \nstatement error Unknown named parameter\nCREATE SECRET r2_with_bearer (\n    TYPE R2,\n    bearer_token 'should_not_work'\n);\n----\n\n# Test that user_project is GCS-only\nstatement error Unknown named parameter\nCREATE SECRET s3_with_user_project (\n    TYPE S3,\n    user_project 'should_not-work'\n);\n----\n\nstatement error Unknown named parameter\nCREATE SECRET r2_with_user_project (\n    TYPE R2,\n    user_project 'should_not-work'\n);\n----\n"
+    },
+    {
+      "path": "test/sql/httpfs/user_agent_httplib.test",
+      "sha": null,
+      "content_sha256": "736de65fb31a8fd6de5aa11cae4db799f32855a0030f162d2cac1c9849812a2a",
+      "score": 129,
+      "content": "# name: test/sql/httpfs/user_agent_httplib.test\n# description: httplib client must send a duckdb User-Agent on every request type\n# group: [httpfs]\n\n#              (S3 LIST/glob, PUT, multipart POST, HEAD, GET, and generic HTTP)\n\nrequire-env S3_TEST_SERVER_AVAILABLE 1\n\nrequire-env AWS_DEFAULT_REGION\n\nrequire-env AWS_ACCESS_KEY_ID\n\nrequire-env AWS_SECRET_ACCESS_KEY\n\nrequire-env DUCKDB_S3_ENDPOINT\n\nrequire-env DUCKDB_S3_USE_SSL\n\nrequire-env PYTHON_HTTP_SERVER_URL\n\nrequire-env PYTHON_HTTP_SERVER_DIR\n\nrequire httpfs\n\nrequire parquet\n\nstatement ok\nSET httpfs_client_implementation='httplib';\n\nstatement ok\nset s3_use_ssl='{DUCKDB_S3_USE_SSL}'\n\nstatement ok\nset s3_endpoint='{DUCKDB_S3_ENDPOINT}'\n\nstatement ok\nset s3_region='{AWS_DEFAULT_REGION}'\n\nstatement ok\nCREATE SECRET s1 (TYPE S3, KEY_ID '{AWS_ACCESS_KEY_ID}', SECRET '{AWS_SECRET_ACCESS_KEY}')\n\n# shrink the aggregation threshold toward the 5 MiB minimum so a small write\n# still exercises the multipart path\nstatement ok\nSET s3_uploader_max_filesize='50GB'\n\nstatement ok\nSET s3_uploader_max_parts_per_file=10000\n\n# publish a file to the local dir the python http.server serves (local write, not HTTP)\nstatement ok\nCOPY (SELECT 42 AS a) TO '{PYTHON_HTTP_SERVER_DIR}/ua_http.csv'\n\nstatement ok\nCALL enable_logging('HTTP');\n\n# --- write: single PUT + multipart POST ---\nstatement ok\nCOPY (SELECT 42 AS a) TO 's3://test-bucket/ua_small.parquet'\n\nstatement ok\nCOPY (SELECT repeat('x', 1000) AS a FROM range(6000)) TO 's3://test-bucket/ua_big.csv'\n\n# --- read: HEAD + ranged GET, then a forced full GET ---\nstatement ok\nSELECT count(*) FROM 's3://test-bucket/ua_small.parquet'\n\nstatement ok\nSET force_download=true\n\nstatement ok\nSELECT count(*) FROM 's3://test-bucket/ua_small.parquet'\n\nstatement ok\nSET force_download=false\n\n# --- list: glob issues an S3 LIST (GET) ---\nstatement ok\nSELECT count(*) FROM glob('s3://test-bucket/*')\n\n# --- generic (non-S3) HTTP: HEAD + GET via HTTPFileSystem ---\nstatement ok\nSELECT count(*) FROM '{PYTHON_HTTP_SERVER_URL}/ua_http.csv'\n\n# we actually exercised every verb\nquery I\nSELECT count(*) FILTER (WHERE request.type = 'PUT')  > 0\n   AND count(*) FILTER (WHERE request.type = 'POST') > 0\n   AND count(*) FILTER (WHERE request.type = 'HEAD') > 0\n   AND count(*) FILTER (WHERE request.type = 'GET')  > 0\nFROM duckdb_logs_parsed('HTTP')\n----\ntrue\n\n# every logged request must carry a User-Agent that identifies duckdb\nquery I\nSELECT count(*) FROM duckdb_logs_parsed('HTTP')\nWHERE request.headers['User-Agent'] IS NULL\n   OR NOT starts_with(request.headers['User-Agent'], 'duckdb')\n----\n0\n"
+    },
+    {
+      "path": "test/sql/s3/glob_user_agent.test",
+      "sha": null,
+      "content_sha256": "dc425ab88a0c11bf9c5625d949dbdf47408d54715979392d825abf4cc13fd942",
+      "score": 129,
+      "content": "# name: test/sql/s3/glob_user_agent.test\n# description: an S3 glob (LIST) request must carry a duckdb User-Agent\n# group: [s3]\n\nrequire-env S3_TEST_SERVER_AVAILABLE 1\n\nrequire-env AWS_DEFAULT_REGION\n\nrequire-env AWS_ACCESS_KEY_ID\n\nrequire-env AWS_SECRET_ACCESS_KEY\n\nrequire-env DUCKDB_S3_ENDPOINT\n\nrequire-env DUCKDB_S3_USE_SSL\n\nrequire httpfs\n\nstatement ok\nset s3_use_ssl='{DUCKDB_S3_USE_SSL}'\n\nstatement ok\nset s3_endpoint='{DUCKDB_S3_ENDPOINT}'\n\nstatement ok\nset s3_region='{AWS_DEFAULT_REGION}'\n\nstatement ok\nCREATE SECRET s1 (TYPE S3, KEY_ID '{AWS_ACCESS_KEY_ID}', SECRET '{AWS_SECRET_ACCESS_KEY}')\n\nstatement ok\nCALL enable_logging('HTTP');\n\n# a glob issues an S3 LIST (GET) regardless of whether anything matches\nstatement ok\nSELECT count(*) FROM glob('s3://test-bucket/*')\n\nquery I\nSELECT count(*) > 0 FROM duckdb_logs_parsed('HTTP')\n----\ntrue\n\n# every logged request must carry a User-Agent that identifies duckdb\nquery I\nSELECT count(*) FROM duckdb_logs_parsed('HTTP')\nWHERE request.headers['User-Agent'] IS NULL\n   OR NOT starts_with(request.headers['User-Agent'], 'duckdb')\n----\n0\n"
+    },
+    {
+      "path": "test/unittest/http/browser_adapter_test.cpp",
+      "sha": null,
+      "content_sha256": "d109e9d7952a6aa76760c478df2f5522da02f70d9f397f6979f3b9d2f61577d1",
+      "score": 129,
+      "content": "#include \"catch.hpp\"\n\n#include \"http/http_settings.hpp\"\n#include \"http/http_request_session.hpp\"\n#include \"http/http_test_helper.hpp\"\n#include \"http/httpfs_client.hpp\"\n#include \"s3/s3_test_helper.hpp\"\n#include \"duckdb/main/client_context_file_opener.hpp\"\n#include \"duckdb/main/config.hpp\"\n\nnamespace duckdb {\nnamespace {\n\nstruct BrowserObservations {\n\tidx_t parameter_initializations = 0;\n\tidx_t client_initializations = 0;\n\tbool destroyed = false;\n};\n\n//! A core-only provider, using the native client to reach the local fixture.\nclass BrowserHTTPUtil : public HTTPUtil {\npublic:\n\texplicit BrowserHTTPUtil(BrowserObservations &observations_p) : observations(observations_p) {\n\t}\n\n\t~BrowserHTTPUtil() override {\n\t\tobservations.destroyed = true;\n\t}\n\n\tstring GetName() const override {\n\t\treturn \"WasmHTTPUtils\";\n\t}\n\n\tunique_ptr<HTTPParams> InitializeParameters(optional_ptr<FileOpener> opener,\n\t                                            optional_ptr<FileOpenerInfo> info) override {\n\t\tobservations.parameter_initializations++;\n\t\treturn HTTPUtil::InitializeParameters(opener, info);\n\t}\n\n\tunique_ptr<HTTPClient> InitializeClient(HTTPParams &params, const string &proto_host_port) override {\n\t\tobservations.client_initializations++;\n\t\tREQUIRE(params.http_util.GetName() == \"HTTPFS-Wasm\");\n\t\treturn native_client.InitializeClient(params, proto_host_port);\n\t}\n\nprivate:\n\tBrowserObservations &observations;\n\tHTTPFSUtil native_client;\n};\n\n} // namespace\n\nTEST_CASE(\"HTTPFS owns browser parameters and preserves its provider\", \"[httpfs][browser-adapter]\") {\n\tBrowserObservations observations;\n\t{\n\t\tMockS3Server server {MockS3ServerConfig()};\n\t\tDuckDB db(nullptr);\n\t\tConnection con(db);\n\t\tauto browser = make_shared_ptr<BrowserHTTPUtil>(observations);\n\t\tHTTPTestHelper::LoadExtension(db);\n\t\tdb.instance->config.SetHTTPUtil(browser);\n\t\tHTTPSettings::Initialize(*db.instance);\n\t\tHTTPTestHelper::Configure(db, con, 0, \"wasm\", false);\n\t\tbrowser.reset();\n\t\tREQUIRE_FALSE(observations.destroyed);\n\n\t\tauto &adapter = db.instance->config.GetHTTPUtil();\n\t\tREQUIRE(adapter.GetName() == \"HTTPFS-Wasm\");\n\t\tREQUIRE(adapter.GetTransportReusePolicy() == HTTPTransportReusePolicy::EPHEMERAL);\n\t\tHTTPSettings::Initialize(*db.instance);\n\t\tREQUIRE(&db.instance->config.GetHTTPUtil() == &adapter);\n\t\tHTTPTestHelper::RequireQueryOk(con, \"SET httpfs_client_implementation='default'\");\n\t\tauto invalid_client = con.Query(\"SET httpfs_client_implementation='curl'\");\n\t\tREQUIRE(invalid_client->HasError());\n\t\tREQUIRE(invalid_client->GetError().find(\"only `wasm` and `default`\") != string::npos);\n\n\t\tHTTPTestHelper::RequireQueryOk(con, \"SET force_download_threshold=123\");\n\t\tHTTPTestHelper::RequireQueryOk(con, \"SET extra_http_headers=MAP {'X-Setting': 'setting'}\");\n\t\tHTTPTestHelper::RequireQueryOk(\n\t\t    con, \"CREATE SECRET browser_headers (TYPE HTTP, EXTRA_HTTP_HEADERS MAP {'X-Secret': 'secret'})\");\n\t\tHTTPTestHelper::RequireQueryOk(con, \"BEGIN TRANSACTION\");\n\t\tClientContextFileOpener opener(*con.context);\n\t\tFileOpenerInfo info;\n\t\tinfo.file_path = server.HTTPPath();\n\t\tauto session = HTTPRequestSession::Create(&opener, &info);\n\t\tauto snapshot = session->Capture().snapshot;\n\t\tREQUIRE(&snapshot->Params().http_util == &adapter);\n\t\tREQUIRE(snapshot->Params().force_download_threshold == 123);\n\t\tREQUIRE(snapshot->Params().extra_headers.at(\"X-Setting\") == \"setting\");\n\t\tREQUIRE(snapshot->Params().extra_headers.at(\"X-Secret\") == \"secret\");\n\t\tREQUIRE(snapshot->Params().VerifyServerCertificate());\n\n\t\tfor (idx_t i = 0; i < 2; i++) {\n\t\t\tauto data = snapshot->CreateRequest();\n\t\t\tHeadRequestInfo request(server.HTTPPath(), data.headers, *data.params);\n\t\t\tREQUIRE(session->Request(request)->Success());\n\t\t}\n\t\tHTTPTestHelper::RequireQueryOk(con, \"COMMIT\");\n\t\tREQUIRE(observations.parameter_initializations == 0);\n\t\tREQUIRE(observations.client_initializations == 2);\n\t\tauto requests = server.Observations();\n\t\tREQUIRE(requests.size() == 2);\n\t\tfor (const auto &request : requests) {\n\t\t\tREQUIRE(MockS3HeaderValues(request, \"X-Setting\") == vector<string> {\"setting\"});\n\t\t\tREQUIRE(MockS3HeaderValues(request, \"X-Secret\") == vector<string> {\"secret\"});\n\t\t}\n\t\tHTTPTestHelper::RequireQueryOk(con, \"SELECT 42\");\n\t}\n\tREQUIRE(observations.destroyed);\n}\n\nTEST_CASE(\"Browser adapter supports S3 credential refresh\", \"[httpfs][browser-adapter][s3-refresh]\") {\n\tconst auto target = GENERATE(MockS3RefreshTarget::HEAD, MockS3RefreshTarget::BULK_DELETE_POST);\n\tMockS3ServerConfig config;\n\tconfig.object.bucket = S3TestHelper::BUCKET;\n\tconfig.object.key = S3TestHelper::OBJECT_KEY;\n\tconfig.auth.stale_key_id = S3TestHelper::STALE_KEY_ID;\n\tconfig.auth.refresh_target = target;\n\tMockS3Server server(std::move(config));\n\n\tBrowserObservations observations;\n\tDuckDB db(nullptr);\n\tConnection con(db);\n\tS3TestHelper::LoadExtension(db);\n\tdb.instance->config.SetHTTPUtil(make_shared_ptr<BrowserHTTPUtil>(observations));\n\tHTTPSettings::Initialize(*db.instance);\n\tauto test_id = S3TestHelper::ConfigureRefresh(db, con, server, \"wasm\", false);\n\tS3TestHelper::RequireQueryOk(con, \"BEGIN TRANSACTION\");\n\tauto &fs = FileSystem::GetFileSystem(*con.context);\n\tif (target == MockS3RefreshTarget::HEAD) {\n\t\tauto handle = fs.OpenFile(S3TestHelper::S3_PATH, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);\n\t\tREQUIRE(handle);\n\t} else {\n\t\tfs.RemoveFiles({S3TestHelper::S3_PATH});\n\t}\n\tS3TestHelper::RequireQueryOk(con, \"COMMIT\");\n\tS3TestHelper::AssertSingleRefresh(test_id);\n\tauto requests = server.Observations();\n\tINFO(MockS3DescribeObservations(requests));\n\tconst auto method = target == MockS3RefreshTarget::HEAD ? \"HEAD\" : \"POST\";\n\tREQUIRE(MockS3HasObservation(requests, method, S3TestHelper::STALE_KEY_ID, 403));\n\tREQUIRE(MockS3HasObservation(requests, method, S3TestHelper::FRESH_KEY_ID, 200));\n\tREQUIRE(observations.parameter_initializations == 0);\n\tS3TestHelper::RequireQueryOk(con, \"SELECT 42\");\n}\n\n} // namespace duckdb\n"
+    },
+    {
+      "path": ".github/workflows/issue-forward.yml",
+      "sha": null,
+      "content_sha256": "eb07c36244d6f9a4e8f2cb05aee72f90e7afaf7ffd6efa5c2766a5cf53bfa71b",
+      "score": 126,
+      "content": "name: Forward issue events to community-issue-tracker\n\n# Thin caller. All forwarding logic lives in the shared composite action\n# (duckdb/duckdb-ci/community-issue-tracker/forward), so changes there reach every\n# tracked repo with no per-repo edit.\n\non:\n  issues:\n    types: [opened, reopened, closed]\n  issue_comment:\n    types: [created]\n\npermissions:\n  contents: read\n\njobs:\n  forward:\n    # issue_comment fires for PRs too — skip those\n    if: ${{ github.event_name == 'issues' || github.event.issue.pull_request == null }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: duckdb/duckdb-ci/community-issue-tracker/forward@main\n        with:\n          token: ${{ secrets.COMMUNITY_ISSUE_DISPATCH_TOKEN }}\n"
+    },
+    {
+      "path": ".github/workflows/review-relay.yml",
+      "sha": null,
+      "content_sha256": "3a537e2d9044983e9274b845efacc1e865fa09253a4ba8a614542694ad98ccdf",
+      "score": 126,
+      "content": "name: Review relay\n\n# Exists only to produce a workflow_run event. A pull_request_review on a fork PR\n# runs without secrets, so it can't dispatch to pr-tracker directly — but its\n# completion still fires a workflow_run in the base repo, which review-forward.yml\n# (running WITH secrets on the default branch) reacts to. This job emits nothing\n# that is trusted downstream; pr-tracker re-fetches the review from the API.\n\non:\n  pull_request_review:\n    types: [submitted, dismissed]\n\npermissions:\n  contents: read\n\njobs:\n  emit-workflow-run:\n    runs-on: ubuntu-latest\n    steps:\n      # Never let this stub fail — its only job is to complete so the base repo\n      # gets a workflow_run event for review-forward.yml to react to.\n      - continue-on-error: true\n        run: echo \"review submitted on PR ${{ github.event.pull_request.number }} - relaying via workflow_run\"\n"
+    },
+    {
+      "path": ".github/workflows/review-forward.yml",
+      "sha": null,
+      "content_sha256": "3ebf72607b7c0e2433b601e8c56e05409bb79e50106c0be066d4a89c17ce0814",
+      "score": 126,
+      "content": "name: Forward review activity to pr-tracker\n\n# Thin caller. Runs on the default branch WITH secrets (a workflow_run always does,\n# even when the run it reacts to had none). All resolution/dispatch logic lives in\n# the shared composite action (duckdb/duckdb-ci/pr-tracker/review-forward), so it's\n# maintained in one place. Pairs with review-relay.yml (the no-op stub that produces\n# the workflow_run on a fork PR review).\n\non:\n  workflow_run:\n    workflows: [\"Review relay\"]\n    types: [completed]\n\npermissions:\n  contents: read\n  pull-requests: read\n\njobs:\n  forward:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: duckdb/duckdb-ci/pr-tracker/review-forward@main\n        with:\n          token: ${{ secrets.PR_DISPATCH_TOKEN }}   # dispatch to pr-tracker\n          lookup_token: ${{ github.token }}          # read this repo's open PRs\n"
+    },
+    {
+      "path": ".github/workflows/pr-forward.yml",
+      "sha": null,
+      "content_sha256": "ad8386bef6d53f927a19907394860592cb1bb106fad7d4b0076d540596ee334e",
+      "score": 126,
+      "content": "name: Forward PR events to pr-tracker\n\n# Thin caller. All forwarding logic lives in the shared composite action\n# (duckdb/duckdb-ci/pr-tracker/forward), so changes there reach every tracked repo\n# with no per-repo edit. Only the triggers below and the token are per-repo — keep\n# the trigger list a generous superset so this file rarely needs to change.\n\non:\n  pull_request_target:\n    types: [opened, reopened, ready_for_review, converted_to_draft, closed, labeled, unlabeled, review_requested]\n  issue_comment:\n    types: [created]\n  check_suite:\n    types: [completed]\n  status:\n\npermissions:\n  contents: read\n\njobs:\n  forward:\n    if: ${{ github.event_name != 'issue_comment' || github.event.issue.pull_request != null }}\n    runs-on: ubuntu-latest\n    steps:\n      - uses: duckdb/duckdb-ci/pr-tracker/forward@main\n        with:\n          token: ${{ secrets.PR_DISPATCH_TOKEN }}\n"
+    },
+    {
+      "path": ".github/workflows/MainDistributionPipeline.yml",
+      "sha": null,
+      "content_sha256": "d7059af2a0c530a58ec6892bbba9a4312a1eb0a7f1c5bcba2d9c5a1c4f6794b0",
+      "score": 126,
+      "content": "#\n# This workflow calls the main distribution pipeline from DuckDB to build, test and (optionally) release the extension\n#\nname: Main Extension Distribution Pipeline\non:\n  push:\n  pull_request:\n  workflow_dispatch:\n\nconcurrency:\n  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}\n  cancel-in-progress: true\n\njobs:\n  prepare:\n    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-slim' }}\n    name: Prepare\n    outputs:\n      runners: ${{ steps.runners.outputs.runners }}\n    steps:\n      - name: Detect runners\n        id: runners\n        uses: duckdb/duckdb-ci/detect-runners@main\n\n  build:\n    name: Build extension\n    uses: duckdb/extension-ci-tools/.github/workflows/build.yml@main\n    needs:\n      - prepare\n    with:\n      groups: |\n        main:\n          config: extension_config.cmake\n          toolchain: main\n      opt_in_archs: windows_arm64\n      runners: ${{ needs.prepare.outputs.runners }}\n\n  deploy:\n    name: Deploy extension\n    if: ${{ startsWith(github.ref_name, 'v') || github.ref_name == 'main' }}\n    needs:\n      - build\n    uses: duckdb/extension-ci-tools/.github/workflows/deploy.yml@main\n    secrets: inherit\n    with:\n      duckdb_version: ${{ needs.build.outputs.duckdb_version }}\n      duckdb_commit: ${{ needs.build.outputs.duckdb_commit }}\n      deploy_extensions: httpfs\n      deploy_latest: ${{ startsWith(github.ref, 'refs/heads/v') }}\n      deploy_versioned: ${{ startsWith(github.ref, 'refs/heads/v') || github.ref == 'refs/heads/main' }}\n\n  code-quality:\n    name: Code Quality\n    uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main\n    with:\n      extension_name: httpfs\n      ci_tools_version: main\n      extra_toolchains: 'python3'\n      format_checks: 'format'\n\n  tidy:\n    name: Tidy Check\n    runs-on: ubuntu-24.04\n    env:\n      CC: gcc\n      CXX: g++\n      GEN: ninja\n      TIDY_THREADS: 4\n      TIDY_CHECKS: readability-convert-member-functions-to-static\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n          submodules: 'recursive'\n      - name: Install\n        run: |\n          sudo apt-get update -y -qq\n          sudo apt-get install -y -qq ninja-build clang-tidy libcurl4-openssl-dev libssl-dev\n          sudo pip3 install 'pybind11[global]' --break-system-packages\n      - name: Tidy Check\n        run: make tidy-check\n\n  relassert:\n    name: Build relassert\n    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-latest' }}\n    env:\n      GEN: ninja\n      CC: clang-20\n      CXX: clang++-20\n      # Enable -DDEBUG slow verifiers (expression verifier, operator\n      # round-trips, etc.) without changing the optimization level.\n      FORCE_DEBUG: 1\n      FORCE_ASSERT: 1\n      ASAN_OPTIONS: \"detect_leaks=1:halt_on_error=1:abort_on_error=0\"\n      UBSAN_OPTIONS: \"halt_on_error=1:print_stacktrace=1\"\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0\n          submodules: 'true'\n      - name: Install tools\n        run: python3 duckdb/scripts/ci/retry.py -- make -C duckdb toolsci\n      - name: Fix ASan runtime\n        # libclang_rt.asan_static.a is missing in ubuntu 24.04 — workaround\n        # mirrored from upstream Main.yml.\n        run: |\n          asan_static_dir=\"/usr/lib/llvm-20/lib/clang/20/lib/x86_64-pc-linux-gnu\"\n          asan_static_target=\"/usr/lib/llvm-20/lib/clang/20/lib/linux/libclang_rt.asan_static-x86_64.a\"\n          if [[ ! -e \"${asan_static_dir}/libclang_rt.asan_static.a\" && -e \"${asan_static_target}\" ]]; then\n            sudo mkdir -p \"${asan_static_dir}\"\n            sudo ln -sf \"${asan_static_target}\" \"${asan_static_dir}/libclang_rt.asan_static.a\"\n          fi\n      - name: Setup Ccache\n        uses: hendrikmuhs/ccache-action@main\n        with:\n          max-size: 5GB\n          evict-old-files: job\n      - name: Build (relassert → ASan + UBSan + LSan)\n        uses: duckdb/duckdb-ci/build-duckdb@main\n        with:\n          build-type: relassert\n          build: python3 duckdb/scripts/ci/retry.py -- make relassert\n          test: make unittest_relassert\n          vcpkg-commit: cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24\n"
+    },
+    {
+      "path": "test/sql/copy/s3/parquet_s3_tpcds.test_slow",
+      "sha": null,
+      "content_sha256": "9c0c21ddc77211bbe641f41c4fb5bab9e4ad16dc32d4a97ba73f939c92dbce1e",
+      "score": 124,
+      "content": "# name: test/sql/copy/s3/parquet_s3_tpcds.test_slow\n# description: Test all tpcds queries on tpch sf0.01 over s3\n# group: [s3]\n\nrequire parquet\n\nrequire httpfs\n\nrequire tpcds\n\nrequire-env S3_TEST_SERVER_AVAILABLE 1\n\n# Require that these environment variables are also set\n\nrequire-env AWS_DEFAULT_REGION\n\nrequire-env AWS_ACCESS_KEY_ID\n\nrequire-env AWS_SECRET_ACCESS_KEY\n\nrequire-env DUCKDB_S3_ENDPOINT\n\nrequire-env DUCKDB_S3_USE_SSL\n\n# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues\nset ignore_error_messages\n\n# answers are generated from postgres\n# hence check with NULLS LAST flag\nstatement ok\nPRAGMA default_null_order='NULLS LAST'\n\nstatement ok\nSET enable_http_metadata_cache=true;\n\nstatement ok\nset http_timeout=120000;\n\n# More retries (longest wait will be 25600ms)\nstatement ok\nset http_retries=6;\n\nstatement ok\nCREATE SCHEMA tpcds;\n\nstatement ok\nCALL dsdgen(sf=0.01, schema='tpcds');\n\nforeach tbl call_center catalog_page catalog_returns catalog_sales customer customer_demographics customer_address date_dim household_demographics inventory income_band item promotion reason ship_mode store store_returns store_sales time_dim warehouse web_page web_returns web_sales web_site\n\nstatement ok\nCOPY tpcds.{tbl} TO 's3://test-bucket/tpcds-sf0_01/{tbl}.parquet' (FORMAT 'PARQUET', COMPRESSION 'ZSTD');\n\nstatement ok\nCREATE VIEW {tbl} AS SELECT * FROM parquet_scan('s3://test-bucket/tpcds-sf0_01/{tbl}.parquet');\n\nendloop\n\n# too slow queries:\n# 64, 85\n\nloop i 1 9\n\nquery I\nPRAGMA tpcds({i})\n----\n<FILE>:duckdb/extension/tpcds/dsdgen/answers/sf0.01/0{i}.csv\n\nendloop\n\nloop i 10 64\n\nquery I\nPRAGMA tpcds({i})\n----\n<FILE>:duckdb/extension/tpcds/dsdgen/answers/sf0.01/{i}.csv\n\nendloop\n\nloop i 65 85\n\nquery I\nPRAGMA tpcds({i})\n----\n<FILE>:duckdb/extension/tpcds/dsdgen/answers/sf0.01/{i}.csv\n\nendloop\n\nloop i 86 99\n\nquery I\nPRAGMA tpcds({i})\n----\n<FILE>:duckdb/extension/tpcds/dsdgen/answers/sf0.01/{i}.csv\n\nendloop\n"
+    },
+    {
+      "path": "test/sql/storage/invalid_unicode_scrambled.test_slow",
+      "sha": null,
+      "content_sha256": "60eb247148708949ce23c6fae85919ff6780fdf895a263677a6b00633ac911a4",
+      "score": 114,
+      "content": "# name: test/sql/storage/invalid_unicode_scrambled.test_slow\n# description: Issue #1650 - \"invalid unicode detected in segment statistics\" when inserting structs with strings and NULL values\n# group: [storage]\n\nrequire httpfs\n\nrequire parquet\n\nstatement ok\ncreate or replace table blah as (with\nus as (select distinct * from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/invalid_unicode_scrambled.parquet') select Address from\nus);\n\n\n"
+    },
+    {
+      "path": "test/unittest/http/http_cache_policy_test.cpp",
+      "sha": null,
+      "content_sha256": "2e12ff76006ff603436d75f1885b3e6a632ac46b725a3021813b5bb4bc6d994e",
+      "score": 112,
+      "content": "#include \"catch.hpp\"\n\n#include \"http/http_test_helper.hpp\"\n#include \"http/httpfs.hpp\"\n\nnamespace duckdb {\n\nTEST_CASE(\"HTTP cache policy preserves repeated response headers\", \"[httpfs][cache]\") {\n\tfor (const auto &client : {\"curl\", \"httplib\"}) {\n\t\tINFO(client);\n\t\tMockS3ServerConfig config;\n\t\tconfig.metadata.response_headers = {{\"Cache-Control\", \"max-age=3600\"}, {\"Cache-Control\", \"no-cache\"}};\n\t\tMockS3Server server(std::move(config));\n\t\tDuckDB db(nullptr);\n\t\tConnection con(db);\n\t\tHTTPTestHelper::Configure(db, con, 0, client);\n\t\tHTTPTestHelper::RequireQueryOk(con, \"BEGIN TRANSACTION\");\n\t\tauto &fs = FileSystem::GetFileSystem(*con.context);\n\t\tauto handle = fs.OpenFile(server.HTTPPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);\n\t\tauto deadline = handle->Cast<HTTPFileHandle>().GetCacheValidUntil();\n\t\tREQUIRE(deadline);\n\t\tREQUIRE(*deadline == timestamp_t::ninfinity());\n\t\tREQUIRE_FALSE(handle->Cast<HTTPFileHandle>().CanReuseCachedData());\n\t\thandle.reset();\n\t\thandle = fs.OpenFile(server.HTTPPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);\n\t\tREQUIRE(HTTPTestHelper::CountRequests(server.Observations(), \"HEAD\", 200) == 2);\n\t\thandle.reset();\n\t\tHTTPTestHelper::RequireQueryOk(con, \"ROLLBACK\");\n\t}\n}\n\nTEST_CASE(\"HTTP metadata cache lifetime is controlled by its setting\", \"[httpfs][cache]\") {\n\tHTTPMetadataCacheEntry entry;\n\tentry.length = 42;\n\tentry.cache_valid_until = timestamp_t::ninfinity();\n\tfor (const auto mode : {HTTPMetadataCacheMode::QUERY_LOCAL, HTTPMetadataCacheMode::GLOBAL}) {\n\t\tHTTPMetadataCache cache(mode);\n\t\tcache.Insert(\"expired\", entry);\n\t\tHTTPMetadataCacheEntry result;\n\t\tconst auto &lookup = cache;\n\t\tREQUIRE(lookup.Find(\"expired\", result) == (mode == HTTPMetadataCacheMode::GLOBAL));\n\t\tentry.cache_valid_until = timestamp_t::infinity();\n\t\tcache.Insert(\"fresh\", entry);\n\t\tREQUIRE(lookup.Find(\"fresh\", result));\n\t\tREQUIRE(result.length == 42);\n\t\tentry.cache_valid_until = timestamp_t::ninfinity();\n\t}\n}\n\nTEST_CASE(\"Explicit cache settings preserve legacy reuse\", \"[httpfs][cache]\") {\n\tMockS3ServerConfig config;\n\tconfig.metadata.response_headers = {{\"Cache-Control\", \"no-store, max-age=0\"}, {\"Vary\", \"Origin\"}};\n\tMockS3Server server(std::move(config));\n\tDuckDB db(nullptr);\n\tConnection con(db);\n\tHTTPTestHelper::Configure(db, con, 0);\n\tHTTPTestHelper::RequireQueryOk(con, \"SET enable_http_metadata_cache=true\");\n\tHTTPTestHelper::RequireQueryOk(con, \"SET enable_external_file_cache=true\");\n\n\tfor (idx_t i = 0; i < 2; i++) {\n\t\tauto result = con.Query(\"SELECT content FROM read_blob('\" + server.HTTPPath() + \"')\");\n\t\tREQUIRE_FALSE(result->HasError());\n\t\tREQUIRE(result->Collection().GetValue(0, 0).GetValue<string>() == server.ObjectData());\n\t}\n\tauto observations = server.Observations();\n\tREQUIRE(HTTPTestHelper::CountRequests(observations, \"HEAD\", 200) == 1);\n\tREQUIRE(HTTPTestHelper::CountRangeRequests(observations, 206) == 1);\n}\n\nTEST_CASE(\"HTTP cache validation follows file options and session settings\", \"[httpfs][cache]\") {\n\tMockS3ServerConfig config;\n\tconfig.metadata.response_headers = {{\"Cache-Control\", \"no-store, max-age=0\"}, {\"Vary\", \"*\"}};\n\tMockS3Server server(std::move(config));\n\tDuckDB db(nullptr);\n\tConnection con(db);\n\tHTTPTestHelper::Configure(db, con, 0);\n\tHTTPTestHelper::RequireQueryOk(con, \"BEGIN TRANSACTION\");\n\tauto &fs = FileSystem::GetFileSystem(*con.context);\n\tOpenFileInfo file(server.HTTPPath());\n\tfile.extended_info = make_shared_ptr<ExtendedOpenFileInfo>();\n\tbool can_reuse = true;\n\tbool invalid_option = false;\n\tSECTION(\"per-file validation is disabled\") {\n\t\tfile.extended_info->options[\"validate_external_file_cache\"] = Value::BOOLEAN(false);\n\t}\n\tSECTION(\"session validation is disabled\") {\n\t\tHTTPTestHelper::RequireQueryOk(con, \"SET validate_external_file_cache='NO_VALIDATION'\");\n\t}\n\tSECTION(\"per-file validation overrides the session\") {\n\t\tHTTPTestHelper::RequireQueryOk(con, \"SET validate_external_file_cache='NO_VALIDATION'\");\n\t\tfile.extended_info->options[\"validate_external_file_cache\"] = Value::BOOLEAN(true);\n\t\tcan_reuse = false;\n\t}\n\tSECTION(\"NULL per-file validation is rejected\") {\n\t\tfile.extended_info->options[\"validate_external_file_cache\"] = Value();\n\t\tinvalid_option = true;\n\t}\n\tif (invalid_option) {\n\t\tREQUIRE_THROWS_WITH(fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO),\n\t\t                    Catch::Contains(\"validate_external_file_cache\") && Catch::Contains(\"expected a BOOLEAN\"));\n\t\tREQUIRE(server.Observations().empty());\n\t\tHTTPTestHelper::RequireQueryOk(con, \"ROLLBACK\");\n\t\treturn;\n\t}\n\tauto handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);\n\tREQUIRE(handle->Cast<HTTPFileHandle>().CanReuseCachedData() == can_reuse);\n\thandle.reset();\n\tHTTPTestHelper::RequireQueryOk(con, \"ROLLBACK\");\n}\n\n} // namespace duckdb\n"
+    },
+    {
+      "path": "test/sql/copy/s3/metadata_cache.test",
+      "sha": null,
+      "content_sha256": "c5c3a9def6487cfe5ceed885edf814167e90cfcc1f1180449c49bcce6137cb9e",
+      "score": 110,
+      "content": "# name: test/sql/copy/s3/metadata_cache.test\n# description: Test metadata cache that caches reponses from the initial HEAD requests to open a file.\n# group: [s3]\n\nrequire parquet\n\nrequire httpfs\n\nrequire-env S3_TEST_SERVER_AVAILABLE 1\n\n# Require that these environment variables are also set\n\nrequire-env AWS_DEFAULT_REGION\n\nrequire-env AWS_ACCESS_KEY_ID\n\nrequire-env AWS_SECRET_ACCESS_KEY\n\nrequire-env DUCKDB_S3_ENDPOINT\n\nrequire-env DUCKDB_S3_USE_SSL\n\n# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues\nset ignore_error_messages\n\n# this test was written before we implemented the external file cache\n# when it is enabled, the request counts are different\n# we disable it so this test still makes sense\n# Exercise the deprecated URL parameter interface explicitly.\nstatement ok\nLOAD httpfs;\n\nstatement ok\nSET s3_enable_deprecated_url_parameters=true;\n\nstatement ok\nset enable_external_file_cache=false;\n\n# Writing a new object issues one more HEAD than overwriting an existing one, so start from an\n# empty prefix to keep the request counts below stable across runs against the same bucket.\nstatement ok\nCOPY (SELECT 0 AS i, 0 AS value WHERE false) TO 's3://test-bucket-public/root-dir/metadata_cache' (FORMAT PARQUET, PARTITION_BY (i), OVERWRITE);\n\nstatement ok\nCREATE TABLE test as SELECT * FROM range(0,10) tbl(i);\n\nstatement ok\nCREATE TABLE test1 as SELECT * FROM range(10,20) tbl(i);\n\nquery II\nEXPLAIN ANALYZE COPY test TO 's3://test-bucket-public/root-dir/metadata_cache/test.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 2.*GET\\: 0.*PUT\\: 1.*\\#POST\\: 0.*\n\nquery II\nEXPLAIN ANALYZE COPY test TO 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 2.*GET\\: 0.*PUT\\: 1.*\\#POST\\: 0.*\n\n# Now we query the file metadata without the global metadata cache: There should be 1 HEAD request for the file size,\n# then a GET for the pointer to the parquet metadata, then a GET for the metadata.\nquery II\nEXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 1.*GET\\: 1.*PUT\\: 0.*\\#POST\\: 0.*\n\n# Redoing query should still result in same request count\nquery II\nEXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 1.*GET\\: 1.*PUT\\: 0.*\\#POST\\: 0.*\n\n# Now enable the global metadata cache to store the results of the head requests, saving 1 HEAD per file\nstatement ok\nSET enable_http_metadata_cache=true;\n\nquery II\nEXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 1.*GET\\: 1.*PUT\\: 0.*\\#POST\\: 0.*\n\n# Now with global metadata cache, we dont need to do the head request again. noice.\nquery II\nEXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 0.*GET\\: 1.*PUT\\: 0.*\\#POST\\: 0.*\n\n# A query-param-auth overwrite targets the same S3 object through a different handle path.\n# The following stale-cache read should detect the changed ETag, erase the cache entry,\n# and allow a retry to load the new metadata.\nstatement ok\nCOPY (SELECT * from range(0,10) tbl(i)) TO 's3://test-bucket-public/root-dir/metadata_cache/etag_mismatch.parquet' (FORMAT PARQUET);\n\nquery I\nSELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/etag_mismatch.parquet';\n----\n10\n\nstatement ok\nCOPY (SELECT * from range(0,25) tbl(i)) TO 's3://test-bucket-public/root-dir/metadata_cache/etag_mismatch.parquet?s3_access_key_id={AWS_ACCESS_KEY_ID}&s3_secret_access_key={AWS_SECRET_ACCESS_KEY}' (FORMAT PARQUET);\n\nstatement error\nSELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/etag_mismatch.parquet';\n----\n<REGEX>:.*ETag on reading file.*\n\nquery I\nSELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/etag_mismatch.parquet';\n----\n25\n\n# Now when we write a file to a cached url, this would break so the cache entry should be invalidated\nstatement ok\nCOPY (SELECT * from range(0,100) tbl(i)) TO 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';\n\n# We need to do a new head request here\nquery II\nEXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 1.*GET\\: 1.*PUT\\: 0.*\\#POST\\: 0.*\n\n# but now its cached again\nquery II\nEXPLAIN ANALYZE SELECT COUNT(*) FROM 's3://test-bucket-public/root-dir/metadata_cache/test1.parquet';\n----\nanalyzed_plan\t<REGEX>:.*HTTP Stats.*\\#HEAD\\: 0.*GET\\: 1.*PUT\\: 0.*\\#POST\\: 0.*\n"
+    },
+    {
+      "path": "test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow",
+      "sha": null,
+      "content_sha256": "24c77906ce60746805e5667fdd3695e281ce7ce650668ad3195ba50c27ea073f",
+      "score": 110,
+      "content": "# name: test/sql/storage/encryption/temp_files/encrypted_out_of_core.test_slow\n# description: Encrypted large joins in persistent databases have a leftover temporary directory.\n# group: [temp_files]\n\nrequire httpfs\n\nrequire tpch\n\nstatement ok\nATTACH ':memory:' AS mem\n\nforeach cipher GCM CTR\n\nstatement ok\nSET temp_file_encryption=true;\n\n# FIXME: This is a significant regression because we no longer evict \"tiny buffers\", of which we're\n# FIXME: allocating plenty here.\nstatement ok\nSET memory_limit='2GB';\n\nstatement ok\nATTACH '{TEST_DIR}/encrypted_temp_files_{cipher}.db' AS enc (ENCRYPTION_KEY 'asdf', ENCRYPTION_CIPHER '{cipher}');\n\nstatement ok\nUSE enc;\n\nstatement ok\nSET threads=8\n\nstatement ok\nCALL dbgen(sf=1);\n\nstatement ok\nALTER TABLE lineitem RENAME TO lineitem1\n\nstatement ok\nCREATE TABLE lineitem2 AS FROM lineitem1\n\n# creating and dropping a table with an ORDER BY\nstatement ok\nCREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l1.* from lineitem1 l1 ORDER BY l_orderkey, l_returnflag\n\nstatement ok\nDROP TABLE ans;\n\n# performing a small hash join\nstatement ok\nCREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN (FROM lineitem2 l2 WHERE l_orderkey<10000) AS l2 USING (l_orderkey, l_linenumber)\n\nstatement ok\nDROP TABLE ans;\n\n# performing a large window function\nstatement ok\nCREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, row_number() OVER (PARTITION BY l_orderkey, l_linenumber ORDER BY l_orderkey) from lineitem1 l1\n\nstatement ok\nDROP TABLE ans;\n\n# performing a large hash join\nstatement ok\nCREATE OR REPLACE TEMPORARY TABLE ans as select l1.*, l2.* from lineitem1 l1 JOIN lineitem2 l2 USING (l_orderkey, l_linenumber)\n\nstatement ok\nDROP TABLE ans;\n\nstatement ok\nUSE mem\n\nstatement ok\nDETACH enc\n\nendloop\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "673504773ce29d116f20f4ff47a9e1fc9415465d6d745ff78d8c46509e84d9e6",
+      "score": 100,
+      "content": "# DuckDB HTTPFS extension\n\nThe httpfs extension is an autoloadable extension implementing a file system that allows reading remote/writing remote files. For plain HTTP(S), only file reading is supported. For object storage using the S3 API, the httpfs extension supports reading/writing/globbing files.\n\n## Building & Loading the Extension\n\nThe DuckDB submodule must be initialized prior to building.\n```bash\ngit submodule init\ngit pull --recurse-submodules\n```\n\nTo build, type:\n```\nmake setup-vcpkg\nVCPKG_TOOLCHAIN_PATH=$pwd/vcpkg/scripts/buildsystems/vcpkg.cmake GEN=ninja make\n```\nConsider adding `GEN=ninja` and having `ccache` installed to speed up recompilations.\n\n### VCPKG\n`vcpkg`, a package manager for C++, it's highly reccomended to generate reproducible and stable builds, in particular here it serves to build the `openssl` and `curl` dependencies.\nWithout the `VCPKG_TOOLCHAIN_PATH` option, locally available libraries will be used from default search paths.\n\n## Running\nThe resulting binary, that will also statically link and load the `httfps`, it's available like:\n```\n./build/release/duckdb\n```\n```sql\nFROM read_blob('https://duckdb.org/');\n```\n\n## Testing\nSome tests querying remote resources can be run already without further setup:\n```\n./build/release/test/unittest\n```\nFurther integration testing uses a local MinIO setup using Docker. See the [testing documentation for more information on how to set this up locally](test).\n"
+    },
+    {
+      "path": "src/README.md",
+      "sha": null,
+      "content_sha256": "3405dad502e83cadaa936daa62623b2b049b1dc1b0e147ee1a929b7485cdb922",
+      "score": 98,
+      "content": "# Source layout\n\nThe root of `src` contains extension composition and functionality shared across\nbackends. Backend-specific implementation is grouped in shallow directories:\n\n- `http/` contains the generic HTTP filesystem, request sessions, state, and\n  transport clients.\n- `s3/` contains S3 authentication, URL handling, request execution, listing,\n  deletion, and multipart upload.\n- `include/http/` and `include/s3/` mirror those implementation directories.\n\nKeep cross-cutting extension registration and secret creation at the root. New\nbackend-specific code should live in its backend directory, and a reusable\nheader helper should be exposed as a struct or class with static methods rather\nthan as free functions.\n\nThe unit tests use the same `http/` and `s3/` split under `test/unittest`. The\nS3 mock server and shared test helpers live with the S3 tests. Documentation on\nthe external S3 test setup can be found\n[in the DuckDB repository](https://github.com/duckdb/duckdb/blob/main/test/sql/copy/s3/README.md).\n"
+    },
+    {
+      "path": "scripts/with_s3_test_server.sh",
+      "sha": null,
+      "content_sha256": "c0afb85aa17cf343e2a6ae2bc23d87b2bfad525b1bc72477cfb0dc62a045e3aa",
+      "score": 93,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\nSCRIPT_DIR=$(cd -- \"$(dirname -- \"${BASH_SOURCE[0]}\")\" && pwd)\n\ncleanup() {\n  \"${SCRIPT_DIR}/cleanup_s3_test_server.sh\"\n}\ntrap cleanup EXIT\n\n# shellcheck source=scripts/run_s3_test_server.sh\nsource \"${SCRIPT_DIR}/run_s3_test_server.sh\"\n# shellcheck source=scripts/set_s3_test_server_variables.sh\nsource \"${SCRIPT_DIR}/set_s3_test_server_variables.sh\"\n\n\"$@\"\n"
+    },
+    {
+      "path": "scripts/set_s3_test_server_variables.sh",
+      "sha": null,
+      "content_sha256": "306af673a6e5efada7305de9608d51a23ddf76eb629e9894c172edcd85c468aa",
+      "score": 93,
+      "content": "#!/usr/bin/env bash\n\n# Run this script with 'source' or the shorthand: '.':\n# i.e: source scripts/set_s3_test_server_variables.sh\n\n# Enable the S3 tests to run\nexport S3_TEST_SERVER_AVAILABLE=1\n\nexport AWS_DEFAULT_REGION=eu-west-1\nexport AWS_ACCESS_KEY_ID=minio_duckdb_user\nexport AWS_SECRET_ACCESS_KEY=minio_duckdb_user_password\nexport DUCKDB_S3_ENDPOINT=duckdb-minio.com:9000\nexport DUCKDB_S3_USE_SSL=false\n"
+    },
+    {
+      "path": "scripts/cleanup_s3_test_server.sh",
+      "sha": null,
+      "content_sha256": "d474adc29e54e0822873efacdd9ad618c6b6bcdbc048fcd7c1257ce229fe5760",
+      "score": 93,
+      "content": "#!/usr/bin/env bash\n\nset -e\n\nSCRIPT_DIR=$(cd -- \"$(dirname -- \"${BASH_SOURCE[0]}\")\" && pwd)\n\ndocker compose -f \"${SCRIPT_DIR}/seaweedfs_s3.yml\" -p duckdb-minio down --volumes --remove-orphans\n\n# MinIO runs as root and can leave root-owned files in the bind-mounted data\n# directories. GitHub-hosted runners provide passwordless sudo, so avoid a\n# noisy unprivileged attempt there. Developers only escalate when necessary.\nif [[ \"${GITHUB_ACTIONS:-false}\" == \"true\" ]]; then\n  sudo rm -rf /tmp/minio_test_data /tmp/minio_root_data\nelif ! rm -rf /tmp/minio_test_data /tmp/minio_root_data 2>/dev/null; then\n  if ! command -v sudo >/dev/null 2>&1; then\n    echo \"Could not remove the MinIO data directories and sudo is unavailable\" >&2\n    exit 1\n  fi\n  sudo rm -rf /tmp/minio_test_data /tmp/minio_root_data\nfi\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 31,
+  "sensitive_files_skipped": [
+    {
+      "path": "data/secrets/README.md",
+      "sha": "dccb3ed1911eb20bace3212bbb89a25ddb49fe14",
+      "size": 456,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "data/secrets/httpfs/s3_config_secret_v1_1_2.duckdb_secret",
+      "sha": "07998250b52387cb7390909a1852d5feb16ed7b2",
+      "size": 435,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "data/secrets/httpfs/s3_config_secret_v1_1_3.duckdb_secret",
+      "sha": "a3e161bc17bd642f1dd781e7e6ae061ae3ac68bd",
+      "size": 435,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "data/secrets/httpfs/s3_config_secret_v_1_0_0.duckdb_secret",
+      "sha": "7ff366232729c5307c949252d0183bb08f0aa6e1",
+      "size": 1071,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "data/secrets/httpfs/s3_secret_chain_v_1_0_0.duckdb_secret",
+      "sha": "212fb180563b5c77332cbbccfede2953b9971111",
+      "size": 561,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "data/secrets/httpfs/s3_secret_chain_v_1_1_2.duckdb_secret",
+      "sha": "9cc6ef5ad86943062707f6f9c60f81a264211f95",
+      "size": 561,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "data/secrets/httpfs/s3_secret_chain_v_1_1_3.duckdb_secret",
+      "sha": "b13faa6a48ddc271488bb4b411f2a18222aef955",
+      "size": 561,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret.test_slow",
+      "sha": "34b6f410561fd6c0829611dbd3a5d9ac3fbda508",
+      "size": 2036,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_binding.test",
+      "sha": "493c7588dc131d465f383fe942f85dad78157d01",
+      "size": 4231,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_cascading.test_slow",
+      "sha": "c756cbf612b165aa98351e6f281b62b74a82e7d6",
+      "size": 1452,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_defaults.test",
+      "sha": "b73fc000a41e4bcb8fc4d9388d3c3cb70f4b991d",
+      "size": 1526,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_gcs.test_slow",
+      "sha": "7d8aa93dc752b4304725f8e5fb8a3701fb46b197",
+      "size": 743,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_hffs.test",
+      "sha": "a55db6291a93ac13f417647fb8e5f0bd712b50f8",
+      "size": 608,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_invalid_map.test",
+      "sha": "518a477e273fb7a1893b674ff5f18479b98be128",
+      "size": 531,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_minio.test",
+      "sha": "922834a505b3fcdbca870bf06e0eb159491fd04d",
+      "size": 2185,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_name_conflicts.test",
+      "sha": "c7fd2e1f7a92becf8003e634c727c22b11793d70",
+      "size": 2092,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_non_writable_persistent_dir.test",
+      "sha": "09b7547dfaeacb42df0aa6dc5b3196631aa4413a",
+      "size": 1202,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_overwriting.test",
+      "sha": "684b6cea255e1ed371c0538ef40ce24b9ba9007a",
+      "size": 1404,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_persistence.test",
+      "sha": "e02dcacba85ee1086186c8c4ce6bd303b0da0f42",
+      "size": 4388,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_persistence_error_handling.test",
+      "sha": "29815f8e4ef89f5df78b6321cffc22ef255c82a0",
+      "size": 1191,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_r2.test",
+      "sha": "785acaf0ff103a1af04f3b783972c1b58a166c14",
+      "size": 2213,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_r2_serialization.test",
+      "sha": "b54d8a194c0d917b4562f0bb5e862be33d849181",
+      "size": 1615,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_s3_serialization.test",
+      "sha": "c1ed785fea811bb1cea3a2365ac05973e1e6d1ee",
+      "size": 2658,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_scope_matching.test",
+      "sha": "598b3c2c7b48f56f8c50d9fe963c5ed635da03d9",
+      "size": 1140,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_settings.test",
+      "sha": "f420476ece2032bcc54ff4d2e3158cd36bdfb2a0",
+      "size": 1502,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_storage_backends.test",
+      "sha": "2eace422f7e9981bafc1d847fe2dec42149981d4",
+      "size": 3323,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/create_secret_transactional.test",
+      "sha": "7ccfd91b4bc6e984494198939734715408cc261c",
+      "size": 2350,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/persistent_key_value_secret.test",
+      "sha": "bcc395828e2e66736931a6a9219989ecfc506ffe",
+      "size": 634,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/s3_url_scheme_aliases.test",
+      "sha": "3ee81823fbd60e17d024a28c817b2e9657afcce9",
+      "size": 4945,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/secret_compatibility_httpfs.test",
+      "sha": "91e9320676a03b41040e5b5c1adb539764cf72a1",
+      "size": 2112,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "test/sql/secrets/secret_types_function.test",
+      "sha": "220fbb79a7dea4244140e2e015223808d6e11559",
+      "size": 554,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:25:33.772455+00:00"
+}

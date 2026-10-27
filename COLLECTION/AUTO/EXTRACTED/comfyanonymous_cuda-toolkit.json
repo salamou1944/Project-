@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:comfyanonymous/cuda-toolkit",
+  "repo": "comfyanonymous/cuda-toolkit",
+  "revision_sha": "a0bcc14a735f5b6dc4e223c7a425f302c2c8e412",
+  "default_branch": "master",
+  "pushed_at": "2023-03-16T03:16:16Z",
+  "repo_updated_at": "2026-07-15T22:29:12Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/CI.yml",
+      "sha": null,
+      "content_sha256": "70e93b9eb60d8368755cddb39e2442e4437ee7d3689a10a632c8e913eff689d6",
+      "score": 198,
+      "content": "# This is a basic workflow to help you get started with Actions\n\nname: CI\n\n# Controls when the action will run.\non:\n  # Triggers the workflow on push or pull request events but only for the master branch\n  push:\n    branches: [master]\n  pull_request:\n\n  # Allows you to run this workflow manually from the Actions tab\n  workflow_dispatch:\n\n# A workflow run is made up of one or more jobs that can run sequentially or in parallel\njobs:\n  # This workflow contains a single job called \"CI\"\n  CI:\n    # The type of runners that the job will run on\n    strategy:\n      fail-fast: false\n      matrix:\n        os: [windows-2022, windows-2019, ubuntu-22.04, ubuntu-20.04, ubuntu-18.04]\n        method: [local, network]\n    runs-on: ${{ matrix.os }}\n\n    # Steps represent a sequence of tasks that will be executed as part of the job\n    steps:\n      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it\n      - uses: actions/checkout@v3\n\n      # npm cache\n      - name: Get npm cache directory\n        id: npm-cache-dir\n        shell: bash\n        run: |\n          echo \"dir=$(npm config get cache)\" >> $GITHUB_OUTPUT\n      - uses: actions/cache@v3\n        id: npm-cache # use this to check for `cache-hit` ==> if: steps.npm-cache.outputs.cache-hit != 'true'\n        with:\n          path: ${{ steps.npm-cache-dir.outputs.dir }}\n          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}\n          restore-keys: |\n            ${{ runner.os }}-node-\n\n      - name: Install npm dependencies\n        run: npm i\n\n      - name: Build\n        run: npm run build\n\n      - name: Format check\n        run: npm run format-check\n\n      - name: Lint\n        run: npm run lint\n\n      - name: Package\n        run: npm run package\n\n      - name: Test\n        run: npm run test\n\n      - name: Run the action on this runner with method ${{matrix.method}}\n        uses: ./\n        with:\n          method: ${{matrix.method}}\n\n      - name: Run the action on this runner with nvcc subpackage only (Linux)\n        if: runner.os == 'Linux' && matrix.method == 'network'\n        uses: ./\n        with:\n          method: ${{matrix.method}}\n          sub-packages: '[\"nvcc\"]'\n\n      - name: Run the action on this runner with nvcc subpackage only (Windows)\n        if: runner.os == 'Windows'\n        uses: ./\n        with:\n          method: ${{matrix.method}}\n          sub-packages: '[\"nvcc\"]'\n\n      - name: Test if nvcc is available\n        run: nvcc -V\n\n      - name: List paths (windows)\n        if: runner.os == 'Windows'\n        shell: powershell\n        run: |\n          ls $env:CUDA_PATH\n          ls $env:CUDA_PATH\\bin\n          ls $env:CUDA_PATH\\include\n\n      - name: List paths (linux)\n        if: runner.os == 'Linux'\n        run: |\n          ls $CUDA_PATH\n          ls $CUDA_PATH/bin\n          ls $CUDA_PATH/include\n"
+    },
+    {
+      "path": ".github/workflows/Check-dist.yml",
+      "sha": null,
+      "content_sha256": "eca92bb6204a8ff247f02525518317f8fb7e6eb3ff728b7cb6ba51cb9b8db633",
+      "score": 126,
+      "content": "# `dist/index.js` is a special file in Actions.\n# When you reference an action with `uses:` in a workflow,\n# `index.js` is the code that will run.\n# For our project, we generate this file through a build process from other source files.\n# We need to make sure the checked-in `index.js` actually matches what we expect it to be.\nname: Check dist/\n\non:\n  push:\n    branches:\n      - main\n    paths-ignore:\n      - '**.md'\n  pull_request:\n    paths-ignore:\n      - '**.md'\n  workflow_dispatch:\n\njobs:\n  check-dist:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v3\n\n      - name: Set Node.js 16.x\n        uses: actions/setup-node@v3.6.0\n        with:\n          node-version: 16.x\n\n      - name: Install dependencies\n        run: npm ci\n\n      - name: Rebuild the dist/ directory\n        run: |\n          npm run build\n          npm run package\n\n      - name: correct vercel/ncc crlf output\n        run: |\n          # See https://github.com/vercel/ncc/issues/638\n          sed -i 's/\\x0D$//' ./dist/*\n\n      - name: Compare the expected and actual dist/ directories\n        run: |\n          if [ \"$(git diff --ignore-space-at-eol dist/ | wc -l)\" -gt \"0\" ]; then\n            echo \"Detected uncommitted changes after build.  See status below:\"\n            git diff\n            exit 1\n          fi\n        id: diff\n\n      # If index.js was different than expected, upload the expected version as an artifact\n      - uses: actions/upload-artifact@v3\n        if: ${{ failure() && steps.diff.conclusion == 'failure' }}\n        with:\n          name: dist\n          path: dist/\n"
+    },
+    {
+      "path": ".github/workflows/CodeQL.yml",
+      "sha": null,
+      "content_sha256": "2cdff700f9410e3bfa7eea1e80da6b19041a83bfdb4797250c71947a613ce254",
+      "score": 126,
+      "content": "name: \"CodeQL\"\n\non:\n  push:\n    branches: [ master ]\n  pull_request:\n    # The branches below must be a subset of the branches above\n    branches: [ master ]\n  schedule:\n    #        ┌───────────── minute (0 - 59)\n    #        │  ┌───────────── hour (0 - 23)\n    #        │  │ ┌───────────── day of the month (1 - 31)\n    #        │  │ │ ┌───────────── month (1 - 12 or JAN-DEC)\n    #        │  │ │ │ ┌───────────── day of the week (0 - 6 or SUN-SAT)\n    #        │  │ │ │ │\n    #        │  │ │ │ │\n    #        │  │ │ │ │\n    #        *  * * * *\n    - cron: '30 1 * * 0'\n\njobs:\n  analyze:\n    name: Analyze\n    runs-on: ubuntu-latest\n    permissions:\n      actions: read\n      contents: read\n      security-events: write\n\n    strategy:\n      fail-fast: false\n      matrix:\n        language: [ 'TypeScript' ]\n\n    steps:\n    - name: Checkout repository\n      uses: actions/checkout@v3\n\n    # Initializes the CodeQL tools for scanning.\n    - name: Initialize CodeQL\n      uses: github/codeql-action/init@v2\n      with:\n        languages: ${{ matrix.language }}\n        source-root: src\n        # If you wish to specify custom queries, you can do so here or in a config file.\n        # By default, queries listed here will override any specified in a config file.\n        # Prefix the list here with \"+\" to use these queries and those in the config file.\n        # queries: ./path/to/local/query, your-org/your-repo/queries@main\n\n    - name: Autobuild\n      uses: github/codeql-action/autobuild@v2\n\n    - name: Perform CodeQL Analysis\n      uses: github/codeql-action/analyze@v2"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "53ca63dddf10be48a89e18b91156a1fa86a4d3266b87ad0131c7328815130c39",
+      "score": 120,
+      "content": "{\n  \"name\": \"cuda-toolkit\",\n  \"version\": \"0.2.9\",\n  \"description\": \"GitHub Action to install the NVIDIA CUDA Toolkit\",\n  \"main\": \"lib/main.js\",\n  \"scripts\": {\n    \"build\": \"tsc --newLine lf\",\n    \"format\": \"prettier --write **/*.ts jest.config.js\",\n    \"format-check\": \"prettier --check **/*.ts jest.config.js\",\n    \"lint\": \"eslint src/**/*.ts __tests__/**/*.ts\",\n    \"package\": \"ncc build --source-map --license licenses.txt\",\n    \"test\": \"jest\",\n    \"all\": \"npm run build && npm run format && npm run lint && npm run package && npm test\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/Jimver/cuda-toolkit.git\"\n  },\n  \"keywords\": [],\n  \"author\": \"Jim Verheijde\",\n  \"bugs\": {\n    \"url\": \"https://github.com/Jimver/cuda-toolkit/issues\"\n  },\n  \"homepage\": \"https://github.com/Jimver/cuda-toolkit#readme\",\n  \"volta\": {\n    \"node\": \"16.19.1\"\n  },\n  \"license\": \"MIT\",\n  \"dependencies\": {\n    \"@actions/artifact\": \"^1.1.0\",\n    \"@actions/core\": \"^1.10.0\",\n    \"@actions/exec\": \"^1.1.1\",\n    \"@actions/glob\": \"^0.3.0\",\n    \"@actions/tool-cache\": \"^2.0.1\",\n    \"@actions/cache\": \"^3.2.1\",\n    \"@actions/io\": \"^1.1.2\",\n    \"@types/semver\": \"^7.3.13\",\n    \"semver\": \"^7.3.8\"\n  },\n  \"devDependencies\": {\n    \"@types/jest\": \"^28.1.6\",\n    \"@types/node\": \"^18.11.9\",\n    \"@typescript-eslint/parser\": \"^5.54.1\",\n    \"@vercel/ncc\": \"^0.36.1\",\n    \"eslint\": \"^8.27.0\",\n    \"eslint-config-prettier\": \"^8.5.0\",\n    \"eslint-plugin-github\": \"^4.3.7\",\n    \"eslint-plugin-jest\": \"^27.1.6\",\n    \"eslint-plugin-prettier\": \"^4.2.1\",\n    \"jest\": \"^28.1.3\",\n    \"jest-circus\": \"^29.5.0\",\n    \"js-yaml\": \"^4.1.0\",\n    \"prettier\": \"2.7.1\",\n    \"ts-jest\": \"^28.0.8\",\n    \"typescript\": \"^4.9.4\"\n  }\n}\n"
+    },
+    {
+      "path": "action.yml",
+      "sha": null,
+      "content_sha256": "5a9c9f3a9135fae5918c723d272074e25967396286b705c2e30ce6ebdf7b09e1",
+      "score": 117,
+      "content": "name: 'cuda-toolkit'\ndescription: 'Installs NVIDIA CUDA Toolkit and adds it to PATH'\nauthor: 'Jim Verheijde'\ninputs:\n  cuda:\n    description: 'Cuda version'\n    required: false\n    default: '12.1.0'\n  sub-packages:\n    description: 'Only installs specified subpackages, must be in the form of a JSON array. For example, if you only want to install nvcc and visual studio integration: [\"nvcc\", \"visual_studio_integration\"] double quotes required! Note that if you want to use this on Linux, ''network'' method MUST be used.'\n    required: false\n    default: '[]'\n  method:\n    description: \"Installation method, can be either 'local' or 'network'. 'local' downloads the entire installer with all packages and runs that (you can still only install certain packages with sub-packages on Windows). 'network' downloads a smaller executable which only downloads necessary packages which you can define in subPackages\"\n    required: false\n    default: 'local'\n  linux-local-args:\n    description: '(Linux and ''local'' method only) override arguments for the linux .run installer. For example if you don''t want samples use [\"--toolkit\"] double quotes required!'\n    required: false\n    default: '[\"--toolkit\", \"--samples\"]'\n  use-github-cache:\n    description: 'Use GitHub cache to cache downloaded installer on GitHub servers'\n    required: false\n    default: 'true'\nruns:\n  using: 'node16'\n  main: dist/index.js\nbranding:\n  icon: box\n  color: green\n"
+    },
+    {
+      "path": "src/apt-installer.ts",
+      "sha": null,
+      "content_sha256": "e5fea665b48d4cf6acce3f2711ebd1fb4b6da4d29c3f5a9351417f0635313037",
+      "score": 115,
+      "content": "import * as core from '@actions/core'\nimport {OSType, getOs} from './platform'\nimport {Method} from './method'\nimport {SemVer} from 'semver'\nimport {exec} from '@actions/exec'\nimport {execReturnOutput} from './run-command'\n\nexport async function useApt(method: Method): Promise<boolean> {\n  return method === 'network' && (await getOs()) === OSType.linux\n}\n\nexport async function aptSetup(version: SemVer): Promise<void> {\n  const osType = await getOs()\n  if (osType !== OSType.linux) {\n    throw new Error(\n      `apt setup can only be run on linux runners! Current os type: ${osType}`\n    )\n  }\n  core.debug(`Setup packages for ${version}`)\n  const ubuntuVersion: string = await execReturnOutput('lsb_release', ['-sr'])\n  const ubuntuVersionNoDot = ubuntuVersion.replace('.', '')\n  const pinFilename = `cuda-ubuntu${ubuntuVersionNoDot}.pin`\n  const arch = `x86_64`\n  const pinUrl = `https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${ubuntuVersionNoDot}/${arch}/${pinFilename}`\n  const repoUrl = `http://developer.download.nvidia.com/compute/cuda/repos/ubuntu${ubuntuVersionNoDot}/${arch}/`\n  const keyRingVersion = `1.0-1`\n  const keyRingUrl = `https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${ubuntuVersionNoDot}/${arch}/cuda-keyring_${keyRingVersion}_all.deb`\n  const keyRingFilename = `cuda_keyring.deb`\n\n  core.debug(`Pin filename: ${pinFilename}`)\n  core.debug(`Pin url: ${pinUrl}`)\n  core.debug(`Keyring url: ${keyRingUrl}`)\n\n  core.debug(`Downloading keyring`)\n  await exec(`wget ${keyRingUrl} -O ${keyRingFilename}`)\n  await exec(`sudo dpkg -i ${keyRingFilename}`)\n\n  core.debug('Adding CUDA Repository')\n  await exec(`wget ${pinUrl}`)\n  await exec(\n    `sudo mv ${pinFilename} /etc/apt/preferences.d/cuda-repository-pin-600`\n  )\n  await exec(`sudo add-apt-repository \"deb ${repoUrl} /\"`)\n  await exec(`sudo apt-get update`)\n}\n\nexport async function aptInstall(\n  version: SemVer,\n  subPackages: string[]\n): Promise<number> {\n  const osType = await getOs()\n  if (osType !== OSType.linux) {\n    throw new Error(\n      `apt install can only be run on linux runners! Current os type: ${osType}`\n    )\n  }\n  if (subPackages.length === 0) {\n    // Install everything\n    const packageName = `cuda-${version.major}-${version.minor}`\n    core.debug(`Install package: ${packageName}`)\n    return await exec(`sudo apt-get -y install`, [packageName])\n  } else {\n    // Only install specified packages\n    const versionedSubPackages = subPackages.map(\n      subPackage => `cuda-${subPackage}-${version.major}-${version.minor}`\n    )\n    core.debug(`Only install subpackages: ${versionedSubPackages}`)\n    return await exec(`sudo apt-get -y install`, versionedSubPackages)\n  }\n}\n"
+    },
+    {
+      "path": "src/installer.ts",
+      "sha": null,
+      "content_sha256": "7280159cf1a80f2758381f806220464d8878a715d346880a1dcbd49cbe242d1a",
+      "score": 115,
+      "content": "import * as artifact from '@actions/artifact'\nimport * as core from '@actions/core'\nimport {OSType, getOs} from './platform'\nimport {SemVer} from 'semver'\nimport {exec} from '@actions/exec'\n\nexport async function install(\n  executablePath: string,\n  version: SemVer,\n  subPackagesArray: string[],\n  linuxLocalArgsArray: string[]\n): Promise<void> {\n  // Install arguments, see: https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#runfile-advanced\n  // and https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html\n  let installArgs: string[]\n\n  // Command string that is executed\n  let command: string\n\n  // Subset of subpackages to install instead of everything, see: https://docs.nvidia.com/cuda/cuda-installation-guide-microsoft-windows/index.html#install-cuda-software\n  const subPackages: string[] = subPackagesArray\n\n  // Execution options which contain callback functions for stdout and stderr of install process\n  const execOptions = {\n    listeners: {\n      stdout: (data: Buffer) => {\n        core.debug(data.toString())\n      },\n      stderr: (data: Buffer) => {\n        core.debug(`Error: ${data.toString()}`)\n      }\n    }\n  }\n\n  // Configure OS dependent run command and args\n  switch (await getOs()) {\n    case OSType.linux:\n      // Root permission needed on linux\n      command = `sudo ${executablePath}`\n      // Install silently, and add additional arguments\n      installArgs = ['--silent'].concat(linuxLocalArgsArray)\n      break\n    case OSType.windows:\n      // Windows handles permissions automatically\n      command = executablePath\n      // Install silently\n      installArgs = ['-s']\n      // Add subpackages to command args (if any)\n      installArgs = installArgs.concat(\n        subPackages.map(subPackage => {\n          // Display driver sub package name is not dependent on version\n          if (subPackage === 'Display.Driver') {\n            return subPackage\n          }\n          return `${subPackage}_${version.major}.${version.minor}`\n        })\n      )\n      break\n  }\n\n  // Run installer\n  try {\n    core.debug(`Running install executable: ${executablePath}`)\n    const exitCode = await exec(command, installArgs, execOptions)\n    core.debug(`Installer exit code: ${exitCode}`)\n  } catch (error) {\n    core.debug(`Error during installation: ${error}`)\n    throw error\n  } finally {\n    // Always upload installation log regardless of error\n    if ((await getOs()) === OSType.linux) {\n      const artifactClient = artifact.create()\n      const artifactName = 'install-log'\n      const files = ['/var/log/cuda-installer.log']\n      const rootDirectory = '/var/log'\n      const artifactOptions = {\n        continueOnError: true\n      }\n      const uploadResult = await artifactClient.uploadArtifact(\n        artifactName,\n        files,\n        rootDirectory,\n        artifactOptions\n      )\n      core.debug(`Upload result: ${uploadResult}`)\n    }\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "6be244280f34ca454f2464097dc02f9b10d9d62336f998730cb31f572245322f",
+      "score": 100,
+      "content": "# cuda-toolkit\n\nThis action installs the [NVIDIA® CUDA® Toolkit](https://developer.nvidia.com/cuda-toolkit) on the system. It adds the cuda install location as `CUDA_PATH` to `GITHUB_ENV` so you can access the CUDA install location in subsequent steps. `CUDA_PATH/bin` is added to `GITHUB_PATH` so you can use commands such as `nvcc` directly in subsequent steps. Right now both `windows-2019` and `ubuntu-20.04` runners have been tested to work successfully.\n\n## Inputs\n\n### `cuda`\n\n**Optional** The CUDA version to install. View `src/link/windows-links.ts` and `src/link/linux-links.ts` for available versions.\n\nDefault: `'12.1.0'`.\n\n### `sub-packages`\n\n**NOTE: On Linux this only works with the 'network' method [view details](#method)**\n\n**Optional**\nIf set, only the specified CUDA subpackages will be installed.\nOnly installs specified subpackages, must be in the form of a JSON array. For example, if you only want to install nvcc and visual studio integration: `'[\"nvcc\", \"visual_studio_integration\"]'` (double quotes required)\n\nDefault: `'[]'`.\n\n### `method`\n\n**Optional**\nInstallation method, can be either `'local'` or `'network'`.\n\n- `'local'` downloads the entire installer with all packages and runs that (you can still only install certain packages with `sub-packages` on Windows).\n- `'network'` downloads a smaller executable which only downloads necessary packages which you can define in `sub-packages`.\n\nDefault: `'local'`.\n\n### `linux-local-args`\n\n**Optional**\n(For Linux and 'local' method only) override arguments for the Linux `.run` installer. For example if you don't want samples use `'[\"--toolkit\"]'` (double quotes required)\nSee the [Nvidia Docs](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html#runfile-advanced) for available options. Note that the `--silent` option is already always added by the action itself.\n\nDefault: `'[\"--toolkit\", \"--samples\"]'`.\n\n## Outputs\n\n### `cuda`\n\nThe cuda version installed (same as `cuda` from input).\n\n### `CUDA_PATH`\n\nThe path where cuda is installed (same as `CUDA_PATH` in `GITHUB_ENV`).\n\n## Example usage\n\n```yaml\nsteps:\n- uses: Jimver/cuda-toolkit@v0.2.9\n  id: cuda-toolkit\n  with:\n    cuda: '12.1.0'\n\n- run: echo \"Installed cuda version is: ${{steps.cuda-toolkit.outputs.cuda}}\"\n\n- run: echo \"Cuda install location: ${{steps.cuda-toolkit.outputs.CUDA_PATH}}\"\n\n- run: nvcc -V\n```\n"
+    },
+    {
+      "path": "__tests__/platform.test.ts",
+      "sha": null,
+      "content_sha256": "4dd0d001f40ac058bc3a21b23b3aa0c4048f5a00a86329e7831bc93b1ba8064e",
+      "score": 93,
+      "content": "import {OSType, getOs} from '../src/platform'\nimport os from 'os'\n\ntest.concurrent('Return either windows of linux platform', async () => {\n  const osString = os.platform()\n  let expected: OSType\n  switch (osString) {\n    case 'win32':\n      expected = OSType.windows\n      break\n    case 'linux':\n      expected = OSType.linux\n      break\n    default:\n      expect(getOs()).rejects.toThrow(`Unsupported OS: ${osString}`)\n      return\n  }\n  const osPlatform = await getOs()\n  expect(osPlatform).toBe(expected)\n})\n"
+    },
+    {
+      "path": "__tests__/version.test.ts",
+      "sha": null,
+      "content_sha256": "a7d3d79e54389c83a8c1a5820218589dc7fa307c4a8c0eee7166a34a39911f9f",
+      "score": 93,
+      "content": "import {Method} from '../src/method'\nimport {SemVer} from 'semver'\nimport {getVersion} from '../src/version'\n\ntest.concurrent.each<Method>(['local', 'network'])(\n  'Successfully parse correct version for method %s',\n  async method => {\n    const versionString = '11.2.2'\n    try {\n      const version = await getVersion(versionString, method)\n      expect(version).toBeInstanceOf(SemVer)\n      expect(version.compare(new SemVer(versionString))).toBe(0)\n    } catch (error) {\n      // Other OS\n    }\n  }\n)\n\ntest.concurrent.each<Method>(['local', 'network'])(\n  'Expect error to be thrown on invalid version string for method %s',\n  async method => {\n    const versionString =\n      'invalid version string that does not conform to semver'\n    await expect(getVersion(versionString, method)).rejects.toThrow(\n      TypeError(`Invalid Version: ${versionString}`)\n    )\n  }\n)\n\ntest.concurrent.each<Method>(['local', 'network'])(\n  'Expect error to be thrown on unavailable version for method %s',\n  async method => {\n    const versionString = '0.0.1'\n    try {\n      await expect(getVersion(versionString, method)).rejects.toThrowError(\n        `Version not available: ${versionString}`\n      )\n    } catch (error) {\n      // Other OS\n    }\n  }\n)\n"
+    },
+    {
+      "path": "__tests__/method.test.ts",
+      "sha": null,
+      "content_sha256": "a882f83b4d491c492f5be7f2d27729dbccd9a0d1c86fb99aac4570af6c3cf024",
+      "score": 93,
+      "content": "import {parseMethod} from '../src/method'\n\ntest.concurrent.each(['local', 'network'])(\n  'Parse %s method',\n  async methodString => {\n    const parsed = parseMethod(methodString)\n    expect(parsed).toBe(methodString)\n  }\n)\n\ntest.concurrent('Parse invalid method', async () => {\n  const invalidMethod = 'invalidMethodString'\n  expect(() => parseMethod(invalidMethod)).toThrowError(\n    `Invalid method string: ${invalidMethod}`\n  )\n})\n"
+    },
+    {
+      "path": "__tests__/links/get-links.test.ts",
+      "sha": null,
+      "content_sha256": "79483d6be4072088d83329cb4c39b16e288d03496c41a09509baf30dc6836f91",
+      "score": 91,
+      "content": "import {LinuxLinks} from '../../src/links/linux-links'\nimport {WindowsLinks} from '../../src/links/windows-links'\nimport {getLinks} from '../../src/links/get-links'\n\ntest.concurrent('getLinks gives a valid ILinks class', async () => {\n  try {\n    const links = await getLinks()\n    expect(\n      links instanceof LinuxLinks || links instanceof WindowsLinks\n    ).toBeTruthy()\n  } catch (error) {\n    // Other OS\n  }\n})\n\ntest.concurrent('getLinks return same versions in same order', async () => {\n  const linuxLinks = LinuxLinks.Instance.getAvailableLocalCudaVersions()\n  const windowsLinks = WindowsLinks.Instance.getAvailableLocalCudaVersions()\n  const windowsNetworkLinks =\n    WindowsLinks.Instance.getAvailableNetworkCudaVersions()\n\n  expect(linuxLinks.length).toBe(windowsLinks.length)\n  expect(windowsLinks.length).toBe(windowsNetworkLinks.length)\n  expect(linuxLinks).toEqual(windowsLinks)\n  expect(windowsLinks).toEqual(windowsNetworkLinks)\n})\n"
+    },
+    {
+      "path": "__tests__/links/linux-links.test.ts",
+      "sha": null,
+      "content_sha256": "7756bb1b914defe9aeefc84af9fe70caf8a0f5dee7f2a946739367a67832303b",
+      "score": 91,
+      "content": "import {AbstractLinks} from '../../src/links/links'\nimport {LinuxLinks} from '../../src/links/linux-links'\nimport {SemVer} from 'semver'\n\ntest.concurrent('Linux Cuda versions in descending order', async () => {\n  const wLinks: AbstractLinks = LinuxLinks.Instance\n  const versions = wLinks.getAvailableLocalCudaVersions()\n  for (let i = 0; i < versions.length - 1; i++) {\n    const versionA: SemVer = versions[i]\n    const versionB: SemVer = versions[i + 1]\n    expect(versionA.compare(versionB)).toBe(1) // A should be greater than B\n  }\n})\n\ntest.concurrent(\n  'Linux Cuda version to URL map contains valid URLs',\n  async () => {\n    for (const version of LinuxLinks.Instance.getAvailableLocalCudaVersions()) {\n      const url: URL = LinuxLinks.Instance.getLocalURLFromCudaVersion(version)\n      expect(url).toBeInstanceOf(URL)\n    }\n  }\n)\n\ntest.concurrent('There is at least linux 1 version url pair', async () => {\n  expect(\n    LinuxLinks.Instance.getAvailableLocalCudaVersions().length\n  ).toBeGreaterThanOrEqual(1)\n})\n"
+    },
+    {
+      "path": "__tests__/links/windows-links.test.ts",
+      "sha": null,
+      "content_sha256": "c1120b50adcd6c55d933d03991e8b98f7640870dd091ec70f32472db1865ef80",
+      "score": 91,
+      "content": "import {AbstractLinks} from '../../src/links/links'\nimport {SemVer} from 'semver'\nimport {WindowsLinks} from '../../src/links/windows-links'\n\ntest.concurrent('Windows Cuda versions in descending order', async () => {\n  const wLinks: AbstractLinks = WindowsLinks.Instance\n  const versions = wLinks.getAvailableLocalCudaVersions()\n  for (let i = 0; i < versions.length - 1; i++) {\n    const versionA: SemVer = versions[i]\n    const versionB: SemVer = versions[i + 1]\n    expect(versionA.compare(versionB)).toBe(1) // A should be greater than B\n  }\n})\n\ntest.concurrent(\n  'Windows Cuda version to URL map contains valid URLs',\n  async () => {\n    for (const version of WindowsLinks.Instance.getAvailableLocalCudaVersions()) {\n      const url: URL = WindowsLinks.Instance.getLocalURLFromCudaVersion(version)\n      expect(url).toBeInstanceOf(URL)\n    }\n  }\n)\n\ntest.concurrent('There is at least windows 1 version url pair', async () => {\n  expect(\n    WindowsLinks.Instance.getAvailableLocalCudaVersions().length\n  ).toBeGreaterThanOrEqual(1)\n})\n\ntest.concurrent(\n  'Windows Cuda network versions in descending order',\n  async () => {\n    const wLinks = WindowsLinks.Instance\n    const versions = wLinks.getAvailableNetworkCudaVersions()\n    for (let i = 0; i < versions.length - 1; i++) {\n      const versionA: SemVer = versions[i]\n      const versionB: SemVer = versions[i + 1]\n      expect(versionA.compare(versionB)).toBe(1) // A should be greater than B\n    }\n  }\n)\n\ntest.concurrent(\n  'Windows network Cuda version to URL map contains valid URLs',\n  async () => {\n    for (const version of WindowsLinks.Instance.getAvailableNetworkCudaVersions()) {\n      const url: URL =\n        WindowsLinks.Instance.getNetworkURLFromCudaVersion(version)\n      expect(url).toBeInstanceOf(URL)\n    }\n  }\n)\n\ntest.concurrent(\n  'There is at least windows network 1 version url pair',\n  async () => {\n    expect(\n      WindowsLinks.Instance.getAvailableNetworkCudaVersions().length\n    ).toBeGreaterThanOrEqual(1)\n  }\n)\n"
+    },
+    {
+      "path": "tsconfig.eslint.json",
+      "sha": null,
+      "content_sha256": "a7100d1e22c32b3d742a31e8baa26b45dd4316a988ee684f326ed1b4f466a0a2",
+      "score": 35,
+      "content": "{\n  \"extends\": \"./tsconfig.json\",\n  \"include\": [\"./src/**/*.ts\", \"__tests__/**/*.test.ts\"]\n}\n"
+    },
+    {
+      "path": ".eslintrc.json",
+      "sha": null,
+      "content_sha256": "83b4f077c3b96ed38eefa277f27d50d21396e494f90014c053be497dcde9de64",
+      "score": 35,
+      "content": "{\n  \"root\": true,\n  \"plugins\": [\n    \"jest\",\n    \"@typescript-eslint\",\n    \"prettier\",\n    \"github\"\n  ],\n  \"extends\": [\n    \"plugin:github/recommended\",\n    \"plugin:github/typescript\",\n    \"prettier\"\n  ],\n  \"parser\": \"@typescript-eslint/parser\",\n  \"parserOptions\": {\n    \"ecmaVersion\": 9,\n    \"sourceType\": \"module\",\n    \"project\": \"./tsconfig.eslint.json\"\n  },\n  \"rules\": {\n    \"prettier/prettier\": \"error\",\n    \"filenames/match-regex\": [\n      \"error\",\n      \"^[a-z0-9-]+(.test)?$\"\n    ],\n    \"i18n-text/no-en\": \"off\",\n    \"eslint-comments/no-use\": \"off\",\n    \"import/no-namespace\": \"off\",\n    \"no-unused-vars\": \"off\",\n    \"@typescript-eslint/no-unused-vars\": [\n      \"error\"\n    ],\n    \"@typescript-eslint/explicit-member-accessibility\": [\n      \"error\",\n      {\n        \"accessibility\": \"no-public\"\n      }\n    ],\n    \"no-shadow\": \"off\",\n    \"@typescript-eslint/no-shadow\": [\n      \"error\"\n    ],\n    \"@typescript-eslint/no-require-imports\": \"error\",\n    \"@typescript-eslint/array-type\": \"error\",\n    \"@typescript-eslint/await-thenable\": \"error\",\n    \"@typescript-eslint/ban-ts-comment\": \"error\",\n    \"camelcase\": \"off\",\n    \"@typescript-eslint/consistent-type-assertions\": \"error\",\n    \"@typescript-eslint/explicit-function-return-type\": [\n      \"error\",\n      {\n        \"allowExpressions\": true\n      }\n    ],\n    \"@typescript-eslint/func-call-spacing\": [\n      \"error\",\n      \"never\"\n    ],\n    \"@typescript-eslint/no-array-constructor\": \"error\",\n    \"@typescript-eslint/no-empty-interface\": \"error\",\n    \"@typescript-eslint/no-explicit-any\": \"error\",\n    \"@typescript-eslint/no-extraneous-class\": \"error\",\n    \"@typescript-eslint/no-for-in-array\": \"error\",\n    \"@typescript-eslint/no-inferrable-types\": \"error\",\n    \"@typescript-eslint/no-misused-new\": \"error\",\n    \"@typescript-eslint/no-namespace\": \"error\",\n    \"@typescript-eslint/no-non-null-assertion\": \"warn\",\n    \"@typescript-eslint/no-unnecessary-qualifier\": \"error\",\n    \"@typescript-eslint/no-unnecessary-type-assertion\": \"error\",\n    \"@typescript-eslint/no-useless-constructor\": \"error\",\n    \"@typescript-eslint/no-var-requires\": \"error\",\n    \"@typescript-eslint/prefer-for-of\": \"warn\",\n    \"@typescript-eslint/prefer-function-type\": \"warn\",\n    \"@typescript-eslint/prefer-includes\": \"error\",\n    \"@typescript-eslint/prefer-string-starts-ends-with\": \"error\",\n    \"@typescript-eslint/promise-function-async\": \"error\",\n    \"@typescript-eslint/require-array-sort-compare\": \"error\",\n    \"@typescript-eslint/restrict-plus-operands\": \"error\",\n    \"semi\": \"off\",\n    \"@typescript-eslint/semi\": [\n      \"error\",\n      \"never\"\n    ],\n    \"@typescript-eslint/type-annotation-spacing\": \"error\",\n    \"@typescript-eslint/unbound-method\": \"error\"\n  },\n  \"env\": {\n    \"node\": true,\n    \"es6\": true,\n    \"jest/globals\": true\n  }\n}\n"
+    },
+    {
+      "path": ".prettierrc.json",
+      "sha": null,
+      "content_sha256": "f27c5369962b92ed5b7fe808eac5526d51ae6961957a108aa12bdfb41ef40344",
+      "score": 35,
+      "content": "{\n  \"printWidth\": 80,\n  \"tabWidth\": 2,\n  \"useTabs\": false,\n  \"semi\": false,\n  \"singleQuote\": true,\n  \"trailingComma\": \"none\",\n  \"bracketSpacing\": false,\n  \"arrowParens\": \"avoid\"\n}\n"
+    },
+    {
+      "path": "jest.config.js",
+      "sha": null,
+      "content_sha256": "8d21de44539f83cdf48d7b3298b5b88b0452f2fc9a63aeac7472759697dcd443",
+      "score": 35,
+      "content": "module.exports = {\n  clearMocks: true,\n  moduleFileExtensions: ['js', 'ts'],\n  testEnvironment: 'node',\n  testMatch: ['**/*.test.ts'],\n  testRunner: 'jest-circus/runner',\n  transform: {\n    '^.+\\\\.ts$': 'ts-jest'\n  },\n  verbose: true\n}\n"
+    },
+    {
+      "path": "tsconfig.json",
+      "sha": null,
+      "content_sha256": "3850cb8b3730fb6413db777a1673f5129ca3def0c96b7ae1f565bdfa6109162a",
+      "score": 35,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"es6\",                          /* Specify ECMAScript target version: 'ES3' (default), 'ES5', 'ES2015', 'ES2016', 'ES2017', 'ES2018', 'ES2019' or 'ESNEXT'. */\n    \"module\": \"commonjs\",                     /* Specify module code generation: 'none', 'commonjs', 'amd', 'system', 'umd', 'es2015', or 'ESNext'. */\n    \"outDir\": \"./lib\",                        /* Redirect output structure to the directory. */\n    \"strict\": true,                           /* Enable all strict type-checking options. */\n    \"noImplicitAny\": true,                    /* Raise error on expressions and declarations with an implied 'any' type. */\n    \"esModuleInterop\": true                   /* Enables emit interoperability between CommonJS and ES Modules via creation of namespace objects for all imports. Implies 'allowSyntheticDefaultImports'. */\n  },\n  \"include\": [\n    \"./src/**/*.ts\"\n  ],\n  \"exclude\": [\"node_modules\"]\n}\n"
+    },
+    {
+      "path": "src/method.ts",
+      "sha": null,
+      "content_sha256": "9391efdf1cdb7cceab4fcafdc22071839db04e4b6369ce0e4696235660560391",
+      "score": 33,
+      "content": "export type Method = 'local' | 'network'\n\nexport function parseMethod(methodString: string): Method {\n  switch (methodString) {\n    case 'local':\n      return 'local'\n    case 'network':\n      return 'network'\n    default:\n      throw new Error(`Invalid method string: ${methodString}`)\n  }\n}\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "b781fabfbbb36d3c32a9ac87246f1515bd7636b8b2f8e66d2dad637c5483724a",
+      "score": 33,
+      "content": "# Please see the documentation for all configuration options:\n# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates\n\nversion: 2\nupdates:\n  - package-ecosystem: \"npm\"\n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n  - package-ecosystem: \"github-actions\"\n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n"
+    },
+    {
+      "path": "src/platform.ts",
+      "sha": null,
+      "content_sha256": "8f9bd682aea2cd17fe550aebb62b0b4d31579d240d8e46a4794f96917e0629e9",
+      "score": 33,
+      "content": "import {debug} from '@actions/core'\nimport os from 'os'\n\nexport enum OSType {\n  windows = 'windows',\n  linux = 'linux'\n}\n\nexport async function getOs(): Promise<OSType> {\n  const osPlatform = os.platform()\n  switch (osPlatform) {\n    case 'win32':\n      return OSType.windows\n    case 'linux':\n      return OSType.linux\n    default:\n      debug(`Unsupported OS: ${osPlatform}`)\n      throw new Error(`Unsupported OS: ${osPlatform}`)\n  }\n}\n\nexport async function getRelease(): Promise<string> {\n  return os.release()\n}\n"
+    },
+    {
+      "path": "src/run-command.ts",
+      "sha": null,
+      "content_sha256": "86f45b061065cee955d9ba25c6b904f20d96b613ed7523ceddec231bb42b4fce",
+      "score": 33,
+      "content": "import * as core from '@actions/core'\nimport {exec} from '@actions/exec'\n\nexport async function execReturnOutput(\n  command: string,\n  args: string[] = []\n): Promise<string> {\n  let result = ''\n  const execOptions = {\n    listeners: {\n      stdout: (data: Buffer) => {\n        result += data.toString()\n      },\n      stderr: (data: Buffer) => {\n        core.debug(`Error: ${data.toString()}`)\n      }\n    }\n  }\n  const exitCode = await exec(command, args, execOptions)\n  if (exitCode) {\n    core.debug(`Error executing: ${command}. Exit code: ${exitCode}`)\n  }\n  return result.trim()\n}\n"
+    },
+    {
+      "path": "src/version.ts",
+      "sha": null,
+      "content_sha256": "77725b98a4d11b0f81f0f1b55a308bfa4e1eb310022765f6c0a11391101a256d",
+      "score": 33,
+      "content": "import * as core from '@actions/core'\nimport {OSType, getOs} from './platform'\nimport {AbstractLinks} from './links/links'\nimport {Method} from './method'\nimport {SemVer} from 'semver'\nimport {WindowsLinks} from './links/windows-links'\nimport {getLinks} from './links/get-links'\n\n// Helper for converting string to SemVer and verifying it exists in the links\nexport async function getVersion(\n  versionString: string,\n  method: Method\n): Promise<SemVer> {\n  const version = new SemVer(versionString)\n  const links: AbstractLinks = await getLinks()\n  let versions\n  switch (method) {\n    case 'local':\n      versions = links.getAvailableLocalCudaVersions()\n      break\n    case 'network':\n      switch (await getOs()) {\n        case OSType.linux:\n          // TODO adapt this to actual available network versions for linux\n          versions = links.getAvailableLocalCudaVersions()\n          break\n        case OSType.windows:\n          versions = (links as WindowsLinks).getAvailableNetworkCudaVersions()\n          break\n      }\n  }\n  core.debug(`Available versions: ${versions}`)\n  if (versions.find(v => v.compare(version) === 0) !== undefined) {\n    core.debug(`Version available: ${version}`)\n    return version\n  } else {\n    core.debug(`Version not available error!`)\n    throw new Error(`Version not available: ${version}`)\n  }\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:25:41.627294+00:00"
+}
