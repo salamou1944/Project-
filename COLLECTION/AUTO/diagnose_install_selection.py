@@ -26,6 +26,21 @@ def main() -> None:
     items = queue.get("items", [])
     if not isinstance(rows, list) or not isinstance(items, list):
         raise SystemExit("invalid manifest/value-queue shape; no diagnosis possible")
+    license_counts = Counter(str(row.get("license") or "<missing>") for row in rows if isinstance(row, dict))
+    global_eligible = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        source = row.get("canonical_source")
+        revision = row.get("revision_sha")
+        if (row.get("state") == "extracted" and row.get("license") in ALLOWED
+                and row.get("mode") in {"cached", "refreshed"}
+                and isinstance(source, str) and source.startswith("github:")
+                and isinstance(revision, str) and len(revision) == 40
+                and int(row.get("files_extracted", 0) or 0) > 0):
+            repo = source.removeprefix("github:")
+            if not is_quarantined_revision(repo, revision, quarantined):
+                global_eligible.append({"repo": repo, "revision": revision, "license": row.get("license"), "mode": row.get("mode"), "files_extracted": row.get("files_extracted")})
     by_source = {
         row.get("canonical_source"): row
         for row in rows
@@ -104,6 +119,9 @@ def main() -> None:
     report = {
         "status": "DIAGNOSIS_ONLY_NO_INSTALLS",
         "manifest_sources": len(rows),
+        "manifest_license_counts": dict(license_counts.most_common()),
+        "globally_eligible_sources_before_capability_and_approval": len(global_eligible),
+        "global_eligible_source_sample": global_eligible[:20],
         "value_queue_items": len(items),
         "queue_gate_counts": dict(sorted(queue_gates.items())),
         "source_gate_counts": dict(sorted(source_gates.items())),
