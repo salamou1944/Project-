@@ -3,6 +3,7 @@
 import unittest
 
 from validate_installation_outcome import validate_outcome
+from verify_installed_assets import load_callable_evidence
 
 
 def result(repo, revision, status):
@@ -25,6 +26,14 @@ class InstallationOutcomeTests(unittest.TestCase):
         self.assertEqual(outcome["status"], "PASS")
         self.assertEqual(outcome["installed_or_already_installed"], 2)
         self.assertEqual(outcome["blocked_by_size"], 1)
+
+    def test_modelparams_callable_evidence_is_exact_revision_and_has_successful_runs(self):
+        evidence = load_callable_evidence()
+        self.assertEqual(evidence["repo"], "mnfst/modelparams.dev")
+        self.assertEqual(evidence["revision"], "0d09d9a3fb642770430fb357e3c72f8e7d9f1f67")
+        self.assertEqual(evidence["execution_status"], "PROVEN_CALLABLE")
+        self.assertEqual(evidence["installed_package_smoke"]["status"], "success")
+        self.assertEqual(evidence["api_factory_integration"]["status"], "success")
 
     def test_safe_noop_when_no_candidate_has_explicit_approval(self):
         outcome = validate_outcome({"candidate_count": 0, "results": []}, {"items": []})
