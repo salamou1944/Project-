@@ -1,0 +1,53 @@
+{
+  "canonical_source": "github:ai-forever/think-mcp",
+  "repo": "ai-forever/think-mcp",
+  "revision_sha": "b8cc127b1f4298d861745c3b99755b8f5ff05004",
+  "default_branch": "master",
+  "pushed_at": "2025-04-16T12:08:04Z",
+  "repo_updated_at": "2026-06-29T10:07:55Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "1fabcf2e184722d83db7d16ca91e40e3c5462f5704e9fc037f88fc6861553464",
+      "score": 120,
+      "content": "[project]\nname = \"think_mcp\"\nversion = \"0.1.16\"\ndescription = \"MCP server providing a 'think' tool for structured reasoning, inspired by Anthropic's Claude 'think' tool. Enables agentic LLMs to pause, log thoughts, and improve multi-step tool use.\"\nreadme = \"README.md\"\nrequires-python = \">=3.10\"\ndependencies = [\n    \"mcp[cli]>=1.6.0\",\n    \"python-dotenv>=1.1.0\",\n    \"tavily-python>=0.5.4\",\n]\nauthors = [\n    { name = \"Konstantin Krestnikov\", email = \"k.krestnikov@gmail.com\" }\n]\nlicense = { text = \"MIT\" }\nkeywords = [\n    \"mcp\",\n    \"think\",\n    \"agentic\",\n    \"llm\",\n    \"structured reasoning\",\n    \"anthropic\",\n    \"claude\",\n]\n\n[project.urls]\nHomepage = \"https://github.com/Rai220/think-mcp\"\n\n[tool.setuptools.packages.find]\nwhere = [\".\"]\n\n[project.scripts]\nthink_mcp = \"think_mcp.__main__:main\"\nthink-mcp = \"think_mcp.__main__:main\"\n"
+    },
+    {
+      "path": "think_mcp/__main__.py",
+      "sha": null,
+      "content_sha256": "71d14ffcea8f545229bcf8b998f302b7ea5edbf08865ea771be69f220d7993ac",
+      "score": 108,
+      "content": "from mcp.server.fastmcp import FastMCP\nfrom pydantic import Field\nfrom dotenv import load_dotenv, find_dotenv\nimport argparse\nimport json\n\nload_dotenv(find_dotenv())\n\nmcp = FastMCP(\"think_mcp\")\ntavily_client = None\n\nadvanced_mode = False  # default, may be set in main()\n\n@mcp.prompt()\ndef system() -> str:\n    return \"\"\"## Using the think tool\n\nBefore taking any action or responding to the user after receiving tool results, use the think tool as a scratchpad to:\n- List the specific rules that apply to the current request\n- Check if all required information is collected\n- Verify that the planned action complies with all policies\n- Iterate over tool results for correctness \n\nHere are some examples of what to iterate over inside the think tool:\n<think_tool_example_1>\nUser wants to cancel flight ABC123\n- Need to verify: user ID, reservation ID, reason\n- Check cancellation rules:\n  * Is it within 24h of booking?\n  * If not, check ticket class and insurance\n- Verify no segments flown or are in the past\n- Plan: collect missing info, verify rules, get confirmation\n</think_tool_example_1>\n\n<think_tool_example_2>\nUser wants to book 3 tickets to NYC with 2 checked bags each\n- Need user ID to check:\n  * Membership tier for baggage allowance\n  * Which payments methods exist in profile\n- Baggage calculation:\n  * Economy class × 3 passengers\n  * If regular member: 1 free bag each → 3 extra bags = $150\n  * If silver member: 2 free bags each → 0 extra bags = $0\n  * If gold member: 3 free bags each → 0 extra bags = $0\n- Payment rules to verify:\n  * Max 1 travel certificate, 1 credit card, 3 gift cards\n  * All payment methods must be in profile\n  * Travel certificate remainder goes to waste\n- Plan:\n1. Get user ID\n2. Verify membership level for bag fees\n3. Check which payment methods in profile and if their combination is allowed\n4. Calculate total: ticket price + any bag fees\n5. Get explicit confirmation for booking\n</think_tool_example_2>\"\"\"\n\n@mcp.tool()\nasync def think(thought: str = Field(..., description=\"A thought to think about.\")) -> str:\n    \"\"\"Use the tool to think about something. \nIt will not obtain new information or change the database, but just append the thought to the log. \nUse it when complex reasoning or some cache memory is needed.\"\"\"\n    return thought\n\nparser = argparse.ArgumentParser(description=\"Think MCP server\")\nparser.add_argument('--advanced', action='store_true', help='Enable advanced mode (plan, search, criticize tools)')\nargs = parser.parse_args()\n\nif args.advanced:\n    print(\"Advanced mode enabled. Loading advanced tools...\")\n    \n    @mcp.tool()\n    async def criticize(criticism: str = Field(..., description=\"Сonstructive criticism\")) -> str:\n        \"\"\"Use the tool to critic your steps. \n        It will not obtain new information or change the database, but just append the thought to the log. \n        Use it when complex reasoning or some cache memory is needed.\"\"\"\n        return criticism\n\n    @mcp.tool()\n    async def plan(plan: str = Field(..., description=\"A plan of next steps\")) -> str:\n        \"\"\"Use the tool to plan your steps. \n        It will not obtain new information or change the database, but just append the thought to the log. \n        Use it when complex reasoning or some cache memory is needed.\"\"\"\n        return plan\n\n    @mcp.tool()\n    async def search(query: str = Field(..., description=\"Search query\")) -> str:\n        \"\"\"Search the web for a given query.\"\"\"\n        from tavily import TavilyClient\n        tavily_client = TavilyClient()\n        context = tavily_client.get_search_context(query=query)\n        return json.dumps(context, ensure_ascii=False)\n\ndef main():\n    mcp.run(transport='stdio')\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b9ab74d2b669e5bdeb51bedfb48865db1f89a7dc7353218bbecc26797965b81e",
+      "score": 100,
+      "content": "# Think MCP Tool\n\nThink MCP is an implementation of an MCP (Model Context Protocol) server that provides a \"think\" tool for structured reasoning in agentic AI workflows. This project is inspired by the Anthropic engineering article: [The \"think\" tool: Enabling Claude to stop and think in complex tool use situations](https://www.anthropic.com/engineering/claude-think-tool).\n\nAccording to the referenced article, adding the think tool can lead to improved evaluation metrics by enabling reasoning capabilities even in models that do not natively possess advanced reasoning skills.\n\n![alt text](tau_bench.png)\n\n## What is the \"think\" tool?\nThe \"think\" tool allows an AI agent to pause and record an explicit thought during complex reasoning or multi-step tool use. It does not change the environment or database, but appends the thought to the log, helping the agent process information, backtrack, or comply with detailed policies.\n\nThis approach is especially useful for:\n- Tool output analysis (processing results of previous tool calls)\n- Policy-heavy environments (verifying compliance with guidelines)\n- Sequential decision making (where each step builds on previous ones)\n\n## Features\n- Implements the \"think\" tool as described in Anthropic's research\n- Minimal, standards-based MCP server using [mcp[cli]](https://pypi.org/project/mcp/)\n- Ready for integration with Claude or other agentic LLMs\n\n## Usage\n\n### MCP server configuration\nAdd this MCP server to your facorite agent.\n```\n\"mcpServers\": {\n    \"think-mcp\": {\n        \"command\": \"uvx\",\n        \"args\": [\"think-mcp\"],\n        \"enabled\": true\n    }\n}\n```\n\n## Tool definition\nThe \"think\" tool is defined as:\n- **Input:** `thought` (string) — A thought to think about.\n- **Behavior:** Appends the thought to the log for structured reasoning.\n\n## Advanced mode\nAdds aditional tools for your agent:\n- criticize\n- plan\n- search\n\n```\n\"mcpServers\": {\n    \"think-mcp\": {\n        \"command\": \"uvx\",\n        \"args\": [\"think-mcp\", \"--advanced\"],\n        \"enabled\": true,\n        \"env\": {\n            \"TAVILY_API_KEY\": ... YOUR TAVILY API KEY HERE ...\n        }\n    }\n}\n```\n\n## Reference\n- Based on: [Anthropic Engineering Blog — The \"think\" tool](https://www.anthropic.com/engineering/claude-think-tool)\n\n## License\nMIT License — see [LICENSE](LICENSE)"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [
+    {
+      "path": "think_mcp/__init__.py",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 1,
+  "generated_at": "2026-10-27T18:51:11.674392+00:00"
+}

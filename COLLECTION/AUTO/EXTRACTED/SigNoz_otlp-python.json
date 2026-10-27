@@ -1,0 +1,69 @@
+{
+  "canonical_source": "github:SigNoz/otlp-python",
+  "repo": "SigNoz/otlp-python",
+  "revision_sha": "3d79249bb1e13d6507f402b6af97079de08fe449",
+  "default_branch": "main",
+  "pushed_at": "2024-09-26T07:12:08Z",
+  "repo_updated_at": "2024-12-29T04:35:58Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "docker-compose.yaml",
+      "sha": null,
+      "content_sha256": "a7df241af363d3ee68237620a35c629568dcdc2f1130d7aebf8ba64d0f487b1d",
+      "score": 120,
+      "content": "version: \"2.4\"\nservices:\n  otlp-python:\n    image: \"signoz/otlp-python:latest\"\n    container_name: otlp-python\n    hostname: otlp-python\n    restart: always\n    ports:\n      - 5002:5002\n    extra_hosts:\n      - signoz:host-gateway\n    environment:\n      OTLP_ENDPOINT: http://signoz:4317   # Replace with SigNoz OTLP endpoint, if SigNoz not running on host machine\n\n  load-python:\n    image: \"grubykarol/locust:1.2.3-python3.9-alpine3.12\"\n    container_name: load-python\n    hostname: load-python\n    restart: always\n    environment:\n      ATTACKED_HOST: http://otlp-python:5002\n      LOCUST_MODE: standalone\n      NO_PROXY: standalone\n      TASK_DELAY_FROM: 45\n      TASK_DELAY_TO: 60\n      QUIET_MODE: \"${QUIET_MODE:-false}\"\n      LOCUST_OPTS: \"--headless -u 10 -r 10\"\n    volumes:\n      - ./locustfile.py:/locust/locustfile.py"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3f92c2b9271ce100708cfb706b0fa6b2fc62086b13bb8e832e1a180f9e9a2f68",
+      "score": 100,
+      "content": "# OTLP-Python\n\n## Run\n\n```bash\ndocker run --name otlp-python -p 5002:5002 --add-host signoz:host-gateway -e OTLP_ENDPOINT=\"signoz:4317\" -e INSECURE=\"true\" signoz/otlp-python\n```\n\n## Build\n\n```bash\ndocker build -t otlp-python .\n\ndocker run --name otlp-python -p 5002:5002 --add-host signoz:host-gateway -e OTLP_ENDPOINT=\"signoz:4317\" -e INSECURE=\"true\" otlp-python\n```\n\n## Generate Data\n\n```bash\ncurl http://127.0.0.1:5002/?user=alice\n```\n\n## Screenshots\n\n**Traces page:**\n\n![traces page](https://i.imgur.com/LgP4CGT.png)\n\n**Logs page:**\n\n![logs page](https://i.imgur.com/kpq2JrQ.png)\n\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "c95fd18184e4df41d88e8f6fa1804b40f103c20fa615f0f985be471d61610dc5",
+      "score": 85,
+      "content": "# syntax=docker/dockerfile:1\n\nFROM python:3.8-slim-buster\n\nWORKDIR /app\n\nCOPY requirements.txt requirements.txt\nRUN pip3 install -r requirements.txt\n\nCOPY . .\n\nCMD [ \"python3\", \"main.py\"]"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "b5007326c805d7ccde1873a5a5d6d1fe0d00915be6fe4a62025073756a03496c",
+      "score": 85,
+      "content": "backoff==2.2.1\ncertifi==2022.12.7\ncharset-normalizer==3.1.0\nDeprecated==1.2.13\ngoogleapis-common-protos==1.58.0\ngrpcio==1.51.3\nidna==3.4\nopentelemetry-distro==0.43b0\nopentelemetry-exporter-otlp==1.22.0\nprotobuf==4.22.1\nrequests==2.28.2\ntyping_extensions==4.5.0\nurllib3==1.26.15\nwrapt==1.15.0\nflask==2.3.2"
+    },
+    {
+      "path": "main.py",
+      "sha": null,
+      "content_sha256": "28a16fb8daebb9b8b1fac13b3f1c20a465ca55ae4bf12396cacae02cbedf3df4",
+      "score": 35,
+      "content": "import logging\nfrom opentelemetry import trace\nfrom opentelemetry._logs import set_logger_provider\nfrom opentelemetry.exporter.otlp.proto.grpc._log_exporter import (\n    OTLPLogExporter,\n)\nfrom opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (\n    OTLPSpanExporter,\n)\nfrom opentelemetry.sdk.trace.export import (\n    BatchSpanProcessor,\n)\nfrom opentelemetry.sdk._logs import LoggerProvider, LoggingHandler\nfrom opentelemetry.sdk._logs.export import BatchLogRecordProcessor\nfrom opentelemetry.sdk.resources import Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nimport random\nimport time\nimport json\nimport os\n\nfrom flask import Flask, jsonify, request\n\nresource = Resource.create(\n        {\n            \"service.name\": \"demo-app\",\n            \"service.instance.id\": \"demo-instance\",\n        }\n    )\n\n# create the providers\ntrace_provider = TracerProvider(resource=resource)\nlogger_provider = LoggerProvider(resource=resource)\n\n# set the providers\ntrace.set_tracer_provider(trace_provider)\nset_logger_provider(logger_provider)\n\nexporter = OTLPLogExporter(endpoint=os.getenv(\"OTLP_ENDPOINT\", \"localhost:4317\"), insecure=json.loads(os.getenv(\"INSECURE\", \"true\").lower()))\nexporterspan = OTLPSpanExporter(endpoint=os.getenv(\"OTLP_ENDPOINT\", \"localhost:4317\"), insecure=json.loads(os.getenv(\"INSECURE\", \"true\").lower()))\n\n# add the batch processors to the trace provider\nlogger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))\ntrace.get_tracer_provider().add_span_processor(\n    BatchSpanProcessor(exporterspan)\n)\n\nhandler = LoggingHandler(level=logging.DEBUG,logger_provider=logger_provider)\n# Attach OTLP handler to root logger\n# logging.getLogger().addHandler(handler)\n# Log directly\nlogging.info(\"Jackdaws love my big sphinx of quartz.\")\n# Create different namespaced loggers\nlogger1 = logging.getLogger(\"myapp.area1\")\nlogger2 = logging.getLogger(\"myapp.area2\")\nlogger2.addHandler(handler)\nlogger2.setLevel(logging.DEBUG)\n\ntracer = trace.get_tracer(__name__)\napp = Flask(__name__)\n\napp.logger.addHandler(handler)\n\ndef get_random_time():\n    return random.randint(100, 1500) / 1000.0\n\n@app.route(\"/healthz\")\ndef health_check():\n\treturn jsonify({\"status\": \"ok\"})\n\n@app.route('/', methods = ['GET', 'POST'])\ndef home():\n    if(request.method == 'GET'):\n        with tracer.start_as_current_span(\"home\"):\n            args = request.args\n            user = args.get('user',  \"anonymous\")\n            with tracer.start_as_current_span(\"authenticate\"):\n                time.sleep(get_random_time())\n                metadata =  '{\"user\": \"'+user +'\", \"service_meta\": {\"name\": \"demo-service\", \"namespace\": \"demo\"}, '\n                logger2.debug(metadata + '\"message\": \"authenticating user: '+ user +'\"}')\n                with tracer.start_as_current_span(\"authenticate_check_cache\"):\n                    time.sleep(get_random_time())\n                with tracer.start_as_current_span(\"authenticate_check_db\"):\n                    time.sleep(get_random_time())\n                with tracer.start_as_current_span(\"check_request limit\"):\n                    time.sleep(get_random_time())\n            with tracer.start_as_current_span(\"get_cart\"):\n                logger2.debug(metadata + '\"message\": \"getting cart for user: '+ user +'\"}')\n                with tracer.start_as_current_span(\"check cart in cache\"):\n                    time.sleep(get_random_time())\n                with tracer.start_as_current_span(\"check cart in db\"):\n                    logger2.debug(metadata + '\"message\": \"checking cart from db for : '+ user +'\"}')\n                    time.sleep(get_random_time())\n            logger2.info(metadata + '\"method\":\"GET\", \"status\": 200, \"level\": \"info\", \"message\": \"completed request for user: '+ user +'\"}', extra={\"method\": \"GET\", \"status\": 200, \"level\": \"info\"})\n            return \"Hello \" + user\n\n# driver function\nif __name__ == '__main__':\n    app.run(host='0.0.0.0', port=5002)\n    logger_provider.shutdown()\n    trace_provider.shutdown()\n"
+    },
+    {
+      "path": "locustfile.py",
+      "sha": null,
+      "content_sha256": "2d15bfe6649ef1f6aeedf28649b8e5fbf2936cc818459feee2c23771614a50a8",
+      "score": 35,
+      "content": "from locust import HttpUser, task, between\nimport random\n\nclass UserTasks(HttpUser):\n    wait_time = between(30, 60)\n    users = [\n        \"alice\",\n        \"bob\",\n        \"charlie\",\n        \"david\",\n        \"eve\",\n        \"frank\",\n        \"grace\",\n        \"heidi\",\n        \"ivan\",\n        \"judy\",\n        \"kevin\",\n        \"larry\",\n        \"michael\",\n        \"naomi\",\n        \"oliver\",\n        \"patricia\",\n        \"quinn\",\n        \"ray\",\n        \"sarah\",\n        \"trent\",\n        \"ursula\",\n        \"victor\",\n        \"wendy\",\n        \"xavier\",\n        \"yvonne\",\n        \"zelda\"\n    ]\n\n    @task(1)\n    def list(self):\n        random_user = random.choice(self.users)\n        self.client.get(\"/?user=\"+random_user)"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:51:15.084977+00:00"
+}

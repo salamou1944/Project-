@@ -1,0 +1,202 @@
+{
+  "canonical_source": "github:stickerdaniel/node-webrtc",
+  "repo": "stickerdaniel/node-webrtc",
+  "revision_sha": "27d0b2bd96234ec7a2f64160e8e54e9ad3fe8787",
+  "default_branch": "develop",
+  "pushed_at": "2026-10-24T06:54:23Z",
+  "repo_updated_at": "2026-10-24T06:54:14Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "scripts/install_macos_sdk.sh",
+      "sha": null,
+      "content_sha256": "679e76a7b16a202d0ee3acfe129c6c1e5eba4c8d04758f13f91da41d4734d8ba",
+      "score": 190,
+      "content": "#!/usr/bin/env bash\n\nGIT_ROOT=\"$(git rev-parse --show-toplevel)\"\nXCODE_VERSION=\"$(cat \"${GIT_ROOT}/.xcode-version\")\"\nxcodes install \"${XCODE_VERSION}\"\nxcodes select \"${XCODE_VERSION}\"\n"
+    },
+    {
+      "path": "test/rtcdtlstransport.js",
+      "sha": null,
+      "content_sha256": "2ede36783d90f0947f8d50f54ba50f7dd74ba6bc3f7d2557e61d33aaad81b490",
+      "score": 165,
+      "content": "\"use strict\";\n\nconst test = require(\"tape\");\nconst { Certificate } = require(\"@fidm/x509\");\n\nconst { RTCDtlsTransport, RTCIceTransport } = require(\"..\");\n\nconst {\n  createRTCPeerConnections,\n  gatherCandidates,\n  negotiate,\n  waitForStateChange,\n} = require(\"./lib/pc\");\n\nasync function testDtlsTransport(t, createSenderOrReceiver) {\n  const [pc1, pc2] = createRTCPeerConnections({}, {}, { handleIce: false });\n  const senderOrReceiver = createSenderOrReceiver(pc1);\n  t.equal(senderOrReceiver.transport, null, \"transport is initially null\");\n\n  const candidates1Promise = gatherCandidates(pc1);\n  const candidates2Promise = gatherCandidates(pc2);\n\n  await negotiate(pc1, pc2);\n\n  const { transport } = senderOrReceiver;\n  t.ok(transport instanceof RTCDtlsTransport, \"transport is no longer null\");\n  t.equal(transport.state, \"new\", '.state is initially \"new\"');\n  t.ok(\n    transport.iceTransport instanceof RTCIceTransport,\n    \".iceTransport is not null\",\n  );\n  t.equal(\n    transport.iceTransport.state,\n    \"new\",\n    '.iceTransport.state is also \"new\"',\n  );\n  t.equal(\n    transport.iceTransport.component,\n    \"rtp\",\n    '.iceTransport.component is \"rtp\"',\n  );\n  t.equal(\n    transport.iceTransport.role,\n    \"controlling\",\n    '.iceTransport.role is \"controlling\"',\n  );\n\n  const connectingPromise = waitForStateChange(transport, \"connecting\");\n  const connectedPromise = waitForStateChange(transport, \"connected\");\n\n  const candidates = await Promise.all([\n    candidates1Promise,\n    candidates2Promise,\n  ]);\n\n  await Promise.all(\n    candidates[0]\n      .map((candidate) => pc2.addIceCandidate(candidate))\n      .concat(candidates[1].map((candidate) => pc1.addIceCandidate(candidate))),\n  );\n\n  if (transport.state !== \"connected\") {\n    await connectingPromise;\n  }\n  t.ok(\n    transport.state === \"connecting\" || transport.state === \"connected\",\n    '.state transitions to \"connecting\" (or \"connected\")',\n  );\n  t.ok(\n    transport.iceTransport.state === \"checking\" ||\n      transport.iceTransport.state === \"connected\",\n    '.state transitions to \"checking\" (or \"connected\")',\n  );\n\n  await connectedPromise;\n\n  t.pass('\"statechange\" fires in state \"connected\"');\n  t.equal(transport.state, \"connected\", '.state is \"connected\"');\n  t.equal(\n    transport.iceTransport.state,\n    \"connected\",\n    '.iceTransport.state is also \"connected\"',\n  );\n\n  const remoteCertificates = transport.getRemoteCertificates();\n  t.ok(\n    remoteCertificates.length > 0,\n    \"getRemoteCertificates() returns at least one remote certificate\",\n  );\n  remoteCertificates.forEach((derBuffer, i) => {\n    // NOTE(mroberts): https://stackoverflow.com/a/48309802\n    const prefix = \"-----BEGIN CERTIFICATE-----\\n\";\n    const postfix = \"-----END CERTIFICATE-----\";\n    const pemText =\n      prefix +\n      Buffer.from(derBuffer)\n        .toString(\"base64\")\n        .match(/.{0,64}/g)\n        .join(\"\\n\") +\n      postfix;\n    const cert = Certificate.fromPEM(pemText);\n    t.equal(cert.issuer.commonName, \"WebRTC\", 'Issuer is \"WebRTC\"');\n    t.pass(`parsed remote certificate ${i + 1}`);\n  });\n\n  pc1.close();\n  pc2.close();\n\n  t.equal(senderOrReceiver.transport, transport, \"transport is still not null\");\n  t.equal(transport.state, \"closed\", '.state is finally \"closed\"');\n  t.ok(\n    transport.iceTransport instanceof RTCIceTransport,\n    \".iceTransport is still not null\",\n  );\n  t.equal(\n    transport.iceTransport.state,\n    \"closed\",\n    '.iceTransport.state is \"closed\"',\n  );\n  t.equal(\n    transport.iceTransport.component,\n    \"rtp\",\n    '.iceTransport.component is still \"rtp\"',\n  );\n  t.equal(\n    transport.iceTransport.role,\n    \"controlling\",\n    '.iceTransport.role is still \"controlling\"',\n  );\n\n  t.end();\n}\n\ntest(\"RTCDtlsTransport\", (t) => {\n  test(\"accessed via RTCRtpSender .transport\", (t) =>\n    testDtlsTransport(t, (pc) => pc.addTransceiver(\"audio\").sender));\n\n  test(\"accessed via RTCRtpReceiver .transport\", (t) =>\n    testDtlsTransport(t, (pc) => pc.addTransceiver(\"audio\").receiver));\n\n  t.end();\n});\n"
+    },
+    {
+      "path": "test/rtcdatachannel.js",
+      "sha": null,
+      "content_sha256": "04c4b30dac52a3485193958702e9ebb2ac0564dc203b4b68fddd719a9176b9e2",
+      "score": 165,
+      "content": "\"use strict\";\n\nconst tape = require(\"tape\");\nconst { RTCPeerConnection } = require(\"..\");\n\ntape(\n  'Calling .send(message) when .readyState is \"closed\" throws InvalidStateError',\n  (t) => {\n    const pc = new RTCPeerConnection();\n    const dc = pc.createDataChannel(\"hello\");\n    pc.close();\n    t.throws(() => dc.send(\"world\"), /RTCDataChannel.readyState is not 'open'/);\n    t.end();\n  },\n);\n\ntape(\".maxPacketLifeTime\", (t) => {\n  const pc = new RTCPeerConnection();\n  const dc1 = pc.createDataChannel(\"dc1\");\n  const dc2 = pc.createDataChannel(\"dc2\", { maxPacketLifeTime: 0 });\n  t.equal(dc1.maxPacketLifeTime, 65535);\n  t.equal(dc2.maxPacketLifeTime, 0);\n  pc.close();\n  t.end();\n});\n\ntape(\".negotiated\", (t) => {\n  const pc = new RTCPeerConnection();\n  const dc1 = pc.createDataChannel(\"dc1\");\n  const dc2 = pc.createDataChannel(\"dc2\", { negotiated: true });\n  t.equal(dc1.negotiated, false);\n  t.equal(dc2.negotiated, true);\n  pc.close();\n  t.end();\n});\n"
+    },
+    {
+      "path": "docs/nonstandard-apis.md",
+      "sha": null,
+      "content_sha256": "dbdaceca15e3396ca6efe00334d69ade0627b257bdb9afdb6dbcac0fc28791ff",
+      "score": 143,
+      "content": "Nonstandard APIs\n================\n\nMediaStream\n-----------\n\nMediaStreams in node-webrtc can be constructed with arbitrary IDs. For example,\nthe following MediaStream, `stream`, has its ID set to \"foo\".\n\n```js\nconst stream = new MediaStream({ id: 'foo' });\nstream.id === 'foo';  // true\n```\n\nRTCConfiguration\n----------------\n\n### `portRange`\n\nRTCConfiguration accepts a nonstandard property, `portRange`. This property\nconstrains the port range used by the RTCPeerConnection's ICE transports. For\nexample,\n\n```js\nconst { RTCPeerConnection } = require('wrtc');\n\nconst pc = new RTCPeerConnection({\n  portRange: {\n    min: 10000, // defaults to 0\n    max: 20000  // defaults to 65535\n  }\n});\n```\n\n### `sdpSemantics`\n\nRTCConfiguration accepts a nonstandard property, `sdpSemantics`. When set to\n\"plan-b\", this property disables RTCRtpTransceivers and enables Plan B format\nSDPs for a particular RTCPeerConnection. `sdpSemantics` defaults to the value\nof the `SDP_SEMANTICS` environment variable. If `SDP_SEMANTICS` is unset, the\ndefault is \"unified-plan\".\n\n```js\nconst { RTCPeerConnection } = require('wrtc');\n\nconst pc = new RTCPeerConnection({\n  sdpSemantics: 'plan-b'  // default is \"unified-plan\"\n});\n```\n\n```\nSDP_SEMANTICS=plan-b node app.js\n```\n\nProgrammatic Audio\n------------------\n\nnode-webrtc includes nonstandard, programmatic audio APIs in the form of\nRTCAudioSource and RTCAudioSink. With these APIs, you can\n\n * Pass audio samples to RTCAudioSource via the `onData` method. Then use the\n   RTCAudioSource's `createTrack` method to create a local audio\n   MediaStreamTrack.\n * Construct an RTCAudioSink from a local or remote audio MediaStreamTrack. The\n   RTCAudioSink will emit a \"data\" event every time audio samples are received.\n   When you're finished, stop the RTCAudioSink by calling `stop`.\n\nFor example,\n\n```js\nconst { RTCAudioSource, RTCAudioSink } = require('wrtc').nonstandard;\n\nconst source = new RTCAudioSource();\nconst track = source.createTrack();\nconst sink = new RTCAudioSink(track);\n\nconst sampleRate = 8000;\nconst samples = new Int16Array(sampleRate / 100);  // 10 ms of 16-bit mono audio\n\nconst data = {\n  samples,\n  sampleRate\n};\n\nconst interval = setInterval(() => {\n  // Update audioData in some way before sending.\n  source.onData(data);\n});\n\nsink.ondata = data => {\n  // Do something with the received audio samples.\n};\n\nsetTimeout(() => {\n  clearInterval(interval);\n  track.stop();\n  sink.stop();\n}, 10000);\n```\n\n### RTCAudioSource\n\n```webidl\n[constructor]\ninterface RTCAudioSource {\n  MediaStreamTrack createTrack();\n  void onData(RTCAudioData data);\n};\n\ndictionary RTCAudioData {\n  required Int16Array samples;\n  required unsigned short sampleRate;\n  octet bitsPerSample = 16;\n  octet channelCount = 1;\n  unsigned short numberOfFrames;\n};\n```\n\n * Calling `createTrack` will return a local audio MediaStreamTrack whose source\n   is the RTCAudioSource.\n * Calling `onData` with RTCAudioData pushes a new audio samples to every\n   non-stopped local audio MediaStreamTrack created with `createTrack`.\n * RTCAudioData should represent 10 ms worth of 16-bit audio samples.\n\n### RTCAudioSink\n\n```webidl\n[constructor(MediaStreamTrack track)]\ninterface RTCAudioSink: EventTarget {\n  void stop();\n  readonly attribute boolean stopped;\n  attribute EventHandler ondata;\n};\n```\n\n * RTCAudioSink's constructor accepts a local or remote audio MediaStreamTrack.\n * As long as neither the RTCAudioSink nor the RTCAudioSink's MediaStreamTrack\n   are stopped, the RTCAudioSink will raise a \"data\" event any time\n   RTCAudioData is received.\n * The \"data\" event has all the properties of RTCAudioData.\n * RTCAudioSink must be stopped by calling `stop`.\n\nProgrammatic Video\n------------------\n\nnode-webrtc includes nonstandard, programmatic video APIs in the form of\nRTCVideoSource and RTCVideoSink. With these APIs, you can\n\n * Pass [I420](https://wiki.videolan.org/YUV/#I420) frames to RTCVideoSource\n   via the `onFrame` method. Then use RTCVideoSource's `createTrack` method to\n   create a local video MediaStreamTrack.\n * Construct an RTCVideoSink from a local or remote video MediaStreamTrack. The\n   RTCVideoSink will emit a \"frame\" event every time an I420 frame is received.\n   When you're finished, stop the RTCVideoSink by calling `stop`.\n\nFor example,\n\n```js\nconst { RTCVideoSource, RTCVideoSink } = require('wrtc').nonstandard;\n\nconst source = new RTCVideoSource();\nconst track = source.createTrack();\nconst sink = new RTCVideoSink(track);\n\nconst width = 320;\nconst height = 240;\nconst data = new Uint8ClampedArray(width * height * 1.5);\nconst frame = { width, height, data };\n\nconst interval = setInterval(() => {\n  // Update the frame in some way before sending.\n  source.onFrame(frame);\n});\n\nsink.onframe = ({ frame }) => {\n  // Do something with the received frame.\n};\n\nsetTimeout(() => {\n  clearInterval(interval);\n  track.stop();\n  sink.stop();\n}, 10000);\n```\n\nnode-webrtc also includes bindings to some\n[libyuv](https://chromium.googlesource.com/libyuv/libyuv/) functions for\nhandling I420 frames. These can be useful when converting to and from RGBA.\n\n### RTCVideoSource\n\n```webidl\n[constructor(optional RTCVideoSourceInit init)]\ninterface RTCVideoSource {\n  readonly attribute boolean isScreencast;\n  readonly attribute boolean? needsDenoising;\n  MediaStreamTrack createTrack();\n  void onFrame(RTCVideoFrame frame);\n};\n\ndictionary RTCVideoSourceInit {\n  boolean isScreencast = false;\n  boolean needsDenoising;\n};\n\ndictionary RTCVideoFrame {\n  required unsigned long width;\n  required unsigned long height;\n  required Uint8ClampedArray data;\n  unsigned short rotation = 0;\n};\n```\n\n * Calling `createTrack` will return a local video MediaStreamTrack whose\n   source is the RTCVideoSource.\n * Calling `onFrame` with an RTCVideoFrame pushes a new video frame to every\n   non-stopped local video MediaStreamTrack created with `createTrack`.\n * An RTCVideoFrame represents an I420 frame.\n * RTCVideoFrame `rotation` is either 0, 90, 180, or 270.\n\n### RTCVideoSink\n\n```webidl\n[constructor(MediaStreamTrack track)]\ninterface RTCVideoSink: EventTarget {\n  void stop();\n  readonly attribute boolean stopped;\n  attribute EventHandler onframe;\n};\n```\n\n * RTCVideoSink's constructor accepts a local or remote video MediaStreamTrack.\n * As long as neither the RTCVideoSink nor the RTCVideoSink's MediaStreamTrack\n   are stopped, the RTCVideoSink will raise a \"frame\" event any time an\n   RTCVideoFrame is received.\n * The \"frame\" event has a property, `frame`, of type RTCVideoFrame.\n * RTCVideoSink must be stopped by calling `stop`.\n\n### `i420ToRgba` and `rgbaToI420`\n\nThese two functions are bindings to libyuv that provide conversions between\nI420 and RGBA frames. WebRTC expects I420, whereas APIs like the\n[Canvas API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)\nexpect RGBA, so these functions are useful for converting between. For example,\n\n```js\nconst { i420ToRgba, rgbaToI420 } = require('wrtc').nonstandard;\n\nconst width = 640;\nconst height = 480;\nconst i420Data = new Uint8ClampedArray(width * height * 1.5);\nconst rgbaData = new Uint8ClampedArray(width * height * 4);\nconst i420Frame = { width, height, data: i420Data };\nconst rgbaFrame = { width, height, data: rgbaData };\n\ni420ToRgba(i420Frame, rgbaFrame);\nrgbaToI420(rgbaFrame, i420Frame);\n```\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "c7a3d1001979e2b362874854ab294713cf8ac984260917aedf05333bd2f3952e",
+      "score": 120,
+      "content": "{\n  \"name\": \"@roamhq/wrtc\",\n  \"description\": \"Standards-compliant WebRTC implementation for Node\",\n  \"keywords\": [\n    \"webrtc\",\n    \"p2p\",\n    \"peer\"\n  ],\n  \"version\": \"0.10.0\",\n  \"author\": \"Jack Duvall <theduvallj@gmail.com> (https://duvallj.pw)\",\n  \"homepage\": \"https://github.com/WonderInventions/node-webrtc\",\n  \"bugs\": \"https://github.com/WonderInventions/node-webrtc/issues\",\n  \"license\": \"BSD-2-Clause\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+ssh://git@github.com/WonderInventions/node-webrtc.git\"\n  },\n  \"main\": \"lib/index.js\",\n  \"types\": \"types/index.d.ts\",\n  \"browser\": \"lib/browser.js\",\n  \"files\": [\n    \"AUTHORS\",\n    \"CHANGELOG.md\",\n    \"lib\",\n    \"types\"\n  ],\n  \"optionalDependencies\": {\n    \"@roamhq/wrtc-darwin-arm64\": \"0.10.0\",\n    \"@roamhq/wrtc-darwin-x64\": \"0.10.0\",\n    \"@roamhq/wrtc-linux-arm64\": \"0.10.0\",\n    \"@roamhq/wrtc-linux-x64\": \"0.10.0\",\n    \"@roamhq/wrtc-win32-x64\": \"0.10.0\",\n    \"domexception\": \"^4.0.0\"\n  },\n  \"devDependencies\": {\n    \"@eslint/eslintrc\": \"^3.2.0\",\n    \"@eslint/js\": \"^9.17.0\",\n    \"@fidm/x509\": \"^1.2.1\",\n    \"cmake-js\": \"^7.3.0\",\n    \"cross-env\": \"^5.1.4\",\n    \"eslint\": \"^9.17.0\",\n    \"eslint-config-prettier\": \"^9.1.0\",\n    \"globals\": \"^15.14.0\",\n    \"husky\": \"^9.1.7\",\n    \"lint-staged\": \"^15.2.11\",\n    \"node-addon-api\": \"^7.0.0\",\n    \"patch-package\": \"^8.0.0\",\n    \"prettier\": \"^3.4.2\",\n    \"recursive-copy\": \"^2.0.14\",\n    \"simple-peer\": \"~9.7.0\",\n    \"tape\": \"^5.6.1\",\n    \"temp\": \"^0.9.4\"\n  },\n  \"scripts\": {\n    \"patch\": \"patch-package --error-on-warn\",\n    \"build\": \"node scripts/build-from-source.js\",\n    \"make-prebuilt\": \"node scripts/make-prebuilt.js\",\n    \"install-example\": \"node scripts/install-example.js\",\n    \"lint\": \"eslint lib/*.js lib/**/*.js test/*.js test/**/*.js scripts/*.js\",\n    \"test\": \"node --expose-gc test/all.js\",\n    \"prepare\": \"husky\"\n  },\n  \"lint-staged\": {\n    \"*.js\": \"eslint --cache --fix\",\n    \"*.{js,css,md}\": \"prettier --write\",\n    \"*.{cc,h}\": \"clang-format -i\"\n  }\n}"
+    },
+    {
+      "path": "npm/package.json",
+      "sha": null,
+      "content_sha256": "20bd7c7d58cd3faf4029fa64191c5ca7d3830e6f5be5c0f28a3f1cb573dc49a4",
+      "score": 118,
+      "content": "{\n  \"dependencies\": {\n    \"node-pre-gyp\": \"^0.13.0\"\n  },\n  \"scripts\": {\n    \"install\": \"node scripts/download-prebuilt.js\"\n  }\n}\n"
+    },
+    {
+      "path": "prebuilds/darwin-x64/package.json",
+      "sha": null,
+      "content_sha256": "e80daaeeda47daa4860ff287cc4d9e7b869193eb50fbf92b2469ccfb2a8a8c6e",
+      "score": 116,
+      "content": "{\n  \"name\": \"@roamhq/wrtc-darwin-x64\",\n  \"version\": \"0.10.0\",\n  \"description\": \"The MacOS 64-bit binary for @roamhq/wrtc.\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/WonderInventions/node-webrtc.git\"\n  },\n  \"license\": \"BSD-2-Clause\",\n  \"os\": [\n    \"darwin\"\n  ],\n  \"cpu\": [\n    \"x64\"\n  ]\n}"
+    },
+    {
+      "path": "prebuilds/darwin-arm64/package.json",
+      "sha": null,
+      "content_sha256": "5cc6f296b2d6d0a3972a6df2fbb7aa903c4481c9e1939f9d6d0e7b390f09136e",
+      "score": 116,
+      "content": "{\n  \"name\": \"@roamhq/wrtc-darwin-arm64\",\n  \"version\": \"0.10.0\",\n  \"description\": \"The MacOS 64-bit ARM binary for @roamhq/wrtc.\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/WonderInventions/node-webrtc.git\"\n  },\n  \"license\": \"BSD-2-Clause\",\n  \"os\": [\n    \"darwin\"\n  ],\n  \"cpu\": [\n    \"arm64\"\n  ]\n}"
+    },
+    {
+      "path": "prebuilds/linux-arm64/package.json",
+      "sha": null,
+      "content_sha256": "c1d6fe5987470c486fbb4b95f6d3ef49008ceffadfe1e618c7bdedb8153e97c2",
+      "score": 116,
+      "content": "{\n  \"name\": \"@roamhq/wrtc-linux-arm64\",\n  \"version\": \"0.10.0\",\n  \"description\": \"The Linux 64-bit ARM binary for @roamhq/wrtc.\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/WonderInventions/node-webrtc.git\"\n  },\n  \"license\": \"BSD-2-Clause\",\n  \"os\": [\n    \"linux\"\n  ],\n  \"cpu\": [\n    \"arm64\"\n  ]\n}"
+    },
+    {
+      "path": "prebuilds/win32-x64/package.json",
+      "sha": null,
+      "content_sha256": "fab528b8518f4d9926e2ca1dbcf3c07db1f837a3c44a05e163770c86cd536a86",
+      "score": 116,
+      "content": "{\n  \"name\": \"@roamhq/wrtc-win32-x64\",\n  \"version\": \"0.10.0\",\n  \"description\": \"The Windows 64-bit binary for @roamhq/wrtc.\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/WonderInventions/node-webrtc.git\"\n  },\n  \"license\": \"BSD-2-Clause\",\n  \"os\": [\n    \"win32\"\n  ],\n  \"cpu\": [\n    \"x64\"\n  ]\n}"
+    },
+    {
+      "path": "prebuilds/linux-x64/package.json",
+      "sha": null,
+      "content_sha256": "434316dcf5672b298bcf60263c3af9f2dd17c71d3daa5734150eb5c995e2de48",
+      "score": 116,
+      "content": "{\n  \"name\": \"@roamhq/wrtc-linux-x64\",\n  \"version\": \"0.10.0\",\n  \"description\": \"The Linux 64-bit binary for @roamhq/wrtc.\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/WonderInventions/node-webrtc.git\"\n  },\n  \"license\": \"BSD-2-Clause\",\n  \"os\": [\n    \"linux\"\n  ],\n  \"cpu\": [\n    \"x64\"\n  ]\n}"
+    },
+    {
+      "path": "scripts/install-example.js",
+      "sha": null,
+      "content_sha256": "9f22af0dc2cd03979143fff9486ba7bcfa0387fbe44c3f5ad28dda09bb58bce5",
+      "score": 115,
+      "content": "#!/usr/bin/env node\n/* eslint no-console:0, no-process-env:0, no-process-exit:0 */\n'use strict';\n\nconst { spawnSync } = require('child_process');\nconst { symlinkSync, writeFileSync } = require('fs');\nconst { join } = require('path');\n\nconst CWD = join(__dirname, '..');\nconst NODE_WEBRTC_EXAMPLES_URL = 'https://github.com/node-webrtc/node-webrtc-examples';\nconst NODE_WEBRTC_EXAMPLES_DIR = 'example';\nconst NODE_WEBRTC_EXAMPLES_REF = '445355403c943457200b5aba687fec45618c1c8a';\n\nfunction gitClone(cwd, url, dir) {\n  const description = 'git clone ' + url + ' ' + dir;\n  console.log(description);\n  let result = spawnSync('git', ['clone', url, dir], {\n    cwd,\n    shell: true,\n    stdio: 'inherit'\n  });\n  if (result.status) {\n    throw new Error(description + ' failed');\n  }\n}\n\nfunction gitCheckout(cwd, dir, ref) {\n  const description = 'git checkout ' + ref;\n  console.log(description);\n  let result = spawnSync('git', ['checkout', ref], {\n    cwd: join(cwd, dir),\n    shell: true,\n    stdio: 'inherit'\n  });\n  if (result.status) {\n    throw new Error(description + ' failed');\n  }\n}\n\nfunction updatePackageJson(cwd, dir, fn) {\n  console.log('Updating package.json');\n  const packageJsonPath = join(cwd, dir, 'package.json');\n  const packageJson = require(packageJsonPath);\n  fn(packageJson);\n  writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));\n}\n\nfunction npmInstall(cwd, dir) {\n  const description = 'npm install';\n  console.log(description);\n  let result = spawnSync('npm', ['install'], {\n    cwd: join(cwd, dir),\n    shell: true,\n    stdio: 'inherit'\n  });\n  if (result.status) {\n    throw new Error(description + ' failed');\n  }\n}\n\nfunction symlink(cwd, target, path) {\n  const description = 'symlink ' + target + ' -> ' + path;\n  console.log(description);\n  process.chdir(cwd);\n  symlinkSync(target, path, 'dir');\n}\n\nfunction deleteWrtcDependency(packageJson) {\n  delete packageJson.dependencies.wrtc;\n}\n\nfunction main() {\n  gitClone(CWD, NODE_WEBRTC_EXAMPLES_URL, NODE_WEBRTC_EXAMPLES_DIR);\n  gitCheckout(CWD, NODE_WEBRTC_EXAMPLES_DIR, NODE_WEBRTC_EXAMPLES_REF);\n  updatePackageJson(CWD, NODE_WEBRTC_EXAMPLES_DIR, deleteWrtcDependency);\n  npmInstall(CWD, NODE_WEBRTC_EXAMPLES_DIR);\n  symlink(join(CWD, NODE_WEBRTC_EXAMPLES_DIR, 'node_modules'), CWD, 'wrtc');\n}\n\nmain();\n"
+    },
+    {
+      "path": "lib/browser.js",
+      "sha": null,
+      "content_sha256": "b39d3f5606da5d31702da82f75cbbc41d3edc7bce8041f19c26be146cd21bb2e",
+      "score": 108,
+      "content": "\"use strict\";\n\nexports.MediaStream = window.MediaStream;\nexports.MediaStreamTrack = window.MediaStreamTrack;\nexports.RTCDataChannel = window.RTCDataChannel;\nexports.RTCDataChannelEvent = window.RTCDataChannelEvent;\nexports.RTCDtlsTransport = window.RTCDtlsTransport;\nexports.RTCIceCandidate = window.RTCIceCandidate;\nexports.RTCIceTransport = window.RTCIceTransport;\nexports.RTCPeerConnection = window.RTCPeerConnection;\nexports.RTCPeerConnectionIceEvent = window.RTCPeerConnectionIceEvent;\nexports.RTCRtpReceiver = window.RTCRtpReceiver;\nexports.RTCRtpSender = window.RTCRtpSender;\nexports.RTCRtpTransceiver = window.RTCRtpTransceiver;\nexports.RTCSctpTransport = window.RTCSctpTransport;\nexports.RTCSessionDescription = window.RTCSessionDescription;\nexports.getUserMedia = window.getUserMedia;\nexports.mediaDevices = navigator.mediaDevices;\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "d09de46e2eb6224cc6891928684ff68bab32fb041fe41f071a4ca45ca53d5f24",
+      "score": 100,
+      "content": "<h1 align=\"center\">\n  <img height=\"120px\" src=\"https://upload.wikimedia.org/wikipedia/commons/d/d9/Node.js_logo.svg\">&nbsp;&nbsp;&nbsp;&nbsp;\n  <img height=\"120px\" src=\"https://webrtc.github.io/webrtc-org/assets/images/webrtc-logo-vert-retro-dist.svg\">\n</h1>\n\n[![NPM](https://img.shields.io/npm/v/@roamhq/wrtc.svg)](https://www.npmjs.com/package/@roamhq/wrtc)\n\nnode-webrtc is a Node.js Native Addon that provides bindings to [WebRTC\nM106](https://webrtc.googlesource.com/src/+/branch-heads/5249). This project is\naiming for spec-compliance and will eventually be tested using the W3C's\n[web-platform-tests](https://github.com/web-platform-tests/wpt) project. A\nnumber of [nonstandard APIs](docs/nonstandard-apis.md) for testing are also\nincluded.\n\n## Install\n\n```\nnpm install @roamhq/wrtc\n```\n\nInstalling from NPM downloads a prebuilt binary for your operating system ×\narchitecture, based on optional dependency filters.\n\nTo install a debug build or cross-compile, you should [build from\nsource](docs/build-from-source.md).\n\n## Supported Platforms\n\nThe following platforms are confirmed to work with node-webrtc and have\nprebuilt binaries available. Since node-webrtc targets [N-API version\n3](https://nodejs.org/api/n-api.html), there may be additional platforms\nsupported that are not listed here. If your platform is not supported, you may\nstill be able to [build from source](docs/build-from-source.md).\n\n<table>\n  <thead>\n    <tr>\n      <td colspan=\"2\" rowspan=\"2\"></td>\n      <th colspan=\"2\">Linux</th>\n      <th colspan=\"2\">macOS</th>\n      <th>Windows</th>\n    </tr>\n    <tr>\n      <th>x64</th>\n      <th>arm64</th>\n      <th>x64</th>\n      <th>arm64</th>\n      <th>x64</th>\n    </tr>\n  </thead>\n  <tbody>\n    <tr>\n      <th rowspan=\"2\">Node</th>\n      <th>20</th>\n      <td align=\"center\">✓</td>\n      <td align=\"center\">?</td>\n      <td align=\"center\">✓</td>\n      <td align=\"center\">✓</td>\n      <td align=\"center\">✓</td>\n    </tr>\n    <tr>\n      <th>22</th>\n      <td align=\"center\">✓</td>\n      <td align=\"center\">?</td>\n      <td align=\"center\">✓</td>\n      <td align=\"center\">✓</td>\n      <td align=\"center\">✓</td>\n    </tr>\n  </tbody>\n</table>\n\n## Examples\n\nSee [node-webrtc/node-webrtc-examples](https://github.com/node-webrtc/node-webrtc-examples).\n"
+    },
+    {
+      "path": "prebuilds/linux-arm64/README.md",
+      "sha": null,
+      "content_sha256": "51bae258597dd16eeb47652c30d024ec588c5ec97247636bd9ba35b7b58e408e",
+      "score": 96,
+      "content": "# wrtc\n\nThis is the Linux 64-bit ARM binary build for @roamhq/wrtc.\nSee https://github.com/WonderInventions/node-webrtc for details.\n"
+    },
+    {
+      "path": "prebuilds/win32-x64/README.md",
+      "sha": null,
+      "content_sha256": "2b6cddab11c9cc9124211af135f9400442b2cefc3ed332d128340e2460234748",
+      "score": 96,
+      "content": "# wrtc\n\nThis is the Windows 64-bit binary build for @roamhq/wrtc.\nSee https://github.com/WonderInventions/node-webrtc for details.\n"
+    },
+    {
+      "path": "prebuilds/darwin-arm64/README.md",
+      "sha": null,
+      "content_sha256": "a0059e90b7241119aec30e973537edbf931daca13e23131e5efd166c863b54eb",
+      "score": 96,
+      "content": "# wrtc\n\nThis is the MacOS 64-bit ARM binary build for @roamhq/wrtc.\nSee https://github.com/WonderInventions/node-webrtc for details.\n"
+    },
+    {
+      "path": "prebuilds/darwin-x64/README.md",
+      "sha": null,
+      "content_sha256": "0bd7c3958badfbc87fad03eacd748e3a6c0c625e1d8c0d570b5c2c768c62497f",
+      "score": 96,
+      "content": "# wrtc\n\nThis is the MacOS 64-bit binary build for @roamhq/wrtc.\nSee https://github.com/WonderInventions/node-webrtc for details.\n"
+    },
+    {
+      "path": "prebuilds/linux-x64/README.md",
+      "sha": null,
+      "content_sha256": "f71575eee94abb4204b758e169402332db97be3a0bc1f5b0df82f7a04ee9dffc",
+      "score": 96,
+      "content": "# wrtc\n\nThis is the Linux 64-bit binary build for @roamhq/wrtc.\nSee https://github.com/WonderInventions/node-webrtc for details.\n"
+    },
+    {
+      "path": "scripts/debug-tests.sh",
+      "sha": null,
+      "content_sha256": "14e56c6b6a429241d5c7d0cb26478b4adab99475c266648e00989e06cd7d56e4",
+      "score": 93,
+      "content": "#!/usr/bin/env bash\n\nNODE_ROOT=\"\"\nif command -v asdf; then\n  NODE_ROOT=\"$(asdf where nodejs)\"\nfi\n\nif [[ \"x${NODE_ROOT}\" = \"x\" ]]; then\n  NODE_ROOT=\"$(realpath \"$(dirname \"$(which node)\")/..\")\"\nfi\n\nlldb -- \"$NODE_ROOT/bin/node\" \"$NODE_ROOT/lib/node_modules/npm/bin/npm-cli.js\" test\n"
+    },
+    {
+      "path": "test/cpp.js",
+      "sha": null,
+      "content_sha256": "3ce86d8f329631b1593ee9c4a7a8439f6223f3c5cc4662cdfce9c92df7faa8ea",
+      "score": 93,
+      "content": "/* eslint no-process-exit:0 */\n\"use strict\";\n\nconst binding = require(\"../lib/binding\");\n\nif (typeof binding.test === \"function\") {\n  const result = binding.test();\n  process.exit(result);\n}\n"
+    },
+    {
+      "path": "test/get-settings.js",
+      "sha": null,
+      "content_sha256": "37a0f5912bc0aba3e66017c552fb2fe018791bb6651cab27540f977872f4064f",
+      "score": 93,
+      "content": "\"use strict\";\n\nconst test = require(\"tape\");\n\nconst { getUserMedia } = require(\"..\");\n\ntest(\"getSettings\", (t) => {\n  return getUserMedia({\n    audio: true,\n    video: true,\n  }).then((media) => {\n    let audioTrack = media.getAudioTracks()[0];\n    // TODO(jack): assert some properties about these maybe? perhaps when I\n    // switch away from getUserMedia\n    t.assert(audioTrack.getSettings());\n    let videoTrack = media.getVideoTracks()[0];\n    // TODO(jack): assert some properties about these maybe? perhaps when I\n    // switch away from getUserMedia\n    t.assert(videoTrack.getSettings());\n    audioTrack.stop();\n    videoTrack.stop();\n    t.end();\n  });\n});\n"
+    },
+    {
+      "path": "test/all.js",
+      "sha": null,
+      "content_sha256": "1cf5f5fa2a33ac6be4672f94fd89e210478e374af26ccf02d1493f9a4e591476",
+      "score": 93,
+      "content": "\"use strict\";\n\n// require('child_process').spawnSync('pause', {shell: true, stdio: 'inherit'});\n//\nrequire(\"./addicecandidate\");\nrequire(\"./closing-data-channel\");\nrequire(\"./closing-peer-connection\");\nrequire(\"./connect\");\nrequire(\"./create-offer\");\nrequire(\"./custom-settings\"); // Seems a little slow...\nrequire(\"./destructor\");\nrequire(\"./get-configuration\");\nrequire(\"./get-settings\");\nrequire(\"./i420helpers\");\nrequire(\"./iceservers\");\nrequire(\"./mediastream\");\nrequire(\"./multiconnect\"); // Seems a little slow...\nrequire(\"./pass-interface-to-method\");\nrequire(\"./rollback\");\nrequire(\"./rtcaudiosink\");\nrequire(\"./rtcaudiosource\");\nrequire(\"./rtcdatachannel\");\nrequire(\"./rtcdtlstransport\");\nrequire(\"./rtcrtpreceiver\");\nrequire(\"./rtcrtpsender\");\nrequire(\"./rtcvideosink\");\nrequire(\"./rtcvideosource\");\nrequire(\"./send-arraybuffer\");\nrequire(\"./sessiondesc\");\n"
+    },
+    {
+      "path": "test/pass-interface-to-method.js",
+      "sha": null,
+      "content_sha256": "524421878feba73bb90fb827912831d124053affaea0ee2378829b22f614bb98",
+      "score": 93,
+      "content": "\"use strict\";\n\nconst test = require(\"tape\");\n\nconst RTCPeerConnection = require(\"..\").RTCPeerConnection;\n\ntest(\"passing something that's not a MediaStream fails\", (t) => {\n  const pc = new RTCPeerConnection();\n  t.throws(\n    () => pc.addTransceiver(\"audio\", { streams: [{}] }),\n    / This is not an instance of MediaStream/,\n  );\n  pc.close();\n  t.end();\n});\n\ntest(\"passing something that's not a MediaStreamTrack fails\", (t) => {\n  const pc = new RTCPeerConnection();\n  t.throws(\n    () => pc.addTrack({}),\n    /This is not an instance of MediaStreamTrack/,\n  );\n  pc.close();\n  t.end();\n});\n\ntest(\"passing something that's not an RTCRtpSender fails\", (t) => {\n  const pc = new RTCPeerConnection();\n  t.throws(() => pc.removeTrack({}), /This is not an instance of RTCRtpSender/);\n  pc.close();\n  t.end();\n});\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": ".envrc",
+      "sha": "1634a83e4f88c61e45285434d9f6c9ce96193d02",
+      "size": 368,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:51:14.437896+00:00"
+}

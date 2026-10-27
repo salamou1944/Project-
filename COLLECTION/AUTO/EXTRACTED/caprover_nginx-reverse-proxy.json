@@ -1,0 +1,62 @@
+{
+  "canonical_source": "github:caprover/nginx-reverse-proxy",
+  "repo": "caprover/nginx-reverse-proxy",
+  "revision_sha": "cc035d12153cf518f5c217d88813f86e2c996fe3",
+  "default_branch": "master",
+  "pushed_at": "2025-07-05T15:50:50Z",
+  "repo_updated_at": "2026-09-18T01:48:29Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/publish_master.yaml",
+      "sha": null,
+      "content_sha256": "0fd307040aa85ebc41bdc1741a2ab96131435769ce6487f75628241d9b0ed623",
+      "score": 126,
+      "content": "name: Build and push Docker image\n\non:\n    push:\n        branches:\n            - master\n\njobs:\n    build-publish-docker-hub:\n        runs-on: ubuntu-latest\n        steps:\n            - uses: azure/docker-login@v1\n              with:\n                  username: ${{ secrets.REGISTRY_USERNAME }}\n                  password: ${{ secrets.REGISTRY_PASSWORD }}\n            - uses: actions/checkout@v1\n            - name: Build and Push Edge to DockerHub\n              shell: bash\n              run: ./dev-scripts/build_and_push.sh"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "1f9ca4454441fd4bd22a689172b32635d503cedfb244324341580c7d153c9d3c",
+      "score": 100,
+      "content": "# nginx-reverse-proxy\nA very simple reverse proxy using nginx and Docker\n\n```\ndocker run -p 1234:80 --env UPSTREAM_HTTP_ADDRESS='https://caprover.com' caprover/nginx-reverse-proxy\n```\n\n\nOpen `http://localhost:1234` in your browser.\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "08247a1454713026cce2132ffb67c37b98f3b5b12b8b90fdce4e1b140cb12492",
+      "score": 85,
+      "content": "FROM nginx:1-alpine\n\nCOPY default.conf /etc/nginx/conf.d/\nCOPY nginx.conf /etc/nginx/\nCOPY docker-entrypoint.sh /\nRUN chmod +x /docker-entrypoint.sh\nENV CLIENT_MAX_BODY_SIZE 20M\n\nENTRYPOINT [\"/docker-entrypoint.sh\"]\nCMD [\"nginx\", \"-g\", \"daemon off;\"]\n"
+    },
+    {
+      "path": "docker-entrypoint.sh",
+      "sha": null,
+      "content_sha256": "19b11efd48645ee648d6425ad12c276ec89ca4899e337b660f941bddf3259216",
+      "score": 35,
+      "content": "#!/bin/sh\nset -e\n\n# Compute the DNS resolvers for use in the templates - if the IP contains \":\", it's IPv6 and must be enclosed in []\nexport RESOLVERS=$(awk '$1 == \"nameserver\" {print ($2 ~ \":\")? \"[\"$2\"]\": $2}' ORS=' ' /etc/resolv.conf | sed 's/ *$//g')\nif [ \"x$RESOLVERS\" = \"x\" ]; then\n    echo \"Error: there is no resolvers!!\" >&2\n    exit 1\nfi\n\ncp /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.template\n\nenvsubst '$RESOLVERS $UPSTREAM_HTTP_ADDRESS $CLIENT_MAX_BODY_SIZE' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf\n\nexec \"$@\"\n"
+    },
+    {
+      "path": "dev-scripts/build_and_push.sh",
+      "sha": null,
+      "content_sha256": "42c0de4a078bdd893534537b43d57e462de1f40faa9f894e3bea29525533c73b",
+      "score": 33,
+      "content": "#!/bin/bash\n\n# Exit early if any command fails\nset -e\n\n# Print all commands\nset -x \n\npwd\n\n# ensure you're not running it on local machine\nif [ -z \"$CI\" ] || [ -z \"$GITHUB_REF\" ]; then\n    echo \"Running on a local machine! Exiting!\"\n    exit 127\nelse\n    echo \"Running on CI\"\nfi\n\n\n\n\n# BRANCH=$(git rev-parse --abbrev-ref HEAD)\n# On Github the line above does not work, instead:\nBRANCH=${GITHUB_REF##*/}\necho \"on branch $BRANCH\"\nif [[ \"$BRANCH\" != \"master\" ]]; then\n    echo 'Not on master branch! Aborting script!';\n    exit 1;\nfi\n\n\ngit clean -fdx .\n\nGIT_COMMIT_HASH=$(git rev-parse --short \"$GITHUB_SHA\")\n\n\ndocker run --rm --privileged multiarch/qemu-user-static --reset -p yes\nexport DOCKER_CLI_EXPERIMENTAL=enabled\ndocker buildx ls\ndocker buildx create --name mybuilder\ndocker buildx use mybuilder\n\n\nIMAGE_NAME=caprover/nginx-reverse-proxy\nIMAGE_VERSION=1-$GIT_COMMIT_HASH\n\ndocker buildx build --platform linux/amd64,linux/arm64,linux/arm -t $IMAGE_NAME:$IMAGE_VERSION -t $IMAGE_NAME:latest -f Dockerfile --push ."
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:51:17.822133+00:00"
+}

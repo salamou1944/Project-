@@ -1,0 +1,202 @@
+{
+  "canonical_source": "github:stripe/connect-js",
+  "repo": "stripe/connect-js",
+  "revision_sha": "8161da45f7a1dd7dfc76cc58870924c8c1846654",
+  "default_branch": "master",
+  "pushed_at": "2026-10-22T14:39:10Z",
+  "repo_updated_at": "2026-10-22T14:44:40Z",
+  "license": "MIT",
+  "topics": [
+    "connectjs",
+    "stripe"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/test.yml",
+      "sha": null,
+      "content_sha256": "fbd5c869d38127af1b199718be5576a0e7bd84a47f55cb5594c5d7c0287cf6e5",
+      "score": 186,
+      "content": "name: build\non:\n  push:\n    branches: [master]\n  pull_request:\n    branches: [master]\n\npermissions:\n  contents: read\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4\n        with:\n          node-version: 18.20.2\n      # GA validations\n      - run: yarn install --frozen-lockfile\n        working-directory: ./ga\n      - run: yarn run lint\n        working-directory: ./ga\n      - run: yarn run typecheck\n        working-directory: ./ga\n      - run: yarn run test:unit --passWithNoTests\n        working-directory: ./ga\n      # Preview validations\n      - run: yarn install --frozen-lockfile\n        working-directory: ./preview\n      - run: yarn run lint\n        working-directory: ./preview\n      - run: yarn run typecheck\n        working-directory: ./preview\n      - run: yarn run test:unit --passWithNoTests\n        working-directory: ./preview\n"
+    },
+    {
+      "path": ".github/workflows/npm_auto_release.yml",
+      "sha": null,
+      "content_sha256": "f0b974d1cfb24646d21e9380788c00dd766e3ad5c630e1c71b995738a7a510d4",
+      "score": 126,
+      "content": "name: NPM Auto Release\n\non:\n  push:\n    branches: [master]\n    paths:\n      - 'ga/package.json'\n      - 'preview/package.json'\n\njobs:\n  detect-releases:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    outputs:\n      ga_changed: ${{ steps.check.outputs.ga_changed }}\n      ga_version: ${{ steps.check.outputs.ga_version }}\n      preview_changed: ${{ steps.check.outputs.preview_changed }}\n      preview_version: ${{ steps.check.outputs.preview_version }}\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n        with:\n          fetch-depth: 2\n\n      - name: Check for version changes\n        id: check\n        run: |\n          GA_VERSION=$(node -p \"require('./ga/package.json').version\")\n          PREVIEW_VERSION=$(node -p \"require('./preview/package.json').version\")\n\n          GA_OLD_VERSION=$(git show HEAD~1:ga/package.json 2>/dev/null | node -p \"JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version\" 2>/dev/null || echo \"\")\n          PREVIEW_OLD_VERSION=$(git show HEAD~1:preview/package.json 2>/dev/null | node -p \"JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version\" 2>/dev/null || echo \"\")\n\n          echo \"GA: $GA_OLD_VERSION → $GA_VERSION\"\n          echo \"Preview: $PREVIEW_OLD_VERSION → $PREVIEW_VERSION\"\n\n          if [ \"$GA_VERSION\" != \"$GA_OLD_VERSION\" ]; then\n            echo \"ga_changed=true\" >> \"$GITHUB_OUTPUT\"\n            echo \"ga_version=$GA_VERSION\" >> \"$GITHUB_OUTPUT\"\n          else\n            echo \"ga_changed=false\" >> \"$GITHUB_OUTPUT\"\n          fi\n\n          if [ \"$PREVIEW_VERSION\" != \"$PREVIEW_OLD_VERSION\" ]; then\n            echo \"preview_changed=true\" >> \"$GITHUB_OUTPUT\"\n            echo \"preview_version=$PREVIEW_VERSION\" >> \"$GITHUB_OUTPUT\"\n          else\n            echo \"preview_changed=false\" >> \"$GITHUB_OUTPUT\"\n          fi\n\n  release-ga:\n    needs: detect-releases\n    if: needs.detect-releases.outputs.ga_changed == 'true'\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./ga\n    permissions:\n      contents: write\n      id-token: write\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n        with:\n          fetch-depth: 0\n\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4\n        with:\n          node-version: \"24\"\n          registry-url: \"https://registry.npmjs.org\"\n\n      - run: yarn install --frozen-lockfile\n      - run: yarn test\n      - run: yarn build\n      - run: cp ../README.md .\n\n      - name: Publish to npm\n        run: npm publish --provenance --ignore-scripts --access public\n\n      - name: Generate scoped release notes\n        id: notes\n        working-directory: .\n        run: |\n          PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v preview | head -n 1 || echo \"\")\n\n          if [ -n \"$PREV_TAG\" ]; then\n            NOTES=$(git log \"$PREV_TAG\"..HEAD --pretty=format:\"- %s (%h)\" -- ga/)\n          else\n            NOTES=$(git log -20 --pretty=format:\"- %s (%h)\" -- ga/)\n          fi\n\n          if [ -z \"$NOTES\" ]; then\n            NOTES=\"- Version bump to ${{ needs.detect-releases.outputs.ga_version }}\"\n          fi\n\n          echo \"$NOTES\" > \"$RUNNER_TEMP/ga-release-notes.md\"\n\n      - name: Create tag and GitHub Release\n        working-directory: .\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          VERSION=\"${{ needs.detect-releases.outputs.ga_version }}\"\n          TAG=\"v${VERSION}\"\n\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"github-actions[bot]@users.noreply.github.com\"\n          git tag \"$TAG\"\n          git push origin \"$TAG\"\n\n          gh release create \"$TAG\" \\\n            --title \"@stripe/connect-js@${VERSION}\" \\\n            --notes-file \"$RUNNER_TEMP/ga-release-notes.md\" \\\n            --latest\n\n      - name: Notify Slack\n        if: always()\n        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2\n        with:\n          webhook: ${{ secrets.SLACK_WEBHOOK_CONNECT_EMBEDDED }}\n          webhook-type: incoming-webhook\n          payload: |\n            {\n              \"text\": \"${{ job.status == 'success' && '✅' || '❌' }} ${{ job.status == 'success' && format('GA release `@stripe/connect-js@{0}` published!', needs.detect-releases.outputs.ga_version) || format('Failed to publish GA release `@stripe/connect-js@{0}`', needs.detect-releases.outputs.ga_version) }}\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run> • Triggered by ${{ github.actor }}\"\n            }\n\n  release-preview:\n    needs: detect-releases\n    if: needs.detect-releases.outputs.preview_changed == 'true'\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./preview\n    permissions:\n      contents: write\n      id-token: write\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n        with:\n          fetch-depth: 0\n\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4\n        with:\n          node-version: \"24\"\n          registry-url: \"https://registry.npmjs.org\"\n\n      - run: yarn install --frozen-lockfile\n      - run: yarn test\n      - run: yarn build\n      - run: cp ../README.md .\n\n      - name: Publish to npm\n        run: npm publish --provenance --ignore-scripts --access public --tag preview\n\n      - name: Generate scoped release notes\n        id: notes\n        working-directory: .\n        run: |\n          PREV_TAG=$(git tag --list 'v*-preview*' --sort=-v:refname | head -n 1 || echo \"\")\n\n          if [ -n \"$PREV_TAG\" ]; then\n            NOTES=$(git log \"$PREV_TAG\"..HEAD --pretty=format:\"- %s (%h)\" -- preview/)\n          else\n            NOTES=$(git log -20 --pretty=format:\"- %s (%h)\" -- preview/)\n          fi\n\n          if [ -z \"$NOTES\" ]; then\n            NOTES=\"- Version bump to ${{ needs.detect-releases.outputs.preview_version }}\"\n          fi\n\n          echo \"$NOTES\" > \"$RUNNER_TEMP/preview-release-notes.md\"\n\n      - name: Create tag and GitHub Release\n        working-directory: .\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          VERSION=\"${{ needs.detect-releases.outputs.preview_version }}\"\n          TAG=\"v${VERSION}\"\n\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"github-actions[bot]@users.noreply.github.com\"\n          git tag \"$TAG\"\n          git push origin \"$TAG\"\n\n          gh release create \"$TAG\" \\\n            --title \"@stripe/connect-js@${VERSION} (preview)\" \\\n            --notes-file \"$RUNNER_TEMP/preview-release-notes.md\" \\\n            --prerelease\n\n      - name: Notify Slack\n        if: always()\n        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2\n        with:\n          webhook: ${{ secrets.SLACK_WEBHOOK_CONNECT_EMBEDDED }}\n          webhook-type: incoming-webhook\n          payload: |\n            {\n              \"text\": \"${{ job.status == 'success' && '✅' || '❌' }} ${{ job.status == 'success' && format('Preview release `@stripe/connect-js@{0}` published!', needs.detect-releases.outputs.preview_version) || format('Failed to publish preview release `@stripe/connect-js@{0}`', needs.detect-releases.outputs.preview_version) }}\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run> • Triggered by ${{ github.actor }}\"\n            }"
+    },
+    {
+      "path": "preview/package.json",
+      "sha": null,
+      "content_sha256": "51b3a504b87d995f0255a2c58818e0438c577883c40b828bc09e3e72cd8af27e",
+      "score": 118,
+      "content": "{\n  \"name\": \"@stripe/connect-js\",\n  \"version\": \"3.4.9-preview.2\",\n  \"description\": \"Connect.js loading utility package (preview version)\",\n  \"main\": \"dist/connect.js\",\n  \"module\": \"dist/connect.esm.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"typings\": \"dist/index.d.ts\",\n  \"scripts\": {\n    \"test\": \"yarn lint && yarn test:unit --passWithNoTests && yarn typecheck && yarn build\",\n    \"test:unit\": \"jest\",\n    \"test:types\": \"zx ./tests/types/scripts/test.mjs\",\n    \"lint\": \"eslint '{src,types}/**/*.{ts,js}' && yarn prettier-check\",\n    \"lint-fix\": \"eslint '{src,types}/**/*.{ts,js}' --fix && yarn prettier-check\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"build\": \"yarn clean && rollup -c\",\n    \"validate-change\": \"yarn run test\",\n    \"clean\": \"rimraf dist\",\n    \"prettier\": \"prettier './**/*.{js,ts,md,html,css}' --write\",\n    \"prettier-check\": \"prettier './**/*.{js,ts,md,html,css}' --check\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/stripe/connect-js.git\"\n  },\n  \"keywords\": [\n    \"Stripe\",\n    \"connect.js\"\n  ],\n  \"author\": \"Stripe (https://www.stripe.com)\",\n  \"license\": \"MIT\",\n  \"bugs\": {\n    \"url\": \"https://github.com/stripe/connect-js/issues\"\n  },\n  \"files\": [\n    \"dist\",\n    \"src\",\n    \"types\",\n    \"pure.js\",\n    \"pure.d.ts\"\n  ],\n  \"homepage\": \"https://github.com/stripe/connect-js#readme\",\n  \"devDependencies\": {\n    \"@babel/core\": \"^7.7.2\",\n    \"@babel/preset-env\": \"^7.7.1\",\n    \"@rollup/plugin-json\": \"^6.0.0\",\n    \"@rollup/plugin-replace\": \"^2.3.1\",\n    \"@types/jest\": \"^24.0.25\",\n    \"@typescript-eslint/eslint-plugin\": \"^7\",\n    \"@typescript-eslint/parser\": \"^7\",\n    \"@typescript-eslint/rule-tester\": \"^7\",\n    \"@typescript-eslint/scope-manager\": \"^7\",\n    \"@typescript-eslint/utils\": \"^7\",\n    \"babel-eslint\": \"^10.0.3\",\n    \"babel-jest\": \"^24.9.0\",\n    \"conditional-type-checks\": \"^1.0.5\",\n    \"eslint\": \"8.56.0\",\n    \"eslint-config-prettier\": \"^8.3.0\",\n    \"eslint-plugin-import\": \"^2.20.1\",\n    \"eslint-plugin-jest\": \"^26.6.0\",\n    \"eslint-plugin-prettier\": \"^4.2.1\",\n    \"jest\": \"^29.5.0\",\n    \"jest-environment-jsdom\": \"^29.5.0\",\n    \"prettier\": \"2.8.8\",\n    \"rimraf\": \"^2.6.2\",\n    \"rollup\": \"^2.80.0\",\n    \"rollup-plugin-babel\": \"^4.4.0\",\n    \"rollup-plugin-typescript2\": \"^0.25.3\",\n    \"ts-jest\": \"^29.1.0\",\n    \"typescript\": \"^4.1.2\",\n    \"yalc\": \"^1.0.0-pre.53\",\n    \"zx\": \"^8.8.5\"\n  },\n  \"dependencies\": {}\n}\n"
+    },
+    {
+      "path": "ga/package.json",
+      "sha": null,
+      "content_sha256": "5eeebf06e7172abf9694dcd0c8fe45dba7b1b2edbdfe563c580cd53f7de8d8b6",
+      "score": 118,
+      "content": "{\n  \"name\": \"@stripe/connect-js\",\n  \"version\": \"3.4.6\",\n  \"description\": \"Connect.js loading utility package (GA version)\",\n  \"main\": \"dist/connect.js\",\n  \"module\": \"dist/connect.esm.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"typings\": \"dist/index.d.ts\",\n  \"scripts\": {\n    \"test\": \"yarn lint && yarn test:unit --passWithNoTests && yarn typecheck && yarn build\",\n    \"test:unit\": \"jest\",\n    \"test:types\": \"zx ./tests/types/scripts/test.mjs\",\n    \"lint\": \"eslint '{src,types}/**/*.{ts,js}' && yarn prettier-check\",\n    \"lint-fix\": \"eslint '{src,types}/**/*.{ts,js}' --fix && yarn prettier-check\",\n    \"typecheck\": \"tsc --noEmit\",\n    \"build\": \"yarn clean && rollup -c\",\n    \"validate-change\": \"yarn run test\",\n    \"clean\": \"rimraf dist\",\n    \"prettier\": \"prettier './**/*.{js,ts,md,html,css}' --write\",\n    \"prettier-check\": \"prettier './**/*.{js,ts,md,html,css}' --check\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/stripe/connect-js.git\"\n  },\n  \"keywords\": [\n    \"Stripe\",\n    \"connect.js\"\n  ],\n  \"author\": \"Stripe (https://www.stripe.com)\",\n  \"license\": \"MIT\",\n  \"bugs\": {\n    \"url\": \"https://github.com/stripe/connect-js/issues\"\n  },\n  \"files\": [\n    \"dist\",\n    \"src\",\n    \"types\",\n    \"pure.js\",\n    \"pure.d.ts\"\n  ],\n  \"homepage\": \"https://github.com/stripe/connect-js#readme\",\n  \"devDependencies\": {\n    \"@babel/core\": \"^7.7.2\",\n    \"@babel/preset-env\": \"^7.7.1\",\n    \"@rollup/plugin-json\": \"^6.0.0\",\n    \"@rollup/plugin-replace\": \"^2.3.1\",\n    \"@types/jest\": \"^24.0.25\",\n    \"@typescript-eslint/eslint-plugin\": \"^7\",\n    \"@typescript-eslint/parser\": \"^7\",\n    \"@typescript-eslint/rule-tester\": \"^7\",\n    \"@typescript-eslint/scope-manager\": \"^7\",\n    \"@typescript-eslint/utils\": \"^7\",\n    \"babel-eslint\": \"^10.0.3\",\n    \"babel-jest\": \"^24.9.0\",\n    \"conditional-type-checks\": \"^1.0.5\",\n    \"eslint\": \"8.56.0\",\n    \"eslint-config-prettier\": \"^8.3.0\",\n    \"eslint-plugin-import\": \"^2.20.1\",\n    \"eslint-plugin-jest\": \"^26.6.0\",\n    \"eslint-plugin-prettier\": \"^4.2.1\",\n    \"jest\": \"^29.5.0\",\n    \"jest-environment-jsdom\": \"^29.5.0\",\n    \"prettier\": \"2.8.8\",\n    \"rimraf\": \"^2.6.2\",\n    \"rollup\": \"^2.79.2\",\n    \"rollup-plugin-babel\": \"^4.4.0\",\n    \"rollup-plugin-typescript2\": \"^0.25.3\",\n    \"ts-jest\": \"^29.1.0\",\n    \"typescript\": \"^4.1.2\",\n    \"yalc\": \"^1.0.0-pre.53\",\n    \"zx\": \"^8.8.5\"\n  },\n  \"dependencies\": {}\n}\n"
+    },
+    {
+      "path": "ga/src/utils/jestSetup.ts",
+      "sha": null,
+      "content_sha256": "a7ea0995e5f213d562cb7673fa0211ce0185caad7cca30010ae529c8ab2a0e98",
+      "score": 111,
+      "content": "import { SCRIPT_SELECTOR } from \"./jestHelpers\";\n\nglobal.beforeEach(() => {\n  jest.spyOn(console, \"warn\").mockReturnValue();\n  jest.useFakeTimers();\n});\n\nglobal.afterEach(() => {\n  const script = document.querySelector(SCRIPT_SELECTOR);\n  if (script && script.parentElement) {\n    script.parentElement.removeChild(script);\n  }\n  jest.resetModules();\n  jest.restoreAllMocks();\n  jest.runOnlyPendingTimers();\n  jest.useRealTimers();\n});\n"
+    },
+    {
+      "path": "preview/src/utils/jestSetup.ts",
+      "sha": null,
+      "content_sha256": "a7ea0995e5f213d562cb7673fa0211ce0185caad7cca30010ae529c8ab2a0e98",
+      "score": 111,
+      "content": "import { SCRIPT_SELECTOR } from \"./jestHelpers\";\n\nglobal.beforeEach(() => {\n  jest.spyOn(console, \"warn\").mockReturnValue();\n  jest.useFakeTimers();\n});\n\nglobal.afterEach(() => {\n  const script = document.querySelector(SCRIPT_SELECTOR);\n  if (script && script.parentElement) {\n    script.parentElement.removeChild(script);\n  }\n  jest.resetModules();\n  jest.restoreAllMocks();\n  jest.runOnlyPendingTimers();\n  jest.useRealTimers();\n});\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "bf8da5bbf3627a72173a571d9e860a9310a9198852d07bac137c5e325bc96242",
+      "score": 100,
+      "content": "# Connect.js ES Module\n\nThe [Connect.js library](https://stripe.com/docs/connect/get-started-connect-embedded-components) and its supporting API allows you to add connected account dashboard functionality to your website.\nThis NPM package contains initialization logic for Connect embedded components along with related types.\n\nCalling `loadConnectAndInitialize` always loads the latest version of Connect.js, regardless of which version of `@stripe/connect-js` you use. Updates for this package only impact tooling around the `loadConnectAndInitialize` helper itself and the TypeScript type definitions provided for Connect.js. Updates do not affect runtime availability of features of Connect.js.\n\nThe embedded onboarding component is generally available now. Please refer to our [documentation](https://stripe.com/docs/connect/supported-embedded-components#account-onboarding) for more information.\n\nNote: Some Connect embedded components are in preview. These can be [viewed on our doc site](https://docs.stripe.com/connect/supported-embedded-components), where you can also request preview access.\n\n## Installation\n\nUse `npm` to install the Connect.js module:\n\n```sh\nnpm install @stripe/connect-js\n```\n\n## Documentation\n\n- [Connect embedded components](https://stripe.com/docs/connect/get-started-connect-embedded-components)\n- [Quickstart guide](https://stripe.com/docs/connect/connect-embedded-components/quickstart)\n\n## Usage\n\n### `loadConnectAndInitialize`\n\nThis synchronous function takes in a publishable key, a function to retrieve the client secret returned from the [Account Session API](https://stripe.com/docs/api/account_sessions/create), and other [initialization parameters](https://stripe.com/docs/connect/get-started-connect-embedded-components#configuring-connect-js). It returns a `StripeConnectInstance`. If necessary, it will load Connect.js for you by inserting the Connect.js script tag.\n\n```js\nimport { loadConnectAndInitialize } from \"@stripe/connect-js\";\nconst fetchClientSecret = async () => {\n  // Fetch the AccountSession client secret by making an API call to your service\n};\n\nconst instance = loadConnectAndInitialize({\n  publishableKey: \"{{pk test123}}\",\n  fetchClientSecret: [REDACTED],\n});\n```\n\nWe’ve placed a random API key in this example. Replace it with your\n[actual publishable API keys](https://dashboard.stripe.com/account/apikeys) to\ntest this code through your Connect account.\n\nIf you have deployed a\n[Content Security Policy](https://developer.mozilla.org/en-US/docs/Web/Security/CSP),\nmake sure to\n[include Connect.js in your directives](https://stripe.com/docs/connect/get-started-connect-embedded-components?platform=web#csp-and-http-header-requirements).\n\n### Import as a side effect\n\nImport `@stripe/connect-js` as a side effect in code that will be included\nthroughout your site (e.g. your root module). This will make sure the Connect.js\nscript tag is inserted immediately upon page load.\n\n```js\nimport \"@stripe/connect-js\";\n```\n\n### Importing `loadConnectAndInitialize` without side effects\n\nIf you would like to use `loadConnectAndInitialize` in your application, but defer loading the\nConnect.js script until `loadConnectAndInitialize` is first called, use the alternative\n`@stripe/connect-js/pure` import path:\n\n```js\nimport { loadConnectAndInitialize } from \"@stripe/connect-js/pure\";\n\n// Connect.js will not be loaded until `loadConnect` is called\nconst instance = loadConnectAndInitialize({\n  publishableKey: \"{{pk test123}}\",\n  fetchClientSecret: [REDACTED],\n});\n```\n\n## Preview/GA\n\nTo work with the [preview](https://docs.stripe.com/connect/supported-embedded-components) version of embedded components, use the [preview](/preview) folder. For the stable GA version, use [/ga](/ga).\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "ga/src/index.test.ts",
+      "sha": null,
+      "content_sha256": "6da5c55d5b31a19363e5d9ef4431514b36f2f153373bec77de62966de2b683ae",
+      "score": 91,
+      "content": "/* eslint-disable @typescript-eslint/no-var-requires */\nimport { SCRIPT_SELECTOR } from \"./utils/jestHelpers\";\n\ndescribe(\"Stripe module loader\", () => {\n  jest.spyOn(global, \"setTimeout\");\n  it(\"injects the Connect.js script as a side effect after a tick\", () => {\n    require(\"./index\");\n\n    expect(document.querySelector(SCRIPT_SELECTOR)).toBe(null);\n    return Promise.resolve().then(() => {\n      expect(document.querySelector(SCRIPT_SELECTOR)).not.toBe(null);\n    });\n  });\n});\n"
+    },
+    {
+      "path": "preview/src/index.test.ts",
+      "sha": null,
+      "content_sha256": "6da5c55d5b31a19363e5d9ef4431514b36f2f153373bec77de62966de2b683ae",
+      "score": 91,
+      "content": "/* eslint-disable @typescript-eslint/no-var-requires */\nimport { SCRIPT_SELECTOR } from \"./utils/jestHelpers\";\n\ndescribe(\"Stripe module loader\", () => {\n  jest.spyOn(global, \"setTimeout\");\n  it(\"injects the Connect.js script as a side effect after a tick\", () => {\n    require(\"./index\");\n\n    expect(document.querySelector(SCRIPT_SELECTOR)).toBe(null);\n    return Promise.resolve().then(() => {\n      expect(document.querySelector(SCRIPT_SELECTOR)).not.toBe(null);\n    });\n  });\n});\n"
+    },
+    {
+      "path": "ga/src/pure.test.ts",
+      "sha": null,
+      "content_sha256": "b6824b326d8b6e999a38d4db695b365c49b2296ad94a52f944254f110751fc12",
+      "score": 91,
+      "content": "/* eslint-disable @typescript-eslint/no-var-requires */\n\nimport type { IStripeConnectInitParams } from \"./exportedTypes/shared\";\nimport { SCRIPT_SELECTOR } from \"./utils/jestHelpers\";\n\ndescribe(\"pure module\", () => {\n  test(\"does not inject the script if loadConnectAndInitialize is not called\", async () => {\n    require(\"./pure\");\n\n    expect(document.querySelector(SCRIPT_SELECTOR)).toBe(null);\n  });\n\n  test(\"it injects the script if loadConnectAndInitialize is called\", async () => {\n    const { loadConnectAndInitialize } = require(\"./pure\");\n    const mockInitParams: IStripeConnectInitParams = {\n      publishableKey: \"pk_123\",\n      fetchClientSecret: async () => {\n        return \"secret_123\";\n      },\n    };\n    loadConnectAndInitialize(mockInitParams);\n\n    expect(document.querySelector(SCRIPT_SELECTOR)).not.toBe(null);\n  });\n});\n"
+    },
+    {
+      "path": "preview/src/pure.test.ts",
+      "sha": null,
+      "content_sha256": "b6824b326d8b6e999a38d4db695b365c49b2296ad94a52f944254f110751fc12",
+      "score": 91,
+      "content": "/* eslint-disable @typescript-eslint/no-var-requires */\n\nimport type { IStripeConnectInitParams } from \"./exportedTypes/shared\";\nimport { SCRIPT_SELECTOR } from \"./utils/jestHelpers\";\n\ndescribe(\"pure module\", () => {\n  test(\"does not inject the script if loadConnectAndInitialize is not called\", async () => {\n    require(\"./pure\");\n\n    expect(document.querySelector(SCRIPT_SELECTOR)).toBe(null);\n  });\n\n  test(\"it injects the script if loadConnectAndInitialize is called\", async () => {\n    const { loadConnectAndInitialize } = require(\"./pure\");\n    const mockInitParams: IStripeConnectInitParams = {\n      publishableKey: \"pk_123\",\n      fetchClientSecret: async () => {\n        return \"secret_123\";\n      },\n    };\n    loadConnectAndInitialize(mockInitParams);\n\n    expect(document.querySelector(SCRIPT_SELECTOR)).not.toBe(null);\n  });\n});\n"
+    },
+    {
+      "path": "ga/pure.js",
+      "sha": null,
+      "content_sha256": "599fa1758f7faae18e3d8cbc2426f4f6526c82ae97da56a5b4fe2edb293eef5a",
+      "score": 33,
+      "content": "module.exports = require(\"./dist/pure.js\");\n"
+    },
+    {
+      "path": "preview/pure.js",
+      "sha": null,
+      "content_sha256": "599fa1758f7faae18e3d8cbc2426f4f6526c82ae97da56a5b4fe2edb293eef5a",
+      "score": 33,
+      "content": "module.exports = require(\"./dist/pure.js\");\n"
+    },
+    {
+      "path": "ga/pure.d.ts",
+      "sha": null,
+      "content_sha256": "40aab16d1b668138693f910f04cf0bce8b1e737b35b9fff051faa6f6a964133f",
+      "score": 33,
+      "content": "// A simple \"redirect\" to the pure exports in src\nexport * from \"./src/pure\";\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "0defaa6aea286c5d1427f36b0897337104caf1df2d8e9aa2942aeab2271e6132",
+      "score": 33,
+      "content": "version: 2\nupdates:\n  - package-ecosystem: \"npm\" \n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n    # Setting to 0 blocks updates for non-security related package dependencies updates\n    open-pull-requests-limit: 0\n    target-branch: \"master\"\n\n  - package-ecosystem: \"npm\" \n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n    open-pull-requests-limit: 0\n    target-branch: \"preview\""
+    },
+    {
+      "path": "preview/.eslintrc.yml",
+      "sha": null,
+      "content_sha256": "26bb38d25bced133e6715ca553dbba4e937fca59d271fec086e64442e34e277d",
+      "score": 33,
+      "content": "---\nroot: true\nextends:\n  - eslint:recommended\n  - plugin:@typescript-eslint/eslint-recommended\n  - plugin:@typescript-eslint/recommended\nparser: \"@typescript-eslint/parser\"\nplugins:\n  - jest\n  - \"@typescript-eslint\"\nenv:\n  jest/globals: true\n  browser: true\nrules:\n  no-console: 0\n  func-style: 2\n  prefer-spread: 0\n  consistent-return: 2\n  prefer-arrow-callback:\n    - 2\n    - allowNamedFunctions: false\n      allowUnboundThis: false\n  no-unused-vars: 0\n  jest/no-disabled-tests: 2\n  jest/no-focused-tests: 2\n  \"@typescript-eslint/no-explicit-any\": 0\n  \"@typescript-eslint/no-empty-interface\": 0\n  \"@typescript-eslint/triple-slash-reference\": 0\n  \"@typescript-eslint/consistent-type-imports\": \"error\"\n  \"@typescript-eslint/no-unused-vars\":\n    - 2\n    - ignoreRestSiblings: true\n  \"object-shorthand\": [\"error\", \"always\"]\n"
+    },
+    {
+      "path": "preview/pure.d.ts",
+      "sha": null,
+      "content_sha256": "40aab16d1b668138693f910f04cf0bce8b1e737b35b9fff051faa6f6a964133f",
+      "score": 33,
+      "content": "// A simple \"redirect\" to the pure exports in src\nexport * from \"./src/pure\";\n"
+    },
+    {
+      "path": "ga/tsconfig.json",
+      "sha": null,
+      "content_sha256": "d90842f4d17730e285992eedddbe07ffa651cdd523d647a4815166ea239fa8e5",
+      "score": 33,
+      "content": "{\n  \"compilerOptions\": {\n    // Let Babel deal with transpiling new language features\n    \"target\": \"ES6\",\n\n    // These are overridden by the Rollup plugin, but are left here in case you\n    // run `tsc` directly for typechecking or debugging purposes\n    \"outDir\": \"./dist\",\n    \"declaration\": true,\n    \"declarationDir\": \"types\",\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"node\",\n    \"noEmit\": true,\n    \"allowJs\": false,\n    \"removeComments\": false,\n    \"strict\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"resolveJsonModule\": true,\n\n    // Turn on additional typechecking flags\n    \"noUnusedLocals\": true,\n    \"noUnusedParameters\": true,\n    \"noUncheckedIndexedAccess\": true,\n    \"noPropertyAccessFromIndexSignature\": true,\n    \"noImplicitThis\": true,\n    \"noImplicitReturns\": true,\n    \"noImplicitOverride\": true,\n    \"noImplicitAny\": true,\n    \"noFallthroughCasesInSwitch\": true,\n    \"exactOptionalPropertyTypes\": true\n  },\n  \"include\": [\"src\", \"types/index.d.ts\", \"types/shared.d.ts\"]\n}\n"
+    },
+    {
+      "path": "ga/rollup.config.js",
+      "sha": null,
+      "content_sha256": "3e3aaf4d54c00528bdd2509ed44852ace26f0b031e75c369bf0673cc1b23ef63",
+      "score": 33,
+      "content": "import babel from \"rollup-plugin-babel\";\nimport ts from \"rollup-plugin-typescript2\";\nimport replace from \"@rollup/plugin-replace\";\nimport json from \"@rollup/plugin-json\";\n\nimport pkg from \"./package.json\";\n\nconst PLUGINS = [\n  ts({\n    tsconfigOverride: { exclude: [\"**/*.test.ts\"] },\n  }),\n  babel({\n    extensions: [\".ts\", \".js\", \".tsx\", \".jsx\"],\n  }),\n  replace({\n    // This string is replaced by the npm package version when bundling\n    _NPM_PACKAGE_VERSION_: pkg.version,\n  }),\n  json(),\n];\n\nexport default [\n  {\n    input: \"src/index.ts\",\n    output: [\n      { file: pkg.main, format: \"cjs\" },\n      { file: pkg.module, format: \"es\" },\n    ],\n    plugins: PLUGINS,\n  },\n  {\n    input: \"src/pure.ts\",\n    output: [\n      { file: \"dist/pure.js\", format: \"cjs\" },\n      { file: \"dist/pure.esm.js\", format: \"es\" },\n    ],\n    plugins: PLUGINS,\n  },\n];\n"
+    },
+    {
+      "path": "preview/tsconfig.json",
+      "sha": null,
+      "content_sha256": "d90842f4d17730e285992eedddbe07ffa651cdd523d647a4815166ea239fa8e5",
+      "score": 33,
+      "content": "{\n  \"compilerOptions\": {\n    // Let Babel deal with transpiling new language features\n    \"target\": \"ES6\",\n\n    // These are overridden by the Rollup plugin, but are left here in case you\n    // run `tsc` directly for typechecking or debugging purposes\n    \"outDir\": \"./dist\",\n    \"declaration\": true,\n    \"declarationDir\": \"types\",\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"node\",\n    \"noEmit\": true,\n    \"allowJs\": false,\n    \"removeComments\": false,\n    \"strict\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"resolveJsonModule\": true,\n\n    // Turn on additional typechecking flags\n    \"noUnusedLocals\": true,\n    \"noUnusedParameters\": true,\n    \"noUncheckedIndexedAccess\": true,\n    \"noPropertyAccessFromIndexSignature\": true,\n    \"noImplicitThis\": true,\n    \"noImplicitReturns\": true,\n    \"noImplicitOverride\": true,\n    \"noImplicitAny\": true,\n    \"noFallthroughCasesInSwitch\": true,\n    \"exactOptionalPropertyTypes\": true\n  },\n  \"include\": [\"src\", \"types/index.d.ts\", \"types/shared.d.ts\"]\n}\n"
+    },
+    {
+      "path": "ga/jest.config.js",
+      "sha": null,
+      "content_sha256": "c433cf518a48a68fbe2baf8edde3e45b1be76df1fda638e30e1714724f9766e2",
+      "score": 33,
+      "content": "module.exports = {\n  roots: [\"<rootDir>/src\"],\n  testMatch: [\n    \"**/__tests__/**/*.+(ts|tsx|js)\",\n    \"**/?(*.)+(spec|test).+(ts|tsx|js)\",\n  ],\n  transform: {\n    \"^.+\\\\.(ts|tsx)$\": [\"ts-jest\", { diagnostics: { ignoreCodes: [151001] } }],\n  },\n  setupFilesAfterEnv: [\"<rootDir>/src/utils/jestSetup.ts\"],\n  testEnvironment: \"jsdom\",\n};\n"
+    },
+    {
+      "path": "ga/.eslintrc.yml",
+      "sha": null,
+      "content_sha256": "26bb38d25bced133e6715ca553dbba4e937fca59d271fec086e64442e34e277d",
+      "score": 33,
+      "content": "---\nroot: true\nextends:\n  - eslint:recommended\n  - plugin:@typescript-eslint/eslint-recommended\n  - plugin:@typescript-eslint/recommended\nparser: \"@typescript-eslint/parser\"\nplugins:\n  - jest\n  - \"@typescript-eslint\"\nenv:\n  jest/globals: true\n  browser: true\nrules:\n  no-console: 0\n  func-style: 2\n  prefer-spread: 0\n  consistent-return: 2\n  prefer-arrow-callback:\n    - 2\n    - allowNamedFunctions: false\n      allowUnboundThis: false\n  no-unused-vars: 0\n  jest/no-disabled-tests: 2\n  jest/no-focused-tests: 2\n  \"@typescript-eslint/no-explicit-any\": 0\n  \"@typescript-eslint/no-empty-interface\": 0\n  \"@typescript-eslint/triple-slash-reference\": 0\n  \"@typescript-eslint/consistent-type-imports\": \"error\"\n  \"@typescript-eslint/no-unused-vars\":\n    - 2\n    - ignoreRestSiblings: true\n  \"object-shorthand\": [\"error\", \"always\"]\n"
+    },
+    {
+      "path": "preview/jest.config.js",
+      "sha": null,
+      "content_sha256": "c433cf518a48a68fbe2baf8edde3e45b1be76df1fda638e30e1714724f9766e2",
+      "score": 33,
+      "content": "module.exports = {\n  roots: [\"<rootDir>/src\"],\n  testMatch: [\n    \"**/__tests__/**/*.+(ts|tsx|js)\",\n    \"**/?(*.)+(spec|test).+(ts|tsx|js)\",\n  ],\n  transform: {\n    \"^.+\\\\.(ts|tsx)$\": [\"ts-jest\", { diagnostics: { ignoreCodes: [151001] } }],\n  },\n  setupFilesAfterEnv: [\"<rootDir>/src/utils/jestSetup.ts\"],\n  testEnvironment: \"jsdom\",\n};\n"
+    },
+    {
+      "path": "preview/rollup.config.js",
+      "sha": null,
+      "content_sha256": "3e3aaf4d54c00528bdd2509ed44852ace26f0b031e75c369bf0673cc1b23ef63",
+      "score": 33,
+      "content": "import babel from \"rollup-plugin-babel\";\nimport ts from \"rollup-plugin-typescript2\";\nimport replace from \"@rollup/plugin-replace\";\nimport json from \"@rollup/plugin-json\";\n\nimport pkg from \"./package.json\";\n\nconst PLUGINS = [\n  ts({\n    tsconfigOverride: { exclude: [\"**/*.test.ts\"] },\n  }),\n  babel({\n    extensions: [\".ts\", \".js\", \".tsx\", \".jsx\"],\n  }),\n  replace({\n    // This string is replaced by the npm package version when bundling\n    _NPM_PACKAGE_VERSION_: pkg.version,\n  }),\n  json(),\n];\n\nexport default [\n  {\n    input: \"src/index.ts\",\n    output: [\n      { file: pkg.main, format: \"cjs\" },\n      { file: pkg.module, format: \"es\" },\n    ],\n    plugins: PLUGINS,\n  },\n  {\n    input: \"src/pure.ts\",\n    output: [\n      { file: \"dist/pure.js\", format: \"cjs\" },\n      { file: \"dist/pure.esm.js\", format: \"es\" },\n    ],\n    plugins: PLUGINS,\n  },\n];\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:51:08.482564+00:00"
+}
