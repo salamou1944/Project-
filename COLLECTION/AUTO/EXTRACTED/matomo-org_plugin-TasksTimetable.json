@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:matomo-org/plugin-TasksTimetable",
+  "repo": "matomo-org/plugin-TasksTimetable",
+  "revision_sha": "987b987fc7c65787251c5b275103e1574e2d5c25",
+  "default_branch": "6.x-dev",
+  "pushed_at": "2026-10-21T04:25:18Z",
+  "repo_updated_at": "2026-10-21T04:17:08Z",
+  "license": "GPL-3.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "00ad86eadf004c43fa134f58d03fb05b1e97b3d746399d77147d184a571da762",
+      "score": 198,
+      "content": "name: Plugins CI\n\non:\n  pull_request:\n    types: [opened, synchronize, reopened, edited]\n  push:\n    branches:\n      - '**.x-dev'\n  workflow_dispatch:\n\npermissions:\n  actions: read\n  contents: read\n  pull-requests: read\n\njobs:\n  ci:\n    uses: matomo-org/plugin-ci-workflows/.github/workflows/plugin-ci.yml@main\n    with:\n      plugin-name: TasksTimetable\n      verify-hook: true\n"
+    },
+    {
+      "path": ".github/workflows/matomo-tests.yml",
+      "sha": null,
+      "content_sha256": "008b30b86956ea87739493f529a3d218a823d675810b612f940ffcf8f47e82b4",
+      "score": 186,
+      "content": "# Action for running tests\n# This file has been automatically created.\n# To recreate it you can run this command\n# ./console generate:test-action --plugin=\"TasksTimetable\" --php-versions=\"matomo6_min_php,matomo6_max_php\" --schedule-cron=\"25 2 * * 6\"\n\nname: Plugin TasksTimetable Tests\n\non:\n  pull_request:\n    types: [opened, synchronize]\n  push:\n    branches:\n      - '**.x-dev'\n  workflow_dispatch:\n  schedule:\n  - cron: \"25 2 * * 6\"\n\npermissions:\n  actions: read\n  checks: none\n  contents: read\n  deployments: none\n  issues: read\n  packages: none\n  pull-requests: read\n  repository-projects: none\n  security-events: none\n  statuses: none\n\nconcurrency:\n  group: php-${{ github.ref }}\n  cancel-in-progress: true\n\njobs:\n  PluginTests:\n    runs-on: ubuntu-24.04\n    strategy:\n      fail-fast: false\n      matrix:\n        php: [ 'matomo6_min_php', 'matomo6_max_php' ]\n        target: ['minimum_required_matomo', 'maximum_supported_matomo']\n        database:\n          - { engine: 'Mysql', version: '8.0' }\n          - { engine: 'Mariadb', version: '10.6' }\n    steps:\n      - uses: actions/checkout@v3\n        with:\n          lfs: true\n          persist-credentials: false\n      - name: Install package ripgrep\n        run: sudo apt-get install ripgrep\n      - name: Run tests\n        uses: matomo-org/github-action-tests@main\n        with:\n          plugin-name: 'TasksTimetable'\n          php-version: ${{ matrix.php }}\n          test-type: 'PluginTests'\n          mysql-engine: ${{ matrix.database.engine }}\n          mysql-version: ${{ matrix.database.version }}\n          matomo-test-branch: ${{ matrix.target }}\n          artifacts-pass: ${{ secrets.ARTIFACTS_PASS }}\n          upload-artifacts: ${{ matrix.php == 'matomo6_min_php' && matrix.target == 'maximum_supported_matomo' && matrix.database.engine == 'Mysql' }}\n  UI:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: actions/checkout@v3\n        with:\n          lfs: true\n          persist-credentials: false\n      - name: running tests\n        uses: matomo-org/github-action-tests@main\n        with:\n          testomatio: ${{secrets.TESTOMATIO}}\n          plugin-name: 'TasksTimetable'\n          matomo-test-branch: 'maximum_supported_matomo'\n          test-type: 'UI'\n          mysql-engine: 'Mysql'\n          mysql-version: '8.0'\n          php-version: 'matomo6_min_php'\n          node-version: '24'\n          artifacts-pass: ${{ secrets.ARTIFACTS_PASS }}\n          upload-artifacts: true\n"
+    },
+    {
+      "path": ".github/workflows/weekly-release.yml",
+      "sha": null,
+      "content_sha256": "63102d2f4761f0af4ef239aa0889f7d53d40b749207de3f79a5424b6bf924761",
+      "score": 126,
+      "content": "# Releases this plugin from its dev branch once a week when plugin.json carries an untagged version\n# whose CHANGELOG.md entry is undated. The logic lives in matomo-org/plugin-ci-workflows; see the\n# \"Weekly release\" section of its README.md.\n\nname: Weekly release\n\non:\n  schedule:\n    # Monday, so the release is dated that Monday. Keeps the minute and hour of matomo-tests.yml's\n    # cron, so the fleet stays staggered across the window.\n    - cron: '25 2 * * 1'\n  workflow_dispatch:\n    inputs:\n      all-branches:\n        description: \"Also release the other maintained branches, as the schedule does\"\n        type: boolean\n        default: false\n      skip-ci-check:\n        description: \"Release this branch even though its CI failed or is still running\"\n        type: boolean\n        default: false\n\npermissions: {}\n\njobs:\n  release:\n    # Granted here because permissions can only be reduced down a call chain, never elevated.\n    permissions:\n      actions: write\n      contents: write\n      pull-requests: write\n    uses: matomo-org/plugin-ci-workflows/.github/workflows/plugin-dev-release.yml@main\n    with:\n      skip-ci-check: ${{ inputs.skip-ci-check || false }}\n    secrets:\n      approver-token: ${{ secrets.TESTS_ACCESS_TOKEN }}\n\n  # A dispatched run must not dispatch again, or the branches would keep dispatching each other.\n  other-branches:\n    if: github.event_name == 'schedule' || inputs.all-branches\n    permissions:\n      actions: write\n      contents: read\n    uses: matomo-org/plugin-ci-workflows/.github/workflows/plugin-branch-sweep.yml@main\n    with:\n      workflow-file: weekly-release.yml\n"
+    },
+    {
+      "path": ".github/workflows/weekly-branch-sweep.yml",
+      "sha": null,
+      "content_sha256": "8c486c094821294cadb234d87630a0d68148388b26c68f8c1298c64008e50e85",
+      "score": 126,
+      "content": "# Dispatches this plugin's build for each maintained branch that is not the default one, because\n# GitHub only ever runs `schedule` from the default branch's copy of a workflow file. The logic\n# lives in matomo-org/plugin-ci-workflows; see the \"Branch sweep\" section of its README.md for\n# why this dispatches rather than building another branch's source here.\n\nname: Weekly branch sweep\n\non:\n  schedule:\n    # Sunday, so it does not compete with this plugin's own Saturday build. Keeps the minute and\n    # hour of matomo-tests.yml's cron, so the fleet stays staggered across the window.\n    - cron: '25 2 * * 0'\n  workflow_dispatch:\n\npermissions: {}\n\njobs:\n  sweep:\n    # Granted by the caller because permissions can only be maintained or reduced down a call\n    # chain, never elevated: the called workflow declares these too, but that can only cap them,\n    # not supply them, so without this block the dispatch is unauthorised.\n    permissions:\n      actions: write\n      contents: read\n    uses: matomo-org/plugin-ci-workflows/.github/workflows/plugin-branch-sweep.yml@main\n"
+    },
+    {
+      "path": ".github/workflows/codex-review.yml",
+      "sha": null,
+      "content_sha256": "cd670927ed23e82639b322c14f966627b80913811eea15f334b2cedcbe13221c",
+      "score": 126,
+      "content": "name: Codex Review\n\non:\n  # nosec — label-gated; this wrapper runs no PR code, see matomo-org/plugin-ci-workflows README.md\n  pull_request_target:\n    types: [labeled]\n\npermissions:\n  contents: none\n\njobs:\n  codex-review:\n    # The shared workflow gates every one of its own jobs on this label, but it also carries a\n    # cancel-in-progress concurrency group. Without this condition an unrelated label would still\n    # instantiate it, claim that group, and cancel a review already running on this pull request.\n    if: ${{ github.event.label.name == 'codex-review' }}\n    uses: matomo-org/plugin-ci-workflows/.github/workflows/plugin-codex-review.yml@main\n    permissions:\n      actions: read\n      contents: read\n      issues: write\n      pull-requests: write\n    with:\n      plugin-name: TasksTimetable\n    secrets:\n      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n      TESTS_ACCESS_TOKEN: ${{ secrets.TESTS_ACCESS_TOKEN }}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "bf7aa06e259663c3837f63398fc0a50e798fe154e28884f10318338e93589b51",
+      "score": 100,
+      "content": "# Matomo TasksTimetable Plugin\n\n[![Build Status](https://github.com/matomo-org/plugin-TasksTimetable/actions/workflows/matomo-tests.yml/badge.svg?branch=4.x-dev)](https://github.com/matomo-org/plugin-TasksTimetable/actions/workflows/matomo-tests.yml)\n\n## Description\n\nPlugin to list all scheduled tasks: Name of the tasks and next execution time displayed in a table. \n"
+    },
+    {
+      "path": "tests/Fixtures/FakeTasksFixture.php",
+      "sha": null,
+      "content_sha256": "d49b9b7f3f1687046b308541c64a2e4790f61319ab2b0091a3296a4f65395788",
+      "score": 91,
+      "content": "<?php\n\n/**\n * Matomo - free/libre analytics platform\n *\n * @link https://matomo.org\n * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later\n */\n\nnamespace Piwik\\Plugins\\TasksTimetable\\tests\\Fixtures;\n\nuse Piwik\\Date;\nuse Piwik\\Option;\nuse Piwik\\Tests\\Framework\\Fixture;\n\nclass FakeTasksFixture extends Fixture\n{\n    public function setUp(): void\n    {\n        parent::setUp();\n\n        self::updateDatabase();\n\n        self::createWebsite(\"2012-01-01 00:00:00\");\n\n        $fakeTasks = array(\n            'Piwik\\Plugins\\ExamplePlugin\\Tasks.myTask' =>\n                Date::factory(\"2012-01-02 02:33:45\")->getTimestampUTC(),\n            'Piwik\\Plugins\\CoreUpdater\\Tasks.sendNotificationIfUpdateAvailable' =>\n                Date::factory(\"2012-03-04 13:45:56\")->getTimestampUTC(),\n            'Piwik\\Plugins\\CorePluginsAdmin\\Tasks.sendNotificationIfUpdatesAvailable' =>\n                Date::factory(\"2012-02-12 15:12:10\")->getTimestampUTC()\n        );\n\n        Option::set('TaskScheduler.timetable', serialize($fakeTasks));\n    }\n}\n"
+    },
+    {
+      "path": "tests/UI/TasksTimetableReport_spec.js",
+      "sha": null,
+      "content_sha256": "5e41ffef684470e585aaae66c2c9c324566ee566729170025b7574b8e51499a8",
+      "score": 91,
+      "content": "/*!\n * Matomo - free/libre analytics platform\n *\n * Screenshot test for TasksTimetable main page.\n *\n * @link https://matomo.org\n * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later\n */\n\ndescribe(\"TasksTimetableReport\", function () {\n    this.timeout(0);\n\n    this.fixture = \"Piwik\\\\Plugins\\\\TasksTimetable\\\\tests\\\\Fixtures\\\\FakeTasksFixture\";\n\n    it('should load the tasks timetable correctly', async function () {\n        await page.goto(\"?module=TasksTimetable&action=index&idSite=1&period=day&date=yesterday\");\n\n        // remove time values that change on each test run\n        await page.evaluate(function () {\n            $('span.server-time').text('');\n            $('#content table td > span:contains(\"(in\")').text('(in )');\n        });\n        expect(await page.screenshotSelector('#content>*')).to.matchImage('tasks_timetable');\n    });\n});"
+    },
+    {
+      "path": "tests/System/CheckDirectDependencyUseCommandTest.php",
+      "sha": null,
+      "content_sha256": "f85eade7d90105541978ad3b3298ea438a35ce61d6a973f280ac597c49d63e76",
+      "score": 91,
+      "content": "<?php\n\n/**\n * Piwik - free/libre analytics platform\n *\n * @link http://piwik.org\n * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later\n */\n\nnamespace Piwik\\Plugins\\TasksTimetable\\tests\\System;\n\nuse Piwik\\Plugins\\TestRunner\\Commands\\CheckDirectDependencyUse;\nuse Piwik\\Tests\\Framework\\TestCase\\SystemTestCase;\nuse Piwik\\Version;\nuse Symfony\\Component\\Console\\Input\\ArrayInput;\nuse Symfony\\Component\\Console\\Output\\NullOutput;\n\nclass CheckDirectDependencyUseCommandTest extends SystemTestCase\n{\n    public function testCommand()\n    {\n        if (version_compare(Version::VERSION, '5.0.3', '<=') && !file_exists(PIWIK_INCLUDE_PATH . '/plugins/TestRunner/Commands/CheckDirectDependencyUse.php')) {\n            $this->markTestSkipped('tests:check-direct-dependency-use is not available in this version');\n        }\n\n        $pluginName = 'TasksTimetable';\n\n        $checkDirectDependencyUse = new CheckDirectDependencyUse();\n\n        $console = new \\Piwik\\Console(self::$fixture->piwikEnvironment);\n        $console->addCommands([$checkDirectDependencyUse]);\n        $command = $console->find('tests:check-direct-dependency-use');\n        $arguments = [\n            'command'    => 'tests:check-direct-dependency-use',\n            '--plugin' => $pluginName,\n            '--grep-vendor',\n        ];\n\n        $inputObject = new ArrayInput($arguments);\n        $command->run($inputObject, new NullOutput());\n\n        $this->assertEquals([\n            'Symfony\\Component\\Console' => [\n                'TasksTimetable/tests/System/CheckDirectDependencyUseCommandTest.php'\n            ],\n        ], $checkDirectDependencyUse->usesFoundList[$pluginName]);\n    }\n}\n"
+    },
+    {
+      "path": "docs/faq.md",
+      "sha": null,
+      "content_sha256": "f0d303ab6934e38e275f32656a94c625e77bd9766247bfacc228ef06605136e9",
+      "score": 68,
+      "content": "## FAQ\n\n__Where can I find the timetable?__\n\nIt is located as a menu item \"Scheduled Tasks\" under diagnostics on the settings page.\n"
+    },
+    {
+      "path": "TasksTimetable.php",
+      "sha": null,
+      "content_sha256": "8d4b894d62a7fbff11de7231b9cb78a681d206a7bd1760067313dc4a67a2e34c",
+      "score": 35,
+      "content": "<?php\n\n/**\n * Matomo - free/libre analytics platform\n *\n * @link https://matomo.org\n * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later\n *\n */\n\nnamespace Piwik\\Plugins\\TasksTimetable;\n\n/**\n *\n */\nclass TasksTimetable extends \\Piwik\\Plugin\n{\n    public function registerEvents()\n    {\n        return [\n            'Translate.getClientSideTranslationKeys' => 'getClientSideTranslationKeys',\n        ];\n    }\n\n    public function getClientSideTranslationKeys(&$translations)\n    {\n        $translations[] = 'TasksTimetable_ScheduledTasks';\n        $translations[] = 'TasksTimetable_Introduction';\n        $translations[] = 'General_Name';\n        $translations[] = 'General_Date';\n        $translations[] = 'TasksTimetable_NothingScheduled';\n    }\n}\n"
+    },
+    {
+      "path": "Menu.php",
+      "sha": null,
+      "content_sha256": "f4b82b9aca34cf5a7f78ad39083b3101aa583a3c43f537b1e9d02fe712d01026",
+      "score": 35,
+      "content": "<?php\n\n/**\n * Matomo - free/libre analytics platform\n *\n * @link https://matomo.org\n * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later\n *\n */\n\nnamespace Piwik\\Plugins\\TasksTimetable;\n\nuse Piwik\\Menu\\MenuAdmin;\nuse Piwik\\Piwik;\n\nclass Menu extends \\Piwik\\Plugin\\Menu\n{\n    public function configureAdminMenu(MenuAdmin $menu)\n    {\n        if (Piwik::hasUserSuperUserAccess()) {\n            $menu->addDiagnosticItem(\n                'TasksTimetable_ScheduledTasks',\n                array('module' => 'TasksTimetable', 'action' => 'index'),\n                $order = 6\n            );\n        }\n    }\n}\n"
+    },
+    {
+      "path": "plugin.json",
+      "sha": null,
+      "content_sha256": "186a904b3d2cd8da98f1c59a41001959d25dadb24dee76b4c3c3c330f67db039",
+      "score": 35,
+      "content": "{\n  \"name\": \"TasksTimetable\",\n  \"version\": \"6.0.0\",\n  \"description\": \"List all maintenance tasks that are scheduled to run. Displays the task names and next execution time in a table.\",\n  \"theme\": false,\n  \"authors\": [\n    {\n      \"name\": \"Megan Liang\",\n      \"email\": \"\",\n      \"homepage\": \"\"\n    },\n    {\n      \"name\": \"Jay Deshpande\",\n      \"email\": \"\",\n      \"homepage\": \"\"\n    },\n    {\n      \"name\": \"Matomo\",\n      \"email\": \"hello@matomo.org\",\n      \"homepage\": \"http://matomo.org\"\n    }\n  ],\n  \"require\": {\n    \"matomo\": \">=6.0.0-b1,<7.0.0-b1\"\n  },\n  \"support\": {\n    \"issues\": \"https://github.com/matomo-org/plugin-TasksTimetable/issues\",\n    \"forum\": \"https://forum.matomo.org\",\n    \"source\": \"https://github.com/matomo-org/plugin-TasksTimetable\"\n  },\n  \"license\": \"GPL v3+\",\n  \"keywords\": [\"tasks\", \"scheduled\", \"timetable\", \"monitoring\"],\n  \"homepage\": \"https://matomo.org\",\n  \"category\": \"development\"\n}\n"
+    },
+    {
+      "path": "Controller.php",
+      "sha": null,
+      "content_sha256": "e204aa1f9ef5f77f356266777dd8da4a50b1537a4493605f9f921d4c6550446b",
+      "score": 35,
+      "content": "<?php\n\n/**\n * Matomo - free/libre analytics platform\n *\n * @link https://matomo.org\n * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later\n *\n */\n\nnamespace Piwik\\Plugins\\TasksTimetable;\n\nuse Piwik\\Common;\nuse Piwik\\Date;\nuse Piwik\\Metrics\\Formatter;\nuse Piwik\\Option;\nuse Piwik\\Piwik;\nuse Piwik\\View;\n\n/**\n *\n */\nclass Controller extends \\Piwik\\Plugin\\ControllerAdmin\n{\n    public function index()\n    {\n        Piwik::checkUserHasSuperUserAccess();\n\n        $view = new View('@TasksTimetable/index.twig');\n        $this->setGeneralVariablesView($view);\n\n        $tasks = Option::get('TaskScheduler.timetable');\n\n        if (!empty($tasks)) {\n            $tasks = Common::safe_unserialize($tasks);\n        }\n\n        if (empty($tasks)) {\n            $tasks = array();\n        } else {\n            asort($tasks);\n        }\n\n        $tsNow      = Date::now()->getTimestamp();\n\n        $formatter = new Formatter();\n\n        $tasksFormatted = array();\n        foreach ($tasks as $name => $timestamp) {\n            $tasksFormatted[] = array(\n                'name'          => $name,\n                'executionDate' => $this->getFormattedDatetime($timestamp),\n                'ts_difference' => $formatter->getPrettyTimeFromSeconds($timestamp - $tsNow)\n            );\n        }\n\n        $view->currentTime = $this->getFormattedDatetime(Date::now()->getTimestampUTC());\n        $view->tasks       = $tasksFormatted;\n\n        return $view->render();\n    }\n\n    /**\n     * @param $timestamp\n     * @return string\n     * @throws \\Exception\n     */\n    protected function getFormattedDatetime($timestamp)\n    {\n        return Date::factory($timestamp)->getLocalized(Date::DATE_FORMAT_LONG) . ' ' . Date::factory($timestamp)->getLocalized(' h:mm:ss');\n    }\n}\n"
+    },
+    {
+      "path": "lang/be.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/dv.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/bn.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/cy.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/ar.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/bs.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/am.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/hu.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/eo.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    },
+    {
+      "path": "lang/hy.json",
+      "sha": null,
+      "content_sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356",
+      "score": 33,
+      "content": "{}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:45:11.778475+00:00"
+}

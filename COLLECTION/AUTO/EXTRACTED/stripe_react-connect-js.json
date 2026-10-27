@@ -1,0 +1,204 @@
+{
+  "canonical_source": "github:stripe/react-connect-js",
+  "repo": "stripe/react-connect-js",
+  "revision_sha": "11afad058c94b71df324b91cb8c3f4532c1fae54",
+  "default_branch": "master",
+  "pushed_at": "2026-10-22T21:19:13Z",
+  "repo_updated_at": "2026-10-22T21:18:15Z",
+  "license": "MIT",
+  "topics": [
+    "connectjs",
+    "react",
+    "stripe",
+    "stripe-connect"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/test.yml",
+      "sha": null,
+      "content_sha256": "c20e65da1c686f43feb9fdb7e6477d85e6f39f7e81a43e460f2c3c8f7cc773e3",
+      "score": 186,
+      "content": "name: build\non:\n  push:\n    branches: [master]\n  pull_request:\n    branches: [master]\n\npermissions:\n  contents: read\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0\n        with:\n          node-version: 18.20.2\n      # GA validations\n      - run: yarn install --frozen-lockfile\n        working-directory: ./ga\n      - run: yarn run validate-change\n        working-directory: ./ga\n      # Preview validations\n      - run: yarn install --frozen-lockfile\n        working-directory: ./preview\n      - run: yarn run validate-change\n        working-directory: ./preview\n"
+    },
+    {
+      "path": ".github/workflows/npm_auto_release.yml",
+      "sha": null,
+      "content_sha256": "8af99ae44363be3f60a2cf1709ad4408652732b1fdb5e3eb7f396a8fff5a2653",
+      "score": 126,
+      "content": "name: NPM Auto Release\n\non:\n  push:\n    branches: [master]\n    paths:\n      - 'ga/package.json'\n      - 'preview/package.json'\n\njobs:\n  detect-releases:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    outputs:\n      ga_changed: ${{ steps.check.outputs.ga_changed }}\n      ga_version: ${{ steps.check.outputs.ga_version }}\n      preview_changed: ${{ steps.check.outputs.preview_changed }}\n      preview_version: ${{ steps.check.outputs.preview_version }}\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n        with:\n          fetch-depth: 2\n\n      - name: Check for version changes\n        id: check\n        run: |\n          GA_VERSION=$(node -p \"require('./ga/package.json').version\")\n          PREVIEW_VERSION=$(node -p \"require('./preview/package.json').version\")\n\n          GA_OLD_VERSION=$(git show HEAD~1:ga/package.json 2>/dev/null | node -p \"JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version\" 2>/dev/null || echo \"\")\n          PREVIEW_OLD_VERSION=$(git show HEAD~1:preview/package.json 2>/dev/null | node -p \"JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version\" 2>/dev/null || echo \"\")\n\n          echo \"GA: $GA_OLD_VERSION → $GA_VERSION\"\n          echo \"Preview: $PREVIEW_OLD_VERSION → $PREVIEW_VERSION\"\n\n          if [ \"$GA_VERSION\" != \"$GA_OLD_VERSION\" ]; then\n            echo \"ga_changed=true\" >> \"$GITHUB_OUTPUT\"\n            echo \"ga_version=$GA_VERSION\" >> \"$GITHUB_OUTPUT\"\n          else\n            echo \"ga_changed=false\" >> \"$GITHUB_OUTPUT\"\n          fi\n\n          if [ \"$PREVIEW_VERSION\" != \"$PREVIEW_OLD_VERSION\" ]; then\n            echo \"preview_changed=true\" >> \"$GITHUB_OUTPUT\"\n            echo \"preview_version=$PREVIEW_VERSION\" >> \"$GITHUB_OUTPUT\"\n          else\n            echo \"preview_changed=false\" >> \"$GITHUB_OUTPUT\"\n          fi\n\n  release-ga:\n    needs: detect-releases\n    if: needs.detect-releases.outputs.ga_changed == 'true'\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./ga\n    permissions:\n      contents: write\n      id-token: write\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n        with:\n          fetch-depth: 0\n\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0\n        with:\n          node-version: \"24\"\n          registry-url: \"https://registry.npmjs.org\"\n\n      - run: yarn install --frozen-lockfile\n      - run: yarn test\n      - run: yarn build\n      - run: cp ../README.md .\n\n      - name: Publish to npm\n        run: npm publish --provenance --ignore-scripts --access public\n\n      - name: Generate scoped release notes\n        id: notes\n        working-directory: .\n        run: |\n          PREV_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v preview | head -n 1 || echo \"\")\n\n          if [ -n \"$PREV_TAG\" ]; then\n            NOTES=$(git log \"$PREV_TAG\"..HEAD --pretty=format:\"- %s (%h)\" -- ga/)\n          else\n            NOTES=$(git log -20 --pretty=format:\"- %s (%h)\" -- ga/)\n          fi\n\n          if [ -z \"$NOTES\" ]; then\n            NOTES=\"- Version bump to ${{ needs.detect-releases.outputs.ga_version }}\"\n          fi\n\n          echo \"$NOTES\" > \"$RUNNER_TEMP/ga-release-notes.md\"\n\n      - name: Create tag and GitHub Release\n        working-directory: .\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          VERSION=\"${{ needs.detect-releases.outputs.ga_version }}\"\n          TAG=\"v${VERSION}\"\n\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"github-actions[bot]@users.noreply.github.com\"\n          git tag \"$TAG\"\n          git push origin \"$TAG\"\n\n          gh release create \"$TAG\" \\\n            --title \"@stripe/react-connect-js@${VERSION}\" \\\n            --notes-file \"$RUNNER_TEMP/ga-release-notes.md\" \\\n            --latest\n\n      - name: Notify Slack\n        if: always()\n        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1\n        with:\n          webhook: ${{ secrets.SLACK_WEBHOOK_CONNECT_EMBEDDED }}\n          webhook-type: incoming-webhook\n          payload: |\n            {\n              \"text\": \"${{ job.status == 'success' && '✅' || '❌' }} ${{ job.status == 'success' && format('GA release `@stripe/react-connect-js@{0}` published!', needs.detect-releases.outputs.ga_version) || format('Failed to publish GA release `@stripe/react-connect-js@{0}`', needs.detect-releases.outputs.ga_version) }}\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run> • Triggered by ${{ github.actor }}\"\n            }\n\n  release-preview:\n    needs: detect-releases\n    if: needs.detect-releases.outputs.preview_changed == 'true'\n    runs-on: ubuntu-latest\n    defaults:\n      run:\n        working-directory: ./preview\n    permissions:\n      contents: write\n      id-token: write\n    steps:\n      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n        with:\n          fetch-depth: 0\n\n      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0\n        with:\n          node-version: \"24\"\n          registry-url: \"https://registry.npmjs.org\"\n\n      - run: yarn install --frozen-lockfile\n      - run: yarn test\n      - run: yarn build\n      - run: cp ../README.md .\n\n      - name: Publish to npm\n        run: npm publish --provenance --ignore-scripts --access public --tag preview\n\n      - name: Generate scoped release notes\n        id: notes\n        working-directory: .\n        run: |\n          PREV_TAG=$(git tag --list 'v*-preview*' --sort=-v:refname | head -n 1 || echo \"\")\n\n          if [ -n \"$PREV_TAG\" ]; then\n            NOTES=$(git log \"$PREV_TAG\"..HEAD --pretty=format:\"- %s (%h)\" -- preview/)\n          else\n            NOTES=$(git log -20 --pretty=format:\"- %s (%h)\" -- preview/)\n          fi\n\n          if [ -z \"$NOTES\" ]; then\n            NOTES=\"- Version bump to ${{ needs.detect-releases.outputs.preview_version }}\"\n          fi\n\n          echo \"$NOTES\" > \"$RUNNER_TEMP/preview-release-notes.md\"\n\n      - name: Create tag and GitHub Release\n        working-directory: .\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: |\n          VERSION=\"${{ needs.detect-releases.outputs.preview_version }}\"\n          TAG=\"v${VERSION}\"\n\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"github-actions[bot]@users.noreply.github.com\"\n          git tag \"$TAG\"\n          git push origin \"$TAG\"\n\n          gh release create \"$TAG\" \\\n            --title \"@stripe/react-connect-js@${VERSION} (preview)\" \\\n            --notes-file \"$RUNNER_TEMP/preview-release-notes.md\" \\\n            --prerelease\n\n      - name: Notify Slack\n        if: always()\n        uses: slackapi/slack-github-action@91efab103c0de0a537f72a35f6b8cda0ee76bf0a # v2.1.1\n        with:\n          webhook: ${{ secrets.SLACK_WEBHOOK_CONNECT_EMBEDDED }}\n          webhook-type: incoming-webhook\n          payload: |\n            {\n              \"text\": \"${{ job.status == 'success' && '✅' || '❌' }} ${{ job.status == 'success' && format('Preview release `@stripe/react-connect-js@{0}` published!', needs.detect-releases.outputs.preview_version) || format('Failed to publish preview release `@stripe/react-connect-js@{0}`', needs.detect-releases.outputs.preview_version) }}\\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run> • Triggered by ${{ github.actor }}\"\n            }\n"
+    },
+    {
+      "path": "preview/package.json",
+      "sha": null,
+      "content_sha256": "51d93a2277611565341bd1f425450abf9947b78755ba4df1d1b408bb930f6cf3",
+      "score": 118,
+      "content": "{\n  \"name\": \"@stripe/react-connect-js\",\n  \"version\": \"3.4.9-preview.2\",\n  \"description\": \"React components for Connect.js and Connect embedded components\",\n  \"main\": \"dist/react-connect.js\",\n  \"module\": \"dist/react-connect.esm.js\",\n  \"types\": \"dist/react-connect.d.ts\",\n  \"files\": [\n    \"dist\",\n    \"src\",\n    \"node_modules\",\n    \".yalc\"\n  ],\n  \"scripts\": {\n    \"test\": \"yarn run lint && yarn run test:unit --passWithNoTests && yarn run typecheck\",\n    \"test:unit\": \"jest\",\n    \"lint\": \"eslint --max-warnings=0 '{src,examples}/**/*.{ts,tsx,js}'\",\n    \"lint:prettier\": \"prettier './**/*.js' './**/*.ts' './**/*.tsx' './**/*.md' --list-different\",\n    \"lint-fix\": \"eslint '{src,types}/**/*.{ts,js}' --fix && yarn prettier\",\n    \"typecheck\": \"tsc\",\n    \"build\": \"yarn run clean && yarn run rollup -c\",\n    \"checkimport\": \"scripts/check-imports\",\n    \"clean\": \"rimraf dist\",\n    \"prettier\": \"prettier './**/*.js' './**/*.ts' './**/*.tsx' './**/*.md' --write\",\n    \"prettier-check\": \"prettier './**/*.{js,ts,md,html,css}' --check\",\n    \"doctoc\": \"doctoc README.md\",\n    \"storybook\": \"start-storybook -p 6006 \",\n    \"local-install-publish\": \"yalc add @stripe/connect-js@1.0.0 && yalc publish\",\n    \"validate-change\": \"yarn run test\",\n    \"validate-changes\": \"yarn run test\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/stripe/react-connect-js.git\"\n  },\n  \"keywords\": [\n    \"React\",\n    \"Connect\",\n    \"embedded UIs\"\n  ],\n  \"author\": \"Stripe (https://www.stripe.com)\",\n  \"license\": \"MIT\",\n  \"bugs\": {\n    \"url\": \"https://github.com/stripe/react-connect-js/issues\"\n  },\n  \"homepage\": \"https://github.com/stripe/react-connect-js#readme\",\n  \"devDependencies\": {\n    \"@babel/core\": \"^7.7.2\",\n    \"@babel/preset-env\": \"^7.7.1\",\n    \"@babel/preset-flow\": \"7.18.6\",\n    \"@babel/preset-react\": \"7.18.6\",\n    \"@rollup/plugin-json\": \"^6.0.0\",\n    \"@rollup/plugin-replace\": \"^2.3.1\",\n    \"@stripe/connect-js\": \"3.4.9-preview.2\",\n    \"@types/jest\": \"^24.0.25\",\n    \"@types/react\": \"^16.8.0\",\n    \"@types/react-dom\": \"^16.8.0\",\n    \"@typescript-eslint/eslint-plugin\": \"^7\",\n    \"@typescript-eslint/parser\": \"^7\",\n    \"@typescript-eslint/rule-tester\": \"^7\",\n    \"@typescript-eslint/scope-manager\": \"^7\",\n    \"@typescript-eslint/utils\": \"^7\",\n    \"babel-eslint\": \"^10.0.3\",\n    \"babel-jest\": \"^24.9.0\",\n    \"conditional-type-checks\": \"^1.0.5\",\n    \"eslint\": \"8.56.0\",\n    \"eslint-config-prettier\": \"^8.3.0\",\n    \"eslint-plugin-import\": \"^2.20.1\",\n    \"eslint-plugin-jest\": \"^26.6.0\",\n    \"eslint-plugin-prettier\": \"^4.2.1\",\n    \"eslint-plugin-react\": \"^7.36.1\",\n    \"eslint-plugin-react-hooks\": \"5.2.0-canary-7b402084-20250107\",\n    \"jest\": \"^29.5.0\",\n    \"jest-environment-jsdom\": \"^29.5.0\",\n    \"jsdom\": \"^22.0.0\",\n    \"prettier\": \"^2.8.7\",\n    \"react\": \"^16.14.0\",\n    \"rimraf\": \"^2.6.2\",\n    \"rollup\": \"~2.80\",\n    \"rollup-plugin-babel\": \"^4.4.0\",\n    \"rollup-plugin-commonjs\": \"^10.1.0\",\n    \"rollup-plugin-node-resolve\": \"^5.2.0\",\n    \"rollup-plugin-replace\": \"^2.2.0\",\n    \"rollup-plugin-terser\": \"^7.0.2\",\n    \"rollup-plugin-ts\": \"^3.2.0\",\n    \"rollup-plugin-typescript2\": \"^0.25.3\",\n    \"ts-jest\": \"^29.1.0\",\n    \"typescript\": \"^4.1.2\",\n    \"yalc\": \"^1.0.0-pre.53\",\n    \"zx\": \"^8.8.5\"\n  },\n  \"peerDependencies\": {\n    \"@stripe/connect-js\": \">=3.4.9-preview.2\",\n    \"react\": \">=16.8.0\",\n    \"react-dom\": \">=16.8.0\"\n  }\n}\n"
+    },
+    {
+      "path": "ga/package.json",
+      "sha": null,
+      "content_sha256": "57c698609193d135bba616c0badd110c38dbaa385572304a1949c2ce31643545",
+      "score": 118,
+      "content": "{\n  \"name\": \"@stripe/react-connect-js\",\n  \"version\": \"3.4.4\",\n  \"description\": \"React components for Connect.js and Connect embedded components\",\n  \"main\": \"dist/react-connect.js\",\n  \"module\": \"dist/react-connect.esm.js\",\n  \"types\": \"dist/react-connect.d.ts\",\n  \"files\": [\n    \"dist\",\n    \"src\",\n    \"node_modules\",\n    \".yalc\"\n  ],\n  \"scripts\": {\n    \"test\": \"yarn run lint && yarn run test:unit --passWithNoTests && yarn run typecheck\",\n    \"test:unit\": \"jest\",\n    \"lint\": \"eslint --max-warnings=0 '{src,examples}/**/*.{ts,tsx,js}'\",\n    \"lint:prettier\": \"prettier './**/*.js' './**/*.ts' './**/*.tsx' './**/*.md' --list-different\",\n    \"lint-fix\": \"eslint '{src,types}/**/*.{ts,js}' --fix && yarn prettier\",\n    \"typecheck\": \"tsc\",\n    \"build\": \"yarn run clean && yarn run rollup -c\",\n    \"checkimport\": \"scripts/check-imports\",\n    \"clean\": \"rimraf dist\",\n    \"prettier\": \"prettier './**/*.js' './**/*.ts' './**/*.tsx' './**/*.md' --write\",\n    \"prettier-check\": \"prettier './**/*.{js,ts,md,html,css}' --check\",\n    \"doctoc\": \"doctoc README.md\",\n    \"storybook\": \"start-storybook -p 6006 \",\n    \"local-install-publish\": \"yalc add @stripe/connect-js@1.0.0 && yalc publish\",\n    \"validate-change\": \"yarn run test\",\n    \"validate-changes\": \"yarn run test\"\n  },\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"https://github.com/stripe/react-connect-js.git\"\n  },\n  \"keywords\": [\n    \"React\",\n    \"Connect\",\n    \"embedded UIs\"\n  ],\n  \"author\": \"Stripe (https://www.stripe.com)\",\n  \"license\": \"MIT\",\n  \"bugs\": {\n    \"url\": \"https://github.com/stripe/react-connect-js/issues\"\n  },\n  \"homepage\": \"https://github.com/stripe/react-connect-js#readme\",\n  \"devDependencies\": {\n    \"@babel/core\": \"^7.7.2\",\n    \"@babel/preset-env\": \"^7.7.1\",\n    \"@babel/preset-flow\": \"7.18.6\",\n    \"@babel/preset-react\": \"7.18.6\",\n    \"@rollup/plugin-json\": \"^6.0.0\",\n    \"@rollup/plugin-replace\": \"^2.3.1\",\n    \"@stripe/connect-js\": \"3.4.6\",\n    \"@types/jest\": \"^24.0.25\",\n    \"@types/react\": \"^16.8.0\",\n    \"@types/react-dom\": \"^16.8.0\",\n    \"@typescript-eslint/eslint-plugin\": \"^7\",\n    \"@typescript-eslint/parser\": \"^7\",\n    \"@typescript-eslint/rule-tester\": \"^7\",\n    \"@typescript-eslint/scope-manager\": \"^7\",\n    \"@typescript-eslint/utils\": \"^7\",\n    \"babel-eslint\": \"^10.0.3\",\n    \"babel-jest\": \"^24.9.0\",\n    \"conditional-type-checks\": \"^1.0.5\",\n    \"eslint\": \"8.56.0\",\n    \"eslint-config-prettier\": \"^8.3.0\",\n    \"eslint-plugin-import\": \"^2.20.1\",\n    \"eslint-plugin-jest\": \"^26.6.0\",\n    \"eslint-plugin-prettier\": \"^4.2.1\",\n    \"eslint-plugin-react\": \"^7.36.1\",\n    \"eslint-plugin-react-hooks\": \"5.2.0-canary-7b402084-20250107\",\n    \"jest\": \"^29.5.0\",\n    \"jest-environment-jsdom\": \"^29.5.0\",\n    \"jsdom\": \"^22.0.0\",\n    \"prettier\": \"^2.8.7\",\n    \"react\": \"^16.14.0\",\n    \"rimraf\": \"^2.6.2\",\n    \"rollup\": \"~2.80\",\n    \"rollup-plugin-babel\": \"^4.4.0\",\n    \"rollup-plugin-commonjs\": \"^10.1.0\",\n    \"rollup-plugin-node-resolve\": \"^5.2.0\",\n    \"rollup-plugin-replace\": \"^2.2.0\",\n    \"rollup-plugin-terser\": \"^7.0.2\",\n    \"rollup-plugin-ts\": \"^3.2.0\",\n    \"rollup-plugin-typescript2\": \"^0.25.3\",\n    \"ts-jest\": \"^29.1.0\",\n    \"typescript\": \"^4.1.2\",\n    \"yalc\": \"^1.0.0-pre.53\",\n    \"zx\": \"^4.2.0\"\n  },\n  \"peerDependencies\": {\n    \"@stripe/connect-js\": \">=3.4.6\",\n    \"react\": \">=16.8.0\",\n    \"react-dom\": \">=16.8.0\"\n  }\n}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "73b768a6846f22aeebd1971fbad98780d33e34dcd2383230397f85a6411b565d",
+      "score": 100,
+      "content": "# @stripe/react-connect-js\n\n# React Connect.js\n\nReact components for Connect.js and Connect embedded components\n\nThis project is a thin React wrapper around\n[Connect embedded components](https://stripe.com/docs/connect/get-started-connect-embedded-components).\nIt allows you to add embedded components to any React app, and manages the state\nand lifecycle of embedded components for you.\n\nNote: Some Connect embedded components are currently still in preview. These can\nbe\n[viewed on our doc site](https://docs.stripe.com/connect/supported-embedded-components),\nwhere you can also request preview access.\n\n### Components\n\nThe list of supported components and their required parameters can be found\n[here](https://stripe.com/docs/connect/supported-embedded-components)\n\n### Minimal example\n\nFirst, install React Connect.js and\n[Connect.js](https://github.com/stripe/connect-js).\n\n```sh\nnpm install @stripe/react-connect-js @stripe/connect-js\n```\n\nYou have to wrap your components with `ConnectComponentsProvider` in order to\nprovide the ConnectInstance context to create or update components\n\n#### Example\n\nSee more examples in the /examples folder\n\n```jsx\nimport React from 'react';\nimport ReactDOM from 'react-dom';\nimport {loadConnectAndInitialize} from '@stripe/connect-js';\nimport {\n  ConnectPayments,\n  ConnectPayouts,\n  ConnectPaymentDetails,\n  ConnectComponentsProvider,\n} from '@stripe/react-connect-js';\n\nconst fetchClientSecret = async () => {\n  // Fetch the AccountSession client secret by making an API call to your service\n};\nconst connectInstance = loadConnectAndInitialize({\n  publishableKey: '{{pk test123}}',\n  fetchClientSecret: [REDACTED],\n  appearance: {\n    variables: {\n      colorPrimary: '#228403', //optional appearance param,\n    },\n  },\n});\n\nconst App = () => (\n  <ConnectComponentsProvider connectInstance={connectInstance}>\n    <ConnectPayments />\n    <ConnectPayouts />\n    <ConnectPaymentDetails\n      onClose={() => {\n        console.log('closed');\n      }}\n      payment=\"pi_test123\"\n    />\n  </ConnectComponentsProvider>\n);\n\nReactDOM.render(<App />, document.body);\n```\n\nThe `stripeConnect.initalize` function returns a `ConnectInstance` once you\ninitialize it with a publishable key and a client secret returned from the\n[Account Session API](https://stripe.com/docs/api/account_sessions/create) call.\n\nWe’ve placed a placeholder API key in this example. Replace it with your\n[actual publishable API keys](https://dashboard.stripe.com/account/apikeys) to\ntest this code through your Connect account.\n\n### Contributing\n\nIf you would like to contribute to React Connect.js, please make sure to read\nour [contributor guidelines](CONTRIBUTING.md).\n\n## Preview/GA\n\nTo work with the\n[preview](https://docs.stripe.com/connect/supported-embedded-components) version\nof embedded components, use the [/preview](/preview) folder. For the stable GA\nversion, use [/ga](/ga).\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "preview/src/Components.test.ts",
+      "sha": null,
+      "content_sha256": "d0c71d5647ce04ad289d213d1e147fefc2091772ce585b89ae1f8da237855290",
+      "score": 91,
+      "content": "import * as Components from './Components';\n\ndescribe('Components', () => {\n  it(\"should verify that every component name starts with 'Connect'\", () => {\n    const doesEveryComponentNameStartsWithConnect = Object.keys(\n      Components\n    ).every((componentName) => {\n      return componentName.startsWith('Connect');\n    });\n    expect(doesEveryComponentNameStartsWithConnect).toBe(true);\n  });\n});\n"
+    },
+    {
+      "path": "ga/src/Components.test.ts",
+      "sha": null,
+      "content_sha256": "d0c71d5647ce04ad289d213d1e147fefc2091772ce585b89ae1f8da237855290",
+      "score": 91,
+      "content": "import * as Components from './Components';\n\ndescribe('Components', () => {\n  it(\"should verify that every component name starts with 'Connect'\", () => {\n    const doesEveryComponentNameStartsWithConnect = Object.keys(\n      Components\n    ).every((componentName) => {\n      return componentName.startsWith('Connect');\n    });\n    expect(doesEveryComponentNameStartsWithConnect).toBe(true);\n  });\n});\n"
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha": null,
+      "content_sha256": "0defaa6aea286c5d1427f36b0897337104caf1df2d8e9aa2942aeab2271e6132",
+      "score": 33,
+      "content": "version: 2\nupdates:\n  - package-ecosystem: \"npm\" \n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n    # Setting to 0 blocks updates for non-security related package dependencies updates\n    open-pull-requests-limit: 0\n    target-branch: \"master\"\n\n  - package-ecosystem: \"npm\" \n    directory: \"/\"\n    schedule:\n      interval: \"daily\"\n    open-pull-requests-limit: 0\n    target-branch: \"preview\""
+    },
+    {
+      "path": "preview/jest.config.js",
+      "sha": null,
+      "content_sha256": "b1ad1ac95a8794d252339ae2b2b5f573c909f719a6ef142b62b9d7ba8c21079c",
+      "score": 33,
+      "content": "module.exports = {\n  roots: ['<rootDir>/src'],\n  testMatch: [\n    '**/__tests__/**/*.+(ts|tsx|js)',\n    '**/?(*.)+(spec|test).+(ts|tsx|js)',\n  ],\n  transform: {\n    '^.+\\\\.(ts|tsx)$': ['ts-jest', {diagnostics: {ignoreCodes: [151001]}}],\n  },\n  testEnvironment: 'jsdom',\n};\n"
+    },
+    {
+      "path": "ga/.prettierrc.yml",
+      "sha": null,
+      "content_sha256": "2b4ed2a68f30a65299d448b75786cd9804cef5379cd4209ab68467da72364610",
+      "score": 33,
+      "content": "singleQuote: true\ntrailingComma: es5\nbracketSpacing: false\narrowParens: always\nproseWrap: always\n"
+    },
+    {
+      "path": "preview/.prettierrc.yml",
+      "sha": null,
+      "content_sha256": "2b4ed2a68f30a65299d448b75786cd9804cef5379cd4209ab68467da72364610",
+      "score": 33,
+      "content": "singleQuote: true\ntrailingComma: es5\nbracketSpacing: false\narrowParens: always\nproseWrap: always\n"
+    },
+    {
+      "path": "ga/jest.config.js",
+      "sha": null,
+      "content_sha256": "b1ad1ac95a8794d252339ae2b2b5f573c909f719a6ef142b62b9d7ba8c21079c",
+      "score": 33,
+      "content": "module.exports = {\n  roots: ['<rootDir>/src'],\n  testMatch: [\n    '**/__tests__/**/*.+(ts|tsx|js)',\n    '**/?(*.)+(spec|test).+(ts|tsx|js)',\n  ],\n  transform: {\n    '^.+\\\\.(ts|tsx)$': ['ts-jest', {diagnostics: {ignoreCodes: [151001]}}],\n  },\n  testEnvironment: 'jsdom',\n};\n"
+    },
+    {
+      "path": "ga/tsconfig.json",
+      "sha": null,
+      "content_sha256": "b70df7b9ca48f87e2e119ebdeeed557c8c3f7667e32a475037b9d2cb2f45adef",
+      "score": 33,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES6\", // Let Babel deal with transpiling new language features\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"node\",\n    \"jsx\": \"react\",\n    \"noEmit\": true,\n    \"declaration\": true,\n    \"allowJs\": true,\n    \"removeComments\": false,\n    \"strict\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"esModuleInterop\": true,\n    \"resolveJsonModule\": true\n  },\n  \"include\": [\"./src\"]\n}\n"
+    },
+    {
+      "path": "ga/rollup.config.js",
+      "sha": null,
+      "content_sha256": "c2d4e266eda55e3f05e2c710240434c424b738293aade3de79d78649786de93f",
+      "score": 33,
+      "content": "import babel from 'rollup-plugin-babel';\nimport commonjs from 'rollup-plugin-commonjs';\nimport resolve from 'rollup-plugin-node-resolve';\nimport {terser} from 'rollup-plugin-terser';\nimport replace from 'rollup-plugin-replace';\nimport ts from 'rollup-plugin-ts';\nimport pkg from './package.json';\nimport json from '@rollup/plugin-json';\n\nconst PLUGINS = [\n  ts({\n    tsconfigOverride: {exclude: ['**/*.test.ts']},\n  }),\n  babel({\n    extensions: ['.ts', '.js', '.tsx', '.jsx'],\n  }),\n  replace({\n    // This string is replaced by the npm package version when bundling\n    _NPM_PACKAGE_VERSION_: pkg.version,\n  }),\n  json(),\n];\n\nexport default [\n  {\n    input: 'src/index.ts',\n    output: [\n      {file: pkg.main, format: 'cjs'},\n      {file: pkg.module, format: 'es'},\n    ],\n    plugins: PLUGINS,\n  },\n  // UMD build with inline PropTypes\n  {\n    input: 'src/index.ts',\n    external: ['react'],\n    output: [\n      {\n        name: 'ReactConnect',\n        file: pkg.browser,\n        format: 'umd',\n        globals: {\n          react: 'React',\n        },\n      },\n    ],\n    plugins: PLUGINS,\n  },\n];\n"
+    },
+    {
+      "path": "ga/.eslintrc.yml",
+      "sha": null,
+      "content_sha256": "478effc400dc0769fa4e3e0cf8c10e8f13fba5240e344f963d909261b57c1915",
+      "score": 33,
+      "content": "---\nroot: true\nextends:\n  - eslint:recommended\n  - plugin:@typescript-eslint/eslint-recommended\n  - plugin:@typescript-eslint/recommended\n  - plugin:react/recommended\nparser: \"@typescript-eslint/parser\"\nparserOptions:\n  # project: './tsconfig.json'\n  ecmaFeatures:\n    jsx: true\nplugins:\n  - \"@typescript-eslint\"\n  - jest\n  - react\n  - react-hooks\nsettings:\n  react:\n    version: detect\nenv:\n  jest/globals: true\n  browser: true\n  es6: true\nrules:\n  no-console: 0\n  func-style: 2\n  consistent-return: 2\n  prefer-arrow-callback:\n    - 2\n    - allowNamedFunctions: false\n      allowUnboundThis: false\n  jest/no-disabled-tests: 2\n  jest/no-focused-tests: 2\n  react/prop-types: 0\n  react/forbid-prop-types: 0\n  react/no-unused-prop-types: 0\n  react-hooks/rules-of-hooks: 2\n  react-hooks/exhaustive-deps: 1\n  \"@typescript-eslint/no-explicit-any\": 0\n  \"@typescript-eslint/no-empty-interface\": 0\n  \"@typescript-eslint/explicit-function-return-type\": 0\n  \"@typescript-eslint/camelcase\": 0\n  \"@typescript-eslint/no-empty-function\": 0\n  \"@typescript-eslint/no-unused-vars\":\n    - 2\n    - varsIgnorePattern: ^_\n  \"@typescript-eslint/consistent-type-imports\": \"error\"\n"
+    },
+    {
+      "path": "preview/tsconfig.json",
+      "sha": null,
+      "content_sha256": "b70df7b9ca48f87e2e119ebdeeed557c8c3f7667e32a475037b9d2cb2f45adef",
+      "score": 33,
+      "content": "{\n  \"compilerOptions\": {\n    \"target\": \"ES6\", // Let Babel deal with transpiling new language features\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"node\",\n    \"jsx\": \"react\",\n    \"noEmit\": true,\n    \"declaration\": true,\n    \"allowJs\": true,\n    \"removeComments\": false,\n    \"strict\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"esModuleInterop\": true,\n    \"resolveJsonModule\": true\n  },\n  \"include\": [\"./src\"]\n}\n"
+    },
+    {
+      "path": "preview/rollup.config.js",
+      "sha": null,
+      "content_sha256": "c2d4e266eda55e3f05e2c710240434c424b738293aade3de79d78649786de93f",
+      "score": 33,
+      "content": "import babel from 'rollup-plugin-babel';\nimport commonjs from 'rollup-plugin-commonjs';\nimport resolve from 'rollup-plugin-node-resolve';\nimport {terser} from 'rollup-plugin-terser';\nimport replace from 'rollup-plugin-replace';\nimport ts from 'rollup-plugin-ts';\nimport pkg from './package.json';\nimport json from '@rollup/plugin-json';\n\nconst PLUGINS = [\n  ts({\n    tsconfigOverride: {exclude: ['**/*.test.ts']},\n  }),\n  babel({\n    extensions: ['.ts', '.js', '.tsx', '.jsx'],\n  }),\n  replace({\n    // This string is replaced by the npm package version when bundling\n    _NPM_PACKAGE_VERSION_: pkg.version,\n  }),\n  json(),\n];\n\nexport default [\n  {\n    input: 'src/index.ts',\n    output: [\n      {file: pkg.main, format: 'cjs'},\n      {file: pkg.module, format: 'es'},\n    ],\n    plugins: PLUGINS,\n  },\n  // UMD build with inline PropTypes\n  {\n    input: 'src/index.ts',\n    external: ['react'],\n    output: [\n      {\n        name: 'ReactConnect',\n        file: pkg.browser,\n        format: 'umd',\n        globals: {\n          react: 'React',\n        },\n      },\n    ],\n    plugins: PLUGINS,\n  },\n];\n"
+    },
+    {
+      "path": "preview/.eslintrc.yml",
+      "sha": null,
+      "content_sha256": "478effc400dc0769fa4e3e0cf8c10e8f13fba5240e344f963d909261b57c1915",
+      "score": 33,
+      "content": "---\nroot: true\nextends:\n  - eslint:recommended\n  - plugin:@typescript-eslint/eslint-recommended\n  - plugin:@typescript-eslint/recommended\n  - plugin:react/recommended\nparser: \"@typescript-eslint/parser\"\nparserOptions:\n  # project: './tsconfig.json'\n  ecmaFeatures:\n    jsx: true\nplugins:\n  - \"@typescript-eslint\"\n  - jest\n  - react\n  - react-hooks\nsettings:\n  react:\n    version: detect\nenv:\n  jest/globals: true\n  browser: true\n  es6: true\nrules:\n  no-console: 0\n  func-style: 2\n  consistent-return: 2\n  prefer-arrow-callback:\n    - 2\n    - allowNamedFunctions: false\n      allowUnboundThis: false\n  jest/no-disabled-tests: 2\n  jest/no-focused-tests: 2\n  react/prop-types: 0\n  react/forbid-prop-types: 0\n  react/no-unused-prop-types: 0\n  react-hooks/rules-of-hooks: 2\n  react-hooks/exhaustive-deps: 1\n  \"@typescript-eslint/no-explicit-any\": 0\n  \"@typescript-eslint/no-empty-interface\": 0\n  \"@typescript-eslint/explicit-function-return-type\": 0\n  \"@typescript-eslint/camelcase\": 0\n  \"@typescript-eslint/no-empty-function\": 0\n  \"@typescript-eslint/no-unused-vars\":\n    - 2\n    - varsIgnorePattern: ^_\n  \"@typescript-eslint/consistent-type-imports\": \"error\"\n"
+    },
+    {
+      "path": "preview/src/index.ts",
+      "sha": null,
+      "content_sha256": "8b4ee6c8cf9b26d3b6e65faf7619e9b91ecbe64a3105f99a25b7ded4bf597ef5",
+      "score": 31,
+      "content": "export * from './Components';\nexport * from './ConnectComponents';\nexport * from './useCreateComponent';\nexport * from './utils/useAttachAttribute';\nexport * from './utils/useAttachEvent';\nexport * from './utils/useUpdateWithSetter';\n"
+    },
+    {
+      "path": "ga/src/types.ts",
+      "sha": null,
+      "content_sha256": "23e91954b0c645e994474781c834b295bce54efd46a338373596916616291ad3",
+      "score": 31,
+      "content": "export type FetchEphemeralKeyFunction = (fetchParams: {\n  issuingCard: string;\n  nonce: string;\n}) => Promise<{\n  issuingCard: string;\n  nonce: string;\n  ephemeralKeySecret: string;\n}>;\n"
+    },
+    {
+      "path": "ga/src/index.ts",
+      "sha": null,
+      "content_sha256": "8b4ee6c8cf9b26d3b6e65faf7619e9b91ecbe64a3105f99a25b7ded4bf597ef5",
+      "score": 31,
+      "content": "export * from './Components';\nexport * from './ConnectComponents';\nexport * from './useCreateComponent';\nexport * from './utils/useAttachAttribute';\nexport * from './utils/useAttachEvent';\nexport * from './utils/useUpdateWithSetter';\n"
+    },
+    {
+      "path": "preview/src/ConnectComponents.tsx",
+      "sha": null,
+      "content_sha256": "429cd0a60ccd99901b79c677078af898d8896d80da4563c8303e155521f59d82",
+      "score": 31,
+      "content": "import * as React from 'react';\nimport type * as connectJs from '@stripe/connect-js';\n\ntype ConnectComponentsPayload = {\n  connectInstance: connectJs.StripeConnectInstance;\n};\n\nconst ConnectComponentsContext =\n  React.createContext<ConnectComponentsPayload | null>(null);\n\nConnectComponentsContext.displayName = 'ConnectComponents';\n\nexport const ConnectComponentsProvider = ({\n  connectInstance,\n  children,\n}: {\n  connectInstance: connectJs.StripeConnectInstance;\n  children: any;\n}): JSX.Element => {\n  return (\n    <ConnectComponentsContext.Provider value={{connectInstance}}>\n      {children}\n    </ConnectComponentsContext.Provider>\n  );\n};\n\nexport const useConnectComponents = (): ConnectComponentsPayload => {\n  const context = React.useContext(ConnectComponentsContext);\n  if (!context) {\n    throw new Error(\n      `Could not find Components context; You need to wrap the part of your app in an <ConnectComponentsProvider> provider.`\n    );\n  }\n  return context;\n};\n"
+    },
+    {
+      "path": "ga/src/ConnectComponents.tsx",
+      "sha": null,
+      "content_sha256": "2c9dd32fd2ce19313811251be9925badc8fc65ed8a9997396b15a9229c845a1e",
+      "score": 31,
+      "content": "import * as React from 'react';\nimport type * as connectJs from '@stripe/connect-js';\n\ntype ConnectComponentsPayload = {\n  connectInstance: connectJs.StripeConnectInstance;\n};\n\nconst ConnectComponentsContext =\n  React.createContext<ConnectComponentsPayload | null>(null);\n\nConnectComponentsContext.displayName = 'ConnectComponents';\n\nexport const ConnectComponentsProvider = ({\n  connectInstance,\n  children,\n}: {\n  connectInstance: connectJs.StripeConnectInstance;\n  children: any;\n}): React.JSX.Element => {\n  return (\n    <ConnectComponentsContext.Provider value={{connectInstance}}>\n      {children}\n    </ConnectComponentsContext.Provider>\n  );\n};\n\nexport const useConnectComponents = (): ConnectComponentsPayload => {\n  const context = React.useContext(ConnectComponentsContext);\n  if (!context) {\n    throw new Error(\n      `Could not find Components context; You need to wrap the part of your app in an <ConnectComponentsProvider> provider.`\n    );\n  }\n  return context;\n};\n"
+    },
+    {
+      "path": "preview/src/types.ts",
+      "sha": null,
+      "content_sha256": "328dffb7b0a7fed99519c9cc484d1bf636e285d691f60e5c4fb47783116a93e1",
+      "score": 31,
+      "content": "export type FetchEphemeralKeyFunction = (fetchParams: {\n  issuingCard: string;\n  nonce: string;\n}) => Promise<{\n  issuingCard: string;\n  nonce: string;\n  ephemeralKeySecret: string;\n}>;\n\nexport type FinancingProductType = {\n  productType: 'standard' | 'refill' | 'none';\n  activeFinancingCount: number;\n};\n\nexport type FinancingPromotionLayoutType = 'full' | 'banner';\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:45:10.127596+00:00"
+}

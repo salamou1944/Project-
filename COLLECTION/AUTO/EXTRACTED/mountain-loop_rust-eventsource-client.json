@@ -1,0 +1,168 @@
+{
+  "canonical_source": "github:mountain-loop/rust-eventsource-client",
+  "repo": "mountain-loop/rust-eventsource-client",
+  "revision_sha": "60e0e3ac5038149c4778dc4979b09b152214f9a8",
+  "default_branch": "main",
+  "pushed_at": "2025-01-15T18:56:42Z",
+  "repo_updated_at": "2025-01-15T18:56:44Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "c64874c3f0bcb4a4bb03f110aa866e5d367792e926a36e0f1e227c57746ff772",
+      "score": 198,
+      "content": "name: Run CI\non:\n  push:\n    branches: [ main ]\n    paths-ignore:\n      - '**.md' # Do not need to run CI for markdown changes.\n  pull_request:\n    branches: [ main ]\n    paths-ignore:\n      - '**.md'\n\njobs:\n  ci-build:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          fetch-depth: 0 # If you only need the current version keep this.\n\n      - name: Setup rust tooling\n        run: |\n          rustup override set 1.72\n          rustup component add rustfmt clippy\n\n      - uses: ./.github/actions/ci\n      - uses: ./.github/actions/build-docs\n"
+    },
+    {
+      "path": ".github/actions/ci/action.yml",
+      "sha": null,
+      "content_sha256": "cdcac39e1d6940c82cf861ed23f6e67e2391adad9ca4e7859f4c4232dbdb04d4",
+      "score": 183,
+      "content": "name: CI Workflow\ndescription: 'Shared CI workflow.'\n\nruns:\n  using: composite\n  steps:\n    - name: Check formatting\n      shell: bash\n      run: cargo fmt --check\n\n    - name: Run tests\n      shell: bash\n      run: cargo test --all-features -p eventsource-client\n\n    - name: Run clippy checks\n      shell: bash\n      run: cargo clippy --all-features -p eventsource-client -- -D warnings\n\n    - name: Build contract tests\n      shell: bash\n      run: make build-contract-tests\n\n    - name: Start contract test service\n      shell: bash\n      run: make start-contract-test-service-bg\n\n    - name: Run contract tests\n      shell: bash\n      run: make run-contract-tests\n"
+    },
+    {
+      "path": ".github/actions/build-docs/action.yml",
+      "sha": null,
+      "content_sha256": "7cf6db322e19fc944b7f9fed9f291b6c7753807d50b3a6601ff3590201476095",
+      "score": 181,
+      "content": "name: Build Documentation\ndescription: 'Build Documentation.'\n\nruns:\n  using: composite\n  steps:\n    - name: Build Documentation\n      shell: bash\n      run: cargo doc --no-deps -p eventsource-client\n"
+    },
+    {
+      "path": ".github/workflows/lint-pr-title.yml",
+      "sha": null,
+      "content_sha256": "e335b7b181e26e267818030ae953e46c80aef32aa10c93d881725dbf63f659cf",
+      "score": 126,
+      "content": "name: Lint PR title\n\non:\n  pull_request_target:\n    types:\n      - opened\n      - edited\n      - synchronize\n\njobs:\n  lint-pr-title:\n    uses: launchdarkly/gh-actions/.github/workflows/lint-pr-title.yml@main\n"
+    },
+    {
+      "path": ".github/workflows/release-please.yml",
+      "sha": null,
+      "content_sha256": "dc855bf626d0b5e0bd13a5464318dd6106a66ab0ee2d350272100664046ce3a7",
+      "score": 126,
+      "content": "name: Run Release Please\n\non:\n  push:\n    branches:\n      - main\n\njobs:\n  release-package:\n    runs-on: ubuntu-latest\n    permissions:\n      id-token: write # Needed if using OIDC to get release secrets.\n      contents: write # Contents and pull-requests are for release-please to make releases.\n      pull-requests: write\n    steps:\n      - uses: googleapis/release-please-action@v4\n        id: release\n\n      - uses: actions/checkout@v4\n        if: ${{ steps.release.outputs['eventsource-client--release_created'] == 'true' }}\n        with:\n          fetch-depth: 0 # If you only need the current version keep this.\n\n      - name: Setup rust tooling\n        if: ${{ steps.release.outputs['eventsource-client--release_created'] == 'true' }}\n        run: |\n          rustup override set 1.72\n          rustup component add rustfmt clippy\n\n      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0\n        name: 'Get crates.io token'\n        if: ${{ steps.release.outputs['eventsource-client--release_created'] == 'true' }}\n        with:\n          aws_assume_role: ${{ vars.AWS_ROLE_ARN }}\n          ssm_parameter_pairs: '/production/common/releasing/cratesio/api_token = [REDACTED]'\n\n      - uses: ./.github/actions/ci\n        if: ${{ steps.release.outputs['eventsource-client--release_created'] == 'true' }}\n\n      - uses: ./.github/actions/build-docs\n        if: ${{ steps.release.outputs['eventsource-client--release_created'] == 'true' }}\n\n      - uses: ./.github/actions/publish\n        if: ${{ steps.release.outputs['eventsource-client--release_created'] == 'true' }}\n        with:\n          dry_run: false\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".github/workflows/manual-publish.yml",
+      "sha": null,
+      "content_sha256": "3f4bee5cdfd08e22bfb305cf7405063a0156067860feceef6b115f8198e992de",
+      "score": 126,
+      "content": "name: Publish Package\non:\n  workflow_dispatch:\n    inputs:\n      dry_run:\n        description: 'Is this a dry run. If so no package will be published.'\n        type: boolean\n        required: true\n\njobs:\n  build-publish:\n    runs-on: ubuntu-latest\n    # Needed to get tokens during publishing.\n    permissions:\n      id-token: write\n      contents: read\n    steps:\n      - uses: actions/checkout@v4\n\n      - name: Setup rust tooling\n        run: |\n          rustup override set 1.72\n          rustup component add rustfmt clippy\n\n      - uses: ./.github/actions/ci\n      - uses: ./.github/actions/build-docs\n\n      - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0\n        name: 'Get crates.io token'\n        with:\n          aws_assume_role: ${{ vars.AWS_ROLE_ARN }}\n          ssm_parameter_pairs: '/production/common/releasing/cratesio/api_token = [REDACTED]'\n\n      - uses: ./.github/actions/publish\n        with:\n          dry_run: ${{ inputs.dry_run }}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "7c55daf76210761e5afebe9974dd88c1367693ae6eac5a102aa5189fcf879634",
+      "score": 120,
+      "content": "[workspace]\n\nmembers = [\n    \"eventsource-client\"\n]\n\nresolver = \"2\"\n"
+    },
+    {
+      "path": "eventsource-client/Cargo.toml",
+      "sha": null,
+      "content_sha256": "56a5b519dd965098c222cb06fcbb6c46ac5eeab89c07940e4fb729906ce6029a",
+      "score": 118,
+      "content": "[package]\nname = \"eventsource-client\"\nversion = \"0.14.0\"\ndescription = \"Client for the Server-Sent Events protocol (aka EventSource)\"\nrepository = \"https://github.com/launchdarkly/rust-eventsource-client\"\nauthors = [\"LaunchDarkly\"]\nedition = \"2021\"\nlicense = \"Apache-2.0\"\nkeywords = [\"launchdarkly\", \"feature-flags\", \"feature-toggles\", \"eventsource\", \"server-sent-events\"]\nexclude = [\"CHANGELOG.md\"]\n\n[dependencies]\nlog = \"0.4.6\"\npin-project = \"1.0.10\"\n"
+    },
+    {
+      "path": ".github/actions/publish/action.yml",
+      "sha": null,
+      "content_sha256": "085e046f340a79b5aa54d651a4f5ba401d4db92455e7708f8730ac6e08954ddc",
+      "score": 111,
+      "content": "name: Publish Package\ndescription: 'Publish the package to crates.io'\ninputs:\n  dry_run:\n    description: 'Is this a dry run. If so no package will be published.'\n    required: true\n\nruns:\n  using: composite\n  steps:\n    - name: Publish Library\n      shell: bash\n      if: ${{ inputs.dry_run == 'false' }}\n      run: cargo publish -p eventsource-client\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "6e29bb1b1a836f95e87abe43babfea99730f5848e10da52c566a5d63bc064912",
+      "score": 100,
+      "content": "# eventsource-client\n\n[![Run CI](https://github.com/launchdarkly/rust-eventsource-client/actions/workflows/ci.yml/badge.svg)](https://github.com/launchdarkly/rust-eventsource-client/actions/workflows/ci.yml)\n\nClient for the [Server-Sent Events] protocol (aka [EventSource]).\n\n[Server-Sent Events]: https://html.spec.whatwg.org/multipage/server-sent-events.html\n[EventSource]: https://developer.mozilla.org/en-US/docs/Web/API/EventSource\n\n## Requirements\n\nRequires tokio.\n\n## Usage\n\nExample that just prints the type of each event received:\n\n```rust\nuse eventsource_client as es;\n\nlet mut client = es::ClientBuilder::for_url(\"https://example.com/stream\")?\n    .header(\"Authorization\", \"Basic username:password\")?\n    .build();\n\nclient\n    .stream()\n    .map_ok(|event| println!(\"got event: {:?}\", event))\n    .map_err(|err| eprintln!(\"error streaming events: {:?}\", err));\n```\n\n(Some boilerplate omitted for clarity; see [examples directory] for complete,\nworking code.)\n\n[examples directory]: https://github.com/launchdarkly/rust-eventsource-client/tree/main/eventsource-client/examples\n## Features\n\n* tokio-based streaming client.\n* Supports setting custom headers on the HTTP request (e.g. for endpoints\n  requiring authorization).\n* Retry for failed connections.\n* Reconnection if connection is interrupted, with exponential backoff.\n\n## Stability\n\nEarly stage release for feedback purposes. May contain bugs or performance\nissues. API subject to change.\n\n## Minimum Supported Rust Version\n\nThis project aims to maintain compatibility with a Rust version that is at least six months old.\n\nVersion updates may occur more frequently than the policy guideline states if external forces require it. For example, a CVE in a downstream dependency requiring an MSRV bump would be considered an acceptable reason to violate the six month guideline.\n"
+    },
+    {
+      "path": "eventsource-client/README.md",
+      "sha": null,
+      "content_sha256": "15daaf44b3dcb2094ac617e5aff63afe74af567b3e5b8c720c049dae6af42d5b",
+      "score": 98,
+      "content": "# eventsource-client\n\n[![Run CI](https://github.com/launchdarkly/rust-eventsource-client/actions/workflows/ci.yml/badge.svg)](https://github.com/launchdarkly/rust-eventsource-client/actions/workflows/ci.yml)\n\nClient for the [Server-Sent Events] protocol (aka [EventSource]).\n\n[Server-Sent Events]: https://html.spec.whatwg.org/multipage/server-sent-events.html\n[EventSource]: https://developer.mozilla.org/en-US/docs/Web/API/EventSource\n\n## Requirements\n\nRequires tokio.\n\n## Usage\n\nExample that just prints the type of each event received:\n\n```rust\nuse eventsource_client as es;\n\nlet mut client = es::ClientBuilder::for_url(\"https://example.com/stream\")?\n    .header(\"Authorization\", \"Basic username:password\")?\n    .build();\n\nclient\n    .stream()\n    .map_ok(|event| println!(\"got event: {:?}\", event))\n    .map_err(|err| eprintln!(\"error streaming events: {:?}\", err));\n```\n\n(Some boilerplate omitted for clarity; see [examples directory] for complete,\nworking code.)\n\n[examples directory]: https://github.com/launchdarkly/rust-eventsource-client/tree/main/eventsource-client/examples\n## Features\n\n* tokio-based streaming client.\n* Supports setting custom headers on the HTTP request (e.g. for endpoints\n  requiring authorization).\n* Retry for failed connections.\n* Reconnection if connection is interrupted, with exponential backoff.\n\n## Stability\n\nEarly stage release for feedback purposes. May contain bugs or performance\nissues. API subject to change.\n"
+    },
+    {
+      "path": "Makefile",
+      "sha": null,
+      "content_sha256": "b334dbd8c4ceeacc9bc9841c3690637c997a007607a3a24887de9960db2ebabc",
+      "score": 85,
+      "content": "TEMP_TEST_OUTPUT=/tmp/contract-test-service.log\n\nbuild-contract-tests:\n\t@cargo build\n\nstart-contract-test-service: build-contract-tests\n\t@./target/debug/sse-test-api\n\nstart-contract-test-service-bg:\n\t@echo \"Test service output will be captured in $(TEMP_TEST_OUTPUT)\"\n\t@make start-contract-test-service >$(TEMP_TEST_OUTPUT) 2>&1 &\n\nrun-contract-tests:\n\t@curl -s https://raw.githubusercontent.com/launchdarkly/sse-contract-tests/v2.0.0/downloader/run.sh \\\n      | VERSION=v2 PARAMS=\"-url http://localhost:8080 -debug -stop-service-at-end $(SKIPFLAGS) $(TEST_HARNESS_PARAMS)\" sh\n\ncontract-tests: build-contract-tests start-contract-test-service-bg run-contract-tests\n\n.PHONY: build-contract-tests start-contract-test-service run-contract-tests contract-tests\n"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha": null,
+      "content_sha256": "d7210aa226bf51b7b698050090ab22cbe313100470b2d32c10cea2a60cf009ae",
+      "score": 80,
+      "content": "# Reporting and Fixing Security Issues\n\nPlease report all security issues to the LaunchDarkly security team by submitting a bug bounty report to our [HackerOne program](https://hackerone.com/launchdarkly?type=team). LaunchDarkly will triage and address all valid security issues following the response targets defined in our program policy. Valid security issues may be eligible for a bounty.\n\nPlease do not open issues or pull requests for security issues. This makes the problem immediately visible to everyone, including potentially malicious actors.\n"
+    },
+    {
+      "path": "coverage.sh",
+      "sha": null,
+      "content_sha256": "cc7383e098322890a60789d4045a01bed3ee9e396763b707ae95f0eeb027b471",
+      "score": 35,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\nset -o pipefail\n\nrustup component add llvm-tools-preview\ncargo install cargo-llvm-cov\n\n# generate coverage report to command line by default; otherwise allow\n# CI to pass in '--html' (or other formats).\n\nif [ -n \"$1\" ]; then\n  cargo llvm-cov --all-features --workspace \"$1\"\nelse\n  cargo llvm-cov --all-features --workspace\nfi\n"
+    },
+    {
+      "path": "release-please-config.json",
+      "sha": null,
+      "content_sha256": "cdbc4767a13a46516aa1f7c4f473ded780fcb43bfbeff5f62af38ef0ea1fc720",
+      "score": 35,
+      "content": "{\n  \"release-type\": \"rust\",\n  \"bump-minor-pre-major\": true,\n  \"versioning\": \"default\",\n  \"include-component-in-tag\": false,\n  \"include-v-in-tag\": false,\n  \"packages\": {\n    \"eventsource-client\": {}\n  }\n}\n"
+    },
+    {
+      "path": ".release-please-manifest.json",
+      "sha": null,
+      "content_sha256": "b0e3b6fecd1a073aded573cd2804a02941db8859c0616bf15feeedcc364ead3c",
+      "score": 35,
+      "content": "{\n  \"eventsource-client\": \"0.13.0\"\n}\n"
+    },
+    {
+      "path": "eventsource-client/src/error.rs",
+      "sha": null,
+      "content_sha256": "cccddeb26565b22df08f2de2d13f3adf26cd6fce79a25effd08fef25bc5ba85c",
+      "score": 31,
+      "content": "\n/// Error type for invalid response headers encountered in ResponseDetails.\n#[derive(Debug)]\npub struct HeaderError {\n    /// Wrapped inner error providing details about the header issue.\n    inner_error: Box<dyn std::error::Error + Send + Sync + 'static>,\n}\n\nimpl HeaderError {\n    /// Constructs a new `HeaderError` wrapping an existing error.\n    pub fn new(err: Box<dyn std::error::Error + Send + Sync + 'static>) -> Self {\n        HeaderError { inner_error: err }\n    }\n}\n\nimpl std::fmt::Display for HeaderError {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        write!(f, \"Invalid response header: {}\", self.inner_error)\n    }\n}\n\nimpl std::error::Error for HeaderError {\n    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {\n        Some(self.inner_error.as_ref())\n    }\n}\n\n/// Error type returned from this library's functions.\n#[derive(Debug)]\npub enum Error {\n    TimedOut,\n    StreamClosed,\n    /// An invalid request parameter\n    InvalidParameter(Box<dyn std::error::Error + Send + Sync + 'static>),\n    /// An error reading from the HTTP response body.\n    HttpStream(Box<dyn std::error::Error + Send + Sync + 'static>),\n    /// The HTTP response stream ended\n    Eof,\n    /// The HTTP response stream ended unexpectedly (e.g. in the\n    /// middle of an event).\n    UnexpectedEof,\n    /// Encountered a line not conforming to the SSE protocol.\n    InvalidLine(String),\n    InvalidEvent,\n    /// Encountered a malformed Location header.\n    MalformedLocationHeader(Box<dyn std::error::Error + Send + Sync + 'static>),\n    /// Reached maximum redirect limit after encountering Location headers.\n    MaxRedirectLimitReached(u32),\n}\n\nimpl std::fmt::Display for Error {\n    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {\n        use Error::*;\n        match self {\n            TimedOut => write!(f, \"timed out\"),\n            StreamClosed => write!(f, \"stream closed\"),\n            InvalidParameter(err) => write!(f, \"invalid parameter: {err}\"),\n            HttpStream(err) => write!(f, \"http error: {err}\"),\n            Eof => write!(f, \"eof\"),\n            UnexpectedEof => write!(f, \"unexpected eof\"),\n            InvalidLine(line) => write!(f, \"invalid line: {line}\"),\n            InvalidEvent => write!(f, \"invalid event\"),\n            MalformedLocationHeader(err) => write!(f, \"malformed header: {err}\"),\n            MaxRedirectLimitReached(limit) => write!(f, \"maximum redirect limit reached: {limit}\"),\n        }\n    }\n}\n\nimpl std::error::Error for Error {}\n\nimpl PartialEq<Error> for Error {\n    fn eq(&self, other: &Error) -> bool {\n        use Error::*;\n        if let (InvalidLine(msg1), InvalidLine(msg2)) = (self, other) {\n            return msg1 == msg2;\n        } else if let (UnexpectedEof, UnexpectedEof) = (self, other) {\n            return true;\n        }\n        false\n    }\n}\n\nimpl Error {\n    pub fn is_http_stream_error(&self) -> bool {\n        if let Error::HttpStream(_) = self {\n            return true;\n        }\n        false\n    }\n\n    pub fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {\n        match self {\n            Error::HttpStream(err) => Some(err.as_ref()),\n            _ => None,\n        }\n    }\n}\n\npub type Result<T> = std::result::Result<T, Error>;\n"
+    },
+    {
+      "path": "eventsource-client/src/event_parser.rs",
+      "sha": null,
+      "content_sha256": "73ec2360ef498f22605c540ea3ab7ba26b651f4f97a1c19186edacd6b9476e0a",
+      "score": 31,
+      "content": "use std::{collections::VecDeque, convert::TryFrom, str::from_utf8};\n\nuse log::{debug, log_enabled, trace};\nuse pin_project::pin_project;\n\nuse super::error::{Error, Result};\n\n#[derive(Default, PartialEq)]\nstruct EventData {\n    pub event_type: String,\n    pub data: String,\n    pub id: Option<String>,\n    pub retry: Option<u64>,\n}\n\nimpl EventData {\n    fn new() -> Self {\n        Self::default()\n    }\n\n    pub fn append_data(&mut self, value: &str) {\n        self.data.push_str(value);\n        self.data.push('\\n');\n    }\n\n    pub fn with_id(mut self, value: Option<String>) -> Self {\n        self.id = value;\n        self\n    }\n}\n\n#[derive(Debug, Eq, PartialEq)]\npub enum SSE {\n    Event(Event),\n    Comment(String),\n}\n\nimpl TryFrom<EventData> for Option<SSE> {\n    type Error = Error;\n\n    fn try_from(event_data: EventData) -> std::result::Result<Self, Self::Error> {\n        if event_data == EventData::default() {\n            return Err(Error::InvalidEvent);\n        }\n\n        if event_data.data.is_empty() {\n            return Ok(None);\n        }\n\n        let event_type = if event_data.event_type.is_empty() {\n            String::from(\"message\")\n        } else {\n            event_data.event_type\n        };\n\n        let mut data = event_data.data.clone();\n        data.truncate(data.len() - 1);\n\n        let id = event_data.id.clone();\n\n        let retry = event_data.retry;\n\n        Ok(Some(SSE::Event(Event {\n            event_type,\n            data,\n            id,\n            retry,\n        })))\n    }\n}\n\n#[derive(Clone, Debug, Eq, PartialEq)]\npub struct Event {\n    pub event_type: String,\n    pub data: String,\n    pub id: Option<String>,\n    pub retry: Option<u64>,\n}\n\nconst LOGIFY_MAX_CHARS: usize = 100;\nfn logify(bytes: &[u8]) -> String {\n    let stringified = from_utf8(bytes).unwrap_or(\"<bad utf8>\");\n    stringified.chars().take(LOGIFY_MAX_CHARS).collect()\n}\n\nfn parse_field(line: &[u8]) -> Result<Option<(&str, &str)>> {\n    if line.is_empty() {\n        return Err(Error::InvalidLine(\n            \"should never try to parse an empty line (probably a bug)\".into(),\n        ));\n    }\n\n    match line.iter().position(|&b| b':' == b) {\n        Some(0) => {\n            let value = &line[1..];\n            debug!(\"comment: {}\", logify(value));\n            Ok(Some((\"comment\", parse_value(value)?)))\n        }\n        Some(colon_pos) => {\n            let key = &line[0..colon_pos];\n            let key = parse_key(key)?;\n\n            let mut value = &line[colon_pos + 1..];\n            // remove the first initial space character if any (but remove no other whitespace)\n            if value.starts_with(b\" \") {\n                value = &value[1..];\n            }\n\n            debug!(\"key: {}, value: {}\", key, logify(value));\n\n            Ok(Some((key, parse_value(value)?)))\n        }\n        None => Ok(Some((parse_key(line)?, \"\"))),\n    }\n}\n\nfn parse_key(key: &[u8]) -> Result<&str> {\n    from_utf8(key).map_err(|e| Error::InvalidLine(format!(\"malformed key: {e:?}\")))\n}\n\nfn parse_value(value: &[u8]) -> Result<&str> {\n    from_utf8(value).map_err(|e| Error::InvalidLine(format!(\"malformed value: {e:?}\")))\n}\n\n#[pin_project]\n#[must_use = \"streams do nothing unless polled\"]\npub struct EventParser {\n    /// buffer for lines we know are complete (terminated) but not yet parsed into event fields, in\n    /// the order received\n    complete_lines: VecDeque<Vec<u8>>,\n    /// buffer for the most-recently received line, pending completion (by a newline terminator) or\n    /// extension (by more non-newline bytes)\n    incomplete_line: Option<Vec<u8>>,\n    /// flagged if the last character processed as a carriage return; used to help process CRLF\n    /// pairs\n    last_char_was_cr: bool,\n    /// the event data currently being decoded\n    event_data: Option<EventData>,\n    /// the last-seen event ID; events without an ID will take on this value until it is updated.\n    last_event_id: Option<String>,\n    sse: VecDeque<SSE>,\n}\n\nimpl EventParser {\n    pub fn new() -> Self {\n        Self {\n            complete_lines: VecDeque::with_capacity(10),\n            incomplete_line: None,\n            last_char_was_cr: false,\n            event_data: None,\n            last_event_id: None,\n            sse: VecDeque::with_capacity(3),\n        }\n    }\n\n    pub fn was_processing(&self) -> bool {\n        if self.incomplete_line.is_some() || !self.complete_lines.is_empty() {\n            true\n        } else {\n            !self.sse.is_empty()\n        }\n    }\n\n    pub fn get_event(&mut self) -> Option<SSE> {\n        self.sse.pop_front()\n    }\n\n    pub fn process_bytes(&mut self, bytes: Vec<u8>) -> Result<()> {\n        trace!(\"Parsing bytes {:?}\", bytes);\n        // We get bytes from the underlying stream in chunks.  Decoding a chunk has two phases:\n        // decode the chunk into lines, and decode the lines into events.\n        //\n        // We counterintuitively do these two phases in reverse order. Because both lines and\n        // events may be split across chunks, we need to ensure we have a complete\n        // (newline-terminated) line before parsing it, and a complete event\n        // (empty-line-terminated) before returning it. So we buffer lines between poll()\n        // invocations, and begin by processing any incomplete events from previous invocations,\n        // before requesting new input from the underlying stream and processing that.\n\n        self.decode_and_buffer_lines(bytes);\n        self.parse_complete_lines_into_event()?;\n\n        Ok(())\n    }\n\n    // Populate the event fields from the complete lines already seen, until we either encounter an\n    // empty line - indicating we've decoded a complete event - or we run out of complete lines to\n    // process.\n    //\n    // Returns the event for dispatch if it is complete.\n    fn parse_complete_lines_into_event(&mut self) -> Result<()> {\n        loop {\n            let mut seen_empty_line = false;\n\n            while let Some(line) = self.complete_lines.pop_front() {\n                if line.is_empty() && self.event_data.is_some() {\n                    seen_empty_line = true;\n                    break;\n                } else if line.is_empty() {\n                    continue;\n                }\n\n                if let Some((key, value)) = parse_field(&line)? {\n                    if key == \"comment\" {\n                        self.sse.push_back(SSE::Comment(value.to_string()));\n                        continue;\n                    }\n\n                    let id = &self.last_event_id;\n                    let event_data = self\n                        .event_data\n                        .get_or_insert_with(|| EventData::new().with_id(id.clone()));\n\n                    if key == \"event\" {\n                        event_data.event_type = value.to_string()\n                    } else if key == \"data\" {\n                        event_data.append_data(value);\n                    } else if key == \"id\" {\n                        // If id contains a null byte, it is a non-fatal error and the rest of\n                        // the event should be parsed if possible.\n                        if value.chars().any(|c| c == '\\0') {\n                            debug!(\"Ignoring event ID containing null byte\");\n                            continue;\n                        }\n\n                        if value.is_empty() {\n                            self.last_event_id = Some(\"\".to_string());\n                        } else {\n                            self.last_event_id = Some(value.to_string());\n                        }\n\n                        event_data.id.clone_from(&self.last_event_id)\n                    } else if key == \"retry\" {\n                        match value.parse::<u64>() {\n                            Ok(retry) => {\n                                event_data.retry = Some(retry);\n                            }\n                            _ => debug!(\"Failed to parse {:?} into retry value\", value),\n                        };\n                    }\n                }\n            }\n\n            if seen_empty_line {\n                let event_data = self.event_data.take();\n\n                trace!(\n                    \"seen empty line, event_data is {:?})\",\n                    event_data.as_ref().map(|event_data| &event_data.event_type)\n                );\n\n                if let Some(event_data) = event_data {\n                    match Option::<SSE>::try_from(event_data) {\n                        Err(e) => return Err(e),\n                        Ok(None) => (),\n                        Ok(Some(event)) => self.sse.push_back(event),\n                    };\n                }\n\n                continue;\n            } else {\n                trace!(\"processed all complete lines but event_data not yet complete\");\n            }\n\n            break;\n        }\n\n        Ok(())\n    }\n\n    // Decode a chunk into lines and buffer them for subsequent parsing, taking account of\n    // incomplete lines from previous chunks.\n    fn decode_and_buffer_lines(&mut self, chunk: Vec<u8>) {\n        let mut lines = chunk.split_inclusive(|&b| b == b'\\n' || b == b'\\r');\n        // The first and last elements in this split are special. The spec requires lines to be\n        // terminated. But lines may span chunks, so:\n        //  * the last line, if non-empty (i.e. if chunk didn't end with a line terminator),\n        //    should be buffered as an incomplete line\n        //  * the first line should be appended to the incomplete line, if any\n\n        if let Some(incomplete_line) = self.incomplete_line.as_mut() {\n            if let Some(line) = lines.next() {\n                trace!(\n                    \"extending line from previous chunk: {:?}+{:?}\",\n                    logify(incomplete_line),\n                    logify(line)\n                );\n\n                self.last_char_was_cr = false;\n                if !line.is_empty() {\n                    // Checking the last character handles lines where the last character is a\n                    // terminator, but also where the entire line is a terminator.\n                    match line.last().unwrap() {\n                        b'\\r' => {\n                            incomplete_line.extend_from_slice(&line[..line.len() - 1]);\n                            let il = self.incomplete_line.take();\n                            self.complete_lines.push_back(il.unwrap());\n                            self.last_char_was_cr = true;\n                        }\n                        b'\\n' => {\n                            incomplete_line.extend_from_slice(&line[..line.len() - 1]);\n                            let il = self.incomplete_line.take();\n                            self.complete_lines.push_back(il.unwrap());\n                        }\n                        _ => incomplete_line.extend_from_slice(line),\n                    };\n                }\n            }\n        }\n\n        let mut lines = lines.peekable();\n        while let Some(line) = lines.next() {\n            if let Some(actually_complete_line) = self.incomplete_line.take() {\n                // we saw the next line, so the previous one must have been complete after all\n                trace!(\n                    \"previous line was complete: {:?}\",\n                    logify(&actually_complete_line)\n                );\n                self.complete_lines.push_back(actually_complete_line);\n            }\n\n            if self.last_char_was_cr && line == [b'\\n'] {\n                // This is a continuation of a \\r\\n pair, so we can ignore this line. We do need to\n                // reset our flag though.\n                self.last_char_was_cr = false;\n                continue;\n            }\n\n            self.last_char_was_cr = false;\n            if line.ends_with(&[b'\\r']) {\n                self.complete_lines\n                    .push_back(line[..line.len() - 1].to_vec());\n                self.last_char_was_cr = true;\n            } else if line.ends_with(&[b'\\n']) {\n                // self isn't a continuation, but rather a line ending with a LF terminator.\n                self.complete_lines\n                    .push_back(line[..line.len() - 1].to_vec());\n            } else if line.is_empty() {\n                // this is the last line and it's empty, no need to buffer it\n                trace!(\"chunk ended with a line terminator\");\n            } else if lines.peek().is_some() {\n                // this line isn't the last and we know from previous checks it doesn't end in a\n                // terminator, so we can consider it complete\n                self.complete_lines.push_back(line.to_vec());\n            } else {\n                // last line needs to be buffered as it may be incomplete\n                trace!(\"buffering incomplete line: {:?}\", logify(line));\n                self.incomplete_line = Some(line.to_vec());\n            }\n        }\n\n        if log_enabled!(log::Level::Trace) {\n            for line in &self.complete_lines {\n                trace!(\"complete line: {:?}\", logify(line));\n            }\n            if let Some(line) = &self.incomplete_line {\n                trace!(\"incomplete line: {:?}\", logify(line));\n            }\n        }\n    }\n}\n"
+    },
+    {
+      "path": "eventsource-client/src/lib.rs",
+      "sha": null,
+      "content_sha256": "e4649c22514747e93b7e85741800ccc17313952fca8e0abfcd1bf6acfdb14be5",
+      "score": 31,
+      "content": "#![warn(rust_2018_idioms)]\n\nmod error;\nmod event_parser;\n\npub use error::*;\npub use event_parser::Event;\npub use event_parser::EventParser;\npub use event_parser::SSE;\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:45:18.693223+00:00"
+}

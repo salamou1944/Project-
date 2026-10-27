@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:vercel-labs/nostics",
+  "repo": "vercel-labs/nostics",
+  "revision_sha": "1f825a027f3516db9c23d11da285b786a1ec07f7",
+  "default_branch": "main",
+  "pushed_at": "2026-09-28T21:22:32Z",
+  "repo_updated_at": "2026-10-23T23:11:43Z",
+  "license": "MIT",
+  "topics": [
+    "agents",
+    "dev",
+    "errors"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "3e15b14ba958dc5b250331f65d4ac3ad3c54141a0e0f54bf66e44af211047f74",
+      "score": 198,
+      "content": "name: ci\n\non:\n  push:\n    branches:\n      - '**'\n    tags-ignore:\n      - '**'\n\njobs:\n  build:\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/checkout@v6\n      - uses: pnpm/action-setup@v6\n      - uses: actions/setup-node@v6\n        with:\n          node-version: lts/*\n          cache: pnpm\n\n      - run: pnpm install --frozen-lockfile\n      - run: pnpm run test\n      - run: pnpm run size\n      # docs often run out of memory and is very slow, we will catch the error\n      # on Vercel deployments\n      # - run: pnpm -C docs run build\n"
+    },
+    {
+      "path": "docs/package.json",
+      "sha": null,
+      "content_sha256": "3602f0b1aeb3c8d02b9b78137006caeb8187df48aba364d0fc4f10b2d0e82024",
+      "score": 188,
+      "content": "{\n  \"name\": \"docs\",\n  \"scripts\": {\n    \"dev\": \"nuxt dev\",\n    \"dev:prepare\": \"nuxt prepare\",\n    \"typecheck\": \"vue-tsc --noEmit\",\n    \"build\": \"nuxt build\"\n  },\n  \"dependencies\": {\n    \"@nuxt/fonts\": \"catalog:docs\",\n    \"@nuxt/ui\": \"catalog:docs\",\n    \"@vercel/analytics\": \"catalog:docs\",\n    \"@vercel/speed-insights\": \"catalog:docs\",\n    \"better-sqlite3\": \"catalog:docs\",\n    \"docus\": \"catalog:docs\",\n    \"nuxt\": \"catalog:docs\"\n  },\n  \"devDependencies\": {\n    \"vue-tsc\": \"catalog:cli\"\n  }\n}\n"
+    },
+    {
+      "path": "docs/README.md",
+      "sha": null,
+      "content_sha256": "18ef907eb94ca639cbeb012e7d2ebe5413093689043344cbcfcbe316148a038f",
+      "score": 168,
+      "content": "# nostics docs\n\nThe documentation site is built with Docus.\n\n## Development\n\n```bash\npnpm -C docs run dev\n```\n\n## Build\n\n```bash\npnpm -C docs run build\n```\n\nContent lives in `docs/content`.\n"
+    },
+    {
+      "path": "docs/content/4.api/1.reference.md",
+      "sha": null,
+      "content_sha256": "a6510155bc02c9aa224772e45d74602308f2db79607b137d7defe043d4148463",
+      "score": 139,
+      "content": "---\ntitle: Reference\ndescription: API reference for nostics core exports, reporters, formatters, and plugins.\nnavigation:\n  icon: i-lucide-file-code\n---\n\n## `nostics`\n\n```ts\nimport {\n  createConsoleReporter,\n  defineDiagnostics,\n  defineProdDiagnostics,\n  Diagnostic,\n  formatDiagnostic,\n} from 'nostics'\n```\n\n### `defineDiagnostics(options)`\n\n```ts\nconst diagnostics = defineDiagnostics({\n  docsBase: code => `https://nuxt.com/e/${code.replace('NUXT_', '').toLowerCase()}`,\n  reporters: [createConsoleReporter()],\n  codes: {\n    NUXT_B2011: {\n      why: (p: { src: string, mode: 'client' | 'server' }) => {\n        const expected = p.mode === 'client' ? 'server' : 'client'\n        return `Plugin \"${p.src}\" is ${expected}-only but was registered with mode \"${p.mode}\".`\n      },\n      fix: (p: { mode: 'client' | 'server' }) => {\n        const expected = p.mode === 'client' ? 'server' : 'client'\n        return `Rename the file or register it with mode \"${expected}\".`\n      },\n    },\n  },\n})\n```\n\nOptions:\n\n| Field | Type | Required | Description |\n| --- | --- | --- | --- |\n| `codes` | `Record<string, DiagnosticDefinition>` | yes | Code definitions |\n| `docsBase` | `string \\| ((code) => string \\| undefined)` | no | Base docs URL or URL resolver |\n| `reporters` | `DiagnosticReporter[]` | no | Reporters called on every diagnostic |\n\nDefinition:\n\n```ts\ninterface DiagnosticDefinition<\n  P = any,\n  Data extends Record<string, unknown> = Record<string, unknown>,\n> {\n  why: string | ((params: P) => string)\n  fix?: string | ((params: P) => string)\n  docs?: string | false\n  data?: Data | ((params: P) => Data)\n}\n```\n\nCall-site fields:\n\n```ts\ninterface DiagnosticCallParams {\n  cause?: unknown\n  sources?: string[]\n}\n```\n\n### `defineProdDiagnostics(options?)`\n\nLean production counterpart to `defineDiagnostics`. Returns a `Proxy` that builds a minimal `Diagnostic` for any accessed code: the code becomes the instance `name`, `docs` is derived from `docsBase`, and the `message` (`why`) points to the docs URL when one exists (empty otherwise, so the thrown header is just the code). It carries no catalog text or data, so it stays tiny in a bundle. Its `data` property is `undefined`.\n\n```ts\nconst diagnostics = defineProdDiagnostics({\n  docsBase: code => `https://nuxt.com/e/${code.replace('NUXT_', '').toLowerCase()}`,\n})\n\nthrow diagnostics.NUXT_B2011() // Error: NUXT_B2011, docs derived from docsBase\n```\n\nOptions:\n\n| Field | Type | Required | Description |\n| --- | --- | --- | --- |\n| `docsBase` | `string \\| ((code) => string \\| undefined)` | no | Base docs URL or URL resolver, identical to `defineDiagnostics` |\n| `reporters` | `DiagnosticReporter[]` | no | Reporters called on every diagnostic. Omitted by default in production builds |\n\nSelect it in production with a `process.env.NODE_ENV` ternary so bundlers drop the full catalog. See [Production builds](/guide/production-builds).\n\n### `Diagnostic`\n\n```ts\nclass Diagnostic<Data = undefined> extends Error {\n  name: string\n  message: string\n  get why(): string\n  fix?: string\n  docs?: string\n  sources?: string[]\n  cause?: unknown\n  data: Data\n  toJSON(): DiagnosticJSON<Data>\n}\n```\n\n`name` is the code. `message` and `why` are the resolved explanation. `data` is inferred for each code from its static object or resolver return type. `toJSON()` returns `name`, `why`, `fix`, `docs`, `sources`, `cause`, `data`, and `stack`.\n\nWhen you call `JSON.stringify(diagnostic)`, fields whose value is `undefined` are omitted from the JSON output.\n\n### `DiagnosticReporter`\n\n```ts\ntype DiagnosticReporter<Options extends object = {}, Data = any> = (\n  diagnostic: Diagnostic<Data>,\n  options: Options,\n) => void\n```\n\nUse the second generic when a reporter handles a known data shape. Reporters shared by unrelated codes can leave it at the default.\n\n### `formatDiagnostic(diagnostic)`\n\nRenders plain multiline text.\n\n```txt\n[NUXT_B2011] Plugin `./runtime/analytics.server.ts` is server-only but was registered with mode `client`.\n├▶ fix: Rename the file or register it with mode `server`.\n├▶ sources: modules/analytics.ts:18:5\n╰▶ see: https://nuxt.com/e/b2011\n```\n\n### `createConsoleReporter`\n\n```ts\nfunction createConsoleReporter(options?: {\n  method?: 'log' | 'error' | 'warn' // default 'warn'\n  formatter?: (diagnostic: Diagnostic) => string // default formatDiagnostic\n}): DiagnosticReporter<{ method?: 'log' | 'error' | 'warn' }>\n```\n\nBuilds a console reporter. `createConsoleReporter()` uses `console.warn` and `formatDiagnostic`; `method` is overridable per call.\n\n## Reporters\n\n### `nostics/reporters/node`\n\n```ts\nimport { createFileReporter } from 'nostics/reporters/node'\n```\n\n```ts\nfunction createFileReporter(options?: {\n  logFile?: string\n  excludeStackFrames?: readonly RegExp[]\n}): DiagnosticReporter\n```\n\nAppends one JSON line per diagnostic. Default file: `.nostics.log`. `excludeStackFrames` defaults to `[/\\/node_modules\\//i]`; pass `[]` to keep every frame.\n\n### `nostics/reporters/fetch`\n\n```ts\nimport { createFetchReporter } from 'nostics/reporters/fetch'\n```\n\n```ts\nfunction createFetchReporter(url: string): DiagnosticReporter\n```\n\nPOSTs `JSON.stringify(diagnostic)` to `url` with `Content-Type: application/json`. Fetch failures are swallowed.\n\n### `nostics/reporters/dev`\n\n```ts\nimport { createDevReporter } from 'nostics/reporters/dev'\n```\n\n`createDevReporter()` builds a reporter that sends `diagnostic.toJSON()` over `import.meta.hot.send('nostics:report', payload)`. Outside Vite, it warns and does nothing else.\n\n## Formatters\n\n### `nostics/formatters/ansi`\n\n```ts\nimport { ansiFormatter } from 'nostics/formatters/ansi'\n```\n\n```ts\nfunction ansiFormatter(colors: Colors): (diagnostic: Diagnostic) => string\n```\n\n```ts\ninterface Colors {\n  red: (s: string) => string\n  yellow: (s: string) => string\n  cyan: (s: string) => string\n  gray: (s: string) => string\n  bold: (s: string) => string\n  dim: (s: string) => string\n}\n```\n\n### `nostics/formatters/json`\n\n```ts\nimport { jsonFormatter } from 'nostics/formatters/json'\n```\n\n```ts\nconst jsonFormatter: (diagnostic: Diagnostic) => string\n```\n\nCalls `JSON.stringify(diagnostic)`.\n\n## Plugins\n\nThe build-time plugins ship in the separate `@nostics/unplugin` package:\n\n```bash\npnpm add -D @nostics/unplugin\n```\n\n### `@nostics/unplugin/strip-transform`\n\n```ts\nimport { nosticsStrip } from '@nostics/unplugin/strip-transform'\n```\n\nBuild-time plugin that marks `defineDiagnostics()` calls as pure and guards report-only diagnostic expression statements with `process.env.NODE_ENV !== \"production\"`.\n\n```ts\nnosticsStrip.vite({\n  packageName: 'nostics',\n})\n```\n\nOptions:\n\n| Field | Default | Description |\n| --- | --- | --- |\n| `packageName` | `'nostics'` | Package name to detect imports from |\n\n### `@nostics/unplugin/dev-server-collector`\n\n```ts\nimport { nosticsCollector } from '@nostics/unplugin/dev-server-collector'\n```\n\nVite dev-server plugin that listens for `nostics:report` events and appends diagnostics to a local file.\n\n```ts\nnosticsCollector.vite({\n  logFile: '.nostics.log',\n  debug: false,\n  excludeStackFrames: [/\\/node_modules\\//],\n})\n```\n\nOptions:\n\n| Field | Default | Description |\n| --- | --- | --- |\n| `logFile` | `'.nostics.log'` | Output file |\n| `debug` | `!!process.env.DEBUG` | Log collector activity |\n| `excludeStackFrames` | `[/\\/node_modules\\//i]` | Remove matching stack frames before writing. Pass `[]` to keep every frame |\n\nOnly the Vite adapter is meaningful for `nosticsCollector`.\n"
+    },
+    {
+      "path": "docs/content/3.recipes/1.diagnostic-registry.md",
+      "sha": null,
+      "content_sha256": "8862ba89a9719e73c72be4744279856772842830e03f324447fdb84daafee05b",
+      "score": 136,
+      "content": "---\ntitle: Diagnostic registry\ndescription: Publish stable docs pages for diagnostic codes.\nnavigation:\n  icon: i-lucide-book-open\n---\n\nA diagnostic code is most useful when it points to a page that explains the problem and the fix.\n\nThe page does not need to be long. It needs to be stable, readable without JavaScript, and consistent across codes.\n\n## Pick the URL shape\n\nUse `docsBase` to decide where code pages live. A function gives you full control over the URL.\n\n```ts\ndefineDiagnostics({\n  docsBase: code => `https://nuxt.com/e/${code.replace('NUXT_', '').toLowerCase()}`,\n  codes: {\n    NUXT_B2011: { why: 'Plugin mode conflicts with file suffix.' },\n  },\n})\n```\n\nThis creates `https://nuxt.com/e/b2011`.\n\nOnce published, keep the URL working. Logs and search results can outlive the release that emitted them.\n\n## Page template\n\n````markdown\n# NUXT_B2011: Plugin mode conflicts with file suffix\n\nCode: `NUXT_B2011`\nLevel: error\n\n## What happened\n\nNuxt tried to register a plugin whose filename says it should run on one side, but whose `mode` says it should run on the other side.\n\n## How to fix it\n\nRemove `mode` and let the filename suffix decide:\n\n```ts [app/plugins/analytics.server.ts]\nexport default defineNuxtPlugin(() => {\n  // plugin code\n})\n```\n\n## Common causes\n\n- A plugin file was renamed from `.client.ts` to `.server.ts` without updating `mode`.\n- A module option switches the plugin mode but not the resolved file path.\n- A shared helper applies a default `mode` after the plugin path was already selected.\n\n## Example output\n\n```txt\n[NUXT_B2011] Plugin `./runtime/analytics.server.ts` is server-only but was registered with mode `client`.\n├▶ fix: Rename the file or register it with mode `server`.\n╰▶ see: https://nuxt.com/e/b2011\n```\n````\n\nKeep the fix near the top. Most people arrive from an error message and want the next action.\n\n## Keep it in sync\n\nThe useful rule is simple: a new published code should ship with its docs page.\n\nCommon ways to enforce that:\n\n- Keep the markdown in the same repo as the diagnostic catalog.\n- Generate an index of all codes from the catalog.\n- Add a CI check that every code has a matching page.\n\nExample check:\n\n```ts\nimport { existsSync } from 'node:fs'\nimport { diagnostics } from '../src/diagnostics'\n\nconst missing = Object.keys(diagnostics).filter((code) => {\n  return !existsSync(`docs/errors/${code.toLowerCase()}.md`)\n})\n\nif (missing.length > 0) {\n  console.error('Missing diagnostic docs:', missing.join(', '))\n  process.exit(1)\n}\n```\n\n## Make pages easy to consume\n\n- Render the content in the initial HTML.\n- Include the code in the title and body.\n- Use the same section names on every page.\n- Keep examples self-contained.\n- Return `404` for unknown codes.\n\nThis helps humans, search engines, and tools that fetch the URL from a log.\n"
+    },
+    {
+      "path": ".github/workflows/autofix.yml",
+      "sha": null,
+      "content_sha256": "9ec06dfd347b7bdeabbcfbb57b5d42654d90edf20fda0b63f673048263457810",
+      "score": 126,
+      "content": "name: autofix.ci\n\non:\n  pull_request:\n    branches:\n      - main\n\npermissions:\n  contents: read\n\njobs:\n  autofix:\n    if: \"!startsWith(github.event.pull_request.title, 'renovate/')\"\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n      - uses: pnpm/action-setup@v6\n      - uses: actions/setup-node@v6\n        with:\n          node-version: lts/*\n          cache: pnpm\n\n      - run: pnpm install --frozen-lockfile\n      - run: pnpm run lint:fix\n\n      - uses: autofix-ci/action@7a166d7532b277f34e16238930461bf77f9d7ed8\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": null,
+      "content_sha256": "20c63777acabbc2e972c9240d775945112cb4bceae9001b96b3afa7134dc6ef7",
+      "score": 126,
+      "content": "name: Publish to npm\n\n# When releasing for the first time, you first need to publish manually a 0.0.0\n#\n# npm login\n# npm publish\n#\n# Add \"repository\": \"vercel/nostics\", to package.json\n# Go to the settings page on npm: https://www.npmjs.com/package/nostics/access\n# Set the Trusted Published, add an environment if added on GitHub repository settings / Environments\n# Disallow tokens\n#\n# Update this file:\n# - use environment if set\n# - Adapt the if condition that prevents running on forks\n\non:\n  push:\n    tags:\n      - '**'\n\njobs:\n  release:\n    runs-on: ubuntu-latest\n    # prevent running on forks and with other tags\n    if: |\n      (startsWith(github.ref_name, 'v') ||\n      contains(github.ref_name, '@')) &&\n      github.repository == 'vercel-labs/nostics'\n\n    environment: release\n\n    permissions:\n      contents: write\n      id-token: write\n\n    steps:\n      - name: Checkout\n        uses: actions/checkout@v6\n        with:\n          fetch-depth: 0\n\n      - name: Resolve tag info\n        id: resolve\n        run: |\n          echo \"Resolving tag info…\"\n\n          TAG=\"${GITHUB_REF#refs/tags/}\"\n          echo \"Current tag: $TAG\"\n          echo \"TAG=$TAG\" >>$GITHUB_OUTPUT\n\n          # ========= Determine package type =========\n          if [[ \"$TAG\" =~ ^v[0-9] ]]; then\n            # Main package\n            PKG_NAME=\"<main>\"\n            PACKAGE_PATH=\".\"\n            GIT_DESCRIBE_MATCH=\"v*\"\n          else\n            # Scoped package: extract prefix before last @\n            PKG_NAME=\"${TAG%@*}\"\n            GIT_DESCRIBE_MATCH=\"${PKG_NAME}@*\"\n\n            # Package folder mapping\n            declare -A MAP=(\n              [\"@nostics/unplugin\"]=\"packages/unplugin\"\n            )\n\n            if [[ -z \"${MAP[$PKG_NAME]}\" ]]; then\n              echo \"❌ Unknown package name '$PKG_NAME'\" >&2\n              exit 1\n            fi\n\n            PACKAGE_PATH=\"${MAP[$PKG_NAME]}\"\n          fi\n\n          echo \"PKG_NAME=$PKG_NAME\" >>$GITHUB_OUTPUT\n          echo \"PACKAGE_PATH=$PACKAGE_PATH\" >>$GITHUB_OUTPUT\n          echo \"GIT_DESCRIBE_MATCH=$GIT_DESCRIBE_MATCH\" >>$GITHUB_OUTPUT\n\n          # ========= Compute previous tag (skip current tag) =========\n          echo \"Finding previous tag using: git describe --match '$GIT_DESCRIBE_MATCH'\"\n\n          set +e\n          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match \"$GIT_DESCRIBE_MATCH\" \"${TAG}^\" 2>/dev/null)\n          STATUS=$?\n          set -e\n\n          if [[ $STATUS -eq 0 ]]; then\n            echo \"Found previous tag: $PREVIOUS_TAG\"\n          else\n            echo \"No previous tag found. Using first commit.\"\n            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)\n          fi\n\n          echo \"PREVIOUS_TAG=$PREVIOUS_TAG\" >>$GITHUB_OUTPUT\n\n          # ========= Determine npm dist-tag =========\n          if [[ \"$TAG\" =~ ^v[0-9] ]]; then\n            VERSION=\"${TAG#v}\"\n          else\n            VERSION=\"${TAG##*@}\"\n          fi\n\n          if [[ \"$VERSION\" =~ -beta ]]; then\n            NPM_TAG=\"beta\"\n          elif [[ \"$VERSION\" =~ -alpha ]]; then\n            NPM_TAG=\"alpha\"\n          elif [[ \"$VERSION\" =~ -rc ]]; then\n            NPM_TAG=\"rc\"\n          else\n            NPM_TAG=\"latest\"\n          fi\n\n          echo \"NPM_TAG=$NPM_TAG\" >>$GITHUB_OUTPUT\n\n          echo \"Resolved:\"\n          echo \"  TAG=$TAG\"\n          echo \"  PKG_NAME=$PKG_NAME\"\n          echo \"  PACKAGE_PATH=$PACKAGE_PATH\"\n          echo \"  PREVIOUS_TAG=$PREVIOUS_TAG\"\n          echo \"  NPM_TAG=$NPM_TAG\"\n\n      - name: Install pnpm\n        uses: pnpm/action-setup@v6\n\n      - name: Setup node\n        uses: actions/setup-node@v6\n        with:\n          node-version: lts/*\n          cache: pnpm\n          registry-url: 'https://registry.npmjs.org'\n\n      - name: Install dependencies\n        shell: bash\n        run: pnpm install --frozen-lockfile\n\n      - name: Build\n        run: pnpm run build\n\n      - name: Publish to NPM\n        run: pnpm publish --access public --no-git-checks --tag ${{ steps.resolve.outputs.NPM_TAG }}\n        working-directory: ${{ steps.resolve.outputs.PACKAGE_PATH }}\n\n      - name: Generate GitHub Changelog\n        run: pnpx changelogithub@14.0.0 --from \"$FROM_TAG\" --to \"$TAG\"\n        continue-on-error: true\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          TAG: ${{ steps.resolve.outputs.TAG }}\n          FROM_TAG: ${{ steps.resolve.outputs.PREVIOUS_TAG }}\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "b49a2c5eb9e85767621b76f36b58bebacf486504f648880190d9663078501ecb",
+      "score": 120,
+      "content": "{\n  \"name\": \"nostics\",\n  \"type\": \"module\",\n  \"version\": \"1.3.0\",\n  \"packageManager\": \"pnpm@12.5.1\",\n  \"description\": \"Structured diagnostic code library\",\n  \"author\": \"Anthony Fu <anthonyfu117@hotmail.com>\",\n  \"contributors\": [\n    \"Eduardo San Martin Morote <posva13@gmail.com>\",\n    \"Daniel Roe <daniel@roe.dev>\"\n  ],\n  \"license\": \"MIT\",\n  \"homepage\": \"https://github.com/vercel-labs/nostics#readme\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/vercel-labs/nostics.git\"\n  },\n  \"bugs\": \"https://github.com/vercel-labs/nostics/issues\",\n  \"keywords\": [],\n  \"sideEffects\": false,\n  \"exports\": {\n    \".\": \"./dist/index.mjs\",\n    \"./formatters/ansi\": \"./dist/formatters/ansi.mjs\",\n    \"./formatters/json\": \"./dist/formatters/json.mjs\",\n    \"./reporters/dev\": \"./dist/reporters/dev.mjs\",\n    \"./reporters/fetch\": \"./dist/reporters/fetch.mjs\",\n    \"./reporters/node\": \"./dist/reporters/node.mjs\",\n    \"./package.json\": \"./package.json\"\n  },\n  \"types\": \"./dist/index.d.mts\",\n  \"files\": [\n    \"dist\",\n    \"skills\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsdown && pnpm --filter \\\"./packages/*\\\" run build\",\n    \"dev\": \"vitest\",\n    \"docs\": \"pnpm -C docs run dev\",\n    \"docs:build\": \"pnpm -C docs run build\",\n    \"play\": \"pnpm -C playground run dev\",\n    \"lint\": \"oxlint ${CI:+--deny-warnings} . && oxfmt --check .\",\n    \"lint:fix\": \"oxfmt && oxlint --fix .\",\n    \"fmt\": \"oxfmt\",\n    \"prepublishOnly\": \"pnpm run build\",\n    \"release\": \"node scripts/release.ts\",\n    \"size\": \"size-limit\",\n    \"test\": \"pnpm run build && pnpm run \\\"/^test:/\\\"\",\n    \"test:unit\": \"vitest run --coverage\",\n    \"test:types\": \"pnpm run typecheck\",\n    \"test:lint\": \"pnpm run lint\",\n    \"test:demo\": \"pnpm -C demo-lib run build && pnpm -C demo-lib run test && pnpm -C playground run build\",\n    \"typecheck\": \"tsc && pnpm --filter \\\"./packages/*\\\" run typecheck\",\n    \"prepare\": \"simple-git-hooks\"\n  },\n  \"devDependencies\": {\n    \"@posva/prompts\": \"catalog:cli\",\n    \"@size-limit/esbuild-why\": \"catalog:cli\",\n    \"@size-limit/preset-small-lib\": \"catalog:cli\",\n    \"@types/node\": \"catalog:types\",\n    \"@types/semver\": \"catalog:types\",\n    \"@vitest/coverage-v8\": \"catalog:testing\",\n    \"conventional-changelog\": \"catalog:cli\",\n    \"conventional-changelog-angular\": \"catalog:cli\",\n    \"lint-staged\": \"catalog:cli\",\n    \"oxfmt\": \"catalog:cli\",\n    \"oxlint\": \"catalog:cli\",\n    \"oxlint-plugin-posva\": \"catalog:cli\",\n    \"publint\": \"catalog:cli\",\n    \"semver\": \"catalog:cli\",\n    \"simple-git-hooks\": \"catalog:cli\",\n    \"size-limit\": \"catalog:cli\",\n    \"tsdown\": \"catalog:cli\",\n    \"tsnapi\": \"catalog:testing\",\n    \"typescript\": \"catalog:cli\",\n    \"vite\": \"catalog:cli\",\n    \"vitest\": \"catalog:testing\"\n  },\n  \"simple-git-hooks\": {\n    \"pre-commit\": \"pnpm i --frozen-lockfile --ignore-scripts --offline && pnpm lint-staged\"\n  },\n  \"lint-staged\": {\n    \"*\": [\n      \"oxfmt --no-error-on-unmatched-pattern\",\n      \"oxlint --no-error-on-unmatched-pattern --fix\"\n    ]\n  },\n  \"size-limit\": [\n    {\n      \"name\": \"defineDiagnostics from source\",\n      \"path\": \"src/index.ts\",\n      \"import\": \"{ defineDiagnostics }\"\n    },\n    {\n      \"name\": \"defineDiagnostics\",\n      \"path\": \"dist/index.mjs\",\n      \"import\": \"{ defineDiagnostics }\"\n    },\n    {\n      \"name\": \"defineProdDiagnostics\",\n      \"path\": \"dist/index.mjs\",\n      \"import\": \"{ defineProdDiagnostics }\"\n    },\n    {\n      \"name\": \"defineDiagnostics + createConsoleReporter\",\n      \"path\": \"dist/index.mjs\",\n      \"import\": \"{ defineDiagnostics, createConsoleReporter }\"\n    },\n    {\n      \"name\": \"defineProdDiagnostics + createConsoleReporter\",\n      \"path\": \"dist/index.mjs\",\n      \"import\": \"{ defineProdDiagnostics, createConsoleReporter }\"\n    },\n    {\n      \"name\": \"formatDiagnostic\",\n      \"path\": \"dist/index.mjs\",\n      \"import\": \"{ formatDiagnostic }\"\n    },\n    {\n      \"name\": \"full root\",\n      \"path\": \"dist/index.mjs\",\n      \"import\": \"*\"\n    },\n    {\n      \"name\": \"ansi formatter\",\n      \"path\": \"dist/formatters/ansi.mjs\",\n      \"import\": \"*\"\n    }\n  ]\n}\n"
+    },
+    {
+      "path": "demo-lib/package.json",
+      "sha": null,
+      "content_sha256": "4dbc448b38756dc10f94524ff55119678c5b510e709750afdf344fdbd08f0967",
+      "score": 118,
+      "content": "{\n  \"name\": \"@posva/lib-demo\",\n  \"type\": \"module\",\n  \"version\": \"0.0.1\",\n  \"publishConfig\": {\n    \"access\": \"public\"\n  },\n  \"exports\": {\n    \".\": \"./dist/index.mjs\",\n    \"./package.json\": \"./package.json\"\n  },\n  \"types\": \"./dist/index.d.mts\",\n  \"files\": [\n    \"dist\"\n  ],\n  \"scripts\": {\n    \"test\": \"tsc\",\n    \"build\": \"tsdown\"\n  },\n  \"dependencies\": {\n    \"nostics\": \"workspace:*\"\n  },\n  \"devDependencies\": {\n    \"@nostics/unplugin\": \"workspace:*\",\n    \"tsdown\": \"catalog:cli\"\n  }\n}\n"
+    },
+    {
+      "path": "playground/package.json",
+      "sha": null,
+      "content_sha256": "eb4a70e1fef72ea8a6431d889cf0d709fd8bdb7d5bd2b822f794f832acd7592e",
+      "score": 118,
+      "content": "{\n  \"name\": \"playground\",\n  \"type\": \"module\",\n  \"version\": \"0.0.0\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"vite\",\n    \"build\": \"tsc --noEmit && vite build\",\n    \"preview\": \"vite preview\"\n  },\n  \"dependencies\": {\n    \"@posva/lib-demo\": \"workspace:*\",\n    \"vue\": \"catalog:playground\"\n  },\n  \"devDependencies\": {\n    \"@nostics/unplugin\": \"workspace:*\",\n    \"@vitejs/devtools\": \"catalog:cli\",\n    \"@vitejs/plugin-vue\": \"catalog:playground\",\n    \"nostics\": \"workspace:*\",\n    \"typescript\": \"catalog:cli\",\n    \"vite\": \"catalog:cli\",\n    \"vite-plugin-inspect\": \"catalog:cli\"\n  }\n}\n"
+    },
+    {
+      "path": "install.sh",
+      "sha": null,
+      "content_sha256": "53afc77b48a879dea0365143e37bbb6599b9c881305ca3e42c161afe02979d45",
+      "score": 117,
+      "content": "#!/usr/bin/env bash\n#\n# nostics Claude Code Plugin Installer\n#\n# Adds the repo as a marketplace and installs the plugin project-scoped.\n# Run from your project root — the plugin is scoped to $PWD.\n#\n# Usage: gh api repos/vercel-labs/nostics/contents/install.sh --jq '.content' | base64 -d | bash\n#\n\nset -e\n\nPLUGIN_NAME=\"nostics\"\nMARKETPLACE_NAME=\"vercel-labs\"\nREPO=\"vercel-labs/nostics\"\n\necho \"nostics Claude Code Plugin Installer\"\necho \"\"\n\n# Add the marketplace (skip if already registered)\nif claude plugin marketplace list 2>/dev/null | grep -q \"  $MARKETPLACE_NAME$\"; then\n    echo \"-> Updating marketplace...\"\n    claude plugin marketplace update \"$MARKETPLACE_NAME\"\nelse\n    echo \"-> Adding marketplace...\"\n    claude plugin marketplace add \"$REPO\" --scope project\nfi\n\n# Install the plugin project-scoped (auto-enables)\necho \"-> Installing plugin...\"\nclaude plugin install \"${PLUGIN_NAME}@${MARKETPLACE_NAME}\" --scope project\n\necho \"\"\necho \"Installed successfully! Restart Claude Code for the plugin to take effect.\"\n"
+    },
+    {
+      "path": "packages/unplugin/package.json",
+      "sha": null,
+      "content_sha256": "f425d6187105c9338856fded088c88ec775744e5ebaa7221a828d6cecc6633e3",
+      "score": 116,
+      "content": "{\n  \"name\": \"@nostics/unplugin\",\n  \"type\": \"module\",\n  \"version\": \"1.1.1\",\n  \"description\": \"Build-time plugins for nostics: strip diagnostics from production builds and collect them during dev\",\n  \"author\": \"Anthony Fu <anthonyfu117@hotmail.com>\",\n  \"contributors\": [\n    \"Eduardo San Martin Morote <posva13@gmail.com>\",\n    \"Daniel Roe <daniel@roe.dev>\"\n  ],\n  \"license\": \"MIT\",\n  \"homepage\": \"https://github.com/vercel-labs/nostics#readme\",\n  \"repository\": {\n    \"type\": \"git\",\n    \"url\": \"git+https://github.com/vercel-labs/nostics.git\",\n    \"directory\": \"packages/unplugin\"\n  },\n  \"bugs\": \"https://github.com/vercel-labs/nostics/issues\",\n  \"keywords\": [\n    \"nostics\",\n    \"unplugin\",\n    \"vite-plugin\",\n    \"diagnostics\"\n  ],\n  \"publishConfig\": {\n    \"access\": \"public\"\n  },\n  \"sideEffects\": false,\n  \"exports\": {\n    \"./dev-server-collector\": \"./dist/dev-server-collector.mjs\",\n    \"./strip-transform\": \"./dist/strip-transform.mjs\",\n    \"./package.json\": \"./package.json\"\n  },\n  \"files\": [\n    \"dist\"\n  ],\n  \"scripts\": {\n    \"build\": \"tsdown\",\n    \"dev\": \"vitest\",\n    \"prepublishOnly\": \"pnpm run build\",\n    \"test\": \"vitest run\",\n    \"typecheck\": \"tsc\"\n  },\n  \"peerDependencies\": {\n    \"nostics\": \"workspace:^\"\n  },\n  \"dependencies\": {\n    \"magic-string\": \"catalog:deps\",\n    \"oxc-parser\": \"catalog:deps\",\n    \"unplugin\": \"catalog:deps\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"catalog:types\",\n    \"esbuild\": \"catalog:cli\",\n    \"nostics\": \"workspace:*\",\n    \"publint\": \"catalog:cli\",\n    \"tsdown\": \"catalog:cli\",\n    \"tsnapi\": \"catalog:testing\",\n    \"typescript\": \"catalog:cli\",\n    \"vite\": \"catalog:cli\",\n    \"vitest\": \"catalog:testing\"\n  }\n}\n"
+    },
+    {
+      "path": "__snapshots__/tsnapi/index.snapshot.d.ts",
+      "sha": null,
+      "content_sha256": "ce134f0dfd91802db2077d89a462b43c549ce82090786b4979c719b3ebdc2542",
+      "score": 106,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics`\n */\n// #region Interfaces\nexport interface ConsoleReporterOptions {\n  method?: ConsoleMethod;\n  formatter?: (_: Diagnostic<unknown>) => string;\n}\nexport interface DefineDiagnosticsOptions<Codes extends Record<string, DiagnosticDefinition>, Reporters extends readonly AnyDiagnosticReporter[]> {\n  docsBase?: string | ((_: keyof Codes) => string | undefined);\n  codes: Codes;\n  reporters?: Reporters;\n}\nexport interface DefineProdDiagnosticsOptions<Reporters extends readonly AnyDiagnosticReporter[] = readonly AnyDiagnosticReporter[]> {\n  docsBase?: string | ((_: string) => string | undefined);\n  reporters?: Reporters;\n}\nexport interface DiagnosticCallParams {\n  cause?: unknown;\n  sources?: string[];\n}\nexport interface DiagnosticDefinition<P = any, Data extends Record<string, unknown> = Record<string, unknown>> {\n  why: ValueOrFn<string, P>;\n  fix?: ValueOrFn<string, P>;\n  docs?: string | false;\n  data?: ValueOrFn<Data, P>;\n}\nexport interface DiagnosticHandle<Params, ReporterOpts, Data = undefined> {\n  (..._: ActionArgs<Params, ReporterOpts>): Diagnostic<Data>;\n}\nexport interface DiagnosticJSON<Data = unknown> {\n  name: string;\n  why: string;\n  fix?: string;\n  docs?: string;\n  sources?: string[];\n  cause?: unknown;\n  data: Data;\n  stack?: string;\n}\n// #endregion\n\n// #region Types\nexport type _ValueOrFn<T, P = any> = T | ((_: P) => T);\nexport type AnyDiagnosticReporter = (_: Diagnostic<any>, _: any) => void;\nexport type ConsoleMethod = \"log\" | \"error\" | \"warn\";\nexport type DiagnosticInit<Data = undefined> = DiagnosticInitBase & ([Data] extends [undefined] ? {\n  data?: undefined;\n} : {\n  data: Data;\n});\nexport type DiagnosticReporter<ReporterOpts extends object = object, Data = any> = (_: Diagnostic<Data>, _: ReporterOpts) => void;\nexport type Diagnostics<Codes extends Record<string, DiagnosticDefinition>, Reporters extends readonly AnyDiagnosticReporter[], DataOverride = never> = { [Code in keyof Codes]: DiagnosticHandle<InferCodeParams<Codes[Code]>, Prettify<ExtractReportersOptions<Reporters>>, [DataOverride] extends [never] ? InferCodeData<Codes[Code]> : DataOverride>; };\n// #endregion\n\n// #region Classes\nexport declare class Diagnostic<Data = undefined> extends Error {\n  name: string;\n  code: string;\n  docs?: string;\n  fix?: string;\n  sources?: string[];\n  data: Data;\n  get why(): string;\n  constructor(_: DiagnosticInit<Data>, _?: StackTraceFrame);\n  toJSON(): DiagnosticJSON<Data>;\n}\n// #endregion\n\n// #region Functions\nexport declare function createConsoleReporter({ method: defaultMethod, formatter }?: ConsoleReporterOptions): DiagnosticReporter<{\n  method?: ConsoleMethod;\n}>;\nexport declare function defineDiagnostics<const Codes extends Record<string, DiagnosticDefinition>, const Reporters extends readonly AnyDiagnosticReporter[]>(_: DefineDiagnosticsOptions<Codes, Reporters>): Diagnostics<Codes, Reporters>;\nexport declare function defineProdDiagnostics<const Codes extends Record<string, DiagnosticDefinition> = Record<string, DiagnosticDefinition>, const Reporters extends readonly AnyDiagnosticReporter[] = readonly AnyDiagnosticReporter[]>(_?: DefineProdDiagnosticsOptions<Reporters>): Diagnostics<Codes, Reporters, undefined>;\nexport declare function formatDiagnostic(_: Diagnostic<unknown>): string;\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/index.snapshot.js",
+      "sha": null,
+      "content_sha256": "ac60ae38f45b20f89502419cddc90d22e388e203bc586c9d671ee8ae49702653",
+      "score": 106,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics`\n */\n// #region Classes\nexport class Diagnostic extends Error {\n  get why() {}\n  constructor(_, _) {}\n  toJSON() {}\n}\n// #endregion\n\n// #region Functions\nexport function createConsoleReporter(_) {}\nexport function defineDiagnostics(_) {}\nexport function defineProdDiagnostics(_) {}\nexport function formatDiagnostic(_) {}\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/formatters/json.snapshot.js",
+      "sha": null,
+      "content_sha256": "f35b9ee455ec36716da8563cdf1896c9c5e6005ae8da3dc5e5d53370c9df42e1",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/formatters/json`\n */\n// #region Variables\nexport var jsonFormatter /* const */\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/reporters/node.snapshot.js",
+      "sha": null,
+      "content_sha256": "aa4c901153f94cccc5c1e2065323ba06605034533547edcb8a509571cd727298",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/reporters/node`\n */\n// #region Functions\nexport function createFileReporter(_) {}\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/formatters/ansi.snapshot.js",
+      "sha": null,
+      "content_sha256": "f8064a6c2c1cbd13e5a1ebc5eefac107a80efba23964211dc5c77e7bf0e5121e",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/formatters/ansi`\n */\n// #region Functions\nexport function ansiFormatter(_) {}\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/reporters/dev.snapshot.d.ts",
+      "sha": null,
+      "content_sha256": "041be30ce255024c8494ffac845da4696ab3baa7fc0ea4814d224a5e52fa5a46",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/reporters/dev`\n */\n// #region Functions\nexport declare function createDevReporter(): DiagnosticReporter;\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/reporters/dev.snapshot.js",
+      "sha": null,
+      "content_sha256": "09da409979fc6cd188d31406eb6a1262ffec75fa43d1626fc230b4c9c4229f34",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/reporters/dev`\n */\n// #region Functions\nexport function createDevReporter() {}\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/formatters/ansi.snapshot.d.ts",
+      "sha": null,
+      "content_sha256": "0319d8f8aaa0f8ec6cf48287ff06b5a0c582d114e1cfaff82dec4fe104e3e3a2",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/formatters/ansi`\n */\n// #region Interfaces\nexport interface Colors {\n  red: (_: string) => string;\n  yellow: (_: string) => string;\n  cyan: (_: string) => string;\n  gray: (_: string) => string;\n  bold: (_: string) => string;\n  dim: (_: string) => string;\n}\n// #endregion\n\n// #region Functions\nexport declare function ansiFormatter(_: Colors): (_: Diagnostic<unknown>) => string;\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/reporters/node.snapshot.d.ts",
+      "sha": null,
+      "content_sha256": "3fd21c2352e3957b52007eb7863248c22cc7fde563e5cbee5cf822978e7239df",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/reporters/node`\n */\n// #region Interfaces\nexport interface FileReporterOptions {\n  logFile?: string;\n  excludeStackFrames?: readonly RegExp[];\n}\n// #endregion\n\n// #region Functions\nexport declare function createFileReporter(_?: FileReporterOptions): DiagnosticReporter;\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/formatters/json.snapshot.d.ts",
+      "sha": null,
+      "content_sha256": "99e877026471f066d2131323118e9b3898d642f30d941e7e29676749913024fc",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/formatters/json`\n */\n// #region Variables\nexport declare const jsonFormatter: (d: Diagnostic<unknown>) => string;\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/reporters/fetch.snapshot.js",
+      "sha": null,
+      "content_sha256": "1f2e837c6e360c022dce79e806bfd64f9f5264eaa9088a49af1c002db1b1c5b3",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/reporters/fetch`\n */\n// #region Functions\nexport function createFetchReporter(_) {}\n// #endregion"
+    },
+    {
+      "path": "__snapshots__/tsnapi/reporters/fetch.snapshot.d.ts",
+      "sha": null,
+      "content_sha256": "6dc4482496370f2a2952233b7303c5431e9f8be0ee28fe9673bc39e4282d851b",
+      "score": 104,
+      "content": "/**\n * Generated by tsnapi — public API snapshot of `nostics/reporters/fetch`\n */\n// #region Functions\nexport declare function createFetchReporter(_: string): DiagnosticReporter;\n// #endregion"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T18:45:06.161006+00:00"
+}
