@@ -1,0 +1,83 @@
+name: collection-modelparams-asset-review
+
+on:
+  pull_request:
+    paths:
+      - "COLLECTION/SECURITY/ASSET-REVIEW-modelparams.dev-2026-10-27.md"
+      - ".github/workflows/collection-modelparams-asset-review.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collection-modelparams-asset-review
+  cancel-in-progress: true
+
+jobs:
+  review-pinned-asset:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout review record
+        uses: actions/checkout@v4
+      - name: Checkout exact upstream revision without persisted credentials
+        uses: actions/checkout@v4
+        with:
+          repository: mnfst/modelparams.dev
+          ref: 0d09d9a3fb642770430fb357e3c72f8e7d9f1f67
+          path: candidate
+          persist-credentials: false
+      - name: Verify exact revision, package version, license, and runtime dependency boundary
+        working-directory: candidate
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import { execFileSync } from "node:child_process";
+          const expected = "0d09d9a3fb642770430fb357e3c72f8e7d9f1f67";
+          const actual = execFileSync("git", ["rev-parse", "HEAD"], {encoding:"utf8"}).trim();
+          if (actual !== expected) throw new Error("source revision mismatch");
+          const pkg = JSON.parse(fs.readFileSync("packages/modelparams/package.json", "utf8"));
+          if (pkg.version !== "0.0.72" || pkg.license !== "MIT") throw new Error("package version/license mismatch");
+          if (pkg.dependencies && Object.keys(pkg.dependencies).length) throw new Error("runtime package must remain zero-dependency");
+          const license = fs.readFileSync("LICENSE", "utf8");
+          if (!license.startsWith("MIT License")) throw new Error("upstream license file is not MIT");
+          console.log(JSON.stringify({revision:actual,package:pkg.name,version:pkg.version,license:pkg.license,runtimeDependencies:Object.keys(pkg.dependencies||{}).length}));
+          NODE
+      - name: Install locked development dependencies without lifecycle scripts
+        working-directory: candidate
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run modelparams package tests
+        working-directory: candidate
+        run: npm test --workspace packages/modelparams
+      - name: Build the pinned package
+        working-directory: candidate
+        run: npm run build --workspace packages/modelparams
+      - name: Audit production dependencies for the package workspace
+        working-directory: candidate
+        run: npm audit --omit=dev --workspace packages/modelparams
+      - name: Check runtime source for ambient I/O and dynamic execution
+        working-directory: candidate
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import path from "node:path";
+          const root = "packages/modelparams/src";
+          const forbidden = /from\s+["']node:(?:child_process|fs|net|http|https|tls|dgram|vm|worker_threads)["']|require\(["'](?:node:)?(?:child_process|fs|net|http|https|tls|vm)["']\)|process\.env|\beval\s*\(|new\s+Function\s*\(|\bfetch\s*\(/;
+          const files = [];
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, {withFileTypes:true})) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) walk(full);
+              else if (/\.(?:ts|tsx|js|mjs|cjs)$/.test(entry.name)) files.push(full);
+            }
+          }
+          walk(root);
+          const hits = [];
+          for (const file of files) {
+            const source = fs.readFileSync(file, "utf8");
+            if (forbidden.test(source)) hits.push(file);
+          }
+          if (hits.length) throw new Error("runtime source contains forbidden ambient I/O/dynamic execution patterns: " + hits.join(", "));
+          console.log("runtime source boundary: PASS (" + files.length + " files checked)");
+          NODE
