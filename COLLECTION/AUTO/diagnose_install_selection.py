@@ -26,6 +26,7 @@ def main() -> None:
     items = queue.get("items", [])
     if not isinstance(rows, list) or not isinstance(items, list):
         raise SystemExit("invalid manifest/value-queue shape; no diagnosis possible")
+    quarantined = load_quarantined_revisions()
     license_counts = Counter(str(row.get("license") or "<missing>") for row in rows if isinstance(row, dict))
     global_eligible = []
     for row in rows:
@@ -46,7 +47,6 @@ def main() -> None:
         for row in rows
         if isinstance(row, dict) and isinstance(row.get("canonical_source"), str)
     }
-    quarantined = load_quarantined_revisions()
     queue_gates = Counter()
     source_gates = Counter()
     shortlist = []
