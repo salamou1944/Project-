@@ -633,6 +633,9 @@ def preserved_record(item, mode="preserved_after_refresh_failure"):
     if item.get("revision_sha") and data.get("revision_sha") != item.get("revision_sha"):
         return None
     kept = dict(item)
+    if not kept.get("license") and data.get("license"):
+        kept["license"] = data.get("license")
+        kept["license_source"] = "github_repository_metadata_at_extraction"
     kept["files_extracted"] = sum(
         1 for f in data.get("files", [])
         if isinstance(f, dict) and not f.get("error")
