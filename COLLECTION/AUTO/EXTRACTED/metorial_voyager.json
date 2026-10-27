@@ -1,0 +1,203 @@
+{
+  "canonical_source": "github:metorial/voyager",
+  "repo": "metorial/voyager",
+  "revision_sha": "8e7348d2ba1bbbbad53acd531405ca8c86f66500",
+  "default_branch": "main",
+  "pushed_at": "2026-04-08T15:09:07Z",
+  "repo_updated_at": "2026-04-08T15:10:56Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/legal.yml",
+      "sha": null,
+      "content_sha256": "f52858bc0cb064316bb598045d620ece5230ddd6f7d96444199dbc2da5755877",
+      "score": 126,
+      "content": "name: Check Legal Boilerplate\n\non:\n  pull_request:\n    types: [opened, edited, synchronize, reopened]\n\njobs:\n  legal:\n    permissions:\n      pull-requests: write\n      contents: read\n    uses: metorial/.github/.github/workflows/legal-boilerplate.yml@main\n"
+    },
+    {
+      "path": ".github/workflows/publish.yml",
+      "sha": null,
+      "content_sha256": "d9eefb3a9fc1527c2242a05e87085d25c40be45347b170e10f08da59c5d030dc",
+      "score": 126,
+      "content": "name: Build and Publish\n\non:\n  push:\n    branches:\n      - main\n  pull_request:\n    branches:\n      - main\n\nenv:\n  REGISTRY: ghcr.io\n  IMAGE_NAME: metorial/voyager\n\njobs:\n  build-and-publish-docker:\n    name: Build and Publish Docker Image\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n      packages: write\n\n    steps:\n      - name: Checkout repository\n        uses: actions/checkout@v4\n\n      - name: Set up QEMU\n        uses: docker/setup-qemu-action@v3\n\n      - name: Set up Docker Buildx\n        uses: docker/setup-buildx-action@v3\n\n      - name: Log in to Container Registry\n        uses: docker/login-action@v3\n        with:\n          registry: ${{ env.REGISTRY }}\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n\n      - name: Extract metadata for Docker\n        id: meta\n        uses: docker/metadata-action@v5\n        with:\n          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\n          tags: |\n            type=ref,event=branch\n            type=ref,event=pr\n            type=sha\n            type=raw,value=latest,enable={{is_default_branch}}\n\n      - name: Build and push Docker image\n        uses: docker/build-push-action@v5\n        with:\n          context: ./service\n          file: ./service/Dockerfile\n          platforms: linux/amd64,linux/arm64\n          push: ${{ github.event_name != 'pull_request' }}\n          tags: ${{ steps.meta.outputs.tags }}\n          labels: ${{ steps.meta.outputs.labels }}\n          build-args: |\n            SENTRY_AUTH_TOKEN=${{ secrets.SENTRY_AUTH_TOKEN }}\n"
+    },
+    {
+      "path": "package.json",
+      "sha": null,
+      "content_sha256": "73da1d3ec28b6d473eaac72d2e8512c680aeae0ae8037d65d6e33d37e553b50d",
+      "score": 120,
+      "content": "{\n  \"name\": \"@metorial/voyager-root\",\n  \"private\": true,\n  \"scripts\": {\n    \"dev\": \"cd ./service && bun dev\"\n  },\n  \"devDependencies\": {\n    \"prettier\": \"^3.5.3\",\n    \"turbo\": \"^2.5.5\",\n    \"typescript\": \"5.8.2\"\n  },\n  \"engines\": {\n    \"node\": \">=18\",\n    \"bun\": \">=1.2.15\"\n  },\n  \"packageManager\": \"bun@1.2.15\",\n  \"workspaces\": [\n    \"service\",\n    \"packages/*\",\n    \"clients/*\"\n  ],\n  \"dependencies\": {\n    \"npm-run-all\": \"^4.1.5\"\n  }\n}"
+    },
+    {
+      "path": "service/docker-compose.dev.yml",
+      "sha": null,
+      "content_sha256": "9cfabe18d18756b2591c48e76b3b89d386dc7c6d9a2675736473cbeea65b075b",
+      "score": 118,
+      "content": "version: '3.8'\n\nservices:\n  postgres:\n    image: postgres:16-alpine\n    container_name: voyager-postgres\n    restart: unless-stopped\n    ports:\n      - \"25432:5432\"\n    environment:\n      POSTGRES_USER: voyager\n      POSTGRES_PASSWORD: voyager\n      POSTGRES_DB: voyager\n    volumes:\n      - postgres_data2:/var/lib/postgresql/data\n    networks:\n      - voyager-network\n\n  redis:\n    image: redis:7-alpine\n    container_name: voyager-redis\n    restart: unless-stopped\n    networks:\n      - voyager-network\n\n  voyager:  \n    build:\n      context: .\n      dockerfile: dev.Dockerfile\n    container_name: voyager-service\n    restart: unless-stopped\n    ports:\n      - \"52060:52060\"\n    environment:\n      DATABASE_URL: postgresql://voyager:voyager@postgres:5432/voyager\n      SEARCH_DATABASE_URL: postgresql://voyager:voyager@postgres:5432/voyager-search\n      REDIS_URL: redis://redis:6379/0\n    volumes:\n      - ./src:/app/src:ro\n      - ./package.json:/app/package.json:ro\n      - ./tsconfig.json:/app/tsconfig.json:ro\n    depends_on:\n      - postgres\n      - redis\n    networks:\n      - voyager-network\n\nvolumes:\n  postgres_data2:\n    driver: local\n\nnetworks:\n  voyager-network:\n    driver: bridge\n"
+    },
+    {
+      "path": "service/package.json",
+      "sha": null,
+      "content_sha256": "6039f9ec11ae7876bfd8f1f9367a6ea25850d33ef8e393b96a150d36ce3527ca",
+      "score": 118,
+      "content": "{\n  \"name\": \"voyager-service\",\n  \"module\": \"index.ts\",\n  \"type\": \"commonjs\",\n  \"private\": true,\n  \"scripts\": {\n    \"start\": \"bun run server:start\",\n    \"server:build\": \"ncc build ./src/server.ts -o ./dist --source-map --transpile-only && bun run sentry:sourcemaps\",\n    \"sentry:sourcemaps\": \"sentry-cli sourcemaps inject --org metorial --project mte-voyager ./dist && sentry-cli sourcemaps upload --org metorial --project mte-voyager ./dist\",\n    \"server:start\": \"bun ./dist/index.js\",\n    \"dev\": \"docker compose -p voyager -f ./docker-compose.dev.yml up --pull always --build voyager\"\n  },\n  \"devDependencies\": {\n    \"@types/bun\": \"latest\",\n    \"@types/node\": \"^25.0.3\",\n    \"@vercel/ncc\": \"^0.38.1\",\n    \"@vitest/coverage-v8\": \"^4.0.16\",\n    \"@vitest/ui\": \"^4.0.16\",\n    \"vitest\": \"^4.0.16\"\n  },\n  \"peerDependencies\": {\n    \"typescript\": \"^5\"\n  },\n  \"dependencies\": {\n    \"@aws-sdk/client-cloudwatch-logs\": \"^3.957.0\",\n    \"@aws-sdk/client-iam\": \"^3.957.0\",\n    \"@aws-sdk/client-lambda\": \"^3.958.0\",\n    \"@lowerdeck/api-mux\": \"^1.0.2\",\n    \"@lowerdeck/cache\": \"^1.0.1\",\n    \"@lowerdeck/canonicalize\": \"^1.0.4\",\n    \"@lowerdeck/cron\": \"^1.0.7\",\n    \"@lowerdeck/encryption\": \"^1.0.7\",\n    \"@lowerdeck/env\": \"^1.0.4\",\n    \"@lowerdeck/error\": \"^1.1.0\",\n    \"@lowerdeck/hash\": \"^1.0.4\",\n    \"@lowerdeck/id\": \"^1.0.6\",\n    \"@lowerdeck/once\": \"^1.0.4\",\n    \"@lowerdeck/pagination\": \"^1.0.5\",\n    \"@lowerdeck/queue\": \"^1.0.7\",\n    \"@lowerdeck/rpc-client\": \"^1.1.0\",\n    \"@lowerdeck/rpc-server\": \"^1.0.7\",\n    \"@lowerdeck/sentry\": \"^1.0.2\",\n    \"@lowerdeck/service\": \"^1.0.3\",\n    \"@lowerdeck/slugify\": \"^1.0.5\",\n    \"@lowerdeck/validation\": \"^1.0.4\",\n    \"@metorial-services/forge-client\": \"^1.0.3\",\n    \"@prisma/adapter-pg\": \"^7.2.0\",\n    \"@prisma/client\": \"^7.2.0\",\n    \"@prisma/extension-read-replicas\": \"^0.5.0\",\n    \"@sentry/bun\": \"^10.38.0\",\n    \"@sentry/cli\": \"^3.2.0\",\n    \"@types/pg\": \"^8.16.0\",\n    \"algoliasearch\": \"^5.48.1\",\n    \"axios\": \"^1.13.2\",\n    \"date-fns\": \"^4.1.0\",\n    \"drizzle-orm\": \"^0.45.1\",\n    \"ipaddr.js\": \"^2.3.0\",\n    \"jszip\": \"^3.10.1\",\n    \"object-storage-client\": \"^0.2.5\",\n    \"pg\": \"^8.16.3\",\n    \"prisma\": \"^7.2.0\",\n    \"prisma-json-types-generator\": \"^4.0.1\",\n    \"snowflake-uuid\": \"^1.0.0\",\n    \"yaml\": \"^2.8.2\"\n  }\n}\n"
+    },
+    {
+      "path": "clients/typescript/package.json",
+      "sha": null,
+      "content_sha256": "934093caa76f1190c8866ce3c75ff91c9b29323d5966fd32824d1bdc3383a352",
+      "score": 116,
+      "content": "{\n  \"name\": \"@metorial-services/voyager-client\",\n  \"version\": \"1.0.1\",\n  \"publishConfig\": {\n    \"access\": \"public\"\n  },\n  \"files\": [\n    \"src/**\",\n    \"dist/**\",\n    \"README.md\",\n    \"package.json\"\n  ],\n  \"author\": \"Tobias Herber\",\n  \"license\": \"Apache 2\",\n  \"type\": \"module\",\n  \"source\": \"src/index.ts\",\n  \"exports\": {\n    \"types\": \"./dist/index.d.ts\",\n    \"require\": \"./dist/index.cjs\",\n    \"import\": \"./dist/index.module.js\",\n    \"default\": \"./dist/index.module.js\"\n  },\n  \"main\": \"./dist/index.cjs\",\n  \"module\": \"./dist/index.module.js\",\n  \"types\": \"dist/index.d.ts\",\n  \"unpkg\": \"./dist/index.umd.js\",\n  \"scripts\": {\n    \"test\": \"vitest run --passWithNoTests\",\n    \"lint\": \"prettier src/**/*.ts --check\",\n    \"build\": \"rm -rf ./dist && microbundle && dts-bundle-generator --config dts-bundle-generator.config.json\",\n    \"prepublish\": \"bun run build\"\n  },\n  \"dependencies\": {\n    \"@lowerdeck/rpc-client\": \"^1.1.0\"\n  },\n  \"devDependencies\": {\n    \"@types/node\": \"^25.0.3\",\n    \"dts-bundle-generator\": \"^9.5.1\",\n    \"microbundle\": \"^0.15.1\",\n    \"typescript\": \"^5.8.3\",\n    \"vitest\": \"^3.1.2\"\n  }\n}"
+    },
+    {
+      "path": "service/src/utils/searchQuery.ts",
+      "sha": null,
+      "content_sha256": "077baa3533c50afca17b8ade13c31d9dcfb27bfaaff40a43552e7e7edc4b5180",
+      "score": 104,
+      "content": "let SEARCH_QUERY_MAX_LENGTH = 512;\n\nexport let normalizeSearchQuery = (query: string) =>\n  query\n    .replace(/[^\\p{L}\\p{N}\\s]+/gu, ' ')\n    .replace(/\\s+/g, ' ')\n    .trim()\n    .slice(0, SEARCH_QUERY_MAX_LENGTH);\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "401154a0e667a80d4333593c74812ab8d8a77c72346bdc224af024dfad7808af",
+      "score": 100,
+      "content": "# Voyager\n\nVoyager is a multi-tenant search and indexing service that provides full-text search and structured data filtering capabilities. It organizes documents in hierarchical indexes and searches them efficiently with tenant isolation.\n\n## Features\n\n- **Multi-Tenant Architecture**: Complete tenant isolation with tenant-specific record filtering\n- **Hierarchical Organization**: Source, Index, and Record hierarchy for logical data organization\n- **Full-Text Search**: PostgreSQL-based full-text search with English language support\n- **Structured Data Filtering**: JSON/JSONB filtering on document fields\n- **Asynchronous Processing**: Queue-based indexing and deletion for high throughput\n- **Document Versioning**: Hash-based change detection prevents duplicate indexing\n- **Tenant-Specific Records**: Records can be associated with specific tenants or made globally available\n- **Metadata Support**: Store additional metadata alongside searchable content\n\n## Quick Start\n\n### Using Docker Compose\n\nCreate a `docker-compose.yml` file:\n\n```yaml\nversion: '3.8'\n\nservices:\n  postgres:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: voyager\n      POSTGRES_PASSWORD: voyager\n      POSTGRES_DB: voyager\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n    networks:\n      - voyager-network\n\n  postgres-search:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: voyager\n      POSTGRES_PASSWORD: voyager\n      POSTGRES_DB: voyager-search\n    volumes:\n      - postgres_search_data:/var/lib/postgresql/data\n    networks:\n      - voyager-network\n\n  redis:\n    image: redis:7-alpine\n    networks:\n      - voyager-network\n\n  voyager:\n    image: ghcr.io/metorial/voyager:latest\n    ports:\n      - \"52060:52060\"\n    environment:\n      DATABASE_URL: postgresql://voyager:voyager@postgres:5432/voyager\n      SEARCH_DATABASE_URL: postgresql://voyager:voyager@postgres-search:5432/voyager-search\n      REDIS_URL: redis://redis:6379/0\n    depends_on:\n      - postgres\n      - postgres-search\n      - redis\n    networks:\n      - voyager-network\n\nvolumes:\n  postgres_data:\n  postgres_search_data:\n\nnetworks:\n  voyager-network:\n    driver: bridge\n```\n\nStart the services:\n\n```bash\ndocker-compose up -d\n```\n\nThe Voyager service will be available at `http://localhost:52060`\n\n## TypeScript Client\n\n### Installation\n\n```bash\nnpm install @metorial-services/voyager-client\nyarn add @metorial-services/voyager-client\nbun add @metorial-services/voyager-client\n```\n\n### Basic Usage\n\n```typescript\nimport { createVoyagerClient } from '@metorial-services/voyager-client';\n\nlet client = createVoyagerClient({\n  endpoint: 'http://localhost:52060',\n});\n```\n\n### Core API Examples\n\n#### 1. Tenant Management\n\nTenants provide isolation for multi-tenant applications:\n\n```typescript\n// Create/update a tenant\nlet tenant = await client.tenant.upsert({\n  name: 'Acme Corporation',\n  identifier: 'acme-corp',\n});\n\n// Get a tenant\nlet retrievedTenant = await client.tenant.get({\n  tenantId: tenant.id,\n});\n```\n\n#### 2. Source Management\n\nSources are top-level containers for organizing related indexes:\n\n```typescript\n// Create/update a source\nlet source = await client.source.upsert({\n  name: 'Documentation',\n  identifier: 'docs',\n});\n\n// Get a source\nlet retrievedSource = await client.source.get({\n  sourceId: source.id,\n});\n```\n\n#### 3. Index Management\n\nIndexes define searchable collections within a source:\n\n```typescript\n// Create/update an index\nlet index = await client.index.upsert({\n  sourceId: source.id,\n  name: 'API Reference',\n  identifier: 'api-reference',\n});\n\n// Get an index\nlet retrievedIndex = await client.index.get({\n  sourceId: source.id,\n  indexId: index.id,\n});\n```\n\n#### 4. Indexing Records\n\nAdd searchable documents to an index:\n\n```typescript\n// Index a document (async operation)\nlet record = await client.record.index({\n  sourceId: source.id,\n  indexId: index.id,\n  documentId: 'doc-123',\n  body: 'This is the searchable content of the document.',\n  fields: {\n    title: 'Getting Started',\n    category: 'guides',\n    tags: ['tutorial', 'beginner'],\n  },\n  metadata: {\n    author: 'John Doe',\n    version: '1.0',\n  },\n});\n\n// Index a tenant-specific document\nlet tenantRecord = await client.record.index({\n  sourceId: source.id,\n  indexId: index.id,\n  documentId: 'doc-456',\n  tenantIds: [tenant.id],\n  body: 'This document is only visible to specific tenants.',\n  fields: {\n    title: 'Private Document',\n    visibility: 'private',\n  },\n});\n\n// Index a document with structured body\nlet structuredRecord = await client.record.index({\n  sourceId: source.id,\n  indexId: index.id,\n  documentId: 'doc-789',\n  body: {\n    title: 'API Documentation',\n    description: 'Complete API reference',\n    sections: ['authentication', 'endpoints', 'examples'],\n  },\n  fields: {\n    type: 'api-docs',\n    version: '2.0',\n  },\n});\n```\n\n#### 5. Searching Records\n\nSearch indexed documents with full-text queries and structured filters:\n\n```typescript\n// Basic full-text search\nlet results = await client.record.search({\n  tenantId: tenant.id,\n  sourceId: source.id,\n  indexId: index.id,\n  query: 'getting started tutorial',\n});\n\nfor (let record of results) {\n  console.log('Document ID:', record.documentId);\n  console.log('Body:', record.body);\n  console.log('Fields:', record.fields);\n  console.log('Metadata:', record.metadata);\n}\n\n// Search with JSON field filters\nlet filteredResults = await client.record.search({\n  tenantId: tenant.id,\n  sourceId: source.id,\n  indexId: index.id,\n  query: 'authentication',\n  filters: {\n    category: 'guides',\n    tags: ['tutorial'],\n  },\n});\n\n// Search with complex filters\nlet advancedResults = await client.record.search({\n  tenantId: tenant.id,\n  sourceId: source.id,\n  indexId: index.id,\n  query: 'api endpoints',\n  filters: {\n    type: 'api-docs',\n    version: '2.0',\n  },\n});\n```\n\n#### 6. Retrieving Records\n\nGet specific records by ID:\n\n```typescript\n// Get a record\nlet record = await client.record.get({\n  tenantId: tenant.id,\n  recordId: 'record-id',\n});\n\nconsole.log('Document ID:', record.documentId);\nconsole.log('Body:', record.body);\nconsole.log('Fields:', record.fields);\nconsole.log('Metadata:', record.metadata);\nconsole.log('Hash:', record.hash);\nconsole.log('Is Tenant Specific:', record.isTenantSpecific);\n```\n\n#### 7. Deleting Records\n\nRemove documents from an index:\n\n```typescript\n// Delete records (async operation)\nlet result = await client.record.delete({\n  sourceId: source.id,\n  indexId: index.id,\n  documentIds: ['doc-123', 'doc-456', 'doc-789'],\n});\n\nconsole.log('Success:', result.success);\n```\n\n## Architecture\n\nVoyager uses a layered architecture:\n\n- **Primary Database**: PostgreSQL stores tenant, source, index, and record metadata\n- **Search Database**: Dedicated PostgreSQL instance with full-text search indexes\n- **Message Queue**: Redis queues asynchronous indexing and deletion operations\n- **Worker Processors**: Background workers consume queue tasks and update search indexes\n\nRecords are automatically deduplicated using content hashing. If a record's body and fields haven't changed, re-indexing is skipped.\n\n## License\n\nThis project is licensed under the Apache License 2.0.\n"
+    },
+    {
+      "path": "clients/typescript/README.md",
+      "sha": null,
+      "content_sha256": "2dedcb4e73d1e35c5587326fef32f650bac4505ccbc1f0f3034fb435c9487def",
+      "score": 96,
+      "content": "# Metorial Voyager Client\n\nA client library for interacting with the Metorial Voyager platform using TypeScript.\n\n## Usage \n\n```ts\nimport { createVoyagerClient } from '@lowerdeck/voyager-client';\n\nlet voyager = createVoyagerClient({\n  endpoint: '...'\n});\n```\n\n## License\n\nThis project is licensed under the Apache License 2.0.\n\n<div align=\"center\">\n  <sub>Built with ❤️ by <a href=\"https://metorial.com\">Metorial</a></sub>\n</div>\n"
+    },
+    {
+      "path": "service/vitest.config.ts",
+      "sha": null,
+      "content_sha256": "a28b338e3c43cd43ed06b1a7f9202ca63f38e47d51e787fe197e2738cb413ced",
+      "score": 93,
+      "content": "import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({\n  test: {\n    globals: true,\n    environment: 'node',\n    exclude: [\n      '**/node_modules/**',\n      '**/dist/**',\n      '**/e2e/**' // E2E tests run in Docker\n    ],\n    coverage: {\n      provider: 'v8',\n      reporter: ['text', 'json', 'html'],\n      exclude: [\n        'node_modules/**',\n        'dist/**',\n        '**/*.d.ts',\n        '**/*.config.ts',\n        '**/prisma/**',\n        'tests/**',\n        'src/server.ts',\n        'src/worker.ts',\n        'src/db.ts',\n        'src/storage.ts',\n        'src/env.ts',\n        'src/id.ts'\n      ]\n    },\n    testTimeout: 30000,\n    hookTimeout: 30000\n  }\n});\n"
+    },
+    {
+      "path": "service/dev.Dockerfile",
+      "sha": null,
+      "content_sha256": "d9056db7794a2897d99ecd8d2818743f0286f0e301ec5372a4aca2d091a7e273",
+      "score": 83,
+      "content": "FROM oven/bun:1\n\nWORKDIR /app\n\n# Copy package files\nCOPY package.json bun.lock* ./\n\n# Install dependencies\nRUN bun install\n\n# Copy source code\nCOPY . .\n\n# Expose port\nEXPOSE 51001\n\n# Run in dev mode with hot reloading\nCMD [\"sh\", \"-c\", \"bun prisma db push && bun --watch src/server.ts\"]\n"
+    },
+    {
+      "path": "service/Dockerfile",
+      "sha": null,
+      "content_sha256": "a5efc9e80fe493a33d45ebffe15e7ba7b8f4e72b5c7ec8dce33cc12c535d853f",
+      "score": 83,
+      "content": "FROM oven/bun:1 AS base\n\n# Install curl for health checks\nRUN apt-get update && \\\n    apt-get install -y curl && \\\n    apt-get clean && \\\n    rm -rf /var/lib/apt/lists/*\n\nWORKDIR /app\n\n# Dependencies stage\nFROM base AS deps\n\n# Copy package files\nCOPY package.json bun.lock* ./\n\n# Install dependencies (production only)\nRUN bun install --frozen-lockfile --production\n\n# Build stage\nFROM base AS builder\n\nARG SENTRY_AUTH_TOKEN\nENV SENTRY_AUTH_TOKEN=[REDACTED]}\n\n# Copy package files\nCOPY package.json bun.lock* ./\n\n# Install all dependencies (including devDependencies for Prisma generation)\nRUN bun install --frozen-lockfile\n\n# Copy Prisma schema\nCOPY prisma ./prisma\nCOPY prisma.config.ts ./prisma.config.ts\n\n# Generate Prisma client\nRUN bun prisma generate\n\n# Copy source code\nCOPY src ./src\nCOPY tsconfig.json ./tsconfig.json\n\n# Build bundle\nRUN bun run server:build\n\n# Production stage\nFROM base AS runner\n\nWORKDIR /app\n\n# Copy dependencies from deps stage\nCOPY --from=deps /app/node_modules ./node_modules\n\n# Copy generated Prisma client from builder\nCOPY --from=builder /app/prisma/generated ./prisma/generated\n\n# Copy Prisma schema (needed for db push)\nCOPY --from=builder /app/prisma ./prisma\nCOPY --from=builder /app/prisma.config.ts ./prisma.config.ts\n\n# Copy built bundle\nCOPY --from=builder /app/dist ./dist\nCOPY --from=builder /app/package.json ./package.json\n\n# Create non-root user for security\nRUN groupadd -r metorial && useradd -r -g metorial metorial && \\\n    chown -R metorial:metorial /app\n\nUSER metorial\n\n# Expose port\nEXPOSE 52060\n\n# Health check using curl\nHEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \\\n    CMD curl -f http://localhost:52060/ping && curl -f http://localhost:12121/ || exit 1\n\n# Start command: push schema and start service\nCMD [\"sh\", \"-c\", \"bun prisma db push --accept-data-loss && bun ./dist/index.js\"]\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "turbo.json",
+      "sha": null,
+      "content_sha256": "00a3edf0d9b2d11dab95c57534abf651b290faaa16d1307dcf05e35d0168ff78",
+      "score": 35,
+      "content": "{\n  \"$schema\": \"https://turborepo.com/schema.json\",\n  \"ui\": \"tui\",\n  \"tasks\": {\n    \"enterprise:dev\": {\n      \"cache\": false,\n      \"persistent\": true\n    },\n    \"build\": {\n      \"dependsOn\": [\n        \"^build\"\n      ]\n    },\n    \"prisma:generate\": {\n      \"dependsOn\": [\n        \"^prisma:generate\"\n      ]\n    },\n    \"generate:client\": {\n      \"dependsOn\": [\n        \"^generate:client\"\n      ],\n      \"cache\": false\n    },\n    \"generate:client:dashboard\": {\n      \"dependsOn\": [\n        \"^generate:client:dashboard\"\n      ],\n      \"cache\": false\n    },\n    \"prisma:push\": {\n      \"cache\": false,\n      \"dependsOn\": [\n        \"^prisma:push\"\n      ],\n      \"env\": [\n        \"DATABASE_URL\",\n        \"PAYMENT_DATABASE_URL\",\n        \"FEDERATION_CORE_DATABASE_URL\"\n      ]\n    },\n    \"frontend:build\": {\n      \"cache\": false,\n      \"dependsOn\": [\n        \"^frontend:build\"\n      ],\n      \"env\": [\n        \"SENTRY_AUTH_TOKEN\",\n        \"METORIAL_ENV\",\n        \"VITE_*\"\n      ]\n    },\n    \"deploy:only\": {\n      \"env\": [\n        \"SENTRY_AUTH_TOKEN\",\n        \"METORIAL_ENV\",\n        \"VITE_*\",\n        \"CLOUDFLARE_API_TOKEN\",\n        \"CLOUDFLARE_ACCOUNT_ID\"\n      ]\n    },\n    \"deploy\": {\n      \"env\": [\n        \"SENTRY_AUTH_TOKEN\",\n        \"METORIAL_ENV\",\n        \"VITE_*\",\n        \"CLOUDFLARE_API_TOKEN\",\n        \"CLOUDFLARE_ACCOUNT_ID\"\n      ]\n    },\n    \"server:build\": {\n      \"dependsOn\": [\n        \"^build\"\n      ],\n      \"env\": [\n        \"SENTRY_AUTH_TOKEN\",\n        \"METORIAL_ENV\"\n      ]\n    },\n    \"test\": {\n      \"cache\": false,\n      \"dependsOn\": [\n        \"^test\"\n      ]\n    },\n    \"check-types\": {\n      \"dependsOn\": [\n        \"^check-types\"\n      ]\n    },\n    \"dev\": {\n      \"cache\": false,\n      \"persistent\": true\n    }\n  }\n}"
+    },
+    {
+      "path": "service/prisma.config.ts",
+      "sha": null,
+      "content_sha256": "d88cd893867354821933141d2ccd67b8b3322fdf76155ff9c2c4661060660380",
+      "score": 33,
+      "content": "import 'dotenv/config';\nimport { defineConfig } from 'prisma/config';\n\nlet databaseUrl = process.env.DATABASE_URL;\n\nif (\n  !databaseUrl &&\n  process.env.DATABASE_USERNAME &&\n  process.env.DATABASE_PASSWORD &&\n  process.env.DATABASE_HOST &&\n  process.env.DATABASE_PORT &&\n  process.env.DATABASE_NAME\n) {\n  databaseUrl = `postgres://${process.env.DATABASE_USERNAME}:${process.env.DATABASE_PASSWORD}@${process.env.DATABASE_HOST}:${process.env.DATABASE_PORT}/${process.env.DATABASE_NAME}?schema=public&sslmode=no-verify&connection_limit=20`;\n}\n\nexport default defineConfig({\n  schema: 'prisma/schema.prisma',\n  migrations: {\n    path: 'prisma/migrations'\n  },\n  datasource: {\n    url: databaseUrl,\n    shadowDatabaseUrl: process.env['SHADOW_DATABASE_URL']\n  }\n});\n"
+    },
+    {
+      "path": "service/tsconfig.json",
+      "sha": null,
+      "content_sha256": "34b31e00cd314cd14f07455e6aa3208df59de84b3b3d0c2a18d164de093352c0",
+      "score": 33,
+      "content": "{\n  \"compilerOptions\": {\n    // Environment setup & latest features\n    \"lib\": [\"ESNext\"],\n    \"target\": \"ESNext\",\n    \"module\": \"Preserve\",\n    \"moduleDetection\": \"force\",\n    \"jsx\": \"react-jsx\",\n    \"allowJs\": true,\n\n    // Bundler mode\n    \"moduleResolution\": \"bundler\",\n    \"verbatimModuleSyntax\": true,\n    \"noEmit\": true,\n\n    // Best practices\n    \"strict\": true,\n    \"skipLibCheck\": true,\n    \"noFallthroughCasesInSwitch\": false,\n    \"noUncheckedIndexedAccess\": true,\n    \"noImplicitOverride\": true,\n\n    // Some stricter flags (disabled by default)\n    \"noUnusedLocals\": false,\n    \"noUnusedParameters\": false,\n    \"noPropertyAccessFromIndexSignature\": false\n  },\n  \"exclude\": [\n    \"node_modules\",\n    \"tests/e2e\",\n    \"tests/helpers\"\n  ]\n}\n"
+    },
+    {
+      "path": "clients/typescript/tsconfig.dts.json",
+      "sha": null,
+      "content_sha256": "224a2055f522a1ee798d8729bdcc0fe7fdcd52104738b2e493662859d58999fb",
+      "score": 31,
+      "content": "{\n  \"$schema\": \"https://json.schemastore.org/tsconfig\",\n  \"extends\": \"./tsconfig.json\",\n  \"compilerOptions\": {\n    \"skipLibCheck\": true,\n    \"noEmit\": true,\n    \"skipDefaultLibCheck\": true,\n    \"types\": []\n  },\n  \"exclude\": [\n    \"dist\",\n    \"node_modules\",\n    \"../../node_modules/bun-types\"\n  ]\n}\n"
+    },
+    {
+      "path": "clients/typescript/tsconfig.json",
+      "sha": null,
+      "content_sha256": "6b0b4dfb061be640f582d18bb402544f746295c9457e1d0f629605e1a20de001",
+      "score": 31,
+      "content": "{\n  \"$schema\": \"https://json.schemastore.org/tsconfig\",\n  \"display\": \"Default\",\n  \"include\": [\n    \"src\"\n  ],\n  \"compilerOptions\": {\n    \"outDir\": \"dist\",\n    \"composite\": false,\n    \"declaration\": true,\n    \"declarationMap\": true,\n    \"esModuleInterop\": true,\n    \"forceConsistentCasingInFileNames\": true,\n    \"inlineSources\": false,\n    \"isolatedModules\": true,\n    \"moduleResolution\": \"node\",\n    \"module\": \"esnext\",\n    \"lib\": [\n      \"ESNext\",\n      \"DOM\",\n      \"DOM.Iterable\"\n    ],\n    \"target\": \"ESNext\",\n    \"noUnusedLocals\": false,\n    \"noUnusedParameters\": false,\n    \"preserveWatchOutput\": true,\n    \"skipLibCheck\": true,\n    \"strict\": true,\n    \"downlevelIteration\": true,\n    \"resolveJsonModule\": true,\n  },\n  \"exclude\": [\n    \"dist\",\n    \"node_modules\"\n  ]\n}"
+    },
+    {
+      "path": "service/src/instrument.ts",
+      "sha": null,
+      "content_sha256": "c3d794983373fea7f870277abf5deae82c541b15e505ef32f75863ec13639ade",
+      "score": 31,
+      "content": "import { setSentry } from '@lowerdeck/sentry';\nimport * as Sentry from '@sentry/bun';\n\ndeclare global {\n  // eslint-disable-next-line no-var\n  var sentryInitialized: boolean | undefined;\n}\n\nif (\n  process.env.METORIAL_ENV !== 'development' &&\n  !global.sentryInitialized &&\n  process.env.SENTRY_DSN\n) {\n  global.sentryInitialized = true;\n\n  Sentry.init({\n    dsn: process.env.SENTRY_DSN,\n\n    sendDefaultPii: true,\n\n    environment: process.env.METORIAL_ENV,\n\n    beforeSend(event) {\n      if (!event.tags) event.tags = {};\n      event.tags.allocationId = process.env.NOMAD_ALLOC_ID || 'unknown';\n      return event;\n    },\n\n    ignoreErrors: ['The client is closed']\n  });\n\n  setSentry(Sentry as any);\n\n  console.log('Sentry initialized for Bun');\n}\n"
+    },
+    {
+      "path": "service/src/env.ts",
+      "sha": null,
+      "content_sha256": "06fae8a21b34fd51af6a886cd0ae0397698225a6f2fd570855053ae96a1f21d2",
+      "score": 31,
+      "content": "import { createValidatedEnv } from '@lowerdeck/env';\nimport { v } from '@lowerdeck/validation';\n\nexport let env = createValidatedEnv({\n  service: {\n    REDIS_URL: v.string(),\n    DATABASE_URL: v.string(),\n    SEARCH_DATABASE_URL: v.string(),\n    ALGOLIA_APP_ID: v.optional(v.string()),\n    ALGOLIA_API_KEY: [REDACTED],\n    ALGOLIA_INDEX_PREFIX: v.optional(v.string())\n  }\n});\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "service/src/worker.ts",
+      "sha": null,
+      "content_sha256": "13156af575305e52692d85145e24df8bccd90bd970f688a35b1167b4c03bb0d8",
+      "score": 31,
+      "content": "import { runQueueProcessors } from '@lowerdeck/queue';\nimport { cleanupProcessor } from './queues/cleanup';\nimport { deleteRecordQueueProcessor, indexRecordQueueProcessor } from './queues/record';\n\nawait runQueueProcessors([\n  indexRecordQueueProcessor,\n  deleteRecordQueueProcessor,\n  cleanupProcessor\n]);\n"
+    },
+    {
+      "path": "service/src/server.ts",
+      "sha": null,
+      "content_sha256": "884f9eebeefc568314d38c68ad39d3d738d7079c196fd0a8865ba87ff6e2ce6b",
+      "score": 31,
+      "content": "import { createRequire } from 'module';\n\n// Provide CommonJS `require` in ESM runtime for bundled deps.\nconst require = createRequire(import.meta.url);\n// eslint-disable-next-line @typescript-eslint/no-explicit-any\n(globalThis as any).require = require;\n\nasync function main() {\n  await import('./init');\n  await import('./instrument');\n  await import('./endpoints');\n  await import('./worker');\n}\n\nmain().catch(err => {\n  console.error(err);\n  process.exit(1);\n});\n\nif (process.env.HEARTBEAT_URL) {\n  setInterval(() => {\n    fetch(process.env.HEARTBEAT_URL!, { method: 'POST' }).catch(error => {\n      console.error('Failed to send heartbeat:', error);\n    });\n  }, 45 * 1000); // Send heartbeat every 45 seconds\n}\n"
+    },
+    {
+      "path": "clients/typescript/dts-bundle-generator.config.json",
+      "sha": null,
+      "content_sha256": "0e33a9fead96bda3c9df6650b7a096f3145fae822b1a68d5e42f83ad28e13c61",
+      "score": 31,
+      "content": "{\n  \"compilationOptions\": {\n    \"preferredConfigPath\": \"./tsconfig.dts.json\"\n  },\n  \"entries\": [\n    {\n      \"filePath\": \"./src/index.ts\",\n      \"outFile\": \"./dist/index.d.ts\",\n      \"noCheck\": true,\n      \"libraries\": {\n        \"inlinedLibraries\": [\n          \"@lowerdeck/rpc-client\",\n          \"@lowerdeck/rpc-server\",\n          \"@lowerdeck/validation\",\n          \"object-storage-client\"\n        ]\n      }\n    }\n  ]\n}"
+    },
+    {
+      "path": "service/src/backend.ts",
+      "sha": null,
+      "content_sha256": "00b921cafb1cd79b06c1c7e79032bfc0db994175b0a08991fd238846f4f57410",
+      "score": 31,
+      "content": "import { defaultBackend } from './backends';\nimport { AlgoliaBackend } from './backends/algolia';\nimport { db } from './db';\nimport { getId } from './id';\n\nlet isAlgolia = defaultBackend instanceof AlgoliaBackend;\n\nif (isAlgolia) {\n  await db.backend.upsert({\n    where: { identifier: 'algolia' },\n    create: {\n      ...getId('backend'),\n      isDefault: true,\n      identifier: 'algolia',\n      name: 'Algolia',\n      id: 'algolia'\n    },\n    update: { isDefault: true }\n  });\n\n  await db.backend.updateMany({\n    where: { identifier: { not: 'algolia' } },\n    data: { isDefault: false }\n  });\n}\n\nexport let backend = await db.backend.upsert({\n  where: { identifier: 'pg' },\n  create: {\n    ...getId('backend'),\n    isDefault: !isAlgolia,\n    identifier: 'pg',\n    name: 'PostgreSQL',\n    id: 'pg'\n  },\n  update: {\n    isDefault: !isAlgolia\n  }\n});\n"
+    },
+    {
+      "path": "service/src/endpoints.ts",
+      "sha": null,
+      "content_sha256": "d40b1f404e4ea105b8873791b4ec06e37175de731f7e6945402868e0b96a4a6b",
+      "score": 31,
+      "content": "import { RedisClient } from 'bun';\nimport { VoyagerApi } from './controllers';\nimport { db } from './db';\n\nlet server = Bun.serve({\n  fetch: VoyagerApi,\n  port: 52060\n});\n\nconsole.log(`Service running on http://localhost:${server.port}`);\n\nlet redis = new RedisClient(process.env.REDIS_URL?.replace('rediss://', 'redis://'), {\n  tls: process.env.REDIS_URL?.startsWith('rediss://')\n});\n\nBun.serve({\n  fetch: async _ => {\n    try {\n      await db.backend.count();\n\n      await redis.ping();\n\n      return new Response('OK');\n    } catch (e) {\n      return new Response('Service Unavailable', { status: 503 });\n    }\n  },\n  port: 12121\n});\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:21:00.144770+00:00"
+}

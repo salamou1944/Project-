@@ -1,0 +1,83 @@
+{
+  "canonical_source": "github:caprover/goaccess",
+  "repo": "caprover/goaccess",
+  "revision_sha": "5f068a00332e4c37a29460e7e86989a1f9c48e8e",
+  "default_branch": "main",
+  "pushed_at": "2025-12-03T06:08:05Z",
+  "repo_updated_at": "2025-12-03T06:08:09Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/publish_release.yml",
+      "sha": null,
+      "content_sha256": "44543f5b384b3977dbfac2116fe3d54562df80a10c327cbe0ddd2ec6ca9b2611",
+      "score": 126,
+      "content": "name: Build and push the image\n\non:\n  push:\n    branches:\n      - release\n\njobs:\n  build-publish-docker-hub:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v3\n      - uses: actions/setup-node@v3\n      - uses: azure/docker-login@v1\n        with:\n          username: ${{ secrets.REGISTRY_USERNAME }}\n          password: ${{ secrets.REGISTRY_PASSWORD }}\n      - uses: actions/checkout@v1\n      - name: Build and Push to DockerHub\n        shell: bash\n        run: ./build_and_push.sh\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "9846c95c174b4e9a7168574ab49fec3839764eaf9defdce85574e1ce6876c7a6",
+      "score": 100,
+      "content": "# goaccess\nA custom built image for GoAccess that provides enough hooks for CapRover to integrate with\n"
+    },
+    {
+      "path": "Dockerfile.goaccess",
+      "sha": null,
+      "content_sha256": "ea1d6c0af2ee846954b919488b85595e394994ce90b85f19b1e845807359168e",
+      "score": 85,
+      "content": "FROM allinurl/goaccess:$goaccess_version\n\n\nRUN which crond && \\\n    rm -rf /etc/periodic\n\nCOPY ./goaccess-files/entrypoint.sh /entrypoint.sh\nCOPY ./goaccess-files/catchupLog.sh /catchupLog.sh\nCOPY ./goaccess-files/processLogs.sh /processLogs.sh\n\nENTRYPOINT [\"/entrypoint.sh\"]\n\n# https://blog.thesparktree.com/cron-in-docker\n# source: `docker run --rm -it alpine  crond -h`\n# -f | Foreground\n# -l N | Set log level. Most verbose 0, default 8\nCMD [\"crond\", \"-f\", \"-l\", \"2\"]\n"
+    },
+    {
+      "path": "build_and_push.sh",
+      "sha": null,
+      "content_sha256": "c94a006373d86774bd12844b953084e430ccd0bbcf252c4ce46cef690df26f69",
+      "score": 35,
+      "content": "#!/bin/bash\n\n# Exit early if any command fails\nset -e\n\n# Print all commands\nset -x\n\npwd\n\n# load .env file\n# Define the path to the .env file\nENV_FILE=\".env\"\nif [ -f \"$ENV_FILE\" ]; then\n    echo \"Loading environment variables from $ENV_FILE...\"\n    # Export the variables in the .env file\n    set -a\n    source \"$ENV_FILE\"\n    set +a\n    echo \"Environment variables loaded.\"\nelse\n    echo \"Error: $ENV_FILE file not found.\"\n    exit 1\nfi\n\nreplaceVariablesInDockerfile() {\n    local variables_string=\"$1\" # Comma-separated list of variables\n    local file=\"Dockerfile.goaccess\"\n\n    # Check if the variables string is provided\n    if [ -z \"$variables_string\" ]; then\n        echo \"Error: Variables string must be provided.\"\n        echo \"Usage: replace_variables \\\"var1,var2\\\"\"\n        return 1\n    fi\n\n    # Split the variables string into an array\n    IFS=',' read -r -a variables <<<\"$variables_string\"\n\n    # Iterate over the variables and replace placeholders\n    for var in \"${variables[@]}\"; do\n        local value\n        value=\"${!var}\"\n\n        if [ -z \"$value\" ]; then\n            echo \"Error: Environment variable $var is not set.\"\n            return 1\n        fi\n\n        sed -i \"s/\\$$var/$value/g\" \"$file\"\n    done\n\n}\n\nreplaceVariablesInDockerfile goaccess_version\n\n# ensure you're not running it on local machine\nif [ -z \"$CI\" ] || [ -z \"$GITHUB_REF\" ]; then\n    echo \"Running on a local machine! Exiting!\"\n    exit 127\nelse\n    echo \"Running on CI\"\nfi\n\nIMAGE_NAME=caprover/goaccess\n\n# BRANCH=$(git rev-parse --abbrev-ref HEAD)\n# On Github the line above does not work, instead:\nBRANCH=${GITHUB_REF##*/}\necho \"on branch $BRANCH\"\nif [[ \"$BRANCH\" != \"release\" ]]; then\n    echo 'Not on release branch! Aborting script!'\n    exit 1\nfi\n\nsudo apt-get update && sudo apt-get install qemu-user-static\n# docker run --rm --privileged multiarch/qemu-user-static --reset -p yes\ndocker run --rm --privileged tonistiigi/binfmt --install all\n# export DOCKER_CLI_EXPERIMENTAL=enabled\ndocker buildx ls\ndocker buildx rm mybuilder || echo \"mybuilder not found\"\ndocker buildx create --name mybuilder\ndocker buildx use mybuilder\n\n# docker buildx build --platform linux/arm -t $IMAGE_NAME:$CAPROVER_VERSION -t $IMAGE_NAME:latest  -f dockerfile-captain.edge --push .\ndocker buildx build --platform linux/amd64,linux/arm64 -t $IMAGE_NAME:$goaccess_version -t $IMAGE_NAME:latest -f Dockerfile.goaccess --push .\n# ,linux/arm is not available for allinurl/goaccess\n"
+    },
+    {
+      "path": "goaccess-files/entrypoint.sh",
+      "sha": null,
+      "content_sha256": "40128c475b152d5757abf41b0fc7c8a4eb917d9c11bd3906917d57301389d811",
+      "score": 33,
+      "content": "#!/bin/sh\n\nenv >> /etc/environment\n\n# execute CMD\necho \"$@\"\nexec \"$@\""
+    },
+    {
+      "path": "goaccess-files/processLogs.sh",
+      "sha": null,
+      "content_sha256": "72b360f1e52c9d0a101cfae71b9a921322ad6a6419a855038129b0fe9b091a42",
+      "score": 33,
+      "content": "#!/bin/sh\n\ncurrentDateTime=$(date +\"%Y-%m-%dT%H:%M\")\n\n# This script does a few things to process the nginx logs into GoAccess reports\n# First it loops through all the non empty .log files in the shared volume\n# (there should only be one per app/domain combo)\n# For each one it:\n# - Creates a directory for all the app reports if it doesn't exist\n# - Copies the live log file into a temporary $rotateLog\n# - Empties the original log file\n# - Creates a new GoAccess report with the temp log file\n# - Then gzip's the temp log to archive it and so it won't be picked up by the loop\n# The reason for doing the copy then truncate is to avoid needing to send the\n# \"kill -USR1 `cat /var/run/nginx.pid`\" signal to NGINX to have it pick up a new log file\n# because this container doesn't have access to the NGINX of course.\n\n# After creating the reports, this also checks to see if there are any logs and reports older\n# than the days specified by the $LOG_RETENTION_DAYS environment variable and deletes them if so\n\necho \"Checking logs to process\"\nfor logFile in /var/log/nginx-shared/*.log; do\n\n  # Ensure the log isn't empty\n  if [ -s $logFile ]; then\n\n    filename=$(basename \"$logFile\")\n    appName=${filename%%--*}\n    appPath=\"/var/log/nginx-shared/$appName\"\n    dbPath=\"$appPath/$filename-db\"\n\n    # Make directory for all the reports to live in\n    mkdir -p $appPath\n\n    rotatedLog=\"$logFile--$currentDateTime.log\"\n    report=\"$appPath/$filename--$currentDateTime.html\"\n\n    if [ -f \"$report\" ]; then\n      echo \"$report already exists, skipping\"\n    else\n      echo \"Processing $report\"\n\n      # Manually rotate the log files\n      cp $logFile $rotatedLog\n      truncate -s 0 $logFile\n\n      # Remove the GoAccess cache db files for the catchup processing now that the log is reset\n      rm -rf $dbPath\n\n      # Build goaccess command with optional anonymize-ip flag\n      if [ \"$ANONYMIZE_IP\" = \"true\" ]; then\n        echo \"Anonymizing IP addresses for $report\"\n        goaccess \"$rotatedLog\" -a -o \"$report\" --log-format=COMBINED --anonymize-ip\n      else\n        goaccess \"$rotatedLog\" -a -o \"$report\" --log-format=COMBINED\n      fi\n\n      gzip $rotatedLog\n    fi\n\n  fi\n\ndone\n\n\n# Loop through the gzipped log files and delete ones past the log retention time\nif [ \"$LOG_RETENTION_DAYS\" -gt 0 ]; then\n  echo \"Checking log retention\"\n  currentTimestamp=$(date +%s)\n\n  for tarFile in /var/log/nginx-shared/*.gz; do\n    if [ -f \"$tarFile\" ]; then\n      fileTimestamp=$(stat -c %Y \"$tarFile\")\n      retentionTimestamp=$((currentTimestamp - LOG_RETENTION_DAYS * 24 * 60 * 60))\n\n      if [ \"$fileTimestamp\" -lt \"$retentionTimestamp\" ]; then\n        echo \"$tarFile past retention, deleting\"\n        rm \"$tarFile\"\n      fi\n    fi\n  done\n\n  # Now remove the reports that are past retention time\n  for folder in /var/log/nginx-shared/*; do\n    if [ -d \"$folder\" ]; then\n      for htmlFile in \"$folder\"/*.html; do\n        if [ -f \"$htmlFile\" ]; then\n          # Get the file's modification time in seconds since the epoch\n          fileTimestamp=$(stat -c %Y \"$htmlFile\")\n          retentionTimestamp=$((currentTimestamp - LOG_RETENTION_DAYS * 24 * 60 * 60))\n\n          if [ \"$fileTimestamp\" -lt \"$retentionTimestamp\" ]; then\n            echo \"$htmlFile past retention, deleting\"\n            rm \"$htmlFile\"\n          fi\n        fi\n      done\n    fi\n  done\nfi\n\necho \"Done\""
+    },
+    {
+      "path": "goaccess-files/catchupLog.sh",
+      "sha": null,
+      "content_sha256": "bd5656a1001345bd9c368cdb6f66333342df50b65a3c89eca015c479961c9383",
+      "score": 33,
+      "content": "#!/bin/sh\n\n# This script is a simpler version of the processLogs script\n# It loops over log files matching the environment variable $FILE_PREFIX\n# which limits it to one app and domain and creates a\n# GoAccess report for it with a consistent name so it will be overwritten\n# next time this runs.\n\n# The --restore and --persist flags let GoAccess process the logs incrementally\n# so it doesn't have to process the whole log file from scratch each time\n\necho \"Starting Catchup for $FILE_PREFIX\"\nfor logFile in /var/log/nginx-shared/$FILE_PREFIX*access.log; do\n\n\n  filename=$(basename \"$logFile\")\n  appName=${filename%%--*}\n  appPath=\"/var/log/nginx-shared/$appName\"\n  dbPath=\"$appPath/$filename-db\"\n\n  # Make directory for all the reports to live in, and the GoAccess db\n  mkdir -p $appPath\n  mkdir -p $dbPath\n\n  report=\"$appPath/$filename--Live.html\"\n\n  echo \"Processing catchup $report\"\n\n  # If anonymization is enabled, check if database exists and was created without anonymization\n  # If so, delete it to ensure it's recreated with anonymization\n  if [ \"$ANONYMIZE_IP\" = \"true\" ]; then\n    # Check if database exists and doesn't have anonymization marker\n    if [ -d \"$dbPath\" ] && [ ! -f \"$appPath/.anonymize-ip\" ]; then\n      echo \"Database exists without anonymization, removing to recreate with anonymization\"\n      rm -rf \"$dbPath\"\n      mkdir -p \"$dbPath\"\n    fi\n    # Create marker file to indicate database was created with anonymization\n    touch \"$appPath/.anonymize-ip\"\n    \n    echo \"Anonymizing IP addresses for $report\"\n    goaccess \"$logFile\" -a -o \"$report\" --log-format=COMBINED --restore --persist --db-path \"$dbPath\" --anonymize-ip\n  else\n    # If anonymization is disabled but database has anonymization marker, remove it\n    if [ -d \"$dbPath\" ] && [ -f \"$appPath/.anonymize-ip\" ]; then\n      echo \"Anonymization disabled but database was created with anonymization, removing to recreate\"\n      rm -rf \"$dbPath\"\n      rm \"$appPath/.anonymize-ip\"\n      mkdir -p \"$dbPath\"\n    fi\n    \n    goaccess \"$logFile\" -a -o \"$report\" --log-format=COMBINED --restore --persist --db-path \"$dbPath\"\n  fi\n\ndone\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": ".env",
+      "sha": "d77865bd126760a67a320be4dd3285b829fbd016",
+      "size": 23,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:21:00.307755+00:00"
+}

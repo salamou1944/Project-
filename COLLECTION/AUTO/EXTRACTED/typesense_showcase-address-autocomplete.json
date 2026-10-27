@@ -1,0 +1,68 @@
+{
+  "canonical_source": "github:typesense/showcase-address-autocomplete",
+  "repo": "typesense/showcase-address-autocomplete",
+  "revision_sha": "6c474bf0bbda297d463d2680e1272a52caa86bb4",
+  "default_branch": "master",
+  "pushed_at": "2024-06-17T20:44:38Z",
+  "repo_updated_at": "2025-12-04T04:11:01Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "address-autocomplete",
+    "address-search",
+    "algolia-places",
+    "typesense"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "compose.yml",
+      "sha": null,
+      "content_sha256": "8838d92a807c2f3a906bb1cdcce11b7d014b72929569adf0614452478919b42f",
+      "score": 120,
+      "content": "version: '3.4'\nservices:\n  typesense:\n    image: typesense/typesense:26.0\n    restart: on-failure\n    ports:\n      - '8108:8108'\n    volumes:\n      - ./typesense-data:/data\n    command: '--data-dir /data --api-key=xyz --enable-cors'\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "442928eb0c4d89d38162d0518064c4a906d070df161d77ce112e81087cbdb72b",
+      "score": 100,
+      "content": "# Address Autocomplete - powered by Typesense 🗺️ 🔍\n\nThis demo shows you how to build an Address autocomplete experience, similar to what you see commonly on address form fields, using Typesense, which is an open source alternative to Algolia.\n\nThis is a good alternative to Algolia Places (which was sunset) and also an alternative to Google Maps API (which tends be very expensive).\n\nThe dataset is from [OpenAddresses](https://www.kaggle.com/datasets/openaddresses/openaddresses-us-northeast).\n\n## Get started\n\nTo run this project locally:\n\nStart the typesense server\n\n```shell\ndocker compose up\n```\n\nIndex data into typesense\n\n```shell\nexport TYPESENSE_API_KEY='xyz'\nexport TYPESENSE_URL='http://localhost:8108'\n\ncurl \"${TYPESENSE_URL}/debug\" \\\n       -H \"X-TYPESENSE-API-KEY: [REDACTED]}\"\n\n\ncurl \"${TYPESENSE_URL}/collections\" \\\n       -X POST \\\n       -H \"Content-Type: application/json\" \\\n       -H \"X-TYPESENSE-API-KEY: [REDACTED]}\" \\\n       -d '{\n         \"name\": \"addresses_boston\",\n         \"fields\": [\n           {\"name\": \"postcode\", \"type\": \"string\" },\n           {\"name\": \"address\", \"type\": \"string\" }\n         ]\n       }'\n\ncurl \"${TYPESENSE_URL}/collections/addresses_boston/documents/import?action=create\" \\\n        -H \"X-TYPESENSE-API-KEY: [REDACTED]}\" \\\n        -X POST \\\n        -T ./data/boston-addresses.jsonl\n```\n\nOpen the `index.html` file in the root of this repo in a web browser.\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "index.js",
+      "sha": null,
+      "content_sha256": "aa15fb930b1402a93c82ee0ad082405745be14a0ed14c274a4fd2a2f4c66a6f4",
+      "score": 35,
+      "content": "const { autocomplete } = window['@algolia/autocomplete-js'];\n\nlet typesenseClient = new Typesense.Client({\n  apiKey: 'xyz',\n  nodes: [\n    {\n      url: 'http://localhost:8108',\n    },\n  ],\n  connectionTimeoutSeconds: 2,\n});\n\nautocomplete({\n  container: '#autocomplete',\n  placeholder: 'Type in an address in Boston city. Eg: 1 North Square',\n  detachedMediaQuery: 'none',\n  async getSources({ query }) {\n    const results = await typesenseClient\n      .collections('addresses_boston')\n      .documents()\n      .search({\n        q: query,\n        query_by: 'address,postcode',\n        highlight_full_fields: 'address,postcode',\n        highlight_start_tag: '<b>',\n        highlight_end_tag: '</b>',\n        per_page: 5,\n      });\n\n    return [\n      {\n        sourceId: 'predictions',\n        getItems() {\n          return results.hits;\n        },\n        getItemInputValue({\n          item: {\n            document: { address, postcode },\n          },\n        }) {\n          return `${address} ${postcode}`;\n        },\n        templates: {\n          item({ item, html }) {\n            // html is from the `htm` package. Docs: https://github.com/developit/htm\n            const address =\n              item.highlights.find((h) => h.field === 'address')?.value ||\n              item.document['address'];\n            const postcode =\n              item.highlights.find((h) => h.field === 'postcode')?.value ||\n              item.document['postcode'];\n            // Get the highlighted HTML fragment from Typesense results\n            const html_fragment = html`${address + ' ' + postcode}`;\n\n            // Send the html_fragment to `html` tagged template\n            // Reference: https://github.com/developit/htm/issues/226#issuecomment-1205526098\n            return html`<div\n              dangerouslySetInnerHTML=${{ __html: html_fragment }}\n            ></div>`;\n          },\n          noResults() {\n            return 'No results found.';\n          },\n        },\n      },\n    ];\n  },\n});\n"
+    },
+    {
+      "path": "build.sh",
+      "sha": null,
+      "content_sha256": "f0093b0a80c52413d0cb40482c036744d707145fe6df70d155679890b2561ce5",
+      "score": 35,
+      "content": "#!/bin/bash\n\nset -ex\necho \"Build starting...\"\n\n# Ensure environment variables are set\nif [[ -z \"$TYPESENSE_SEARCH_ONLY_API_KEY\" || -z \"$TYPESENSE_URL\" ]]; then\n  echo \"Environment variables TYPESENSE_SEARCH_ONLY_API_KEY and TYPESENSE_URL must be set.\"\n  exit 1\nfi\n\n# Define the js file to be modified\nJS_FILE=\"index.js\"\n\n# Define the files to be copied, including the js file\nFILES=(\"$JS_FILE\" \"index.css\" \"index.html\")\nDIST_DIR=\"dist\"\n\n# Create the dist directory if it doesn't exist\nmkdir -p \"$DIST_DIR\"\n\n# Copy files to the dist directory\nfor file in \"${FILES[@]}\"; do\n  cp \"$file\" \"$DIST_DIR\"\ndone\n\necho \"Files copied to $DIST_DIR\"\n\n# Replace apiKey and url in the copied index.js file\nsed -i -e \"s/apiKey: 'xyz'/apiKey: '[REDACTED]'/g\" \\\n       -e \"s|url: 'http://localhost:8108'|url: '$TYPESENSE_URL'|g\" \"$DIST_DIR/$JS_FILE\"\n\necho \"Replacements done in $DIST_DIR/$JS_FILE\"\necho \"Build done.\"",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:20:57.988571+00:00"
+}
