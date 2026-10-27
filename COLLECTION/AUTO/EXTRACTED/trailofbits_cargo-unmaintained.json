@@ -1,0 +1,199 @@
+{
+  "canonical_source": "github:trailofbits/cargo-unmaintained",
+  "repo": "trailofbits/cargo-unmaintained",
+  "revision_sha": "10d9ad8b6a694e4fa1875992a393ba748edbca57",
+  "default_branch": "main",
+  "pushed_at": "2026-10-23T17:05:28Z",
+  "repo_updated_at": "2026-10-23T20:42:12Z",
+  "license": "AGPL-3.0",
+  "topics": [
+    "package-management",
+    "rust",
+    "unmaintained"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "fixtures/dev-dependencies/Cargo.toml",
+      "sha": null,
+      "content_sha256": "f8a749bfc9062fdf496af93474fd60edcdd1a575f81d7a122cd799cd74c99248",
+      "score": 248,
+      "content": "[package]\nname = \"dev-dependencies\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nrand = \"0.8\"\nxz2 = \"0.1\"\n"
+    },
+    {
+      "path": "fixtures/dev-dependencies-unresolvable/Cargo.toml",
+      "sha": null,
+      "content_sha256": "de734b3bacbe92c71204a6e1bbc16ad86e8049aac696c67447fc4431d9fbecc8",
+      "score": 248,
+      "content": "[package]\nname = \"dev-dependencies-unresolvable\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nxz2 = \"0.1\"\n\n"
+    },
+    {
+      "path": "fixtures/optional-dependencies-resolvable/Cargo.toml",
+      "sha": null,
+      "content_sha256": "4e77ae1987dc1170e11548363381e2d2d9f6d050e7ab94e97e54cac1e5f5e841",
+      "score": 248,
+      "content": "[package]\nname = \"optional-dependencies-resolvable\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\ncookie = \"0.17\"\nrand = \"0.8\"\n"
+    },
+    {
+      "path": "fixtures/optional-dependencies-unresolvable/Cargo.toml",
+      "sha": null,
+      "content_sha256": "1f94297cd7a05dadc70b0121773e78dee347a819bfcd17e685bcfd3c43364755",
+      "score": 248,
+      "content": "[package]\nname = \"optional-dependencies-unresolvable\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\ncookie = \"0.17\"\n"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "162dede658e9d6e5778fedee0de2ca8947def0ca436154dbf428211d66ee4f46",
+      "score": 198,
+      "content": "name: CI\n\non:\n  merge_group:\n  pull_request:\n  schedule:\n    - cron: \"0 3 * * sun\"\n  workflow_dispatch:\n\nconcurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: true\n\nenv:\n  CARGO_TERM_COLOR: always\n\npermissions:\n  contents: read\n\njobs:\n  check-up-to-dateness:\n    outputs:\n      is-up-to-date: ${{ steps.main.outputs.is-up-to-date }}\n\n    runs-on: ubuntu-latest\n\n    steps:\n      - id: main\n        uses: trailofbits/check-up-to-dateness@v2\n\n  test:\n    needs: [check-up-to-dateness]\n\n    if: needs.check-up-to-dateness.outputs.is-up-to-date != 'true'\n\n    strategy:\n      fail-fast: ${{ github.event_name == 'merge_group' }}\n      matrix:\n        environment: [ubuntu-latest, macos-latest, windows-latest]\n        index: [crates-index, tame-index]\n        test:\n          [\n            ci,\n            dogfood,\n            general,\n            rustsec_advisories,\n            rustsec_issues,\n            snapbox_mock_github,\n            snapbox_real_github,\n          ]\n\n    runs-on: ${{ matrix.environment }}\n\n    defaults:\n      run:\n        shell: bash\n\n    env:\n      RUST_BACKTRACE: 1\n      GIT_LFS_SKIP_SMUDGE: 1\n\n    steps:\n      - uses: actions/checkout@v7\n        with:\n          fetch-depth: 0\n\n      - uses: actions/cache@v6\n        with:\n          path: |\n            # smoelius: Do NOT cache ~/.cache/cargo-unmaintained. Sure, it makes CI faster. But it\n            # also makes it harder to tell when test files need to be updated.\n            # ~/.cache/cargo-unmaintained/\n            ~/.cargo/bin/\n            ~/.cargo/registry/index/\n            ~/.cargo/registry/cache/\n            ~/.cargo/git/db/\n          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}\n\n      - uses: taiki-e/install-action@v2.87.29\n        with:\n          tool: cargo-audit, cargo-hack, cargo-udeps\n\n      - name: Install CI tools\n        if: ${{ matrix.test == 'ci' }}\n        run: |\n          rustup update          --no-self-update\n          rustup install nightly --no-self-update\n          rustup component add clippy  --toolchain nightly\n          rustup component add rustfmt --toolchain nightly\n          cargo install cargo-dylint dylint-link || true\n          cargo install cargo-license            || true\n          cargo install cargo-supply-chain       || true\n\n      - name: Install general tools\n        run: |\n          cargo install cargo-nested             || true\n\n      - name: Enable verbose logging\n        if: ${{ runner.debug == 1 }}\n        run: echo 'VERBOSE=1' >> \"$GITHUB_ENV\"\n\n      - name: Fetch dependencies\n        run: cargo nested fetch\n\n      - name: Compute features\n        run: |\n          # `crates-index` is a default feature, so `--no-default-features` is needed for the\n          # `tame-index` leg to actually use `tame-index`.\n          FEATURES=\"--no-default-features --features=on-disk-cache,${{ matrix.index }}\"\n          # The externally influenced tests are slow and depend on the network. Running them on\n          # just one platform is sufficient.\n          if [[ '${{ matrix.environment }}' = 'ubuntu-latest' ]]; then\n            FEATURES=\"$FEATURES --features=test-ei\"\n            if [[ '${{ github.event_name }}' = 'schedule' || '${{ github.event_name }}' = 'workflow_dispatch' ]] ||\n              git diff --name-only ${{ github.event.pull_request.base.sha }} | grep 'rustsec' >/dev/null\n            then\n              FEATURES=\"$FEATURES --features=test-rustsec\"\n            fi\n          fi\n          echo \"FEATURES=$FEATURES\" >> \"$GITHUB_ENV\"\n\n      - name: Build\n        # smoelius: Build the whole workspace. This performs some unnecessary work, but it ensures\n        # that all packages are built.\n        run: cargo build $FEATURES --workspace\n\n      - name: Test\n        run: cargo test $FEATURES --test ${{ matrix.test }}\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n\n  all-checks:\n    needs: [test]\n\n    # smoelius: From \"Defining prerequisite jobs\"\n    # (https://docs.github.com/en/actions/using-jobs/using-jobs-in-a-workflow#defining-prerequisite-jobs):\n    # > If you would like a job to run even if a job it is dependent on did not succeed, use the\n    # > `always()` conditional expression in `jobs.<job_id>.if`.\n    if: ${{ always() }}\n\n    runs-on: ubuntu-latest\n\n    steps:\n      - name: Check results\n        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}\n        run: exit 1\n"
+    },
+    {
+      "path": "ci/Cargo.toml",
+      "sha": null,
+      "content_sha256": "6e1a74348a511bf9ab0fe56c22f1452bb9be4e2bcd92e6e8472cf055a24b975c",
+      "score": 190,
+      "content": "[package]\nname = \"ci\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[dev-dependencies]\nassert_cmd = \"2.2\"\ncargo_metadata = \"0.23\"\nelaborate = \"2.0\"\nregex = \"1.13\"\nserde_json = \"1.0\"\nsimilar-asserts = \"2.0\"\nsupply_chain = \"0.2\"\ntempfile = \"3.27\"\ntoml_edit = \"0.25\"\nwalkdir = \"2.5\"\nyaml_serde = \"0.10\"\n\ntesting = { path = \"../testing\" }\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "mock_github/Cargo.toml",
+      "sha": null,
+      "content_sha256": "9a6b5a9ba79b3bc9484f5282ba107eafbd4b518751056ca73007977920186acb",
+      "score": 178,
+      "content": "[package]\nname = \"cargo-unmaintained-with-mock-github\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[dependencies]\nanyhow = \"1.0\"\ncargo-unmaintained = { path = \"..\", features = [\"__mock_github\"] }\n"
+    },
+    {
+      "path": "testing/Cargo.toml",
+      "sha": null,
+      "content_sha256": "41661085d91d82268313075c57675be529a646db5cee7f1372479d6b18abdc6e",
+      "score": 178,
+      "content": "[package]\nname = \"testing\"\nversion = \"0.1.0\"\nedition = \"2024\"\npublish = false\n\n[dependencies]\nanyhow = \"1.0\"\nelaborate = \"2.0\"\nserde = { version = \"1.0\", features = [\"derive\"] }\nserde_json = \"1.0\"\nsnapbox = \"1.2\"\ntempfile = \"3.27\"\ntoml = \"1.1\"\n\n[lints]\nworkspace = true\n"
+    },
+    {
+      "path": "fixtures/workspace/Cargo.toml",
+      "sha": null,
+      "content_sha256": "9f353a70737813880a5fa47e273bc424f73f763c85c8c36a715ecd48fe24c5db",
+      "score": 176,
+      "content": "[workspace]\nmembers = [\"unmaintained\"]\n"
+    },
+    {
+      "path": "fixtures/timeout/Cargo.toml",
+      "sha": null,
+      "content_sha256": "6b4f80560f2fa876848dcf1b7ada7124d8db4c75e9cdc44ca6a872cae88ac707",
+      "score": 176,
+      "content": "[package]\nname = \"package\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\ntimeout = { path = \"timeout\" }\n"
+    },
+    {
+      "path": "fixtures/archived/Cargo.toml",
+      "sha": null,
+      "content_sha256": "58bfacdb60a5a0cc3082e862f5f9554be5bea79deef08bd564d64fbd5d05443e",
+      "score": 176,
+      "content": "[package]\nname = \"archived\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nadler = \"1.0\"\n"
+    },
+    {
+      "path": "tests/cases/cargo.toml",
+      "sha": null,
+      "content_sha256": "0bc576287fcb38f4e8d408918c22f9ecdaee65d03317eb1cc11fa1c58696dbc0",
+      "score": 176,
+      "content": "url = \"https://github.com/rust-lang/cargo\"\nrev = \"0.77.0\"\nuse_real_github = true\n"
+    },
+    {
+      "path": "fixtures/old-repository-non-member/Cargo.toml",
+      "sha": null,
+      "content_sha256": "2af9f65364dfd0bb7b9439d8575928baeb44208fbf9881115e1e1e8c5b2d34ac",
+      "score": 176,
+      "content": "[package]\nname = \"old-repository-non-member\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\ngethostname = \"0.2.3\"\n"
+    },
+    {
+      "path": "fixtures/private-registry/Cargo.toml",
+      "sha": null,
+      "content_sha256": "6d8041cbccc15506ffeefb242f5b75bf9be9ffe084ffa816b1b069eaaff818de",
+      "score": 176,
+      "content": "[package]\nname = \"private-registry\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\ncrates-io = { path = \"crates-io\" }\nmy-registry = { path = \"my-registry\" }\n"
+    },
+    {
+      "path": "fixtures/old-repository-archived/Cargo.toml",
+      "sha": null,
+      "content_sha256": "6d6f17a6277fb4568e082c7a02caff5484089ef784447e597267db86a9c24f82",
+      "score": 176,
+      "content": "[package]\nname = \"old-repository-archived\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nregex-automata = \"0.2.0\"\n"
+    },
+    {
+      "path": "fixtures/workspace/unmaintained/Cargo.toml",
+      "sha": null,
+      "content_sha256": "50ccb3636c54979beb907e8f011bc5505149cda960c8f19b26842a026f5f3266",
+      "score": 174,
+      "content": "[package]\nname = \"unmaintained\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nsyn = { version = \"1.0\" }\n"
+    },
+    {
+      "path": "fixtures/timeout/timeout/Cargo.toml",
+      "sha": null,
+      "content_sha256": "d88bc4c460ed491b451d3bfb21cfbaae8752c914c5346529a577f5df025a321d",
+      "score": 174,
+      "content": "[package]\nname = \"timeout\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n# smoelius: https://stackoverflow.com/a/56459603\n# repository = \"https://httpstat.us/200?sleep=300000\" # 5 minutes\n\n# smoelius: httpstat.us is returning 503s.\n# smoelius: https://stackoverflow.com/a/100859\nrepository = \"https://www.google.com:81\"\n"
+    },
+    {
+      "path": "fixtures/private-registry/crates-io/Cargo.toml",
+      "sha": null,
+      "content_sha256": "e8d434500b4fe3b51e44bc11530b3c62326543fcf8a7f325be9bab862bf4fc3d",
+      "score": 174,
+      "content": "[package]\nname = \"crates-io\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n# smoelius: The next `dependencies` entry should match what is in ../my-registry/Cargo.toml, except\n# that file's entry has a `registry` field.\n\n[dependencies]\nsyn = { version = \"1.0\" }\n"
+    },
+    {
+      "path": "fixtures/private-registry/my-registry/Cargo.toml",
+      "sha": null,
+      "content_sha256": "1f85f041af610881992bb29345af7e2af64a7b193abbf1602e79ed77ce5934e9",
+      "score": 174,
+      "content": "[package]\nname = \"my-registry\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n# smoelius: The next `dependencies` entry should match what is in ../crates-io/Cargo.toml, except\n# that file's entry does not have a `registry` field.\n\n[dependencies]\nsyn = { version = \"1.0\", registry = \"my-registry\" }\n"
+    },
+    {
+      "path": "tests/ci.rs",
+      "sha": null,
+      "content_sha256": "9fcefdfddd137bbaaa3a03aa2b13f5a9e48b7838faa6e27019cd0e9240a77611",
+      "score": 165,
+      "content": "use anyhow::{Context, Result, anyhow, bail};\nuse cargo_metadata::{Message, camino::Utf8PathBuf};\nuse elaborate::std::{env::var_wc, process::CommandContext};\nuse std::process::Command;\n\n// This test runs the `ci` package's tests from the workspace root. An individual test can instead\n// be run with, e.g., `cargo test -p ci supply_chain`, so long as the test hardcodes its paths.\n//\n// A test that relies on the current directory works only when run through this one, because Cargo\n// sets a test executable's current directory to its package's root. Use `FILTER` to select such a\n// test; a filter on the command line would apply to this test rather than to the tests it runs.\n#[test]\nfn ci() {\n    let executable = test_executable().unwrap();\n    let mut command = Command::new(executable);\n    if let Ok(filter) = var_wc(\"FILTER\") {\n        command.arg(filter);\n    }\n    command.env_remove(\"CARGO_TERM_COLOR\");\n    let status = command.status_wc().unwrap();\n    assert!(status.success());\n}\n\nfn test_executable() -> Result<Utf8PathBuf> {\n    let mut command = Command::new(\"cargo\");\n    let output = command\n        .args([\"build\", \"--message-format=json\", \"--package=ci\", \"--tests\"])\n        .env_remove(\"CARGO_TERM_COLOR\")\n        .output_wc()?;\n    if !output.status.success() {\n        bail!(\"command failed: {command:?}\");\n    }\n    let messages = Message::parse_stream(output.stdout.as_slice())\n        .collect::<Result<Vec<_>, _>>()\n        .with_context(|| format!(\"failed to parse metadata from: {command:?}\"))?;\n    let executables = messages\n        .into_iter()\n        .filter_map(|message| {\n            if let Message::CompilerArtifact(artifact) = message\n                && artifact.target.name == \"ci\"\n                && artifact.target.is_lib()\n                && artifact.profile.test\n                && let Some(executable) = artifact.executable\n            {\n                Some(executable)\n            } else {\n                None\n            }\n        })\n        .collect::<Vec<_>>();\n    if executables.len() >= 2 {\n        bail!(\"found multiple test executables: {executables:?}\");\n    }\n    executables\n        .into_iter()\n        .next()\n        .ok_or_else(|| anyhow!(\"found no test executables\"))\n}\n"
+    },
+    {
+      "path": "tests/cases/dev-dependencies-unresolvable.json",
+      "sha": null,
+      "content_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "score": 163,
+      "content": "[]\n"
+    },
+    {
+      "path": "tests/cases/dev-dependencies-unresolvable.toml",
+      "sha": null,
+      "content_sha256": "efb19f9dc859cfeb2afbbd99e729a100196b5b9db601dd00f67b3525907568df",
+      "score": 163,
+      "content": "path = \"fixtures/dev-dependencies-unresolvable\"\n"
+    },
+    {
+      "path": "tests/cases/dev-dependencies-resolvable.toml",
+      "sha": null,
+      "content_sha256": "edae0aed69247525948deb3b72ff892f0ace5348cca804e9fc99e4a40858d036",
+      "score": 163,
+      "content": "path = \"fixtures/dev-dependencies\"\n"
+    },
+    {
+      "path": "tests/cases/optional-dependencies-unresolvable.json",
+      "sha": null,
+      "content_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+      "score": 163,
+      "content": "[]\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:31:17.895515+00:00"
+}

@@ -1,0 +1,97 @@
+{
+  "canonical_source": "github:postalserver/blackhole",
+  "repo": "postalserver/blackhole",
+  "revision_sha": "25de83fe75a2695d491da50578c69a4740f8a444",
+  "default_branch": "main",
+  "pushed_at": "2024-03-17T18:10:27Z",
+  "repo_updated_at": "2025-02-28T07:46:59Z",
+  "license": "CC0-1.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "1509b93e22d53fd6d11e87d6c1b126fc0ff4ae10b07f81185b2a0cddc55eaa39",
+      "score": 198,
+      "content": "---\nname: CI\non: [push]\n\njobs:\n  release-please:\n    name: Release Please\n    runs-on: ubuntu-latest\n    if: github.ref == 'refs/heads/main'\n    outputs:\n      release_created: ${{ steps.release-please.outputs.release_created }}\n      tag_name: ${{ steps.release-please.outputs.tag_name }} # e.g. v1.0.0\n      version: ${{ steps.release-please.outputs.version }} # e.g. 1.0.0\n      all: ${{ toJSON(steps.release-please.outputs) }}\n    steps:\n      - uses: google-github-actions/release-please-action@v3\n        id: release-please\n        with:\n          command: manifest\n\n  release:\n    runs-on: ubuntu-latest\n    needs: [release-please]\n    if: needs.release-please.outputs.release_created\n    steps:\n      - uses: actions/checkout@v3\n        with:\n          fetch-depth: 0\n      - run: git fetch --force --tags\n      - name: Set up QEMU\n        uses: docker/setup-qemu-action@v2\n      - uses: docker/setup-buildx-action@v2\n      - name: Docker Login\n        uses: docker/login-action@v2\n        with:\n          registry: ghcr.io\n          username: ${{ github.actor }}\n          password: ${{ secrets.GITHUB_TOKEN }}\n      - uses: actions/setup-go@v4\n        with:\n          go-version: \"1.22\"\n      - name: Run GoReleaser\n        uses: goreleaser/goreleaser-action@v2\n        with:\n          version: latest\n          args: release --clean\n        env:\n          REGISTRY: ghcr.io\n          IMAGE_NAME: ${{ github.repository }}\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "9663d845df098bfda2ff78fbe4e9ebafb1b9fa394e9d3c433b682eea8d739622",
+      "score": 100,
+      "content": "# Blackhole\n\nThis is a very simple web & SMTP server which will respond to all requests sent to it and log the output to stdout. This is designed for testing some Postal interactions with live SMTP and HTTP servers.\n\n## Usage\n\nStart the server with the following:\n\n```\ndocker run --pull always \\\n           -p 80:8080 \\\n           -p 25:2525 \\\n           ghcr.io/postalserver/blackhole:latest\n```\n\n### SMTP\n\nYou can send email to various addresses to illicit different responses:\n\n* `accept@` - message will be accepted with a 250 \n* `softfail@` - message will be rejected with a 450 (\"Mailbox unavailable at the moment\")\n* `later@` - message will be rejected with a 450 (\"Try again in 250 seconds\")\n* `hardfail@` - message will be rejected with a 550 (\"Invalid recipient address\") after receiving data\n* `anything-else@` - message will be rejected with a 550 (\"Invalid recipient address\") afer `RCPT TO`\n\n### HTTP\n\nThe following URLs are available. \n\n* `/200` or `/ok` - returns a 200 OK\n* `/403` or `/forbidden` - returns a 403 Forbidden\n* `/500` or `/internal-server-error` - returns a 500 Internal Server Error\n* All other URLs will return a 404 Not Found\n"
+    },
+    {
+      "path": "go.mod",
+      "sha": null,
+      "content_sha256": "1d190e99487ec7ea614688e2628a8433dc8d26cf242065de0388fde2057d37cf",
+      "score": 85,
+      "content": "module github.com/postalserver/blackhole\n\ngo 1.22.1\n\nrequire (\n\tgithub.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21 // indirect\n\tgithub.com/emersion/go-smtp v0.20.2 // indirect\n\tgithub.com/mhale/smtpd v0.8.2 // indirect\n)\n"
+    },
+    {
+      "path": "Dockerfile",
+      "sha": null,
+      "content_sha256": "b0c89a915d7448dd3e0f88e0f227f8377cb39a693e896ee868e2b5b548b98b0c",
+      "score": 85,
+      "content": "FROM scratch\nCOPY ./blackhole /\nEXPOSE 8080\nEXPOSE 2525\nWORKDIR /\nENTRYPOINT [\"/blackhole\"]\n"
+    },
+    {
+      "path": "http.go",
+      "sha": null,
+      "content_sha256": "f7eaaee761f2a052bc0cae465736bed63dc887cede88c14435429c520a9036f5",
+      "score": 35,
+      "content": "package main\n\nimport (\n\t\"log\"\n\t\"net/http\"\n)\n\nfunc runHTTPServer() {\n\thttp.HandleFunc(\"/\", func(w http.ResponseWriter, r *http.Request) {\n\n\t\t// log\n\t\tlog.Printf(\"http: %s %s from %s\", r.Method, r.URL.Path, r.RemoteAddr)\n\n\t\tswitch r.URL.Path {\n\t\tcase \"/200\", \"/ok\":\n\t\t\tw.WriteHeader(http.StatusOK)\n\t\t\tw.Write([]byte(\"ok\"))\n\t\tcase \"/500\", \"/internal-server-error\":\n\t\t\tw.WriteHeader(http.StatusInternalServerError)\n\t\t\tw.Write([]byte(\"internal server error\"))\n\t\tcase \"/403\", \"/forbidden\":\n\t\t\tw.WriteHeader(http.StatusForbidden)\n\t\t\tw.Write([]byte(\"forbidden\"))\n\t\tdefault:\n\t\t\tw.WriteHeader(http.StatusNotFound)\n\t\t\tw.Write([]byte(\"not found\"))\n\t\t}\n\t})\n\n\tlog.Printf(\"http: starting http server at %s\", \":8080\")\n\thttp.ListenAndServe(\":8080\", nil)\n}\n"
+    },
+    {
+      "path": "smtp.go",
+      "sha": null,
+      "content_sha256": "44cdb3f1e9c094645761fbff83cb700b63df17ceeff9d64d1795dfdf9178b51e",
+      "score": 35,
+      "content": "package main\n\nimport (\n\t\"io\"\n\t\"log\"\n\t\"strings\"\n\t\"time\"\n\n\t\"github.com/emersion/go-smtp\"\n)\n\nvar ValidUsernames = []string{\"accept\", \"softfail\", \"hardfail\", \"later\"}\n\ntype Backend struct{}\ntype Session struct {\n\tMailFrom string\n\tUsername string\n}\n\nfunc (bkd *Backend) NewSession(c *smtp.Conn) (smtp.Session, error) {\n\treturn &Session{}, nil\n}\n\nfunc (s *Session) AuthPlain(username, password string) error {\n\treturn nil\n}\n\nfunc (s *Session) Mail(from string, opts *smtp.MailOptions) error {\n\tlog.Println(\"smtp: mail from:\", from)\n\ts.MailFrom = from\n\treturn nil\n}\n\nfunc (s *Session) Rcpt(to string, opts *smtp.RcptOptions) error {\n\tlog.Println(\"smtp: rcpt to:\", to)\n\n\tusername := getUsername(to)\n\tif !contains(ValidUsernames, username) {\n\t\tlog.Println(\"smtp: 550 invalid recipient address\")\n\t\treturn &smtp.SMTPError{\n\t\t\tCode:    550,\n\t\t\tMessage: \"Invalid recipient address\",\n\t\t}\n\t}\n\ts.Username = getUsername(to)\n\treturn nil\n}\n\nfunc (s *Session) Data(r io.Reader) error {\n\n\tif b, err := io.ReadAll(r); err != nil {\n\t\treturn err\n\t} else {\n\t\tlog.Println(\"smtp: data:\", string(b))\n\t}\n\n\tswitch s.Username {\n\tcase \"accept\":\n\t\tlog.Println(\"smtp: accepting message\")\n\t\treturn nil\n\tcase \"softfail\":\n\t\tlog.Println(\"smtp: 450 mailbox is available\")\n\t\treturn &smtp.SMTPError{\n\t\t\tCode:    450,\n\t\t\tMessage: \"Mailbox is unavailable at the moment\",\n\t\t}\n\tcase \"later\":\n\t\tlog.Println(\"smtp: 450 try again later\")\n\t\treturn &smtp.SMTPError{\n\t\t\tCode:    450,\n\t\t\tMessage: \"Try again in 250 seconds\",\n\t\t}\n\tdefault:\n\t\tlog.Println(\"smtp: 550 invalid recipient address\")\n\t\treturn &smtp.SMTPError{\n\t\t\tCode:    550,\n\t\t\tMessage: \"Invalid recipient address\",\n\t\t}\n\t}\n}\n\nfunc (s *Session) Reset() {}\n\nfunc (s *Session) Logout() error {\n\treturn nil\n}\n\nfunc runSMTPServer() {\n\tbe := &Backend{}\n\n\ts := smtp.NewServer(be)\n\n\ts.Addr = \":2525\"\n\ts.Domain = \"blackhole\"\n\ts.WriteTimeout = 10 * time.Second\n\ts.ReadTimeout = 10 * time.Second\n\ts.MaxMessageBytes = 1024 * 1024\n\ts.MaxRecipients = 50\n\ts.AllowInsecureAuth = true\n\n\tlog.Println(\"smtp: starting smtp server at\", s.Addr)\n\tif err := s.ListenAndServe(); err != nil {\n\t\tlog.Fatal(err)\n\t}\n}\n\nfunc getUsername(s string) string {\n\tparts := strings.Split(s, \"@\")\n\tif len(parts) > 0 {\n\t\treturn parts[0]\n\t}\n\treturn \"\"\n}\n\nfunc contains(arr []string, str string) bool {\n\tfor _, a := range arr {\n\t\tif a == str {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}\n"
+    },
+    {
+      "path": "release-please-config.json",
+      "sha": null,
+      "content_sha256": "5abe99146cd24b85879b66a4613fb5cdc0eff2fa834c1f7aa558dd8c765a2c6c",
+      "score": 35,
+      "content": "{\n  \"packages\": {\n    \".\": {\n      \"release-type\": \"go\",\n      \"changelog-path\": \"CHANGELOG.md\",\n      \"bump-minor-pre-major\": true,\n      \"bump-patch-for-minor-pre-major\": true,\n      \"draft\": false,\n      \"prerelease\": false\n    }\n  },\n  \"changelog-sections\": [\n    {\n      \"type\": \"feat\",\n      \"section\": \"Features\"\n    },\n    {\n      \"type\": \"feature\",\n      \"section\": \"Features\"\n    },\n    {\n      \"type\": \"fix\",\n      \"section\": \"Bug Fixes\"\n    },\n    {\n      \"type\": \"perf\",\n      \"section\": \"Performance Improvements\"\n    },\n    {\n      \"type\": \"revert\",\n      \"section\": \"Reverts\"\n    },\n    {\n      \"type\": \"docs\",\n      \"section\": \"Documentation\"\n    },\n    {\n      \"type\": \"style\",\n      \"section\": \"Styles\"\n    },\n    {\n      \"type\": \"chore\",\n      \"section\": \"Miscellaneous Chores\"\n    },\n    {\n      \"type\": \"refactor\",\n      \"section\": \"Code Refactoring\"\n    },\n    {\n      \"type\": \"test\",\n      \"section\": \"Tests\",\n      \"hidden\": true\n    },\n    {\n      \"type\": \"build\",\n      \"section\": \"Build System\",\n      \"hidden\": true\n    },\n    {\n      \"type\": \"ci\",\n      \"section\": \"Continuous Integration\",\n      \"hidden\": true\n    }\n  ],\n  \"$schema\": \"https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json\"\n}\n"
+    },
+    {
+      "path": "main.go",
+      "sha": null,
+      "content_sha256": "c86d69c3565d39caedcb8eacf01b7748bf662fbc81bf192e049d697924d306e6",
+      "score": 35,
+      "content": "package main\n\nimport \"sync\"\n\nfunc main() {\n\tvar wg sync.WaitGroup\n\twg.Add(2)\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\trunSMTPServer()\n\t}()\n\n\tgo func() {\n\t\tdefer wg.Done()\n\t\trunHTTPServer()\n\t}()\n\n\twg.Wait()\n}\n"
+    },
+    {
+      "path": ".release-please-manifest.json",
+      "sha": null,
+      "content_sha256": "a70d075ae288997273b703c5fc8ecc2f6d0a66a6b70feb4e04ab96e759efed80",
+      "score": 35,
+      "content": "{\n  \".\": \"0.0.6\"\n}\n"
+    },
+    {
+      "path": ".goreleaser.yml",
+      "sha": null,
+      "content_sha256": "f3ee0eb06650c24cdfd4915591ad2243d0855062d8796b271c2bb58de622d002",
+      "score": 35,
+      "content": "before:\n  hooks:\n    - go mod tidy\nbuilds:\n  - env:\n      - CGO_ENABLED=0\n    mod_timestamp: \"{{ .CommitTimestamp }}\"\n    flags:\n      - -trimpath\n    ldflags:\n      - \"-s -w -X main.version={{ .Version }} -X main.commit={{ .Commit }}\"\n    goos:\n      - \"darwin\"\n      - \"linux\"\n    goarch:\n      - \"amd64\"\n      - \"arm64\"\n\nuniversal_binaries:\n  - replace: false\n\narchives:\n  - format: tar.gz\n    name_template: |-\n      {{ .ProjectName }}-{{ .Version }}_{{ .Os }}_{{ if eq .Arch \"all\" }}universal{{ else }}{{ .Arch }}{{ end }}{{ if not (eq .Amd64 \"v1\") }}{{ .Amd64 }}{{ end }}\n    wrap_in_directory: true\n\nchecksum:\n  name_template: \"checksums.txt\"\nsnapshot:\n  name_template: \"{{ .Tag }}-next\"\n\nchangelog:\n  skip: true\n\ndockers:\n  - image_templates:\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:{{ .Version }}-amd64\"\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:latest-amd64\"\n    dockerfile: Dockerfile\n    use: buildx\n    goos: linux\n    goarch: amd64\n    build_flag_templates:\n      - \"--platform=linux/amd64\"\n  - image_templates:\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:{{ .Version }}-arm64\"\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:latest-arm64\"\n    use: buildx\n    goos: linux\n    goarch: arm64\n    dockerfile: Dockerfile\n    build_flag_templates:\n      - \"--platform=linux/arm64\"\n\ndocker_manifests:\n  - name_template: \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:{{ .Version }}\"\n    image_templates:\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:{{ .Version }}-amd64\"\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:{{ .Version }}-arm64\"\n  - name_template: \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:latest\"\n    image_templates:\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:latest-amd64\"\n      - \"{{ .Env.REGISTRY }}/{{ .Env.IMAGE_NAME }}:latest-arm64\"\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:31:27.781025+00:00"
+}

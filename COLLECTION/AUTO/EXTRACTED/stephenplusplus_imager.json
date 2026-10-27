@@ -1,0 +1,48 @@
+{
+  "canonical_source": "github:stephenplusplus/imager",
+  "repo": "stephenplusplus/imager",
+  "revision_sha": "b3c251a7289edddac83553b6fca2f9987e5a6d7a",
+  "default_branch": "master",
+  "pushed_at": "2013-08-07T18:19:32Z",
+  "repo_updated_at": "2014-09-28T04:46:10Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "readme.md",
+      "sha": null,
+      "content_sha256": "f0dd200cc5e827fde28e30c77cc7141bdde8a9579e8a3ede5a96b2b122c12791",
+      "score": 100,
+      "content": "# imager\n\nA project by the talented devs at BBC News and Addy Osmani.\n\n*Note: Please note this project is not ready for production and is currently in development*\n\nThis is an experiment in offering developers an interim solution to responsive images based on the [ImageEnhancer](https://gist.github.com/Integralist/6157139) concept researched and developed by BBC news. At present, support for `srcset` and `PictureFill` are not widespread and the polyfills for these solutions also come with a number of drawbacks.\n\n[Mark McDonnell](https://gist.github.com/Integralist) was kind enough to document the BBC's approach for us and walkthrough how the general solution is tackled by their site.\nOur goal is to try putting together a good demo project of how a similar setup can be used by anyone together with some Grunt tooling for generating the necessary responsive images required by the solution.\n\nMuch of this work can be repurposed to work with a more standards-based approach once support improves in modern browsers.\n\nFor the purposes of maintaining a distinguishment between the ImageEnhancer concept built by the BBC and this project, we're calling it Imager.js for now."
+    },
+    {
+      "path": "imager.js",
+      "sha": null,
+      "content_sha256": "6e77d4799a4ec5393cefe2b157e6bd54f8e1b721317dd917a3eb1114729ebfb6",
+      "score": 35,
+      "content": "(function (window, document) {\n\n  'use strict';\n\n  var $;\n  var listeners;\n  var listen;\n  var yell;\n  var Imager;\n\n  requestAnimationFrameShimishStuff: {\n\n    window.requestAnimationFrame\n      = window.requestAnimationFrame\n      || window.mozRequestAnimationFrame\n      || window.webkitRequestAnimationFrame\n      || function (callback) {\n        window.setTimeout(callback, 1000 / 60);\n      };\n  }\n\n  selectorEngine: {\n\n    // jQuery substitute, if necessary.\n    $ = (function (dollar) {\n\n      if (dollar) {\n        return dollar;\n      }\n\n      var slice = Array.prototype.slice;\n      return function (selector) {\n        return slice.call(document.querySelectorAll(selector));\n      };\n    })(window.$);\n  }\n\n  pubSubSystem: {\n\n    // Collection of listeners.\n    listeners = {};\n\n    // Registers listeners with a given callback.\n    listen = function (event, then) {\n\n      if (typeof then === 'function') {\n        listeners[event] = then;\n      }\n    };\n\n    // Invokes callback for a given event.\n    yell = function (event, what) {\n\n      if (listeners[event]) {\n        listeners[event](what);\n      }\n    };\n  }\n\n  Imager = function (opts) {\n\n    var self = this;\n    opts = opts || {};\n\n    this.availableWidths = opts.availableWidths || [\n      100,\n      200,\n      300,\n      400,\n      500,\n      600,\n      700,\n      800,\n      900,\n      1000\n    ];\n\n    this.selector = opts.selector || '.delayed-image-load';\n    this.className = '.' + (opts.className || 'image-replace').replace(/^\\.+/, '.');\n    this.regex = opts.regex || /^(.+\\/)\\d+$/i;\n\n    this.gif = document.createElement('img');\n    this.gif.src = 'data:image/gif;base64,R0lGODlhEAAJAIAAAP///wAAACH5BAEAAAAALAAAAAAQAAkAAAIKhI+py+0Po5yUFQA7';\n    this.gif.className = this.className.replace(/^[#\\.]/, '');\n\n    this.divs = $(this.selector);\n    this.swapDivs();\n\n    this.cache = {};\n\n    listen('imager:resize', function () {\n      self.resizeImages();\n    });\n\n    listen('div:added', function () {\n      self.swapDivs();\n    });\n\n    listen('div:changed', function () {\n      self.resizeImages();\n    });\n\n    window.requestAnimationFrame(function () {\n      self.init();\n    });\n  };\n\n  Imager.prototype.init = function () {\n\n    this.initialized = true;\n    this.resizeImages();\n\n    window.addEventListener('resize', function () {\n      yell('imager:resize');\n    }, false);\n  };\n\n  Imager.prototype.swapDivs = function () {\n\n    var divs = this.divs;\n    var gif;\n\n    var i = 0, l = divs.length;\n\n    for (; i < l; i++) {\n      gif = this.gif.cloneNode(false);\n      gif.width = divs[i].getAttribute('data-width');\n      gif.setAttribute('data-src', divs[i].getAttribute('data-src'));\n      divs[i].parentNode.replaceChild(gif, divs[i]);\n    }\n\n    if (this.initialized) {\n      yell('div:changed');\n    }\n  };\n\n  Imager.prototype.resizeImages = function () {\n\n    var self = this;\n    var images = $(this.className);\n\n    var i = 0, l = images.length;\n\n    if (!this.isResizing) {\n      this.isResizing = true;\n\n      for (; i < l; i++) {\n        this.placeImage(images[i]);\n      }\n\n      this.isResizing = false;\n    }\n  };\n\n  Imager.prototype.placeImage = function (image) {\n\n    var src = this.calculate(image);\n    var parent = image.parentNode;\n    var replacedImage;\n\n    if (this.cache[src]) {\n      replacedImage = this.cache[src].cloneNode(false);\n      replacedImage.width = image.getAttribute('width');\n    } else {\n      replacedImage = image.cloneNode(false);\n      replacedImage.src = src;\n      this.cache[src] = replacedImage;\n    }\n\n    parent.replaceChild(replacedImage, image);\n  };\n\n  Imager.prototype.calculate = function (image) {\n\n    var self = this;\n    var src = image.getAttribute('data-src');\n    var width = image.clientWidth;\n    var selectedWidth = this.availableWidths[0];\n\n    var i = 0, l = this.availableWidths.length;\n\n    for (; i < l; i++) {\n      if (width >= this.availableWidths[i]) {\n        selectedWidth = this.availableWidths[i];\n      }\n    }\n\n    return src.replace(this.regex, function (match, captured) {\n      return captured + selectedWidth;\n    });\n  };\n\n  window.Imager = Imager;\n  window.onload = function () {\n    new Imager();\n  };\n})(window, document);\n"
+    },
+    {
+      "path": "bower.json",
+      "sha": null,
+      "content_sha256": "dbf2c393c5e1771c664afa3377ce6694362e8a1522c7ccdc3513ea6056c54b95",
+      "score": 35,
+      "content": "{\n  \"name\": \"imager\",\n  \"version\": \"0.0.0\",\n  \"main\": \"imager.js\",\n  \"ignore\": [\n    \"*.md\",\n    \"*.html\"\n  ]\n}"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:31:27.345208+00:00"
+}

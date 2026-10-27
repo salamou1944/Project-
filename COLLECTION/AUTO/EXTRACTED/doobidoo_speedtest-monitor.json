@@ -1,0 +1,48 @@
+{
+  "canonical_source": "github:doobidoo/speedtest-monitor",
+  "repo": "doobidoo/speedtest-monitor",
+  "revision_sha": "c083992a5bb926c35f06d0a064b5b4147a50de3c",
+  "default_branch": "master",
+  "pushed_at": "2026-03-07T14:59:09Z",
+  "repo_updated_at": "2026-04-20T14:33:57Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "install.sh",
+      "sha": null,
+      "content_sha256": "5e82c45e57d900888442bccf6776ad3aee5306bddaf0a5c062734291257890ad",
+      "score": 117,
+      "content": "#!/bin/bash\n# install.sh - Setup speedtest-monitor\nset -e\n\nSCRIPT_DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\nWEB_ROOT=\"/var/www/html\"\nCRON_SCHEDULE=\"0 * * * *\"\n\necho \"=== Speed Monitor Setup ===\"\n\n# 1. Install speedtest-cli (in venv, no sudo needed)\nif [ ! -x \"$SCRIPT_DIR/.venv/bin/speedtest-cli\" ]; then\n    echo \"[1/4] Installing speedtest-cli in venv...\"\n    python3 -m venv \"$SCRIPT_DIR/.venv\"\n    \"$SCRIPT_DIR/.venv/bin/pip\" install speedtest-cli\nelse\n    echo \"[1/4] speedtest-cli already installed\"\nfi\n\n# Verify jq is available\nif ! command -v jq &>/dev/null; then\n    echo \"[!] jq is required. Installing...\"\n    apt-get install -y jq\nfi\n\n# 2. Make scripts executable\necho \"[2/4] Setting permissions...\"\nchmod +x \"$SCRIPT_DIR/speedtest.sh\"\n\n# 3. Copy to web root (nginx can't follow symlinks to home dirs)\necho \"[3/4] Deploying to $WEB_ROOT...\"\ncp \"$SCRIPT_DIR/index.html\" \"$WEB_ROOT/speedtest.html\"\nchmod 644 \"$WEB_ROOT/speedtest.html\"\n\n# Initialize data file if needed\nif [ ! -f \"$WEB_ROOT/speedtest-data.json\" ]; then\n    echo '{\"results\":[],\"updated\":\"\"}' | tee \"$WEB_ROOT/speedtest-data.json\" > /dev/null\n    chmod 644 \"$WEB_ROOT/speedtest-data.json\"\nfi\n\n# 4. Setup cron job\necho \"[4/4] Setting up cron job (hourly)...\"\nCRON_CMD=\"$CRON_SCHEDULE $SCRIPT_DIR/speedtest.sh\"\n(crontab -l 2>/dev/null | grep -v \"speedtest.sh\"; echo \"$CRON_CMD\") | crontab -\n\necho \"\"\necho \"=== Setup complete ===\"\necho \"Dashboard: http://$(hostname -I | awk '{print $1}')/speedtest.html\"\necho \"Cron: hourly ($CRON_SCHEDULE)\"\necho \"\"\necho \"Run first test: $SCRIPT_DIR/speedtest.sh\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "e4af633760e6b25ed17b9301bc204f79aaa3275d9b96b521f9ac9ba1eba9215f",
+      "score": 100,
+      "content": "# Speed Monitor\n\nLightweight internet speed monitoring dashboard. Cron + speedtest-cli + static HTML.\n\n## Architecture\n\n```\nCron (hourly) → speedtest-cli → speedtest.sh → /var/www/html/speedtest-data.json\n                                                        ↑\nBrowser → Nginx → /var/www/html/speedtest.html ─────────┘\n```\n\n## Setup\n\n```bash\n./install.sh\n```\n\nThis will:\n- Install `speedtest-cli` (via pip3)\n- Symlink `index.html` → `/var/www/html/speedtest.html`\n- Set up hourly cron job\n\n## Manual Test\n\n```bash\n./speedtest.sh\n```\n\n## Dashboard\n\n`http://<server-ip>/speedtest.html`\n\nFeatures: dark theme, download/upload/ping charts, time range filter (24h/7d/30d), auto-refresh.\n\n## Data\n\n- JSON file: `/var/www/html/speedtest-data.json`\n- Auto-rotates entries older than 30 days\n- ~100KB for 30 days of hourly measurements\n"
+    },
+    {
+      "path": "speedtest.sh",
+      "sha": null,
+      "content_sha256": "8824b6a0b334aef102b1c1196534b73564e72f11f762c1b156ae97522e4dbede",
+      "score": 95,
+      "content": "#!/bin/bash\n# speedtest.sh - Run speedtest and append result to JSON data file\n# Called by cron every hour\n\nSCRIPT_DIR=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\nDATA_FILE=\"/var/www/html/speedtest-data.json\"\nLOCK_FILE=\"/tmp/speedtest-monitor.lock\"\nMAX_AGE_DAYS=30\nLOG_TAG=\"speedtest-monitor\"\nSPEEDTEST=\"$SCRIPT_DIR/.venv/bin/speedtest-cli\"\n\n# Fallback to system speedtest-cli if venv doesn't exist\nif [ ! -x \"$SPEEDTEST\" ]; then\n    SPEEDTEST=\"speedtest-cli\"\nfi\n\n# Prevent concurrent runs\nif [ -f \"$LOCK_FILE\" ]; then\n    pid=$(cat \"$LOCK_FILE\" 2>/dev/null)\n    if kill -0 \"$pid\" 2>/dev/null; then\n        logger -t \"$LOG_TAG\" \"Already running (PID $pid), skipping\"\n        exit 0\n    fi\n    rm -f \"$LOCK_FILE\"\nfi\necho $$ > \"$LOCK_FILE\"\ntrap 'rm -f \"$LOCK_FILE\"' EXIT\n\n# Initialize data file if missing\nif [ ! -f \"$DATA_FILE\" ] || [ ! -s \"$DATA_FILE\" ]; then\n    echo '{\"results\":[],\"updated\":\"\"}' > \"$DATA_FILE\"\nfi\n\n# Run speedtest with retry\nMAX_RETRIES=3\nfor attempt in $(seq 1 $MAX_RETRIES); do\n    logger -t \"$LOG_TAG\" \"Starting speedtest (attempt $attempt/$MAX_RETRIES)...\"\n    raw=$($SPEEDTEST --json --secure 2>&1)\n    rc=$?\n\n    if [ $rc -eq 0 ] && [ -n \"$raw\" ] && echo \"$raw\" | jq . >/dev/null 2>&1; then\n        break\n    fi\n\n    if [ \"$attempt\" -lt \"$MAX_RETRIES\" ]; then\n        logger -t \"$LOG_TAG\" \"Attempt $attempt failed: $(echo \"$raw\" | head -1). Retrying in 30s...\"\n        sleep 30\n    else\n        logger -t \"$LOG_TAG\" \"ERROR: speedtest-cli failed after $MAX_RETRIES attempts (rc=$rc): $(echo \"$raw\" | head -1)\"\n        exit 1\n    fi\ndone\n\n# Parse results (speedtest-cli outputs bits/s, convert to Mbit/s)\ntimestamp=$(echo \"$raw\" | jq -r '.timestamp')\ndownload_bps=$(echo \"$raw\" | jq -r '.download')\nupload_bps=$(echo \"$raw\" | jq -r '.upload')\nping_ms=$(echo \"$raw\" | jq -r '.ping')\nserver=$(echo \"$raw\" | jq -r '.server.sponsor + \" (\" + .server.name + \")\"')\nisp=$(echo \"$raw\" | jq -r '.client.isp')\npublic_ip=$(echo \"$raw\" | jq -r '.client.ip')\n\n# Convert bits/s to Mbit/s with 2 decimal places\ndownload_mbps=$(echo \"$download_bps\" | awk '{printf \"%.2f\", $1 / 1000000}')\nupload_mbps=$(echo \"$upload_bps\" | awk '{printf \"%.2f\", $1 / 1000000}')\nping_rounded=$(echo \"$ping_ms\" | awk '{printf \"%.1f\", $1}')\n\n# Build new entry\nnew_entry=$(jq -n \\\n    --arg ts \"$timestamp\" \\\n    --argjson dl \"$download_mbps\" \\\n    --argjson ul \"$upload_mbps\" \\\n    --argjson ping \"$ping_rounded\" \\\n    --arg srv \"$server\" \\\n    --arg isp \"$isp\" \\\n    --arg ip \"$public_ip\" \\\n    '{timestamp: $ts, download_mbps: $dl, upload_mbps: $ul, ping_ms: $ping, server: $srv, isp: $isp, public_ip: $ip}')\n\n# Calculate cutoff timestamp (30 days ago)\ncutoff=$(date -d \"-${MAX_AGE_DAYS} days\" -Iseconds 2>/dev/null || date -v-${MAX_AGE_DAYS}d -Iseconds 2>/dev/null)\n\n# Append to data file and rotate old entries\nupdated=$(date -Iseconds)\ntmp=$(mktemp)\njq --argjson entry \"$new_entry\" --arg cutoff \"$cutoff\" --arg updated \"$updated\" '\n    .results += [$entry] |\n    .results |= map(select(.timestamp > $cutoff)) |\n    .updated = $updated\n' \"$DATA_FILE\" > \"$tmp\" && mv \"$tmp\" \"$DATA_FILE\"\n\nchmod 644 \"$DATA_FILE\"\n\nlogger -t \"$LOG_TAG\" \"Done: ${download_mbps} Mbit/s down, ${upload_mbps} Mbit/s up, ${ping_rounded} ms ping, IP: ${public_ip}\"\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-10-27T03:31:25.097714+00:00"
+}
