@@ -13,6 +13,7 @@ Policy:
 """
 from __future__ import annotations
 import argparse, concurrent.futures, json, os, re, shutil, subprocess, tempfile
+from urllib.parse import urlparse
 from pathlib import Path
 
 from collection_json_io import load_collection_json
