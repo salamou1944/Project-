@@ -25,6 +25,7 @@ def validate_outcome(report: dict, queue: dict) -> dict:
             "status": "NO_APPROVED_CANDIDATES",
             "installed_or_already_installed": 0,
             "ready_for_verification": 0,
+            "proven_callable": 0,
             "blocked_by_size": 0,
         }
 
