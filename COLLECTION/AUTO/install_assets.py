@@ -13,6 +13,7 @@ Policy:
 """
 from __future__ import annotations
 import argparse, concurrent.futures, json, os, re, shutil, subprocess, tempfile
+from urllib.parse import urlparse
 from pathlib import Path
 
 from collection_json_io import load_collection_json
@@ -25,6 +26,7 @@ DEFAULT_WORKERS = int(os.getenv("COLLECTION_INSTALL_WORKERS", "8"))
 MAX_MB = int(os.getenv("COLLECTION_INSTALL_MAX_MB", "250"))
 
 QUARANTINE = ROOT / "COLLECTION" / "SECURITY" / "SOURCE-QUARANTINE.json"
+INSTALL_APPROVALS = ROOT / "COLLECTION" / "MASTER" / "INSTALL-APPROVALS.json"
 
 
 def load_quarantined_revisions():
@@ -139,6 +141,91 @@ def select_collected_candidates(manifest, value_queue, max_candidates=5, quarant
     return selected
 
 
+def select_explicit_approval_candidates(manifest, approvals, max_candidates=5, quarantined_revisions=None):
+    """Select exact-revision approvals only when both evidence-backed gates are PASS."""
+    if not isinstance(max_candidates, int) or isinstance(max_candidates, bool) or not 0 <= max_candidates <= 20:
+        raise ValueError("max_candidates must be between 0 and 20")
+    rows = manifest.get("sources") if isinstance(manifest, dict) else None
+    items = approvals.get("items") if isinstance(approvals, dict) else None
+    if not isinstance(rows, list):
+        raise ValueError("manifest.sources must be a list")
+    if not isinstance(approvals, dict) or approvals.get("schema_version") != "collection-install-approvals/v1" or not isinstance(items, list):
+        raise ValueError("install approvals schema is invalid")
+    if max_candidates == 0:
+        return []
+    by_source = {
+        row.get("canonical_source"): row
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("canonical_source"), str)
+    }
+    blocked = {(repo, revision.lower()) for repo, revision in (quarantined_revisions or set())}
+    selected, seen = [], set()
+    for approval in items:
+        if not isinstance(approval, dict):
+            raise ValueError("install approval entries must be objects")
+        if approval.get("decision") != "INSTALL_APPROVED":
+            continue
+        required = (
+            "repo", "revision_sha", "license", "install_approval", "integration_gate",
+            "security_gate", "integration_evidence", "security_evidence", "capability_key",
+            "reviewed_at", "review_notes",
+        )
+        if any(not isinstance(approval.get(key), str) or not approval.get(key).strip() for key in required):
+            raise ValueError("approved install record is incomplete")
+        repo = approval["repo"]
+        revision = approval["revision_sha"].lower()
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            raise ValueError("approved install repo is invalid")
+        if not re.fullmatch(r"[0-9a-f]{40}", revision):
+            raise ValueError("approved install revision must be a full commit SHA")
+        if approval["install_approval"] != "APPROVED":
+            continue
+        if approval["integration_gate"] != "PASS" or approval["security_gate"] != "PASS":
+            continue
+        for evidence_key in ("integration_evidence", "security_evidence"):
+            parsed = urlparse(approval[evidence_key])
+            if parsed.scheme != "https" or parsed.netloc != "github.com" or "/actions/runs/" not in parsed.path:
+                raise ValueError(f"{evidence_key} must link to a GitHub Actions run")
+        if approval["license"] not in ALLOWED:
+            continue
+        if (repo, revision) in blocked:
+            continue
+        row = by_source.get("github:" + repo)
+        if not isinstance(row, dict):
+            continue
+        row_revision = row.get("revision_sha")
+        if not isinstance(row_revision, str) or row_revision.lower() != revision:
+            continue
+        if row.get("state") != "extracted" or row.get("license") != approval["license"]:
+            continue
+        if row.get("mode") not in {"cached", "refreshed"}:
+            continue
+        try:
+            if int(row.get("files_extracted", 0) or 0) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        if repo in seen:
+            continue
+        selected.append({
+            "source_record": "COLLECTION/MASTER/INSTALL-APPROVALS.json",
+            "repo": repo,
+            "url": "https://github.com/" + repo,
+            "revision": revision,
+            "license": approval["license"],
+            "selected_capabilities": [approval["capability_key"]],
+            "approval_evidence": {
+                "integration": approval["integration_evidence"],
+                "security": approval["security_evidence"],
+                "reviewed_at": approval["reviewed_at"],
+            },
+        })
+        seen.add(repo)
+        if len(selected) >= max_candidates:
+            break
+    return selected
+
+
 def source_records(max_auto_candidates=5):
     """Select only explicitly approved candidates from the canonical value queue."""
     out = []
@@ -152,10 +239,19 @@ def source_records(max_auto_candidates=5):
     if max_auto_candidates:
         try:
             canonical_data = json.loads(canonical_manifest.read_text(encoding="utf-8"))
-            value_data = load_collection_json(value_queue_path)
-            out.extend(select_collected_candidates(canonical_data, value_data, max_auto_candidates, quarantined_revisions))
+            approval_data = json.loads(INSTALL_APPROVALS.read_text(encoding="utf-8"))
+            explicit = select_explicit_approval_candidates(
+                canonical_data, approval_data, max_auto_candidates, quarantined_revisions
+            )
+            out.extend(explicit)
+            seen = {item["repo"] for item in out}
+            remaining = max_auto_candidates - len(out)
+            if remaining > 0:
+                value_data = load_collection_json(value_queue_path)
+                queued = select_collected_candidates(canonical_data, value_data, remaining, quarantined_revisions)
+                out.extend(item for item in queued if item["repo"] not in seen)
         except (OSError, ValueError) as exc:
-            raise SystemExit(f"invalid Collection shortlist input; refusing automatic install selection: {exc}")
+            raise SystemExit(f"invalid Collection shortlist or approval input; refusing automatic install selection: {exc}")
 
     # Legacy source notes are preservation/research records only; they never feed auto-install.
     return out
