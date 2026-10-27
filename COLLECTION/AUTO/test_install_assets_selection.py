@@ -2,7 +2,7 @@
 """Regression tests for evidence-prioritized, license-gated Collection installs."""
 import unittest
 
-from install_assets import ALLOWED, load_quarantined_revisions, select_collected_candidates
+from install_assets import ALLOWED, load_quarantined_revisions, select_collected_candidates, select_explicit_approval_candidates
 
 
 def source(repo, *, state="extracted", license_name="MIT", files=1, revision=None, mode="refreshed"):
@@ -30,6 +30,25 @@ def queue_item(key, sources, action="API_FACTORY_REVIEW", promotion_action="INST
         "sources": sources,
         "priority": [100, 10, len(sources)],
     }
+
+
+def approval_item(repo, revision, **overrides):
+    item = {
+        "repo": repo,
+        "revision_sha": revision,
+        "license": "MIT",
+        "decision": "INSTALL_APPROVED",
+        "install_approval": "APPROVED",
+        "integration_gate": "PASS",
+        "security_gate": "PASS",
+        "integration_evidence": "https://github.com/salamou1944/Salamou-31/actions/runs/12345",
+        "security_evidence": "https://github.com/salamou1944/Project-/actions/runs/67890",
+        "capability_key": "model-parameter-validation",
+        "reviewed_at": "2026-10-27",
+        "review_notes": "Pinned source and target integration were checked.",
+    }
+    item.update(overrides)
+    return item
 
 
 class InstallSelectionTests(unittest.TestCase):
@@ -132,6 +151,51 @@ class InstallSelectionTests(unittest.TestCase):
         selected = select_collected_candidates(manifest, queue, quarantined_revisions=quarantine)
         self.assertEqual([item["repo"] for item in selected], ["owner/fresh"])
         self.assertEqual(len(quarantine), 5)
+
+    def test_explicit_approval_requires_exact_current_revision_and_two_evidence_runs(self):
+        revision = "d" * 40
+        manifest = {"sources": [
+            source("mnfst/modelparams.dev", revision=revision, license_name="MIT", mode="cached"),
+            source("owner/other", revision="e" * 40),
+        ]}
+        approvals = {"schema_version": "collection-install-approvals/v1", "items": [
+            approval_item("mnfst/modelparams.dev", revision),
+            approval_item("owner/other", "f" * 40),
+            approval_item("owner/not-reviewed", "e" * 40, security_gate="UNVERIFIED"),
+        ]}
+        selected = select_explicit_approval_candidates(manifest, approvals, quarantined_revisions=set())
+        self.assertEqual([item["repo"] for item in selected], ["mnfst/modelparams.dev"])
+        self.assertEqual(selected[0]["source_record"], "COLLECTION/MASTER/INSTALL-APPROVALS.json")
+        self.assertEqual(selected[0]["approval_evidence"]["reviewed_at"], "2026-10-27")
+
+    def test_explicit_approval_fails_closed_for_missing_or_non_actions_evidence(self):
+        manifest = {"sources": [source("mnfst/modelparams.dev", revision="d" * 40)]}
+        bad_url = approval_item("mnfst/modelparams.dev", "d" * 40,
+                                security_evidence="https://github.com/mnfst/modelparams.dev")
+        with self.assertRaisesRegex(ValueError, "GitHub Actions run"):
+            select_explicit_approval_candidates(
+                manifest, {"schema_version": "collection-install-approvals/v1", "items": [bad_url]}
+            )
+
+    def test_explicit_approval_never_bypasses_quarantine_or_source_license(self):
+        revision = "d" * 40
+        manifest = {"sources": [source("mnfst/modelparams.dev", revision=revision)]}
+        approval = approval_item("mnfst/modelparams.dev", revision)
+        self.assertEqual(
+            select_explicit_approval_candidates(
+                manifest, {"schema_version": "collection-install-approvals/v1", "items": [approval]},
+                quarantined_revisions={("mnfst/modelparams.dev", revision)},
+            ),
+            [],
+        )
+        mismatch = approval_item("mnfst/modelparams.dev", revision, license="NOASSERTION")
+        self.assertEqual(
+            select_explicit_approval_candidates(
+                manifest, {"schema_version": "collection-install-approvals/v1", "items": [mismatch]},
+                quarantined_revisions=set(),
+            ),
+            [],
+        )
 
     def test_missing_refresh_mode_fails_closed(self):
         manifest = {"sources": [source("owner/unknown-mode", mode=None)]}
