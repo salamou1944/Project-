@@ -519,3 +519,50 @@ Checked: 2026-10-27T03:03Z. This is an evidence update, not a claim of a new cus
 - Upwork proposals: **0**; invitations: **0**; Connects balance/spend: **0 / 0**.
 - Provider activations / live hosted inference calls / paid inference spend: **0 / 0 / $0**.
 - Listings, collaboration requests, free models, open-source packages, and architecture are not customers or revenue events.
+
+
+## 2026-10-28 revenue + leverage sweep
+
+### AgentMail — full received-thread audit
+- Inbox inventory returned three inboxes: `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`.
+- `api-pilot` has 6 received threads; all are mailer-daemon delivery-failure notices, latest 2026-09-27. `easy` has 5 received threads; all are delivery-failure notices, latest 2026-09-22. `pastel-realtime-e2e` has 0 received threads.
+- A separate thread query after 2026-10-26T02:27:56Z returned 0 threads in all three inboxes. No genuine prospect reply, acceptance, payment, or delivery confirmation was found.
+- Product 001's four messages to IEA, IMMAR Media, B2B Lead Generation Agency, and Data-Track Consulting remain outbound-only. No follow-up was sent; no new email was sent.
+
+### Fresh Upwork opportunities — connected marketplace evidence
+1. **AI Automation Engineer Needed for Lead Qualification & CRM Integration Using n8n** — https://www.upwork.com/jobs/~022114812077809695061
+   - Fixed price: $500.00; posting state ACTIVE; client payment verified; published 2026-10-26.
+   - Scope aligns with the Lead Automation Pilot: one form/webhook, validation and duplicate prevention, one LLM, one CRM, up to ten fields, notifications, retries, failure logging, human review, tests and handoff.
+   - Live activity at check: 50+ proposals, 1 hire, 2 invited to interview, 0 offers, 0 invitations sent. The connected Upwork job detail reports `connects_cost=18`, `connects_balance=0`, `can_apply=false`, `applied=false`.
+   - Decision: **do not submit**. It is a relevant listing, but competition is already high, hiring is underway, and application is blocked by the zero Connects balance. No credits were bought; no off-platform contact was attempted. The job says platform subscriptions, hosting and API usage are separate, so any future scope must keep these customer-funded or use a verified free path.
+2. **AI Agent Creator and QA/Tester (Claude, Gumloop, N8N, CrewAI, UiPath, OpenClaw)** — https://www.upwork.com/jobs/~022114527181761958802
+   - Posting state ACTIVE, published 2026-10-26, $3–$4/hour, fewer than 5 proposals; client payment is verified, with 4 interview invitations, 0 hires and 0 offers at check.
+   - The client explicitly requires the freelancer to bring their own platform access, including existing paid accounts or trials, and says not to contact outside Upwork.
+   - Decision: **exclude** because the rate is low for the broad QA/platform scope, paid account access conflicts with the no-upfront-spend rule, and there is no permitted free direct-contact path. No proposal or off-platform contact was made.
+- Connected Upwork freelancer dashboard: 0 Connects, 0 incoming invitations, 0 active contracts. No proposal was submitted and no paid lead credit or upfront spend occurred.
+
+### Repository leverage — verified source changes, not upgraded to customer proof
+- `salamou1944/Salamou-31` latest relevant commits:
+  - `e3981ddda8d1485b5ccfe698ca39b97791dd4417` — opt-in validation of provider parameters against pinned `modelparams@0.0.72`, returning `422 INVALID_MODEL_PARAMETERS` before provider network I/O: https://github.com/salamou1944/Salamou-31/commit/e3981ddda8d1485b5ccfe698ca39b97791dd4417
+  - `a185727cf2f92829510742afe592e5c460b22437` and `429b8b047e9a277cb04c420dd131614bb1dbb35f` — install pinned dependencies before the Gemini real-completion probe to fix import-time failures: https://github.com/salamou1944/Salamou-31/commit/429b8b047e9a277cb04c420dd131614bb1dbb35f
+- Monetization use: offer API integration hardening with preflight model-parameter validation, clear 422 failures, and an explicit provider-probe acceptance test. **The Gemini probe's resulting workflow status was not verified in this sweep**, so do not claim a successful live Gemini completion or production reliability based on the dependency fix alone.
+- The current API Factory docs still point to the 2026-10-25 production/preview customer-key lifecycle smoke and durable-storage smoke. Those tests evidence the tested technical path only; they do not establish a paying customer, generated API revenue, or an uptime SLA. Source: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md
+- Existing offer catalog remains a scope/pricing hypothesis, not customer demand: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/OFFERS-AND-PRICING.md. The current Product 001 prospecting pack still records four outbound messages and no conversion: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/products/username-research-api/PROSPECTING-PACK.md
+
+### Free LLM catalogue delta and official-term cross-check
+- Current `mnfst/awesome-free-llm-apis/data.json`: `lastUpdated=2026-10-25`, 16 providers, blob SHA `c9e486f028274d4b42eb63f29d7856b6e1c84a77`; `sources.json` SHA `71c48b6d5982c469d5d660684ab161a858d5b907`.
+- Relative to the 2026-10-23 catalogue commit `82a8cd897efb3d1a42efe7121023e52b70800753`, Hugging Face was removed; Gemini aliases/models changed; three Kilo Code model entries and three OpenRouter model entries were added; Ollama Cloud's grouped model summary changed. The latest repo commit on 2026-10-26 (`65ca334001b084dfcaf40b56b223a344466668dc`) only changes a sponsor URL; no newer provider/model-data snapshot was found. Relevant source-review commit: https://github.com/mnfst/awesome-free-llm-apis/commit/0ad26c4f3b00185a6c13af4efbca6848ca51c2ba
+- **Hugging Face source conflict:** the catalogue removed Hugging Face based on a claim that free users have no credits, but the official pricing page currently says Free users receive $0.10/month in Inference Provider credits, subject to change: https://huggingface.co/docs/inference-providers/pricing. Treat the catalogue claim as contradicted by the current official page. The allowance is too small to serve as a dependable production budget; no dependency on it is recommended.
+- **OpenRouter source conflict:** official pricing currently says free models are capped at 20 RPM and 50 requests/day across free models; raising the cap to 1,000/day requires buying at least $10 in credits. Failed attempts count toward the daily limit. Source: https://openrouter.ai/pricing. The current `data.json` footnote's “50 RPD per model” wording conflicts with the official pricing page; use the official aggregate 50/day figure for planning. The paid top-up is excluded by the no-upfront-spend rule. Free routing can vary models and providers, and provider logging/data terms must be checked before any prompt is sent.
+- **Groq** remains the strongest candidate for bounded synthetic-data tests: current official limits list `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, and `qwen/qwen3.8-27b` at 30 RPM, 1,000 RPD, 8K TPM and 200K TPD for the published base limits. Limits are organization-level and exceeding them returns HTTP 429; exact account limits may differ. Source: https://console.groq.com/docs/rate-limits. This is not an uptime guarantee and was not live-probed in this sweep.
+- **Cloudflare Workers AI** free allocation is 10,000 Neurons/day shared across usage; requests fail after the allocation is exhausted. These models require Workers Paid or prepaid AI Gateway credits and are excluded from the no-spend path: `@cf/moonshotai/kimi-k2.6`, `@cf/moonshotai/kimi-k2.7-code`, `@cf/zai-org/glm-5.2`, `@cf/zai-org/glm-5.3`, `@cf/zai-org/glm-5.3-flash`, `@cf/deepseek-ai/deepseek-v4-flash-0731`, `@cf/deepseek-ai/deepseek-v4-pro-0813`. Source: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- **Kilo Code additions** are catalogue entries, not verified live capability: the new entries have not been live-probed, and the catalogue warns that prompts may be retained for training. NVIDIA endpoints listed through that route are explicitly trial-only and prohibit personal/confidential data. Keep these out of paid customer-data paths until exact model access, license, terms and retention are verified.
+- No provider was activated, no API key was created, no live hosted-inference call was made, and no customer data was sent. No provider is being represented as a customer or revenue event.
+
+### Commercial state after this sweep
+- New genuine inbound replies: **0**.
+- New qualified client replies / accepted scopes / payments / revenue: **0 / 0 / $0**.
+- Upwork proposals sent: **0**; Connects balance/spend: **0 / 0**.
+- New outreach sent: **0**; paid lead credits: **$0**; upfront spend: **$0**.
+- Provider activations / live hosted inference calls / paid inference spend: **0 / 0 / $0**.
+- Current best zero-upfront offer to test remains a tightly scoped workflow reliability/repair or lead-validation pilot, with binary acceptance criteria and no production claims beyond demonstrated tests. Listings, free-model catalog entries, code changes, and technical capability are not customers or revenue.
