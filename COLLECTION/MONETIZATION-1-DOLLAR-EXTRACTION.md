@@ -566,3 +566,45 @@ Checked: 2026-10-27T03:03Z. This is an evidence update, not a claim of a new cus
 - New outreach sent: **0**; paid lead credits: **$0**; upfront spend: **$0**.
 - Provider activations / live hosted inference calls / paid inference spend: **0 / 0 / $0**.
 - Current best zero-upfront offer to test remains a tightly scoped workflow reliability/repair or lead-validation pilot, with binary acceptance criteria and no production claims beyond demonstrated tests. Listings, free-model catalog entries, code changes, and technical capability are not customers or revenue.
+
+
+### Scheduled revenue + leverage sweep — 2026-10-28 20:08 PDT (2026-10-29 03:08 UTC)
+
+#### AgentMail reply check
+- Connected inbox inventory still contains `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`.
+- `list_threads(after=2026-10-26T02:27:57Z)` returned 0 threads in all three inboxes. The latest visible received threads in the outreach inboxes remain delivery-failure notifications (API Pilot: latest 2026-09-27; EASY: latest 2026-09-22); PASTEL has no received threads.
+- No new prospect reply, acceptance, customer conversion, or payment evidence. No follow-up or new outbound email was sent. This also means the earlier four Product 001 outreach messages remain unconverted; their delivery/interest is not established.
+
+#### Fresh Upwork opportunity review — no proposal submitted
+1. **Build a Simple AI Customer Support Chatbot for Our Website** — https://www.upwork.com/jobs/~022115511154231807581
+   - Live marketplace lookup at this sweep: status ACTIVE; published 2026-10-28T18:29:25Z; fixed budget $100; client payment method VERIFIED; client history shows $40 spend, one prior contract, 5.0 feedback from one review, and 50% hire rate.
+   - Job activity shows one invite and one interview, zero hires; proposal tier is 20–50. Scope: website FAQ bot from client-provided content, lead capture and human handoff, email/Google Sheets notification, test 15–20 questions, and a 5–10 minute handover video. Client requires evidence of 2–3 previously built website chatbots or a demo and expects 5–7 day delivery. Paid platform fees must be agreed and billed to the client's account.
+   - Upwork job detail returned `can_apply=false`, `connects_cost=13`, `connects_balance=0`, Freelancer Basic. No proposal was submitted. In addition to zero Connects, the required live-chatbot portfolio evidence was not verified in our repos; do not claim it.
+2. **Automation Specialist: Fix Keap + Memberium + WordPress email and webhook issues** — https://www.upwork.com/jobs/~022114017928798294930
+   - Status ACTIVE in job detail; published 2026-10-24; $20–30/hour; payment VERIFIED; client spend $350, hire rate 17%, zero feedback records; one interview and no hires on this posting.
+   - The client explicitly requires a personal 5-minute Loom showing 1–2 real automations and specific Keap/Memberium experience, and rejects generic/AI-written proposals. Job detail returned `can_apply=false`, `connects_cost=15`, `connects_balance=0`. No proposal or off-platform contact was attempted. Do not imply hands-on Keap/Memberium delivery experience without evidence.
+3. **AI Agent Creator and QA/Tester** — https://www.upwork.com/jobs/~022114527181761958802
+   - Job detail returned `can_apply=false`, `connects_cost=20`, `connects_balance=0`; rate is $3–4/hour and the job expects the freelancer to bring their own platform access, including existing paid accounts or trials. Excluded due to zero Connects, low economics, and potential upfront-access cost.
+- Account-level proposal check: no submitted freelancer proposals and no pending client invitations. Do not spend money or use an unauthorized external contact route to work around Upwork's rules.
+
+#### Free LLM catalogue delta (source-of-truth snapshot)
+- Current `mnfst/awesome-free-llm-apis/data.json` blob SHA: `c9e486f028274d4b42eb63f29d7856b6e1c84a77`; `lastUpdated=2026-10-25`; 16 providers. Compared with the 2026-10-23 snapshot (`60cb24f2a57fe37d48bf65e3a332bc78a096785b`), Hugging Face was removed; three Kilo Code rows and three OpenRouter rows were added; Gemini 3.7/3.5 Flash rows were removed; Ollama's grouped starter-model summary changed.
+- Latest upstream commits on 2026-10-28 (`a22f68b907631047edeb1ff68072c4ad5d21f390`, `c28ddc8b84804368a1b081385112feec590abd0a`, `bb481c0a11995e7480a97cdaf83644dbac71670a`) concern the Okapi sponsor/tracking link and tagline in README generation, not provider/model data. No newer model-data snapshot was found.
+- Newly added Kilo Code rows include `nvidia/nemotron-3-super-120b-a12b:free`, `nvidia/nemotron-3.5-content-safety:free`, and `stealth/glyph-cluster`; catalog-listed limit is 200 requests/hour per IP, but the new rows have not been live-probed. Kilo's own docs warn that requests may be routed to providers that log prompts/outputs; the catalog specifically marks NVIDIA endpoints as trial-only and says not to submit personal/confidential data. Exclude these from customer-data delivery unless the exact endpoint, license, commercial terms, logging/retention, and actual capability are independently verified.
+- Newly added OpenRouter rows include `thinkingmachines/inkling-small:free`, `nvidia/nemotron-3-super-120b-a12b:free`, and `nvidia/nemotron-3.5-content-safety:free`. Official OpenRouter pricing/limits: 20 RPM and 50 requests/day across all free models; providers may log prompts. These rows were not live-probed in this sweep. They are not a production guarantee and must not receive confidential/customer data until provider routing, terms, retention, and exact model behavior are verified.
+- Hugging Face removal remains a source conflict: current official pricing has previously stated $0.10/month in free Inference Provider credits, while the catalogue removed it as no-credit. Treat this allowance as too small and uncertain for a production budget; do not depend on it.
+- The catalogue's `lastUpdated` field is 2026-10-25 even though README/sponsor commits landed on 2026-10-28. Do not describe the Oct 28 commits as new model/provider updates.
+
+#### Reusable platform leverage and verification limits
+- Latest Salamou-31 commits remain: `e3981dd` adds opt-in exact model-parameter validation before provider network I/O with `422 INVALID_MODEL_PARAMETERS`; `a185727` and `429b8b0` install pinned API Factory dependencies before the Gemini real-completion probe. These support a potential paid offer for API-integration reliability, invalid-input handling, and documented error paths.
+- Current CI/status lookup for `e3981dd` and `429b8b0` returned no status entries; the workflow-runs helper is PR-trigger-only and returned no runs for `429b8b0`. Therefore, the dependency fix is recorded, but **a successful live Gemini completion is not established by this sweep**. Do not sell the probe as passed until a concrete run/response is captured.
+- API Factory's existing durable quota/customer-key lifecycle evidence remains useful for a tightly scoped API integration/repair offer, but proves only the tested technical path, not a customer, production SLA, or revenue. Product 001 prospecting pack still records four outbound messages and no conversion: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/products/username-research-api/PROSPECTING-PACK.md
+- Candidate zero-upfront offer remains a small workflow/API reliability pilot with a client-owned environment, agreed scope, synthetic/test data first, and binary acceptance criteria. Do not promise live chatbot delivery without a verified demo and the required platform access.
+
+#### Commercial state at end of this sweep
+- New inbound prospect replies: **0**.
+- New qualified leads / accepted scopes / payments / revenue: **0 / 0 / $0**.
+- New outbound messages: **0**; Upwork proposals: **0**.
+- Upwork Connects balance / spend: **0 / $0**; paid lead credits and provider spend: **$0**.
+- New free-model provider activations / hosted inference probes: **0 / 0**.
+- No listing, repository commit, free quota, or capability was counted as a customer or revenue event.
