@@ -608,3 +608,97 @@ Checked: 2026-10-27T03:03Z. This is an evidence update, not a claim of a new cus
 - Upwork Connects balance / spend: **0 / $0**; paid lead credits and provider spend: **$0**.
 - New free-model provider activations / hosted inference probes: **0 / 0**.
 - No listing, repository commit, free quota, or capability was counted as a customer or revenue event.
+
+
+
+### Scheduled revenue + leverage sweep — 2026-10-29 19:56 PDT (2026-10-30 02:56 UTC)
+
+#### AgentMail reply check
+- Queried received threads and received messages after `2026-10-26T02:27:56Z` in `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`.
+- Result: **0 received threads and 0 received messages** in each inbox for that interval. No prospect reply, acceptance, signed scope, payment, or conversion evidence.
+- No follow-up email or new outbound message was sent. Do not infer delivery or interest from previously sent messages.
+
+#### Fresh Upwork opportunities — legitimate listings, but no application was possible
+Account and application state checked:
+- Freelancer profile location: Oran, Algeria (UTC+01:00); profile visibility is private; profile aggregates show 0 completed jobs and 0 feedback records. No established Job Success Score or public portfolio evidence was available in the profile response.
+- Connects balance: **0 free / 0 paid / 0 total**. No Connects purchase or transaction. Freelancer proposals list is empty; dashboard shows 0 invitations and 0 active contracts.
+- All job details below returned `can_apply=false` because the account has no Connects. No proposals were submitted and no off-platform contact was attempted.
+
+1. **AI Automation and Growth Operations Specialist (Claude Agents, Outreach, Sales Ops)** — Queed, Saudi energy technology company.
+   - Upwork job: https://www.upwork.com/jobs/~022115736493956174582
+   - Published 2026-10-29 09:24 UTC; status ACTIVE at lookup; $25–$40/hour; client payment verified, 5.0 rating across 38 reviews, 53 contracts, $37,633.22 historical spend, 76% hire rate.
+   - Scope includes partner onboarding, order/install workflows, CRM, ClickUp, Slack, Google Drive, email and WhatsApp integrations, Claude/n8n agents, lead qualification and sales reporting. It also asks for personalised email/LinkedIn outreach.
+   - Application requires 2–3 relevant automation/agent examples and outreach/sales campaign experience. Cost: 22 Connects; balance 0; the dashboard showed 50+ proposals and the job detail showed 2 invitations / 6 interviews / 0 hires.
+   - This is the strongest new commercial fit by problem domain and client history, but we do not have two verified n8n/Claude client case studies or verified outreach campaign outcomes in the repositories. No proposal submitted. Do not invent case studies. If ever pursued, limit any outbound automation to lawful, targeted, non-spam partner outreach with human review and suppression controls.
+
+2. **Intercom and Fin AI Agent Implementation Lead**.
+   - Upwork job: https://www.upwork.com/jobs/~022115929694109594240
+   - Published 2026-10-29 22:12 UTC; status ACTIVE; expert/full-time; client payment verified, 5.0 across 10 reviews, 16 contracts, $19,343.95 historical spend, 83% hire rate.
+   - Requires at least two end-to-end Intercom implementations with Fin AI Agent in production, custom-system integration, Messenger/JWT, ticket routing, and training. Cost: 27 Connects; balance 0; 10–15 proposals shown in the dashboard.
+   - No Intercom/Fin production implementation evidence exists in our current repositories. Excluded; no proposal.
+
+3. **n8n AI Agent & Automation Builder: Long-Term Partner, Per-Project Pay**.
+   - Upwork job: https://www.upwork.com/jobs/~022115893133876904343
+   - Status ACTIVE; $275 fixed paid trial for one WhatsApp or web-chat AI agent; client payment verified, 5.0 across 6 reviews, $1,195 historical spend, 67% hire rate.
+   - Follow-on prices described by the client: about $195 per automation, then about $50/month per active AI agent and $35/month per active automation for maintenance. The listing asks for proven n8n + LLM experience, WhatsApp Business API/chat-widget experience, and 1–2 example agents/workflows.
+   - Cost: 18 Connects; balance 0; dashboard search showed 50+ proposals. No exported n8n workflow or live WhatsApp integration was found in the searched Salamou-31 paths. No proposal submitted.
+
+4. **n8n Expert Needed for Lead Capture & AI Follow-Up Email Workflow**.
+   - Upwork job: https://www.upwork.com/jobs/~022115726432249122397
+   - Status ACTIVE; $20 fixed starter project; client payment verified, 5.0 across 2 reviews, $280.50 historical spend, 38% hire rate.
+   - Scope: webhook form intake → Google Sheets → OpenAI draft → Gmail send → Telegram alert. The client explicitly requests an existing n8n workflow example using OpenAI or Sheets.
+   - Cost: 10 Connects; balance 0. No qualifying n8n workflow export/demo was found in our repository search. No proposal submitted.
+
+5. **n8n automation: Google Drive → Claude captions → GoHighLevel Social Planner**.
+   - Upwork job: https://www.upwork.com/jobs/~022115540483786615953
+   - Status ACTIVE; $1,000 fixed; client payment verified, 4.73 across 20 reviews, 37 contracts, $18,338.94 historical spend.
+   - Requires n8n, GoHighLevel media-library API upload, Anthropic API, training, troubleshooting guide, and 30 days of support. Cost: 27 Connects; balance 0; 50+ proposals in the search result. We have no verified GHL media-upload implementation or equivalent client case study. No proposal submitted.
+
+6. **Build Custom AI Agent to Process Emailed PDF Purchase Orders into ERP-Ready CSVs**.
+   - Upwork job: https://www.upwork.com/jobs/~022115886926935166557
+   - Client history is substantial (4.91 across 40 reviews; about $1.25M spend), but the posting is expert-level and requires $10,000+ historical freelancer earnings, JSS 90+, Rising Talent, and 26 Connects. It also demands proven accuracy on rotated/faxed/handwritten multi-format purchase orders and ERP reconciliation.
+   - We have no verified production OCR accuracy/case study for this scope. Excluded; no proposal.
+
+Other fresh dashboard matches were filtered out when they required German/Italian/other language fluency, direct voice-agent production experience, or unrelated manual support. The high client spend on a listing does not establish that the user is qualified or that a contract exists.
+
+#### Public n8n community opportunities
+- Automation Job Board page: https://automationjobboard.com/freelance-automation-jobs/ (page says updated 2026-10-29 and lists six open roles; original posts have their own older dates and were not all re-confirmed as open on Oct 29).
+- **Young Automation Studio — Shopify tracking + n8n specialist**: original post https://community.n8n.io/t/hiring-shopify-tracking-n8n-specialist-part-time-ongoing-35-hr-guaranteed-revenue-share/322445. It requires production Shopify Customer Events, Meta CAPI de-duplication, GA4 purchase events, Klaviyo and production n8n; at least 3 hours/day overlap with US Eastern. The author updated terms on Oct 19: no guaranteed weekly hours; pay is 60% of what the agency receives per job after Upwork fees/refunds; paid test remains $105 with a 3-hour cap. The user’s Oran UTC+01 location can overlap the US Eastern window, but no production Shopify tracking/Klaviyo evidence or Upwork JSS exists. The application route is a forum DM with seven requested details; the connected Browser tool is read-only and cannot send forum DMs. No email was sent as a workaround.
+- **XASIS — paid SME n8n/AI builders (Singapore)**: original post https://community.n8n.io/t/hiring-ai-n8n-builders-in-sea-for-small-paid-sme-automation-jobs-singapore/321311. Fixed-scope work includes WhatsApp FAQ bots and quote/booking automation, but builders must be in Singapore/Malaysia/Philippines or nearby GMT+7–9 and show client work already shipped. User profile location is Algeria UTC+01; location and client-case-study requirements are not met. No outreach sent.
+- **MirrorFly video-conferencing automation**: original post https://community.n8n.io/t/n8n-mirrorfly-developer-for-video-conferencing-automation/322016. Advertised base-system budget £800–£1,000 and advanced add-ons £800–£1,200; requires n8n + MirrorFly API/SDK, calendars, CRM, notifications, handoff and 30-day bug support. No MirrorFly implementation or similar n8n workflow evidence exists in the searched repositories; no fixed quote or application sent.
+- **Private-client n8n/AI agent QA trial**: https://community.n8n.io/t/looking-for-n8n-ai-automation-specialist-paid-qa-stress-testing/319256. It asks for n8n/Vapi/Twilio/ElevenLabs testing and a paid trial but does not state a rate in the post. No relevant production voice-agent case study exists in our repositories; no DM sent.
+- The older Looker Studio paid test (about $115) is listed for India/IST and the original post dates to Sep 29; it is not treated as a fresh opportunity. The Luca Bernardi role requires at least 50% time, French/Italian and a paid practical exercise; excluded under the no-upfront-spend constraint.
+
+#### Repository leverage and honest capability boundary
+- Salamou-31 service catalog and offers define n8n repair, REST/webhook/OAuth integration, lead qualification, customer support, CRM/WhatsApp, document extraction/OCR and e-commerce automation. These are service definitions, not evidence that each integration has been delivered for a paying client.
+- GitHub search for `n8n` and `WhatsApp` in Salamou-31 found service catalog/README/offer/secret-template references, but **no exported n8n workflow JSON, no live WhatsApp Cloud API integration proof, and no client case study** in the searched paths.
+- `AI-API-HUB/lead-qualification-api/README.md` explicitly labels the Lead Qualification API as MVP code that is not deployed or independently production-tested. Do not market it as a live production endpoint.
+- API Factory remains the strongest reusable technical asset. Its README documents provider-neutral compilation, OpenAPI contracts, API-key auth, validation, idempotency, usage/quota ledger, structured errors and fail-closed storage. The PERSISTENCE.md evidence from 2026-10-25 records production/preview customer-key lifecycle smoke: one successful live research request, durable quota rejection (HTTP 429), revocation, then HTTP 401. This proves only the tested technical path; it does not prove a paying customer, generated API sales, SLA or production reliability for unrelated integrations.
+- Latest Salamou-31 commit `429b8b047e9a277cb04c420dd131614bb1dbb35f` adds pinned dependency installation and an import-resolution check before the Gemini completion probe. The diff still contains a second dependency-install step. No successful Gemini completion result was independently verified in this sweep.
+- Reusable commercial angle: a small, client-owned **API/workflow reliability pilot** with input validation, idempotency, retries, error notifications, audit logs and binary acceptance tests. Keep the Lead Qualification API as an MVP/template until deployed and independently tested. Do not claim WhatsApp, Intercom, GHL, MirrorFly, OCR accuracy or n8n production work without a concrete demo or client evidence.
+
+#### Free LLM catalogue delta — 2026-10-29 upstream sync
+- Upstream repository: https://github.com/mnfst/awesome-free-llm-apis
+- Current `data.json` blob SHA: `db1f3499c61f6786cc85981b18801a00b69b10d4`; `lastUpdated=2026-10-25`; **15 providers** (down from 16 in the prior recorded sweep).
+- Relevant upstream commits:
+  - `7c8748c781b5eb6b5aba95f7bce40e59bccde849` — merge of the 2026-10-29 data sync.
+  - `f49e523a77dbbb98032ca589ca796700fc565689` — removes Ollama Cloud because its canonical pricing page no longer offers free hosted inference credits.
+  - `be2ef92b557d9a18c651c00d33e8eedca79c5368` — removes two dead free model entries: `nvidia/nemotron-3-super-120b-a12b:free` from Kilo Code and OpenRouter.
+- No new provider or free-model additions were made in this Oct 29 data sync. The model-data field still says Oct 25; the Oct 29 commits are removals, not a new-model release.
+- Canonical Ollama pricing page https://ollama.com/pricing currently describes cloud inference as pay-per-token with usage credits; the $0 pay-as-you-go tier is not free cloud inference. Running models locally is a separate option whose cost depends on user-owned hardware. Treat older search snippets mentioning free starter cloud credits as stale; do not rely on Ollama Cloud for a no-cost hosted API.
+- OpenRouter's live model catalogue https://openrouter.ai/api/v1/models no longer lists the removed `:free` variant of Nemotron 3 Super 120B; the non-free base model remains listed with paid token prices. Free model caps remain 20 RPM and 50 requests/day across all free models; raising the daily limit requires at least $10 in purchased credits, excluded by the no-upfront rule. Source: https://openrouter.ai/pricing
+- Kilo Code's live documentation https://kilo.ai/docs/gateway/models-and-providers says free model availability changes and `kilo-auto/free` dynamically selects from a curated pool. Anonymous requests are capped at 200/hour/IP (https://kilo.ai/docs/gateway/authentication). NVIDIA free endpoints are trial-only: no personal/confidential data, and requests may be logged for service improvement. Do not use Kilo Auto Free for customer data.
+- **Groq** remains a candidate for bounded B2B integration tests: official base free limits for `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, and `qwen/qwen3.8-27b` are 30 RPM, 1,000 RPD, 8K TPM and 200K TPD; organization-level and account-specific limits may differ, with HTTP 429 on overage. Source: https://console.groq.com/docs/rate-limits. Groq's Services Agreement permits API integration into a Customer Application and use by end users, but prohibits reselling/leasing access to the Groq account; inputs/outputs are not retained except for service, reliability, legal or abuse-prevention purposes, and training is not permitted without explicit permission. Source: https://console.groq.com/docs/legal/services-agreement. Best fit: client-owned Groq account/key for a narrowly scoped lead-classification or support-triage workflow, not an API-key resale service. No live model call or account-specific commercial-use confirmation was performed.
+- **Cloudflare Workers AI** has a documented 10,000 Neurons/day free allocation; requests fail after the allocation is exhausted, and some models require a paid billing method. Source: https://developers.cloudflare.com/workers-ai/platform/pricing/. Its Oct 16 data-usage terms state zero data retention for stateless inference and no model training on Customer Content, but stateful storage/logging/caching can retain content; third-party model licenses still apply. Source: https://developers.cloudflare.com/workers-ai/platform/data-usage. The official pricing page lists small Llama 3.2 models within the free allocation; Meta's Llama 3.2 license permits commercial/research use subject to its community terms and a >700M monthly-active-user additional-license threshold. Sources: https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/MODEL_CARD.md and https://github.com/meta-llama/llama-models/blob/main/models/llama3_2/LICENSE. This is the most promising privacy posture for a low-volume, stateless classification pilot, but no live inference, quota test or end-to-end Arabic/French quality evaluation was performed.
+- **Google Gemini free tier** may use submitted prompts/responses to improve Google products, and human reviewers may process inputs/outputs; no sensitive, confidential or personal data should be sent to unpaid services. Paid Services are required when making API clients available to EEA, Switzerland or UK users. Sources: https://ai.google.dev/gemini-api/terms and https://ai.google.dev/gemini-api/docs/pricing.md. Use only synthetic data for free-tier tests unless the data/region conditions are satisfied.
+- **Mistral Free mode** may use prompts/outputs for training unless opted out, per its Help Center (https://help.mistral.ai/en/articles/347617-do-you-use-my-user-data-to-train-my-artificial-intelligence-models). Direct API free-tier availability/limits are not sufficiently clear from current official evidence; exclude it from customer-data delivery until the API quota and account terms are confirmed.
+- **Cohere trial API** remains explicitly non-commercial in the catalogue; exclude it from paid customer delivery.
+- No provider was activated, no API key was created, no live hosted-inference request was made, and no customer data was sent. Free quotas are not uptime/SLA guarantees and no model is marked production-verified.
+
+#### Commercial state at end of this sweep
+- New inbound prospect replies: **0**.
+- New qualified customer replies / accepted scopes / signed contracts / payments / revenue: **0 / 0 / 0 / $0**.
+- Upwork proposals submitted: **0**; pending invitations: **0**; Connects balance/spend: **0 / $0**.
+- New outbound messages: **0**; paid lead credits: **$0**; upfront spend: **$0**.
+- Provider activations / live hosted inference calls / inference spend: **0 / 0 / $0**.
+- No listing, provider, catalogue entry, repository commit, free quota, or capability was counted as a customer or revenue event.
