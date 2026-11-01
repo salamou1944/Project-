@@ -751,3 +751,64 @@ Other fresh dashboard matches were filtered out when they required German/Italia
 - Paid lead credits / upfront spend: **$0 / $0**.
 - Provider activations / live hosted-inference calls / inference spend: **0 / 0 / $0**.
 - No listing, outreach, partner inquiry, provider, catalogue entry, repository commit, free quota, or capability was counted as a customer or revenue event.
+
+
+## 2026-10-31 Revenue + leverage sweep — inbound AI Coders response
+
+Run evidence date: 2026-10-31, America/Los_Angeles local time; all AgentMail and Upwork event timestamps below are UTC where shown. This section records the current sweep only. A reply or job listing is not a customer or revenue event.
+
+### AgentMail — a real partner reply, not a buyer
+
+- Inbox checked: `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`, for messages after `2026-10-31T03:00:00Z`.
+- One new received message was found in API Pilot; zero new messages were found in the other two inboxes.
+- Reply from AI Coders `hello@aicoders.dev`, received `2026-10-31T09:49:50Z`, in thread `703516ed-0aaa-45a2-9693-5c37dab93f86`. Message ID: `<1a1915d918d.cfce130974422.6041145535728388543@aicoders.dev>`. AgentMail reports SPF=pass and DKIM=pass; DMARC was none.
+- The sender clarified they do not want prospect lists or speculative research. They want a partner to contact decision-makers, establish that a real automation project is active, and make a warm introduction only after buyer interest.
+- Commercial terms stated by AI Coders: 10% of the one-time development cost; 5% after the client deposit and 5% after final payment; commission processing target 1–2 business days after the corresponding client payment; no upfront fees, paid research, or exclusivity. Excluded industries: gambling and sexually oriented businesses. Target markets include US, UK, Canada, Europe, Australia, and other international markets.
+- We replied in-thread on 2026-10-31 (message ID `<010001a1952dfec9-c778832f-917b-4c08-b4ed-24fa36d29b4c-000000@email.amazonses.com>`). We acknowledged that we will not send lists; will introduce only after a decision-maker confirms an active project and agrees to the introduction; and asked for the preferred attribution process and written acknowledgment of accepted referrals/commission basis.
+- No buyer has been introduced, no referral accepted, no referral agreement signed, and no commission earned. This is an actionable partner channel with contingent compensation, not a customer or revenue.
+
+Source: AI Coders public business-development post in the n8n Community, `https://community.n8n.io/c/jobs/13` (the post title is “Looking for Business Development & Client Acquisition Partners for AI Coders”). The reply is the direct commercial evidence for the terms above.
+
+### Fresh Upwork demand — platform-bound; no proposal sent
+
+Upwork freelancer account balance was checked live: `connectsBalance=0`, free Connects=0, paid Connects=0. Do not buy Connects or contact clients off-platform to bypass the proposal flow.
+
+1. **“Ai automation for e-commerce”** — job `2116702872958117120`, active at read time; published `2026-10-31T23:51:51Z` (2026-10-31 local evening). Buyer says an established fashion brand wants AI automation to increase sales, but the scope and budget are not defined. Payment method verified; client record: 4 contracts, 2 active, 100% hire rate, $73.09 lifetime spend, 5/5 from one review. Proposal tier 20–50. Applying costs 16 Connects; balance 0; `can_apply=false`. It is a real but vague opportunity; no proposal sent. URL: `https://www.upwork.com/jobs/~022116702872958117120`.
+2. **“AI Automation Expert Needed – Build Complete Real Estate Lead Follow-Up & Sales Funnel”** — job `2116596757537331370`, active at read time, $600 fixed. Scope includes Facebook/Instagram lead capture, SMS/email, AI calls, CRM, calendar booking, analytics, and US messaging compliance. Buyer has no prior hires or spend in the current client record; the job had 26 invites sent and 21 interviews, with no offer/hire yet. Applying costs 9 Connects; balance 0; `can_apply=false`. The scope requires production voice-AI and messaging-compliance proof not present in our verified portfolio, so we did not pursue it. URL: `https://www.upwork.com/jobs/~022116596757537331370`.
+3. **“AI Automation Specialist Needed for Lead Generation, CRM Integration & n8n Workflows”** — job `2116347770435408310`, active at read time, $5–$10/hour, part-time 1–3 months. Payment verified; client has one prior contract, $31.50 spend, 5/5 review, and 50% hire rate. Job activity showed 6 invites, 2 interviews, 0 offers/hired. Applying costs 19 Connects; balance 0; `can_apply=false`. The buyer requires 1–2 relevant portfolio examples; the low rate and missing verified portfolio example make it a poor use of scarce effort. No proposal sent. URL: `https://www.upwork.com/jobs/~022116347770435408310`.
+
+No proposal, Connects purchase, off-platform contact, or application was made. A job listing remains a lead signal only.
+
+### Free LLM API catalogue — 2026-10-31 upstream delta
+
+- Current upstream `data.json` SHA: `22cf1ef1d210986f0115ed450c98b51d17b99726`; provider count 15. Its embedded `lastUpdated` still says `2026-10-25`, despite new upstream data-sync commits dated 2026-10-31. Treat that field as stale; use Git commit provenance instead.
+- Upstream data-sync commit `1681ef24bf30ca1948772ac752d4b3c76f023c97` removed `nvidia/nemotron-3.5-content-safety:free` from Kilo Code and OpenRouter after the catalogue recorded 404 responses on 2026-10-30 and 2026-10-31. It refreshed Z AI source quotations for GLM-4.7-Flash (200K context / 128K max output), GLM-4.5-Flash (128K / 96K), and GLM-4.6V-Flash (128K, multimodal); listed values did not change.
+- Upstream commit `b35511d33f50d56dbcb2bce3da5663cb75183ac3` removed three model/provider entries that were no longer in their provider catalogues: Poolside Laguna S 2.1 and Laguna XS 2.1 from Kilo Code/OpenRouter, and MiniMax M2.7 from LLM7.io.
+- Merge commit `28bab972292bf3ccab9fb4a2fd637e0ed91c355d` is the 2026-10-31 data sync. No new free model/provider was added in this delta; the material changes are removals and refreshed provenance.
+- Sources: `https://github.com/mnfst/awesome-free-llm-apis/commit/1681ef24bf30ca1948772ac752d4b3c76f023c97`, `https://github.com/mnfst/awesome-free-llm-apis/commit/b35511d33f50d56dbcb2bce3da5663cb75183ac3`, `https://github.com/mnfst/awesome-free-llm-apis/commit/28bab972292bf3ccab9fb4a2fd637e0ed91c355d`, and `https://github.com/mnfst/awesome-free-llm-apis/blob/main/data.json`.
+
+#### Cost-reduction candidates and commercial-use gate
+
+- **Z AI / GLM Flash family:** the catalogue and provider-owned pricing docs list GLM-4.7-Flash, GLM-4.5-Flash, and GLM-4.6V-Flash as free-priced models. Z.ai's API terms allow integrating API Services into downstream applications for end users, but impose restrictions on high-risk/qualified professional services and significant automated decisions (including healthcare, finance, credit, education, employment, housing, legal and similar decisions); they prohibit using model outputs to develop or improve competing models. API customer content is not used to improve services unless explicitly agreed. Public numeric API rate limits are not established in the docs; the account's rate-limit panel must be checked. Candidate low-risk use: synthetic-data evaluation of classification, extraction, or draft generation with human review. Not approved for production routing until a live API key, actual model response, account limit, latency/reliability, regional/data protection requirements, and task-specific terms are verified. No key was created and no live request or customer data was sent.
+- **Cloudflare Workers AI:** official pricing says 10,000 Neurons/day free on Workers Free, reset at 00:00 UTC; further operations fail after the free allowance, while some named models require paid billing. Official data-use docs state standard stateless inference does not retain Customer Content after processing and does not use it to train models; stateful features, AI Gateway logging/caching, or third-party routes can change retention. Model-specific licenses still apply. Candidate for bounded, low-risk pilots only; not live-tested here.
+- **Groq:** official limits page lists organization-level base limits for selected models such as GPT-OSS 20B/120B and Qwen3.8-27B of 30 RPM, 1,000 RPD, 8,000 TPM and 200,000 TPD; exact organization limits must be checked in the account and HTTP 429 is expected on exceeded limits. The services agreement permits API integration into a customer application and access by end users, but prohibits resale/lease of account access. No provider was activated or live-probed.
+- Official sources: `https://docs.z.ai/guides/overview/pricing`, `https://chat.z.ai/legal-agreement/terms-of-service`, `https://z.ai/manage-apikey/rate-limits` (account-specific), `https://developers.cloudflare.com/workers-ai/platform/pricing/`, `https://developers.cloudflare.com/workers-ai/platform/data-usage/`, `https://console.groq.com/docs/rate-limits`, and `https://console.groq.com/docs/legal/services-agreement`.
+- Free quota is not an SLA or evidence of a successful model response. No paid fallback may be enabled silently; the existing FREE-PROVIDER-POLICY requires official-source freshness, explicit quota/hard-stop/eligibility, and fail-closed routing.
+
+### Reusable repository/platform leverage checked
+
+- Latest visible Salamou-31 API Factory code changes remain dated 2026-10-27: model-parameter validation and CI dependency installation for the Gemini probe. No newer repository commit was found in this sweep.
+- API Factory remains a scoped integration lever: OpenAPI/manifests, input validation, customer-key auth, idempotency, usage/quota ledger, structured errors, and durable storage/readiness. The 2026-10-25 customer-key smoke documented in `AI-API-HUB/api-factory/PERSISTENCE.md` verified one successful request, quota HTTP 429, revocation, and revoked-key HTTP 401. This is technical path evidence only; it does not prove a paying customer, generated API registration, or SLA. Render Free may sleep, and generated API business-state durability is not automatic.
+- `AI-API-HUB/free-provider-policy-fixture.json` still contains only Gemini, Pollinations, and local Ollama. Gemini/local Ollama cite OmniRoute rather than provider-owned sources and set `official_source_verified=false`; Pollinations has an unverified exact quota/hard-stop. Therefore none of these fixture entries qualifies as an automatic production zero-cost route under the current policy.
+- `AI-API-HUB/evaluation-fixture.schema.json` is a reusable, provider-neutral evidence contract for AI/model/RAG/agent QA with provenance, dataset/system revisions, metrics, failures, and limitations. It is a schema, not a successful evaluation run. A scoped AI/API QA or integration audit is sellable only as a measured deliverable, not as a claim of model performance.
+- Sources: `https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md`, `https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/FREE-PROVIDER-POLICY.md`, `https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/free-provider-policy-fixture.json`, and `https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/evaluation-fixture.schema.json`.
+
+### Commercial state at end of this sweep
+
+- New inbound prospect replies: **1** (AI Coders partner response; not a buyer).
+- New outbound business emails: **1 reply in an existing thread** (clarification of referral attribution; no referral promised).
+- Qualified buyer introductions / accepted referrals / signed contracts / commission earned: **0 / 0 / 0 / $0**.
+- Upwork proposals submitted: **0**; Connects balance / paid Connects / Connects spend: **0 / 0 / 0**.
+- Paid lead credits / upfront spend: **$0 / $0**.
+- Provider activations / live hosted-inference calls / inference spend: **0 / 0 / $0**.
+- No listing, partner reply, referral offer, provider, model, repository capability, or free quota was counted as a customer or revenue.
