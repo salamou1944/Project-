@@ -767,7 +767,7 @@ Run evidence date: 2026-10-31, America/Los_Angeles local time; all AgentMail and
 - We replied in-thread on 2026-10-31 (message ID `<010001a1952dfec9-c778832f-917b-4c08-b4ed-24fa36d29b4c-000000@email.amazonses.com>`). We acknowledged that we will not send lists; will introduce only after a decision-maker confirms an active project and agrees to the introduction; and asked for the preferred attribution process and written acknowledgment of accepted referrals/commission basis.
 - No buyer has been introduced, no referral accepted, no referral agreement signed, and no commission earned. This is an actionable partner channel with contingent compensation, not a customer or revenue.
 
-Source: AI Coders public business-development post in the n8n Community, `https://community.n8n.io/c/jobs/13` (the post title is “Looking for Business Development & Client Acquisition Partners for AI Coders”). The reply is the direct commercial evidence for the terms above.
+Source: AI Coders public business-development post in the n8n Community, `https://community.n8n.io/t/looking-for-business-development-client-acquisition-partners-for-ai-coders-ai-automation-agency/325466` (posted 2026-10-30). The reply is the direct commercial evidence for the terms above.
 
 ### Fresh Upwork demand — platform-bound; no proposal sent
 
