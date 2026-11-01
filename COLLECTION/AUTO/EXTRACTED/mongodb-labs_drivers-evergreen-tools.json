@@ -1,0 +1,392 @@
+{
+  "canonical_source": "github:mongodb-labs/drivers-evergreen-tools",
+  "repo": "mongodb-labs/drivers-evergreen-tools",
+  "revision_sha": "04328af6941963e878e90dd3ad82d105f99df12c",
+  "default_branch": "master",
+  "pushed_at": "2026-10-30T19:27:05Z",
+  "repo_updated_at": "2026-10-30T19:27:01Z",
+  "license": null,
+  "topics": [
+    "evergreen-ci"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".evergreen/auth_oidc/azure_func/self-test/requirements.txt",
+      "sha": null,
+      "content_sha256": "f3c6ee28e0e5895d6d160669db1d0b1ce961ed19cb3efe08a9f3d48c7eff1680",
+      "score": 217,
+      "content": "# Do not include azure-functions-worker in this file\n# The Python Worker is managed by the Azure Functions platform\n# Manually managing azure-functions-worker may cause unexpected issues\n\nazure-functions\npymongo\n"
+    },
+    {
+      "path": ".evergreen/auth_aws/pyproject.toml",
+      "sha": null,
+      "content_sha256": "e57fa50f76453d67bcf3b104ab4875eb5d746b1ce897063a03b8f1be2b71c762",
+      "score": 196,
+      "content": "[project]\nname = \"drivers-auth-aws\"\nversion = \"0.1.0\"\ndescription = 'Scripts for the drivers auth_aws feature'\nrequires-python = \">=3.9\"\nlicense = \"MIT\"\nauthors = [\n  { name = \"Steven Silvester\", email = \"steve.silvester@mongodb.com\" },\n]\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/pyproject.toml",
+      "sha": null,
+      "content_sha256": "a692df0ec726123f5cc490021272992939379f01c22bdc14d2224cc8bf2a6d58",
+      "score": 196,
+      "content": "[project]\nname = \"drivers-auth-oidc\"\nversion = \"0.1.0\"\ndescription = 'Scripts for the drivers auth_oidc feature'\nrequires-python = \">=3.9\"\nlicense = \"MIT\"\nauthors = [\n  { name = \"Steven Silvester\", email = \"steve.silvester@mongodb.com\" },\n]\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/setup_oidc.js",
+      "sha": null,
+      "content_sha256": "60646a5e3d8e5a762db1dd3c354929437743be9fa27bcab402d0df11adaadc14",
+      "score": 193,
+      "content": "/**\n * Set up OIDC auth roles.\n */\n(function() {\n\"use strict\";\n\nconst adminUser = process.env['AZUREOIDC_USERNAME'] || 'bob';\nconsole.log(\"Setting up Admin User\", adminUser);\nconst admin = Mongo().getDB(\"admin\");\nassert(admin.auth(adminUser, \"pwd123\"));\n\nconsole.log(\"Setting up User\");\nconst authorizationPrefix = process.env['AZUREOIDC_AUTHPREFIX'] || 'test1';\nconst authorizationClaim = process.env['AZUREOIDC_AUTHCLAIM'] || 'readWrite';\nconst role1Name = authorizationPrefix + '/' + authorizationClaim;\nconst role2Name = 'test2/readWrite';\n\n// Add the roles.\nconsole.log('Adding role:', role1Name);\nadmin.runCommand({createRole: role1Name, roles:[{role: 'readWrite', db: 'test'}], privileges: []});\n\nconsole.log('Adding role:', role2Name);\nadmin.runCommand({createRole: role2Name, roles:[{role: 'readWrite', db: 'test'}], privileges: []});\n\n}());\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/setup.sh",
+      "sha": null,
+      "content_sha256": "87c79a69a5fd07f5e871c19eca02f4089bade1e425bc008cdcccfb6822bdb5e2",
+      "score": 193,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../handle-paths.sh\npushd $SCRIPT_DIR\n\n# Get the secrets\nrm -f secrets-export.sh\n. ./setup-secrets.sh\n\n# Get the tokens.\nbash ./oidc_get_tokens.sh\n\nif [ \"$(uname -s)\" = \"Linux\" ]; then\n    # On Linux, we start a local server so we can have better control of the idp configuration.\n    # The auth_oidc group lives in the root pyproject.toml.\n    . $SCRIPT_DIR/../ensure-uv.sh\n    ensure_uv || exit 1\n    uv run --project \"$DRIVERS_TOOLS\" --group auth_oidc python oidc_write_orchestration.py\n    TOPOLOGY=replica_set ORCHESTRATION_FILE=auth-oidc.json bash ../run-orchestration.sh\n    URI=\"mongodb://127.0.0.1:27017/?directConnection=true\"\n    $MONGODB_BINARIES/mongosh -f ./setup_oidc.js \"$URI&serverSelectionTimeoutMS=10000\"\n    cat <<EOF >> \"secrets-export.sh\"\nexport MONGODB_URI=\"$URI\"\nexport MONGODB_URI_SINGLE=\"$URI&authMechanism=MONGODB-OIDC\"\nexport MONGODB_URI_MULTI=\"mongodb://127.0.0.1:27018/?directConnection=true&authMechanism=MONGODB-OIDC\"\nexport OIDC_ADMIN_USER=bob\nexport OIDC_ADMIN_PWD=pwd123\nexport OIDC_IS_LOCAL=1\n\nEOF\nelse\n  # Start an Atlas Cluster\n\n  # Get the utility functions\n  . ../atlas/atlas-utils.sh\n\n  # Generate a random cluster name.\n  # See: https://docs.atlas.mongodb.com/reference/atlas-limits/#label-limits\n  DEPLOYMENT_NAME=\"$RANDOM-DRIVERTEST\"\n  echo \"export CLUSTER_NAME=$DEPLOYMENT_NAME\" >> \"secrets-export.sh\"\n\n  # Set the create cluster configuration.\n  DEPLOYMENT_DATA=$(cat <<EOF\n{\n  \"autoScaling\" : {\n    \"autoIndexingEnabled\" : false,\n    \"compute\" : {\n      \"enabled\" : true,\n      \"scaleDownEnabled\" : true\n    },\n    \"diskGBEnabled\" : true\n  },\n  \"backupEnabled\" : false,\n  \"biConnector\" : {\n    \"enabled\" : false,\n    \"readPreference\" : \"secondary\"\n  },\n  \"clusterType\" : \"REPLICASET\",\n  \"diskSizeGB\" : 10.0,\n  \"encryptionAtRestProvider\" : \"NONE\",\n  \"mongoDBMajorVersion\" : \"7.0\",\n  \"name\" : \"${DEPLOYMENT_NAME}\",\n  \"numShards\" : 1,\n  \"paused\" : false,\n  \"pitEnabled\" : false,\n  \"providerBackupEnabled\" : false,\n  \"providerSettings\" : {\n    \"providerName\" : \"AWS\",\n    \"autoScaling\" : {\n      \"compute\" : {\n        \"maxInstanceSize\" : \"M20\",\n        \"minInstanceSize\" : \"M10\"\n      }\n    },\n    \"diskIOPS\" : 3000,\n    \"encryptEBSVolume\" : true,\n    \"instanceSizeName\" : \"M10\",\n    \"regionName\" : \"US_EAST_1\",\n    \"volumeType\" : \"STANDARD\"\n  },\n  \"replicationFactor\" : 3,\n  \"rootCertType\" : \"ISRGROOTX1\",\n  \"terminationProtectionEnabled\" : false,\n  \"versionReleaseSystem\" : \"LTS\"\n}\nEOF\n  )\n  export DEPLOYMENT_DATA\n\n  export ATLAS_PUBLIC_API_KEY=[REDACTED]\n  export ATLAS_PRIVATE_API_KEY=[REDACTED]\n  export ATLAS_GROUP_ID=$OIDC_ATLAS_GROUP_ID\n\n  create_deployment\n\n  URI=$(check_deployment)\n  cat <<EOF >> \"secrets-export.sh\"\nexport MONGODB_URI=\"$URI\"\nexport MONGODB_URI_SINGLE=\"$URI/?authMechanism=MONGODB-OIDC&authSource=%24external\"\nexport OIDC_ADMIN_USER=$OIDC_ATLAS_USER\nexport OIDC_ADMIN_PWD=$OIDC_ATLAS_PASSWORD\nEOF\nfi\n\npopd\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".evergreen/auth_aws/setup.sh",
+      "sha": null,
+      "content_sha256": "f48b13759dd6671a89927baf668353ca1fa2c205cda7700f1971c21a590089ee",
+      "score": 193,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../handle-paths.sh\n\n. ./setup-secrets.sh\n"
+    },
+    {
+      "path": ".evergreen/auth_aws/setup_secrets.sh",
+      "sha": null,
+      "content_sha256": "2a9654e37f71d2232c21b0af0257babb421230c49e52969b88a0b7650e61b463",
+      "score": 193,
+      "content": "#!/usr/bin/env bash\n# setup_secrets\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../handle-paths.sh\n\n# TODO: Remove this file after DRIVERS-2585\necho \"auth_aws/setup_secrets.sh is deprecated, please use auth_aws/setup-secrets.sh\"\n. $SCRIPT_DIR/../secrets_handling/setup-secrets.sh \"$@\"\n"
+    },
+    {
+      "path": ".evergreen/auth_aws/aws_setup.sh",
+      "sha": null,
+      "content_sha256": "a5ce3cb149ea4e7e2230390495018e5e403f010840d91139511183d16f3a3fa5",
+      "score": 193,
+      "content": "#!/usr/bin/env bash\n#\n# aws_setup.sh\n#\n# Usage:\n#   . ./aws_setup.sh <test-name>\n#\n# Handles AWS credential setup and exports relevant environment variables.\n# Sets up secrets if they have not already been set up.\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../handle-paths.sh\npushd $SCRIPT_DIR\n\n# Ensure uv is available and source the secrets file.\n. $SCRIPT_DIR/../ensure-uv.sh\nensure_uv || exit 1\n\n# Ensure that secrets have already been set up.\nif [ ! -f \"./secrets-export.sh\" ]; then\n    bash ./setup-secrets.sh\nfi\n\n# Remove any AWS creds that might be set in the parent env.\n# We will need those creds for eks to set up the cluster.\nif [ $1 != \"eks\" ]; then\n    unset AWS_ACCESS_KEY_ID\n    unset AWS_SECRET_ACCESS_KEY\n    unset AWS_SESSION_TOKEN\nfi\n\nsource ./secrets-export.sh\n\nif [ -f $SCRIPT_DIR/test-env.sh ]; then\n    rm $SCRIPT_DIR/test-env.sh\nfi\n\nexport PROJECT_DIRECTORY\n# The auth_aws group is defined in the root pyproject.toml, so run from the\n# root project context. DRIVERS_TOOLS is set absolutely by handle-paths.sh.\nuv run --project \"$DRIVERS_TOOLS\" --group auth_aws python aws_tester.py \"$@\"\n\n# Remove any AWS creds that might be set in the parent env.\nif [ $1 == \"eks\" ]; then\n    unset AWS_ACCESS_KEY_ID\n    unset AWS_SECRET_ACCESS_KEY\n    unset AWS_SESSION_TOKEN\nfi\n\nsource $SCRIPT_DIR/test-env.sh\n\npopd\n"
+    },
+    {
+      "path": ".evergreen/auth_aws/setup-secrets.sh",
+      "sha": null,
+      "content_sha256": "8bcdd6879b2ac82063006326610103d552ec8bbae3d16688a7a7f7ea2014132d",
+      "score": 193,
+      "content": "#!/usr/bin/env bash\n# setup-secrets for AWS testing.\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../handle-paths.sh\npushd $SCRIPT_DIR\n. $SCRIPT_DIR/../secrets_handling/setup-secrets.sh drivers/aws_auth\npopd\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/setup-secrets.sh",
+      "sha": null,
+      "content_sha256": "80f40a523576784b11aea530f595661af35039ef7bd11da1d539d2984de53bc1",
+      "score": 193,
+      "content": "#!/usr/bin/env bash\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../handle-paths.sh\npushd $SCRIPT_DIR\n. $SCRIPT_DIR/../secrets_handling/setup-secrets.sh drivers/oidc\npopd\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/k8s/setup-secrets.sh",
+      "sha": null,
+      "content_sha256": "17ec6e004ff2f6159008246659a8ad198d469fd0a22483b1403e20e8db8645e8",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\npushd $SCRIPT_DIR\n. ../../secrets_handling/setup-secrets.sh drivers/oidc\npopd\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/azure/setup.sh",
+      "sha": null,
+      "content_sha256": "cf9a377cbca5f99c31e3eae7ba26fb9aa34208f5aa69a5f948e627330ed1f804",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\n\nrm -f $SCRIPT_DIR/env.sh\n. $SCRIPT_DIR/create-and-setup-vm.sh\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/azure/setup-secrets.sh",
+      "sha": null,
+      "content_sha256": "754e5ba178eae3669359fb00357eba3a642fddb23cceabc3ff1d882a69fd8d6d",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\npushd $SCRIPT_DIR\n. ../../secrets_handling/setup-secrets.sh drivers/azureoidc\npopd\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/gcp/setup-instance.sh",
+      "sha": null,
+      "content_sha256": "da371688762e56b2a04a44cdfbdd2348c06bf973b6d0d414b1148f7a177a0e0b",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\n# Setup a GCE instance for MONGODB-OIDC test.\nset -o errexit # Exit on first command error.\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\n\nVARLIST=(\nGCPKMS_GCLOUD\nGCPKMS_PROJECT\nGCPKMS_ZONE\nGCPKMS_INSTANCENAME\n)\n\n# Ensure that all variables required to run the test are set, otherwise throw\n# an error.\nfor VARNAME in \"${VARLIST[@]}\"; do\n  [[ -z \"${!VARNAME:-}\" ]] && echo \"ERROR: $VARNAME not set\" && exit 1;\ndone\n\necho \"Copying setup-gce-instance.sh to GCE instance ($GCPKMS_INSTANCENAME) ... begin\"\n# Copy files to test. Use \"-p\" to preserve execute mode.\n$GCPKMS_GCLOUD compute scp $DRIVERS_TOOLS/.evergreen/csfle/gcpkms/remote-scripts/setup-gce-instance.sh \"$GCPKMS_INSTANCENAME\":~ \\\n    --zone $GCPKMS_ZONE \\\n    --project $GCPKMS_PROJECT \\\n    --scp-flag=\"-p\"\necho \"Copying setup-gce-instance.sh to GCE instance ($GCPKMS_INSTANCENAME) ... end\"\n\necho \"Running setup-gce-instance.sh on GCE instance ($GCPKMS_INSTANCENAME) ... begin\"\n$GCPKMS_GCLOUD compute ssh \"$GCPKMS_INSTANCENAME\" \\\n    --zone $GCPKMS_ZONE \\\n    --project $GCPKMS_PROJECT \\\n    --command \"./setup-gce-instance.sh\"\necho \"Exit code of test-script is: $?\"\necho \"Running setup-gce-instance.sh on GCE instance ($GCPKMS_INSTANCENAME) ... end\"\n\necho \"Copying test files to GCE instance ($GCPKMS_INSTANCENAME) ... begin\"\n# Copy files to test. Use \"-p\" to preserve execute mode.\n$GCPKMS_GCLOUD compute scp $DRIVERS_TOOLS/.evergreen/auth_oidc/gcp/remote-scripts/run-self-test.sh \"$GCPKMS_INSTANCENAME\":~ \\\n    --zone $GCPKMS_ZONE \\\n    --project $GCPKMS_PROJECT \\\n    --scp-flag=\"-p\"\n$GCPKMS_GCLOUD compute scp $DRIVERS_TOOLS/.evergreen/auth_oidc/gcp/remote-scripts/test.py \"$GCPKMS_INSTANCENAME\":~ \\\n    --zone $GCPKMS_ZONE \\\n    --project $GCPKMS_PROJECT \\\n    --scp-flag=\"-p\"\necho \"Copying test files to GCE instance ($GCPKMS_INSTANCENAME) ... end\"\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/k8s/setup-pod.sh",
+      "sha": null,
+      "content_sha256": "bf17b97b6b59d3eccb27ffa901bd75814b2a80afe462f9e95f0b1c3ac4b82c36",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\npushd $SCRIPT_DIR\n\n# Set the current K8S_VARIANT.\nK8S_VARIANT=${K8S_VARIANT:-$1}\necho \"export K8S_VARIANT=$K8S_VARIANT\" >> secrets-export.sh\nVARIANT=$(echo \"$K8S_VARIANT\" | tr '[:upper:]' '[:lower:]')\nVARIANT_DIR=$DRIVERS_TOOLS/.evergreen/k8s/$VARIANT\necho \"export K8S_VARIANT_DIR=$VARIANT_DIR\" >> secrets-export.sh\n\n# Set up the pod.\necho \"Setting up $VARIANT pod...\"\n. $VARIANT_DIR/setup.sh\necho \"Setting up $VARIANT pod... done.\"\n\npopd\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/azure/create-and-setup-vm.sh",
+      "sha": null,
+      "content_sha256": "0e0251269b57edba7cd7521ae9ad02dac708dd56550b5aa471b5478ef559f0e2",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\nset -o errexit\nset -o pipefail\nset -o nounset\n\n# Ensure required variables are set.\nif [ -z \"${AZUREOIDC_VMNAME_PREFIX:-}\" ]; then\n    echo \"Please set the following required environment variables\"\n    echo \" AZUREOIDC_VMNAME_PREFIX to an identifier string no spaces (e.g. CDRIVER)\"\n    exit 1\nfi\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\npushd $SCRIPT_DIR\n\n# Set defaults.\nexport AZUREKMS_PUBLICKEYPATH=\"$SCRIPT_DIR/keyfile.pub\"\nexport AZUREKMS_PRIVATEKEYPATH=\"$SCRIPT_DIR/keyfile\"\nexport AZUREKMS_CERTFILE=\"$SCRIPT_DIR/cert.pem\"\nexport AZUREKMS_VMNAME_PREFIX=$AZUREOIDC_VMNAME_PREFIX\nexport AZUREOIDC_ENVPATH=\"$SCRIPT_DIR/env.sh\"\nexport AZUREKMS_IMAGE=${AZUREOIDC_IMAGE:-\"Debian:debian-12:12:0.20260821.2577\"}\n\n# Handle secrets from AWS vault.\nif [ ! -f ./secrets-export.sh ]; then\n    . ./setup-secrets.sh\nfi\nsource ./secrets-export.sh\n\necho \"${AZUREOIDC_CERT}\" | base64 --decode > $AZUREKMS_CERTFILE\n# Set 600 permissions on cert file. Otherwise ssh / scp may error with permissions \"are too open\".\nchmod 600 $AZUREKMS_CERTFILE\n\nexport AZUREKMS_TENANTID=$AZUREOIDC_TENANTID\nexport AZUREKMS_SECRET=[REDACTED]\nexport AZUREKMS_CLIENTID=$AZUREOIDC_APPID\n\n# Login.\n. \"$DRIVERS_TOOLS\"/.evergreen/csfle/azurekms/login.sh\n\n# Get the rest of the secrets from the Azure vault.\n# The auth_oidc group lives in the root pyproject.toml.\n. \"$DRIVERS_TOOLS\"/.evergreen/ensure-uv.sh\nensure_uv || exit 1\nuv run --project \"$DRIVERS_TOOLS\" --group auth_oidc python ./handle_secrets.py\n# shellcheck source=env.sh\nsource $AZUREOIDC_ENVPATH\n\n# Create VM.\n. \"$DRIVERS_TOOLS\"/.evergreen/csfle/azurekms/create-vm.sh\nexport AZUREOIDC_VMNAME=\"$AZUREKMS_VMNAME\"\nexport AZUREKMS_VMNAME=\"$AZUREOIDC_VMNAME\"\n\n# Update secrets file for teardown.\necho \"export AZUREOIDC_VMNAME=${AZUREOIDC_VMNAME}\" >> $AZUREOIDC_ENVPATH\n\n# Install dependencies.\nAZUREKMS_SRC=\"$DRIVERS_TOOLS/.evergreen/csfle/azurekms/remote-scripts/setup-azure-vm.sh\" \\\nAZUREKMS_DST=\"./\" \\\n    \"$DRIVERS_TOOLS\"/.evergreen/csfle/azurekms/copy-file.sh\nAZUREKMS_CMD=\"./setup-azure-vm.sh\" \\\n    \"$DRIVERS_TOOLS\"/.evergreen/csfle/azurekms/run-command.sh\n\n# Write the env variables file\nAZUREKMS_SRC=$AZUREOIDC_ENVPATH \\\nAZUREKMS_DST=\"./\" \\\n    \"$DRIVERS_TOOLS\"/.evergreen/csfle/azurekms/copy-file.sh\n\n# Push Drivers Evergreen Tools onto the VM\nTARFILE=/tmp/drivers-evergreen-tools.tgz\npushd $DRIVERS_TOOLS\nbash \"$DRIVERS_TOOLS/.evergreen/make-drivers-tools-archive.sh\" \"$TARFILE\"\nTARFILE_BASE=$(basename ${TARFILE})\nAZUREKMS_SRC=${TARFILE} \\\n    AZUREKMS_DST=\"./\" \\\n    $DRIVERS_TOOLS/.evergreen/csfle/azurekms/copy-file.sh\necho \"Copying files ... end\"\necho \"Untarring file ... begin\"\n# The archive is flat, so name the destination here rather than baking it in as\n# a tar --prefix.\nAZUREKMS_CMD=\"mkdir -p drivers-evergreen-tools && tar xf ${TARFILE_BASE} -C drivers-evergreen-tools\" \\\n  $DRIVERS_TOOLS/.evergreen/csfle/azurekms/run-command.sh\necho \"Untarring file ... end\"\npopd\n\n# Start mongodb.\nAZUREKMS_CMD=\"./drivers-evergreen-tools/.evergreen/auth_oidc/azure/remote-scripts/start-mongodb.sh\" \\\n    \"$DRIVERS_TOOLS\"/.evergreen/csfle/azurekms/run-command.sh\n\n# Run the self-test\nAZUREKMS_CMD=\"./drivers-evergreen-tools/.evergreen/auth_oidc/azure/remote-scripts/run-self-test.sh\" \\\n    \"$DRIVERS_TOOLS\"/.evergreen/csfle/azurekms/run-command.sh\n\npopd\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".evergreen/auth_oidc/azure_func/setup.sh",
+      "sha": null,
+      "content_sha256": "1fbccd806a345177f19961a4b09f886a1849f5b3354f7a7f1c090defeec4fb69",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\npushd $SCRIPT_DIR\n\n# Ensure Azure Functions Core Tools is/can be installed.\nDOCS_URL=https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local\nOS_NAME=$(uname -s | tr '[:upper:]' '[:lower:]')\nif ! command -v func &> /dev/null; then\n  if [ \"$OS_NAME\" != \"linux\" ]; then\n    echo \"See $DOCS_URL for Azure Functions Core Tools installation\"\n    exit 1\n  fi\nfi\n\n########################\n# Log in to azure and set up secrets.\n# Ensure clean secrets.\nrm -f secrets-export.sh\nbash ./login.sh\nsource ./secrets-export.sh\n\n########################\n# Start an Atlas Cluster\n\n# Get the utility functions\n. ../../atlas/atlas-utils.sh\n\n# Generate a random cluster name.\n# See: https://docs.atlas.mongodb.com/reference/atlas-limits/#label-limits\nDEPLOYMENT_NAME=\"$RANDOM-DRIVERGCP\"\necho \"export CLUSTER_NAME=$DEPLOYMENT_NAME\" >> \"secrets-export.sh\"\n\n# Set the create cluster configuration.\nDEPLOYMENT_DATA=$(cat <<EOF\n{\n  \"autoScaling\" : {\n    \"autoIndexingEnabled\" : false,\n    \"compute\" : {\n      \"enabled\" : true,\n      \"scaleDownEnabled\" : true\n    },\n    \"diskGBEnabled\" : true\n  },\n  \"backupEnabled\" : false,\n  \"biConnector\" : {\n    \"enabled\" : false,\n    \"readPreference\" : \"secondary\"\n  },\n  \"clusterType\" : \"REPLICASET\",\n  \"diskSizeGB\" : 10.0,\n  \"encryptionAtRestProvider\" : \"NONE\",\n  \"mongoDBMajorVersion\" : \"7.0\",\n  \"name\" : \"${DEPLOYMENT_NAME}\",\n  \"numShards\" : 1,\n  \"paused\" : false,\n  \"pitEnabled\" : false,\n  \"providerBackupEnabled\" : false,\n  \"providerSettings\" : {\n    \"providerName\" : \"AWS\",\n    \"autoScaling\" : {\n      \"compute\" : {\n        \"maxInstanceSize\" : \"M20\",\n        \"minInstanceSize\" : \"M10\"\n      }\n    },\n    \"diskIOPS\" : 3000,\n    \"encryptEBSVolume\" : true,\n    \"instanceSizeName\" : \"M10\",\n    \"regionName\" : \"US_EAST_1\",\n    \"volumeType\" : \"STANDARD\"\n  },\n  \"replicationFactor\" : 3,\n  \"rootCertType\" : \"ISRGROOTX1\",\n  \"terminationProtectionEnabled\" : false,\n  \"versionReleaseSystem\" : \"LTS\"\n}\nEOF\n)\nexport DEPLOYMENT_DATA\n\nexport ATLAS_PUBLIC_API_KEY=[REDACTED]\nexport ATLAS_PRIVATE_API_KEY=[REDACTED]\nexport ATLAS_GROUP_ID=$OIDC_ATLAS_GROUP_ID\n\ncreate_deployment\n\n# Ensure Azure Functions Core Tools is installed.\nURL=https://github.com/Azure/azure-functions-core-tools/releases/download/4.0.5907/Azure.Functions.Cli.linux-x64.4.0.5907.zip\nif ! command -v func &> /dev/null; then\n  curl -L -o /tmp/azure-functions-cli.zip $URL\n  unzip -q -d /tmp/azure-functions-cli /tmp/azure-functions-cli.zip\n  pushd /tmp/azure-functions-cli\n  mkdir -p $DRIVERS_TOOLS/.bin\n  chmod +x func\n  chmod +x gozip\n  mv * $DRIVERS_TOOLS/.bin\n  popd\nfi\n\n########################\n# Wait for the Atlas Cluster\nMONGODB_URI=$(check_deployment)\nexport MONGODB_URI\necho \"export MONGODB_URI=$MONGODB_URI\" >> ./secrets-export.sh\n\npopd\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".evergreen/auth_aws/lib/eks-pod-setup.sh",
+      "sha": null,
+      "content_sha256": "b32784af1af989d5251492032a2afc1a6379a9ef204767528407f08dd01ef9ce",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\nset -eu\n\n# Write the secrets-export.sh file to the k8s/eks directory.\nEKS_DIR=\"../../k8s/eks\"\n\ncat <<EOF >> $EKS_DIR/secrets-export.sh\nexport EKS_CLUSTER_NAME=$EKS_CLUSTER_NAME\nexport EKS_SERVICE_ACCOUNT_NAME=$EKS_SERVICE_ACCOUNT_NAME\nexport EKS_REGION=$EKS_REGION\nEOF\n\nbash $EKS_DIR/setup.sh\nsource $EKS_DIR/secrets-export.sh\n\nNAME=\"$1\"\nMONGODB_URI=\"mongodb://${NAME}:27017\"\nAPP_LABEL=mongodb-deployment\nMONGODB_VERSION=${MONGODB_VERSION:-latest}\n\n. ../../ensure-binary.sh kubectl\n\n# Delete mongodb servers over one hour old in case they were not torn down.\necho \"Deleting old mongodb servers...\"\nif [ \"$(uname -s)\" = \"Darwin\" ]; then\n    DATE=\"gdate\"\nelse\n    DATE=\"date\"\nfi\n# shellcheck disable=SC2046\nkubectl get deployments -l app=$APP_LABEL -o go-template --template '{{range .items}}{{.metadata.name}} {{.metadata.creationTimestamp}}{{\"\\n\"}}{{end}}' | awk '$2 <= \"'$($DATE -d'now-1 hours' -Ins --utc | sed 's/+0000/Z/')'\" { print $1 }' | xargs --no-run-if-empty kubectl delete deployment\n# shellcheck disable=SC2046\nkubectl get services -l app=$APP_LABEL -o go-template --template '{{range .items}}{{.metadata.name}} {{.metadata.creationTimestamp}}{{\"\\n\"}}{{end}}' | awk '$2 <= \"'$($DATE -d'now-1 hours' -Ins --utc | sed 's/+0000/Z/')'\" { print $1 }' | xargs --no-run-if-empty kubectl delete service\necho \"Deleting old mongodb servers... done.\"\n\ncat <<EOF | kubectl apply -f -\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ${NAME}\n  labels:\n    app: ${APP_LABEL}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: ${NAME}\n  template:\n    metadata:\n      labels:\n        app: ${NAME}\n    spec:\n      containers:\n      - name: mongodb\n        image: mongodb/mongodb-enterprise-server:${MONGODB_VERSION}\n        ports:\n        - containerPort: 27017\n        env:\n        - name: MONGO_INITDB_ROOT_USERNAME\n          value: \"bob\"\n        - name: MONGO_INITDB_ROOT_PASSWORD\n          value: \"pwd123\"\n        - name: MONGODB_AWS_ACCOUNT_ARN\n          value: \"${EKS_ROLE_ARN}\"\n        args:\n        - \"--setParameter\"\n        - \"authenticationMechanisms=MONGODB-AWS,SCRAM-SHA-256\"\nEOF\n\ncat <<EOF | kubectl apply -f -\napiVersion: v1\nkind: Service\nmetadata:\n  name: ${NAME}\n  labels:\n    app: ${APP_LABEL}\nspec:\n  selector:\n    app: ${NAME}\n  ports:\n  - protocol: TCP\n    port: 27017\n    targetPort: 27017\n  type: ClusterIP\nEOF\n\n# Set up the server.\necho \"Setting up the server...\"\nMONGODB_POD=$(kubectl get pods -l app=${NAME} -o jsonpath='{.items[0].metadata.name}')\n# Wait for the pod to be ready.\nkubectl wait --for=condition=Ready pod/${MONGODB_POD} --timeout=2000s\nkubectl exec ${MONGODB_POD} -- bash -c \"rm -rf /tmp/test && mkdir /tmp/test\"\nkubectl cp ./eks_pod_setup_server.js ${MONGODB_POD}:/tmp/test/setup_server.js\nkubectl exec ${MONGODB_POD} -- mongosh /tmp/test/setup_server.js\necho \"Setting up the server... done.\"\n\n# Run the self test.\necho \"Running self test on eks pod...\"\nkubectl exec ${K8S_POD_NAME} -- bash -c \"rm -rf /tmp/self-test && mkdir /tmp/self-test\"\nkubectl cp ./eks-pod-run-self-test.sh ${K8S_POD_NAME}:/tmp/self-test/run-self-test.sh\nkubectl cp ./eks_pod_self_test.py ${K8S_POD_NAME}:/tmp/self-test/test.py\nkubectl exec ${K8S_POD_NAME} -- /tmp/self-test/run-self-test.sh $MONGODB_URI\necho \"Running self test on eks pod... done.\"\n\n# Set up driver test.\necho \"Setting up driver test files...\"\nkubectl exec ${K8S_POD_NAME} -- bash -c \"rm -rf /tmp/src\"\nkubectl cp $PROJECT_DIRECTORY ${K8S_POD_NAME}:/tmp/src/\necho \"Setting up driver test files... done.\"\n\necho \"Running the driver test command... done.\"\necho \"export MONGODB_URI=${MONGODB_URI}\" >> secrets-export.sh\nkubectl cp ./secrets-export.sh ${K8S_POD_NAME}:/tmp/src/secrets-export.sh\necho \"Setting up driver test files... done.\"\n\n# Run the driver test.\necho \"Running the driver test command...\"\nMONGODB_URI=\"${MONGODB_URI}/aws?authMechanism=MONGODB-AWS\"\nkubectl exec ${K8S_POD_NAME} -- bash -c \"cd /tmp && source src/secrets-export.sh && bash src/.evergreen/run-mongodb-aws-eks-test.sh $MONGODB_URI\"\necho \"Running the driver test command... done.\"\n"
+    },
+    {
+      "path": ".evergreen/auth_aws/lib/eks_pod_setup_server.js",
+      "sha": null,
+      "content_sha256": "8328750e8487aba77d89c88bde3ecdc8cd11905bc47b93059c83a5ad2c4fd709",
+      "score": 191,
+      "content": "(function() {\n\"use strict\";\n\nconst AWS_ACCOUNT_ARN=process.env[\"MONGODB_AWS_ACCOUNT_ARN\"];\nconst admin = Mongo().getDB(\"admin\");\nconst external = admin.getMongo().getDB(\"$external\");\nassert(admin.auth(\"bob\", \"pwd123\"));\n\nexternal.runCommand({createUser: AWS_ACCOUNT_ARN, roles:[{role: 'read', db: \"aws\"}]});\n}());\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/k8s/setup.sh",
+      "sha": null,
+      "content_sha256": "aab10c416e9999c6e11ee67204c1400dcb17cb66a4ae272c50d9b2f3fb891169",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\n\nrm -f $SCRIPT_DIR/secrets-export.sh\n\n# If running locally, just set up the variables and exit.\nif [ \"$1\" == \"local\" ]; then\n  URI=\"mongodb://127.0.0.1\"\n  cat <<EOF >> \"$SCRIPT_DIR/secrets-export.sh\"\nexport OIDC_SERVER_TYPE=local\nexport MONGODB_URI=\"$URI\"\nexport MONGODB_URI_SINGLE=\"$URI/?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:k8s&authSource=%24external\"\nexport OIDC_ADMIN_USER=bob\nexport OIDC_ADMIN_PWD=pwd123\nEOF\n  exit 0\nfi\n\npushd $SCRIPT_DIR\n\n# Handle secrets from vault.\n. ./setup-secrets.sh\n\n# Add preliminary variables. Unconditionally used by teardown.sh.\ncat <<EOF >> \"secrets-export.sh\"\nexport OIDC_SERVER_TYPE=atlas\nexport OIDC_ADMIN_USER=$OIDC_ATLAS_USER\nexport OIDC_ADMIN_PWD=$OIDC_ATLAS_PASSWORD\nEOF\n\n########################\n# Start an Atlas Cluster\n\n# Get the utility functions\n. ../../atlas/atlas-utils.sh\n\n# Generate a random cluster name.\n# See: https://docs.atlas.mongodb.com/reference/atlas-limits/#label-limits\nDEPLOYMENT_NAME=\"$RANDOM-DRIVER-K8S\"\necho \"export CLUSTER_NAME=$DEPLOYMENT_NAME\" >> \"$DRIVERS_TOOLS/.evergreen/atlas/secrets-export.sh\"\n\n# Set the create cluster configuration.\nDEPLOYMENT_DATA=$(cat <<EOF\n{\n  \"autoScaling\" : {\n    \"autoIndexingEnabled\" : false,\n    \"compute\" : {\n      \"enabled\" : true,\n      \"scaleDownEnabled\" : true\n    },\n    \"diskGBEnabled\" : true\n  },\n  \"backupEnabled\" : false,\n  \"biConnector\" : {\n    \"enabled\" : false,\n    \"readPreference\" : \"secondary\"\n  },\n  \"clusterType\" : \"REPLICASET\",\n  \"diskSizeGB\" : 10.0,\n  \"encryptionAtRestProvider\" : \"NONE\",\n  \"mongoDBMajorVersion\" : \"8.0\",\n  \"name\" : \"${DEPLOYMENT_NAME}\",\n  \"numShards\" : 1,\n  \"paused\" : false,\n  \"pitEnabled\" : false,\n  \"providerBackupEnabled\" : false,\n  \"providerSettings\" : {\n    \"providerName\" : \"AWS\",\n    \"autoScaling\" : {\n      \"compute\" : {\n        \"maxInstanceSize\" : \"M20\",\n        \"minInstanceSize\" : \"M10\"\n      }\n    },\n    \"diskIOPS\" : 3000,\n    \"encryptEBSVolume\" : true,\n    \"instanceSizeName\" : \"M10\",\n    \"regionName\" : \"US_EAST_1\",\n    \"volumeType\" : \"STANDARD\"\n  },\n  \"replicationFactor\" : 3,\n  \"rootCertType\" : \"ISRGROOTX1\",\n  \"terminationProtectionEnabled\" : false,\n  \"versionReleaseSystem\" : \"LTS\"\n}\nEOF\n)\nexport DEPLOYMENT_DATA\n\nexport ATLAS_PUBLIC_API_KEY=[REDACTED]\nexport ATLAS_PRIVATE_API_KEY=[REDACTED]\nexport ATLAS_GROUP_ID=$OIDC_ATLAS_GROUP_ID\n\ncreate_deployment\n\n########################\n# Wait for the Atlas Cluster\nURI=$(check_deployment)\n\ncat <<EOF >> \"secrets-export.sh\"\nexport MONGODB_URI=\"$URI\"\nexport MONGODB_URI_SINGLE=\"$URI/?authMechanism=MONGODB-OIDC&authMechanismProperties=ENVIRONMENT:k8s&authSource=%24external\"\nEOF\n\npopd\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".evergreen/auth_oidc/gcp/setup-secrets.sh",
+      "sha": null,
+      "content_sha256": "72a7a16bc2c747a386705b85b17ff72b62c691317b4bcd750ed62737cb3edde5",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\nset -eu\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\npushd $SCRIPT_DIR\n. ../../secrets_handling/setup-secrets.sh drivers/gcpoidc\npopd\n"
+    },
+    {
+      "path": ".evergreen/auth_oidc/gcp/setup.sh",
+      "sha": null,
+      "content_sha256": "7323c5f74c6e5676ab463dc215c3df43d4d6f86b23707711bbba3c277d89593d",
+      "score": 191,
+      "content": "#!/usr/bin/env bash\n\nset -o errexit\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/../../handle-paths.sh\npushd $SCRIPT_DIR\n\n# Handle secrets from vault.\nrm -f secrets-export.sh\n. ./setup-secrets.sh\n\n########################\n# Start an Atlas Cluster\n\n# Get the utility functions\n. ../../atlas/atlas-utils.sh\n\n# Generate a random cluster name.\n# See: https://docs.atlas.mongodb.com/reference/atlas-limits/#label-limits\nDEPLOYMENT_NAME=\"$RANDOM-DRIVERGCP\"\necho \"export CLUSTER_NAME=$DEPLOYMENT_NAME\" >> \"$DRIVERS_TOOLS/.evergreen/atlas/secrets-export.sh\"\n\n# Set the create cluster configuration.\nDEPLOYMENT_DATA=$(cat <<EOF\n{\n  \"autoScaling\" : {\n    \"autoIndexingEnabled\" : false,\n    \"compute\" : {\n      \"enabled\" : true,\n      \"scaleDownEnabled\" : true\n    },\n    \"diskGBEnabled\" : true\n  },\n  \"backupEnabled\" : false,\n  \"biConnector\" : {\n    \"enabled\" : false,\n    \"readPreference\" : \"secondary\"\n  },\n  \"clusterType\" : \"REPLICASET\",\n  \"diskSizeGB\" : 10.0,\n  \"encryptionAtRestProvider\" : \"NONE\",\n  \"mongoDBMajorVersion\" : \"7.0\",\n  \"name\" : \"${DEPLOYMENT_NAME}\",\n  \"numShards\" : 1,\n  \"paused\" : false,\n  \"pitEnabled\" : false,\n  \"providerBackupEnabled\" : false,\n  \"providerSettings\" : {\n    \"providerName\" : \"AWS\",\n    \"autoScaling\" : {\n      \"compute\" : {\n        \"maxInstanceSize\" : \"M20\",\n        \"minInstanceSize\" : \"M10\"\n      }\n    },\n    \"diskIOPS\" : 3000,\n    \"encryptEBSVolume\" : true,\n    \"instanceSizeName\" : \"M10\",\n    \"regionName\" : \"US_EAST_1\",\n    \"volumeType\" : \"STANDARD\"\n  },\n  \"replicationFactor\" : 3,\n  \"rootCertType\" : \"ISRGROOTX1\",\n  \"terminationProtectionEnabled\" : false,\n  \"versionReleaseSystem\" : \"LTS\"\n}\nEOF\n)\nexport DEPLOYMENT_DATA\n\nexport ATLAS_PUBLIC_API_KEY=[REDACTED]\nexport ATLAS_PRIVATE_API_KEY=[REDACTED]\nexport ATLAS_GROUP_ID=$OIDC_ATLAS_GROUP_ID\n\ncreate_deployment\n\n########################\n# Set up the GCE instance.\n\n# Set up variables for GCPKMS scripts.\nexport GCPKMS_SECRETS_FILE=\"$SCRIPT_DIR/secrets-export.sh\"\nexport GCPKMS_SERVICEACCOUNT=$GCPOIDC_SERVICEACCOUNT\nexport GCPKMS_MACHINE=$GCPOIDC_MACHINE\nexport GCPKMS_SETUP_INSTANCE=\"$SCRIPT_DIR/setup-instance.sh\"\n\n# Write the keyfile content to a local JSON path.\nexport GCPKMS_KEYFILE=/tmp/testgcpkms_key_file.json\n# convert content from base64 to JSON and write to file\necho ${GCPOIDC_KEYFILE_CONTENT} | base64 --decode > $GCPKMS_KEYFILE\n\n# Create the instance using the script.\nbash $DRIVERS_TOOLS/.evergreen/csfle/gcpkms/create-and-setup-instance.sh\n\n########################\n# Wait for the Atlas Cluster\nURI=$(check_deployment)\n\ncat <<EOF >> \"secrets-export.sh\"\nexport MONGODB_URI=\"$URI\"\nexport MONGODB_URI_SINGLE=\"$URI/?authMechanism=MONGODB-OIDC&authSource=%24external&authMechanismProperties=ENVIRONMENT:gcp,TOKEN_RESOURCE:$GCPOIDC_AUDIENCE\"\nexport OIDC_ADMIN_USER=$GCPOIDC_ATLAS_USER\nexport OIDC_ADMIN_PWD=$GCPOIDC_ATLAS_PASSWORD\nEOF\n\n########################\n# Run the self test.\nsource ./secrets-export.sh\necho \"Copying secrets file to GCE instance ($GCPKMS_INSTANCENAME) ... begin\"\n$GCPKMS_GCLOUD compute scp $DRIVERS_TOOLS/.evergreen/auth_oidc/gcp/secrets-export.sh \"$GCPKMS_INSTANCENAME\":~ \\\n    --zone $GCPKMS_ZONE \\\n    --project $GCPKMS_PROJECT \\\n    --scp-flag=\"-p\"\necho \"Copying secrets file to GCE instance ($GCPKMS_INSTANCENAME) ... end\"\n\necho \"Running run-self-test.sh on GCE instance ($GCPKMS_INSTANCENAME) ... begin\"\n$GCPKMS_GCLOUD compute ssh \"$GCPKMS_INSTANCENAME\" \\\n    --zone $GCPKMS_ZONE \\\n    --project $GCPKMS_PROJECT \\\n    --command \"./run-self-test.sh\"\necho \"Exit code of test-script is: $?\"\necho \"Running run-self-test.sh on GCE instance ($GCPKMS_INSTANCENAME) ... end\"\n\npopd\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": ".evergreen/auth_oidc/k8s/remote-scripts/setup_oidc.js",
+      "sha": null,
+      "content_sha256": "7f1c0e3f3350809ae42fc98e23b538de243d3fc8af7eee60d3a8605d48b47c37",
+      "score": 189,
+      "content": "/**\n * Set up OIDC auth roles.\n */\n(function() {\n    \"use strict\";\n\n    console.log(\"Setting up Admin User\");\n    const admin = Mongo().getDB(\"admin\");\n    assert(admin.auth(\"bob\", \"pwd123\"));\n\n    console.log(\"Setting up OIDC User\");\n    const authPrefix = process.env['K8S_OIDC_AUTHPREFIX'];\n    const authClaim = process.env['K8S_OIDC_CLIENT'];\n    const username = `${authPrefix}/${authClaim}`\n\n    const external = admin.getSiblingDB(\"$external\");\n    console.log('Adding user:', username);\n    external.runCommand({createUser: username, roles:[{role: 'readWrite', db: 'test'}]});\n\n    }());\n"
+    },
+    {
+      "path": ".evergreen/install-dependencies.sh",
+      "sha": null,
+      "content_sha256": "34b0e8e7290e28afb3e79c1701f00272ad3d056d445e9b4995eed4499a5712db",
+      "score": 187,
+      "content": "#!/usr/bin/env bash\nset -o errexit  # Exit the script with error if any of the commands fail\n\nSCRIPT_DIR=$(dirname ${BASH_SOURCE[0]})\n. $SCRIPT_DIR/handle-paths.sh\n\n# Functions to fetch MongoDB binaries\n. $SCRIPT_DIR/download-mongodb.sh\n\nget_distro\n\n# See .evergreen/download-mongodb.sh for most possible values\ncase \"$DISTRO\" in\n   cygwin*)\n      echo \"Install Windows dependencies\"\n      ;;\n\n   darwin*)\n      echo \"Install macOS dependencies\"\n      ;;\n\n   linux-rhel*)\n      echo \"Install RHEL dependencies\"\n      ;;\n\n   linux-ubuntu*)\n      echo \"Install Ubuntu dependencies\"\n      sudo apt-get -qq update || true\n      sudo DEBIAN_FRONTEND=noninteractive apt-get -qqy -o DPkg::Lock::Timeout=-1 install awscli < /dev/null > /dev/null || true\n      echo \"Install Ubuntu dependencies... done\"\n      ;;\n\n   sunos*)\n      echo \"Install Solaris dependencies\"\n      sudo /opt/csw/bin/pkgutil -y -i sasl_dev || true\n      ;;\n\n   *)\n      echo \"All other platforms...\"\n      ;;\nesac\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 29,
+  "sensitive_files_skipped": [
+    {
+      "path": ".evergreen/ocsp/ecdsa/ca.key",
+      "sha": "05935962b577757332e1a6c12f46421aed760ca4",
+      "size": 241,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/ecdsa/ca.pem",
+      "sha": "b5037745c2678212608b27628eef4a93e7564576",
+      "size": 982,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/ecdsa/ocsp-responder.key",
+      "sha": "9e7eaa64e4eeb615bb424148cc5fa6cc76f664e1",
+      "size": 241,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/ecdsa/server-mustStaple-singleEndpoint.pem",
+      "sha": "c2d3caa3d7fc99fd942c01873cf1259876544215",
+      "size": 1205,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/ecdsa/server-mustStaple.pem",
+      "sha": "b539779eff5431c25f6ac6785f8c40c24dbe5bd7",
+      "size": 1270,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/ecdsa/server-singleEndpoint.pem",
+      "sha": "fb2cfc5969e2f034f8392090798a5722da93e32d",
+      "size": 1181,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/ecdsa/server.pem",
+      "sha": "d120e1852e0a8bdbaa038d75e2a0970b205bbe78",
+      "size": 1242,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/rsa/ca.key",
+      "sha": "9d10cb2db9db11fd83896b771594fdae1eb9f24a",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/rsa/ca.pem",
+      "sha": "afa468f04ba7af74cd869a5e856642d59e2f3a19",
+      "size": 2969,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/rsa/ocsp-responder.key",
+      "sha": "ab3001e7f2b122df5fe9b384d573ed96e5dff107",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/rsa/server-mustStaple-singleEndpoint.pem",
+      "sha": "47112c02b1ebd0f1a4fcea341a154af00862e0bd",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/rsa/server-mustStaple.pem",
+      "sha": "5c80602e41388e06c7586bbe007e2a7ffdae5353",
+      "size": 3245,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/rsa/server-singleEndpoint.pem",
+      "sha": "66849f535323e6d6ae1766d47d4525d9c6a85ba8",
+      "size": 3156,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/ocsp/rsa/server.pem",
+      "sha": "abf978ef8fb93e31618566dc25102fc43961c4ee",
+      "size": 3221,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/orchestration/lib/client.pem",
+      "sha": "829dc918bbafb40826e96b52802c6bebfdd31302",
+      "size": 24,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/altname.pem",
+      "sha": "ff0fd61e67017ea2bdf6efe9addcde0df97bdc52",
+      "size": 2989,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/ca.pem",
+      "sha": "24beea2d48a94ad3aa4057ed2bd83dfbfbcef12d",
+      "size": 1273,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/client-pkcs8-encrypted.pem",
+      "sha": "4fa2d485e316ca1a1911520157939ca18aa211ca",
+      "size": 3111,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/client-pkcs8-unencrypted.pem",
+      "sha": "7b6bd924fe534190a3cdb2f1d75dab30a71a4e95",
+      "size": 2981,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/client-private.pem",
+      "sha": "bd3341a30ebf64727e8e4d1e5587f64750f5b177",
+      "size": 1679,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/client-public.pem",
+      "sha": "aaec4726762a029958c80b1c98b0a5694f3a8efc",
+      "size": 1277,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/client.pem",
+      "sha": "5b070010920d3159a2b4eb1bed834508fb799fde",
+      "size": 2956,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/commonName.pem",
+      "sha": "e8ebd4953f15ef8842135afa916041cdfdff2602",
+      "size": 2928,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/crl.pem",
+      "sha": "733a0acdc0760a1bbc5ad3dcf93620aad97ffa1e",
+      "size": 719,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/expired.pem",
+      "sha": "2d92be01aa4c03a878a60546104ffdcbdb402d0c",
+      "size": 2985,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/password_protected.pem",
+      "sha": "cc9e124703503deccbc163d60b349eac560b7aa5",
+      "size": 3135,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/server.pem",
+      "sha": "7480f9644763eff444e0490bf78bdc342213c7b8",
+      "size": 2977,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/wild.pem",
+      "sha": "d418007486b4bac4f3b22d0e1a39bdffbfbd0015",
+      "size": 2977,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": ".evergreen/x509gen/wrong-host.pem",
+      "sha": "819a14cb0693ccb04c3c62bc2694c52511b76c8e",
+      "size": 2916,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-01T11:55:19.490118+00:00"
+}

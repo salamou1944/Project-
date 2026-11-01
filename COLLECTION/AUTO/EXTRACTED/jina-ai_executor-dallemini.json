@@ -1,0 +1,76 @@
+{
+  "canonical_source": "github:jina-ai/executor-dallemini",
+  "repo": "jina-ai/executor-dallemini",
+  "revision_sha": "f42b5c6e6572af32c8b306cf12dffe74feff5a6b",
+  "default_branch": "main",
+  "pushed_at": "2022-04-30T08:23:22Z",
+  "repo_updated_at": "2023-09-26T03:09:53Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "8f4ecf004b681101c90fc1440aac20efade8cb17c167b2c07ef801e44648755d",
+      "score": 100,
+      "content": "# DalleMini\n\nGenerating image from text prompt using DALLE-mini model.\n\n- Incoming Document must have `.text` filled.\n- Returned image Documents are nested under each `.chunks`'s `.uri` as base64 DataURI jpg format.\n- One can use `parameters={'num_images': 1}` to set the number of images returned, 1 image for 1 Document takes ~30 seconds on CPU.\n- One can turn off captioning by `parameters={'caption': False}`.\n\n## Caveat\n\nMemory demanding!\n\nEach request would take 30 second/each.\n\n"
+    },
+    {
+      "path": "requirements.txt",
+      "sha": null,
+      "content_sha256": "c41c6426c4917f946d88366ab4a74fad9d17710137320ef514ec45169bacf81d",
+      "score": 85,
+      "content": "flax\ngit+https://github.com/huggingface/transformers.git\ngit+https://github.com/patil-suraj/vqgan-jax.git\ngit+https://github.com/borisdayma/dalle-mini.git"
+    },
+    {
+      "path": "flow.yml",
+      "sha": null,
+      "content_sha256": "4cb779fe956a8fd4c9b9362bbf52d5f19537c9c3532c3c53fd6048afb8b4ceab",
+      "score": 35,
+      "content": "jtype: Flow\nwith:\n  protocol: http\n  env:\n    WANDB_START_METHOD: thread\n    JINA_LOG_LEVEL: debug\nexecutors:\n  - name: dalle_mini\n    uses: jinahub+docker://DalleMini\n    resources:\n      memory: 16G"
+    },
+    {
+      "path": "dm_helper.py",
+      "sha": null,
+      "content_sha256": "2357b20d8bc4c2a0295e80f98cba50b5c3842f7b0fa2720052e582e942c1a232",
+      "score": 35,
+      "content": "import random\nfrom functools import partial\n\nimport jax\nimport jax.numpy as jnp\nimport numpy as np\nimport wandb\nfrom PIL import Image\nfrom dalle_mini import DalleBart, DalleBartProcessor\nfrom flax.jax_utils import replicate\nfrom flax.training.common_utils import shard_prng_key\nfrom vqgan_jax.modeling_flax_vqgan import VQModel\n\nDALLE_MODEL = \"dalle-mini/dalle-mini/mega-1:latest\"\nDALLE_COMMIT_ID = None\n\nVQGAN_REPO = \"dalle-mini/vqgan_imagenet_f16_16384\"\nVQGAN_COMMIT_ID = \"e93a26e7707683d349bf5d5c41c5b0ef69b677a9\"\n\n# We can customize top_k/top_p used for generating samples\ngen_top_k = None\ngen_top_p = 0.9\ntemperature = 0.85\ncond_scale = 3.0\n\nwandb.init(anonymous=\"must\")\ndtype = jnp.float32\n# Load models & tokenizer\nmodel = DalleBart.from_pretrained(DALLE_MODEL, revision=DALLE_COMMIT_ID)\nvqgan = VQModel.from_pretrained(VQGAN_REPO, revision=VQGAN_COMMIT_ID)\n\nmodel._params = replicate(model.params)\nvqgan._params = replicate(vqgan.params)\n\nprint('device', jax.device_count())\n\n\n# model inference\n@partial(jax.pmap, axis_name=\"batch\", static_broadcasted_argnums=(3, 4, 5, 6))\ndef p_generate(\n        tokenized_prompt, key, params, top_k, top_p, temperature, condition_scale\n):\n    return model.generate(\n        **tokenized_prompt,\n        prng_key=key,\n        params=params,\n        top_k=top_k,\n        top_p=top_p,\n        temperature=temperature,\n        condition_scale=condition_scale,\n    )\n\n\n# decode images\n@partial(jax.pmap, axis_name=\"batch\")\ndef p_decode(indices, params):\n    return vqgan.decode_code(indices, params=params)\n\n\nprocessor = DalleBartProcessor.from_pretrained(DALLE_MODEL, revision=DALLE_COMMIT_ID)\n\n\ndef tokenize_prompt(prompt: str):\n    tokenized_prompt = processor([prompt])\n    return replicate(tokenized_prompt)\n\n\ndef generate_images(prompt: str, num_predictions: int):\n    tokenized_prompt = tokenize_prompt(prompt)\n\n    # create a random key\n    seed = random.randint(0, 2 ** 32 - 1)\n    key = jax.random.PRNGKey(seed)\n\n    # generate images\n    images = []\n    for i in range(max(1, num_predictions // jax.device_count())):\n        # get a new key\n        key, subkey = jax.random.split(key)\n\n        # generate images\n        encoded_images = p_generate(\n            tokenized_prompt,\n            shard_prng_key(subkey),\n            model.params,\n            gen_top_k,\n            gen_top_p,\n            temperature,\n            cond_scale,\n        )\n\n        # remove BOS\n        encoded_images = encoded_images.sequences[..., 1:]\n\n        # decode images\n        decoded_images = p_decode(encoded_images, vqgan.params)\n        decoded_images = decoded_images.clip(0.0, 1.0).reshape((-1, 256, 256, 3))\n        for img in decoded_images:\n            images.append(Image.fromarray(np.asarray(img * 255, dtype=np.uint8)))\n\n    return images\n"
+    },
+    {
+      "path": "executor.py",
+      "sha": null,
+      "content_sha256": "fa34f29c3a6d9f9a0dab01209403ddb16d8db8d22c90a0fe47719b9a9b315129",
+      "score": 35,
+      "content": "from io import BytesIO\nfrom typing import Dict\n\nfrom jina import Executor, requests, DocumentArray, Document\n\nimport dm_helper\n\n\nclass DalleMiniGenerator(Executor):\n\n    @requests(on='/')\n    def generate(self, docs: DocumentArray, parameters: Dict, **kwargs):\n\n        num_images = int(parameters.get('num_images', 1))\n        for d in docs:\n            print(f'Created {num_images} images from text prompt [{d.text}]')\n            generated_imgs = dm_helper.generate_images(d.text, num_images)\n\n            for img in generated_imgs:\n                buffered = BytesIO()\n                img.save(buffered, format='PNG')\n                _d = Document(blob=buffered.getvalue(), mime_type='image/png').convert_blob_to_datauri()\n                _d.blob = None\n                d.chunks.append(_d)\n\n            print(f'{d.text} done!')\n"
+    },
+    {
+      "path": "manifest.yml",
+      "sha": null,
+      "content_sha256": "f092c0c6d0397118e4ae1736e419e8a6eeaa44cd459b4b12376ba38871a43d9f",
+      "score": 35,
+      "content": "manifest_version: 1\nname: DalleMini\ndescription: Generate image from text prompt using DALLE-mini model\nurl: https://github.com/jina-ai/executor-dallemini"
+    },
+    {
+      "path": "config.yml",
+      "sha": null,
+      "content_sha256": "fd4073ab86069e412333db6d317ab1eef8c77a4e733aeaa1f672631965af3158",
+      "score": 35,
+      "content": "jtype: DalleMiniGenerator\nmetas:\n  py_modules:\n    - dm_helper.py\n    - executor.py\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-01T11:55:19.486313+00:00"
+}

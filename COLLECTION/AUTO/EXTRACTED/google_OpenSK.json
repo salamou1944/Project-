@@ -1,0 +1,213 @@
+{
+  "canonical_source": "github:google/OpenSK",
+  "repo": "google/OpenSK",
+  "revision_sha": "c9dec1fcdc3433a2dcf9de6e90aa99a0cb30707c",
+  "default_branch": "develop",
+  "pushed_at": "2026-10-29T18:47:40Z",
+  "repo_updated_at": "2026-10-31T20:36:47Z",
+  "license": "Apache-2.0",
+  "topics": [
+    "ctap2",
+    "embedded",
+    "fido2",
+    "firmware",
+    "hardware",
+    "opensk",
+    "rust",
+    "security",
+    "security-key",
+    "tock",
+    "tock-os",
+    "u2f",
+    "webauthn"
+  ],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/cifuzz.yml",
+      "sha": null,
+      "content_sha256": "c6652e9629c80c4586a9ff014cda550a304b55983a60c208005d26ffb3ac4bfe",
+      "score": 198,
+      "content": "name: CIFuzz\non: \n  push:\n    branches:\n      - develop\njobs:\n  Fuzzing:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n    - name: Build Fuzzers\n      id: build\n      uses: google/oss-fuzz/infra/cifuzz/actions/build_fuzzers@master\n      with:\n        oss-fuzz-project-name: 'opensk'\n        dry-run: false\n        language: rust\n    - name: Run Fuzzers\n      uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master\n      with:\n        oss-fuzz-project-name: 'opensk'\n        fuzz-seconds: 600\n        dry-run: false\n    - name: Upload Crash\n      uses: actions/upload-artifact@v4\n      if: failure() && steps.build.outcome == 'success'\n      with:\n        name: artifacts\n        path: ./out/artifacts\n"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha": null,
+      "content_sha256": "31d934203d29803c6db54e8557764a2c718631eeceee958b6b42a281c833fd98",
+      "score": 198,
+      "content": "name: Continuous Integration\n\non:\n  push:\n    branches:\n      - develop\n  pull_request:\n    branches:\n      - develop\n  schedule:\n    - cron: 30 1 * * 2 # every Tuesday at 1:30 UTC\n\nconcurrency:\n  group: ci-${{ github.ref }}\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n\njobs:\n  runtests:\n    name: Continuous Integration\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    runs-on: ${{ matrix.os }}\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.13\"\n      - uses: astral-sh/setup-uv@v5\n        with:\n          enable-cache: true\n      - run: ./setup.sh\n      - run: ./run_desktop_tests.sh\n"
+    },
+    {
+      "path": "libraries/opensk/src/api/crypto/ecdh.rs",
+      "sha": null,
+      "content_sha256": "3a666f146215ec592f2e3b52f927b2c891c9be62645e6c883a19f5d8a44d9fb8",
+      "score": 172,
+      "content": "// Copyright 2023 Google LLC\n//\n// Licensed under the Apache License, Version 2.0 (the \"License\");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//      http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an \"AS IS\" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\nuse super::EC_FIELD_SIZE;\nuse crate::api::rng::Rng;\n\n/// Container for all ECDH cryptographic material.\npub trait Ecdh {\n    type SecretKey: SecretKey<PublicKey = Self::PublicKey, SharedSecret = [REDACTED];\n    type PublicKey: PublicKey;\n    type SharedSecret: [REDACTED];\n}\n\n/// ECDH ephemeral key.\npub trait SecretKey {\n    type PublicKey: PublicKey;\n    type SharedSecret: [REDACTED];\n\n    /// Generates a new random secret key.\n    fn random(rng: &mut impl Rng) -> Self;\n\n    /// Computes the corresponding public key for this private key.\n    fn public_key(&self) -> Self::PublicKey;\n\n    /// Computes the shared secret when using Elliptic-curve Diffie–Hellman.\n    fn diffie_hellman(&self, public_key: &Self::PublicKey) -> Self::SharedSecret;\n}\n\n/// ECDH public key.\npub trait PublicKey: Sized {\n    /// Creates a public key from its coordinates.\n    fn from_coordinates(x: &[u8; EC_FIELD_SIZE], y: &[u8; EC_FIELD_SIZE]) -> Option<Self>;\n\n    /// Writes the public key coordinates into the passed in parameters.\n    fn to_coordinates(&self, x: &mut [u8; EC_FIELD_SIZE], y: &mut [u8; EC_FIELD_SIZE]);\n}\n\n/// ECDH shared secret.\npub trait SharedSecret {\n    /// Exports the x component of the point computed by Diffie–Hellman.\n    fn raw_secret_bytes(&self, secret: &mut [u8; EC_FIELD_SIZE]);\n}\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "docs/install.md",
+      "sha": null,
+      "content_sha256": "7cce401d7bec8ca46662402ecb8c8b9de5030ee4e199fef9d0a4a6948f114b67",
+      "score": 150,
+      "content": "# <img alt=\"OpenSK logo\" src=\"img/OpenSK.svg\" width=\"200px\">\n\n## Installation guide\n\nThis document lists required steps to start building your own OpenSK.\nOpenSK installation is supported and tested under Linux and macOS.\n\nOpenSK is installed as a native [Wasefire](https://github.com/google/wasefire)\napplet.\n\n### Software requirements\n\nIn order to compile and flash a working OpenSK firmware, you will need the\nfollowing:\n\n- rustup (can be installed with [Rustup](https://rustup.rs/))\n- the OpenSSL command line tool (can be installed and configured with the\n  `libssl-dev` and `pkg-config` packages on Debian)\n- uv and python3 (optional, for sending CTAP commands for configuration, can be\n  installed with [uv](https://docs.astral.sh/uv/getting-started/installation/))\n\n## Setup\n\nRun the setup script and follow install instructions for `rustup` and `uv`, if\nnecessary.\n\n```sh\n./setup.sh\n```\n\nThe setup script is idempotent, so you can always rerun it, either because you\ndon't remember you've run it or because you just pulled a newer version of the\n`main` branch with `git pull`. Rerun it if any command below fails.\n\nIf this is the first time installing OpenSK on a Linux host machine, you need to\ninstall a `udev` rule file to allow non-root users to interact with OpenSK\ndevices. To install it, execute:\n\n```sh\nsudo cp rules.d/99-wasefire.rules /etc/udev/rules.d/\nsudo udevadm control --reload\n```\n\n## Storage\n\nOpenSK stores data in the devices flash storage, for example your credentials.\nWhen you flash Wasefire, you will erase that storage.\nTo keep your storage, use the `--update` flag with the below flash script.\n\n## Features\n\nThe applet provides a few customization features (all disabled by default):\n\n- `config-command` recommended, enables the authenticatorConfig CTAP command\n- `ctap1` recommended, enables CTAP 1 (the applet always implements CTAP 2)\n- `debug` enables logging of the applet's debug messages\n- `ed25519` enables support for Ed25519 (the applet always implements ECDSA P-256)\n- `fingerprint` enables support for fingerprints (requires a sensor)\n\nWe provide a `flash.sh` script to flash the OpenSK applet for each platform.\nTo customize features, use `--features`. For example, to enable debug prints:\n\n```sh\n./flash.sh --features=ctap1,config-command,debug <target>\n```\n\nThe available targets are listed below.\n\n## Platforms\n\nThe applet needs the platform to implement the following features of the board API:\n\n- `api-button`\n- `api-clock`\n- `api-crypto-aes256-cbc`\n- `api-crypto-ed25519` if the applet `ed25519` feature is enabled\n- `api-crypto-hmac-sha256`\n- `api-crypto-p256-ecdh`\n- `api-crypto-p256-ecdsa`\n- `api-crypto-sha256`\n- `api-fingerprint-matcher` if the applet `fingerprint` feature is enabled\n- `api-led`\n- `api-rng`\n- `api-storage`\n- `api-timer`\n- `api-usb-ctap`\n\nSome applet features only work for some targets, special notes will indicate\nwhen a feature is not supported, or extra steps need to be taken.\n\nIn the following sections, we describe platforms that support OpenSK.\n\n### Host\n\nThe applet feature `fingerprint` is not supported.\n\nTo install, run:\n\n```sh\n./flash.sh host\n```\n\n### nRF52840\n\nThe applet feature `ed25519` is not supported.\n\nThe applet feature `fingerprint` is supported for the development kit if an [FPC\n2534](https://www.fingerprints.com/solutions/access/fpc-allkey-development-kit)\nis connected to the board. In that case, the `fpc2534` platform feature must be\nenabled.\n\nAn FPC 2532 should theoretically also be supported (but has not been tested)\nusing the same platform feature.\n\n#### Boards\n\nFor more details on the boards, see:\n\n- [Nordic nRF52840-DK](boards/nrf52840dk.md) - target: `nrf52840dk`\n- [Nordic nRF52840 Dongle](boards/nrf52840_dongle.md) - target: `nrf52840_dongle`\n- [Makerdiary nRF52840-MDK USB dongle](boards/nrf52840_mdk.md) - target: `nrf52840_mdk`\n- [Feitian OpenSK dongle](boards/nrf52840_feitian.md) - target: `nrf52840_dongle`\n\n### OpenTitan\n\nThe applet feature `ed25519` is supported and needs the `ed25519`\nplatform feature.\n\nThe applet feature `fingerprint` is not supported.\n\n#### Board: Teacup A2\n\nA LED (active high) needs to be connected to R10. A capacitive touch needs to be\nconnected to R13.\n\n```sh\n./flash.sh opentitan\n```\n\n## Configuring the firmware\n\nAfter flashing the firmware, you can configure it.\nYou can use a custom AAGUID, batch attestation key and certificate.\nOnly perform this step if you understand the privacy implications. Read the\n[certificate section in Customization](customization.md#Certificate-considerations)\nto find the necessary command.\n"
+    },
+    {
+      "path": ".github/workflows/mdlint.yml",
+      "sha": null,
+      "content_sha256": "20aaab1feb7f7596a7ac403a4bc8348afa82f8c321a0ab770835d0d97a56e578",
+      "score": 126,
+      "content": "name: markdownlint\non:\n  push:\n    paths:\n      - '**/*.md'\n      - '.markdownlint.json'\n      - '!third_party/**'\n  pull_request:\n    types: [opened, synchronize, reopened]\n\njobs:\n  mdlint:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      - uses: actions/checkout@v4\n      - name: markdownlint-cli\n        uses: nosborn/github-action-markdown-cli@v3\n        with:\n          files: '**/*.md'\n          config_file: '.markdownlint.json'\n          ignore_files: 'third_party/*'\n"
+    },
+    {
+      "path": ".github/workflows/bloat_formatter.sh",
+      "sha": null,
+      "content_sha256": "2948cf78e3cd8b95f5be4da0b27ab5add91401b20efcd52001800e716a86b030",
+      "score": 126,
+      "content": "#!/bin/bash\n# Copyright 2022 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\ncd \"$(dirname \"$0\")\"\n\n# New output file is $1\n# Old output file is $2\n# Optional output file is $3\nTMP=\"${3:-bloat_comment.md}\"\nWARNING=\"never will be\"\nNEW_SIZE=$(cat \"$1\" | sed -nr 's/.*100.0% (.*)KiB .text.*/\\1/p')\nOLD_SIZE=$(cat \"$2\" | sed -nr 's/.*100.0% (.*)KiB .text.*/\\1/p')\n\necho \"\nOLD $OLD_SIZE kiB\nNEW $NEW_SIZE kiB\" > \"$TMP\"\n\necho \"\nOutput of cargo bloat\n======================\n\" >> \"$TMP\"\n\necho \"Including PR\" >> \"$TMP\"\nsed -n '/File  .text/,$p' \"$1\" | grep -v \"$WARNING\" >> \"$TMP\"\necho \"Base branch\" >> \"$TMP\"\nsed -n '/File  .text/,$p' \"$2\" | grep -v \"$WARNING\" >> \"$TMP\"\n\nCOMMENT=$(cat \"$TMP\" | sed 's/%/%25/g' | sed -z 's/\\n/%0A/g')\n# No output for equality is intentional.\nif (( $(echo \"$NEW_SIZE > $OLD_SIZE\" | bc -l) )); then\n  echo \"::warning file=.github/workflows/cargo_bloat.yml,line=1,title=Binary size::$COMMENT\"\nfi\nif (( $(echo \"$NEW_SIZE < $OLD_SIZE\" | bc -l) )); then\n  echo \"::notice file=.github/workflows/cargo_bloat.yml,line=1,title=Binary size::$COMMENT\"\nfi\n"
+    },
+    {
+      "path": ".github/workflows/cargo_bloat.yml",
+      "sha": null,
+      "content_sha256": "ae295bad6d22319ac3ad09785873c54ea97087abf6acabb013112d4de1980335",
+      "score": 126,
+      "content": "name: Binary size report\non: pull_request\n\njobs:\n  cargo_bloat:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n    steps:\n      # Setup\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.13\"\n      - uses: astral-sh/setup-uv@v5\n        with:\n          enable-cache: true\n      - uses: actions-rs/cargo@v1\n        with:\n          command: install\n          args: cargo-bloat\n\n      # First run: PR\n      - uses: actions/checkout@v4\n        with:\n          submodules: true\n      - name: Set up OpenSK\n        run: ./setup.sh\n      - name: Run bloat on the PR\n        working-directory: ./third_party/wasefire\n        run: cargo xtask --release --native applet rust ../.. --opt-level=z --features=ctap1,config-command runner nordic --opt-level=z --features=usb-ctap --features=software-crypto-aes256-cbc,software-crypto-hmac-sha256 --features=software-crypto-p256-ecdh,software-crypto-p256-ecdsa --measure-bloat >> \"$GITHUB_WORKSPACE/.github/workflows/bloat_output_new.txt\"\n\n      # Second run: HEAD\n      - uses: actions/checkout@v4\n        with:\n          submodules: true\n          ref: ${{ github.base_ref }}\n          path: OpenSK_base\n      - name: Set up OpenSK\n        working-directory: ./OpenSK_base\n        run: ./setup.sh\n      - name: Run bloat on base\n        working-directory: ./OpenSK_base/third_party/wasefire\n        run: cargo xtask --release --native applet rust ../.. --opt-level=z --features=ctap1,config-command runner nordic --opt-level=z --features=usb-ctap --features=software-crypto-aes256-cbc,software-crypto-hmac-sha256 --features=software-crypto-p256-ecdh,software-crypto-p256-ecdsa --measure-bloat >> \"$GITHUB_WORKSPACE/.github/workflows/bloat_output_old.txt\"\n\n      - name: Run output formatter to echo workflow command\n        run: .github/workflows/bloat_formatter.sh bloat_output_new.txt bloat_output_old.txt bloat_comment.md\n\n      - name: Add summary\n        run: cat .github/workflows/bloat_comment.md >> $GITHUB_STEP_SUMMARY\n"
+    },
+    {
+      "path": ".github/workflows/coveralls.yml",
+      "sha": null,
+      "content_sha256": "6ce02cb533afb85716089ecd6142d09ce2ab4476f512cf63e7b271825bd51283",
+      "score": 126,
+      "content": "---\nname: OpenSK code coverage report\non:\n  push:\n    paths:\n      - 'libraries/**/*.rs'\n  pull_request:\n    types: [opened, synchronize, reopened]\n\njobs:\n  coveralls:\n    name: OpenSK code coverage\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          submodules: \"true\"\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.13\"\n      - uses: astral-sh/setup-uv@v5\n        with:\n          enable-cache: true\n      - name: Set up OpenSK\n        run: ./setup.sh\n      - name: Install llvm tools\n        run: rustup +nightly component add llvm-tools-preview\n\n      - name: Install grcov\n        run: if [[ ! -e ~/.cargo/bin/grcov ]]; then cargo +stable install grcov; fi\n      - uses: actions-rs/cargo@v1\n        with:\n          toolchain: nightly\n          command: test\n          args: --manifest-path libraries/opensk/Cargo.toml --features \"std,ctap1,vendor_hid,software_crypto_ed25519,fingerprint\" --no-fail-fast\n        env:\n          RUSTFLAGS: \"-Cinstrument-coverage\"\n          LLVM_PROFILE_FILE: \"opensk-%p-%m.profraw\"\n      - name: Run grcov\n        run: RUSTUP_TOOLCHAIN=nightly grcov . --binary-path ./libraries/opensk/target/debug/ --source-dir libraries/opensk/ --output-type lcov --ignore-not-existing --output-path ./lcov.info --ignore \"/*\" --ignore \"examples/*\" --ignore \"third_party/*\"\n      - uses: coverallsapp/github-action@1.1.3\n        name: upload report to coveralls\n        with:\n          github-token: ${{ secrets.GITHUB_TOKEN }}\n          path-to-lcov: \"./lcov.info\"\n          base-path: \"libraries/opensk\"\n\n"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha": null,
+      "content_sha256": "0b207cd042bb6eff9d719b0e20fc634fe000b5e1ec89e96657dd947cc47fda15",
+      "score": 120,
+      "content": "[package]\nname = \"opensk-wasefire\"\nversion = \"0.1.0\"\nauthors = [\n  \"Fabian Kaczmarczyck <kaczmarczyck@google.com>\",\n  \"Guillaume Endignoux <guillaumee@google.com>\",\n  \"Jean-Michel Picod <jmichel@google.com>\",\n  \"Julien Cretin <cretin@google.com>\",\n]\nlicense = \"Apache-2.0\"\nedition = \"2024\"\n\n[dependencies]\nportable-atomic-util = { version = \"0.2.6\", default-features = false, features = [\"alloc\"] }\nwasefire-common = { path = \"third_party/wasefire/crates/common\", optional = true }\n\n[dependencies.wasefire]\npath = \"third_party/wasefire/crates/prelude\"\ndefault-features = false\nfeatures = [\n  \"api-button\",\n  \"api-clock\",\n  \"api-crypto-cbc\",\n  \"api-crypto-ecdh\",\n  \"api-crypto-ecdsa\",\n  \"api-crypto-hash\",\n  \"api-crypto-hkdf\",\n  \"api-led\",\n  \"api-rng\",\n  \"api-store\",\n  \"api-timer\",\n  \"api-usb-ctap\",\n]\n\n[dependencies.opensk]\npath = \"libraries/opensk\"\ndefault-features = false\n\n[dependencies.sk-cbor]\npath = \"libraries/cbor\"\n\n[features]\nconfig-command = [\"opensk/config_command\"]\nctap1 = [\"opensk/ctap1\"]\ndebug = [\"opensk/debug_ctap\"]\ned25519 = [\"opensk/ed25519\", \"wasefire/api-crypto-ed25519\"]\nfingerprint = [\"dep:wasefire-common\", \"opensk/fingerprint\", \"wasefire/api-fingerprint-matcher\"]\nled-1 = []\ntest = [\"opensk/std\", \"wasefire/test\"]\n"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "c648b962d9c51fc98394b6e87845264e94039b701a7eb7adb9e7429b0e969a87",
+      "score": 120,
+      "content": "[project]\nname = \"opensk\"\nversion = \"0.1.0\"\nrequires-python = \">=3.13\"\ndependencies = [\n    \"colorama\",\n    \"cryptography\",\n    \"fido2\",\n    \"hid\",\n    \"ruff\",\n    \"tqdm\",\n]\n"
+    },
+    {
+      "path": "fuzzing_setup.sh",
+      "sha": null,
+      "content_sha256": "d7125e5d55e9f800d894e8004ddc7696a5b71418e10d0ab9180472960587bb1c",
+      "score": 117,
+      "content": "#!/usr/bin/env bash\n# Copyright 2019 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n# Ensure the script doesn't fail on Github workflows\nexport TERM=${TERM:-vt100}\ndone_text=\"$(tput bold)DONE.$(tput sgr0)\"\n\nset -e\n\n# Install cargo-fuzz library.\ncargo +stable install cargo-fuzz\n"
+    },
+    {
+      "path": "setup.sh",
+      "sha": null,
+      "content_sha256": "ddd30ea687a1b913a14ad4ce9fabf079d678e9368c8d482050a0cee488e5f841",
+      "score": 117,
+      "content": "#!/usr/bin/env bash\n# Copyright 2019-2023 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n# Ensure the script doesn't fail on Github workflows\nexport TERM=${TERM:-vt100}\ndone_text=\"$(tput bold)DONE.$(tput sgr0)\"\n\nset -e\n\nif ! command -v rustup &> /dev/null; then\n  echo \"❌ Missing rustup command.\"\n  echo \"Please follow the steps at https://rustup.rs/ to install it.\"\n  exit 1\nfi\n\nif ! command -v uv &> /dev/null; then\n  echo \"uv command not found, optional for device configuration. \"\n  echo \"Install with: https://docs.astral.sh/uv/getting-started/installation/\"\nfi\n\ngit submodule update --init\n\n# Wasefire fails in an OSS-Fuzz environment, and we only fuzz the libraries\nif [ -z \"$FUZZING_ENGINE\" ]; then\n  (cd third_party/wasefire/ && ./scripts/setup.sh)\nfi\n\n# Ensure we have certificates, keys, etc. so that the tests can run\nsource tools/gen_key_materials.sh\ngenerate_pki N\nif [ ! -f \"crypto_data/opensk.key\" -o ! -f \"crypto_data/opensk_cert.pem\" ]\nthen\n  generate_new_batch\nfi\n\nrustup show\nrustup install stable\nif [ -z \"$FUZZING_ENGINE\" ]; then\n  cargo +stable install cargo-audit\nfi\n"
+    },
+    {
+      "path": "libraries/cbor/Cargo.toml",
+      "sha": null,
+      "content_sha256": "32cbba46e472d39b43bce0bb6130c8d831be555508247cd85d899e024e509c28",
+      "score": 116,
+      "content": "[package]\nname = \"sk-cbor\"\nversion = \"0.2.0\"\nlicense = \"Apache-2.0\"\nedition = \"2024\"\ndescription = \"CBOR parsing library\"\nrepository = \"https://github.com/google/OpenSK\"\nkeywords = [\"cbor\", \"serialization\", \"no_std\"]\ncategories = [\"encoding\"]\nreadme = \"README.md\"\n\n[badges]\nmaintenance = { status = \"passively-maintained\" }\n\n[dependencies]\n"
+    },
+    {
+      "path": "libraries/opensk/Cargo.toml",
+      "sha": null,
+      "content_sha256": "380040e7abe29285f9493badef9629af288254d861d2dc3f3a6b1cd7e1d36ffb",
+      "score": 116,
+      "content": "[package]\nname = \"opensk\"\nversion = \"0.1.0\"\nlicense = \"Apache-2.0\"\nedition = \"2024\"\ndescription = \"OpenSK's CTAP2 (FIDO2) authenticator, as a library\"\nrepository = \"https://github.com/google/OpenSK\"\nreadme = \"README.md\"\nkeywords = [\"fido2\", \"ctap2\", \"webauthn\", \"authenticator\", \"no_std\"]\ncategories = [\"authentication\", \"cryptography\", \"embedded\", \"no-std\"]\n\n[package.metadata.docs.rs]\nall-features = true\n\n[dependencies]\nsk-cbor = { path = \"../cbor\", version = \"0.2.0\" }\nbyteorder = { version = \"1\", default-features = false }\narrayref = \"0.3.6\"\nsubtle = { version = \"2.2\", default-features = false, features = [\"nightly\"] }\narbitrary = { version = \"1.4.2\", features = [\"derive\"], optional = true }\ned25519-compact = { version = \"1\", default-features = false, optional = true }\nrand_core = \"0.10.1\"\nrand = { version = \"0.10.1\", default-features = false, optional = true }\nsha2 = { version = \"0.11.0\", default-features = false, optional = true }\nhmac = { version = \"0.13.0\", default-features = false, optional = true }\nhkdf = { version = \"0.13.0\", default-features = false, optional = true }\naes = { version = \"0.9.0\", default-features = false, optional = true }\ncbc = { version = \"0.2.0\", default-features = false, optional = true }\nzeroize = { version = \"1.5.7\", features = [\"derive\"] }\nwasefire-store = { version = \"0.2.4\", optional = true }\n\n[dependencies.p256]\nversion = \"0.14.0\"\ndefault-features = false\nfeatures = [\"alloc\", \"ecdh\", \"ecdsa\"]\noptional = true\n\n[features]\ndefault = [\"config_command\", \"ctap1\"]\nconfig_command = []\ndebug_ctap = []\nstd = [\"wasefire-store/std\", \"rand?/std_rng\", \"software_crypto\", \"ed25519-compact\"]\nctap1 = []\nvendor_hid = []\nfuzz = [\"arbitrary\", \"std\"]\nsoftware_crypto = [\"rand\", \"sha2\", \"hmac\", \"hkdf\", \"aes\", \"cbc\", \"p256\"]\ned25519 = []\nsoftware_crypto_ed25519 = [\"software_crypto\", \"ed25519\", \"ed25519-compact\"]\nfingerprint = []\n\n[dev-dependencies]\nenum-iterator = \"2.3.0\"\n"
+    },
+    {
+      "path": "libraries/cbor/fuzz/Cargo.toml",
+      "sha": null,
+      "content_sha256": "9d96b937613d185bf84d3182c3e5754a6939853aef3b5cd7b208a45b701a7827",
+      "score": 114,
+      "content": "\n[package]\nname = \"sk-cbor-fuzz\"\nversion = \"0.0.0\"\nauthors = [\"Automatically generated\"]\npublish = false\nedition = \"2024\"\n\n[package.metadata]\ncargo-fuzz = true\n\n[dependencies]\nlibfuzzer-sys = \"0.4\"\n\n[dependencies.sk-cbor]\npath = \"..\"\n\n# Prevent this from interfering with workspaces\n[workspace]\nmembers = [\".\"]\n\n[[bin]]\nname = \"fuzz_target_cbor\"\npath = \"fuzz_targets/fuzz_target_cbor.rs\"\ntest = false\ndoc = false\n"
+    },
+    {
+      "path": "libraries/opensk/fuzz/Cargo.toml",
+      "sha": null,
+      "content_sha256": "e8da5488deff5155583960a28706e0e00de38321d68bb6eb99315c96e58f5c1c",
+      "score": 114,
+      "content": "[package]\nname = \"opensk-fuzz\"\nversion = \"0.0.0\"\nauthors = [\"Automatically generated\"]\npublish = false\nedition = \"2024\"\n\n[package.metadata]\ncargo-fuzz = true\n\n[dependencies]\nlibfuzzer-sys = { version = \"0.4\" }\nfuzz_helper = { path = \"fuzz_helper\" }\n\n# Prevent this from interfering with workspaces\n[workspace]\nmembers = [\".\"]\n\n[[bin]]\nname = \"fuzz_target_process_ctap_command\"\npath = \"fuzz_targets/fuzz_target_process_ctap_command.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_process_ctap1\"\npath = \"fuzz_targets/fuzz_target_process_ctap1.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_process_ctap2_client_pin\"\npath = \"fuzz_targets/fuzz_target_process_ctap2_client_pin.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_process_ctap2_client_pin_structured\"\npath = \"fuzz_targets/fuzz_target_process_ctap2_client_pin_structured.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_process_ctap2_get_assertion\"\npath = \"fuzz_targets/fuzz_target_process_ctap2_get_assertion.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_process_ctap2_get_assertion_structured\"\npath = \"fuzz_targets/fuzz_target_process_ctap2_get_assertion_structured.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_process_ctap2_make_credential\"\npath = \"fuzz_targets/fuzz_target_process_ctap2_make_credential.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_process_ctap2_make_credential_structured\"\npath = \"fuzz_targets/fuzz_target_process_ctap2_make_credential_structured.rs\"\ntest = false\ndoc = false\n\n[[bin]]\nname = \"fuzz_target_split_assemble\"\npath = \"fuzz_targets/fuzz_target_split_assemble.rs\"\ntest = false\ndoc = false\n"
+    },
+    {
+      "path": "tools/authenticator_config.py",
+      "sha": null,
+      "content_sha256": "e6ebb910e7cb0ef81a1cbee7cc8d1794e619dfb8d7d7cbea78471170e4bf127a",
+      "score": 113,
+      "content": "# Copyright 2023 Google LLC\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n# Lint as: python3\n\"\"\"Tool that sends a config command to OpenSK.\"\"\"\n\nfrom __future__ import absolute_import, division, print_function\n\nimport argparse\nimport colorama\nfrom fido2 import hid\nfrom fido2.ctap2 import Config\nimport uuid\n\nfrom tools.configure import fatal, get_opensk_devices, info\n\n\ndef main(args):\n    colorama.init()\n\n    devices = get_opensk_devices(False)\n    if not devices:\n        fatal(\"No devices found.\")\n\n    for authenticator in devices:\n        if authenticator.device.capabilities & hid.CAPABILITY.WINK:\n            authenticator.device.wink()\n        aaguid = uuid.UUID(bytes=authenticator.get_info().aaguid)\n        info(f\"Config of device AAGUID {aaguid} ({authenticator.device}).\")\n\n        config = Config(authenticator)\n        if args.ep:\n            info(\"Enable EP...\")\n            config.enable_enterprise_attestation()\n        if args.always_uv:\n            info(\"Toggle AlwaysUv...\")\n            config.toggle_always_uv()\n\n\nif __name__ == \"__main__\":\n    parser = argparse.ArgumentParser()\n    parser.add_argument(\"--ep\", action=argparse.BooleanOptionalAction)\n    parser.add_argument(\"--always-uv\", action=argparse.BooleanOptionalAction)\n    main(parser.parse_args())\n"
+    },
+    {
+      "path": "libraries/opensk/fuzz/fuzz_helper/Cargo.toml",
+      "sha": null,
+      "content_sha256": "6b07163e1a81d526b618ce6d47323d47e6d6fbb61663a592e079ae44ec0de17a",
+      "score": 112,
+      "content": "[package]\nname = \"fuzz_helper\"\nversion = \"0.1.0\"\nauthors = [\"Mingxiao Guo <mingxguo@google.com>\"]\nlicense = \"Apache-2.0\"\nedition = \"2024\"\n\n[dependencies]\narrayref = \"0.3.6\"\nopensk = { path = \"../..\", features = [\"fuzz\"] }\nsk-cbor = { path = \"../../../cbor\" }\narbitrary = { version = \"1.4.2\", features = [\"derive\"] }\n"
+    },
+    {
+      "path": "libraries/opensk/src/api/mod.rs",
+      "sha": null,
+      "content_sha256": "b1b76627af4997363deb93953bced53102346cd8a113eb6f23f5180ac5a8b127",
+      "score": 102,
+      "content": "// Copyright 2022-2023 Google LLC\n//\n// Licensed under the Apache License, Version 2.0 (the \"License\");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//      http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an \"AS IS\" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\n//! APIs for the environment.\n//!\n//! The [environment](crate::env::Env) is split into components. Each component has an API described\n//! by a trait. This module gathers the API of those components.\n\npub mod clock;\npub mod connection;\npub mod crypto;\npub mod customization;\n#[cfg(feature = \"fingerprint\")]\npub mod fingerprint;\npub mod firmware_protection;\npub mod key_store;\npub mod persist;\npub mod private_key;\npub mod rng;\npub mod user_presence;\n"
+    },
+    {
+      "path": "libraries/opensk/src/api/firmware_protection.rs",
+      "sha": null,
+      "content_sha256": "7e4852bf7698710d9c8524d5f286893beaac8b0fad22a424714270fc499fe59b",
+      "score": 102,
+      "content": "// Copyright 2022-2023 Google LLC\n//\n// Licensed under the Apache License, Version 2.0 (the \"License\");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//      http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an \"AS IS\" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\npub trait FirmwareProtection {\n    /// Locks the firmware.\n    ///\n    /// Returns whether the operation was successful.\n    fn lock(&mut self) -> bool;\n}\n"
+    },
+    {
+      "path": "libraries/opensk/src/api/rng.rs",
+      "sha": null,
+      "content_sha256": "919305d888242093ef91af58d2bd6947a8ea27d37370b85470b23c3d0358de2e",
+      "score": 102,
+      "content": "// Copyright 2023 Google LLC\n//\n// Licensed under the Apache License, Version 2.0 (the \"License\");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//      http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an \"AS IS\" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\npub use rand_core;\nuse rand_core::{CryptoRng, Rng as CoreRng};\n\n/// Random number generator.\n///\n/// Reuses the common API from `Rng`. Implementing the marker trait `CryptoRng` asserts that\n/// your random output is usable for sensitive key material.\npub trait Rng: CryptoRng + CoreRng {\n    /// Provides a random byte array.\n    ///\n    /// This is a convenience function, as CTAP often requires such keys or tokens.\n    fn gen_uniform_u8x32(&mut self) -> [u8; 32] {\n        let mut bytes = [0; 32];\n        self.fill_bytes(&mut bytes);\n        bytes\n    }\n}\n"
+    },
+    {
+      "path": "libraries/opensk/src/api/connection.rs",
+      "sha": null,
+      "content_sha256": "23e53a85aba508fdbac55363bf095f8b3295b574ed17f0a41dc4c02d906a97d4",
+      "score": 102,
+      "content": "// Copyright 2022-2023 Google LLC\n//\n// Licensed under the Apache License, Version 2.0 (the \"License\");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//      http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an \"AS IS\" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\nuse crate::ctap::status_code::{Ctap2StatusCode, CtapResult};\nuse core::convert::TryFrom;\n\n#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub enum UsbEndpoint {\n    MainHid = 1,\n    #[cfg(feature = \"vendor_hid\")]\n    VendorHid = 2,\n}\n\nimpl TryFrom<usize> for UsbEndpoint {\n    type Error = Ctap2StatusCode;\n\n    fn try_from(endpoint_num: usize) -> CtapResult<Self> {\n        match endpoint_num {\n            1 => Ok(UsbEndpoint::MainHid),\n            #[cfg(feature = \"vendor_hid\")]\n            2 => Ok(UsbEndpoint::VendorHid),\n            _ => Err(Ctap2StatusCode::CTAP2_ERR_VENDOR_HARDWARE_FAILURE),\n        }\n    }\n}\n\npub enum RecvStatus {\n    Timeout,\n    Received(UsbEndpoint),\n}\n\npub trait HidConnection {\n    fn send(&mut self, buf: &[u8; 64], endpoint: UsbEndpoint) -> CtapResult<()>;\n    fn recv(&mut self, buf: &mut [u8; 64], timeout_ms: usize) -> CtapResult<RecvStatus>;\n}\n\n#[cfg(test)]\nmod test {\n    use super::*;\n\n    #[test]\n    fn test_endpoint_num() {\n        assert_eq!(UsbEndpoint::try_from(1), Ok(UsbEndpoint::MainHid));\n        #[cfg(feature = \"vendor_hid\")]\n        assert_eq!(UsbEndpoint::try_from(2), Ok(UsbEndpoint::VendorHid));\n        assert_eq!(\n            UsbEndpoint::try_from(3),\n            Err(Ctap2StatusCode::CTAP2_ERR_VENDOR_HARDWARE_FAILURE)\n        );\n    }\n}\n"
+    },
+    {
+      "path": "libraries/opensk/src/api/user_presence.rs",
+      "sha": null,
+      "content_sha256": "2868edc5226c91a25ed3ad01af7440a6f19ab55345ceb69398950105bdca5427",
+      "score": 102,
+      "content": "// Copyright 2022-2023 Google LLC\n//\n// Licensed under the Apache License, Version 2.0 (the \"License\");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//      http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an \"AS IS\" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\nuse crate::api::connection::RecvStatus;\nuse crate::ctap::status_code::CtapResult;\n\n#[derive(Debug)]\npub enum UserPresenceError {\n    /// User explicitly declined user presence check.\n    Declined,\n    /// User presence check was canceled by User Agent.\n    Canceled,\n    /// User presence check timed out.\n    Timeout,\n}\npub type UserPresenceResult = Result<(), UserPresenceError>;\n\npub type UserPresenceWaitResult = CtapResult<(UserPresenceResult, RecvStatus)>;\n\npub trait UserPresence {\n    /// Initializes for a user presence check.\n    ///\n    /// Must eventually be followed by a call to [`Self::check_complete`].\n    fn check_init(&mut self);\n\n    /// Waits until user presence is confirmed, rejected, or the given timeout expires.\n    ///\n    /// Must be called between calls to [`Self::check_init`] and [`Self::check_complete`].\n    /// The function may write to the packet buffer, if it receives one during the wait.\n    /// If it does, the returned option contains the endpoint it received the data from.\n    fn wait_with_timeout(\n        &mut self,\n        packet: &mut [u8; 64],\n        timeout_ms: usize,\n    ) -> UserPresenceWaitResult;\n\n    /// Finalizes a user presence check.\n    ///\n    /// Must be called after [`Self::check_init`].\n    fn check_complete(&mut self);\n}\n"
+    },
+    {
+      "path": "libraries/opensk/src/api/clock.rs",
+      "sha": null,
+      "content_sha256": "06d21cf6bbfbbef34c58f5f5baed0ecf0a389a53ea4aab25783988e194b4d7e1",
+      "score": 102,
+      "content": "// Copyright 2022-2023 Google LLC\n//\n// Licensed under the Apache License, Version 2.0 (the \"License\");\n// you may not use this file except in compliance with the License.\n// You may obtain a copy of the License at\n//\n//      http://www.apache.org/licenses/LICENSE-2.0\n//\n// Unless required by applicable law or agreed to in writing, software\n// distributed under the License is distributed on an \"AS IS\" BASIS,\n// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n// See the License for the specific language governing permissions and\n// limitations under the License.\n\npub trait Clock {\n    /// Stores data for the clock to recognize if this timer is elapsed or not.\n    ///\n    /// The Clock does not keep track of the timers it creates. Therefore, they should not wrap\n    /// unexpectedly. A timer that is elapsed may never return to a non-elapsed state.\n    ///\n    /// A default Timer should return `true` when checked with `is_elapsed`.\n    type Timer: Default;\n\n    /// Creates a new timer that expires after the given time in ms.\n    fn make_timer(&mut self, milliseconds: usize) -> Self::Timer;\n\n    /// Checks whether a given timer is expired.\n    ///\n    /// Until a timer expires, this function consistently returns false. Once it expires, this\n    /// function consistently returns true. In particular, it is valid to continue calling this\n    /// function after the first time it returns true.\n    fn is_elapsed(&mut self, timer: &Self::Timer) -> bool;\n\n    /// Timestamp in microseconds.\n    ///\n    /// Normal operation only needs relative time, absolute timestamps are useful for debugging.\n    #[cfg(feature = \"debug_ctap\")]\n    fn timestamp_us(&mut self) -> usize;\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-01T11:55:08.654112+00:00"
+}
