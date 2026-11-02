@@ -814,3 +814,52 @@ No proposal, Connects purchase, off-platform contact, or application was made. A
 - Paid lead credits / upfront spend: **$0 / $0**.
 - Provider activations / live hosted-inference calls / inference spend: **0 / 0 / $0**.
 - No listing, partner reply, referral offer, provider, model, repository capability, or free quota was counted as a customer or revenue.
+
+
+## Sweep: 2026-11-01 local / 2026-11-02 UTC
+
+### AgentMail — AI Coders referral process clarified
+
+- Inbox checked: `api-pilot@agentmail.to`; the other connected outreach inboxes (`easy@agentmail.to` and `pastel-realtime-e2e@agentmail.to`) had no new received threads after the previous checkpoint.
+- New inbound from `hello@aicoders.dev` at `2026-11-01T10:16:10Z`, thread `703516ed-0aaa-45a2-9693-5c37dab93f86`, message `<1a1969c06cb.83768f9d1028264.5957584642491173016@aicoders.dev>`.
+- AI Coders requires a genuine active project and expressed prospect interest, not a researched list or speculative company. Before introduction, send company name, website, project requirements, and known budget/timeline; no decision-maker personal contact details are required at that stage. AI Coders checks its existing pipeline and accepts/rejects the referral in writing. Only after written acceptance and prospect consent may a warm email introduction be made.
+- Written commission basis: 10% of the one-time development fee, split 5% after the client deposit clears and 5% after the final payment clears; recurring maintenance excluded unless separately agreed. AI Coders handles proposal, contract, invoicing, implementation, and delivery. No upfront spend or quota.
+- Sent an acknowledgment in the same thread at `2026-11-02T03:53:53.221Z`, message `<010001a19a6465af-b2f2215b-c780-49cb-a45c-bc10f4cf2438-000000@email.amazonses.com>`. It confirms the evidence gate, written referral acceptance, prospect consent, and no-list/no-mass-outreach approach.
+- Recheck after the reply: no new inbound from AI Coders; the latest received timestamp remains `2026-11-01T10:16:10Z`.
+- No qualified prospect has been submitted to AI Coders. This is a partner process with terms, not a buyer, accepted referral, contract, earned commission, or revenue.
+
+### Fresh opportunity scan — no application submitted
+
+1. **AI Automation Consultant & Business Process Strategist (Upwork)** — posted `2026-11-02T01:42:32Z`; listed at `$35–$60/hour`. The initial phase is an operations assessment, automation opportunity list, tool recommendations, prioritized roadmap, and estimated costs/time savings. The live job record shows no prior hires/contracts, 2 invitations, 0 interviews, and an 11-Connect application cost; current Connects balance is 0 and `can_apply=false`. No proposal submitted. Source: https://www.upwork.com/jobs/~022117069803092324809
+2. **Make.com / n8n expert: respond.io WhatsApp bot powered by Claude (Upwork)** — posted `2026-11-02T01:03:22Z`; fixed budget `$500–$900`; payment verified; client record shows 43 contracts, 39 reviews, 5/5 feedback, and `$10,649.38` spend. It requires prior respond.io/WhatsApp automation proof and an example; activity showed 50+ proposals. Application cost 18 Connects, balance 0, `can_apply=false`; no proposal submitted. This production-specific WhatsApp/respond.io capability is not yet evidenced by our repository. Source: https://www.upwork.com/jobs/~022117059926949241906
+3. **n8n & API Integration Engineer — EU ATS/CRM/Microsoft 365 (Upwork)** — posted `2026-11-01T20:19:55Z`; `$25–$45/hour`; application cost 13 Connects, balance 0. It requires 3+ complex production n8n workflows, verifiable references, and CET overlap; our current evidence does not establish those credentials. No proposal submitted. Source: https://www.upwork.com/jobs/~022116988610474907940
+4. **Keap/Memberium/WordPress email and webhook repair (Upwork)** — `$20–$30/hour`; application cost 15 Connects, balance 0. Scope includes transactional email deliverability, missed webhooks, membership access, and Cloudflare. It requires hands-on Keap/Memberium and SPF/DKIM/DMARC experience not established by the current repository evidence. No proposal submitted. Source: https://www.upwork.com/jobs/~022114017928798294930
+
+- No Upwork application was submitted, no Connects were purchased, and no off-platform contact was made with Upwork clients. These listings are opportunities only, not customers or revenue.
+- The n8n Community post “Hiring in San Diego (n8n & HubSpot)” is a Workiz Revenue Operations Specialist role, `$85k–$110k`, hybrid in San Diego; it is an employee role, not a remote scoped implementation/referral opportunity. Source: https://community.n8n.io/t/hiring-in-san-diego-n8n-hubspot/325678
+- The n8n Community “AI WhatsApp Business Chatbot Developer” post explicitly says no confirmed project is currently available, so it is not an active paid lead. Source: https://community.n8n.io/t/looking-for-an-ai-whatsapp-business-chatbot-developer-long-term-collaboration/324371
+
+### Free LLM API catalog — latest upstream diff
+
+- Current `mnfst/awesome-free-llm-apis/data.json` blob SHA: `22cf1ef1d210986f0115ed450c98b51d17b99726`; it reports `lastUpdated=2026-10-25` and 15 providers.
+- Compared the current provider/model records with the Oct 31 sync baseline at upstream commit `28bab972292bf3ccab9fb4a2fd637e0ed91c355d`: **no provider or model additions/removals or model-record changes**.
+- The latest Nov 1 upstream change is documentation/setup plumbing, not a free-tier catalog change: PR #211 clarifies that native API and OpenAI-compatible base URLs may differ, moves provider setup metadata into `scripts/provider-setup.js`, and adds a generated-endpoint regression test. Relevant upstream commit: https://github.com/mnfst/awesome-free-llm-apis/commit/4d23baa1a5110969e9d2531cbc6a1fe619e4cc0e ; generated README/skill commit: https://github.com/mnfst/awesome-free-llm-apis/commit/2527fd445fb94a1361d31d1891fbbef91f1d81eb
+- No provider was activated and no live inference request was made. The catalog remains discovery-only; our `FREE-PROVIDER-POLICY.md` requires a current provider-owned terms/quota source, explicit eligibility and hard-stop evidence, isolated routing tests, runtime evidence, and no silent paid fallback before production routing. Current fixture entries do not meet that automatic-routing evidence gate.
+- Sources: https://github.com/mnfst/awesome-free-llm-apis/blob/main/data.json and https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/FREE-PROVIDER-POLICY.md
+
+### Reusable repository leverage and evidence boundary
+
+- `AI-API-HUB/api-factory/README.md` and `PERSISTENCE.md` support a scoped API integration/repair pilot: manifest validation, OpenAPI contract generation, customer-key authorization, quota/idempotency/error handling, and durable registry/artifact storage through the Supabase Edge Function gateway. The recorded customer-key lifecycle smoke is evidence for the tested technical path only; it does not prove a paying customer, generated customer API, or SLA. Render Free can sleep, and generated API business-state durability is not automatic.
+- `AI-API-HUB/OFFERS-AND-PRICING.md` records starting ranges for Automation Repair Sprint (`$75–$250`), AI/API Integration Pilot (`$150–$500`), and AI/Automation Technical Audit (`$100–$500`). These are starting ranges, not accepted quotes or revenue.
+- Repository tree review found no exported n8n/WhatsApp production workflow artifact to use as proof of a deployed customer implementation. GitHub Actions provider-probe workflows exist, but their presence is not a successful current provider probe.
+- Sources: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/README.md, https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md, and https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/OFFERS-AND-PRICING.md
+
+### Commercial state at end of this sweep
+
+- New inbound replies: **1** (AI Coders partner response; not a buyer).
+- New outbound replies in existing thread: **1** (acknowledgment of referral process).
+- Qualified prospects submitted / accepted referrals / signed contracts / commission earned: **0 / 0 / 0 / $0**.
+- Upwork proposals submitted: **0**; Connects balance / paid Connects / Connects spend: **0 / 0 / $0**.
+- Paid lead credits / upfront spend: **$0 / $0**.
+- Provider activations / live hosted-inference calls / inference spend: **0 / 0 / $0**.
+- No listing, partner reply, referral offer, provider, model, repository capability, or free quota was counted as a customer or revenue.
