@@ -916,3 +916,78 @@ Sources: https://automationjobboard.com/freelance-automation-jobs/ ; https://com
 - Paid lead credits / upfront spend: **$0 / $0**.
 - Provider activations / live hosted inference / inference spend: **0 / 0 / $0**.
 - No listing, partner reply, model/provider, free quota, repository capability, or technical test was counted as a customer or revenue.
+
+
+## Sweep: 2026-11-03 local / 2026-11-04 UTC
+
+### AgentMail — no new inbound commercial signal
+
+- Checked the connected outreach inboxes: `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`.
+- The latest received message in the API Pilot thread with AI Coders remains the Nov 2, 2026 08:19:21 UTC acknowledgement, “Sounds good!” (thread `703516ed-0aaa-45a2-9693-5c37dab93f86`, message `<1a19b577170.3280646f1065291.6436610201958905974@aicoders.dev>`). No newer inbound was present. The other two inboxes returned zero messages in the checked window.
+- No email was sent in this sweep. No qualified prospect was submitted to AI Coders; no referral was accepted, no contract was signed, and no commission was earned.
+
+### Fresh Upwork scan — no proposal submitted
+
+The connected Upwork Talent account was read through the marketplace connector. The current Connects balance is **0**. No paid Connects were purchased or spent; no proposal or off-platform contact was made.
+
+1. **French-speaking Retell AI voice agent — paid test €150** — published Nov 4 UTC / Nov 3 local; client payment method verified; fewer than 5 proposals; 9 Connects to apply. The paid test requires a live French voice-agent demo, French phone number, Retell (or Vapi), Make/n8n, Twilio/Telnyx, Google Calendar and SMS. The client explicitly asks for a callable production demo and prior French-number/Retell experience. These capabilities are not evidenced in our current repository/runtime proof; no application.
+   Source: https://www.upwork.com/jobs/~022117750214994495931
+2. **n8n Developer to Complete AI Workflow Project** — $30 fixed; published Nov 3 UTC; 9 Connects; client activity shows 7 invites and 6 interviews, 0 offers/hires at read. Scope is n8n Cloud + OpenAI + Supabase/pgvector RAG + Gmail/Drive/Calendar. The client requires a similar completed n8n+AI/RAG project and asks the proposal to begin “VITUO.” Our current portfolio does not evidence that exact delivery, and the budget is small relative to the stated testing/documentation scope; no application.
+   Source: https://www.upwork.com/jobs/~022117741829260636765
+3. **AI Automation & CRM Integration Audit** — $20 fixed; 14 Connects. Requires proven n8n/Make/Zapier, CRM and AI workflow audit examples. This is a very low-budget audit and the required prior audit evidence is not established; no application.
+   Source: https://www.upwork.com/jobs/~022117633594936182304
+4. **CRM and Automation Setup (Eventbrite + GoHighLevel)** — $50 fixed; 7 Connects. Requires prior GoHighLevel and Eventbrite integration experience; the client’s recorded hire rate is 33% and there is no current delivery artifact proving this stack. No application.
+   Source: https://www.upwork.com/jobs/~022117717376415726437
+5. **Custom e-commerce AI agent (Shopify + WhatsApp + RAG)** — $1,000 fixed; 23 Connects; 50+ proposals. Requires a live deployed agent/portfolio with Shopify Admin API, WhatsApp Business API, RAG, order creation and production safeguards. Those end-to-end credentials are not proven in our evidence; the client’s recorded hire rate is 11% and spend is $56. No application.
+   Source: https://www.upwork.com/jobs/~022117629517446942188
+
+A fresh marketplace listing is not a customer. The Connects requirement, capability evidence gap, and (where relevant) poor economics/competition were treated as stop conditions rather than reasons to buy credits or exaggerate experience.
+
+### Other public opportunity boards — fit checks only
+
+- Automation Job Board's freelance list states it was updated Nov 3, 2026 and includes 10 open freelance/project roles. The closest fit is Young Automation Studio's Shopify Tracking + n8n role ($35/hour guaranteed for 5–8.5 hours/week plus revenue share), but it requires Shopify tracking/Klaviyo and customer-facing delivery not verified in our evidence. The n8n + MirrorFly project lists an approximate £800–1,000 base budget but requires a MirrorFly SDK implementation and examples we do not have. No outreach or application was sent.
+  Source: https://automationjobboard.com/freelance-automation-jobs/
+- The current n8n Community latest page contains active technical discussions, but the examined “Catching Shopify orders your webhook workflow never received” thread is a solution discussion, not a buyer request or paid listing. It is market/problem evidence only.
+  Source: https://community.n8n.io/t/catching-shopify-orders-your-webhook-workflow-never-received/323887
+
+### Reusable open-source / product leverage — Shopify webhook integrity
+
+The n8n Community thread (original post Oct 23, active discussion through Oct 26; latest community listing activity Nov 3) describes a practical reliability gap: webhook-triggered order flows can miss events without a failed execution. The reusable pattern is:
+
+- Daily reconciliation against Shopify's source-of-truth orders, with pagination and a stable Shopify order ID.
+- Separate webhook-subscription health checks for missing topics, wrong callback host, or duplicate subscriptions.
+- Idempotency/dedupe before side effects.
+- Treat a missing log row as missing evidence, not proof that the order was never processed; use a Shopify marker/status and human review before replaying any customer-facing or financial action.
+- An external heartbeat is needed to detect an n8n workflow/instance that never runs; an in-workflow alert cannot report its own outage.
+
+This could become a narrowly scoped **Shopify Order/Webhook Integrity Audit** or **Reconciliation Pilot**. It is a product hypothesis based on the public thread, not a workflow we have implemented, tested, or deployed. The current Salamou-31 repository search found service-catalog and commercial-backlog entries for generic n8n repair/API/webhook integration, but no Shopify reconciliation workflow artifact. Do not claim production Shopify delivery until built and tested against a customer-owned development store.
+
+Sources:
+- n8n Community thread: https://community.n8n.io/t/catching-shopify-orders-your-webhook-workflow-never-received/323887
+- Salamou-31 service catalog: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/SERVICE-CATALOG.md
+- Salamou-31 commercial backlog: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/COMMERCIAL-OPERATING-BACKLOG.md
+- API Factory persistence/evidence boundary: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md
+
+### Free LLM API catalog — Nov 2 upstream sync; no new provider/model
+
+- Read the live upstream `mnfst/awesome-free-llm-apis/data.json`: blob SHA `22cf1ef1d210986f0115ed450c98b51d17b99726`, 15 providers, embedded `lastUpdated=2026-10-25`. The data.json blob SHA is unchanged from the prior sweep.
+- The latest upstream sync is `Data sync 2026-11-02: 5 changes` (commit `fe2b9d12e4652acab5b4f45d5682d287b4924a86`, merged as `bb4f9d87776410af26f646769bb645e961dff3f1`, Nov 3 UTC). It refreshes official-source quotes for Google Gemini free-tier availability and pricing on `gemini-3.8-flash`, `gemini-3.6-flash`, `gemma-4-31b-it`, and `gemma-4-26b-a4b-it`; recorded values did not change. No provider/model additions or removals were recorded in this sync.
+- Google's official Gemini pricing page currently marks selected free-tier models as “Free of charge” but also states that free-tier prompts/responses may be used to improve Google's products. Exact RPM/TPM/RPD limits are project/model-specific and must be checked in AI Studio; exceeding a limit can produce 429. Do not route confidential/customer personal data through the free tier. A free-tier model is only a candidate for synthetic or explicitly approved, non-sensitive evaluation—not an approved paid-production dependency.
+- Potential low-cost offer enablement remains limited to low-risk text classification/extraction, with data minimization and human review. No provider was activated, no API key was created, no live inference was run, and no customer data was sent.
+- Sources: upstream sync commit https://github.com/mnfst/awesome-free-llm-apis/commit/fe2b9d12e4652acab5b4f45d5682d287b4924a86 ; merge https://github.com/mnfst/awesome-free-llm-apis/commit/bb4f9d87776410af26f646769bb645e961dff3f1 ; official Gemini pricing https://ai.google.dev/gemini-api/docs/pricing ; official rate limits https://ai.google.dev/gemini-api/docs/rate-limits
+
+### Reusable repository leverage and commercial evidence
+
+- Salamou-31's latest visible commit remains Oct 27, 2026 (`429b8b047e9a277cb04c420dd131614bb1dbb35f`); no newer commits were returned. Its API Factory docs support a scoped API/webhook integration or repair pilot through manifest/input validation, OpenAPI, customer-key authorization, quota/idempotency, structured errors, and durable registry/artifact storage. The documented lifecycle smoke is technical-path evidence only—not a paying customer, generated customer API, or SLA. Render Free can sleep; generated business-state durability is not automatic.
+- The service catalog and commercial backlog describe n8n repair and generic API/webhook integration offers. Search did not find a shipped n8n/WhatsApp/Shopify production artifact that could be presented as customer-delivery proof.
+- This supports a small, acceptance-tested repair/audit offer; it does not justify claiming production WhatsApp, Retell, GoHighLevel, RAG, or Shopify deployment experience.
+
+### Commercial state at end of this sweep
+
+- New AgentMail inbound since prior checkpoint: **0**; latest partner message remains AI Coders' Nov 2 “Sounds good!” acknowledgement.
+- Qualified prospects submitted / accepted referrals / contracts / commission earned: **0 / 0 / 0 / $0**.
+- Upwork proposals: **0**; Connects balance / purchased / spent: **0 / 0 / 0**.
+- Paid lead credits / upfront spend: **$0 / $0**.
+- Provider activations / live inference calls / inference spend: **0 / 0 / $0**.
+- Confirmed customers: **0**; confirmed revenue: **$0**.
+- No listing, outreach, partner acknowledgement, provider/model, free quota, or repository capability was counted as a customer or revenue.
