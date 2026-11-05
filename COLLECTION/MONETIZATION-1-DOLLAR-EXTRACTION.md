@@ -991,3 +991,63 @@ Sources:
 - Provider activations / live inference calls / inference spend: **0 / 0 / $0**.
 - Confirmed customers: **0**; confirmed revenue: **$0**.
 - No listing, outreach, partner acknowledgement, provider/model, free quota, or repository capability was counted as a customer or revenue.
+
+
+## 2026-11-04 Revenue + leverage sweep (America/Los_Angeles; UTC evidence through 2026-11-05 04:09)
+
+### AgentMail reply check
+- Read recent threads in `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to` with `after=2026-11-03T00:00:00Z`: **0 new received threads in each inbox**.
+- The latest known AI Coders inbound remains its Nov 2, 2026 “Sounds good!” acknowledgment in thread `703516ed-0aaa-45a2-9693-5c37dab93f86`. No later response, qualified referral, acceptance, contract, or commission evidence was found.
+- No new outreach was sent; no cold follow-up was warranted.
+
+### Fresh Upwork opportunities — evidence and stop conditions
+The connected freelancer account returned a zero Connects balance; no proposal was sent and no Connects were purchased.
+
+1. **n8n Automation Engineer — production-grade email document intake and API pipeline** — $500 fixed, published 2026-11-04 12:07 UTC. The scope includes email/IMAP polling, allowlists, attachment fan-out and single-level ZIP extraction, SHA-256 deduplication, deterministic classification with validated structured-JSON LLM fallback, retries/error routing, idempotency, audit tables, and a test harness. Client record: verified payment, 5.0 feedback from 14 reviews, 16 jobs with hires / 17 contracts total, 3 active contracts, $7,230.48 spend, 100% hire rate. At live detail check the job remained ACTIVE but its activity reported 1 hire; application cost was 18 Connects and balance was 0 (`can_apply=false`). This is strong document/API reliability demand, but the listing specifically requires production-grade n8n multi-workflow examples that are not evidenced in our repository. No proposal.
+   Source: https://www.upwork.com/jobs/~022117951699469571001
+
+2. **WhatsApp Chatbot Developer — five-question intake to cloud Excel** — published 2026-11-05 03:51 UTC (2026-11-04 19:51 America/Los_Angeles); hourly budget not stated. Client record: 1 contract, $230 spend, 50% hire rate, no feedback count; job ACTIVE with no hire recorded at detail check. Application cost 13 Connects, balance 0 (`can_apply=false`). The narrow intake flow is conceptually aligned, but a live WhatsApp Business integration artifact is not evidenced; no proposal and no off-platform contact.
+   Source: https://www.upwork.com/jobs/~022118189379191961066
+
+3. **AI Omnichannel Support Expert — legal firm email/SMS/fax + SmartAdvocate** — published 2026-11-03 16:30 UTC; client has 133 contracts, 91 reviews (4.61 feedback score), and $1,064,409.77 lifetime spend. The listing explicitly requires prior production omnichannel AI support, knowledge-base governance, CRM integration, and 2–3 measurable case studies; legal case communications are sensitive. It has 50+ proposals and costs 22 Connects; balance 0. No proposal because the required production evidence is absent and the scope/data sensitivity is beyond the currently evidenced offer.
+   Source: https://www.upwork.com/jobs/~022117655707998645209
+
+4. **AI proposal-maker micro-job** — $25 fixed; the live detail check showed 1 hire and 1 contract already completed, with 7 Connects required and balance 0. Treated as already hired/stale for acquisition; no proposal.
+   Source: https://www.upwork.com/jobs/~022117991546285068936
+
+All entries above are listings only. None is a customer, accepted scope, or revenue event.
+
+### Other current opportunity-board check
+- Automation Job Board reports its freelance automation list updated Nov 4, 2026. It still shows the Oct 18 Shopify Tracking + n8n role ($35/hour guaranteed for 5–8.5 hours/week plus revenue share), but the role requires Shopify tracking/Klaviyo and customer-facing execution not proven in our current artifacts. The Oct 6 paid QA trial requires Vapi/Twilio/ElevenLabs voice-agent experience; the Oct 16 MirrorFly project requires MirrorFly SDK work. These are not newly verified deliverables for us, and no outreach/application was made.
+- Source: https://automationjobboard.com/freelance-automation-jobs/
+
+### Free LLM API catalog — upstream Nov 4 changes
+- Live upstream `mnfst/awesome-free-llm-apis/data.json` blob SHA: `4dda6e225a35e20917da0bda98fe2f7780198d95`; 15 providers. Its embedded `lastUpdated` field remains `2026-10-25`, so the dated Git commits—not that stale field—were used as change provenance.
+- Upstream commit `8c9a845549c774ac4ae07f74c03686a1f0c854b6` (Nov 4) removed six retired/unavailable model entries:
+  - Kilo Code: `liquid/lfm-2.5-2.6b:free`, `recursive/flint-v1.0:free`, `xingchen-agi/xing4.0-29b-a4b:free`.
+  - OpenRouter: free variants `thinkingmachines/inkling:free` and `thinkingmachines/inkling-small:free`.
+  - OVHcloud: `Mistral-Nemo-Instruct-2407`, retired on Nov 4.
+  - The current `data.json` no longer lists these entries. Do not route requests to these model IDs.
+- Upstream sync `af7c16826921d107d43998f6ff735a88aba620a6` (Nov 4) refreshed official pricing-source quotes for Gemini `gemini-3.8-flash`, `gemini-3.6-flash`, and Gemma 4 `31b-it` / `26b-a4b-it`; recorded pricing values did not change. No provider or model additions were recorded in this sync.
+- Sources:
+  - Removal commit: https://github.com/mnfst/awesome-free-llm-apis/commit/8c9a845549c774ac4ae07f74c03686a1f0c854b6
+  - Gemini/Gemma quote sync: https://github.com/mnfst/awesome-free-llm-apis/commit/af7c16826921d107d43998f6ff735a88aba620a6
+  - Current catalog: https://github.com/mnfst/awesome-free-llm-apis/blob/main/data.json
+- No new provider/model candidate cleared the complete provider-owned terms, account-specific quota, commercial-use, data-handling, API-availability, reliability, and hard-stop/no-paid-fallback gates. No provider was activated, no key created, no live inference called, and no customer data submitted. Remaining free-model use is limited to future isolated/synthetic evaluation until those gates are verified for the exact model/account and use case.
+
+### Reusable repository/platform leverage
+- `salamou1944/Salamou-31` has no newer commit than `429b8b047e9a277cb04c420dd131614bb1dbb35f` (Oct 27) in the checked history. API Factory remains the strongest reusable platform asset for a scoped API/webhook repair or integration: customer-key auth, durable quota enforcement, revocation, idempotency/error contracts, OpenAPI, and remote registry/artifact storage. The documented Oct 25 customer-key smoke proves only the tested technical path (successful request, HTTP 429 quota denial, HTTP 401 after revocation); it is not a paying customer, generated API durability guarantee, or SLA. Render Free may sleep, and generated API business-state ledgers are not automatically remote-durable.
+  - Source: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md
+- `salamou1944/agent-skills` latest returned commit is `0f4c3a0fef4429f5344d7cdbe8047cd451162b13` (Oct 20), registering a runtime-provenance CI contract. This supports evidence discipline, not a new customer deliverable.
+- The agent-skills/MONY guardrail commit `542471851541ad247d39ec5b6d58d11eeb9a6d07` (Oct 17) blocks paid checkout without a real billing provider and keeps free samples fixture-only. This is useful payment-truth protection; it does not establish MONY revenue.
+- The existing `FREE-PROVIDER-POLICY.md` remains the adoption gate: official source freshness, explicit eligibility, `hard_stop=true`, isolated policy/runtime test, and no silent paid fallback.
+  - Source: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/FREE-PROVIDER-POLICY.md
+
+### Commercial state at end of sweep
+- New AgentMail inbound: **0**.
+- Qualified referral submitted / accepted referral / contract / commission earned: **0 / 0 / 0 / $0**.
+- Upwork proposals: **0**; Connects balance / purchased / spent: **0 / 0 / 0**.
+- Paid lead credits / upfront spend: **$0 / $0**.
+- Provider activations / live inference calls / inference spend: **0 / 0 / $0**.
+- Confirmed customers: **0**; confirmed revenue: **$0**.
+- No listing, partner acknowledgment, free provider/model, repository capability, or outreach was counted as customer or revenue.
