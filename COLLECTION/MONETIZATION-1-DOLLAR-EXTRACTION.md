@@ -1051,3 +1051,83 @@ All entries above are listings only. None is a customer, accepted scope, or reve
 - Provider activations / live inference calls / inference spend: **0 / 0 / $0**.
 - Confirmed customers: **0**; confirmed revenue: **$0**.
 - No listing, partner acknowledgment, free provider/model, repository capability, or outreach was counted as customer or revenue.
+
+
+## 2026-11-05 Revenue + leverage sweep (America/Los_Angeles; UTC evidence through 2026-11-06T04:22:43Z)
+
+### AgentMail reply check
+- Listed received threads in `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to` with `after=2026-11-05T00:00:00Z`: **0 new threads in each inbox**.
+- Re-read AI Coders thread `703516ed-0aaa-45a2-9693-5c37dab93f86`. Its latest inbound remains Muhammad's Nov 2, 2026 `Sounds good!` acknowledgment at `2026-11-02T08:19:21Z`; no later reply exists in that thread.
+- The previously stated no-upfront referral terms remain unchanged, but no prospect has expressed interest, no qualified referral was submitted or accepted, and no commission has accrued. No new email or follow-up was sent.
+
+### Fresh marketplace opportunities — read-only assessment; no application
+The connected Upwork freelancer account is **Freelancer Basic** with **0 Connects**. No Connects were purchased or spent and no proposal was sent.
+
+1. **AI Chatbot Developer for Support Automation** — Upwork job `2118469358927585012`, $500 fixed, published `2026-11-05T22:23:52.199Z`, active at detail check. Client is in Algeria, payment method is **not verified**, and the live client record showed 0 prior hires, 0 contracts, 1 job posted/open, and no feedback. Search showed 20–50 proposals. Applying costs 11 Connects; balance 0; `can_apply=false`. The description is generic and does not specify the support channels, API, acceptance tests, or production handoff. It is a listing only, not a qualified customer. No off-platform contact.
+   Source: https://www.upwork.com/jobs/~022118469358927585012
+
+2. **Activepieces / n8n Developer — existing AI Property Automation System** — Upwork job `2118304579952492289`, $300 fixed, listed as posted about six hours before the Nov 5 check, active at detail check. The client is in Malaysia, payment is **not verified**, and the live client record showed 0 prior hires/contracts, 1 job posted/open. The public listing showed 20–50 proposals and no interviews or hires. Applying costs 11 Connects; balance 0; `can_apply=false`. Scope is a phased audit of existing Activepieces/n8n, Telegram and Google Sheets workflows, approval/database controls, Meta Graph API feasibility and written roadmap. Screening explicitly asks for prior Activepieces and Meta Graph API examples. Our current repository evidence does not show a shipped n8n/Activepieces/Meta Graph API client deployment, so no proposal was sent and no experience was claimed.
+   Source: https://www.upwork.com/jobs/~022118304579952492289
+
+3. **HVAC Lead Generation & AI Sales Automation** — $100 fixed, posted Nov 5, with 20–50 proposals and a client record showing verified payment, 43 hires and $1,500 historical spend. However, the described scope requires Apollo/Clay enrichment, Vapi/Retell voice agents, Twilio, GoHighLevel and multi-channel campaigns. Those specific production integrations are not evidenced in our repositories; the small fixed budget and 20–50 proposals make it a poor fit. No proposal or external contact.
+   Source: https://www.upwork.com/jobs/~022118360373817923257/
+
+### n8n opportunity-board check
+- Automation Job Board's n8n page stated **8 open roles (3 freelance, 5 full-time)** and was updated Nov 5, 2026. The strongest freelance matches remain:
+  - Shopify Tracking + n8n Specialist: $35/hour guaranteed for 5–8.5 hours/week plus revenue share; posted Oct 18; requires Shopify tracking/Klaviyo and customer-facing delivery not evidenced in our artifacts.
+  - n8n / AI Automation Specialist paid QA trial: posted Oct 6; requires Vapi, Twilio and ElevenLabs voice-agent experience not evidenced here.
+  - n8n + MirrorFly video-conferencing automation: posted Oct 16; approx. GBP 800–1,000; requires MirrorFly API/SDK work not evidenced here.
+- The board also lists Wellbayt's **AI Growth & Automation Specialist** role: remote, full-time, fixed salary plus commission (amount not stated), posted Oct 21. The founder's original n8n Community post asks for a DM with an example of something built using n8n or other automation tools. This is employment, not a defined implementation contract; the board says the original was last checked Oct 21, and our current artifacts do not prove a deployed n8n growth workflow. The available Browser connector is read-only and there is no connected Discourse/LinkedIn send action, so no DM was sent. Do not count this as a lead, customer, or revenue.
+- Workiz is hybrid in San Diego; 7shifts is limited to US/Canada; neither is a practical remote service opportunity for this operating run.
+Sources:
+  - https://automationjobboard.com/n8n-jobs/
+  - https://community.n8n.io/t/hiring-ai-growth-automation-specialist-remote-potential-growth-partnership/323364
+
+### Free LLM API catalog — latest upstream sync and provider gates
+- Current `mnfst/awesome-free-llm-apis/data.json` SHA: `4dda6e225a35e20917da0bda98fe2f7780198d95`; `sources.json` SHA: `eca5cde3e02df99fa0d113db1a821158bb1dd0a0`; 15 providers. The embedded `lastUpdated` remains stale at `2026-10-25`; use Git commit provenance instead.
+- Latest upstream commit as of this sweep: `095e35e10f33d7ba32ebb86e1dd0ff604dea9c1a`, Nov 4, 2026 15:19:35 UTC. No later catalog commit was present through Nov 6 04:22 UTC. The Nov 4 sync made 10 evidence changes: six unavailable/retired model entries were removed and four Gemini pricing-source quotes were refreshed. No provider or model was added.
+- Removed model IDs that must not be routed:
+  - Kilo Code: `liquid/lfm-2.5-2.6b:free`, `recursive/flint-v1.0:free`, `xingchen-agi/xing4.0-29b-a4b:free`.
+  - OpenRouter: `thinkingmachines/inkling:free`, `thinkingmachines/inkling-small:free`.
+  - OVHcloud: `Mistral-Nemo-Instruct-2407` (retired Nov 4).
+- Gemini source quotes for `gemini-3.8-flash`, `gemini-3.6-flash`, `gemma-4-31b-it`, and `gemma-4-26b-a4b-it` were refreshed; catalog values did not change.
+- **Z.ai / GLM Flash is the strongest no-upfront candidate to evaluate next, not yet approved for paid delivery.** Z.ai's official pricing page lists `GLM-4.7-Flash`, `GLM-4.5-Flash`, and `GLM-4.6V-Flash` as free. Official API docs use `https://api.z.ai/api/paas/v4/chat/completions`. Its Terms of Use allow use for internal organizational purposes or for the benefit of end users; for API Services, Z.ai says it will not use API customer content to develop/improve services unless the customer explicitly agrees. The linked API DPA says content is processed in real time and not stored on Z.ai servers after API processing; customer data is generally processed in Singapore. Important restrictions: no unauthorized personal data, no high-risk automated decisions, and no substitute for regulated/professional services such as medical, legal, education, news, investment or financial management. Public numeric rate limits were not found; the rate-limit page requires account login. Candidate use is limited to low-risk classification, extraction, summarization or draft generation with human review, after confirming the exact account limit and customer consent/DPA requirements. API availability is documented, but model quality, uptime and latency have **not** been tested by us.
+  - Pricing: https://docs.z.ai/guides/overview/pricing
+  - Terms: https://docs.z.ai/legal-agreement/terms-of-use
+  - Privacy policy and API DPA: https://docs.z.ai/legal-agreement/privacy-policy
+- **Cloudflare Workers AI:** official pricing states 10,000 Neurons/day on Workers Free, resetting at 00:00 UTC; after the free allocation, requests fail on Workers Free, while exceeding it on Workers Paid incurs $0.011/1,000 Neurons. Some models require a paid billing method. Potential for very low-volume, non-sensitive classification, but the exact model/account terms, customer-data suitability and service reliability still need verification; no test was run.
+  - https://developers.cloudflare.com/workers-ai/platform/pricing/
+- **Google Gemini:** official pricing distinguishes Free (content may be used to improve Google products) from Paid (content not used to improve products). Do not send customer-confidential data to the free tier. A Nov 3 community report described unexpected HTTP 429 daily-quota behavior around the Nov 2 daylight-saving reset; this is a user report, not an official incident, but reinforces that free quotas are not an SLA. Use only synthetic/non-sensitive evaluation until project-specific limits and behavior are verified.
+  - https://ai.google.dev/gemini-api/docs/pricing
+  - https://ai.google.dev/gemini-api/docs/rate-limits
+  - https://discuss.ai.google.dev/t/free-tier-daily-quota-not-reset-at-midnight-pacific-on-2-nov-2026-429-limit-500-after-one-request-gemini-3-5-flash-lite/197849
+- **Cohere:** trial keys are limited (1,000 calls/month; endpoint-specific RPM limits); production keys are metered/paid and intended for public-facing production use. Do not use trial keys as the production engine for a paid client service.
+  - https://docs.cohere.com/v2/docs/rate-limits
+- No provider was activated, no key was created, no live inference was called, no customer data was submitted, and no paid fallback was configured. The free catalog is a research source, not evidence of reliable production capacity or revenue.
+
+### Reusable repository/platform leverage — verified scope and limits
+1. **Documenso n8n community node** — the Project- collection contains an extracted MIT-licensed copy of `documenso/n8n-node`; the upstream README currently documents 7 resources / 35 operations (documents, templates, recipients, fields, files, attachments, folders) plus webhook triggers for document created/sent/opened/signed/completed/rejected/cancelled. It requires a Documenso API key and supports a hosted or self-hosted base URL. This enables a plausible bounded offer: PDF/document intake → create/send for signature → webhook status tracking → signed-PDF download/archive → CRM update. The upstream node's latest commit is Feb 6, 2026, so compatibility with current Documenso API and n8n versions must be tested before a paid delivery. No live test or customer deployment has been performed.
+   - https://github.com/documenso/n8n-node
+   - https://github.com/documenso/n8n-node/blob/main/README.md
+2. **n8n observability** — upstream `n8n-io/n8n-observability` is MIT-licensed; latest checked commit Oct 13, 2026. It provides Prometheus/Grafana dashboards for webhook/form execution counts, failures and latency, durable-scheduler queue/retry/dead-letter signals, poll-trigger health and system tasks; optional Slack failure alerting is included. This is a reusable reliability/monitoring add-on for a workflow repair pilot, but it is not deployed in our environment and still requires customer-hosted n8n/Prometheus/Grafana infrastructure.
+   - https://github.com/n8n-io/n8n-observability
+3. **Email/IMAP candidate rejected:** the collected `imap-simple` README explicitly says the library is no longer maintained/archived and warns that functionality is missing. Do not build a new production document-ingestion pipeline on it; prefer a currently maintained n8n IMAP node or maintained mail client after compatibility testing.
+   - https://github.com/n8n-io/imap
+4. **Template collection not cleared for commercial reuse:** `rohitg00/n8n-free-templates` has no declared license in the collected repository metadata. Several extracted JSONs contain placeholder/sticky-note scaffolding and credentials tied to OpenAI, Cohere, Supabase, Pinecone or Weaviate. Do not copy or sell these templates until the license is clarified and each workflow is inspected, credential references replaced, and execution tested.
+   - https://github.com/rohitg00/n8n-free-templates
+5. **Easy lead qualification and e-commerce code:** `salamou1944/Easy-` contains `src/lead-qualification-workflow.mjs` with a provider-required boundary and unit tests using a mock provider; `src/seller-product-workflow.mjs` has tests for deterministic fallback, integrity checks and a rule that fallback output is not publishable. These are reusable implementation/test assets, not proof of live provider-backed service or a customer n8n deployment.
+   - https://github.com/salamou1944/Easy-/blob/main/src/lead-qualification-workflow.mjs
+   - https://github.com/salamou1944/Easy-/blob/main/src/seller-product-workflow.mjs
+6. **Salamou-31 API Factory:** latest repository commit remains `429b8b047e9a277cb04c420dd131614bb1dbb35f` (Oct 27). Existing lead-qualification and product-content manifests provide provider-neutral API contracts; the Factory adds customer-key auth, quota/idempotency, structured errors and durable registry/artifact storage. Documented smoke tests establish only the tested technical path, not a customer API, production SLA or revenue. `agent-skills` latest checked commit remains Oct 20; `Easy-` latest checked commit remains Oct 15.
+   - https://github.com/salamou1944/Salamou-31/tree/main/AI-API-HUB/api-factory
+   - https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md
+   - https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/FREE-PROVIDER-POLICY.md
+
+### Commercial state at end of sweep
+- New AgentMail inbound: **0** across all three checked inboxes.
+- Qualified prospects submitted to AI Coders / accepted referrals / contracts / commission earned: **0 / 0 / 0 / $0**.
+- Upwork proposals: **0**; Connects balance / purchased / spent: **0 / 0 / 0**.
+- Paid lead credits / upfront spend: **$0 / $0**.
+- Provider activations / live inference calls / inference spend: **0 / 0 / $0**.
+- Confirmed customers: **0**; confirmed revenue: **$0**.
+- No listing, job, partner acknowledgment, free quota, model, repository capability or outreach was counted as a customer or revenue.
