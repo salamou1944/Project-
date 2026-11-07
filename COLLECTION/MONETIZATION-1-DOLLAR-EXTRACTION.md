@@ -1134,3 +1134,59 @@ Sources:
 - Provider activations / live inference calls / inference spend: **0 / 0 / $0**.
 - Confirmed customers: **0**; confirmed revenue: **$0**.
 - No listing, job, partner acknowledgment, free quota, model, repository capability or outreach was counted as a customer or revenue.
+
+
+## 2026-11-06 Revenue + leverage sweep (America/Los_Angeles; evidence through 2026-11-07T04:41:36Z)
+
+### AgentMail — inbound check
+- Checked received messages after `2026-11-06T04:30:00Z` in `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`: **0 / 0 / 0**.
+- The AI Coders thread's last known inbound remains the Nov 2, 2026 `Sounds good!` acknowledgment; no newer reply, referral acceptance, or commission evidence appeared.
+- No follow-up was sent. No outreach was sent in this sweep.
+
+### Fresh Upwork opportunities — verified detail, no application
+The connected account is **Freelancer Basic** with **0 Connects**. The dashboard's message section returned an upstream service error, so Upwork messages are **unavailable**, not proven empty. No Connects were purchased or spent and no proposal was sent.
+
+1. **WhatsApp receptionist on Cloud API + Claude — paid trial build** — job `2118926326460948212`, posted `2026-11-07T04:40:08Z` (Nov 6, 20:40 Pacific), active at detail check. Fixed trial: **$250**. The client describes an existing Express/Node.js + Anthropic Claude + WhatsApp Cloud API receptionist and a Meta test number; requested scope is Railway/Render deployment, webhook verification, one real-phone booking in English and one in Arabic, and a two-minute recording. The client record showed payment verified, 5.0 feedback from 1 review, 7 contracts, 5 active contracts, 86% hire rate and $2,820.25 historical spend. This posting had no hires/offers/interviews and fewer than 5 proposals at the check. Applying costs **14 Connects**; balance **0**, `can_apply=false`. The screening question specifically requires knowing the difference between business-initiated template messages and session messages. Our current repository evidence does **not** establish a shipped WhatsApp Cloud API deployment or Meta webhook verification, so we did not apply, claim experience, or contact the client off-platform. This is a high-fit market listing, **not a qualified customer or revenue**.
+   - Source: https://www.upwork.com/jobs/~022118926326460948212
+
+2. **AI Agents & Automation Coach — build with me and teach me** — job `2118606287884493314`, active. Client record: 692 contracts, 4.97 feedback from 649 reviews, 95% hire rate, $10,963.82 historical spend. The job offers a paid one-week test but states no hourly rate; it requires a real business automation example and a two-minute workflow Loom, plus Arabic/Gulf context as a plus. It had 50+ proposals and costs **11 Connects**; balance 0. Our repo evidence does not show a delivered business n8n/Claude/Slack workflow or client case study suitable for the required screening. No application.
+   - Source: https://www.upwork.com/jobs/~022118606287884493314
+
+3. **Expert n8n AI Lead Qualification & Workflow Pipeline** — job `2118782514572973753`, active; **$10 fixed**, 15–20 proposals, client in Aruba with verified payment but no prior hires/contracts or feedback, one job posted/open. Scope: secure website webhook, AI qualification to structured JSON, Airtable/Sheets/n8n Data Worksheets, email/SMS follow-up and error handling. Applying costs **7 Connects**; balance 0. The budget is not commercially viable for the stated expert scope, and there is no client delivery evidence in our repositories that satisfies the requested advanced n8n proof. No application.
+   - Source: https://www.upwork.com/jobs/~022118782514572973753
+
+4. **AI-Powered Chatbot Developer for Business Automation** — job `2118915716496466434`, **$10 fixed**, generic scope and mismatched skill tags. Client history is strong (692 contracts, 4.97/649, $10,963.82 spend), but the posting budget and undefined acceptance criteria do not justify spending Connects. No application.
+   - Source: https://www.upwork.com/jobs/~022118915716496466434
+
+A WhatsApp Business API troubleshooting listing for $100 had already hired one freelancer when checked and was excluded. No off-platform outreach, paid lead credits, or Upwork proposal was sent.
+
+### Repository leverage and verified delivery boundary
+- Latest checked commits: `Project-` was updated by the Nov 5 sweep at `be80c7679a7a19f8ca2a1a20b59a86139e0ddf73`; `Salamou-31` latest commit remains `429b8b047e9a277cb04c420dd131614bb1dbb35f` (Oct 27); `Easy-` remains `735f2ab5c26d411d3f1886e4b75493405dc756ac` (Oct 15); `agent-skills` remains `0f4c3a0fef4429f5344d7cdbe8047cd451162b13` (Oct 20).
+- Current API Factory README blob: `810353697d157e42c2d57b7c0094ad687b3a794f`; persistence doc blob: `bbbe0439cee1947774c6c8aa818133c10909b7f7`. The documented Render Production/Preview + Supabase Edge storage smoke is dated Oct 25. It proves the tested registry/artifact persistence and customer-key lifecycle at that time, **not** a paying customer, an uptime SLA, or a registered customer API. The docs say zero generated APIs were registered in that smoke; generated API usage/idempotency/quota/business data is not automatically durable, and deployment planning is not deployment execution.
+- `Easy-/src/lead-qualification-workflow.mjs` (blob `38b46c992908c1fd5e23e4a53317c54c2337eec3`) requires a configured provider; `src/seller-product-workflow.mjs` (blob `e3dcda1d96337595b478ea34d902b0fb0d215369`) preserves integrity checks and only marks provider-backed output publishable. These are reusable code boundaries, not evidence of a customer deployment or an n8n/WhatsApp production delivery.
+- No new implementation commits were found in the above product repositories since their recorded latest commits. The existing Documenso and n8n observability assets remain potential reusable components, not newly validated customer deployments.
+
+### Free LLM API catalog — no new upstream sync since Nov 4
+- Current `mnfst/awesome-free-llm-apis/data.json` SHA: `4dda6e225a35e20917da0bda98fe2f7780198d95`; `sources.json` SHA: `eca5cde3e02df99fa0d113db1a821158bb1dd0a0`; **15 providers**. Embedded `lastUpdated` remains `2026-10-25`, so Git commit provenance is authoritative.
+- Latest upstream commit remains `095e35e10f33d7ba32ebb86e1dd0ff604dea9c1a` (Nov 4, 2026 15:19:35 UTC). No later upstream commit was present through this sweep. No provider/model additions or removals since the Nov 4 sync; the six model removals and four Gemini source-quote refreshes are already recorded in the Nov 5 section.
+- **Groq is the strongest additional candidate for bounded low-risk inference evaluation:** official Services Agreement (modified Jun 22, 2026) expressly permits API integration into customer applications and serving end users; Inputs/Outputs are not used for model training absent explicit permission, and are accessed/retained only as needed for service operation, reliability, legal compliance or AUP enforcement. Official rate-limit docs currently list `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, and `qwen/qwen3.8-27b` at base limits of 30 RPM, 1,000 RPD and 8K TPM; exact account limits are shown in the account and can differ. The agreement requires compliance with each model's own terms, disclaims output accuracy/warranty, and does not create an SLA. This makes Groq a candidate for low-risk classification, extraction and draft generation with validation/human review—not a guaranteed production dependency. Do not process PHI without the applicable BAA; check model-specific licenses and current account limits. No key was created and no live call was made.
+  - https://console.groq.com/docs/legal/services-agreement
+  - https://console.groq.com/docs/rate-limits
+  - https://console.groq.com/docs/legal/customer-data-processing-addendum
+- **Cloudflare Workers AI** remains a zero-upfront candidate only within the free allocation: 10,000 Neurons/day, reset at 00:00 UTC; on Workers Free, exceeding the allocation causes requests to fail rather than incur overage. Some listed models require a paid billing method or Workers Paid, so only explicitly free models may be considered. No SLA or quality test was established here.
+  - https://developers.cloudflare.com/workers-ai/platform/pricing/
+  - https://developers.cloudflare.com/changelog/post/2026-07-28-models-require-workers-paid/
+- **Aion Labs** official Terms of Service version effective Oct 17, 2026 allow lawful commercial use, including building products/services, but say free use before purchase is a courtesy that may change or be withdrawn; listed free-tier ceiling is 15 RPM and 20,000 tokens/day. The catalog models are described as roleplay/storytelling tuned, so this is not a preferred fit for support/CRM classification, and there is no uptime guarantee. Do not build a critical workflow around it.
+  - https://api.aionlabs.ai/terms/
+  - https://www.aionlabs.ai/docs/rate-limits/
+- Existing exclusions remain: Cohere Trial is non-commercial; Gemini Free may use prompts to improve Google products; Mistral account/API-key billing eligibility remains unresolved; Z.ai account-level limits are not publicly stated; Gonka Broker's free grant requires real-phone verification and its model lineup rotates; ModelScope requires Alibaba Cloud binding/real-name verification; anonymous OVHcloud is limited to 2 RPM/IP and commercial terms were not established; Kilo/OpenRouter free pools are dynamic and low-quota. No provider was activated, no API key was created, no inference call was made, and no customer data was sent.
+
+### Commercial state at end of sweep
+- New AgentMail inbound: **0** across the three checked inboxes.
+- New Upwork proposals / accepted offers / contracts: **0 / 0 / 0**.
+- Connects balance / purchased / spent: **0 / 0 / 0**.
+- Qualified referral / accepted referral / commission: **0 / 0 / $0**.
+- Paid lead credits / upfront spend: **$0 / $0**.
+- Provider activations / live inference calls / inference spend: **0 / 0 / $0**.
+- Confirmed customers: **0**; confirmed revenue: **$0**.
+- No listing, outreach, partner acknowledgment, model/free quota, repository capability, or code artifact was counted as a customer or revenue.
