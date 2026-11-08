@@ -1,0 +1,202 @@
+{
+  "canonical_source": "github:alexbevi/typeorm",
+  "repo": "alexbevi/typeorm",
+  "revision_sha": "71addb2ef49b5fba8f6ac8c08129c32dc52c5c74",
+  "default_branch": "master",
+  "pushed_at": "2025-03-31T13:44:33Z",
+  "repo_updated_at": "2024-12-30T15:49:33Z",
+  "license": "MIT",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "test/functional/transaction/database-specific-isolation/full-isolation-support.ts",
+      "sha": null,
+      "content_sha256": "4e3c10ab4455197a4803d647e42f25669e58c63ca0b159f62f84d6fb441b65b2",
+      "score": 361,
+      "content": "import \"reflect-metadata\"\nimport {\n    closeTestingConnections,\n    createTestingConnections,\n    reloadTestingDatabases,\n} from \"../../../utils/test-utils\"\nimport { DataSource } from \"../../../../src/data-source/DataSource\"\nimport { Post } from \"./entity/Post\"\nimport { Category } from \"./entity/Category\"\nimport { expect } from \"chai\"\n\ndescribe(\"transaction > transaction with full isolation support\", () => {\n    let connections: DataSource[]\n    before(\n        async () =>\n            (connections = await createTestingConnections({\n                entities: [__dirname + \"/entity/*{.js,.ts}\"],\n                enabledDrivers: [\"mysql\", \"mssql\", \"postgres\", \"sap\"], // todo: for some reasons mariadb tests are not passing here\n            })),\n    )\n    beforeEach(() => reloadTestingDatabases(connections))\n    after(() => closeTestingConnections(connections))\n\n    it(\"should execute all operations in a single transaction with READ UNCOMMITTED isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                // SAP does not support READ UNCOMMITTED isolation level\n                if (connection.driver.options.type === \"sap\") return\n\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                await connection.manager.transaction(\n                    \"READ UNCOMMITTED\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n\n    it(\"should execute all operations in a single transaction with READ COMMITTED isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                await connection.manager.transaction(\n                    \"READ COMMITTED\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n\n    it(\"should execute all operations in a single transaction with REPEATABLE READ isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                await connection.manager.transaction(\n                    \"REPEATABLE READ\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n\n    it(\"should execute all operations in a single transaction with SERIALIZABLE isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                await connection.manager.transaction(\n                    \"SERIALIZABLE\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n})\n"
+    },
+    {
+      "path": ".github/workflows/database-compose-tests.yml",
+      "sha": null,
+      "content_sha256": "5dda360d2824234ebc70225eb50f9c647a26f697fee4557c5008e438f8080400",
+      "score": 331,
+      "content": "name: database-tests\n\non:\n  workflow_call:\n    inputs:\n      node-version:\n        required: true\n        type: string\n\njobs:\n  oracle:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: ${{inputs.node-version}}\n      - uses: actions/checkout@v4\n      - run: docker compose -f .github/workflows/test/oracle.docker-compose up -d\n      - run: npm i\n      - run: cp .github/workflows/test/oracle.ormconfig.json ormconfig.json\n      - run: npm test\n"
+    },
+    {
+      "path": "test/functional/transaction/database-specific-isolation/sqlite-isolation.ts",
+      "sha": null,
+      "content_sha256": "b076b297f2ddbb60470473c22ec30f79ca4d894f9cd0b66f5facf79635c7242c",
+      "score": 301,
+      "content": "import \"reflect-metadata\"\nimport {\n    closeTestingConnections,\n    createTestingConnections,\n    reloadTestingDatabases,\n} from \"../../../utils/test-utils\"\nimport { DataSource } from \"../../../../src/data-source/DataSource\"\nimport { Post } from \"./entity/Post\"\nimport { Category } from \"./entity/Category\"\nimport { expect } from \"chai\"\n\ndescribe(\"transaction > transaction with sqlite connection partial isolation support\", () => {\n    let connections: DataSource[]\n    before(\n        async () =>\n            (connections = await createTestingConnections({\n                entities: [__dirname + \"/entity/*{.js,.ts}\"],\n                enabledDrivers: [\"sqlite\", \"better-sqlite3\"], // todo: for some reasons mariadb tests are not passing here\n            })),\n    )\n    beforeEach(() => reloadTestingDatabases(connections))\n    after(() => closeTestingConnections(connections))\n\n    it(\"should execute all operations in a single transaction with READ UNCOMMITTED isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                await connection.manager.transaction(\n                    \"READ UNCOMMITTED\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n\n    it(\"should execute all operations in a single transaction with SERIALIZABLE isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                await connection.manager.transaction(\n                    \"SERIALIZABLE\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n})\n"
+    },
+    {
+      "path": "test/functional/transaction/database-specific-isolation/oracle-isolation.ts",
+      "sha": null,
+      "content_sha256": "64d439506567d97baa44aae79e35183256d33d4f6f34f228c850f5368c8416ca",
+      "score": 301,
+      "content": "import \"reflect-metadata\"\nimport {\n    closeTestingConnections,\n    createTestingConnections,\n    reloadTestingDatabases,\n} from \"../../../utils/test-utils\"\nimport { DataSource } from \"../../../../src/data-source/DataSource\"\nimport { Post } from \"./entity/Post\"\nimport { Category } from \"./entity/Category\"\nimport { expect } from \"chai\"\n\ndescribe(\"transaction > transaction with oracle connection partial isolation support\", () => {\n    let connections: DataSource[]\n    before(\n        async () =>\n            (connections = await createTestingConnections({\n                entities: [__dirname + \"/entity/*{.js,.ts}\"],\n                enabledDrivers: [\"oracle\"], // todo: for some reasons mariadb tests are not passing here\n            })),\n    )\n    beforeEach(() => reloadTestingDatabases(connections))\n    after(() => closeTestingConnections(connections))\n\n    it(\"should execute all operations in a single transaction with READ COMMITTED isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                await connection.manager.transaction(\n                    \"READ COMMITTED\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n\n    it(\"should execute all operations in a single transaction with SERIALIZABLE isolation level\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                let postId: number | undefined = undefined,\n                    categoryId: number | undefined = undefined\n\n                // Initial inserts are required to prevent ORA-08177 errors in Oracle 21c when using a serializable connection\n                // immediately after DDL statements. This ensures proper synchronization and helps avoid conflicts.\n                await connection.manager\n                    .getRepository(Post)\n                    .save({ title: \"Post #0\" })\n                await connection.manager\n                    .getRepository(Category)\n                    .save({ name: \"Category #0\" })\n\n                await connection.manager.transaction(\n                    \"SERIALIZABLE\",\n                    async (entityManager) => {\n                        const post = new Post()\n                        post.title = \"Post #1\"\n                        await entityManager.save(post)\n\n                        const category = new Category()\n                        category.name = \"Category #1\"\n                        await entityManager.save(category)\n\n                        postId = post.id\n                        categoryId = category.id\n                    },\n                )\n\n                const post = await connection.manager.findOne(Post, {\n                    where: { title: \"Post #1\" },\n                })\n                expect(post).not.to.be.null\n                post!.should.be.eql({\n                    id: postId,\n                    title: \"Post #1\",\n                })\n\n                const category = await connection.manager.findOne(Category, {\n                    where: { name: \"Category #1\" },\n                })\n                expect(category).not.to.be.null\n                category!.should.be.eql({\n                    id: categoryId,\n                    name: \"Category #1\",\n                })\n            }),\n        ))\n})\n"
+    },
+    {
+      "path": "test/functional/transaction/database-specific-isolation/entity/Category.ts",
+      "sha": null,
+      "content_sha256": "7e3f83deba3c5a6b707cf6b38335aa45143e8e729f184f9ebef6024a8638154c",
+      "score": 299,
+      "content": "import { Entity } from \"../../../../../src/decorator/entity/Entity\"\nimport { PrimaryGeneratedColumn } from \"../../../../../src/decorator/columns/PrimaryGeneratedColumn\"\nimport { Column } from \"../../../../../src/decorator/columns/Column\"\n\n@Entity()\nexport class Category {\n    @PrimaryGeneratedColumn()\n    id: number\n\n    @Column()\n    name: string\n}\n"
+    },
+    {
+      "path": "test/functional/transaction/database-specific-isolation/entity/Post.ts",
+      "sha": null,
+      "content_sha256": "22a197b61b4bf60f6733700d7141804805b47c679c56924fc3216544470b559f",
+      "score": 299,
+      "content": "import { Entity } from \"../../../../../src/decorator/entity/Entity\"\nimport { PrimaryGeneratedColumn } from \"../../../../../src/decorator/columns/PrimaryGeneratedColumn\"\nimport { Column } from \"../../../../../src/decorator/columns/Column\"\n\n@Entity()\nexport class Post {\n    @PrimaryGeneratedColumn()\n    id: number\n\n    @Column()\n    title: string\n}\n"
+    },
+    {
+      "path": ".github/workflows/database-tests.yml",
+      "sha": null,
+      "content_sha256": "f5a0ab88a94cb90053c3016584bf59e29df2d8c099f450c49f552e2f423f5b45",
+      "score": 246,
+      "content": "name: database-tests\n\non:\n  workflow_call:\n    inputs:\n      node-container:\n        required: true\n        type: string\n\njobs:\n  cockroachdb:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n    services:\n      crdb:\n        image: cockroachdb/cockroach\n        env:\n          COCKROACH_ARGS: 'start-single-node --insecure --cache=1GB --store=type=mem,size=4GB'\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: cp .github/workflows/test/cockroachdb.ormconfig.json ormconfig.json\n      - run: npm test\n\n  mongodb:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n    services:\n      mongodb:\n        image: mongo:5.0.12\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: cp .github/workflows/test/mongodb.ormconfig.json ormconfig.json\n      - run: npm test\n\n\n  mssql:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n    services:\n      mssql:\n        image: \"mcr.microsoft.com/mssql/server:2022-latest\"\n        env:\n          SA_PASSWORD: \"Admin12345\"\n          ACCEPT_EULA: \"Y\"\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: cp .github/workflows/test/mssql.ormconfig.json ormconfig.json\n      - run: npm test\n\n\n  mysql_mariadb:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n    services:\n      mysql:\n        image: mysql:5.7.37\n        env:\n          MYSQL_ROOT_PASSWORD: \"admin\"\n          MYSQL_USER: \"test\"\n          MYSQL_PASSWORD: \"test\"\n          MYSQL_DATABASE: \"test\"\n      mariadb:\n        image: mariadb:10.10.3\n        env:\n          MYSQL_ROOT_PASSWORD: \"admin\"\n          MYSQL_USER: \"test\"\n          MYSQL_PASSWORD: \"test\"\n          MYSQL_DATABASE: \"test\"\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: cp .github/workflows/test/mysql-mariadb.ormconfig.json ormconfig.json\n      - run: npm test\n\n\n  better-sqlite3:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: chown -R 1001:127 ./temp #This fix is needed for fixing permission error on Node 16\n      - run: cp .github/workflows/test/better-sqlite3.ormconfig.json ormconfig.json\n      - run: npm test\n\n\n  sqlite:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: chown -R 1001:127 ./temp #This fix is needed for fixing permission error on Node 16\n      - run: cp .github/workflows/test/sqlite.ormconfig.json ormconfig.json\n      - run: npm test\n\n\n  sqljs:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: cp .github/workflows/test/sqljs.ormconfig.json ormconfig.json\n      - run: npm test\n\n\n  postgres:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    container: ${{inputs.node-container}}\n    services:\n      postgres:\n        image: postgis/postgis:14-3.3\n        env:\n          POSTGRES_USERNAME: postgres\n          POSTGRES_PASSWORD: postgres\n          POSTGRES_DB: postgres\n        options: >-\n          --health-cmd pg_isready\n          --health-interval 10s\n          --health-timeout 5s\n          --health-retries 5\n\n    steps:\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: chown -R 1001:127 /github/home/.npm #This fix is needed for running CLI tests\n      - run: cp .github/workflows/test/postgres.ormconfig.json ormconfig.json\n      - run: npm test\n"
+    },
+    {
+      "path": ".github/workflows/test/postgres.ormconfig.json",
+      "sha": null,
+      "content_sha256": "dc798c41fe6fc4286328959b78bd3d627f7a8c7f47c0454e0b0f355e0e439289",
+      "score": 244,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/oracle.docker-compose",
+      "sha": null,
+      "content_sha256": "606fa31c4145a034fda074cdddc4565e91069e36c6e2158ac1598e19fe6bc3f0",
+      "score": 234,
+      "content": "version: \"3\"\nservices:\n  oracle:\n    build:\n      context: ../../../docker/oracle\n    container_name: \"typeorm-oracle\"\n    ports:\n      - \"1521:1521\"\n    #volumes:\n     # - oracle-data:/opt/oracle/oradata\n    healthcheck:\n      test: [ \"CMD\", \"/opt/oracle/checkDBStatus.sh\" ]\n      interval: 2s"
+    },
+    {
+      "path": "test/github-issues/1545/entity/ValidationModel.ts",
+      "sha": null,
+      "content_sha256": "3110b7859f23b842596cb3c337aa7eae5609d111ad89432463c9eebd8a61ad34",
+      "score": 220,
+      "content": "import { Column, OneToMany, Entity } from \"../../../../src/index\"\nimport { DataModel } from \"./DataModel\"\n\n@Entity()\nexport class ValidationModel {\n    @Column({\n        type: \"integer\",\n        primary: true,\n    })\n    validation: number\n\n    @OneToMany((type) => DataModel, (dataModel) => dataModel.validations)\n    dataModel: DataModel[]\n}\n"
+    },
+    {
+      "path": "test/functional/driver/postgres/specific-options.ts",
+      "sha": null,
+      "content_sha256": "dee04772a7f7662b5d0815614f589e0256bcfc78532a8946b2c0dddba115ddd4",
+      "score": 219,
+      "content": "import \"reflect-metadata\"\nimport {\n    closeTestingConnections,\n    createTestingConnections,\n    reloadTestingDatabases,\n} from \"../../../utils/test-utils\"\nimport { DataSource } from \"../../../../src/data-source/DataSource\"\nimport { expect } from \"chai\"\n\ndescribe(\"postgres specific options\", () => {\n    let connections: DataSource[]\n    before(\n        async () =>\n            (connections = await createTestingConnections({\n                enabledDrivers: [\"postgres\"],\n                driverSpecific: {\n                    applicationName: \"some test name\",\n                },\n            })),\n    )\n    beforeEach(() => reloadTestingDatabases(connections))\n    after(() => closeTestingConnections(connections))\n\n    it(\"should set application_name\", () =>\n        Promise.all(\n            connections.map(async (connection) => {\n                const result = await connection.query(\n                    \"select current_setting('application_name') as application_name\",\n                )\n                expect(result.length).equals(1)\n                expect(result[0].application_name).equals(\"some test name\")\n            }),\n        ))\n})\n"
+    },
+    {
+      "path": "sample/sample13-everywhere-abstraction/entity/PostAuthor.ts",
+      "sha": null,
+      "content_sha256": "b98dc58b486fb98846611beca4a35b03269608589754ff6a55ed7c8690a20f9a",
+      "score": 191,
+      "content": "import { Column, Entity, PrimaryGeneratedColumn } from \"../../../src/index\"\nimport { Post } from \"./Post\"\nimport { OneToMany } from \"../../../src/decorator/relations/OneToMany\"\nimport { PostUser } from \"./PostUser\"\n\n@Entity(\"sample13_post_author\")\nexport class PostAuthor extends PostUser {\n    @PrimaryGeneratedColumn()\n    id: number\n\n    @Column()\n    name: string\n\n    @OneToMany((type) => Post, (post) => post.author)\n    posts: Post[]\n}\n"
+    },
+    {
+      "path": ".github/workflows/test.yml",
+      "sha": null,
+      "content_sha256": "f0f43f6e4b2784154cd62a237d8681764f8e2f83535d647a3ec121f17b67cef7",
+      "score": 186,
+      "content": "# https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs\n# https://docs.github.com/en/actions/use-cases-and-examples/building-and-testing/building-and-testing-nodejs\n# https://docs.github.com/en/actions/use-cases-and-examples/using-containerized-services/creating-postgresql-service-containers\n\nname: test\n\non:\n  push:\n    branches: [ \"**\" ]\n  pull_request:\n    branches: [ \"master\" ]\n\njobs:\n  formatting:\n    runs-on: ubuntu-latest\n    strategy:\n      fail-fast: false\n\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: \"18.x\"\n      - uses: actions/checkout@v4\n      - run: npm i\n      - run: npm run lint\n\n\n  # These tests run in standard node containers with their db attached as a service\n  database-tests:\n    strategy:\n      fail-fast: false\n      matrix:\n        node-container: [\"node:16\", \"node:18\", \"node:20\"] #, \"node:22\"]\n        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/\n    uses: ./.github/workflows/database-tests.yml\n    with:\n      node-container: ${{matrix.node-container}}\n\n\n  # These tests run with custom docker image attributes that can't be specified in a GHA service\n  database-compose-tests:\n    strategy:\n      fail-fast: false\n      matrix:\n        node-version: [16.x, 18.x, 20.x] #, 22.x]\n        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/\n    uses: ./.github/workflows/database-compose-tests.yml\n    with:\n      node-version: ${{matrix.node-version}}\n"
+    },
+    {
+      "path": ".github/workflows/test/sqljs.ormconfig.json",
+      "sha": null,
+      "content_sha256": "5564011ad0127f4756381bb3defbe6771625cfc40ad374fa083a67405ffcfd84",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"sqljs\",\n    \"type\": \"sqljs\",\n    \"logging\": false\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/better-sqlite3.ormconfig.json",
+      "sha": null,
+      "content_sha256": "d86a4d5aa48bdbb0bf1816094b202290ca092e8109a4d914e66acd1f5f1b0f8d",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"better-sqlite3\",\n    \"type\": \"better-sqlite3\",\n    \"database\": \"./temp/better-sqlite3db.db\",\n    \"logging\": false\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/oracle.ormconfig.json",
+      "sha": null,
+      "content_sha256": "9950befc34da256eebef07098633ec781b857f80abb1844e2049191b603e581a",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"oracle\",\n    \"type\": \"oracle\",\n    \"host\": \"localhost\",\n    \"port\": 1521,\n    \"serviceName\": \"XEPDB1\",\n    \"username\": \"typeorm\",\n    \"password\": \"oracle\",\n    \"logging\": false,\n    \"extra\": {\n      \"connectString\": \"localhost:1521/XEPDB1\"\n    }\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/mongodb.ormconfig.json",
+      "sha": null,
+      "content_sha256": "9aac2d5b0e65be6fe84bf635e1bd8b7edd2430d325cc38485471f7655c88be12",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"disabledIfNotEnabledImplicitly\": true,\n    \"name\": \"mongodb\",\n    \"type\": \"mongodb\",\n    \"host\": \"mongodb\",\n    \"port\": 27017,\n    \"database\": \"test\",\n    \"logging\": false,\n    \"useNewUrlParser\": true,\n    \"useUnifiedTopology\": true\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/mssql.ormconfig.json",
+      "sha": null,
+      "content_sha256": "a835f9da6fa0617bcb5453dade15e5bc4502d9dbdb68e30e79ed16acdc1742db",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"mssql\",\n    \"type\": \"mssql\",\n    \"host\": \"mssql\",\n    \"port\": 1433,\n    \"username\": \"sa\",\n    \"password\": \"Admin12345\",\n    \"database\": \"tempdb\",\n    \"logging\": false,\n    \"extra\": {\n      \"trustServerCertificate\": true\n    }\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/mysql-mariadb.ormconfig.json",
+      "sha": null,
+      "content_sha256": "0fecb20c40a7f298fca2706f08f1608c73991bf6c52815dd93c556bc78d59c84",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"mysql\",\n    \"type\": \"mysql\",\n    \"host\": \"mysql\",\n    \"port\": 3306,\n    \"username\": \"root\",\n    \"password\": \"admin\",\n    \"database\": \"test\",\n    \"logging\": false\n  },\n  {\n    \"skip\": false,\n    \"name\": \"mariadb\",\n    \"type\": \"mariadb\",\n    \"host\": \"mariadb\",\n    \"port\": 3306,\n    \"username\": \"root\",\n    \"password\": \"admin\",\n    \"database\": \"test\",\n    \"logging\": false\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/sqlite.ormconfig.json",
+      "sha": null,
+      "content_sha256": "1f75dec2fd4c80f084d7140cef266d36213cad037b9b4d0d0ed4aa179f00f2be",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"sqlite\",\n    \"type\": \"sqlite\",\n    \"database\": \"./temp/sqlitedb-1.db\",\n    \"logging\": false,\n    \"relationLoadStrategy\": \"join\"\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": ".github/workflows/test/cockroachdb.ormconfig.json",
+      "sha": null,
+      "content_sha256": "5d0e506df8581efc3fd65788f2eb76e754f0076bec9fcec2213d92b4c48036a4",
+      "score": 184,
+      "content": "[\n  {\n    \"skip\": false,\n    \"name\": \"cockroachdb\",\n    \"type\": \"cockroachdb\",\n    \"host\": \"crdb\",\n    \"port\": 26257,\n    \"username\": \"root\",\n    \"password\": \"\",\n    \"database\": \"defaultdb\",\n    \"logging\": false\n  },\n\n  {\n    \"skip\": true,\n    \"name\": \"postgres\",\n    \"type\": \"postgres\",\n    \"host\": \"postgres\",\n    \"port\": 5432,\n    \"username\": \"postgres\",\n    \"password\": \"postgres\",\n    \"database\": \"postgres\",\n    \"logging\": false\n  }\n]\n"
+    },
+    {
+      "path": "src/driver/sqlserver/authentication/AzureActiveDirectoryServicePrincipalSecret.ts",
+      "sha": null,
+      "content_sha256": "ceaf3b02ffa329001920471d0104da3072a43614a2bb8af49f1dcc3a6f88411d",
+      "score": 179,
+      "content": "export interface AzureActiveDirectoryServicePrincipalSecret {\n    type: \"azure-active-directory-service-principal-secret\"\n    options: {\n        /**\n         * Application (`client`) ID from your registered Azure application\n         */\n        clientId: string\n        /**\n         * The created `client secret` for this registered Azure application\n         */\n        clientSecret: string\n        /**\n         * Directory (`tenant`) ID from your registered Azure application\n         */\n        tenantId: string\n    }\n}\n"
+    },
+    {
+      "path": "test/utils/test-setup.ts",
+      "sha": null,
+      "content_sha256": "980169cb340925459b1d09828f6ebf891c1b3b07133d55960b552f320ada8111",
+      "score": 173,
+      "content": "import \"source-map-support/register\"\nimport \"reflect-metadata\"\nimport * as chai from \"chai\"\n\nchai.should()\nchai.use(require(\"sinon-chai\"))\nchai.use(require(\"chai-as-promised\"))\n"
+    },
+    {
+      "path": "test/github-issues/3120/entity/ActionDetails.ts",
+      "sha": null,
+      "content_sha256": "3d6288bf641c9dd5a19ddf2a424d3382430268c5c5edad13e1aa882970e5eaa7",
+      "score": 169,
+      "content": "import { PrimaryGeneratedColumn } from \"../../../../src/decorator/columns/PrimaryGeneratedColumn\"\nimport { Entity } from \"../../../../src/decorator/entity/Entity\"\nimport { Column } from \"../../../../src/decorator/columns/Column\"\n\n@Entity()\nexport class ActionDetails {\n    @PrimaryGeneratedColumn()\n    id: number\n\n    @Column()\n    description: string\n}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 1,
+  "sensitive_files_skipped": [
+    {
+      "path": "test/functional/connection-options-reader/configs/.env",
+      "sha": "2d7a79b5a0c3d2d4625d3a5139d1e351a9deb231",
+      "size": 54,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-08T12:00:49.695719+00:00"
+}

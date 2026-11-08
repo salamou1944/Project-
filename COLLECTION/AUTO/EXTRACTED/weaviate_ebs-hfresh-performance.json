@@ -1,0 +1,195 @@
+{
+  "canonical_source": "github:weaviate/ebs-hfresh-performance",
+  "repo": "weaviate/ebs-hfresh-performance",
+  "revision_sha": "0e5b65ca26305ab1af5141c96d82cbea7a8232a1",
+  "default_branch": "main",
+  "pushed_at": "2026-11-06T14:19:49Z",
+  "repo_updated_at": "2026-11-06T14:20:01Z",
+  "license": "BSD-3-Clause",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "compose/docker-compose.yml",
+      "sha": null,
+      "content_sha256": "e65c89f50fcf62a6b73b1092e1e3d9c2dacdaac1d9f50fc3c1f7bdcad0846b16",
+      "score": 118,
+      "content": "# Headline configuration: Weaviate with HFresh, hard-capped at 8 GiB (page cache included).\n# Run from /opt/ebs-blog/compose on the server:  docker compose up -d\nservices:\n  weaviate:\n    image: cr.weaviate.io/semitechnologies/weaviate:${WEAVIATE_VERSION:-1.39.3}\n    command: [\"--host\", \"0.0.0.0\", \"--port\", \"8080\", \"--scheme\", \"http\"]\n    restart: \"no\"\n    ports:\n      - \"8080:8080\"\n      - \"50051:50051\"\n      - \"2112:2112\"\n      - \"6060:6060\"\n    volumes:\n      - /data/weaviate:/var/lib/weaviate\n    # cgroup v2 hard cap. memswap == mem means no swap. Page cache attributable to\n    # the container counts against this, which is what makes the test disk-bound.\n    mem_limit: ${MEM_LIMIT:-8g}\n    memswap_limit: ${MEM_LIMIT:-8g}\n    cpus: 24\n    environment:\n      PERSISTENCE_DATA_PATH: /var/lib/weaviate\n      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: \"true\"\n      DEFAULT_VECTOR_INDEX: hfresh\n      ASYNC_INDEXING: \"true\"\n      GOMEMLIMIT: ${GOMEMLIMIT:-5GiB}\n      GOMAXPROCS: \"24\"\n      LIMIT_RESOURCES: \"false\"\n      PERSISTENCE_LSM_ACCESS_STRATEGY: ${LSM_ACCESS:-mmap}\n      PROMETHEUS_MONITORING_ENABLED: \"true\"\n      DEBUG_ENDPOINTS_ENABLED: \"true\"\n      DISABLE_TELEMETRY: \"true\"\n      CLUSTER_HOSTNAME: node1\n      LOG_LEVEL: info\n      QUERY_DEFAULTS_LIMIT: \"10\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "43740d1ebbb13633302020cd404b198493b4435282dee2b3412c6a2741c5a7c6",
+      "score": 100,
+      "content": "# HFresh on Amazon EBS gp3: a reproducible performance test\n\nThis repository holds everything needed to re-run the benchmark behind Weaviate's\nblog post on serving a 10-million-vector HFresh index from 8 GiB of RAM on Amazon EBS\ngp3: the Terraform rig, the orchestration scripts, the Weaviate configuration, the raw\nmeasurements and the rendered charts.\n\nThe question the test answers: when Weaviate's HFresh index is forced to live on disk\ninstead of in RAM, how much does the provisioned performance of the EBS volume matter?\n\n## Headline result\n\nSame instance, same dataset, same 8 GiB memory cap. The only change between the two\nrows is one `aws ec2 modify-volume` call.\n\n| configuration | QPS | p99 latency | recall@10 |\n|---|---|---|---|\n| gp3 at 3,000 IOPS / 125 MiB/s (default) | 9.8 | 5.7 s | 0.512 |\n| gp3 at 80,000 IOPS / 2,000 MiB/s | 260 | 204 ms | 0.512 |\n| instance-store NVMe (i4i.8xlarge), for comparison | 561 | 91 ms | 0.512 |\n\nMeasured at 32 concurrent clients and `searchProbe` 64. Full tables are in\n`results/summary.md` and `results/summary-nvme.md`.\n\n## What the rig looks like\n\n- One **server**: `c6in.8xlarge` (32 vCPU, instance EBS cap of 100k IOPS), Amazon Linux\n  2023, Docker Compose, Weaviate 1.39.3 with `DEFAULT_VECTOR_INDEX=hfresh`, hard-capped\n  with cgroup v2 at 8 GiB including page cache (`compose/`).\n- One **data volume**: 400 GiB gp3, created at 80,000 IOPS and modified live between\n  phases. The NVMe variant uses the instance store of an `i4i.8xlarge` instead.\n- One **client**: `c7i.2xlarge` running\n  [weaviate-benchmarking](https://github.com/weaviate/weaviate-benchmarking) built\n  inside Docker (commit in `results/benchmarker-commit.txt`).\n- **Dataset**: `sphere-10M-meta-dpr` (10M x 768-d, 31 GB HDF5, public, URL in\n  `infra/variables.tf`).\n- **Network**: both instances sit in a private subnet with no public IPv4 address.\n  Outbound traffic (package installs, image pull, the dataset download) leaves through a\n  NAT gateway; S3 traffic uses a gateway endpoint. Shell access goes through an EC2\n  Instance Connect Endpoint (`scripts/aws/ssm.sh`) with a throw-away key, so there is no\n  inbound path from the internet and no stored key pair. An S3 bucket ferries scripts out\n  and results back.\n- **Safety**: a server-side dead-man's switch (`scripts/server/deadman.sh`) stops\n  Weaviate, syncs results and powers the instance off after a timer, so a dropped\n  session cannot leave the rig running.\n\nEach measurement phase: fio calibration of the volume, drop caches, pin readahead,\nrestart Weaviate under the cap, capture iostat / cgroup memory / Prometheus metrics on\nthe server, warm up, then sweep clients 8/32/128 x `searchProbe` 32/64/128/256, then\n`rescoreLimit` 100/350/1000.\n\n## Reproducing the test\n\nExpect roughly 6 to 8 hours of wall clock and around $35 to $50 of AWS spend for the\nEBS phases. The baseline phase is slow by construction (10k queries at ~9 QPS per data\npoint). The NAT gateway adds a few dollars: an hourly charge plus per-GB processing for\nthe 31 GB dataset download. The original run placed the instances in a public subnet;\nthe move to a private subnet changes nothing about the storage path being measured.\n\nPrerequisites on the operator machine: Terraform >= 1.5, AWS CLI v2, `jq`, `ssh`,\nPython 3 with `pip install -r scripts/analyze/requirements.txt`.\n\n1. **Account and profile.** Use a throwaway AWS account or a sandbox you can audit\n   afterwards. Configure a profile (the scripts default to `AWS_PROFILE=ebs-blog`).\n   If you load short-lived keys from a file, `scripts/aws/load-keys.sh` parses the\n   access-portal format into that profile and `scripts/aws/preflight.sh` fails fast\n   when they expire.\n2. **Pick an AZ** that offers `c6in.8xlarge`:\n   ```\n   aws ec2 describe-instance-type-offerings --location-type availability-zone \\\n     --filters Name=instance-type,Values=c6in.8xlarge --region us-east-2\n   ```\n   and set `availability_zone` in `infra/variables.tf` (or pass `-var`).\n3. **Build the rig.**\n   ```\n   cd infra && terraform init && terraform apply\n   scripts/aws/modify-volume.sh 80000 2000      # provider caps throughput at 1000 on create\n   scripts/aws/sync-to-hosts.sh                 # ship compose/ and scripts/ to both hosts\n   ```\n4. **Import** (about 20 minutes plus the dataset download):\n   ```\n   scripts/run-import.sh\n   ```\n   Calibrates the volume with fio, starts Weaviate with a relaxed 32 GiB cap, imports the\n   dataset, waits for compactions, stops Weaviate and snapshots the volume.\n5. **Measure.** The volume starts at 80k / 2,000.\n   ```\n   scripts/run-phase.sh phase-2-max      headline-pread.env 80000-2000\n   scripts/aws/modify-volume.sh 3000 125\n   scripts/run-phase.sh phase-1-baseline headline-pread.env 3000-125\n   ```\n   Add `quick` as a fourth argument for a 30-second dry run. gp3 allows four\n   modifications per 24 hours.\n6. **Render.**\n   ```\n   python3 scripts/analyze/render.py    # writes results/summary.md and charts/*.png\n   ```\n7. **Tear down and verify nothing is left.** Detached gp3 volumes keep billing their\n   provisioned IOPS.\n   ```\n   scripts/aws/teardown.sh\n   scripts/aws/teardown-check.sh us-east-2\n   ```\n\n### NVMe variant\n\n```\ncd infra && terraform apply -var data_disk=nvme -var server_instance_type=i4i.8xlarge\nscripts/aws/sync-to-hosts.sh\nEBS_LABEL=nvme scripts/run-import.sh\nscripts/run-phase.sh phase-4-nvme headline-pread.env nvme\npython3 scripts/analyze/render.py\nscripts/aws/teardown.sh\n```\nInstance-store data does not survive a stop, so there is no snapshot step and the\ndead-man's switch erases the data when it fires.\n\n## Two things worth knowing before you run it\n\n**mmap caps in-flight IO at GOMAXPROCS.** With Weaviate's default\n`PERSISTENCE_LSM_ACCESS_STRATEGY=mmap`, every posting or object read is a page fault\nthat pins an OS thread, so the volume never saw more than ~25 outstanding IOs and\nplateaued at ~40k IOPS and ~82 QPS regardless of client count. Switching to `pread`\nturns reads into syscalls the Go runtime can hand off: 85k IOPS, 250 in flight, 252\nQPS. The `*-pread.env` files are therefore the headline configuration; the mmap sweep\nis kept in `results/phase-2-max-mmap/` as the first surprise of the test.\n\n**The benchmarker ignores `--rescoreLimit` in query-only mode**, so `sweep.sh` sets\n`rq.rescoreLimit` through the schema API instead.\n\n## Repository layout\n\n```\ncompose/           docker-compose.yml plus one .env per phase (memory cap, GOMEMLIMIT, LSM strategy)\ninfra/             Terraform: VPC, instances, gp3 volume, Instance Connect Endpoint, results bucket\nscripts/aws/       operator side: tunnel, sync, volume modification, CloudWatch export, teardown\nscripts/server/    on the server: fio calibration, disk tuning, reset, capture, dead-man's switch\nscripts/client/    on the client: build the benchmarker, check the dataset, import, sweep\nscripts/run-*.sh   the import and phase orchestrators\nscripts/analyze/   render.py: results/ -> summary tables and charts\nresults/           raw measurements (see below)\ncharts/            rendered charts for the EBS phases; charts/nvme/ for the NVMe run\n```\n\n### Results\n\n| path | contents |\n|---|---|\n| `results/summary.md`, `summary-nvme.md` | rendered tables: fio calibration, query sweep, rescore sensitivity, iostat and memory |\n| `results/phase-0-calibration/` | fio runs against the gp3 volume at each setting |\n| `results/phase-1-baseline/` | gp3 3,000 / 125, pread, 8 GiB cap (partial: 8-client sweep complete, 32-client probe 64 and 256, rescore 100) |\n| `results/phase-2-max/` | gp3 80,000 / 2,000, pread, 8 GiB cap (headline) |\n| `results/phase-2-max-mmap/` | same volume with the default mmap strategy |\n| `results/phase-3-control/` | empty: the 56 GiB in-RAM control phase was not run |\n| `results/phase-4-nvme/` | i4i.8xlarge instance store, pread, 8 GiB cap |\n| `results/import/` | import timings and the post-import disk footprint |\n| `results/*.run.log`, `volume-modifications.log`, `deadman.log` | operator logs as they happened |\n\nInside each phase: `probe-sweep-p<clients>.json` and `rescore-r<limit>-p32.json` from the\nbenchmarker, `fio-*.json` and `fio-summary.txt`, `host-state.txt`, `container-limits.txt`,\n`cloudwatch-ebs.json`, and `sweep/` with `iostat.json`, `cgroup-mem.csv`, `mpstat.txt`\nand one Prometheus scrape per second under `metrics/`.\n\nThe volume, snapshot and instance IDs that appear in the logs belong to a sandbox account\nthat was emptied after the test.\n\n## Lessons from running it\n\n- Instance Connect tunnels drop after about an hour. Run sweeps detached on the client\n  and poll for a `DONE` marker (this is what `run-phase.sh` does now); never hold a\n  tunnel open across a run.\n- Short-lived SSO keys expire mid-run. Call `preflight.sh` before every remote step.\n- A gp3 down-modification sits in `optimizing` for an hour or more while the new limits\n  are already in force. fio confirms the target before `completed`.\n- Budget the baseline phase at three times the max phase, or use the `quick` mode to\n  check the pipeline first.\n- gp3 needs at least 160 GiB to allow 80,000 IOPS, and the instance type sets its own\n  ceiling (c7i.8xlarge stops at 40k; c6in.8xlarge allows 100k).\n\n## License\n\nSee `LICENSE`.\n"
+    },
+    {
+      "path": "compose/control-pread.env",
+      "sha": null,
+      "content_sha256": "e4f541fd35853b92ccb54d1c67c7615693493b60bf4447e21fdb50a893b75988",
+      "score": 83,
+      "content": "# Control with pread: 56 GiB cap, whole footprint in page cache.\nMEM_LIMIT=56g\nGOMEMLIMIT=8GiB\nLSM_ACCESS=pread\n"
+    },
+    {
+      "path": "compose/headline-pread.env",
+      "sha": null,
+      "content_sha256": "ecca62df07ff6886b354e8038cfe8e47a5457071bc4e5ac03bf5e9a546e09bda",
+      "score": 83,
+      "content": "# Phases 1 and 2 with pread instead of mmap: reads become syscalls the Go runtime can hand off,\n# so in-flight IOs are no longer capped at GOMAXPROCS (24). Same 8 GiB cap.\nMEM_LIMIT=8g\nGOMEMLIMIT=5GiB\nLSM_ACCESS=pread\n"
+    },
+    {
+      "path": "compose/import.env",
+      "sha": null,
+      "content_sha256": "3927e3130a10ad14e87e27b2378884c8d5c3333c71b537d9060dbf40fb75bda9",
+      "score": 83,
+      "content": "# Import phase: relaxed RAM so compaction and HFresh splits cannot OOM.\n# On-disk bytes are identical regardless of how fast they were written.\nMEM_LIMIT=32g\nGOMEMLIMIT=24GiB\n"
+    },
+    {
+      "path": "compose/headline.env",
+      "sha": null,
+      "content_sha256": "b8b5d76662144037ba6ae007b887c0b2b26abdf755df1a6a2368a74ff44a9e02",
+      "score": 83,
+      "content": "# Phases 1 and 2: the 8 GiB cap. ~3 GiB of it is left for page cache and non-Go memory.\nMEM_LIMIT=8g\nGOMEMLIMIT=5GiB\n"
+    },
+    {
+      "path": "compose/control.env",
+      "sha": null,
+      "content_sha256": "dd05c7b8d3a02734f56e0f25d808b6be66d71f730e807d5661139ac70deebc0d",
+      "score": 83,
+      "content": "# Phase 3 control: enough RAM for the whole ~40 GB on-disk footprint to sit in page cache.\nMEM_LIMIT=56g\nGOMEMLIMIT=8GiB\n"
+    },
+    {
+      "path": "results/phase-0-calibration/compose-env.txt",
+      "sha": null,
+      "content_sha256": "3927e3130a10ad14e87e27b2378884c8d5c3333c71b537d9060dbf40fb75bda9",
+      "score": 81,
+      "content": "# Import phase: relaxed RAM so compaction and HFresh splits cannot OOM.\n# On-disk bytes are identical regardless of how fast they were written.\nMEM_LIMIT=32g\nGOMEMLIMIT=24GiB\n"
+    },
+    {
+      "path": "results/phase-2-max-mmap/compose-env.txt",
+      "sha": null,
+      "content_sha256": "b8b5d76662144037ba6ae007b887c0b2b26abdf755df1a6a2368a74ff44a9e02",
+      "score": 81,
+      "content": "# Phases 1 and 2: the 8 GiB cap. ~3 GiB of it is left for page cache and non-Go memory.\nMEM_LIMIT=8g\nGOMEMLIMIT=5GiB\n"
+    },
+    {
+      "path": "results/phase-1-baseline/compose-env.txt",
+      "sha": null,
+      "content_sha256": "ecca62df07ff6886b354e8038cfe8e47a5457071bc4e5ac03bf5e9a546e09bda",
+      "score": 81,
+      "content": "# Phases 1 and 2 with pread instead of mmap: reads become syscalls the Go runtime can hand off,\n# so in-flight IOs are no longer capped at GOMAXPROCS (24). Same 8 GiB cap.\nMEM_LIMIT=8g\nGOMEMLIMIT=5GiB\nLSM_ACCESS=pread\n"
+    },
+    {
+      "path": "results/phase-2-max/compose-env.txt",
+      "sha": null,
+      "content_sha256": "ecca62df07ff6886b354e8038cfe8e47a5457071bc4e5ac03bf5e9a546e09bda",
+      "score": 81,
+      "content": "# Phases 1 and 2 with pread instead of mmap: reads become syscalls the Go runtime can hand off,\n# so in-flight IOs are no longer capped at GOMAXPROCS (24). Same 8 GiB cap.\nMEM_LIMIT=8g\nGOMEMLIMIT=5GiB\nLSM_ACCESS=pread\n"
+    },
+    {
+      "path": "scripts/analyze/requirements.txt",
+      "sha": null,
+      "content_sha256": "d946066d9f96d62493b01b97ade56f2988fa8698f7b00a4eff35b649a225b0d4",
+      "score": 81,
+      "content": "pandas>=2.0\nmatplotlib>=3.8\n"
+    },
+    {
+      "path": "results/phase-4-nvme/compose-env.txt",
+      "sha": null,
+      "content_sha256": "ecca62df07ff6886b354e8038cfe8e47a5457071bc4e5ac03bf5e9a546e09bda",
+      "score": 81,
+      "content": "# Phases 1 and 2 with pread instead of mmap: reads become syscalls the Go runtime can hand off,\n# so in-flight IOs are no longer capped at GOMAXPROCS (24). Same 8 GiB cap.\nMEM_LIMIT=8g\nGOMEMLIMIT=5GiB\nLSM_ACCESS=pread\n"
+    },
+    {
+      "path": "infra/user-data-client.sh",
+      "sha": null,
+      "content_sha256": "56e11d067c3c140715d013ad30f34319f8cf8fc7ad42612f357f70e503092bc9",
+      "score": 33,
+      "content": "#!/bin/bash\n# Client bootstrap: docker (the benchmarker builds inside its own image), h5py for dataset checks,\n# dataset download in the background.\nset -euxo pipefail\nexec > >(tee -a /var/log/user-data.log) 2>&1\n\ndnf install -y docker git jq htop python3-pip\npip3 install --quiet h5py numpy      # wheels bundle libhdf5; no hdf5-devel package exists on AL2023\nsystemctl enable --now docker\nusermod -aG docker ec2-user || true\n\ncat > /etc/ebs-blog.env <<EOF\nSERVER_IP=${server_private_ip}\nRESULTS_BUCKET=${results_bucket}\nDATASET=/datasets/sphere-10M-meta-dpr.hdf5\nEOF\n\nmkdir -p /datasets /results\nchmod 777 /datasets /results\n\n# Dataset download in the background (31 GB). Wall time is logged for the post.\nnohup bash -c 'start=$(date +%s); curl -fsSL -o /datasets/sphere-10M-meta-dpr.hdf5.part \"${dataset_url}\" && mv /datasets/sphere-10M-meta-dpr.hdf5.part /datasets/sphere-10M-meta-dpr.hdf5; echo \"download seconds: $(( $(date +%s) - start ))\" > /datasets/download.log' \\\n  > /datasets/download.out 2>&1 &\n\necho \"client bootstrap done\"\n"
+    },
+    {
+      "path": "scripts/run-import.sh",
+      "sha": null,
+      "content_sha256": "4af18a67c8eab9602acd7f3158e999a0c28b1b30301b617d40d3e0100916a6ad",
+      "score": 33,
+      "content": "#!/bin/bash\n# Mac-side orchestrator for day 0: tooling, dataset check, import, idle wait, snapshot.\n# Pre-conditions: terraform applied, sync-to-hosts.sh run, volume at 80000/2000.\nset -euo pipefail\nexport AWS_PROFILE=\"${AWS_PROFILE:-ebs-blog}\"\nHERE=\"$(cd \"$(dirname \"$0\")\" && pwd)\"; SSM=\"$HERE/aws/ssm.sh\"\nREGION=\"$(cd \"$HERE/../infra\" && terraform output -raw region)\"\nVOL=\"$(cd \"$HERE/../infra\" && terraform output -raw data_volume_id)\"\nBUCKET=\"$(cd \"$HERE/../infra\" && terraform output -raw results_bucket)\"\n\necho \"== server: image shell check, calibration, start weaviate with import.env\"\n\"$SSM\" server \"docker run --rm --entrypoint /bin/sh cr.weaviate.io/semitechnologies/weaviate:1.39.3 -c 'echo image-has-shell'\"\n\"$SSM\" server \"/opt/ebs-blog/scripts/server/reset.sh phase-0-calibration import.env\"\necho \"== client: build benchmarker, check dataset\"\n\"$SSM\" client \"/opt/ebs-blog/scripts/client/build-benchmarker.sh\"\n\"$SSM\" client \"/opt/ebs-blog/scripts/client/check-dataset.sh\"\necho \"== client: import (long; SSM command timeout is 1 h, so it runs detached and we poll the log)\"\n\"$SSM\" client \"nohup /opt/ebs-blog/scripts/client/import.sh ${EBS_LABEL:-80000-2000} > /results/import-nohup.log 2>&1 < /dev/null & disown\"\nwhile ! \"$SSM\" client \"grep -q 'import wall seconds' /results/import/import.log && tail -3 /results/import/import.log\" 2>/dev/null; do\n  \"$SSM\" client \"tail -1 /results/import/import.log 2>/dev/null || echo waiting\" | tail -1\n  sleep 300\ndone\necho \"== server: wait for background work and compactions to finish\"\n\"$SSM\" server \"/opt/ebs-blog/scripts/server/wait-idle.sh 10 5 | tail -3; du -sh /data/weaviate | tee /data/results/phase-0-calibration/disk-footprint-after-import.txt\"\necho \"== server: stop weaviate\"\n\"$SSM\" server \"cd /opt/ebs-blog/compose && docker compose --env-file import.env down --timeout 120 && sync\"\nif [ \"$VOL\" != \"none\" ]; then\n  echo \"== snapshot the volume as a rollback point\"\n  aws ec2 create-snapshot --region \"$REGION\" --volume-id \"$VOL\" --description \"sphere-10M hfresh imported\" \\\n    --tag-specifications 'ResourceType=snapshot,Tags=[{Key=Project,Value=ebs-hfresh-blog}]' --query SnapshotId --output text | tee results/snapshot-id.txt\nelse\n  echo \"== instance-store data: no snapshot possible (data is lost if the instance stops; the dead-man's switch stops, not terminates, but NVMe still clears)\"\nfi\n\"$SSM\" server \"aws s3 sync /data/results s3://$BUCKET/results/server/ --quiet && echo synced\"\n\"$HERE/aws/pull-results.sh\"\necho \"== import done. Next: scripts/run-phase.sh phase-2-max headline.env 80000-2000\"\n"
+    },
+    {
+      "path": "infra/user-data-server.sh",
+      "sha": null,
+      "content_sha256": "3a707fff138b37c5bab491fb907a0e684e8d200891abc657e4774803fcb18968",
+      "score": 33,
+      "content": "#!/bin/bash\n# Server bootstrap: docker + compose, sysstat/fio, mount the gp3 data volume at /data.\nset -euxo pipefail\nexec > >(tee -a /var/log/user-data.log) 2>&1\n\ndnf install -y docker sysstat fio jq htop git bc\n\n# docker compose v2 plugin\nCOMPOSE_VERSION=\"v2.29.7\"\nmkdir -p /usr/local/lib/docker/cli-plugins\ncurl -fsSL \"https://github.com/docker/compose/releases/download/$${COMPOSE_VERSION}/docker-compose-linux-x86_64\" \\\n  -o /usr/local/lib/docker/cli-plugins/docker-compose\nchmod +x /usr/local/lib/docker/cli-plugins/docker-compose\nsystemctl enable --now docker\nusermod -aG docker ec2-user || true\nusermod -aG docker ssm-user || true\n\nif [ \"${data_disk}\" = \"nvme\" ]; then\n  # Instance-store NVMe: pick the first (largest) \"Amazon EC2 NVMe Instance Storage\" device.\n  DEV=\"\"\n  for i in $(seq 1 30); do\n    best=0\n    for d in /sys/block/nvme*n1; do\n      [ -e \"$d/device/model\" ] || continue\n      if grep -qi \"Instance Storage\" \"$d/device/model\"; then\n        sz=$(cat \"$d/size\"); if [ \"$sz\" -gt \"$best\" ]; then best=$sz; DEV=\"/dev/$(basename \"$d\")\"; fi\n      fi\n    done\n    [ -n \"$DEV\" ] && break; sleep 2\n  done\n  [ -n \"$DEV\" ] || { echo \"no instance-store NVMe found\"; lsblk -o NAME,MODEL,SIZE; exit 1; }\n  echo \"instance-store device: $DEV\"\nelse\n  # Wait for the data volume. On Nitro the EBS volume id is visible in the by-id symlink.\n  VOL_ID_NODASH=\"$(echo \"${volume_id}\" | tr -d '-')\"\n  DEV_LINK=\"/dev/disk/by-id/nvme-Amazon_Elastic_Block_Store_$${VOL_ID_NODASH}\"\n  for i in $(seq 1 60); do\n    [ -e \"$DEV_LINK\" ] && break\n    sleep 5\n  done\n  [ -e \"$DEV_LINK\" ] || { echo \"data volume not attached\"; exit 1; }\n  DEV=\"$(readlink -f \"$DEV_LINK\")\"\nfi\n\nif ! blkid \"$DEV\" >/dev/null 2>&1; then\n  mkfs.ext4 -m0 -E lazy_itable_init=0,lazy_journal_init=0 -L weaviate-data \"$DEV\"\nfi\nmkdir -p /data\n# Instance-store data does not survive a stop, so mount it nofail: a reboot must not hang on it.\ngrep -q 'LABEL=weaviate-data' /etc/fstab || echo 'LABEL=weaviate-data /data ext4 defaults,noatime,nodiratime,nofail 0 2' >> /etc/fstab\nmount -a\nmkdir -p /data/weaviate /data/results\nchmod 777 /data/weaviate /data/results\n\n# Persist the device name and settings for the scripts.\ncat > /etc/ebs-blog.env <<EOF\nDATA_DEV=$(basename \"$DEV\")\nDATA_DISK=${data_disk}\nVOLUME_ID=${volume_id}\nRESULTS_BUCKET=${results_bucket}\nWEAVIATE_VERSION=${weaviate_version}\nEOF\n\n# Pre-pull the image so phase resets are fast.\ndocker pull \"cr.weaviate.io/semitechnologies/weaviate:${weaviate_version}\" || true\n\n# Disable swap entirely (the RAM cap must be a hard cap).\nswapoff -a || true\necho \"server bootstrap done\"\n"
+    },
+    {
+      "path": "scripts/run-phase.sh",
+      "sha": null,
+      "content_sha256": "9b97c8038201369bed03281dfd61588dba83e5662c5a65d57efc926cb2bb40f0",
+      "score": 33,
+      "content": "#!/bin/bash\n# Mac-side orchestrator for one measurement phase. Everything goes through SSM, nothing through SSH.\n# Usage: run-phase.sh <phase> <env-file> <ebs-label> [quick]\n#   run-phase.sh phase-2-max      headline.env 80000-2000\n#   run-phase.sh phase-1-baseline headline.env 3000-125\n#   run-phase.sh phase-3-control  control.env  80000-2000\n# Pre-condition: the volume already reports the limits named in <ebs-label> (scripts/aws/modify-volume.sh).\nset -euo pipefail\nexport AWS_PROFILE=\"${AWS_PROFILE:-ebs-blog}\"\nPHASE=\"${1:?phase}\"; ENVFILE=\"${2:?env file}\"; EBS=\"${3:?ebs label}\"; QUICK=\"${4:-}\"\nHERE=\"$(cd \"$(dirname \"$0\")\" && pwd)\"; SSM=\"$HERE/aws/ssm.sh\"; PRE=\"$HERE/aws/preflight.sh\"\nDEADMAN_MIN=\"${DEADMAN_MIN:-90}\"   # server powers itself off this many minutes after the phase starts\n\"$PRE\"\necho \"== [$PHASE] arm dead-man's switch ($DEADMAN_MIN min)\"\n\"$SSM\" server \"/opt/ebs-blog/scripts/server/deadman.sh arm $DEADMAN_MIN\"\nBUCKET=\"$(cd \"$HERE/../infra\" && terraform output -raw results_bucket)\"\n\nif [ \"${SKIP_RESET:-0}\" = \"1\" ]; then\n  echo \"== [$PHASE] SKIP_RESET=1: server already reset\"\nelse\n  echo \"== [$PHASE] reset server ($ENVFILE)\"\n  \"$SSM\" server \"/opt/ebs-blog/scripts/server/reset.sh $PHASE $ENVFILE\"\nfi\n\"$PRE\"; echo \"== [$PHASE] start host capture\"\n\"$SSM\" server \"/opt/ebs-blog/scripts/server/capture.sh start $PHASE sweep\"\nSTART=$(date -u +%FT%TZ)\n\"$PRE\"; echo \"== [$PHASE] sweep from client (detached; the tunnel is not held open)\"\n\"$SSM\" client \"rm -f /results/$PHASE/DONE /results/$PHASE/FAILED; nohup /opt/ebs-blog/scripts/client/sweep.sh $PHASE $EBS $QUICK > /results/$PHASE.nohup.log 2>&1 < /dev/null & disown; echo launched\"\n# Poll with short sessions. Each check is its own SSH; an expired token or dropped tunnel only costs one poll.\nfor i in $(seq 1 90); do\n  sleep 60\n  st=$(\"$SSM\" client \"if [ -f /results/$PHASE/DONE ]; then echo DONE; elif [ -f /results/$PHASE/FAILED ]; then echo FAILED; else grep -oE 'Benchmark result.*qps=[0-9.]+' /results/$PHASE/sweep.log 2>/dev/null | tail -1 | sed -E 's/.*parallel=([0-9]+) qps=([0-9.]+).*/last: p=\\1 qps=\\2/' || echo running; fi\" 2>/dev/null | tail -1 || echo \"poll failed\")\n  echo \"$(date -u +%H:%M) [$PHASE] $st\"\n  case \"$st\" in DONE|FAILED) break;; esac\ndone\n[ \"$st\" = \"DONE\" ] || { echo \"== [$PHASE] sweep did not finish cleanly ($st); capture is stopped and results pulled anyway\"; }\nEND=$(date -u +%FT%TZ)\n\"$PRE\" || true; echo \"== [$PHASE] stop capture, sync server results\"\n\"$SSM\" server \"/opt/ebs-blog/scripts/server/capture.sh stop $PHASE sweep; aws s3 sync /data/results s3://$BUCKET/results/server/ --quiet && echo synced\"\necho \"== [$PHASE] cloudwatch export $START .. $END\"\nsleep 120   # CloudWatch EBS metrics lag by a minute or two\n\"$HERE/aws/cw-export.sh\" \"$PHASE\" \"$START\" \"$END\" || echo \"cloudwatch export failed (non-fatal)\"\n\"$HERE/aws/pull-results.sh\"\n\"$SSM\" server \"/opt/ebs-blog/scripts/server/deadman.sh disarm\" || true\necho \"== [$PHASE] done $(date -u +%H:%M) UTC. Render with: python3 scripts/analyze/render.py\"\n"
+    },
+    {
+      "path": "results/phase-0-calibration/meta.json",
+      "sha": null,
+      "content_sha256": "90a6357281d38aeb6d100a80cbae20bf7bb8118b4b87c84dd1d3c4e82acc8d37",
+      "score": 31,
+      "content": "{\"version\":\"1.39.3\",\"hostname\":\"http://[::]:8080\"}\n"
+    },
+    {
+      "path": "results/phase-4-nvme/meta.json",
+      "sha": null,
+      "content_sha256": "90a6357281d38aeb6d100a80cbae20bf7bb8118b4b87c84dd1d3c4e82acc8d37",
+      "score": 31,
+      "content": "{\"version\":\"1.39.3\",\"hostname\":\"http://[::]:8080\"}\n"
+    },
+    {
+      "path": "scripts/client/bench.sh",
+      "sha": null,
+      "content_sha256": "1047ac5f71f7bcd2e8aa88ac48655ecb3f44796717c298bfb45722b18a867228",
+      "score": 31,
+      "content": "#!/bin/bash\n# Thin wrapper: run the benchmarker container against the server. All args pass through.\n# Results land in /results/raw/<runID>.json (the tool writes ./results/<runID>.json in its cwd).\nset -euo pipefail\nsource /etc/ebs-blog.env\nmkdir -p /results/raw\nexec docker run --rm --network host \\\n  -v /datasets:/datasets:ro -v /results/raw:/app/results \\\n  benchmarker:local /app/benchmarker ann-benchmark \\\n  -v \"$DATASET\" -d cosine -c Sphere --indexType hfresh \\\n  -u \"$SERVER_IP:50051\" --httpOrigin \"$SERVER_IP:8080\" --metricsEndpoint \"http://$SERVER_IP:2112/metrics\" \\\n  -f json -l 10 \"$@\"\n"
+    },
+    {
+      "path": "results/phase-1-baseline/meta.json",
+      "sha": null,
+      "content_sha256": "90a6357281d38aeb6d100a80cbae20bf7bb8118b4b87c84dd1d3c4e82acc8d37",
+      "score": 31,
+      "content": "{\"version\":\"1.39.3\",\"hostname\":\"http://[::]:8080\"}\n"
+    },
+    {
+      "path": "scripts/client/build-benchmarker.sh",
+      "sha": null,
+      "content_sha256": "dd84d184f56d988704ca94c71049e2808d791c2e6ed7647b182813f0ba444f9a",
+      "score": 31,
+      "content": "#!/bin/bash\n# Build the Weaviate benchmarker as a local docker image (the repo's Dockerfile links HDF5 via CGO,\n# which is easier inside the image than on AL2023). Result: image benchmarker:local\nset -euo pipefail\ncd /opt\nif [ ! -d weaviate-benchmarking ]; then git clone --depth 1 https://github.com/weaviate/weaviate-benchmarking; fi\ncd weaviate-benchmarking\ngit rev-parse HEAD > /results/benchmarker-commit.txt\ndocker build -q -t benchmarker:local ./benchmarker\ndocker run --rm benchmarker:local /app/benchmarker ann-benchmark -h | head -5\necho \"benchmarker:local built ($(cat /results/benchmarker-commit.txt))\"\n"
+    },
+    {
+      "path": "results/phase-2-max/meta.json",
+      "sha": null,
+      "content_sha256": "90a6357281d38aeb6d100a80cbae20bf7bb8118b4b87c84dd1d3c4e82acc8d37",
+      "score": 31,
+      "content": "{\"version\":\"1.39.3\",\"hostname\":\"http://[::]:8080\"}\n"
+    },
+    {
+      "path": "results/phase-2-max-mmap/meta.json",
+      "sha": null,
+      "content_sha256": "90a6357281d38aeb6d100a80cbae20bf7bb8118b4b87c84dd1d3c4e82acc8d37",
+      "score": 31,
+      "content": "{\"version\":\"1.39.3\",\"hostname\":\"http://[::]:8080\"}\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-08T12:00:45.409724+00:00"
+}

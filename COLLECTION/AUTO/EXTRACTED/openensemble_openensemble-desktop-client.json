@@ -1,0 +1,41 @@
+{
+  "canonical_source": "github:openensemble/openensemble-desktop-client",
+  "repo": "openensemble/openensemble-desktop-client",
+  "revision_sha": "7e762d238a00ab621665090595266dd49bc5ad06",
+  "default_branch": "main",
+  "pushed_at": "2026-11-04T19:41:08Z",
+  "repo_updated_at": "2026-11-04T19:41:12Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/macos-preview.yml",
+      "sha": null,
+      "content_sha256": "d554b8f7591319c58ac6e255d17c043ec5611833673d80e600ca15883461009b",
+      "score": 126,
+      "content": "name: macOS preview build and smoke test\n\n# This workflow can live in the public releases-only repository. Source remains\n# in an authenticated draft-release asset and is checked against a reviewed hash.\non:\n  workflow_dispatch:\n    inputs:\n      source_release:\n        description: Draft release tag containing macos-source.tar.gz\n        required: true\n        type: string\n      source_sha256:\n        description: SHA-256 from the reviewed local source-receipt.json\n        required: true\n        type: string\n\npermissions:\n  # GitHub only exposes draft releases to callers with push access. The token\n  # is passed only to the download step; this workflow never changes a release.\n  contents: write\n\njobs:\n  preview:\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - arch: arm64\n            runner: macos-15\n          - arch: x64\n            runner: macos-15-intel\n    runs-on: ${{ matrix.runner }}\n    timeout-minutes: 30\n    env:\n      CSC_IDENTITY_AUTO_DISCOVERY: 'false'\n    steps:\n      - name: Fetch the reviewed draft source bundle\n        env:\n          GH_TOKEN: ${{ github.token }}\n          SOURCE_RELEASE: ${{ inputs.source_release }}\n          SOURCE_SHA256: ${{ inputs.source_sha256 }}\n        shell: bash\n        run: |\n          set -euo pipefail\n          [[ \"$SOURCE_RELEASE\" =~ ^[A-Za-z0-9._-]+$ ]]\n          [[ \"$SOURCE_SHA256\" =~ ^[A-Fa-f0-9]{64}$ ]]\n          test \"$(gh release view \"$SOURCE_RELEASE\" --repo \"$GITHUB_REPOSITORY\" --json isDraft --jq .isDraft)\" = true\n          mkdir -p \"$RUNNER_TEMP/oe-mac-source\" \"$RUNNER_TEMP/oe-mac-download\"\n          gh release download \"$SOURCE_RELEASE\" --repo \"$GITHUB_REPOSITORY\" --pattern macos-source.tar.gz --dir \"$RUNNER_TEMP/oe-mac-download\"\n          printf '%s  %s\\n' \"$SOURCE_SHA256\" \"$RUNNER_TEMP/oe-mac-download/macos-source.tar.gz\" | shasum -a 256 -c -\n          tar -xzf \"$RUNNER_TEMP/oe-mac-download/macos-source.tar.gz\" -C \"$RUNNER_TEMP/oe-mac-source\"\n      - uses: actions/setup-node@v4\n        with:\n          node-version: '22.22.1'\n      - uses: actions/setup-go@v5\n        with:\n          go-version: '1.27.3'\n          cache: false\n      - name: Install and run shared checks\n        working-directory: ${{ runner.temp }}/oe-mac-source\n        run: npm ci && npm run check && npm test\n      - name: Build the native preview\n        working-directory: ${{ runner.temp }}/oe-mac-source\n        run: npm run dist:mac:preview -- --arch=${{ matrix.arch }}\n      - name: Launch the packaged app and test local integration\n        working-directory: ${{ runner.temp }}/oe-mac-source\n        env:\n          OE_MAC_PREVIEW_ARCH: ${{ matrix.arch }}\n        run: npm run test:mac:preview\n      # This repository is public. Retain diagnostics only; installers stay on\n      # the temporary runner and are never uploaded or published by this job.\n      - name: Retain build and test evidence\n        if: always()\n        uses: actions/upload-artifact@v4\n        with:\n          name: macos-preview-${{ matrix.arch }}\n          if-no-files-found: error\n          retention-days: 14\n          path: |\n            ${{ runner.temp }}/oe-mac-source/dist/macos-preview/${{ matrix.arch }}/SHA256SUMS.txt\n            ${{ runner.temp }}/oe-mac-source/dist/macos-preview/${{ matrix.arch }}/build-receipt.json\n            ${{ runner.temp }}/oe-mac-source/out/macos-smoke-${{ matrix.arch }}/*\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b16496ed7d57bb9eed313f116a5b0081925e558a6b805d0cf0b09342e872eb4f",
+      "score": 100,
+      "content": "# OpenEnsemble Desktop Client\n\nThe desktop client for your OpenEnsemble server, available for **Windows x64**\nand **Linux x64**.\n\n**[Download for your computer](https://openensemble.github.io/openensemble/desktop/)** ·\n**[Latest release](https://github.com/openensemble/openensemble-desktop-client/releases/latest)**\n\nThe OE webpage selects the download for your operating system and also offers\nboth platform choices. This repository hosts installers and update metadata;\nthe OpenEnsemble server lives in [openensemble/openensemble](https://github.com/openensemble/openensemble).\n\n## Install\n\n- **Windows:** download `OpenEnsemble-Setup-<version>-x64.exe`, open it, and follow\n  the installer. Launch OpenEnsemble from the Start menu or desktop shortcut.\n- **Linux:** download `OpenEnsemble-<version>-x86_64.AppImage` into a folder you\n  own, such as `~/Applications`. In Properties, allow the file to run as a\n  program, then open it. Keep this folder writable for updates.\n\nChoose your OE server from the network search, or enter its HTTPS address,\nthen sign in with your existing account. The client does not install a server.\n\nThe Windows installer is currently unsigned. Windows may show an\nunknown-publisher or SmartScreen notice. The release includes SHA-256 checksums.\n\n## Updates\n\nThe app checks for new stable releases shortly after startup and every six\nhours. When prompted, save your work and choose **Update and restart**. It\ndownloads and verifies the release, updates in place, and reopens. Settings,\nsign-in storage and local files remain in their existing locations.\n\nChecking does not download or install updates. Closing the app without\naccepting the update does not install anything. You can check immediately under\n**App updates → Check for updates**.\n\nWindows clients from version 0.2.0 already use this feed. Version 0.1.0 requires\na one-time manual installation. Linux users running from source need to switch\nto the AppImage to enable updates.\n\n[Desktop guide](https://openensemble.github.io/openensemble/guide/desktop-app/) ·\n[OpenEnsemble website](https://openensemble.github.io/openensemble/)\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-08T12:00:48.755962+00:00"
+}
