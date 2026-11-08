@@ -1,0 +1,270 @@
+{
+  "canonical_source": "github:DIYgod/RSSHub-Radar",
+  "repo": "DIYgod/RSSHub-Radar",
+  "revision_sha": "03dec82cd87d2cb8e306689b38a563d91632df20",
+  "default_branch": "dev",
+  "license": "AGPL-3.0",
+  "description": "🧡 Browser extension that simplifies finding and subscribing RSS and RSSHub",
+  "topics": [
+    "browser-extension",
+    "chrome-extension",
+    "firefox-addon",
+    "rss",
+    "rsshub"
+  ],
+  "source_pushed_at": "2026-11-08T01:21:59Z",
+  "source_updated_at": "2026-11-08T09:10:45Z",
+  "stargazers_count": 7401,
+  "size_kb": 5268,
+  "tree_truncated": false,
+  "files": [
+    {
+      "path": ".github/workflows/test.yml",
+      "sha": "be3f107e25c21c3a0c1ab4d74cd1a16d7a296289",
+      "bucket": "eval",
+      "source_content_sha256": "7eaa9ce5a26d6c7cd1395125984c8532d2264b46fece02bbcd86fbafa0f6266b",
+      "content_sha256": "7eaa9ce5a26d6c7cd1395125984c8532d2264b46fece02bbcd86fbafa0f6266b",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "name: test\n\non:\n  push:\n\nenv:\n  WXT_UMAMI_ID: ${{ vars.WXT_UMAMI_ID || vars.PLASMO_PUBLIC_UMAMI_ID }}\n  WXT_UMAMI_URL: ${{ vars.WXT_UMAMI_URL || vars.PLASMO_PUBLIC_UMAMI_URL }}\n  WXT_UMAMI_SAMPLE_RATE: ${{ vars.WXT_UMAMI_SAMPLE_RATE || vars.PLASMO_PUBLIC_UMAMI_SAMPLE_RATE }}\n\njobs:\n  build:\n    runs-on: macos-latest\n    name: Build assets\n    steps:\n      - uses: actions/checkout@v7\n      - uses: pnpm/action-setup@v6\n        with:\n          version: 12.16.1\n          run_install: false\n      - name: Use Node.js 24.x\n        uses: actions/setup-node@v7\n        with:\n          node-version: 24.x\n          cache: \"pnpm\"\n      - name: Install dependencies\n        run: pnpm install --frozen-lockfile\n      - name: Type check\n        run: pnpm typecheck\n      - name: Check formatting\n        run: pnpm format:check\n      - name: Package the extension for Chrome\n        run: pnpm zip\n      - name: Package the extension for Firefox\n        run: pnpm zip:firefox\n      - name: Package the extension for Safari\n        run: pnpm build:safari:zip\n      - name: Archive production artifacts\n        uses: actions/upload-artifact@v7\n        with:\n          name: build\n          path: |\n            build/safari-mv3-prod.zip\n            build/chrome-mv3-prod.zip\n            build/firefox-mv3-prod.zip\n"
+    },
+    {
+      "path": "src/sandboxes/index.ts",
+      "sha": "923110d9e3c57e81bb6622bfc7c1d2b64915f92a",
+      "bucket": "runtime",
+      "source_content_sha256": "67df72fe7127ffc2aec6f3d3e5efd91b707ea90f808ef1c895f79fcdc5c93d1e",
+      "content_sha256": "67df72fe7127ffc2aec6f3d3e5efd91b707ea90f808ef1c895f79fcdc5c93d1e",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import { getPageRSSHub, getWebsiteRSSHub } from \"~/lib/rsshub\"\nimport { parseRules } from \"~/lib/rules\"\nimport { removeFunctionFields } from \"~/lib/utils\"\n\nexport {}\n\nexport const getRSSHub = ({\n  html,\n  url,\n  rules,\n}: {\n  html: string\n  url: string\n  rules: string\n}) => {\n  const pageRSSHub = getPageRSSHub({\n    html,\n    url,\n    rules,\n  })\n  const websiteRSSHub = getWebsiteRSSHub({\n    url,\n    rules,\n  })\n  return {\n    pageRSSHub,\n    websiteRSSHub,\n  }\n}\n\nexport const getDisplayedRules = (rules: string) => {\n  const displayedRules = parseRules(rules)\n  removeFunctionFields(displayedRules)\n  return displayedRules\n}\n\nif (typeof window !== \"undefined\") {\n  window.addEventListener(\n    \"message\",\n    (\n      event: MessageEvent<\n        | {\n            name: \"requestRSSHub\"\n            body: {\n              html: string\n              url: string\n              rules: string\n              tabId: number\n            }\n          }\n        | {\n            name: \"requestDisplayedRules\"\n            body: {\n              rules: string\n            }\n          }\n      >,\n    ) => {\n      switch (event.data?.name) {\n        case \"requestRSSHub\": {\n          const rsshub = getRSSHub({\n            html: event.data.body.html,\n            url: event.data.body.url,\n            rules: event.data.body.rules,\n          })\n          event.source.postMessage(\n            {\n              name: \"responseRSS\",\n              body: {\n                url: \"url\" in event.data.body && event.data.body.url,\n                tabId: \"tabId\" in event.data.body && event.data.body.tabId,\n                rss: rsshub,\n              },\n            },\n            event.origin as any,\n          )\n          break\n        }\n        case \"requestDisplayedRules\": {\n          const displayedRules = getDisplayedRules(event.data.body.rules)\n          event.source.postMessage(\n            {\n              name: \"responseDisplayedRules\",\n              body: {\n                displayedRules,\n              },\n            },\n            event.origin as any,\n          )\n          break\n        }\n      }\n    },\n  )\n}\n"
+    },
+    {
+      "path": "src/entrypoints/sandbox/index.html",
+      "sha": "c7659af321f50a42f0b5ab1a3ed1b905c347e8d1",
+      "bucket": "runtime",
+      "source_content_sha256": "6834fafcce7ef00a748f0512b67743b98aa1d6ce6f9ce284c19eee87244442b3",
+      "content_sha256": "6834fafcce7ef00a748f0512b67743b98aa1d6ce6f9ce284c19eee87244442b3",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>RSSHub Radar</title>\n  </head>\n  <body>\n    <script type=\"module\" src=\"./main.ts\"></script>\n  </body>\n</html>\n"
+    },
+    {
+      "path": "README.md",
+      "sha": "89d17cd2b2478f9cd73175b299055ffb021fd529",
+      "bucket": "runtime",
+      "source_content_sha256": "e243f4f8433cea3c35c0856a072fcf59497898c56919417569aa31d325e0d7a1",
+      "content_sha256": "e243f4f8433cea3c35c0856a072fcf59497898c56919417569aa31d325e0d7a1",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "<p align=\"center\">\n<img src=\"https://i.loli.net/2019/04/23/5cbeb7e41414c.png\" alt=\"RSSHub\" width=\"100\">\n</p>\n<h1 align=\"center\">RSSHub Radar</h1>\n\n> Browser extension that simplifies finding and subscribing RSS and RSSHub.\n>\n> Everything is RSSible\n\n[![version](https://img.shields.io/chrome-web-store/v/kefjpfngnndepjbopdmoebkipbgkggaa.svg?style=flat-square&logo=googlechrome&logoColor=fff)](https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa)\n[![users](https://img.shields.io/chrome-web-store/users/kefjpfngnndepjbopdmoebkipbgkggaa.svg?style=flat-square)](https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa)\n[![rating](https://img.shields.io/chrome-web-store/rating/kefjpfngnndepjbopdmoebkipbgkggaa.svg?style=flat-square)](https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa)\n\n[![Mozilla Add-on](https://img.shields.io/amo/v/rsshub-radar?style=flat-square&logo=firefoxbrowser&logoColor=fff)](https://addons.mozilla.org/firefox/addon/rsshub-radar/)\n[![Mozilla Add-on](https://img.shields.io/amo/users/rsshub-radar?color=%2344cc11&style=flat-square)](https://addons.mozilla.org/firefox/addon/rsshub-radar/)\n[![Mozilla Add-on](https://img.shields.io/amo/rating/rsshub-radar?style=flat-square)](https://addons.mozilla.org/firefox/addon/rsshub-radar/)\n\n[![](https://img.shields.io/badge/dynamic/json?label=edge%20add-on&prefix=v&query=%24.version&url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fgangkeiaobmjcjokiofpkfpcobpbmnln&style=flat-square&logo=microsoftedge&logoColor=fff)](https://microsoftedge.microsoft.com/addons/detail/rsshub-radar/gangkeiaobmjcjokiofpkfpcobpbmnln)\n[![](https://img.shields.io/badge/dynamic/json?label=users&query=%24.activeInstallCount&url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fgangkeiaobmjcjokiofpkfpcobpbmnln&style=flat-square&color=%2344cc11)](https://microsoftedge.microsoft.com/addons/detail/rsshub-radar/gangkeiaobmjcjokiofpkfpcobpbmnln)\n[![](https://img.shields.io/badge/dynamic/json?label=rating&suffix=/5&query=%24.averageRating&url=https%3A%2F%2Fmicrosoftedge.microsoft.com%2Faddons%2Fgetproductdetailsbycrxid%2Fgangkeiaobmjcjokiofpkfpcobpbmnln&style=flat-square&color=%2344cc11)](https://microsoftedge.microsoft.com/addons/detail/rsshub-radar/gangkeiaobmjcjokiofpkfpcobpbmnln)\n\n[![iTunes App Store](https://img.shields.io/itunes/v/1610744717?label=apple%20app%20store&style=flat-square&logo=appstore&logoColor=fff)](https://apps.apple.com/us/app/rsshub-radar/id1610744717)\n\nTested for compatibility with the following browsers (other Chromium-based browsers should also work):\n\n<a href=\"https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_128x128.png\" width=\"48\" /></a>\n<a href=\"https://microsoftedge.microsoft.com/addons/detail/gangkeiaobmjcjokiofpkfpcobpbmnln\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/edge/edge_128x128.png\" width=\"48\" /></a>\n<a href=\"https://addons.mozilla.org/firefox/addon/rsshub-radar/\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/firefox/firefox_128x128.png\" width=\"48\" /></a>\n<a href=\"https://apps.apple.com/us/app/rsshub-radar/id1610744717?l=zh&mt=12\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/safari/safari_128x128.png\" width=\"48\" /></a>\n<a href=\"https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa\"><img src=\"https://i.imgur.com/ofOUkIB.png\" width=\"48\" /></a>\n<a href=\"https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa\"><img src=\"https://i.imgur.com/9RH7UNb.png\" width=\"48\" /></a>\n<a href=\"https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/vivaldi/vivaldi_128x128.png\" width=\"48\" /></a>\n\n## Introduction\n\n[Telegram group](https://t.me/rsshub) | [Telegram channel](https://t.me/awesomeRSSHub)\n\nRSSHub Radar is a spin-off project of [RSSHub](https://github.com/DIYgod/RSSHub), a browser extension that simplifies finding and subscribing RSS and RSSHub.\n\n- Discover and subscribe to the RSS feeds associated with the current page effortlessly.\n- Explore and subscribe to the RSSHub supported by the current page promptly.\n- Easily identify the RSSHubs supported by the current website quickly.\n- Supports one-click RSS subscription for various platforms including Tiny Tiny RSS, Miniflux, FreshRSS, WyrmRSS, Feedly, Inoreader, Feedbin, The Old Reader, Feeds.Pub, Local Reader...\n\nFor WyrmRSS, enable it under **Quick subscriptions** and enter your instance's base\nURL (for example, `https://wyrm.example.com`). This requires WyrmRSS v0.36.0 or\nlater, which adds `/subscribe?url=…&title=…` and RSSHub instance / `rsshub://`\nsupport. The subscription button opens WyrmRSS with the feed URL and title\nprefilled for confirmation. Authenticate in WyrmRSS as usual; no API key is\nneeded in Radar.\n\n![image](https://github.com/DIYgod/RSSHub-Radar/assets/8266075/3474727c-fa8c-4949-bd86-afc3a471a020)\n![image](https://github.com/DIYgod/RSSHub-Radar/assets/8266075/42103b61-cb13-489a-b00b-c8c786a4cc30)\n![image](https://github.com/DIYgod/RSSHub-Radar/assets/8266075/72d7a96f-90bf-46d8-804c-0809ab71a3cf)\n\n## Install\n\n### Webstore\n\n<a href=\"https://chromewebstore.google.com/detail/kefjpfngnndepjbopdmoebkipbgkggaa\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_128x128.png\" width=\"48\" /></a>\n<a href=\"https://microsoftedge.microsoft.com/addons/detail/gangkeiaobmjcjokiofpkfpcobpbmnln\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/edge/edge_128x128.png\" width=\"48\" /></a>\n<a href=\"https://addons.mozilla.org/firefox/addon/rsshub-radar/\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/firefox/firefox_128x128.png\" width=\"48\" /></a>\n<a href=\"https://apps.apple.com/us/app/rsshub-radar/id1610744717?l=zh&mt=12\"><img src=\"https://raw.githubusercontent.com/alrra/browser-logos/main/src/safari/safari_128x128.png\" width=\"48\" /></a>\n\n### Manual installation\n\nFirst download the corresponding version of `chrome-mv3-prod.zip` from the [releases](https://github.com/DIYgod/RSSHub-Radar/releases) page and unzip it\n\n**Chrome install extension:**\n\nOpen `chrome://extensions/`\n\nOpen the upper right corner `Developer mode`\n\nClick `Load unpacked extension` in the upper left corner\n\nSelect the unzipped extension directory containing `manifest.json`\n\n**Firefox install extension:**\n\nOpen `about:debugging`\n\nClick `Load Temporary Extension` in the upper right corner\n\nSelect the `manifest.json` file in the unzipped extension directory\n\n## Join us\n\n### Reproduce the Firefox release build (Mozilla reviewers)\n\nBuild environment: macOS on Apple Silicon, Node.js **24.22.1**, and pnpm\n**12.16.1**. Install Node.js from https://nodejs.org/en/download and install the\nexact pnpm version with `npm install --global pnpm@12.16.1`.\n\nExtract the source ZIP for the submitted version into an empty directory, then\nrun these commands from its root:\n\n```sh\npnpm install --frozen-lockfile\npnpm zip:firefox\n```\n\nThe unpacked extension is written to `.output/firefox-mv3/`. The uploadable\nextension is `.output/rsshub-radar-2.3.1-firefox.zip` (also copied to\n`build/firefox-mv3-prod.zip`), and its matching source package is\n`.output/rsshub-radar-2.3.1-sources.zip`. Compare the extracted extension files\nwith the submitted unsigned ZIP. No credentials, `.env` file, private packages,\nor downloaded RSSHub rules are needed to build. Use the included lockfile;\ninstalling with npm or updating dependencies can change the generated code.\n\nFirefox builds exclude browsing and interaction analytics even when\n`WXT_UMAMI_ID`, `WXT_UMAMI_URL`, or `WXT_UMAMI_SAMPLE_RATE` are set in the build\nenvironment. Feed lists use a bundled icon instead of loading site favicons or\nsending visited domains to a favicon service. Feed and route detection runs\nlocally. The extension downloads rule data from the configured RSSHub instance;\nthat request does not contain the current page URL. Opening or previewing a feed\ncontacts its URL, and a subscription button sends the selected feed link to the\nreader chosen by the user. Those actions occur only when the user invokes them.\n\nTo test without an account, load `.output/firefox-mv3/manifest.json` via\n`about:debugging` → **This Firefox** → **Load Temporary Add-on**. Open a page\nwith an RSS/Atom link, then open RSSHub Radar to inspect and copy its feed link.\nAlso check direct RSS URLs, feed previews, and the General, Rules, and About\noptions pages. Browsing, opening the popup, copying links, and visiting options\nmust not send analytics requests.\n\n### Start the Development Server\n\nAlso refer to: https://wxt.dev/guide/installation\n\n```\npnpm i\npnpm dev\n```\n\nor use npm\n\n```\nnpm install\nnpm run dev\n```\n\nGet the `.output/chrome-mv3` directory, the installation method refers to [manual installation](#manual installation)\n\n### Submit New RSSHub Radar Rules\n\n[See documentation](https://docs.rsshub.app/joinus/new-rss/submit-route) ([GitHub source](https://github.com/RSSNext/rsshub-docs/blob/main/src/joinus/new-rss/submit-route.md))\n\n## Author\n\n**RSSHub Radar** © [DIYgod](https://github.com/DIYgod), Released under the [AGPL-3.0](./LICENSE) License.<br>\nAuthored and maintained by DIYgod with help from contributors ([list](https://github.com/DIYgod/RSSHub-radar/contributors)).\n\n> Blog [@DIYgod](https://diygod.cc) · GitHub [@DIYgod](https://github.com/DIYgod) · Twitter [@DIYgod](https://twitter.com/DIYgod) · Telegram Channel [@awesomeDIYgod](https://t.me/awesomeDIYgod)\n"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "sha": "d36279fe37fe705a63676dfb6291661d90e47296",
+      "bucket": "docs",
+      "source_content_sha256": "e10a1879bed0a760c5b64c34c5e9fbae91210caf3b287aa7a75acdc3b0650b15",
+      "content_sha256": "e10a1879bed0a760c5b64c34c5e9fbae91210caf3b287aa7a75acdc3b0650b15",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "name: release\n\non:\n  push:\n    tags:\n      - \"*\"\n\nenv:\n  WXT_UMAMI_ID: ${{ vars.WXT_UMAMI_ID || vars.PLASMO_PUBLIC_UMAMI_ID }}\n  WXT_UMAMI_URL: ${{ vars.WXT_UMAMI_URL || vars.PLASMO_PUBLIC_UMAMI_URL }}\n  WXT_UMAMI_SAMPLE_RATE: ${{ vars.WXT_UMAMI_SAMPLE_RATE || vars.PLASMO_PUBLIC_UMAMI_SAMPLE_RATE }}\n\njobs:\n  build:\n    runs-on: macos-latest\n    name: Build assets\n    steps:\n      - uses: actions/checkout@v7\n      - uses: pnpm/action-setup@v6\n        with:\n          version: 12.16.1\n          run_install: false\n      - name: Use Node.js 24.x\n        uses: actions/setup-node@v7\n        with:\n          node-version: 24.x\n          cache: \"pnpm\"\n      - name: Install dependencies\n        run: pnpm install --frozen-lockfile\n      - name: Package the extension for Chrome\n        run: pnpm zip\n      - name: Package the extension for Firefox\n        run: pnpm zip:firefox\n      - name: Package the extension for Safari\n        run: pnpm build:safari:zip\n      - name: Upload file\n        uses: xresloader/upload-to-github-release@v1.6.2\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n        with:\n          file: \"build/chrome-mv3-prod.zip;build/firefox-mv3-prod.zip;build/safari-mv3-prod.zip\"\n          tags: true\n          draft: false\n"
+    },
+    {
+      "path": ".github/workflows/submit.yml",
+      "sha": "d7840eede9f6a1cf9a812c8ebea97a7bfdb8599d",
+      "bucket": "security",
+      "source_content_sha256": "f0a77465292da14c3cfb048547aa2854b1169ede37695cc6cdfd9e2572c65d6f",
+      "content_sha256": "f0a77465292da14c3cfb048547aa2854b1169ede37695cc6cdfd9e2572c65d6f",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "name: \"Submit to Web Store\"\non:\n  workflow_dispatch:\n    inputs:\n      dry_run:\n        description: \"Run submission in dry-run mode\"\n        required: false\n        default: false\n        type: boolean\n      chrome:\n        description: \"Submit to Chrome Web Store\"\n        required: false\n        default: true\n        type: boolean\n      firefox:\n        description: \"Submit to Firefox Add-ons (AMO)\"\n        required: false\n        default: true\n        type: boolean\n      edge:\n        description: \"Submit to Microsoft Edge Add-ons\"\n        required: false\n        default: true\n        type: boolean\n\nenv:\n  WXT_UMAMI_ID: ${{ vars.WXT_UMAMI_ID || vars.PLASMO_PUBLIC_UMAMI_ID }}\n  WXT_UMAMI_URL: ${{ vars.WXT_UMAMI_URL || vars.PLASMO_PUBLIC_UMAMI_URL }}\n  WXT_UMAMI_SAMPLE_RATE: ${{ vars.WXT_UMAMI_SAMPLE_RATE || vars.PLASMO_PUBLIC_UMAMI_SAMPLE_RATE }}\n\njobs:\n  build:\n    runs-on: macos-latest\n    steps:\n      - uses: actions/checkout@v7\n      - uses: pnpm/action-setup@v6\n        with:\n          version: 12.16.1\n          run_install: false\n      - name: Use Node.js 24.x\n        uses: actions/setup-node@v7\n        with:\n          node-version: 24.x\n          cache: \"pnpm\"\n      - name: Install dependencies\n        run: pnpm install --frozen-lockfile\n      - name: Package the extension for Chrome\n        run: pnpm zip\n      - name: Package the extension for Firefox\n        run: pnpm zip:firefox\n      - name: Check Chrome Web Store credentials\n        if: ${{ inputs.chrome && inputs.dry_run }}\n        uses: wdzeng/chrome-extension@v2.0.0\n        with:\n          action: check-credentials\n          client-id: ${{ vars.CHROME_CLIENT_ID }}\n          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}\n          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}\n      - name: Submit to Chrome Web Store\n        if: ${{ inputs.chrome && !inputs.dry_run }}\n        uses: wdzeng/chrome-extension@v2.0.0\n        with:\n          extension-id: ${{ vars.CHROME_EXTENSION_ID }}\n          zip-path: .output/*-chrome.zip\n          publisher-id: ${{ vars.CHROME_PUBLISHER_ID }}\n          client-id: ${{ vars.CHROME_CLIENT_ID }}\n          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}\n          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}\n      - name: Submit to Firefox Add-ons\n        if: ${{ inputs.firefox }}\n        env:\n          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID || vars.FIREFOX_EXTENSION_ID }}\n          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER || vars.FIREFOX_JWT_ISSUER }}\n          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET || vars.FIREFOX_JWT_SECRET }}\n        run: |\n          DRY_RUN_FLAG=\"\"\n          if [ \"${{ inputs.dry_run }}\" = \"true\" ]; then\n            DRY_RUN_FLAG=\"--dry-run\"\n          fi\n\n          pnpm wxt submit \\\n            --firefox-zip .output/*-firefox.zip \\\n            --firefox-sources-zip .output/*-sources.zip \\\n            ${DRY_RUN_FLAG}\n      - name: Submit to Microsoft Edge Add-ons\n        if: ${{ inputs.edge }}\n        env:\n          EDGE_PRODUCT_ID: ${{ secrets.EDGE_PRODUCT_ID || vars.EDGE_PRODUCT_ID }}\n          EDGE_CLIENT_ID: ${{ secrets.EDGE_CLIENT_ID || vars.EDGE_CLIENT_ID }}\n          EDGE_API_KEY: ${{ secrets.EDGE_API_KEY || vars.EDGE_API_KEY }}\n        run: |\n          DRY_RUN_FLAG=\"\"\n          if [ \"${{ inputs.dry_run }}\" = \"true\" ]; then\n            DRY_RUN_FLAG=\"--dry-run\"\n          fi\n\n          pnpm wxt submit \\\n            --edge-zip .output/*-chrome.zip \\\n            ${DRY_RUN_FLAG}\n"
+    },
+    {
+      "path": "src/background/index.ts",
+      "sha": "afb2815c9a33993b94ff02441816e56f21c6473e",
+      "bucket": "runtime",
+      "source_content_sha256": "12563c9c6cce82e8fae244f4794c8cff8d217baef6f30d25337f7af4338db593",
+      "content_sha256": "12563c9c6cce82e8fae244f4794c8cff8d217baef6f30d25337f7af4338db593",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import contentReady from \"./messages/contentReady\"\nimport offscreenReady from \"./messages/offscreenReady\"\nimport popupReady from \"./messages/popupReady\"\nimport refreshRules from \"./messages/refreshRules\"\nimport requestDisplayedRules from \"./messages/requestDisplayedRules\"\nimport responseDisplayedRules from \"./messages/responseDisplayedRules\"\nimport responseRSS from \"./messages/responseRSS\"\nimport { deleteCachedRSS, getRSS } from \"./rss\"\nimport { initSchedule } from \"./rules\"\nimport { initUpdateNotifications } from \"./update-notifications\"\n\nexport {}\n\nchrome.tabs.onActivated.addListener((tab) => {\n  chrome.tabs.get(tab.tabId, (info) => {\n    if (info.url) {\n      getRSS(tab.tabId, info.url)\n    }\n  })\n})\n\nchrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {\n  if (tab.active) {\n    if (changeInfo.url) {\n      deleteCachedRSS(tabId)\n      getRSS(tabId, changeInfo.url)\n    } else if (changeInfo.status === \"loading\") {\n      deleteCachedRSS(tabId)\n    } else if (changeInfo.status === \"complete\") {\n      getRSS(tabId, tab.url)\n    }\n  }\n})\n\nchrome.tabs.onRemoved.addListener((tabId) => {\n  deleteCachedRSS(tabId)\n})\n\nchrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {\n  const run = async () => {\n    switch (msg?.name) {\n      case \"contentReady\":\n        return contentReady(msg, sender)\n      case \"offscreenReady\":\n        return offscreenReady()\n      case \"popupReady\":\n        return popupReady(msg, sender)\n      case \"refreshRules\":\n        return refreshRules(msg, sender)\n      case \"requestDisplayedRules\":\n        return requestDisplayedRules(msg, sender)\n      case \"responseDisplayedRules\":\n        return responseDisplayedRules(msg, sender)\n      case \"responseRSS\":\n        return responseRSS(msg, sender)\n      default:\n        return undefined\n    }\n  }\n\n  run()\n    .then((res) => {\n      sendResponse(res)\n    })\n    .catch((error) => {\n      console.error(error)\n      sendResponse(undefined)\n    })\n\n  return true\n})\n\ninitSchedule()\ninitUpdateNotifications()\n"
+    },
+    {
+      "path": "src/background/rss.test.ts",
+      "sha": "7325008426b10e748abffa43bb7d7b6be6d30709",
+      "bucket": "runtime",
+      "source_content_sha256": "0ec648f6eb4c7d462b36b3f110d6b09a6c189b58268cf35e5cf2195f359b396e",
+      "content_sha256": "3c21ea1dcef97c4880e42c90db4811494d8d735493b0cce07719eeffd939002c",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ],
+      "content": "import { randomUUID } from \"node:crypto\"\nimport { createServer, type Server } from \"node:http\"\nimport type { AddressInfo } from \"node:net\"\nimport {\n  afterAll,\n  afterEach,\n  beforeAll,\n  beforeEach,\n  describe,\n  expect,\n  it,\n  vi,\n} from \"vitest\"\n\nimport type { RSSData } from \"~/lib/types\"\n\nimport { deleteCachedRSS, getCachedRSS, getRSS } from \"./rss\"\n\nvi.mock(\"~/lib/offscreen\", () => ({ setupOffscreenDocument: vi.fn() }))\nvi.mock(\"~/lib/report\", () => ({ default: vi.fn() }))\nvi.mock(\"~/lib/storage\", () => ({ getLocalStorage: vi.fn(async () => ({})) }))\nvi.mock(\"~/tabs/sandboxes\", () => ({\n  getRSSHub: vi.fn(() => ({ pageRSSHub: [], websiteRSSHub: [] })),\n}))\nvi.mock(\"./badge\", () => ({ setBadge: vi.fn() }))\n\nconst TAB_ID = 42\n\n// A site like the ones in #1192 and #1193: every GET of the login page starts a\n// new session and issues a new CSRF token, so a second GET invalidates the form\n// the user already has open.\nlet server: Server\nlet origin: string\nlet hits: Record<string, number>\n\nbeforeAll(async () => {\n  server = createServer((req, res) => {\n    const path = new URL(req.url, \"http://localhost\").pathname\n    hits[path] = (hits[path] ?? 0) + 1\n\n    if (path === \"/login\") {\n      const token = [REDACTED]\n      res.setHeader(\"set-cookie\", `session=${token}; Path=/; HttpOnly`)\n      res.setHeader(\"content-type\", \"text/html\")\n      res.end(\n        `<form method=\"post\"><input type=\"hidden\" name=\"csrf\" value=\"${token}\"></form>`,\n      )\n    } else if (path === \"/feed.xml\") {\n      res.setHeader(\"content-type\", \"application/rss+xml\")\n      res.end(\n        `<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>Example feed</title></channel></rss>`,\n      )\n    } else {\n      res.statusCode = 404\n      res.end()\n    }\n  })\n  await new Promise<void>((resolve) => server.listen(0, \"127.0.0.1\", resolve))\n  origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`\n})\n\nafterAll(async () => {\n  await new Promise((resolve) => server.close(resolve))\n})\n\nconst realFetch = globalThis.fetch\nconst fetchSpy = vi.fn((input: RequestInfo | URL, init?: RequestInit) =>\n  realFetch(input, init),\n)\n\ntype ContentScript = { html: string; pageRSS: RSSData[] }\n\nfunction stubBrowser({\n  contentScript,\n  tabStatus = \"complete\",\n}: {\n  contentScript?: ContentScript\n  tabStatus?: \"loading\" | \"complete\"\n}) {\n  const runtime: { lastError?: { message: string } } = {}\n  vi.stubGlobal(\"chrome\", {\n    runtime,\n    tabs: {\n      sendMessage: vi.fn((_tabId, message, callback) => {\n        if (!contentScript) {\n          runtime.lastError = {\n            message:\n              \"Could not establish connection. Receiving end does not exist.\",\n          }\n          callback(undefined)\n          runtime.lastError = undefined\n          return\n        }\n        callback(\n          message.name === \"requestHTML\"\n            ? contentScript.html\n            : { pageRSS: contentScript.pageRSS },\n        )\n      }),\n      get: vi.fn((tabId, callback) => {\n        callback({ id: tabId, status: tabStatus })\n      }),\n    },\n  })\n}\n\nbeforeEach(() => {\n  hits = {}\n  fetchSpy.mockClear()\n  vi.stubGlobal(\"fetch\", fetchSpy)\n})\n\nafterEach(() => {\n  deleteCachedRSS(TAB_ID)\n  vi.unstubAllGlobals()\n})\n\ndescribe(\"getRSS\", () => {\n  it(\"does not request an ordinary page again when it has no feeds (#1192, #1193)\", async () => {\n    stubBrowser({\n      contentScript: { html: \"<html><body>Login</body></html>\", pageRSS: [] },\n    })\n\n    await getRSS(TAB_ID, `${origin}/login`)\n\n    expect(hits[\"/login\"] ?? 0).toBe(0)\n    expect(fetchSpy).not.toHaveBeenCalled()\n    expect(getCachedRSS(TAB_ID)?.pageRSS).toEqual([])\n  })\n\n  it(\"does not request a page whose content script is not ready yet\", async () => {\n    stubBrowser({ tabStatus: \"loading\" })\n\n    await getRSS(TAB_ID, `${origin}/login`)\n\n    expect(hits[\"/login\"] ?? 0).toBe(0)\n    expect(fetchSpy).not.toHaveBeenCalled()\n  })\n\n  it(\"does not request a loaded page without a content script unless it looks like a feed\", async () => {\n    stubBrowser({ tabStatus: \"complete\" })\n\n    await getRSS(TAB_ID, `${origin}/login`)\n\n    expect(hits[\"/login\"] ?? 0).toBe(0)\n    expect(fetchSpy).not.toHaveBeenCalled()\n  })\n\n  it(\"does not probe a feed URL while the tab is still loading\", async () => {\n    stubBrowser({ tabStatus: \"loading\" })\n\n    await getRSS(TAB_ID, `${origin}/feed.xml`)\n\n    expect(fetchSpy).not.toHaveBeenCalled()\n  })\n\n  it(\"detects a feed opened in a tab without a content script, without cookies\", async () => {\n    stubBrowser({ tabStatus: \"complete\" })\n\n    await getRSS(TAB_ID, `${origin}/feed.xml`)\n\n    expect(hits[\"/feed.xml\"]).toBe(1)\n    expect(fetchSpy).toHaveBeenCalledTimes(1)\n    expect(fetchSpy.mock.calls[0][1]).toMatchObject({ credentials: \"omit\" })\n    expect(getCachedRSS(TAB_ID)?.pageRSS).toEqual([\n      {\n        url: `${origin}/feed.xml`,\n        title: \"Example feed\",\n        image: \"https://icons.duckduckgo.com/ip3/127.0.0.1.ico\",\n      },\n    ])\n  })\n\n  it(\"uses the feeds found by the content script\", async () => {\n    const feed = {\n      url: `${origin}/feed.xml`,\n      title: \"Example feed\",\n      image: `${origin}/favicon.ico`,\n    }\n    stubBrowser({\n      contentScript: { html: \"<html></html>\", pageRSS: [feed] },\n    })\n\n    await getRSS(TAB_ID, `${origin}/login`)\n\n    expect(fetchSpy).not.toHaveBeenCalled()\n    expect(getCachedRSS(TAB_ID)?.pageRSS).toEqual([feed])\n  })\n})\n"
+    },
+    {
+      "path": "src/contents/index.ts",
+      "sha": "8f46a6222b8fb4670132711b8c035b2906efdbf3",
+      "bucket": "runtime",
+      "source_content_sha256": "f9aae561acd1daca496f2ad8688e217a5b8dbd7268efb4f02e2189b0e59c5f20",
+      "content_sha256": "f9aae561acd1daca496f2ad8688e217a5b8dbd7268efb4f02e2189b0e59c5f20",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import { sendToBackground } from \"~/lib/messaging\"\nimport { getPageRSS } from \"~/lib/rss\"\n\nsendToBackground({\n  name: \"contentReady\",\n}).catch((error) => {\n  console.error(\"Failed to notify background that content is ready\", error)\n})\n\nchrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {\n  if (msg.name === \"requestHTML\") {\n    sendResponse(document.documentElement.outerHTML)\n  } else if (msg.name === \"requestPageRSS\") {\n    getPageRSS()\n      .then((data) => {\n        sendResponse(data)\n      })\n      .catch((error) => {\n        console.error(\"Failed to inspect page feeds\", error)\n        sendResponse({ pageRSS: [] })\n      })\n    return true\n  }\n})\n\nexport {}\n"
+    },
+    {
+      "path": "src/lib/quick-subscriptions.test.ts",
+      "sha": "17a70261c50a7ba21f4258182cc47c688fea159d",
+      "bucket": "docs",
+      "source_content_sha256": "3970613cb153b3d445a4eed6b846e27e1e5c99fd2a5997f2fd7f316189fefca9",
+      "content_sha256": "3970613cb153b3d445a4eed6b846e27e1e5c99fd2a5997f2fd7f316189fefca9",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import { describe, expect, it } from \"vitest\"\n\nimport { quickSubscriptions } from \"./quick-subscriptions\"\n\nconst wyrmrss = quickSubscriptions.find(({ key }) => key === \"wyrmrss\")!\n\ndescribe(\"WyrmRSS quick subscription\", () => {\n  it.each([\n    [\"https://example.com/feed.xml\", \"Example\"],\n    [\n      \"https://rsshub.example.com/github/issue/DIYgod/RSSHub?label=help+wanted&lang=pt#recent\",\n      \"Notícias & updates + 100% #1 / <feed>\",\n    ],\n    [\"https://example.com/feed?literal=%2F&name=a%26b\", \"\"],\n  ])(\"preserves feed URL %s and its title\", (url, title) => {\n    const path = wyrmrss.getSubscribePath({\n      url,\n      encodedUrl: encodeURIComponent(url),\n      title,\n      image: \"\",\n    })\n    const target = new URL(path, \"https://wyrm.example.com\")\n\n    expect(target.origin).toBe(\"https://wyrm.example.com\")\n    expect(target.pathname).toBe(\"/subscribe\")\n    expect(target.searchParams.get(\"url\")).toBe(url)\n    expect(target.searchParams.get(\"title\")).toBe(title)\n    expect([...target.searchParams.keys()]).toEqual([\"url\", \"title\"])\n    expect(target.hash).toBe(\"\")\n  })\n})\n"
+    },
+    {
+      "path": "src/lib/rss.test.ts",
+      "sha": "a3ecf6791cc80d19ad084b83e45426a2c65e3ba9",
+      "bucket": "eval",
+      "source_content_sha256": "7046b47a3d92aa71092dd9b547a69c7372b717f7e0443a9c7562978855bcb8bd",
+      "content_sha256": "7046b47a3d92aa71092dd9b547a69c7372b717f7e0443a9c7562978855bcb8bd",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "// @vitest-environment happy-dom\nimport { afterEach, beforeEach, describe, expect, it, vi } from \"vitest\"\n\nimport { getPageRSS } from \"./rss\"\n\nconst FEED = `<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>Example feed</title></channel></rss>`\n\nconst fetchSpy = vi.fn(async (_input: RequestInfo | URL) => new Response(FEED))\n\nfunction requestedPaths() {\n  return fetchSpy.mock.calls.map(([input]) => new URL(String(input)).pathname)\n}\n\nbeforeEach(() => {\n  history.replaceState(null, \"\", \"/login\")\n  document.head.innerHTML = \"<title>Sign in</title>\"\n  document.body.innerHTML = \"\"\n  fetchSpy.mockClear()\n  vi.stubGlobal(\"fetch\", fetchSpy)\n})\n\nafterEach(() => {\n  vi.unstubAllGlobals()\n})\n\ndescribe(\"getPageRSS\", () => {\n  it(\"never requests the current page through links that point back to it\", async () => {\n    document.body.innerHTML = `\n      <form method=\"post\"><input type=\"hidden\" name=\"csrf\" value=\"token\"></form>\n      <a href=\"#\" class=\"rss-icon\">RSS</a>\n      <a href=\"\" title=\"RSS\">Subscribe</a>\n      <a href=\"#comments\">Feed</a>\n    `\n\n    const { pageRSS } = await getPageRSS()\n\n    expect(requestedPaths()).not.toContain(\"/login\")\n    expect(pageRSS).toEqual([])\n  })\n\n  it(\"still checks links that look like feeds\", async () => {\n    document.body.innerHTML = `<a href=\"/feed\">RSS</a>`\n\n    const { pageRSS } = await getPageRSS()\n\n    expect(requestedPaths()).toEqual([\"/feed\"])\n    expect(pageRSS).toMatchObject([\n      { url: `${location.origin}/feed`, title: \"Example feed\" },\n    ])\n  })\n\n  it(\"detects feeds declared in the head without requesting them\", async () => {\n    document.head.innerHTML += `<link rel=\"alternate\" type=\"application/rss+xml\" title=\"Posts\" href=\"/posts.xml\">`\n\n    const { pageRSS } = await getPageRSS()\n\n    expect(fetchSpy).not.toHaveBeenCalled()\n    expect(pageRSS).toMatchObject([\n      { url: `${location.origin}/posts.xml`, title: \"Posts\" },\n    ])\n  })\n\n  it(\"detects a feed shown as plain text from the DOM without requesting it\", async () => {\n    const pre = document.createElement(\"pre\")\n    pre.textContent = FEED\n    document.body.append(pre)\n\n    const { pageRSS } = await getPageRSS()\n\n    expect(fetchSpy).not.toHaveBeenCalled()\n    expect(pageRSS).toMatchObject([\n      { url: location.href, title: \"Example feed\" },\n    ])\n  })\n})\n"
+    },
+    {
+      "path": "src/lib/storage.ts",
+      "sha": "70d3163c1163980aea633570339ad5efe12e9622",
+      "bucket": "data",
+      "source_content_sha256": "b79094f68d0b37a1b83ad630f8ef1a82716d8903f6c3ac359e661c4e3172227b",
+      "content_sha256": "b79094f68d0b37a1b83ad630f8ef1a82716d8903f6c3ac359e661c4e3172227b",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "const LEGACY_STORAGE_KEYS = [\n  \"config\",\n  \"rules\",\n  \"displayedRules\",\n  \"version\",\n] as const\n\nlet legacyStorageMigration: Promise<void> | undefined\n\n/**\n * v2.2.0 moved the extension from Plasmo to WXT. Plasmo stored data in\n * `chrome.storage.sync` as JSON strings, while the new implementation uses\n * `chrome.storage.local` with plain values. Copy the old data over once so\n * existing users keep their settings after upgrading.\n */\nexport function migrateLegacyStorage() {\n  if (!legacyStorageMigration) {\n    legacyStorageMigration = migrateLegacyStorageInternal().catch((error) => {\n      console.error(\"Failed to migrate legacy storage\", error)\n    })\n  }\n  return legacyStorageMigration\n}\n\nasync function migrateLegacyStorageInternal() {\n  const local = await chrome.storage.local.get([\"legacyStorageMigrated\"])\n  if (local.legacyStorageMigrated) {\n    return\n  }\n\n  let sync: Record<string, unknown> = {}\n  try {\n    sync = await chrome.storage.sync.get([...LEGACY_STORAGE_KEYS])\n  } catch (error) {\n    // Firefox may reject access to the sync area when it is unavailable.\n    console.error(\"Failed to read legacy storage\", error)\n  }\n\n  const localValues = await chrome.storage.local.get([...LEGACY_STORAGE_KEYS])\n  const migrated: Record<string, unknown> = {}\n\n  for (const key of LEGACY_STORAGE_KEYS) {\n    if (localValues[key] !== undefined || sync[key] === undefined) {\n      continue\n    }\n\n    const value = sync[key]\n    if (typeof value === \"string\") {\n      try {\n        migrated[key] = JSON.parse(value)\n      } catch {\n        migrated[key] = value\n      }\n    } else {\n      migrated[key] = value\n    }\n  }\n\n  if (Object.keys(migrated).length > 0) {\n    await chrome.storage.local.set(migrated)\n  }\n  await chrome.storage.local.set({ legacyStorageMigrated: true })\n}\n\nexport async function getLocalStorage<T = any>(key: string) {\n  await migrateLegacyStorage()\n  return new Promise<T>((resolve, reject) => {\n    chrome.storage.local.get(key, (result) => {\n      if (chrome.runtime.lastError) {\n        reject(new Error(chrome.runtime.lastError.message))\n        return\n      }\n\n      resolve(result[key] as T)\n    })\n  })\n}\n\nexport async function setLocalStorage<T = any>(key: string, value: T) {\n  await migrateLegacyStorage()\n  return new Promise<void>((resolve, reject) => {\n    chrome.storage.local.set(\n      {\n        [key]: value,\n      },\n      () => {\n        if (chrome.runtime.lastError) {\n          reject(new Error(chrome.runtime.lastError.message))\n          return\n        }\n\n        resolve()\n      },\n    )\n  })\n}\n"
+    },
+    {
+      "path": "src/lib/utils.test.ts",
+      "sha": "856deb4281dc89b65b6cb2698f72abb0e4e49af6",
+      "bucket": "docs",
+      "source_content_sha256": "c50d130e7d50486253c91dac85cf7ca5afb525b0940b83bc35c2f1cce96815c5",
+      "content_sha256": "c50d130e7d50486253c91dac85cf7ca5afb525b0940b83bc35c2f1cce96815c5",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import { describe, expect, it } from \"vitest\"\n\nimport { isLikelyFeedUrl, isSameDocumentUrl } from \"./utils\"\n\ndescribe(\"isLikelyFeedUrl\", () => {\n  it.each([\n    \"https://example.com/feed\",\n    \"https://example.com/feed/\",\n    \"https://example.com/blog/rss.xml\",\n    \"https://example.com/atom.xml\",\n    \"https://example.com/index.rss\",\n    \"https://example.com/feeds/posts/default\",\n    \"https://example.com/?feed=rss2\",\n    \"https://example.com/news?format=atom\",\n  ])(\"matches %s\", (url) => {\n    expect(isLikelyFeedUrl(url)).toBe(true)\n  })\n\n  it.each([\n    \"https://sep.ucas.ac.cn/\",\n    \"https://example.com/login\",\n    \"https://example.com/login?redirect=/feed\",\n    \"https://example.com/account/sign-in?next=%2Fhome\",\n    \"https://example.com/rssreader-review\",\n    \"ftp://example.com/feed.xml\",\n    \"not a url\",\n  ])(\"does not match %s\", (url) => {\n    expect(isLikelyFeedUrl(url)).toBe(false)\n  })\n})\n\ndescribe(\"isSameDocumentUrl\", () => {\n  it(\"ignores the hash and the protocol\", () => {\n    expect(\n      isSameDocumentUrl(\n        \"https://example.com/login?next=1#\",\n        \"http://example.com/login?next=1\",\n      ),\n    ).toBe(true)\n  })\n\n  it(\"distinguishes other paths and queries\", () => {\n    expect(\n      isSameDocumentUrl(\n        \"https://example.com/feed\",\n        \"https://example.com/login\",\n      ),\n    ).toBe(false)\n    expect(\n      isSameDocumentUrl(\n        \"https://example.com/login?a=1\",\n        \"https://example.com/login?a=2\",\n      ),\n    ).toBe(false)\n  })\n})\n"
+    },
+    {
+      "path": "src/options/index.tsx",
+      "sha": "7e85916090825a1f8ba99fa0b18b32bad179147f",
+      "bucket": "data",
+      "source_content_sha256": "b7765b095596312d0686aa45cd4d9bfe2815f054aaba7b6360a7f0e42371b32a",
+      "content_sha256": "b7765b095596312d0686aa45cd4d9bfe2815f054aaba7b6360a7f0e42371b32a",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import \"~/lib/style.css\"\n\nimport { Toaster } from \"react-hot-toast\"\nimport { MemoryRouter } from \"react-router\"\n\nimport { useDark } from \"~/lib/hooks/use-dark\"\nimport { Routing } from \"~/options/routes\"\n\nimport Siderbar from \"./Siderbar\"\n\nfunction Options() {\n  useDark()\n  return (\n    <div className=\"max-w-screen-lg mx-auto text-base py-10 px-4\">\n      <Toaster\n        toastOptions={{\n          className: \"!bg-secondary !text-secondary-foreground\",\n        }}\n      />\n      <MemoryRouter>\n        <div className=\"flex sm:gap-20 h-full sm:flex-row flex-col\">\n          <Siderbar />\n          <div className=\"flex-1\">\n            <Routing />\n          </div>\n        </div>\n      </MemoryRouter>\n    </div>\n  )\n}\n\nexport default Options\n"
+    },
+    {
+      "path": "src/popup/index.tsx",
+      "sha": "225aacb3b2b50b8cd2336a1d74161ecd3e7102d5",
+      "bucket": "data",
+      "source_content_sha256": "da65b4ef71b69817065b77ed19b2cad15733560c13c00ca4cc70f2543963aaa3",
+      "content_sha256": "da65b4ef71b69817065b77ed19b2cad15733560c13c00ca4cc70f2543963aaa3",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import \"~/lib/style.css\"\n\nimport { useEffect, useState } from \"react\"\n\nimport { useDark } from \"~/lib/hooks/use-dark\"\nimport { sendToBackground } from \"~/lib/messaging\"\nimport report from \"~/lib/report\"\n\nimport RSSList from \"./RSSList\"\n\nfunction IndexPopup() {\n  useDark()\n\n  const [data, setData] = useState({\n    pageRSS: [],\n    pageRSSHub: [],\n    websiteRSSHub: [],\n  })\n  useEffect(() => {\n    sendToBackground({\n      name: \"popupReady\",\n    }).then((res) => {\n      setData(\n        Object.assign(\n          {\n            pageRSS: [],\n            pageRSSHub: [],\n            websiteRSSHub: [],\n          },\n          res,\n        ),\n      )\n    })\n\n    chrome.tabs.query(\n      {\n        active: true,\n      },\n      ([tab]) => {\n        report({\n          url: tab.url,\n          name: \"popup\",\n        })\n      },\n    )\n  }, [])\n\n  return (\n    <div className=\"min-w-[350px] p-5\">\n      <a\n        className=\"absolute right-4 h-6 flex items-center\"\n        href=\"/options.html\"\n        target=\"_blank\"\n      >\n        <i className=\"i-mingcute-settings-3-line w-5 h-5 text-slate-600 dark:text-slate-400 hover:text-black dark:hover:text-white transition-colors\"></i>\n      </a>\n      {!data.pageRSS.length &&\n        !data.pageRSSHub.length &&\n        !data.websiteRSSHub.length && (\n          <div className=\"space-y-4\">\n            <h2 className=\"text-base font-bold\">\n              ( ´･･)ﾉ(._.`) <span>{chrome.i18n.getMessage(\"RSSNotFound\")}</span>\n            </h2>\n            <p\n              dangerouslySetInnerHTML={{\n                __html: chrome.i18n.getMessage(\"joinRSSHub\"),\n              }}\n            ></p>\n          </div>\n        )}\n      <RSSList type=\"currentPageRSS\" list={data.pageRSS} />\n      <RSSList type=\"currentPageRSSHub\" list={data.pageRSSHub} />\n      <RSSList type=\"currentSiteRSSHub\" list={data.websiteRSSHub} />\n    </div>\n  )\n}\n\nexport default IndexPopup\n"
+    },
+    {
+      "path": "src/tabs/sandboxes.ts",
+      "sha": "6a3bf0ea8333c0bb8f9547fb4f4922013a2ea362",
+      "bucket": "runtime",
+      "source_content_sha256": "2219a985e46fc89c640d699cc40745f7e8b84d94c0f45705f23d358e0d87ae20",
+      "content_sha256": "2219a985e46fc89c640d699cc40745f7e8b84d94c0f45705f23d358e0d87ae20",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "export * from \"~/sandboxes\"\n"
+    },
+    {
+      "path": "src/entrypoints/sandbox/main.ts",
+      "sha": "c4a36e4be5cc7d460f1004816d385068c4282b6b",
+      "bucket": "runtime",
+      "source_content_sha256": "cf075fed2fb45e4f32a8b8c4973bcda4da62ced036ac3d1be340936420149c93",
+      "content_sha256": "cf075fed2fb45e4f32a8b8c4973bcda4da62ced036ac3d1be340936420149c93",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import \"~/tabs/sandboxes\"\n"
+    },
+    {
+      "path": "src/options/routes/index.tsx",
+      "sha": "a20f03c0aeb4cdf91faffe8085006b7a4dfb28d1",
+      "bucket": "data",
+      "source_content_sha256": "b49d13bbfd1fb825aadc4d6809582cd4a60b4d26ca150c7c0b9345d785fbaae8",
+      "content_sha256": "b49d13bbfd1fb825aadc4d6809582cd4a60b4d26ca150c7c0b9345d785fbaae8",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import { Route, Routes } from \"react-router\"\n\nimport { About } from \"./About\"\nimport { General } from \"./General\"\nimport { Rules } from \"./Rules\"\n\nexport const Routing = () => (\n  <Routes>\n    <Route path=\"/\" element={<General />} />\n    <Route path=\"/rules\" element={<Rules />} />\n    <Route path=\"/about\" element={<About />} />\n  </Routes>\n)\n"
+    },
+    {
+      "path": "vitest.config.mts",
+      "sha": "f9afa1c84c5526bb5dc17ec5ad378479a2c08962",
+      "bucket": "eval",
+      "source_content_sha256": "647e4c2e63601aa57306424a36b703fe4bc26473c77b57d00690cfa40c2c85b0",
+      "content_sha256": "647e4c2e63601aa57306424a36b703fe4bc26473c77b57d00690cfa40c2c85b0",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "import { defineConfig } from \"vitest/config\"\nimport { WxtVitest } from \"wxt/testing/vitest-plugin\"\n\nexport default defineConfig({\n  plugins: [WxtVitest()],\n  test: {\n    include: [\"src/**/*.test.ts\"],\n  },\n})\n"
+    },
+    {
+      "path": "src/entrypoints/offscreen/index.html",
+      "sha": "5050dc8760340e501c44f678ed76762adb7006b5",
+      "bucket": "data",
+      "source_content_sha256": "83aa1a0c3afe0b251c6eebda517c0fc5c6adffcf41a35986d6974191bd352254",
+      "content_sha256": "83aa1a0c3afe0b251c6eebda517c0fc5c6adffcf41a35986d6974191bd352254",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>RSSHub Radar</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n    <script type=\"module\" src=\"./main.tsx\"></script>\n  </body>\n</html>\n"
+    },
+    {
+      "path": "src/entrypoints/options/index.html",
+      "sha": "0da92fb6100bc69469e20e77b85f5a1eb7ec9815",
+      "bucket": "data",
+      "source_content_sha256": "377448fd2278cbfe8357047c985ebee94fb5432828d9038123238c67e13be424",
+      "content_sha256": "377448fd2278cbfe8357047c985ebee94fb5432828d9038123238c67e13be424",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>RSSHub Radar</title>\n    <meta name=\"manifest.open_in_tab\" content=\"true\" />\n  </head>\n  <body>\n    <div id=\"root\"></div>\n    <script type=\"module\" src=\"./main.tsx\"></script>\n  </body>\n</html>\n"
+    },
+    {
+      "path": "src/entrypoints/popup/index.html",
+      "sha": "5050dc8760340e501c44f678ed76762adb7006b5",
+      "bucket": "data",
+      "source_content_sha256": "83aa1a0c3afe0b251c6eebda517c0fc5c6adffcf41a35986d6974191bd352254",
+      "content_sha256": "83aa1a0c3afe0b251c6eebda517c0fc5c6adffcf41a35986d6974191bd352254",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>RSSHub Radar</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n    <script type=\"module\" src=\"./main.tsx\"></script>\n  </body>\n</html>\n"
+    },
+    {
+      "path": "src/entrypoints/preview/index.html",
+      "sha": "5050dc8760340e501c44f678ed76762adb7006b5",
+      "bucket": "data",
+      "source_content_sha256": "83aa1a0c3afe0b251c6eebda517c0fc5c6adffcf41a35986d6974191bd352254",
+      "content_sha256": "83aa1a0c3afe0b251c6eebda517c0fc5c6adffcf41a35986d6974191bd352254",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "<!doctype html>\n<html lang=\"en\">\n  <head>\n    <meta charset=\"UTF-8\" />\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n    <title>RSSHub Radar</title>\n  </head>\n  <body>\n    <div id=\"root\"></div>\n    <script type=\"module\" src=\"./main.tsx\"></script>\n  </body>\n</html>\n"
+    },
+    {
+      "path": ".prettierrc.js",
+      "sha": "b7c44fc09ecf3e9cc409e13feaf324bdcb538f56",
+      "bucket": "other",
+      "source_content_sha256": "88e35c1cc0afc4fc3b1bdc9239b93839b48c7268ecd0d1704d052ade1025ae65",
+      "content_sha256": "88e35c1cc0afc4fc3b1bdc9239b93839b48c7268ecd0d1704d052ade1025ae65",
+      "redaction_applied": false,
+      "redaction_reasons": [],
+      "content": "module.exports = {\n  singleQuote: false,\n  semi: false,\n  trailingComma: \"all\",\n  endOfLine: \"lf\",\n  plugins: [\"prettier-package-json\", \"@ianvs/prettier-plugin-sort-imports\"],\n\n  importOrderParserPlugins: [\n    \"classProperties\",\n    \"decorators-legacy\",\n    \"typescript\",\n    \"jsx\",\n  ],\n  importOrder: [\n    \"<THIRD_PARTY_MODULES>\",\n    \"\",\n    \"^@(.*)/(.*)$\",\n    \"\",\n    \"^~/(.*)$\",\n    \"\",\n    \"^@/(.*)$\",\n    \"\",\n    \"^[./]\",\n  ],\n}\n"
+    }
+  ],
+  "policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_repo_bytes": 300000
+  },
+  "generated_at": "2026-11-08T10:43:07.025149+00:00"
+}
