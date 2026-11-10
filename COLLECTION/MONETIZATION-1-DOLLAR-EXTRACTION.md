@@ -1413,9 +1413,130 @@ Newly opened provider proposal:
 - AgentMail new inbound: **0** across 3 inboxes; latest AI Coders reply remains **2026-11-02**.
 - Upwork Connects: **0** (0 free / 0 paid); proposals submitted: **0**; active contracts/offers/invitations/messages: **0 / 0 / 0 / 0**.
 - Fresh relevant Upwork listings inspected: Odoo API/CRM integration sub-scope and AI chatbot maintenance; neither was responsibly submittable. No Connects purchased.
-- Freelancer.com n8n buyer opportunities confirmed: **0**; bids submitted: **0**.
+- Correction: the first Freelancer n8n-category snapshot was incomplete. A later AI Automation-category scan found multiple genuine buyer briefs (see same-day supplemental sweep); the earlier “0 buyer opportunities” count is superseded. Freelancer bids submitted: **0**.
 - New qualified referrals / accepted referrals / commissions: **0 / 0 / USD 0**.
 - Provider activations / live inference calls / inference spend: **0 / 0 / USD 0**.
 - Paid lead credits / upfront spend: **USD 0 / USD 0**.
 - Confirmed new customers: **0**; confirmed revenue: **USD 0**.
 - No listing, outreach, free quota, open-source asset, internal smoke, demo, or unsubmitted proposal was counted as a customer or revenue.
+
+
+## Same-day supplemental sweep — 2026-11-09 (marketplace + GEO/SEO leverage)
+
+This addendum supersedes the initial Freelancer-category-only count in the earlier November 9 section. It does not change the commercial ledger: no bid was submitted and no customer or revenue was created.
+
+### 1. Additional verified marketplace briefs
+
+#### Freelancer — Dedicated AI Business Agent for Operations & Customer Support
+- Listing: https://www.freelancer.com/projects/ai-automation/dedicated-business-agent-for-operations
+- Project ID `40802181`; INR 12,500–37,500 indicative budget; paid on delivery; open; **155 proposals**; active 31 minutes before retrieval; two days remaining.
+- Client: Jamshedpur, India; payment method verified; 5.0/5 from 3 reviews; member since 2021-01-07.
+- Two businesses are named in the brief: NLC (lighting retail/showroom/e-commerce) and Cosmic Safety (safety training). Requested scope spans HR, warehouse/inventory, billing/accounts, sales/marketing, customer support, owner assistant, website/e-commerce, and integrations with existing tools/official WhatsApp.
+- The client explicitly says the displayed budget is only indicative for an initial discovery/MVP phase, the full scope will be finalised after proposals, and the listing is a request for quotations—not a commitment to award or pay. It asks for similar live projects or demos.
+- Potential narrow MVP: one customer-support knowledge workflow with human handoff plus one lead-capture/CRM update flow, using client-owned APIs and approval gates. Our current Support Resolution Engine is a static demo, not a live customer system; we cannot claim a comparable production deployment. 155 proposals and no Freelancer account-action connector were additional barriers. No bid or external message was sent.
+
+#### Freelancer — WhatsApp AI Sales Agent MVP
+- Listing: https://www.freelancer.com/projects/ai-chatbot/whatsapp-sales-agent-mvp-aura
+- Project ID `40803740`; USD 30–250; paid on delivery; open. The latest opened page showed 75 proposals and recent activity; an earlier page snapshot showed 119 proposals and a different posting-age label, so proposal/post-age metadata is inconsistent and is not used as a qualification signal.
+- Client: Dhaka, Bangladesh; payment method verified, 0 reviews/0 rating, member since 2026-11-02.
+- Requires a fully functioning WhatsApp sales agent connected to Shopify live catalogue/prices/inventory/discounts, LLM/RAG, checkout/payment confirmation, conversation/order dashboard, editable prompts, real-phone end-to-end test and under-five-second average response. The client requests past WhatsApp/AI commerce examples.
+- We do not have a verified production WhatsApp Cloud API + Shopify commerce case or an end-to-end paid-order proof. The full scope is not safe to bid at this budget. No bid/message sent.
+
+#### Freelancer — AI Meeting Insights and Action Tracker
+- Listing: https://www.freelancer.com/projects/natural-language-processing/meeting-insights-action-tracker
+- Project ID `40798857`; USD 250–750; paid on delivery; open; 283 proposals; posted six days before retrieval and one day remaining.
+- Client: Abu Dhabi, UAE; payment method verified; 0 reviews/0 rating; member since 2026-11-02.
+- Requires TXT/DOCX/PDF transcript ingestion, summary/decision/action-item extraction with named owners and deadlines where present, unresolved questions, editable review UI, Word/PDF export, Python and an LLM API.
+- This is a real document-automation buyer brief, but the client is new, competition is high, and we have no verified end-to-end meeting-analysis application. A client-supplied LLM key would avoid our API spend, but does not solve the missing production proof. No bid sent.
+
+#### Freelancer — Custom LLM Automation Workflow Build
+- Listing: https://www.freelancer.com/projects/ai-automation/custom-llm-automation-workflow-build
+- Project ID `40801537`; INR 12,500–37,500; open; 82 proposals; active 17 hours before retrieval; one day remaining.
+- Wants shared company memory, role-based employee access, file/email/cloud connectors, multi-agent workflows for PPT/media/research/operations, employee setup, training and handover.
+- Our AI-operating-memory and agent-skills assets are not evidence of a production multi-tenant RAG system with document-level RBAC. Scope/competition and lack of production proof make this a no-bid.
+
+#### Freelancer — AI Automation Expert (WEM Life)
+- Listing: https://www.freelancer.com/projects/ai-automation/automation-expert-agents-gohighlevel
+- Project ID `40805909`; maximum USD 300 fixed; still open; latest category snapshot showed 177 proposals and three days remaining; client payment verified and 5.0/5 from five reviews.
+- The same client has a related project `40806037` already In Progress and awarded to `SkillCrafts`. This is a separate open project with overlapping broad AI/business automation scope, not proof of a duplicate or of our own customer relationship.
+- No verified production n8n/GoHighLevel reference and very high proposal volume; no bid sent.
+
+#### Freelancer — SEO/GEO automation on buyer VPS (adjacent, not bid-ready)
+- Listing: https://www.freelancer.com/projects/automation/busco-freelancer-para-implementar
+- Project ID `40810767`; USD 10–30 shown on platform; description specifies fixed MXN 800; open; 6 proposals; posted about one minute before retrieval; six days remaining.
+- Client: Monterrey, Mexico; payment method verified; 5.0/5 from six reviews; member since 2025-05-01.
+- Requests a one-time SEO/GEO system on the buyer's VPS using existing GitHub repositories, n8n/ChatGPT/Claude, competitor and backlink analysis, with no monthly subscriptions. The buyer has a historical HubSpot+n8n project `39639774` from 11 months ago, awarded to another freelancer; this is buyer-history evidence only, not our customer.
+- The narrow technical stack we can responsibly investigate is OpenSERP + client-authorized Search Console data + optional Open Page Rank. That can produce a SERP/technical-visibility baseline; it does **not** deliver a complete backlink profile or guarantee Google/ChatGPT ranking. The budget is too low for the full requested scope and we have no verified SEO/GEO delivery reference. No bid sent.
+
+#### Explicitly excluded
+- `N8N Offline Automation for WhatsApp -- 2`: asks for mass WhatsApp/email messaging and contact extraction from map/CRM data. This is a spam-risk brief and conflicts with the no-spam requirement; do not pursue.
+- `AI Lead Outreach Agent` and `AI Outreach Super-Agent`: explicitly automate unsolicited prospect discovery and first-touch cold email. Excluded.
+- `GoHighLevel Lead Capture Expert`: performance-based sales/lead-generation role with no guaranteed fixed payment and customer-closing responsibility; not a delivery contract we can substantiate.
+- `Looking for AI Automation Specialists & Ready-Made Software Solutions`: asks for ready-made/white-label production software. Our current assets are not ready for an honest production license sale.
+- `AI-Driven Daily Brief Integration`, `WordPress Store Maintenance & AI SEO`, `ChatGPT Product Feed Campaign Setup`, and senior SEO/AIO/GEO roles were also inspected; proposal volume, broad requirements, missing platform proof or domain expertise made them no-bid.
+- Freelancer is not available as an authenticated write/action connector in this run. No bid, message, account creation, or off-platform contact was attempted.
+
+### 2. Additional Upwork opportunities — no honest application available
+
+- **Zoho CRM Plus Expert – Custom Scoring & WhatsApp Integration** — https://www.upwork.com/jobs/~022119687056022769487; job `2119687056022769487`; posted 2026-11-09 07:03 UTC; USD 300 fixed; 5–10 proposals. Client payment verified, 5.0/5 from 27 reviews, 33 contracts, USD 3,798.20 spent, 100% hire rate, two active contracts. Scope includes CRM/Deluge scoring, permissions, Zoho Mail/Campaigns/Social/Analytics, official WhatsApp Business API, synchronization and training. The client expressly requires the *entire* scope within USD 300 and rejects partial proposals; subscriptions, messaging and approved third-party costs are separate. Upwork get returned 14 Connects required, balance 0, `can_apply=false`. We lack verified Zoho and production WhatsApp implementations. No bid.
+- **Salesforce & API Integration Consultant with VoIP Support** — https://www.upwork.com/jobs/~022119894868275400488; job `2119894868275400488`; USD 15–30/hour, 15–20 proposals. Client has 4.98/5 from 17 reviews, 29 contracts, USD 47,711.68 spend and 1,453.17 hours. Role requires Salesforce admin/API work plus French customer correspondence and/or 8x8/Alianza cloud telephony support, with a target start in early 2027. Upwork get returned 27 Connects required, balance 0. No verified Salesforce/VoIP delivery and French support ability is not evidenced; no bid.
+- **B2B Sales & Lead Qualification Specialist – AI Automation & Software Development** — https://www.upwork.com/jobs/~022119671044510486312; job `2119671044510486312`; 5–10 proposals. Client has 4.88/5 from five reviews, nine contracts and USD 872.17 spend. It requires a real personally handled inbound lead example, discovery/qualification calls, objections and sales follow-up. We have no verified personal sales-conversion case; Upwork get returned 16 Connects required, balance 0. No bid.
+- The Upwork account remains at **0 Connects** and the dashboard reports 0 active contracts, offers, invitations and messages. No paid credits were purchased.
+
+### 3. Reusable no-upfront SEO/GEO leverage — verified boundaries
+
+#### OpenSERP
+- Repository: https://github.com/karust/openserp
+- MIT license file SHA: `714c96d87a2de9b65fb10abe6ffac9f511e37446`.
+- README SHA: `b4d815383dc4175a6d0626cb83f99a62900a30e7`.
+- Latest commit checked: `98f42fbaf7aa6b60f54c8581369166943b209e28`, **2026-11-03 00:39 UTC**, message includes Chrome recovery, proxy validation, Google readiness and regression coverage; release reference in README is v0.8.18.
+- README describes self-hosted REST API/CLI/MCP for Google, Bing, Yandex, Baidu, DuckDuckGo and Ecosia; structured JSON, page extraction, a listed n8n community node, Docker/Go binary, no API key and no per-search vendor billing.
+- Cost boundary: client-owned VPS/compute and any proxies are still costs. README explicitly warns engines may return CAPTCHAs, rate limits or unrelated results; browser mode does not eliminate them. Do not bypass CAPTCHA/access controls or promise stable rankings. Source-level capability verified; **no deployment or live search request was run in our environment**.
+
+#### Google Search Console API
+- Official pricing says API use is free of charge subject to quotas: https://developers.google.com/webmaster-tools/pricing
+- Private property data requires OAuth 2.0 and the user must have permission for the property: https://developers.google.com/webmaster-tools/v1/how-tos/authorizing
+- Usage quotas apply: https://developers.google.com/webmaster-tools/limits
+- Useful for a client's own search clicks/impressions, pages and sitemaps; it is not competitor data or a backlink index. Use client-owned OAuth consent and only the minimum read-only scope. No credentials or API call created.
+
+#### Open Page Rank by Keywords Everywhere
+- Official API reference: https://keywordseverywhere.com/openpagerank/docs
+- Free tier: 30,000 unique domains/month, up to 100 domains per request, 60 requests/minute. It returns a Common-Crawl-derived 0–10 authority score, monthly history and referring-domain count; it does not return a full backlink URL/profile export.
+- Free API keys are tied to one IPv4 address; since **2026-11-01**, calls from another address return HTTP 403. One free account per address; address can be changed once a week. The client should own the key and call from the client's VPS if used.
+- This is a limited authority signal, not an Ahrefs/Majestic replacement. No key or API request created.
+
+#### GEO-AI-Woo
+- Repository: https://github.com/madeburo/GEO-AI-Woo
+- GPL v2 license SHA: `9efa6fbc962836e243e20f7f23db062e2c077d28`; README SHA: `b2a3dd14e2dd4f9dcd7afd5fb815fff607f69d6e`.
+- WordPress 6.2+ / optional WooCommerce 7.0+ plugin; README describes llms.txt/llms-full.txt generation, AI crawler rules, metadata, JSON-LD, REST/WP-CLI integration. AI-generated descriptions require Anthropic or OpenAI API keys and are not free inference.
+- Latest repository commit checked is **2026-03-20** (`05ed7b569e61d6fc6972ac27b36ceeeea075cc40`); therefore treat as an older candidate requiring compatibility/security testing, not a production-ready dependency. If distributing a modified derivative, observe GPLv2 obligations. Only relevant if the buyer's site is WordPress/WooCommerce.
+
+#### Existing Project- SEO API catalogue is discovery data, not a free stack
+- `COLLECTION/AUTO/EXTRACTED/cporter202_seo-apis-that-rank-pages.json` blob SHA `e86ac802ee44e591d0284739b216adfa977827b8`.
+- Extracted external repo `cporter202/seo-apis-that-rank-pages` lists 903 API entries (287 keyword research, 161 technical audit, 23 backlink/authority, 28 content optimisation, 404 other); source repo metadata says license `null`, last updated 2026-10-06.
+- Many entries are Apify actors with pay-per-use pricing and affiliate parameters. Do not present this file as an open-source implementation or a no-cost production stack. Every specific API requires separate license, terms, quota and commercial-use verification.
+
+#### Narrow offer hypothesis (not yet marketed or delivered)
+A one-time technical GEO/SERP baseline could combine:
+1. Sitemap-based page inventory and technical checks on the client's own site.
+2. llms.txt and AI-crawler directive review/generation, without promising ranking gains.
+3. SERP snapshots from a client-hosted OpenSERP instance.
+4. Client-authorized Search Console first-party metrics.
+5. Optional Open Page Rank domain-authority snapshot from a client-owned, IP-bound free key.
+
+Explicit exclusions: full backlink URL discovery, paid competitor intelligence, mass outreach/link-building, ranking guarantees, and any proxy/API spend not pre-approved by the client. The current USD 10–30 / MXN 800 listing is not sufficient for the full scope; this remains a discovery note, not a new product build.
+
+### 4. Free LLM source status remains unchanged
+- `mnfst/awesome-free-llm-apis` main still has 15 providers and 91 model rows; `data.json` lastUpdated remains 2026-10-25. No new provider/model merge was found after the 2026-11-04 main commit.
+- CheapLLM PR #229 remains open/unmerged and maintainer's independent real-request probe is still pending. Provider commercial-use, retention, training and reliability remain unverified. Do not activate or use for customer data. No API key or inference request created.
+
+### 5. Corrected end-of-sweep ledger
+
+- AgentMail new inbound since 2026-11-08: **0**; AI Coders latest received message remains **2026-11-02 08:19:21 UTC**, `Sounds good!` only.
+- Upwork proposals: **0**; Connects: **0**; paid Connects purchased: **0**.
+- Freelancer bids/messages: **0 / 0**; no Freelancer authenticated write connector was available.
+- New customers / accepted referrals / contracts: **0 / 0 / 0**.
+- Confirmed revenue: **USD 0**.
+- LLM provider activations / live inference calls / spend: **0 / 0 / USD 0**.
+- Paid lead credits / upfront spend: **USD 0 / USD 0**.
+- No listing, proposal, internal demo, free quota, open-source tool, or prospect history is counted as a customer or revenue.
