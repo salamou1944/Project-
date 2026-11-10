@@ -1332,3 +1332,90 @@ A WhatsApp Business API troubleshooting listing for $100 had already hired one f
 - Paid lead credits / upfront spend: **USD 0 / USD 0**.
 - Confirmed new customers: **0**; confirmed revenue: **USD 0**.
 - No listing, free quota, open-source asset, demo, internal smoke test, or unsubmitted proposal was counted as a customer or revenue.
+
+## Revenue + leverage sweep — 2026-11-09 (20:15 America/Los_Angeles)
+
+This section records the eleventh scheduled sweep. Marketplace listings, technical assets, open-source provider proposals, and outreach are not customers or revenue.
+
+### 1. AgentMail outreach inbox — no new inbound
+
+Read the current thread lists for all three connected inboxes:
+- `api-pilot@agentmail.to`: 7 threads total; newest thread is the AI Coders referral discussion, last received **2026-11-02 08:19:21 UTC**, six messages, latest preview `Sounds good!`. No newer inbound.
+- `easy@agentmail.to`: 5 threads, all are old delivery-failure/bounce notices; no new buyer reply.
+- `pastel-realtime-e2e@agentmail.to`: 0 threads.
+- New inbound since the prior 2026-11-08 sweep: **0**.
+No follow-up or outbound message was sent. The AI Coders response is an acknowledgment only, not referral acceptance, customer acceptance, or revenue.
+
+### 2. Fresh marketplace opportunities — screened, none responsibly submittable
+
+#### Upwork: Odoo Deployment and Customization for Professional Services
+- Listing: https://www.upwork.com/jobs/~022119796404931803926
+- Job ID: `2119796404931803926`; published **2026-11-09 15:17:19 UTC**; hourly, part-time; rate not provided; 15–20 proposals.
+- Client payment is verified. Current client record: 7 contracts, 4 feedback reviews, 5.0/5 feedback score, 218.33 historical hours, USD 3,397.17 spent, 78% hire rate, 0 active contracts. Posting activity: 1 invited to interview, 0 hires, 0 offers.
+- Scope is much broader than an API handoff: self-hosted Odoo 19 Community + PostgreSQL in Docker, reverse proxy/HTTPS, hardening and backups/restore, CRM configuration and custom fields module, dedicated integration and MCP users, a documented n8n API contract, external-reference idempotency, jobs/deliverables, Pipedrive migration, quotes/optional lines/signatures, Gmail routing, duplicate review, and Community upgrade plan.
+- The narrow inbound API contract (find/create company/person/deal, notes/tasks/attachments, return IDs, deduplicate by external reference) is adjacent to our API Factory authentication/idempotency work. However, our repositories do not prove an Odoo 19 deployment, Odoo custom module, Odoo upgrade, or two self-hosted Odoo instances. Do not bid for the full scope or claim Odoo experience.
+- Upwork get returned `applied=false`, `connects_cost=16`, `connects_balance=0`, `can_apply=false`. The buyer's preferred qualifications include fluent English, USD 1,000+ freelancer earnings, 90% Job Success Score, and Rising Talent. No proposal was submitted and no Connects were purchased.
+
+#### Upwork: AI Chatbot Maintenance and Troubleshooting
+- Listing: https://www.upwork.com/jobs/~022119704117516111695
+- Job ID: `2119704117516111695`; published **2026-11-09 08:11 UTC**; hourly USD 15–80; 50+ proposals.
+- Client record: verified payment, 4.71/5 from 190 reviews, 418 contracts, 24 active contracts, USD 262,417.48 spent, one open job. Posting activity: one invite and one interview, zero hires/offers at time of get.
+- Requires maintenance of an already deployed proprietary-book RAG chatbot, knowledge-base updates, retrieval/accuracy troubleshooting, periodic tests and on-call support. We have no verified production RAG maintenance reference; this is not a truthful first reference project for us.
+- Upwork get returned `connects_cost=19`, `connects_balance=0`, `can_apply=false`. No proposal or message was sent.
+
+#### Excluded near-matches
+- `n8n Automation Expert Needed to Review and Modify Existing Workflows`, job `2119854487638260825`, published 2026-11-09: USD 15 fixed, 15–20 proposals, already shows one hire and one interview; client history is only USD 30 and one review. Not worth pursuing.
+- `Set Up Shopify Order Sync to Zoho Inventory and Books`, job `2118427985579460821`, published 2026-11-05: USD 10 fixed, 15–20 proposals, one interview and two invites; the client has extensive marketplace history, but the fixed budget is not viable for the integration scope.
+- The Upwork freelancer dashboard still shows **0 Connects (0 free / 0 paid), 0 active contracts, 0 offers, 0 invitations, and 0 messages**. No proposal was submitted.
+- Freelancer.com’s public n8n category returned only three listings; the visible “Automate Your Workflows with AI” entry is a freelancer-style service description, not a buyer brief. No bid action/account access was available, and no bid or off-platform contact was attempted: https://www.freelancer.com/jobs/n8n/
+- No new Workana buyer brief with a verifiable recent posting date was established. Older indexed Workana results were not treated as fresh.
+- No external outreach was sent to marketplace clients. Marketplace communication must remain on-platform.
+
+### 3. Repository leverage — current heads and evidence boundaries
+
+Current default-branch heads rechecked:
+- `salamou1944/Project-`: `4d2a3044cad34bc334d057436ed56ed1265ba653` (2026-11-09 04:20 UTC).
+- `salamou1944/Salamou-31`: `429b8b047e9a277cb04c420dd131614bb1dbb35f` (2026-10-27 18:42 UTC).
+- `salamou1944/Easy-`: `735f2ab5c26d411d3f1886e4b75493405dc756ac` (2026-10-15 07:02 UTC).
+- `salamou1944/agent-skills`: `0f4c3a0fef4429f5344d7cdbe8047cd451162b13` (2026-10-20 03:13 UTC).
+No new implementation commit was found in Salamou-31, Easy-, or agent-skills since the prior sweep. Project- contains the prior November 9 ledger updates; this section is the only new change in this sweep.
+
+Re-fetched current files:
+- `Salamou-31/AI-API-HUB/OFFERS-AND-PRICING.md` blob `67ab69523c07287c37dd6aa189afc4c475b8688b`: internal starting price ranges and a ladder from discovery to paid pilot, production, maintenance and expansion. These are pricing hypotheses, not sold/accepted quotes.
+- `Salamou-31/AI-API-HUB/api-factory/PERSISTENCE.md` blob `bbbe0439cee1947774c6c8aa818133c10909b7f7`: readiness checks authenticated registry/artifact storage. Explicitly says generated API request-idempotency, usage, quota and business state are not automatically moved to remote storage, and Railway/Vercel deployment planning is not deployment execution. Do not sell the factory as fully durable multi-tenant API hosting.
+- `Salamou-31/AI-API-HUB/COMMERCIAL-OPERATING-BACKLOG.md` blob `8513d8ecdc5b220578b9e8ee1409581cb42c4676`: prioritizes fresh paid opportunities and the lead → qualify → small paid outcome → deliver → prove → expand/maintain sequence.
+- `Easy-/src/lead-qualification-workflow.mjs` blob `38b46c992908c1fd5e23e4e53317c54c2337eec3`: throws `lead_qualification_provider_not_configured` without a configured provider; it does not fabricate a qualification result.
+- `Easy-/api-lab/mini-apps/support-resolution-engine.html` blob `1cafc4f027d330a8a8ec7106c6b59fc412486a23`: remains a static demo with hard-coded order examples and regex intent matching, not a live LLM, CRM, order API, or production n8n integration.
+- `Easy-/docs/PLATFORM-LEVERAGE.md` blob `c45de0f72cae4b6d9cd02e690db93d802054af97`: identifies Chatwoot/Twenty/EspoCRM, n8n and document/OCR tools as candidates; its own acceptance gates are still pending.
+- Existing Documenso n8n node/SDK assets and n8n Community License SUL boundaries remain as recorded in the November 8 section; no new production integration evidence was found.
+
+Commercially usable next step remains a single narrow API/webhook pilot with client-owned destination credentials and explicit acceptance tests. The Odoo listing may fit a future *Odoo API subtask* only after an Odoo test instance and real implementation proof exist; it does not justify bidding for the whole Odoo project today.
+
+### 4. Free LLM API source — new open PR, no merged provider change
+
+Re-fetched upstream main:
+- `mnfst/awesome-free-llm-apis/data.json` SHA `4dda6e225a35e20917da0bda98fe2f7780198d95`; `lastUpdated=2026-10-25`; 15 providers and 91 model rows.
+- `sources.json` SHA `eca5cde3e02df99fa0d113db1a821158bb1dd0a0`.
+- Latest merged commit remains `095e35e10f33d7ba32ebb86e1dd0ff604dea9c1a`, dated **2026-11-04 15:19 UTC**. No new provider/model change is merged on main as of this sweep.
+
+Newly opened provider proposal:
+- [PR #229 — Add cheapllm.shop (DeepSeek V4.1 Flash 1017)](https://github.com/mnfst/awesome-free-llm-apis/pull/229), opened **2026-11-09 14:51:34 UTC**, updated after comment **16:33:46 UTC**; state open, not merged.
+- PR author `Volko61` explicitly discloses: “I run cheapllm.shop.” The maintainer replied **2026-11-09 16:33:44 UTC**: “Entries land after I check the free tier with a real request. I will run that check and follow up here.” The Copilot review could not run because the requesting user had insufficient quota. Therefore the provider has not passed the repository maintainer's independent live probe.
+- PR claims email-only signup/no card, an OpenAI-compatible API at `https://cheapllm.shop/v1` plus Anthropic Messages and Responses-compatible endpoints, one model ID `deepseek-v4.1-flash-1017`, text+image input and reasoning output. Claimed free tier is at least 5,000 input + 1,000 output tokens per account per rolling hour; the current beta is said to have no rate limit, with limits applying after beta. Requests beyond the free allowance are billed per token; over-limit responses are said to be HTTP 429 with `Retry-After`. Provider entry leaves context and max-output fields unpublished.
+- The official [DeepSeek model card on Hugging Face](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017) labels the checkpoint MIT and image-text-to-text; it reports a 1M context family specification and 763B parameters. MIT covers the model repository/weights, **not** the separate cheapllm.shop hosted API service terms.
+- Not independently verified: cheapllm.shop API availability from our account, commercial-use authorization in the provider's own terms, prompt/output retention, training use, subprocessors/data location, SLA, uptime, latency, rate-limit enforcement after beta, output quality, and image-input behavior. The official docs/terms pages could not be independently fetched in this run, and the maintainer's own real-request check is still pending.
+- Decision: **do not activate or use cheapllm.shop for customer data or paid delivery**. It is a synthetic-data evaluation candidate only after the provider terms are readable and commercial use/privacy/retention are confirmed, and after an independent API probe records HTTP status, model ID, image/text behavior, rate-limit headers, latency, and error handling. No account, API key, inference request, or spend was created.
+- If validated later, possible low-risk offers include synthetic invoice/receipt image extraction, document classification, and support-attachment triage. These remain hypotheses until actual API behavior is tested; no model/provider capability is being claimed as production-ready.
+- Existing open provider proposals #201 Runcrate, #196 Synap/Linkrra, and #155 Mixlayer remain unmerged. Prior restrictions and unresolved privacy/terms issues recorded in the November 8 section still apply; no new activation or live call was made.
+
+### 5. Commercial ledger — end of 2026-11-09 sweep
+
+- AgentMail new inbound: **0** across 3 inboxes; latest AI Coders reply remains **2026-11-02**.
+- Upwork Connects: **0** (0 free / 0 paid); proposals submitted: **0**; active contracts/offers/invitations/messages: **0 / 0 / 0 / 0**.
+- Fresh relevant Upwork listings inspected: Odoo API/CRM integration sub-scope and AI chatbot maintenance; neither was responsibly submittable. No Connects purchased.
+- Freelancer.com n8n buyer opportunities confirmed: **0**; bids submitted: **0**.
+- New qualified referrals / accepted referrals / commissions: **0 / 0 / USD 0**.
+- Provider activations / live inference calls / inference spend: **0 / 0 / USD 0**.
+- Paid lead credits / upfront spend: **USD 0 / USD 0**.
+- Confirmed new customers: **0**; confirmed revenue: **USD 0**.
+- No listing, outreach, free quota, open-source asset, internal smoke, demo, or unsubmitted proposal was counted as a customer or revenue.
