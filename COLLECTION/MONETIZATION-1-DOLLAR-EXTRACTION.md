@@ -1540,3 +1540,151 @@ Explicit exclusions: full backlink URL discovery, paid competitor intelligence, 
 - LLM provider activations / live inference calls / spend: **0 / 0 / USD 0**.
 - Paid lead credits / upfront spend: **USD 0 / USD 0**.
 - No listing, proposal, internal demo, free quota, open-source tool, or prospect history is counted as a customer or revenue.
+
+
+## 2026-11-10 — Revenue + Leverage Sweep (Run 11)
+
+**Evidence cut-off:** 2026-11-10 (America/Los_Angeles); the one targeted AgentMail message below was accepted by AgentMail at 2026-11-11T03:56:25.794Z. This is an outreach record, not a customer, reply, acceptance, contract, or revenue event.
+
+### 1. AgentMail — inbound check and one permitted targeted approach
+
+- Checked the three connected inboxes after 2026-11-09T00:00:00Z:
+  - `api-pilot@agentmail.to`: no new inbound message.
+  - `easy@agentmail.to`: no new inbound message.
+  - `pastel-realtime-e2e@agentmail.to`: no new inbound message.
+- No new AI Coders reply or referral acceptance was present.
+- A fresh, directly relevant public role appeared on the n8n Community Jobs board: **[Agency Operations & AI Systems Builder | Remote, part-time](https://community.n8n.io/t/hiring-agency-operations-ai-systems-builder-remote-part-time/327583)**, posted 2026-11-08 by `Alpenes_Kasap`.
+  - The post describes Beyond Creator as a Toronto-founded AI-powered marketing agency producing 200+ content pieces monthly.
+  - Scope: keep Notion/Slack priorities and handoffs clear; build practical n8n/API/webhook workflows; write/debug small apps; test, handle failures and document; understand creative/marketing production.
+  - Starts around 15 hours/week; applications accepted from elsewhere, with clear English and some Toronto-hours overlap. A personal AI project counts, but the applicant must show what they personally built, a demo/code sample and one coordinated project.
+  - The linked Notion form returned 404 in this check. The post explicitly permits email or direct-message contact, and the agency website publicly lists `beyondcreatorca@gmail.com`.
+- **One targeted email was sent** from `api-pilot@agentmail.to` to `beyondcreatorca@gmail.com` (the public contact on https://beyondcreator.ca/), with the job post as context. It:
+  - linked the API Factory README and persistence/smoke evidence;
+  - linked the Easy lead-qualification module;
+  - stated plainly that these are personal/internal assets, not paid-customer deployments, and that we do not yet have a verified production n8n deployment for a paying customer;
+  - offered a small paid API/webhook integration trial and asked whether the role remains open and for a working application route/rate/schedule.
+- Subject: `Re: Agency Operations & AI Systems Builder — API/webhook automation`
+- AgentMail message ID: `<010001a1c8bff587-088be95d-a392-482f-a2c9-aebefdcacc70-000000@email.amazonses.com>`
+- Thread ID: `eb4bdcab-8174-4cd7-987a-3a5d90dad272`
+- Immediate post-send inbox check showed the message under `sent`, with no reply or bounce at that time. A sent message is not proof of delivery, reading, interest, or acceptance. Do not send a duplicate or follow-up until a reasonable interval has passed.
+
+### 2. Other fresh opportunities — screened, not bid
+
+#### n8n Community
+- **Full-Time Close CRM & n8n Automation Engineer | Remote | $2,000–$3,000 USD/month**, posted 2026-11-06: relevant category, but it asks for advanced production n8n, Close CRM and Meta CAPI experience. No first-party production workflow or Close/Meta CAPI delivery proof was found; no application/contact.
+- **Looking to Hire an n8n Expert to Build a Lead Management Automation Workflow**, posted 2026-11-05: the topic matches lead qualification and CRM integration, but the thread is closed after enough responses. Do not attempt a late unsolicited contact.
+- **Looking for n8n contractors for ongoing project work**, posted 2026-11-02: asks for prior workflow portfolio and a short Loom demonstration; no first-party production n8n workflow is available to show. No contact.
+- Jobs board evidence: https://community.n8n.io/c/jobs/13
+
+#### Upwork
+- Account balance remained **0 Connects**; no paid Connects or other credits were purchased.
+- The **Facebook Marketplace Automation Expert** posting (job `2120260568607838691`) showed a USD 50 fixed budget, verified payment method, but zero client hires/reviews, four interviews, eight invitations and 10–15 proposals. It required 9 Connects and Upwork returned `can_apply=false` with the account at zero. We also lack a production n8n/marketplace reference. No bid.
+- **Quick Paid Project for n8n / Zapier / Make experts** (job `2119417394034806568`) came from a strong historical client, but explicitly requires five paid-client automation projects in the preceding six months. We cannot substantiate that prerequisite; 8 Connects were required and none were available. No bid.
+- The recent **Intercom Fin AI setup/configuration** result has a strong historical client but requires specific Intercom Fin implementation experience that is not present in our verified repository evidence. No bid.
+- The broader Upwork searches for REST/webhooks, n8n, document automation and e-commerce/support automation did not yield another bid-ready job. No applications were submitted.
+
+### 3. First-party repository evidence and reusable workflow leverage
+
+#### Salamou-31 API Factory
+- First-party README: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/README.md
+- Persistence boundary: https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/PERSISTENCE.md
+- The Render service `salamou-31-api-factory` is not suspended, runs on the **Free** plan, and has a latest deployment record with status `live`; latest deployment commit is `a2ec755fa6e756c964dc654ad4c70505e1ef7dd2` (2026-10-25). Its public health-check path is `/health`. No fresh HTTP health/readiness request was made in this sweep, so Render deployment status is not represented as a current application health test.
+- The latest documented production persistence/customer-key smoke is 2026-10-25. It proves the tested control-plane key lifecycle, storage readiness and quota behavior, but the documented registry still had zero customer-generated APIs. This is a personal platform asset, not a customer deployment or revenue.
+- The commercial service catalog contains n8n/workflow repair as an offer, but that catalog entry is not proof of a deployed n8n customer workflow.
+
+#### Easy lead qualification
+- Source: https://github.com/salamou1944/Easy-/blob/main/src/lead-qualification-workflow.mjs (source blob `38b46c992908c1fd5e23e4a53317c54c2337eec3`).
+- Unit test: https://github.com/salamou1944/Easy-/blob/main/test/lead-qualification-workflow.test.mjs (blob `0d30107579bf26d189066e8ee4136d6c23436fd9`).
+- Tests exercise a supplied test provider and validation failures. They do **not** prove a live LLM provider, CRM write, n8n deployment or paid customer use. The provider boundary is reusable for a lead-intake → validation → qualification → human review → CRM-update pilot.
+
+#### n8n workflow sample stored in Project-/COLLECTION
+- Existing extracted snapshot: `COLLECTION/AUTO/DEEP-EXTRACTED/thekaveh__rag-showcase.json`.
+- Canonical upstream: https://github.com/thekaveh/rag-showcase
+- Source revision: `67cdce058a4ab6185f5bf946e1a399699b9d879d`; declared license Apache-2.0; source pushed 2026-10-10T15:47:01Z.
+- Embedded workflow: `n8n/adaptive-rag.workflow.json`, source blob `2cb288073a43455f2e07c74cc22e72c02e4098f3`, content SHA-256 `4acc7fd022cca009dc27e1bdbfe86e35ff37bb9d359518ba37d208493573a277`.
+- Pattern: POST webhook → LiteLLM Qwen classifier → simple/complex route → `vanilla-rag` or `agentic-rag` → response shaping. It assumes internal `http://litellm:4000`, `LITELLM_API_KEY`, and those model aliases.
+- It is an **external Apache-2.0 sample**, not our authored or deployed workflow. The webhook has no authentication in the sample; add authentication, input/schema validation, rate limiting, timeout/retry bounds, secret isolation, PII policy and execution logging before adapting it. The internal service names and model aliases must be replaced and tested.
+- Search found no first-party n8n workflow export in `Salamou-31` or `agent-skills`; `agent-skills` returned no n8n code match. Current first-party evidence is API Factory + Easy lead-qualification code/tests, not a production n8n portfolio.
+
+#### Existing free-provider gate
+- `AI-API-HUB/FREE-PROVIDER-POLICY.md` requires an official provider-owned source, explicit access/eligibility/quota fields, a verified hard stop before assuming no paid charge, current source evidence (≤30 days), and fail-closed behavior.
+- `FREE-ZERO-COST-RUNTIME-OPTIONS-2026-10-21.md` says the Ollama local CI completion is development evidence, not a hosted production endpoint; Groq and Gemini probes were safe no-ops because billing-tier eligibility was empty.
+- The fixture currently dates Gemini and Ollama-local to 2026-10-05, which is 36 days old on 2026-11-10. The contract test's 30-day freshness assertion should reject those stale records until re-researched. This is an inferred test outcome from the fixture and test source; no CI workflow was run in this sweep.
+
+### 4. mnfst/awesome-free-llm-apis — current main and open provider proposals
+
+- Upstream main latest commit checked: `095e35e10f33d7ba32ebb86e1dd0ff604dea9c1a`, merge of data sync 2026-11-04 (#220).
+- Current `data.json`: 15 providers, 91 model rows; its `lastUpdated` field still says 2026-10-25, so that metadata field is stale relative to the 2026-11-04 main commit.
+- The 2026-11-04 main change removed six models no longer listed or retired. Earlier nightly/data-sync PR evidence removed 20 more model rows after repeated 404/402/410 responses on 2026-10-23 and 2026-10-24. PR #181 also recorded a model removed after three consecutive liveness failures and corrected Hugging Face/Ollama free-tier terms. Free-model names and quotas are volatile; re-query the provider's live model catalog before every deployment.
+- Four provider additions remain open/unmerged in this audit:
+
+#### CheapLLM — PR #229 (newest; not approved)
+- PR: https://github.com/mnfst/awesome-free-llm-apis/pull/229
+- Created 2026-11-09T14:51:34Z; updated 2026-11-10T15:59:26Z; contributor disclosed they operate the provider.
+- Claims free/no-rate-limit access during beta; afterward a permanent minimum of 5,000 input + 1,000 output tokens/hour per account. One model: `deepseek-v4.1-flash-1017`; text + image input, reasoning output; context/max output not published. OpenAI-compatible `https://cheapllm.shop/v1`; PR says email sign-up and no card.
+- Maintainer's independent live request is still pending. The provider's terms/docs could not be independently retrieved in this audit; commercial-use, retention/training, model provenance/license, operational reliability and actual multimodal behavior remain unverified. The PR is not merged. Do not create a key or send customer data.
+
+#### Synap / Linkrra — PR #196 (not approved)
+- PR: https://github.com/mnfst/awesome-free-llm-apis/pull/196
+- PR claims 100K tokens/day, but maintainer review found the public free-tier endpoint described only one model (`qwen3-coder-30b`) and reported 100K tokens/day, 50 requests/day, 10 RPM and 4,096 max output. The advertised signup link returned 404 in the maintainer's check; the public provider page did not substantiate permanent free access. The PR remains open and facts are unresolved. Do not use.
+
+#### Runcrate — PR #201 (hold for account/terms clarification)
+- PR: https://github.com/mnfst/awesome-free-llm-apis/pull/201
+- Claims five free models for a workspace whose owner has a GitHub account at least 30 days old, no card, with shared per-session/per-week allowance; no fixed RPM/TPM is published. The PR contributor (who disclosed working on Runcrate) reports HTTP 200 on all five model IDs from a free account with no credit/card; this is contributor evidence, not our account or an independent maintainer probe.
+- Official privacy page says API prompts/answers are not kept unless workspace saving is enabled, Playground history is separate, and saved prompts are not used to train models. However, the official Terms describe a prepaid-credit system and do not promise uninterrupted access. Resolve the relationship between the free allowance and prepaid-credit wording, and confirm commercial API rights and model-specific terms before use. No key or call created.
+
+#### Mixlayer — PR #155 (hold; privacy and quota review)
+- PR: https://github.com/mnfst/awesome-free-llm-apis/pull/155
+- Proposed free model `qwen/qwen3.5-4b-free`, $0 input/output, OpenAI-compatible chat API, text + vision, 131,072 context. Free models do not require prepaid credits. Rate limits are per organization/model and are not fixed; inspect `x-ratelimit-*` headers and obey 429/`retry-after`.
+- ZDR docs say prompts/outputs are processed in memory and discarded immediately; org admins can set **Never store** for supported stored-response APIs. However, the Terms allow API requests/responses, logs/metadata and uploaded files to be retained for up to one year unless otherwise agreed in writing. The Terms also say model-provider third-party terms apply, SOC 2 is in progress, outputs are “as is,” and uninterrupted operation is not guaranteed. No live call or model-license review was performed. Do not use customer data until retention is contractually clarified, ZDR is configured, the model license is verified, and a live account test passes.
+
+#### Other recently reviewed provider proposals — closed/rejected
+- Merkium #169: maintainer closed because the company was not registered and model origin/free-tier permanence could not be independently verified.
+- IteraCompute #161: its Qwen3.8-27B promotion ends 2026-11-24; not a permanent free tier.
+- MapleAI #131: thin reseller of NVIDIA models; 10 requests/10 minutes and 100/day per IP; rejected as not an independent free-model provider.
+- BazaarLink #114: gateway/reseller with dynamic free quotas and no stable allowance; rejected.
+- TeamoRouter #107: its “free” models were described by provider pages as promotional discounts and required a minimum $5 top-up; rejected.
+- Api.Airforce #60: reseller/origin and free-model provenance not established; the maintainer did not accept the PR.
+- These closed proposals are discovery evidence only; do not activate them.
+
+### 5. Strongest existing no-upfront inference candidates (official sources checked; not yet live-tested by our account)
+
+#### Groq — GPT-OSS 20B
+- Official model/API page: https://console.groq.com/docs/models
+- Official rate limits: https://console.groq.com/docs/rate-limits
+- Free-plan base limits for `openai/gpt-oss-20b`: **30 RPM, 1,000 RPD, 8,000 TPM, 200,000 TPD**; account-specific limits can differ and the console is authoritative. Exceeding limits returns 429. Model is currently listed as a production model, text-only, with tool/browser/code capabilities documented by Groq.
+- Billing FAQ: a payment method is required to upgrade from Free to Developer; the free plan is rate-limited. Do not upgrade or add a payment method for this work.
+- Data: inference inputs/outputs are not retained by default; reliability/abuse monitoring may retain them up to 30 days unless Zero Data Retention is enabled. Usage metadata is always retained. Groq says it does not use inputs/outputs for model training absent explicit permission.
+- Terms: APIs may be integrated into a Customer Application and made available to its End Users; account access may not be resold or leased, and Cloud Services may not be resold/sublicensed except with approval. This supports a managed service behind our application, not a resale of Groq API access or exposure of our key.
+- Model license: OpenAI's GPT-OSS weights are Apache-2.0, subject to the GPT-OSS usage policy.
+- Reliability caveat: no uninterrupted/error-free warranty; free-service liability is limited. Treat as a low-volume, non-critical inference candidate with retries, strict spend/usage guards, human review and deterministic fallback. No account key, live call or customer data was used.
+
+#### Cloudflare Workers AI — GPT-OSS 20B / small text models
+- Official pricing: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- Official limits: https://developers.cloudflare.com/workers-ai/platform/limits/
+- Official data use: https://developers.cloudflare.com/workers-ai/platform/data-usage/
+- Workers Free includes **10,000 Neurons/day at no charge**; on Workers Free, exceeding the allocation causes further operations to fail until upgrading. Workers Paid charges $0.011 per 1,000 Neurons above the daily free allocation. The daily counter resets at 00:00 UTC.
+- Default text-generation rate limit is 300 RPM; text classification is 2,000 RPM and summarization 1,500 RPM. Per-model/account limits and exceptions still apply. `@cf/openai/gpt-oss-20b` appears in the public catalog and is not among the models listed as requiring a paid billing method. Its published price is $0.20/M input and $0.30/M output tokens, metered in Neurons.
+- Data: standard stateless inference has zero data retention after processing and Customer Content is not used to train models. Stateful features, AI Gateway logging/caching, or app logs can store content; operational metadata is retained.
+- GPT-OSS model license is Apache-2.0, subject to its usage policy. Cloudflare's service agreement and any model-specific terms still apply.
+- This is the strongest no-upfront hosted candidate for a small, non-critical pilot if the account stays on Workers Free and only non-paid models are selected. No Cloudflare account was created and no live inference call was made.
+
+### 6. Sellable service hypotheses enabled by the evidence (not yet delivered or marketed)
+
+1. **Agency content-operations workflow:** intake via authenticated webhook → classify/route → Notion/Slack task → owner/deadline → human approval → audit log. This maps to the Beyond Creator job, but requires a scoped trial and confirmation of role/budget.
+2. **Lead qualification + CRM sync:** validate incoming lead → optional low-cost model classification → human review → CRM update/notification. Reuse the Easy provider boundary and API Factory auth/quota/idempotency controls. Do not automatically send outbound messages without explicit customer approval.
+3. **Document intake/support triage:** local OCR or customer-provided extraction → schema validation → optional low-cost model summary/classification → CRM/support queue. Use client-owned accounts/keys where possible; do not send sensitive documents to a provider until its retention terms and account configuration are approved.
+
+Pricing references in `AI-API-HUB/OFFERS-AND-PRICING.md` remain internal starting ranges, not validated buyer willingness-to-pay. Prefer a small paid trial, customer-owned integrations/credentials, no provider spend by us, and explicit acceptance criteria. A free quota is not a customer or revenue.
+
+### 7. Run 11 ledger — strict commercial counts
+
+- New inbound AgentMail replies since 2026-11-09: **0**.
+- Targeted role inquiry sent: **1**; replies/acceptance: **0**.
+- Upwork applications: **0**; available Connects: **0**; purchased Connects: **0**.
+- Freelancer bids/messages: **0 / 0**.
+- New customers / accepted referrals / new contracts: **0 / 0 / 0**.
+- Confirmed revenue: **USD 0**.
+- Provider keys created / providers activated / live inference calls: **0 / 0 / 0**.
+- Paid lead credits / upfront spend: **USD 0 / USD 0**.
+- No listing, outreach, role application, repository capability, free quota, external workflow sample, or provider PR is counted as a customer or revenue.
