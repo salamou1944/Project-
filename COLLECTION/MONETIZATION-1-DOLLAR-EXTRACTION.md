@@ -1733,8 +1733,8 @@ The connected account still has **0 Connects**. The job-detail tool returned `ca
 Repositories were inspected at the latest available commits; these findings separate implementation from service claims.
 
 - **Salamou-31 / API Factory**
-  - `AI-API-HUB/api-factory/README.md` blob: `810353e5b8f4d37a7c69e7b23d4c3f3e4a5b7d22`.
-  - `AI-API-HUB/api-factory/PERSISTENCE.md` blob: `bbbe2b44e8c1c4b6b84c4f1c2a4d5b6e7f8091a2`.
+  - `AI-API-HUB/api-factory/README.md` blob: `810353697d157e42c2d57b7c0094ad687b3a794f`.
+  - `AI-API-HUB/api-factory/PERSISTENCE.md` blob: `bbbe0439cee1947774c6c8aa818133c10909b7f7`.
   - The documented reusable boundary includes manifest validation, OpenAPI contracts, API-key authentication, quota enforcement, idempotency and structured errors. The deploy plan is preflight/planning, not a deployment executor. The persistence evidence in the document is a 2026-10-25 snapshot; no fresh production smoke was run in this supplement. Do not claim current health or a paying API customer from that snapshot.
   - Latest repository commit inspected: `429b8b047e9a277cb04c420dd131614bb1dbb35f`; it adjusts the Gemini probe workflow dependency installation, not a new customer-facing service. Combined commit status returned no checks for this commit.
 
@@ -1742,7 +1742,7 @@ Repositories were inspected at the latest available commits; these findings sepa
   - `src/lead-qualification-workflow.mjs` blob: `38b46c992908c1fd5e23e4a53317c54c2337eec3`.
   - `src/providers/salamou31-lead-qualification.mjs` blob: `9fcd36f7d41c5c4c0f7eb8d9b824afce90ec29d2`. It calls `POST /v1/leads/qualify` with an API key and idempotency key and validates the returned score/priority. The unit test `test/lead-qualification-workflow.test.mjs` blob `0d30107579bf26d189066e8ee4136d6c23436fd9` uses a test provider; this is not a live CRM write or a customer deployment.
   - `src/seller-product-workflow.mjs` blob: `e3dcda1d96337595b478ea34d902b0fb0d215369` retains the product-integrity boundary; fallback output is not publishable.
-  - `api-lab/mini-apps/support-resolution-engine.html` blob: `1caf4c2b90c8b1a2e8f6b2c8a3d4e5f60718293a` is a static mock-data demonstration, not a live LLM/CRM/order integration.
+  - `api-lab/mini-apps/support-resolution-engine.html` blob: `1cafc4f027d330a8a8ec7106c6b59fc412486a23` is a static mock-data demonstration, not a live LLM/CRM/order integration.
   - Latest commit inspected: `735f2ab5c26d411d3f1886e4b75493405dc756ac`, which defers provider adapters until local media gates pass. Combined commit status returned no checks; do not claim a verified CI run from the commit message alone.
 
 - **agent-skills**
