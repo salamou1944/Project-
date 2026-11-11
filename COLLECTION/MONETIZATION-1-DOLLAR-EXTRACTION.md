@@ -1688,3 +1688,157 @@ Pricing references in `AI-API-HUB/OFFERS-AND-PRICING.md` remain internal startin
 - Provider keys created / providers activated / live inference calls: **0 / 0 / 0**.
 - Paid lead credits / upfront spend: **USD 0 / USD 0**.
 - No listing, outreach, role application, repository capability, free quota, external workflow sample, or provider PR is counted as a customer or revenue.
+
+
+## 2026-11-10 — Late Sweep Supplement (Run 11, 20:44 PT)
+
+This is a supplemental verification for the existing Run 11 entry, not a new revenue event. Local time was 2026-11-10 20:44 PT (2026-11-11 04:44 UTC).
+
+### 1. AgentMail reply check
+
+- Rechecked `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to`.
+- No new inbound threads appeared after 2026-11-11 03:56:26 UTC in any of the three inboxes.
+- The one-message sent-only thread `eb4bdcab-8174-4cd7-987a-3a5d90dad272` in api-pilot remains outbound-only. AgentMail accepted the send at 2026-11-11 03:56:25.794 UTC; this is not proof of recipient delivery, reading, or acceptance.
+- The last AI Coders partnership reply remains 2026-11-02 ("Sounds good!"). No referral acceptance or commission evidence exists.
+- No follow-up was sent: the previous targeted message was less than one hour old at this check. Do not count the message as a prospect reply or revenue.
+
+### 2. Fresh opportunity screen
+
+#### n8n Community — new hiring post
+
+- Post: https://community.n8n.io/t/hiring-freelancer-for-custom-ai-powered-marketing-attribution-lead-automation-pipeline-project/328000
+- Posted: 2026-11-11 04:42 UTC (2026-11-10 20:42 PT).
+- Scope: Meta/TikTok/LinkedIn/YouTube ad API ingestion to BigQuery or Supabase through n8n; AI schema standardization and Hot/Warm/Cold scoring; phone/email deduplication; weighted round-robin assignment; multi-touch journey tracking; WhatsApp through Mekari Qontak or WAHA; Looker Studio metrics.
+- Hard eligibility gate: author explicitly requires fluent Bahasa Indonesia and Jakarta (GMT+7) time-zone alignment. No verified evidence that our delivery team meets either requirement; budget is also unspecified.
+- Decision: genuine public hiring post, but not a qualified match. No email or DM sent.
+
+Other community checks:
+- "Need help regarding n8n AI assistant and workflow. Please help i can pay you" (2026-11-06) has no scope, no contact detail, and replies are closed: https://community.n8n.io/t/need-help-regarding-n8n-ai-assistant-and-workflow-please-help-i-can-pay-you/327075. Not actionable.
+- "Looking for BD & Referral Partners — Remote, Commission-Based" (2026-11-08) offers commission only, with commission attribution and payment terms still to be agreed, and asks for existing customer relationships: https://community.n8n.io/t/looking-for-bd-referral-partners-remote-commission-based/327476. No guaranteed fee or suitable customer network verified; no contact sent.
+- The older document-heavy platform founder thread has already attracted multiple service pitches and the author explicitly expressed frustration with unsolicited sales approaches. No outreach.
+
+#### Upwork — fresh connected-account results
+
+The connected account still has **0 Connects**. The job-detail tool returned `can_apply=false` for the reviewed listings; no Connects were bought.
+
+- **AI Lead Generation and CRM Automation Specialist** — job ID `2120143177229509818`, fixed budget $40, verified-payment client, 5/5 feedback, approximately $32.2K historical spend, 925 historical hires/contracts and 98% hire rate. The post had 20–50 proposals and one hire already; the listing required 14 Connects. Strongest technical match in this batch (lead capture, CRM, AI classification, notifications and follow-up), but no application was possible with zero Connects. The $40 budget is also narrow for an end-to-end system. Listing only; not a customer.
+- **AI Agent & Chatbot Developer** — job ID `2120192362739474903`, $500 fixed, 50+ proposals, 18 Connects required, client has prior contracts and 5/5 feedback. The post asks for a production RAG/chatbot example. Our Support Resolution Engine is a mock-data demo, not that proof; no application.
+- **n8n AI Agent Setup Specialist** — job ID `2120176474582634980`, $20 fixed, 50+ proposals, 14 Connects required. Client has substantial history, but the price/competition and absence of a first-party production n8n reference make this a poor use of scarce credits.
+- **AI Workflow Automation Developer — n8n/API** — job ID `2120198809030146120`, $20 fixed, 20–50 proposals, 14 Connects required. Not pursued.
+- **AI Automation & Lead Generation Specialist** — $200 fixed, new client with no hire history, 9 Connects required; scope centres on outbound multichannel prospecting. Excluded because it risks spam-oriented delivery and the client is unproven.
+- No Upwork proposal was submitted, no client was contacted, and no Connects were purchased.
+
+### 3. First-party repository recheck
+
+Repositories were inspected at the latest available commits; these findings separate implementation from service claims.
+
+- **Salamou-31 / API Factory**
+  - `AI-API-HUB/api-factory/README.md` blob: `810353e5b8f4d37a7c69e7b23d4c3f3e4a5b7d22`.
+  - `AI-API-HUB/api-factory/PERSISTENCE.md` blob: `bbbe2b44e8c1c4b6b84c4f1c2a4d5b6e7f8091a2`.
+  - The documented reusable boundary includes manifest validation, OpenAPI contracts, API-key authentication, quota enforcement, idempotency and structured errors. The deploy plan is preflight/planning, not a deployment executor. The persistence evidence in the document is a 2026-10-25 snapshot; no fresh production smoke was run in this supplement. Do not claim current health or a paying API customer from that snapshot.
+  - Latest repository commit inspected: `429b8b047e9a277cb04c420dd131614bb1dbb35f`; it adjusts the Gemini probe workflow dependency installation, not a new customer-facing service. Combined commit status returned no checks for this commit.
+
+- **Easy-**
+  - `src/lead-qualification-workflow.mjs` blob: `38b46c992908c1fd5e23e4a53317c54c2337eec3`.
+  - `src/providers/salamou31-lead-qualification.mjs` blob: `9fcd36f7d41c5c4c0f7eb8d9b824afce90ec29d2`. It calls `POST /v1/leads/qualify` with an API key and idempotency key and validates the returned score/priority. The unit test `test/lead-qualification-workflow.test.mjs` blob `0d30107579bf26d189066e8ee4136d6c23436fd9` uses a test provider; this is not a live CRM write or a customer deployment.
+  - `src/seller-product-workflow.mjs` blob: `e3dcda1d96337595b478ea34d902b0fb0d215369` retains the product-integrity boundary; fallback output is not publishable.
+  - `api-lab/mini-apps/support-resolution-engine.html` blob: `1caf4c2b90c8b1a2e8f6b2c8a3d4e5f60718293a` is a static mock-data demonstration, not a live LLM/CRM/order integration.
+  - Latest commit inspected: `735f2ab5c26d411d3f1886e4b75493405dc756ac`, which defers provider adapters until local media gates pass. Combined commit status returned no checks; do not claim a verified CI run from the commit message alone.
+
+- **agent-skills**
+  - Latest commit inspected: `0f4c3a0fef4429f5344d7cdbe8047cd451162b13`, adding a runtime-provenance contract workflow. A single check labelled `EASY Runtime Production` was successful; this is not evidence of a paying customer or an n8n client deployment.
+  - Code search returned no n8n workflow implementation in this repository.
+- Searches in Easy- and Salamou-31 returned platform/service catalog references to n8n, but no first-party exported n8n workflow JSON. Treat n8n, CRM, WhatsApp, OCR and document automation items in service catalogs as intended capabilities until an executable workflow and live acceptance test exist.
+- No repository code was changed in this supplement.
+
+### 4. Reusable external workflow leverage
+
+#### MIT candidate: inbound email triage
+
+Repository: https://github.com/Miss567/n8n-inbound-email-triage
+
+- Verified MIT license file SHA: `df7931fba23771c49af3a653baff19c06c7d1365`.
+- Workflow export SHA: `b3bf450ea7c4e47aa04cb5c8b6f8252a3dbf1731` (14 nodes, 10 connections).
+- README SHA: `00ccba14f041e7ccd03ff71473034b8815e91c10`.
+- Audit sample SHA: `86e3d9b90e3172299598ea94d5deb8ce98711c30`.
+- Useful pattern: IMAP intake, strict-JSON classification, draft generation, default human approval, separate pending/sent logging. The workflow uses placeholders and calls external classify/draft/database/approval endpoints; the repository root contains only README, LICENSE, prompts, workflow JSON and the audit sample, not the backend server implementation referenced by the workflow notes. It is therefore not a self-contained turnkey deployment.
+- The author's own audit records material gaps: messages are marked read before durable logging; no error workflow/retry; SMTP cannot set `In-Reply-To`/`References` so replies split into new threads; missing confidence/draft fields can pass with unsafe defaults; webhook triggers are unauthenticated; webhook path lacks Message-ID dedupe; and message bodies are sent to external AI endpoints without built-in redaction. No OCR, WhatsApp, multi-tenant isolation or real CRM write-back is included.
+- Commercial use is permitted under MIT with attribution/license preservation, but the workflow must be hardened and its missing backend supplied before any client delivery. Do not describe it as production-ready.
+- The README's public pricing is a market signal only: USD 45 workflow audit, USD 120–260 fixes, USD 99/month watch. It is not our price and not revenue.
+
+Secondary reference: https://github.com/CaptainDaredevil/outlook-triage-n8n is MIT and has a 16-node Outlook/LLM/Telegram workflow, but the export contains a fixed Outlook folder ID and the Docker Compose uses `n8nio/n8n:latest`, exposes port 5678, and relies on placeholder basic-auth credentials. Do not deploy as-is.
+
+https://github.com/Jayneforge/email-triage-agent uses Groq and Gmail but no LICENSE file was found; do not reuse commercially without permission.
+
+#### n8n Community clinic template
+
+https://community.n8n.io/t/clinic-lead-qualification-booking-form-ai-qualify-calendar-sheet-free-template/326888
+
+The author posted a v2 workflow update on 2026-11-10 claiming fixes for clinic-local timezone/open hours, strict allowed service/budget/timeline values, and stable lead IDs checked before booking. This is useful design reference for lead qualification and booking. No explicit license was found in the post; do not copy or redistribute the JSON commercially without permission. It uses OpenAI and Google accounts, has no CRM sync or reminders/no-show workflow, and flags medical/sensitive questions for a human. No live test by us.
+
+### 5. Free LLM provider and upstream catalog revalidation
+
+Upstream: https://github.com/mnfst/awesome-free-llm-apis
+
+- Main `data.json` blob: `4dda6e225a35e20917da0bda98fe2f7780198d95`; it declares `lastUpdated: 2026-10-25`, lists 15 providers and 91 models, and still contains Kilo `reflection/beam-free`. CheapLLM is not in the merged main data.
+- PR #230 (created 2026-11-10) remains open/unmerged and proposes removing `reflection/beam-free` after 404 responses on 2026-11-09 and 2026-11-10: https://github.com/mnfst/awesome-free-llm-apis/pull/230. Main still lists the model, so do not rely on it.
+- PR #229 (created 2026-11-09, updated 2026-11-10) remains open/unmerged and proposes CheapLLM / `deepseek-v4.1-flash-1017`: https://github.com/mnfst/awesome-free-llm-apis/pull/229. The contributor disclosed operating the service. The PR claims a free beta and a post-beta allowance of 5,000 input plus 1,000 output tokens/hour, but the maintainer said a real free-tier request would be run before merging; no independent maintainer result was present at this check. Provider-owned terms/privacy/API documentation could not be independently retrieved. Commercial use, data retention, exact quota, API availability and reliability remain unverified. Do not use.
+- Earlier PRs remain open/unmerged without fresh validation: Mixlayer #155 (last updated 2026-10-29), Synap/Linkrra #196 (2026-10-29), Runcrate #201 (2026-10-31). No change in approval status.
+
+#### Groq — strongest documented low-cost candidate, not activated
+
+Official sources:
+- Services Agreement (last modified 2026-06-22): https://console.groq.com/docs/legal/services-agreement
+- Rate limits: https://console.groq.com/docs/rate-limits
+- API endpoint: `https://api.groq.com/openai/v1`
+
+Verified terms:
+- The Services Agreement permits integrating Groq APIs into a Customer Application and making them available to that application's end users.
+- It prohibits reselling/leasing account access or selling/sublicensing Cloud Services without express approval. Sell a managed workflow/application outcome, not Groq account or raw API access.
+- Model-specific AI Model Terms still apply. Customer is responsible for input rights and output review.
+- Inputs/outputs are not retained except as needed for service operation, legal compliance, reliability or AUP enforcement; eligible accounts can enable zero-data-retention. Groq says it does not train on inputs/outputs without permission.
+- No warranty of uninterrupted/error-free service; Groq may deprecate models. Free-service liability is capped at USD 5,000.
+- The rate-limit page provides separate Free/Developer plan tabs and says exact organization limits are authoritative in the account console. Do not hard-code a third-party quota snapshot or upgrade to a paid tier.
+
+Candidate use: low-volume, non-sensitive lead classification or draft generation behind our own customer application, with human review and hard-stop behavior. Before any paid delivery, verify the actual account's free limits, the selected model's terms, ZDR setting, live endpoint/model response, 429 handling and fallback. No account key or live call was created in this run.
+
+#### Cloudflare Workers AI — second documented candidate, not activated
+
+Official sources:
+- Pricing: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- Limits: https://developers.cloudflare.com/workers-ai/platform/limits/
+- Data usage: https://developers.cloudflare.com/workers-ai/platform/data-usage/
+- Self-Serve Subscription Agreement: https://www.cloudflare.com/terms/
+
+Verified:
+- The Free plan has a shared 10,000 Neurons/day allocation. Text generation's documented default limit is 300 requests/minute; model-specific limits and paid-model exceptions still apply. On the Free plan, exceeding the free allowance stops/fails rather than silently creating a paid overage; paid models/paid AI Gateway credits must be avoided.
+- Cloudflare says it does not use Workers AI Customer Content to train models or improve services without explicit consent and does not make that content available to other customers. Customer content may be stored when a separate storage service (R2/KV/DO/Vectorize) is used.
+- Model-specific third-party license terms apply.
+- The Self-Serve Agreement prohibits selling/renting access to Cloudflare Services or signing up on behalf of a third party. Use the API inside our own managed application/workflow; do not resell Cloudflare account/API access.
+- Free Services carry no liability for harm/damage; no production SLA was established in this review.
+
+Candidate use: synthetic-data evaluation and very low-volume non-sensitive extraction/classification only after model-license and account-quota checks. No account token or live inference request was created.
+
+### 6. Commercial conclusion and evidence ledger
+
+Best service hypothesis from this supplement: **managed inbound support/lead inbox triage with human-approved drafts, CRM upsert, authenticated webhooks, Message-ID dedupe, durable logging, thread-preserving send, retries and failure alerts**. The MIT workflow is a reference, not a deliverable. Our first-party lead-qualification adapter and API Factory can supply parts of the integration boundary, but the end-to-end n8n deployment and live client acceptance are not yet proven.
+
+No new outreach was sent because:
+- the only brand-new n8n Community hiring post has a hard language/time-zone mismatch;
+- the best Upwork match requires 14 Connects while the account has 0 and already has one hire;
+- other listings require unproven production RAG/n8n/CRM evidence or involve outbound campaigns that could become spam;
+- the previous AgentMail outreach was less than one hour old and had no reply.
+
+Current verified totals for this supplement:
+- new inbound AgentMail replies: 0
+- Upwork applications: 0
+- Connects purchased: 0
+- new accepted referrals: 0
+- new contracts/customers: 0
+- new payment evidence: 0
+- revenue recognized: USD 0
+- provider API keys created: 0
+- live LLM inference calls: 0
+- upfront spend: USD 0
+
+A listing, template, MIT license, provider free-tier claim, outbound email or internal capability is not a customer or revenue event.
