@@ -1735,7 +1735,7 @@ Repositories were inspected at the latest available commits; these findings sepa
 - **Salamou-31 / API Factory**
   - `AI-API-HUB/api-factory/README.md` blob: `810353697d157e42c2d57b7c0094ad687b3a794f`.
   - `AI-API-HUB/api-factory/PERSISTENCE.md` blob: `bbbe0439cee1947774c6c8aa818133c10909b7f7`.
-  - The documented reusable boundary includes manifest validation, OpenAPI contracts, API-key authentication, quota enforcement, idempotency and structured errors. The deploy plan is preflight/planning, not a deployment executor. The persistence evidence in the document is a 2026-10-25 snapshot; no fresh production smoke was run in this supplement. Do not claim current health or a paying API customer from that snapshot.
+  - The documented reusable boundary includes manifest validation, OpenAPI contracts, API-key authentication, quota enforcement, idempotency and structured errors. The deploy plan is preflight/planning, not a deployment executor. PERSISTENCE.md records a strict external smoke on 2026-10-25 and explicitly reports zero registered APIs in both targets; no fresh production smoke was run in this supplement. Do not claim current health or a paying API customer from that snapshot.
   - Latest repository commit inspected: `429b8b047e9a277cb04c420dd131614bb1dbb35f`; it adjusts the Gemini probe workflow dependency installation, not a new customer-facing service. Combined commit status returned no checks for this commit.
 
 - **Easy-**
@@ -1748,7 +1748,7 @@ Repositories were inspected at the latest available commits; these findings sepa
 - **agent-skills**
   - Latest commit inspected: `0f4c3a0fef4429f5344d7cdbe8047cd451162b13`, adding a runtime-provenance contract workflow. A single check labelled `EASY Runtime Production` was successful; this is not evidence of a paying customer or an n8n client deployment.
   - Code search returned no n8n workflow implementation in this repository.
-- Searches in Easy- and Salamou-31 returned platform/service catalog references to n8n, but no first-party exported n8n workflow JSON. Treat n8n, CRM, WhatsApp, OCR and document automation items in service catalogs as intended capabilities until an executable workflow and live acceptance test exist.
+- Searches in Easy- and Salamou-31 returned platform/service catalog references to n8n, but no first-party exported n8n workflow JSON. Easy docs/PLATFORM-LEVERAGE.md blob `c45de0f72cae4b6d9cd02e690db93d802054af97` lists Medusa/Vendure/Saleor/WooCommerce/PrestaShop, Chatwoot/Twenty/EspoCRM, n8n, rembg/Upscayl/ComfyUI/FFmpeg/whisper.cpp/Piper, OCRmyPDF/Docling/Tesseract, and APISIX/STOA/LiteLLM as candidates; that file is a leverage catalog, not evidence those integrations are installed or deployed. Treat n8n, CRM, WhatsApp, OCR and document automation items in service catalogs as intended capabilities until an executable workflow and live acceptance test exist.
 - No repository code was changed in this supplement.
 
 ### 4. Reusable external workflow leverage
@@ -1783,7 +1783,7 @@ Upstream: https://github.com/mnfst/awesome-free-llm-apis
 - Main `data.json` blob: `4dda6e225a35e20917da0bda98fe2f7780198d95`; it declares `lastUpdated: 2026-10-25`, lists 15 providers and 91 models, and still contains Kilo `reflection/beam-free`. CheapLLM is not in the merged main data.
 - PR #230 (created 2026-11-10) remains open/unmerged and proposes removing `reflection/beam-free` after 404 responses on 2026-11-09 and 2026-11-10: https://github.com/mnfst/awesome-free-llm-apis/pull/230. Main still lists the model, so do not rely on it.
 - PR #229 (created 2026-11-09, updated 2026-11-10) remains open/unmerged and proposes CheapLLM / `deepseek-v4.1-flash-1017`: https://github.com/mnfst/awesome-free-llm-apis/pull/229. The contributor disclosed operating the service. The PR claims a free beta and a post-beta allowance of 5,000 input plus 1,000 output tokens/hour, but the maintainer said a real free-tier request would be run before merging; no independent maintainer result was present at this check. Provider-owned terms/privacy/API documentation could not be independently retrieved. Commercial use, data retention, exact quota, API availability and reliability remain unverified. Do not use.
-- Earlier PRs remain open/unmerged without fresh validation: Mixlayer #155 (last updated 2026-10-29), Synap/Linkrra #196 (2026-10-29), Runcrate #201 (2026-10-31). No change in approval status.
+- Earlier PRs remain open/unmerged without fresh validation: Mixlayer #155 (last updated 2026-10-29), Synap/Linkrra #196 (2026-10-29), Runcrate #201 (2026-10-31). No change in approval status. Salamou-31/AI-API-HUB/FREE-PROVIDER-POLICY.md blob `16053e910591f92e40994759e412ef1be62fef25` requires official provider-owned HTTPS sources, source freshness no older than 30 days, explicit eligibility and account-level hard-stop evidence, deduplication of shared quotas, and fail-closed behavior for missing or contradictory fields. The CheapLLM PR does not meet this gate; Groq and Cloudflare remain candidates until their account-level free limits and model-specific terms are checked.
 
 #### Groq — strongest documented low-cost candidate, not activated
 
