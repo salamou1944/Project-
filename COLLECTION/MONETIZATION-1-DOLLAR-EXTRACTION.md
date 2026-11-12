@@ -1991,3 +1991,90 @@ Current official facts:
 - Provider keys created / providers activated / live inference calls: **0 / 0 / 0**.
 - Paid lead credits / upfront spend: **USD 0 / USD 0**.
 - No listing, public hiring post, outbound inquiry, marketplace membership, repository capability, model/provider listing, free quota, or provider PR is counted as a customer or revenue.
+
+
+## 2026-11-11 — Late sweep supplement: CRM follow-up opportunity and upstream governance updates
+
+This supplement adds a second-pass review of fresh Upwork CRM listings, the complete current AutoMatch Terms, and two additional merged upstream PRs discovered after the main Run 11 entry.
+
+### 1. AgentMail recheck
+
+- Rechecked the AutoMatch thread after the initial send. It still contains only our outbound message; no reply has arrived.
+- Received-thread searches in api-pilot@agentmail.to, easy@agentmail.to and pastel-realtime-e2e@agentmail.to remain empty after 2026-11-11 00:00 UTC.
+- The AutoMatch inquiry is not an accepted application, introduction, customer, contract or revenue event. No second message was sent.
+
+### 2. Strongest fresh Upwork fit — not actionable without paid Connects
+
+**Complete Email Campaigns, SMS and Lead Follow-Up**, job ID 2120536424756285933:
+https://www.upwork.com/jobs/~022120536424756285933
+
+- Posted 2026-11-11; $150 fixed; client payment method verified; client historical spend USD 76,439.19; 10–15 proposals and 14 interviews at the time of the connected-account screen.
+- Scope is unusually close to our evidence-backed integration boundary: existing CRM and communication history; new-enquiry routing; owner assignment; staff tasks and overdue alerts; reply/call outcome matching; follow-up sequences; CRM-based email campaigns; recipient preference/unsubscribe exclusions; duplicate suppression; delivery/bounce/unsubscribe logging; safe recovery and status distinctions.
+- The client explicitly requires CRM contact preferences to be respected, unsubscribed/ineligible contacts excluded, campaign and follow-up sequences not duplicated, and replies/bookings/opt-outs/closed enquiries to stop or change sequences. This is a consent-aware workflow, not a request for indiscriminate bulk messaging.
+- Connected Upwork job detail returned can_apply=false, 0 Connects available and 18 Connects required. No Connects were bought and no proposal or off-platform contact was made.
+- This is the best technical match in this pass, but the exact CRM/application, provider accounts, data model and code ownership still need discovery before a fixed-price commitment. A responsible paid-trial scope would start with one enquiry route, CRM owner/task state, reply matching, suppression/stop conditions and audit/retry behavior, not the entire email/SMS/calling/campaign scope for USD 150.
+- Decision: record as a genuine, high-fit listing only. No customer, proposal, acceptance or revenue.
+
+Other fresh CRM listings were rejected:
+- HubSpot CRM Specialist for Sales Workflow Optimization, job ID 2120611419783014572: client payment method verified, USD 487.10 historical spend, 15–20 proposals, one interview, 8 Connects required. It explicitly asks for prior HubSpot workflow examples; no first-party HubSpot deployment is evidenced.
+- Part-Time Real Estate VA — Lofty CRM & Lead Follow-Up, job ID 2120711186200584398: $500 budget and verified payment, but requires hands-on Lofty/Chime real-estate brokerage experience and daily VA ownership, not just API integration.
+- GoHighLevel CRM Pipeline Setup, job ID 2120605788134808153: fixed budget USD 5, 8 Connects required, and explicitly requests prior GHL pipeline examples. Not a responsible use of scarce credits.
+- The Upwork account still has 0 free and 0 paid Connects. No application was submitted.
+
+### 3. Freelancer.com and n8n Community cross-check
+
+- Freelancer search surfaced “Complete n8n Workflow Automation” with a stated USD 750–1,500 budget, 383 proposals and recent activity, but the original project URL returned 404 when opened. The listing is not verifiable as currently actionable; no bid or message.
+- Other surfaced Freelancer WhatsApp/CRM projects were closed or posted one to nine months ago. The n8n/CRM listing marked In Progress was posted about two months ago. None was treated as a fresh open opportunity.
+- The 2026-11-11 n8n Community AutoMatch founding-builder post remains the only directly invited new cohort opportunity we contacted. Its stated prerequisite is hands-on n8n plus client-work examples; our inquiry disclosed that the current portfolio is personal engineering work, not a paid-client n8n case study.
+- The 2026-11-11 marketing attribution/lead-engine post remains disqualified by its explicit Bahasa Indonesia fluency and Jakarta GMT+7 requirements. No outreach.
+
+### 4. AutoMatch — corrected platform risk assessment
+
+Current official Terms: https://useautomatch.com/terms (last updated 2026-11-08). Current homepage/pricing surface: https://useautomatch.com/.
+
+The Terms confirm:
+- Builder membership is free during launch; AutoMatch promises at least 30 days’ email notice before any membership charge, and an account can be closed before that charge.
+- The 10% consultant service fee applies even during the free launch period. Businesses pay 6%, reduced to 3% by bank transfer.
+- Funded milestones are held in AutoMatch’s Stripe account until release/refund, but AutoMatch expressly says it is not a bank or licensed escrow agent.
+- Stripe Connect is mandatory for consultant payouts.
+- Every payment for a relationship introduced through AutoMatch must remain on-platform until 24 months after the last AutoMatch payment (or 24 months after the introduction if no payment occurs). The terms prohibit sharing contact details to move the relationship off-platform and can assess fees on off-platform payments.
+- AutoMatch does not guarantee matches, project volume, outcomes or consultant conduct; profile review is not an endorsement or background check.
+- The current homepage capture shows “$0 membership during launch” but does not render the exact post-launch membership price in the accessible static content. The prior $39/month / $29 founding-price figures were not independently revalidated in this pass; the founder inquiry asks for written confirmation. Do not rely on those exact figures until confirmed.
+- Privacy policy: https://useautomatch.com/privacy. Consultant profiles are public after approval (email and resume excluded); Stripe collects identity, tax and bank onboarding information.
+
+Decision: keep the existing inquiry open, but do not create a profile, upload a resume, submit payout details or accept a deal until the founder confirms payout-country eligibility, entry requirements, exact membership pricing and the 24-month platform commitment is acceptable.
+
+### 5. mnfst/awesome-free-llm-apis — PR #234 and #235
+
+Current main data.json remains blob SHA cb0a60979e8a583bc0d34837399efef0601a7fbd, lastUpdated 2026-11-11, with 14 providers and 82 models. No new provider was added in this late pass.
+
+#### PR #234 — remove stale Mistral recommendations from the skill
+
+- PR: https://github.com/mnfst/awesome-free-llm-apis/pull/234
+- Merged commit: 2077301aee2ecc168c496bea53a9d3e8c1361283.
+- Removes Mistral from the hand-written free-LLM setup skill’s recommendations, including its fastest/proprietary/EU-hosting/privacy-sensitive examples, consistent with PR #232 removing Mistral from data.json.
+- Decision: Mistral is excluded from no-upfront API delivery. A free Studio/Vibe allowance is not API access; API use requires billing activation/pay-as-you-go.
+
+#### PR #235 — stricter provider-sync and stale-model governance
+
+- PR: https://github.com/mnfst/awesome-free-llm-apis/pull/235
+- Merged commit: 7fccf7d57bc96331f1f3cd7918e03363227608c7.
+- The maintainer changed provider-sync to run the same strict source check as CI, handle quote/value drift in the same sync run, and remove a model on the day it disappears from the provider’s public catalog rather than waiting two days of failed probes.
+- A provider whose free tier disappears or whose API requires a payment method is removed rather than left as an unresolved recommendation.
+- New data/sync pull requests supersede older open sync PRs, keeping only one data-sync PR open at a time. The triage policy now requires every issue/PR to end closed, fixed by a merged PR, or waiting for one named action with a deadline.
+- This improves catalog hygiene and reduces the risk of stale model recommendations. It is process evidence, not proof that any listed provider is reliable or usable by our account.
+
+No new provider/model was activated. The prior Run 11 decisions remain: Synap free tier paused; Mistral API removed; NVIDIA NIM developer endpoints are test-only; Groq limits require account-console verification; Cloudflare Workers AI remains the strongest documented no-upfront candidate for a controlled test.
+
+### 6. Commercial and execution ledger — late supplement
+
+- New inbound AgentMail replies: **0**.
+- AutoMatch outbound inquiries in this sweep: **1 total**; founder response/profile approval: **0**.
+- Best-fit Upwork listing found: **1**; Connects required: **18**; Connects available: **0**; proposals submitted: **0**.
+- Other Upwork proposals: **0**.
+- Freelancer bids/messages: **0 / 0**.
+- New customers / accepted referrals / contracts: **0 / 0 / 0**.
+- Confirmed revenue: **USD 0**.
+- Provider keys / activations / live inference calls: **0 / 0 / 0**.
+- Paid lead credits / Connects purchased / other upfront spend: **USD 0 / USD 0 / USD 0**.
+- No listing, marketplace inquiry, job post, platform membership, code asset, free quota or upstream PR is counted as a customer or revenue.
