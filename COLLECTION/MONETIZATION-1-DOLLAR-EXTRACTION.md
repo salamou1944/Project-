@@ -2186,3 +2186,14 @@ Repository: https://github.com/mnfst/awesome-free-llm-apis. Current main `data.j
 - New provider keys / activations / live inference calls: 0 / 0 / 0.
 - Upfront spend: **USD 0**.
 - A listing, founder invitation, reply, provider free tier, code asset or stated future budget is not a customer or revenue.
+
+
+### 6. Additional Upwork qualification checks — same 2026-11-12 sweep
+
+A second connected-account search was run for `n8n CRM API webhook automation`, sorted by recency and restricted to verified-payment clients. Three additional listings were opened in full:
+
+- **“Quick Paid Project for n8n / Zapier / Make Experts: Rebuild a Workflow You've Already Built”** — job ID `2119417394034806568`, USD 50 fixed, 8 Connects. Client history is strong (40 contracts, 25 feedback entries at 5.0, USD 126,443.29 spend), but the job already shows 2 hires, 5 interviews, 1 offer and 30 invitations. More importantly, eligibility explicitly requires at least five automation projects delivered for paying clients, including recent work in the last six months. We do not have that evidence. The $40 recording + $10 LinkedIn share is conditional on hiring and delivery; the additional $100 partner incentive is conditional on a future client paying. No application and no revenue claim.
+- **“Workflow Automation Engineer”** — job ID `2117441599077105703`, USD 13–17/hour, full-time for an initial six months, 21 Connects. The client has 33 contracts, 26 feedback entries at 4.89, 71% hire rate and USD 18,822.64 spend. Requirements include 3+ years of production integrations, hands-on HubSpot workflows/API, client calls, and four hours of Sydney overlap. The post explicitly prohibits direct outreach outside Upwork. Those production/HubSpot requirements are not established in our evidence, so no proposal and no external contact.
+- **“CRM/ERP API Integration with n8n”** — job ID `2115817602836501238`, USD 30 fixed, 8 Connects. The job activity already shows 1 hire; the client has one prior contract and USD 30 spend. Not treated as unfilled.
+
+These results reinforce the same boundary: listings with real client histories are still not customer relationships, and a fixed-price amount or conditional incentive is not revenue until the user is hired, completes the work and receives payment.
