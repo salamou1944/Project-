@@ -2207,3 +2207,8 @@ A source-level review of `Easy-/src/lead-qualification-workflow.mjs` and `Easy-/
 2. The provider's `Idempotency-Key` is built from `lead.id || lead.email || Date.now()`. When neither a stable ID nor email is supplied, repeated submissions receive different keys and do not get deterministic deduplication. Require a stable event/lead ID or derive a deterministic canonical key before claiming retry-safe intake.
 
 No code was changed in this sweep. These are review findings, not evidence of a production incident or customer deployment.
+
+
+### 8. AutoMatch location wording correction — 2026-11-12
+
+The first payout-eligibility reply used the wording “I am based in Algeria.” The verified personal-context fact is narrower: the user's Upwork account is registered in Algeria (Oran); current legal residence and payout domicile have not been explicitly confirmed. A corrective reply was therefore sent in the same AutoMatch thread (message ID `<010001a1d32bb648-4f75d71a-6e17-4d32-8e99-a84e5ad674da-000000@email.amazonses.com>`) clarifying the distinction and asking AutoMatch to check the actual Stripe Connect KYC/bank-country requirements. The user will provide accurate onboarding details only and will not use a VPN or misstate residence. No profile or payout information was submitted.
