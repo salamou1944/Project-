@@ -2197,3 +2197,13 @@ A second connected-account search was run for `n8n CRM API webhook automation`, 
 - **“CRM/ERP API Integration with n8n”** — job ID `2115817602836501238`, USD 30 fixed, 8 Connects. The job activity already shows 1 hire; the client has one prior contract and USD 30 spend. Not treated as unfilled.
 
 These results reinforce the same boundary: listings with real client histories are still not customer relationships, and a fixed-price amount or conditional incentive is not revenue until the user is hired, completes the work and receives payment.
+
+
+### 7. EASY Lead Qualification code-review guardrail — 2026-11-12
+
+A source-level review of `Easy-/src/lead-qualification-workflow.mjs` and `Easy-/src/providers/salamou31-lead-qualification.mjs` found two semantics that must be corrected or explicitly constrained before this pattern is marketed as reliable lead qualification:
+
+1. The workflow currently returns `status: "qualified"` after any valid provider response, regardless of whether the returned priority is `low`, `medium` or `high`. That label must not be interpreted as a business acceptance/qualification decision without a separately defined threshold and status mapping.
+2. The provider's `Idempotency-Key` is built from `lead.id || lead.email || Date.now()`. When neither a stable ID nor email is supplied, repeated submissions receive different keys and do not get deterministic deduplication. Require a stable event/lead ID or derive a deterministic canonical key before claiming retry-safe intake.
+
+No code was changed in this sweep. These are review findings, not evidence of a production incident or customer deployment.
