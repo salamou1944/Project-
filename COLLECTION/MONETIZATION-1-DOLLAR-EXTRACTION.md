@@ -2212,3 +2212,202 @@ No code was changed in this sweep. These are review findings, not evidence of a 
 ### 8. AutoMatch location wording correction — 2026-11-12
 
 The first payout-eligibility reply used the wording “I am based in Algeria.” The verified personal-context fact is narrower: the user's Upwork account is registered in Algeria (Oran); current legal residence and payout domicile have not been explicitly confirmed. A corrective reply was therefore sent in the same AutoMatch thread (message ID `<010001a1d32bb648-4f75d71a-6e17-4d32-8e99-a84e5ad674da-000000@email.amazonses.com>`) clarifying the distinction and asking AutoMatch to check the actual Stripe Connect KYC/bank-country requirements. The user will provide accurate onboarding details only and will not use a VPN or misstate residence. No profile or payout information was submitted.
+
+
+---
+
+## 2026-11-13 Revenue + Leverage Sweep
+
+Research date: 2026-11-13 (latest inbox and repository evidence fetched through 2026-11-14 03:48 UTC).
+
+### 1. AgentMail: founder reply and compliant response
+
+- Inbox checked: `api-pilot@agentmail.to`, `easy@agentmail.to`, `pastel-realtime-e2e@agentmail.to`.
+- One new inbound reply from Aidan Styan / AutoMatch arrived 2026-11-13 14:10:45 UTC in thread `a44cbb87-d626-4aaa-95b3-306dc0005b31`.
+- Founder clarified that payout eligibility requires the bank-account country and government-ID country to be the same supported country. The supported list stated in the reply was US, UK, EU/EEA, Canada and Switzerland; Algeria was not listed.
+- Founder also requested the name of the human project lead because AgentMail is a mailbox, not a person.
+- Sent one concise reply on 2026-11-14 03:48:10 UTC: we cannot currently confirm a supported country for both bank and ID, will not create a profile or use another person's identity/account, identified the account holder as the human project lead/client contact, and asked to be notified if Algeria or a compliant payout route becomes supported.
+- Post-reply inbox check showed no subsequent inbound response; the latest thread message was our sent reply. The other two inboxes had zero new threads.
+- Status: **on hold / payout-blocked**. No builder profile, identity upload, bank details, client assignment, accepted referral, contract, or revenue. Do not follow up again until the founder responds or eligibility changes.
+
+Evidence:
+- AutoMatch: https://useautomatch.com/
+- AutoMatch terms: https://useautomatch.com/terms
+- Stripe supported countries: https://stripe.com/global
+
+### 2. Fresh marketplace scan: Upwork
+
+Searches were run through the connected Upwork account for recent n8n, CRM, WhatsApp, chatbot and PDF/document listings, filtering for verified payment where supported. Connects balance remained zero. No proposal was submitted and no credits were purchased.
+
+| Listing | Evidence observed | Qualification decision |
+|---|---|---|
+| Shopify customer-support chatbot with RAG and product recommendations — $500 fixed | Payment-verified client, 5.0 client feedback score, 50+ proposals; 16 Connects required; account balance 0 | Closest support/e-commerce match, but Shopify/RAG production case study is not verified and no Connects are available. No proposal. |
+| n8n setup and automation — $600 fixed | Fresh listing (2026-11-12), 5–10 proposals, payment-verified client; German B2/live communication and German documentation required | Not qualified: German fluency is not evidenced; client has no prior spend/hire history in the returned record. No proposal. |
+| WhatsApp Business Platform / Meta API Integration Specialist | Fresh listing (2026-11-13), $5–10/hour, 18 Connects; client rating 2.0/5 from one review, $209.59 historical spend, 1 hire from 7 posted jobs | Reject: weak client feedback, low hourly range and no Connects. |
+| CRM/GoHighLevel and AppSheet/Apps Script listings | Several current listings require specific GHL, AppSheet or Google Apps Script production examples; some require full-time synchronous coverage | Not qualified on present evidence. No proposals. |
+| PDF search | Results were CAD/DWG drafting, graphic-design PDF patterns and print formatting, not document extraction/OCR automation | No relevant document-automation opportunity identified. |
+
+Additional public search:
+- Recent n8n Community results were mostly older posts (2025 or earlier 2026), not fresh buyer requests.
+- Workana results found for WhatsApp/CRM automation were published in June or October 2026 and were not treated as fresh.
+- No external cold outreach was sent to marketplace clients. Do not contact Upwork clients off-platform.
+
+Evidence:
+- Shopify support/RAG listing: https://www.upwork.com/jobs/~0221202212461787113
+- n8n job search: connected Upwork search result (2026-11-12; German requirement)
+- WhatsApp integration listing: https://www.upwork.com/jobs/~022121134195459943668
+- n8n Community search: https://community.n8n.io/c/jobs/9
+
+Marketplace ledger: listings only; no proposal, acceptance, contract, customer or revenue.
+
+### 3. mnfst/awesome-free-llm-apis: current catalog delta
+
+Current `data.json` reports 14 providers, 82 model rows, `lastUpdated=2026-11-12`.
+
+Latest model-data sync:
+- PR #237 / merge commit `ecf94ea9b6724d0327354f712dd5ec96c98119fc`, merged 2026-11-13 12:22 UTC.
+- Data commit `b8a56151120d73e64a33ecda967ef77c1b956716`.
+- Removed OpenRouter `xingchen-agi/xing4.0-29b-a4b:free` after two consecutive 404s and absence from the live model catalog.
+- Removed NVIDIA NIM `google/gemma-4-31b-it` after two consecutive 404s; `nvidia/nemotron-3-ultra-550b-a55b` returned 200 in the same check.
+- Strict `validate-data` and `check-sources --strict` passed.
+- PR #232 (merged 2026-11-11) removed Mistral because Free mode no longer gives API access, corrected Groq's published rate-limit fields and removed unsupported NVIDIA rate-limit claims.
+- PR #234 removed Mistral from skill recommendations.
+- PR #235 tightened the sync process so a model is removed when it disappears from its provider's live catalog and strict source checks run.
+- Commits #238–#240 after the data sync changed sponsor links/counts only; no newer provider/model addition was found after the 2026-11-12 data sync.
+- No new provider was added by the latest sync; it was a liveness/removal update.
+
+Sources:
+- Catalog: https://github.com/mnfst/awesome-free-llm-apis/blob/main/data.json
+- PR #237: https://github.com/mnfst/awesome-free-llm-apis/pull/237
+- Data sync commit: https://github.com/mnfst/awesome-free-llm-apis/commit/b8a56151120d73e64a33ecda967ef77c1b956716
+- PR #232: https://github.com/mnfst/awesome-free-llm-apis/pull/232
+- PR #234: https://github.com/mnfst/awesome-free-llm-apis/pull/234
+- PR #235: https://github.com/mnfst/awesome-free-llm-apis/pull/235
+
+### 4. Provider/model commercial-use and zero-spend gate
+
+**Cloudflare Workers AI — first internal test candidate, not yet activated**
+- Official free allocation: 10,000 Neurons/day, shared across Workers AI; reset at 00:00 UTC. On Workers Free, requests fail when the allocation is exceeded; using more requires Workers Paid. Default text-generation rate limit is 300 RPM unless a model requires a paid plan.
+- The current pricing page lists eight model IDs that require a paid billing method; exclude them from the zero-spend path.
+- `@cf/openai/gpt-oss-20b` is currently documented, text-only, 128K context, function calling and reasoning; model weights are Apache 2.0 under the gpt-oss usage policy. Cloudflare exposes OpenAI-compatible chat-completions and REST interfaces.
+- Cloudflare Workers AI stateless inference has zero data retention and no model training on Customer Content; stateful features, logs, caching, storage and batch workflows may retain content under their own settings.
+- Contract limitation: Cloudflare's Self-Serve Subscription Agreement grants a non-sublicensable service right and prohibits selling/reselling access to the Services. Use a customer's own Cloudflare account for a client-owned integration, or obtain written approval before exposing a multi-tenant hosted inference service; do not resell our account or API access. Free Services may be terminated at Cloudflare's discretion and have no liability guarantee.
+- **Existing probe defect:** `cloudflare-workers-ai-probe.mjs` defaults to `@cf/meta/llama-3.1-8b-instruct`, which Cloudflare marks deprecated since 2026-05-30. `@cf/meta/llama-3.1-8b-instruct-fp8` is planned for deprecation on 2026-11-20. Do not run the probe with its default. A future controlled test should explicitly select a current model such as `@cf/openai/gpt-oss-20b`, confirm the account's Free plan and keep paid fallback disabled.
+- Current probe remains fail-closed: without `CLOUDFLARE_WORKERS_AI_BILLING_TIER=free`, account ID and token, it reports `NOT_VERIFIED` and makes zero network requests. No live provider call was made in this sweep.
+
+Sources:
+- Pricing: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- Data use: https://developers.cloudflare.com/workers-ai/platform/data-usage/
+- Cloudflare terms: https://www.cloudflare.com/terms/
+- gpt-oss-20b on Workers AI: https://developers.cloudflare.com/workers-ai/models/gpt-oss-20b/
+- OpenAI gpt-oss licence: https://help.openai.com/en/articles/11870455-openai-open-weight-models-gpt-oss
+- Deprecated default model: https://developers.cloudflare.com/workers-ai/models/llama-3.1-8b-instruct/
+
+**Groq — technically promising, free-plan eligibility still unverified**
+- Current catalog includes `qwen/qwen3.8-27b`, a Preview model accepting text and images (up to three images), with 131K context and 16,384 max output on the Groq model page. Groq warns Preview models may be discontinued at short notice.
+- The model page lists paid pricing of $0.80/M input and $4.00/M output. The rate-limit table lists 30 RPM, 1,000 RPD, 8,000 TPM and 200,000 TPD, but the catalog maintainer explicitly noted that the Free-plan-specific limits tab could not be verified; do not represent these as confirmed free-tier quotas.
+- Groq Services Agreement §3.1 permits API integration into Customer Applications and making the service available to end users through those applications. It prohibits reselling/ leasing the account and reselling or sublicensing Cloud Services without approval.
+- Groq says inference inputs/outputs are not retained by default and are not used for training unless explicitly permitted; reliability/abuse logs may be retained up to 30 days unless Zero Data Retention is enabled. Retained data location is US GCP.
+- No Groq key/account quota was verified and no live inference call was made. Use only after the exact account's Free-plan limits, applicable model terms, DPA and data-location requirements are confirmed.
+
+Sources:
+- Model: https://console.groq.com/docs/model/qwen/qwen3.8-27b
+- Limits: https://console.groq.com/docs/rate-limits
+- Services Agreement: https://console.groq.com/docs/legal/services-agreement
+- Data controls: https://console.groq.com/docs/your-data
+
+**Google Gemini — free-tier data restriction blocks customer-data use**
+- Official pricing confirms limited free access and free input/output tokens for certain models.
+- Unpaid Services use submitted prompts, outputs and files to improve Google products/services; human reviewers may read and annotate content. Google explicitly says not to submit sensitive, confidential or personal information to Unpaid Services.
+- API clients made available to users in the EEA, Switzerland or UK must use Paid Services. Therefore do not use the free tier for those customer populations.
+- No account/model-specific quota or live API call was verified. Free-tier use is limited to public/synthetic, non-confidential internal tests only.
+
+Sources:
+- Pricing: https://aistudio.google.com/docs/pricing
+- Additional Terms: https://aistudio.google.com/docs/terms
+
+**Z.ai — free models exist, but decision-making restrictions are material**
+- Catalog lists GLM-4.7-Flash, GLM-4.5-Flash and GLM-4.6V-Flash as free API models; GLM-4.5-Flash is subject to retirement/redirect notices. Public rate limits are not published; exact quota is account-console dependent.
+- Z.ai API terms allow integration into downstream applications but prohibit high-stakes and decision-making uses, including employment-related decisions. Do not use it for autonomous lead scoring, hiring, credit, legal, medical or other consequential decisions. If used at all, restrict to human-reviewed summaries or draft responses after confirming model-specific and regional terms.
+- No key or live API call was available.
+
+Sources:
+- API terms: https://docs.z.ai/legal-agreement/terms-of-service
+- Model/pricing docs: https://docs.z.ai/guides/overview/pricing
+- Model list: https://docs.z.ai/guides/llm/glm-4.7
+
+**OVHcloud AI Endpoints — anonymous API path is real, but free pricing/legal gate remains**
+- Official docs describe anonymous API access at 2 requests/minute per IP and model; authenticated access is 400 RPM per Public Cloud project/model. The API is OpenAI-compatible and supports JSON mode, function calling and structured outputs. OVH says AI Endpoints data is not stored/shared and infrastructure is hosted in Europe.
+- Creating an authenticated API key requires a Public Cloud project with a payment method; Discovery-mode projects without a payment method cannot use authenticated access.
+- Qwen3.8-27B is Apache 2.0 and supports vision, function calling, reasoning and streaming, but its official page lists paid rates of €0.40/M input and €2.70/M output. Do not count it as a zero-cost model.
+- Qwen3Guard-Gen-0.6B and Qwen3Guard-Gen-8B are catalogued as Free and Apache 2.0 moderation models. They are a possible low-volume moderation test for WhatsApp/support content, but the anonymous route, model endpoint, provider Appendix 10 terms and commercial-use rights still require a live synthetic test and legal review. The Appendix 10 PDF could not be fetched in this sweep; no production-use approval is claimed.
+- No OVH API call was made.
+
+Sources:
+- Getting started: https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-endpoints-getting-started
+- Capabilities and limits: https://docs.ovhcloud.com/en/guides/public-cloud/ai-machine-learning/ai-endpoints-capabilities
+- Qwen3.8-27B: https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/qwen-3-8-27b/
+- Catalog: https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/
+
+**Gonka Broker — research only**
+- Catalog describes a no-card free allowance of at least 1M tokens/month with phone verification and OpenAI/Anthropic-compatible API.
+- The broker's Terms allow the free grant to be changed or withdrawn at its discretion, disclaim service availability/warranties and cap liability at $100. The broker says it does not store prompts/responses, but inference is performed by an external Gonka network; upstream operator/model terms and model licences were not verified.
+- Do not send client data or rely on it for paid delivery. At most, consider a synthetic-data smoke after the exact upstream terms and account verification are understood. No account/key was created.
+
+Sources:
+- https://gonkabroker.com/
+- https://gonkabroker.com/terms
+- https://gonkabroker.com/privacy
+- https://docs.gonkabroker.com/
+
+**Other exclusions**
+- Mistral: removed from the free API catalog; Free mode no longer provides API access.
+- NVIDIA NIM: Developer Program access is for development/testing; production requires NVIDIA AI Enterprise. Do not use trial access for a paid production service.
+- Cohere Trial: non-commercial restriction; exclude from paid delivery.
+- OpenRouter: free baseline is 20 RPM/50 RPD; 1,000 RPD requires buying at least $10 credits. No credits purchased.
+- ModelScope/SiliconFlow: account/real-name verification requirements are China-centric; not verified as usable from our operating context.
+- LLM7.io: anonymous access is no longer documented by current provider docs; data-use/region details are insufficient.
+- Aion Labs: 15 RPM/20K tokens/day, but its roleplay/storytelling specialization is not a good fit for our CRM/support workloads.
+
+### 5. Business use cases enabled, subject to the above gates
+
+1. **CRM/support triage:** use a permitted model for summarizing inbound tickets, extracting structured fields and drafting a response; preserve human approval and escalation. Cloudflare gpt-oss-20b is the first candidate for a client-owned-account test, after updating the stale probe model and verifying the account quota.
+2. **WhatsApp/support moderation:** Qwen3Guard on OVH is a possible low-volume synthetic test only; 2 RPM anonymous limit makes it unsuitable for normal production volume until an authenticated, funded customer-owned project exists.
+3. **E-commerce product/document triage:** Groq Qwen3.8 accepts images, but its paid model price and unverified free quota mean it is not a zero-spend delivery path today.
+4. **Public-data demos:** Gemini free tier can be used only with public/synthetic data, outside the EEA/UK/Switzerland API-client restriction; never use customer or personal data on unpaid quota.
+5. **Human-reviewed drafts:** Z.ai may support draft generation after exact terms and quotas are checked; no automated scoring or consequential decisions.
+
+These are delivery-cost hypotheses, not customers, contracts or revenue.
+
+### 6. Reusable repository leverage and current engineering blockers
+
+- `Salamou-31/AI-API-HUB/api-factory` contains reusable authentication, OpenAPI contract generation, request validation, idempotency, quota, usage ledger, registry/artifact persistence, provider-evidence and customer-key lifecycle modules. The API Factory README describes the deployment planner as preflight/plan logic; Railway/Vercel deployment execution is not implemented.
+- `PERSISTENCE.md` contains production and preview durability/customer-key lifecycle smoke evidence from 2026-10-25. This is historical evidence, not a fresh smoke in this run. It also states that no generated API was registered in the last smoke and that generated API business/request ledgers are not automatically durable merely because the factory registry/artifacts are durable.
+- `cloudflare-workers-ai-probe.mjs` blob SHA `8b513ff039d3528091d69c44c79ea84558f63d31` has a deprecated default model. No provider key, network request or activation occurred.
+- `Easy-/src/lead-qualification-workflow.mjs` blob SHA `38b46c992908c1fd5e23e4a53317c54c2337eec3` returns `status:'qualified'` after any valid provider response, without mapping the low/medium/high priority to an explicit qualification threshold.
+- `Easy-/src/providers/salamou31-lead-qualification.mjs` blob SHA `9fcd36f7d41c5c4c0f7eb8d9b824afce90ec29d2` falls back to `Date.now()` for the Idempotency-Key when neither lead ID nor email is present; repeated submissions then cannot deduplicate deterministically. Fix both before selling this workflow as reliable qualification.
+- `OFFERS-AND-PRICING.md` contains proposed starting ranges: Automation Repair $75–$250; AI/API Integration $150–$500; Lead Automation $250–$750; Support AI $300–$1,000; Document Automation $250–$900; CRM+WhatsApp $500–$2,500; maintenance $300–$1,500/month. These are internal price hypotheses, not accepted quotes or sales.
+- `SALES-KIT-SUPPORT-RESOLUTION-ENGINE.md` describes a 2–4 week human-supervised support pilot at $1,000. It is a sales kit, not a completed customer pilot and has no measured ROI evidence.
+- Latest observed code commits: Salamou-31 2026-10-27; Easy- 2026-10-15. No new application-code changes were made in this sweep.
+
+### 7. Decision and evidence ledger
+
+- AutoMatch: one founder reply received; one compliant reply sent; payout eligibility remains blocked/unconfirmed.
+- Upwork: fresh listings inspected; 0 proposals submitted; Connects balance 0; Connects purchased 0.
+- External cold outreach: 0 new messages.
+- Customers newly acquired: 0.
+- Accepted referrals: 0.
+- New contracts: 0.
+- Payments/revenue: $0.
+- New provider keys/accounts: 0.
+- Live LLM calls: 0.
+- Upfront spending: $0.
+
+Next safe actions:
+1. Wait for AutoMatch to confirm a compliant supported payout route; do not create the profile before that.
+2. Do not buy Upwork Connects. Reassess only if a high-fit listing can be applied to with the existing balance or a legitimate no-credit route appears.
+3. Correct the Cloudflare probe's deprecated default model before any test; select a current model explicitly, confirm Free-plan eligibility, and keep paid fallback disabled.
+4. Fix EASY qualification status mapping and deterministic idempotency before selling the lead workflow.
+5. Require model-specific licences, provider commercial terms, exact quota, region/data-processing review, live synthetic test and failure/latency evidence before any free model enters paid delivery.
+
+No listing, provider, repository capability, outreach or founder reply is counted as a customer or revenue.
