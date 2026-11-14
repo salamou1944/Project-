@@ -2242,7 +2242,7 @@ Searches were run through the connected Upwork account for recent n8n, CRM, What
 | Listing | Evidence observed | Qualification decision |
 |---|---|---|
 | Shopify customer-support chatbot with RAG and product recommendations — $500 fixed | Payment-verified client, 5.0 client feedback score, 50+ proposals; 16 Connects required; account balance 0 | Closest support/e-commerce match, but Shopify/RAG production case study is not verified and no Connects are available. No proposal. |
-| n8n setup and automation — $600 fixed | Fresh listing (2026-11-12), 5–10 proposals, payment-verified client; German B2/live communication and German documentation required | Not qualified: German fluency is not evidenced; client has no prior spend/hire history in the returned record. No proposal. |
+| n8n setup and automation — $600 fixed | Fresh listing (2026-11-12), 5–10 proposals, payment-verified client; German-language live communication and documentation required | Not qualified: German fluency is not evidenced; client has no prior spend/hire history in the returned record. No proposal. |
 | WhatsApp Business Platform / Meta API Integration Specialist | Fresh listing (2026-11-13), $5–10/hour, 18 Connects; client rating 2.0/5 from one review, $209.59 historical spend, 1 hire from 7 posted jobs | Reject: weak client feedback, low hourly range and no Connects. |
 | CRM/GoHighLevel and AppSheet/Apps Script listings | Several current listings require specific GHL, AppSheet or Google Apps Script production examples; some require full-time synchronous coverage | Not qualified on present evidence. No proposals. |
 | PDF search | Results were CAD/DWG drafting, graphic-design PDF patterns and print formatting, not document extraction/OCR automation | No relevant document-automation opportunity identified. |
@@ -2288,7 +2288,7 @@ Sources:
 
 **Cloudflare Workers AI — first internal test candidate, not yet activated**
 - Official free allocation: 10,000 Neurons/day, shared across Workers AI; reset at 00:00 UTC. On Workers Free, requests fail when the allocation is exceeded; using more requires Workers Paid. Default text-generation rate limit is 300 RPM unless a model requires a paid plan.
-- The current pricing page lists eight model IDs that require a paid billing method; exclude them from the zero-spend path.
+- The current pricing page (updated 2026-11-12) lists nine model IDs that require a paid billing method; the catalog's footnote 11 still says seven. Treat the live pricing page as authoritative, exclude all nine from the zero-spend path, and record this as a catalog footnote discrepancy.
 - `@cf/openai/gpt-oss-20b` is currently documented, text-only, 128K context, function calling and reasoning; model weights are Apache 2.0 under the gpt-oss usage policy. Cloudflare exposes OpenAI-compatible chat-completions and REST interfaces.
 - Cloudflare Workers AI stateless inference has zero data retention and no model training on Customer Content; stateful features, logs, caching, storage and batch workflows may retain content under their own settings.
 - Contract limitation: Cloudflare's Self-Serve Subscription Agreement grants a non-sublicensable service right and prohibits selling/reselling access to the Services. Use a customer's own Cloudflare account for a client-owned integration, or obtain written approval before exposing a multi-tenant hosted inference service; do not resell our account or API access. Free Services may be terminated at Cloudflare's discretion and have no liability guarantee.
@@ -2327,8 +2327,7 @@ Sources:
 - Additional Terms: https://aistudio.google.com/docs/terms
 
 **Z.ai — free models exist, but decision-making restrictions are material**
-- Catalog lists GLM-4.7-Flash, GLM-4.5-Flash and GLM-4.6V-Flash as free API models; GLM-4.5-Flash is subject to retirement/redirect notices. Public rate limits are not published; exact quota is account-console dependent.
-- Z.ai API terms allow integration into downstream applications but prohibit high-stakes and decision-making uses, including employment-related decisions. Do not use it for autonomous lead scoring, hiring, credit, legal, medical or other consequential decisions. If used at all, restrict to human-reviewed summaries or draft responses after confirming model-specific and regional terms.
+- Catalog lists GLM-4.7-Flash (200K context, 128K max output), GLM-4.5-Flash (128K/96K; retirement date passed but row remains listed) and GLM-4.6V-Flash (128K/32K, multimodal) as free models. The catalog gives a limit of one concurrent request; it does not publish a reliable RPM/RPD/TPM quota. Overseas phone numbers are accepted for registration, the international chat API does not require real-name verification, and Batch API does. Use the international API base URL `https://api.z.ai/api/paas/v4`, not the China endpoint in the provider row. Search-indexed official terms indicate downstream-app integration and restrictions on decision-making/high-stakes uses, but the exact terms page could not be opened in this pass; treat the legal restriction as a stop condition to re-check, not as production clearance. Do not use for autonomous lead scoring, hiring, credit, legal, medical or other consequential decisions. At most consider human-reviewed summaries/drafts after the exact current terms, quota and region are confirmed.
 - No key or live API call was available.
 
 Sources:
