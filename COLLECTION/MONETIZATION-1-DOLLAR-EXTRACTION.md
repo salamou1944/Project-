@@ -2318,8 +2318,7 @@ Sources:
 
 **Google Gemini — free-tier data restriction blocks customer-data use**
 - Official pricing confirms limited free access and free input/output tokens for certain models.
-- Unpaid Services use submitted prompts, outputs and files to improve Google products/services; human reviewers may read and annotate content. Google explicitly says not to submit sensitive, confidential or personal information to Unpaid Services.
-- API clients made available to users in the EEA, Switzerland or UK must use Paid Services. Therefore do not use the free tier for those customer populations.
+- Outside the EEA, Switzerland and UK, Unpaid Services use submitted prompts, outputs and files to improve Google products/services; human reviewers may read and annotate content. Google explicitly says not to submit sensitive, confidential or personal information to Unpaid Services. The catalog footnote states that the EEA/Switzerland/UK unpaid-quota data terms do not permit product-improvement use, but API clients made available to users in those regions must still use Paid Services.
 - No account/model-specific quota or live API call was verified. Free-tier use is limited to public/synthetic, non-confidential internal tests only.
 
 Sources:
