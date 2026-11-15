@@ -1,0 +1,48 @@
+{
+  "canonical_source": "github:DIYgod/homebrew-tap",
+  "repo": "DIYgod/homebrew-tap",
+  "revision_sha": "e17303b1f37c271c9855aaafc0e35d05210002b8",
+  "default_branch": "main",
+  "pushed_at": "2026-11-15T10:13:58Z",
+  "repo_updated_at": "2026-11-12T13:35:02Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/update.yml",
+      "sha": null,
+      "content_sha256": "2f1b6a7870ff084e6242edf15e881513db950af9293132661d8c04a99319310f",
+      "score": 126,
+      "content": "name: Update the casks\n\n# Every 15 minutes, Casks/pinky.rb becomes the cask that Pinky's latest\n# release carries (pinky.rb, which its release workflow writes) when that\n# one is newer, so Pinky's workflow needs no token for this repository.\n# This file comes from scripts/release/homebrew-tap/ in DIYgod/pinky, which\n# `scripts/release.sh setup` copies here.\n#\n# GitHub turns off schedules after 60 days without a commit here: a release\n# in that time keeps it on, and \"Run workflow\" brings it back.\non:\n  schedule:\n    - cron: \"7,22,37,52 * * * *\"\n  workflow_dispatch:\n\npermissions:\n  contents: write\n\nconcurrency:\n  group: update\n\njobs:\n  pinky:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - uses: actions/checkout@v7\n      - name: Take the cask of Pinky's latest release\n        run: |\n          url=https://github.com/DIYgod/pinky/releases/latest/download/pinky.rb\n          if ! curl -fsSL --retry 3 -o \"$RUNNER_TEMP/pinky.rb\" \"$url\"; then\n            echo \"No release with a cask at $url yet.\"\n            exit 0\n          fi\n          version() { sed -n 's/^ *version \"\\([^\"]*\\)\".*/\\1/p' \"$1\" 2>/dev/null | head -n 1; }\n          new=$(version \"$RUNNER_TEMP/pinky.rb\")\n          old=$(version Casks/pinky.rb)\n          case \"$new\" in\n          [0-9]*.[0-9]*.[0-9]*) ;;\n          *) echo \"::error::The release's pinky.rb has no version\"; exit 1 ;;\n          esac\n          ruby -c \"$RUNNER_TEMP/pinky.rb\" > /dev/null\n          # The newer of the two, comparing each part as a number.\n          newest=$(printf '%s\\n%s\\n' \"$new\" \"${old:-0.0.0}\" | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -n 1)\n          if [ \"$new\" = \"$old\" ] || [ \"$newest\" != \"$new\" ]; then\n            echo \"Casks/pinky.rb has ${old} already.\"\n            exit 0\n          fi\n          mkdir -p Casks\n          cp \"$RUNNER_TEMP/pinky.rb\" Casks/pinky.rb\n          git config user.name \"github-actions[bot]\"\n          git config user.email \"41898282+github-actions[bot]@users.noreply.github.com\"\n          git add Casks/pinky.rb\n          git commit --quiet -m \"pinky $new\"\n          git push --quiet\n          echo \"Casks/pinky.rb installs pinky $new (was ${old:-nothing}).\"\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "5ca67f99dd780a34976dc57c68a8c5f274c14802bf9712293f3666c056773f8f",
+      "score": 100,
+      "content": "# DIYgod's Homebrew tap\n\n```sh\nbrew install --cask diygod/tap/pinky\n```\n\n| Cask | |\n| --- | --- |\n| [`pinky`](Casks/pinky.rb) | [Pinky](https://github.com/DIYgod/pinky): let AI agents use your phone, with you in the loop. Also installs the `pinkyctl` command (`pinkyctl mcp`). |\n\nThe casks follow their apps' releases: a workflow takes the cask that each release of Pinky carries, within a quarter of an hour. Pinky updates itself, so `brew upgrade` leaves it alone unless you pass `--greedy`.\n"
+    },
+    {
+      "path": "Casks/pinky.rb",
+      "sha": null,
+      "content_sha256": "106c8dc67c0f92444934a18d393088ba213c49516588868599d39d8415d49d5f",
+      "score": 33,
+      "content": "cask \"pinky\" do\n  arch arm: \"arm64\", intel: \"amd64\"\n\n  version \"2026.1115.10\"\n  sha256 arm:   \"5635cd64e594628fbaa7483192a353f7f1dc75d3ded8697585621d219746216f\",\n         intel: \"baad32e04489257918025e77074114cfd3570db8b1b71403dfdda20172a97417\"\n\n  url \"https://github.com/DIYgod/pinky/releases/download/v#{version}/pinky-#{version}-darwin-#{arch}.zip\"\n  name \"Pinky\"\n  desc \"Let AI agents use your phone, with you in the loop\"\n  homepage \"https://github.com/DIYgod/pinky\"\n\n  livecheck do\n    url :url\n    strategy :github_latest\n  end\n\n  auto_updates true\n  depends_on macos: :ventura\n\n  app \"Pinky.app\"\n  command_wrapper \"pinkyctl\",\n                  executable: \"#{appdir}/Pinky.app/Contents/MacOS/Pinky\"\n\n  uninstall quit: \"app.pinky.desktop\"\n\n  zap trash: [\n    \"~/Library/Application Support/Pinky\",\n    \"~/Library/Caches/app.pinky.desktop\",\n    \"~/Library/HTTPStorages/app.pinky.desktop\",\n    \"~/Library/Logs/Pinky\",\n    \"~/Library/Preferences/app.pinky.desktop.plist\",\n    \"~/Library/Saved Application State/app.pinky.desktop.savedState\",\n  ]\n\n  caveats <<~EOS\n    Agents start Pinky with: pinkyctl mcp\n      claude mcp add pinky -- pinkyctl mcp\n    The command was named pinky before, a name coreutils has too: change\n    agents that run \"pinky mcp\" to run \"pinkyctl mcp\".\n  EOS\nend\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-15T12:51:15.407710+00:00"
+}

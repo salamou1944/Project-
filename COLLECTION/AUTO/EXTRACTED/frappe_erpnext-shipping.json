@@ -1,0 +1,187 @@
+{
+  "canonical_source": "github:frappe/erpnext-shipping",
+  "repo": "frappe/erpnext-shipping",
+  "revision_sha": "492eb68ef8528e4b36790668cacd1b32d2d634ff",
+  "default_branch": "develop",
+  "pushed_at": "2026-11-13T12:58:21Z",
+  "repo_updated_at": "2026-11-05T11:01:16Z",
+  "license": "NOASSERTION",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/server-tests.yml",
+      "sha": null,
+      "content_sha256": "d7253e7c42d7278a4436a81d7fcd423edd9011adf4fdf150e802f6da5e228954",
+      "score": 186,
+      "content": "name: Server\n\non:\n  schedule:\n    - cron: \"42 4 * * *\"\n  push:\n    branches:\n      - version-16-hotfix\n    paths-ignore:\n      - \"**.css\"\n      - \"**.js\"\n      - \"**.md\"\n      - \"**.html\"\n      - \"**.csv\"\n      - \"**.pot\"\n      - \"**.po\"\n  pull_request:\n    paths-ignore:\n      - \"**.css\"\n      - \"**.js\"\n      - \"**.md\"\n      - \"**.html\"\n      - \"**.csv\"\n      - \"**.pot\"\n      - \"**.po\"\n\nconcurrency:\n  group: version-16-erpnext_shipping-${{ github.event.number }}\n  cancel-in-progress: true\n\npermissions:\n  contents: read\n\njobs:\n  tests:\n    name: Unit Tests\n    runs-on: ubuntu-latest\n    timeout-minutes: 60\n    env:\n      NODE_ENV: \"production\"\n\n    strategy:\n      fail-fast: false\n\n    services:\n      mariadb:\n        image: mariadb:11.8\n        env:\n          MARIADB_ROOT_PASSWORD: root\n        ports:\n          - 3306:3306\n        options: --health-cmd=\"healthcheck.sh --connect --innodb_initialized\" --health-interval=5s --health-timeout=2s --health-retries=3\n\n    steps:\n      - name: Clone\n        uses: actions/checkout@v6\n\n      - name: Setup Python\n        uses: actions/setup-python@v6\n        with:\n          python-version: \"3.14\"\n\n      - name: Setup Node\n        uses: actions/setup-node@v6\n        with:\n          node-version: 24\n          check-latest: true\n\n      - name: Add to Hosts\n        run: |\n          echo \"127.0.0.1 test_site\" | sudo tee -a /etc/hosts\n\n      - name: Cache pip\n        uses: actions/cache@v5\n        with:\n          path: ~/.cache/pip\n          key: ${{ runner.os }}-pip-${{ hashFiles('**/*requirements.txt', '**/pyproject.toml', '**/setup.py', '**/setup.cfg') }}\n          restore-keys: |\n            ${{ runner.os }}-pip-\n            ${{ runner.os }}-\n\n      - name: Get yarn cache directory path\n        id: yarn-cache-dir-path\n        run: echo \"dir=$(yarn cache dir)\" >> \"$GITHUB_OUTPUT\"\n\n      - uses: actions/cache@v5\n        id: yarn-cache\n        with:\n          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}\n          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}\n          restore-keys: |\n            ${{ runner.os }}-yarn-\n\n      - name: Install\n        run: |\n          bash ${GITHUB_WORKSPACE}/.github/helper/install.sh\n\n      - name: Install erpnext_shipping\n        working-directory: /home/runner/frappe-bench\n        run: |\n          bench --site test_site install-app erpnext_shipping\n        env:\n          TYPE: server\n\n      - name: Run Tests\n        working-directory: /home/runner/frappe-bench\n        run: |\n          bench --site test_site set-config allow_tests true\n          bench --site test_site run-tests --app erpnext_shipping\n        env:\n          TYPE: server\n\n      - name: Uninstall erpnext_shipping\n        working-directory: /home/runner/frappe-bench\n        run: |\n          bench --site test_site uninstall-app --yes --no-backup erpnext_shipping\n        env:\n          TYPE: server\n\n      - name: Show bench output\n        if: ${{ always() }}\n        run: cat ~/frappe-bench/bench_start.log || true\n"
+    },
+    {
+      "path": ".github/workflows/release.yaml",
+      "sha": null,
+      "content_sha256": "30839575d2aadcc2532486b0227ea34fb3a7ae32839873d07a0e383faa384d3c",
+      "score": 126,
+      "content": "name: Generate Semantic Release\non:\n  push:\n    branches:\n      - version-16\n\npermissions:\n  contents: read\n\njobs:\n  release:\n    name: Release\n    runs-on: ubuntu-latest\n    steps:\n      - name: Checkout Entire Repository\n        uses: actions/checkout@v6\n        with:\n          fetch-depth: 0\n          persist-credentials: false\n      - name: Setup Node.js\n        uses: actions/setup-node@v6\n        with:\n          node-version: \"24\"\n          check-latest: true\n      - name: Setup dependencies\n        run: |\n          npm install @semantic-release/git @semantic-release/exec --no-save\n      - name: Create Release\n        env:\n          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}\n          GIT_AUTHOR_NAME: \"github-actions[bot]\"\n          GIT_AUTHOR_EMAIL: \"41898282+github-actions[bot]@users.noreply.github.com\"\n          GIT_COMMITTER_NAME: \"github-actions[bot]\"\n          GIT_COMMITTER_EMAIL: \"41898282+github-actions[bot]@users.noreply.github.com\"\n        run: npx semantic-release\n"
+    },
+    {
+      "path": ".github/workflows/linters.yaml",
+      "sha": null,
+      "content_sha256": "31f93c9251f06b40a4b541043bb21c1d59e8c38fe109c055e572dfd994368e2e",
+      "score": 126,
+      "content": "name: Linters\n\non:\n  pull_request: {}\n\npermissions:\n  contents: read\n\njobs:\n  linters:\n    name: linters\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v6\n\n      - name: Set up Python 3.14\n        uses: actions/setup-python@v6\n        with:\n          python-version: \"3.14\"\n          cache: pip\n\n      - name: Set up Node.js 24\n        uses: actions/setup-node@v6\n        with:\n          node-version: \"24\"\n          check-latest: true\n\n      - name: Install and Run Pre-commit\n        uses: pre-commit/action@v3.0.1\n\n      - name: Download Semgrep rules\n        run: git clone --depth 1 https://github.com/frappe/semgrep-rules.git frappe-semgrep-rules\n\n      - name: Download semgrep\n        run: pip install semgrep\n\n      - name: Run Semgrep rules\n        run: semgrep ci --config ./frappe-semgrep-rules/rules --config r/python.lang.correctness\n\n  deps-vulnerable-check:\n    name: Vulnerable Dependency Check\n    runs-on: ubuntu-latest\n\n    steps:\n      - uses: actions/setup-python@v6\n        with:\n          python-version: \"3.14\"\n\n      - uses: actions/checkout@v6\n\n      - name: Cache pip\n        uses: actions/cache@v5\n        with:\n          path: ~/.cache/pip\n          key: ${{ runner.os }}-pip-${{ hashFiles('**/pyproject.toml') }}\n          restore-keys: |\n            ${{ runner.os }}-pip-\n            ${{ runner.os }}-\n\n      - name: Install and run pip-audit\n        run: |\n          pip install pip-audit\n          cd ${GITHUB_WORKSPACE}\n          pip-audit --desc on .\n"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha": null,
+      "content_sha256": "2fb4862c4132390c2c1081c86c02eea079668a5ea85a13d68c2f0259518dea69",
+      "score": 120,
+      "content": "[project]\nname = \"erpnext_shipping\"\nauthors = [\n    { name = \"Frappe Technologies Pvt Ltd and contributors\", email = \"developers@frappe.io\"}\n]\ndescription = \"Shipping Integrations for ERPNext\"\nrequires-python = \">=3.14\"\nreadme = \"README.md\"\ndynamic = [\"version\"]\ndependencies = []\n\n[tool.bench.frappe-dependencies]\nfrappe = \">=16.0.0,<17.0.0\"\nerpnext = \">=16.0.0,<17.0.0\"\n\n[build-system]\nrequires = [\"flit_core >=3.4,<4\"]\nbuild-backend = \"flit_core.buildapi\"\n\n[tool.ruff]\nline-length = 110\ntarget-version = \"py314\"\n\n[tool.ruff.format]\nindent-style = \"tab\"\ndocstring-code-format = true\n"
+    },
+    {
+      "path": "erpnext_shipping/install.py",
+      "sha": null,
+      "content_sha256": "b374b8c0f971dfe030c9b8072c2b616f37753410bd66ec728e8d1273bbba9116",
+      "score": 115,
+      "content": "from frappe.custom.doctype.custom_field.custom_field import create_custom_fields\n\nfrom .custom_fields import get_custom_fields\nfrom .property_setters import get_property_setters\nfrom .utils import make_property_setters\n\n\ndef after_install():\n\tcreate_custom_fields(get_custom_fields())\n\tmake_property_setters(get_property_setters())\n"
+    },
+    {
+      "path": ".github/helper/install.sh",
+      "sha": null,
+      "content_sha256": "e5a75fe4f6edb30392a1bc28b51df30dc4c73b78391a47b694f4fd7466885b22",
+      "score": 113,
+      "content": "#!/bin/bash\n\nset -e\n\ncd ~ || exit\n\nsudo apt update && sudo apt install -y redis-server libcups2-dev\n\npip install frappe-bench\n\ngit clone https://github.com/frappe/frappe --branch version-16 --depth 1\nbench init --skip-assets --frappe-path ~/frappe --python \"$(which python)\" frappe-bench\n\nmysql --host 127.0.0.1 --port 3306 -u root -proot -e \"SET GLOBAL character_set_server = 'utf8mb4'\"\nmysql --host 127.0.0.1 --port 3306 -u root -proot -e \"SET GLOBAL collation_server = 'utf8mb4_unicode_ci'\"\nmysql --host 127.0.0.1 --port 3306 -u root -proot -e \"FLUSH PRIVILEGES\"\n\ncd ~/frappe-bench || exit\n\nsed -i 's/watch:/# watch:/g' Procfile\nsed -i 's/schedule:/# schedule:/g' Procfile\nsed -i 's/socketio:/# socketio:/g' Procfile\nsed -i 's/redis_socketio:/# redis_socketio:/g' Procfile\n\nbench get-app erpnext --branch version-16\nbench get-app erpnext_shipping \"${GITHUB_WORKSPACE}\"\nbench setup requirements --dev\n\nbench start &> bench_start.log &\nbench new-site --db-root-password root --admin-password admin test_site --install-app erpnext\n"
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "b368b8601167d78aa60598ee7087593194f1610f40cae107934d411609b2811b",
+      "score": 100,
+      "content": "## ERPNext Shipping\n\nA Shipping Integration for ERPNext with various platforms. Platforms integrated in this app are:\n\n- [LetMeShip](https://www.letmeship.com/en/)\n- [SendCloud](https://www.sendcloud.com/home-new/)\n\n> [!TIP]\n> Please make sure to get your API access enabled first, by contacting the LetMeShip support.\n\n## Features\n- Creation of shipment to a carrier service (e.g. FedEx, UPS) via LetMeShip and SendCloud. \n- Compare shipping rates. \n- Printing the shipping label is also made available within the Shipment doctype.\n- Templates for the parcel dimensions.\n- Shipment tracking.\n\n## Installation\n\nInstall [on Frappe Cloud](https://frappecloud.com/marketplace/apps/shipping) or your own server:\n\n```bash\ncd ~/frappe-bench\nbench get-app https://github.com/frappe/erpnext-shipping.git --branch version-14\nbench --site $MY_SITE install-app erpnext_shipping\n```\n\n## Setup\n\nSome shipping providers require the contact details of the pickup contact. Please make sure that the **User** selected as the _Pickup Contact Person_ has a first name, last name, email address, and phone number before submitting the **Shipment**.\n\nFor the 'compare shipping rates' feature to work as expected, you need to generate an API key from your service provider. Service providers have their own specific doctypes similar to those from the `Integrations`. They can be enabled or disabled depending on your needs.\n\n![LetMeShip 2020-08-05 09-54-28](https://user-images.githubusercontent.com/17470909/89377411-500c4f80-d724-11ea-8fe5-b11fec2a5c27.png)\n\n### Fetch Shipping Rates\n![core2](https://user-images.githubusercontent.com/17470909/89377460-70d4a500-d724-11ea-8550-a2813b936651.gif)\n\nYou can see the list of shipping rates by clicking the `Fetch Shipping Rates` button. Once you picked a rate, it will create the shipment for you. \n\n### Shipping Label\n![71bcfc9d-9d66-4a58-8238-1eeab4e9a24f 2020-08-05 09-48-32](https://user-images.githubusercontent.com/17470909/89377478-78944980-d724-11ea-8120-a5374c6e4c5e.png)\n\nThe service provider will also provide the shipping label and to generate the label, click on the `Print Shipping Label` on top of the doctype.\n\n-----------------------\n#### License\n\nMIT\n"
+    },
+    {
+      "path": "erpnext_shipping/erpnext_shipping/doctype/sendcloud/test_sendcloud.py",
+      "sha": null,
+      "content_sha256": "f2750ccac1d8ac8ba2a486ae8d99f639bcc75b683ee146cc593d0076691fb1b9",
+      "score": 87,
+      "content": "# Copyright (c) 2020, Frappe and Contributors\n# See license.txt\n\nimport json\nfrom unittest.mock import MagicMock, patch\n\nimport frappe\nfrom frappe.tests.utils import FrappeTestCase\n\nfrom erpnext_shipping.erpnext_shipping.shipping import create_shipment, fetch_shipping_rates\n\nREQUESTS_POST = \"erpnext_shipping.erpnext_shipping.doctype.sendcloud.sendcloud.requests.post\"\n\n\ndef shipping_option(code, carrier, name, quotes, quote_error=None):\n\treturn {\n\t\t\"code\": code,\n\t\t\"name\": name,\n\t\t\"carrier\": {\"code\": carrier.lower(), \"name\": carrier},\n\t\t\"quotes\": quotes,\n\t\t\"quote_error\": quote_error,\n\t}\n\n\nPRICED_OPTION = shipping_option(\n\t\"dhl:paket\",\n\t\"DHL\",\n\t\"DHL Paket\",\n\tquotes=[{\"price\": {\"total\": {\"value\": \"5.90\", \"currency\": \"EUR\"}}}],\n)\nUNPRICED_OPTION = shipping_option(\n\t\"ups:standard\",\n\t\"UPS\",\n\t\"UPS Standard\",\n\tquotes=[],\n\tquote_error={\n\t\t\"code\": \"no_price_for_route\",\n\t\t\"title\": \"Price missing\",\n\t\t\"description\": \"No price is available for this route.\",\n\t},\n)\n\n\nclass TestSendCloud(FrappeTestCase):\n\tdef setUp(self):\n\t\tfrappe.db.set_single_value(\"LetMeShip\", \"enabled\", 0)\n\t\tsettings = frappe.get_single(\"SendCloud\")\n\t\tsettings.enabled = 1\n\t\tsettings.api_key = \"test-key\"\n\t\tsettings.api_secret = \"test-secret\"\n\t\tsettings.save()\n\n\tdef make_address(self, title):\n\t\t# ERPNext renders the address on save, which needs an Address Template\n\t\tif not frappe.db.exists(\"Address Template\", \"Germany\"):\n\t\t\tfrappe.get_doc({\"doctype\": \"Address Template\", \"country\": \"Germany\"}).insert()\n\n\t\treturn frappe.get_doc(\n\t\t\t{\n\t\t\t\t\"doctype\": \"Address\",\n\t\t\t\t\"address_title\": title,\n\t\t\t\t\"address_type\": \"Shipping\",\n\t\t\t\t\"address_line1\": \"Teststrasse 1\",\n\t\t\t\t\"city\": \"Berlin\",\n\t\t\t\t\"pincode\": \"10115\",\n\t\t\t\t\"country\": \"Germany\",\n\t\t\t}\n\t\t).insert()\n\n\tdef test_unpriced_options_are_returned_with_reason(self):\n\t\tpickup_address = self.make_address(\"Test Pickup\")\n\t\tdelivery_address = self.make_address(\"Test Delivery\")\n\t\tresponse = MagicMock()\n\t\tresponse.json.return_value = {\"data\": [UNPRICED_OPTION, PRICED_OPTION]}\n\n\t\twith patch(REQUESTS_POST, return_value=response):\n\t\t\tservices = fetch_shipping_rates(\n\t\t\t\tpickup_from_type=\"Company\",\n\t\t\t\tdelivery_to_type=\"Customer\",\n\t\t\t\tpickup_address_name=pickup_address.name,\n\t\t\t\tdelivery_address_name=delivery_address.name,\n\t\t\t\tparcels=json.dumps([{\"weight\": 1, \"count\": 1}]),\n\t\t\t\tdescription_of_content=\"Test\",\n\t\t\t\tpickup_date=\"2026-01-01\",\n\t\t\t\tvalue_of_goods=10,\n\t\t\t)\n\n\t\tservice_names = [service.service_name for service in services]\n\t\tself.assertEqual(service_names, [\"DHL Paket\", \"UPS Standard\"])\n\n\t\tunpriced_service = services[1]\n\t\tself.assertIsNone(unpriced_service.get(\"total_price\"))\n\t\tself.assertEqual(unpriced_service.quote_error_title, \"Price missing\")\n\t\tself.assertEqual(unpriced_service.quote_error_description, \"No price is available for this route.\")\n\n\tdef test_unpriced_service_cannot_be_booked(self):\n\t\tservice_data = json.dumps(\n\t\t\t{\n\t\t\t\t\"service_provider\": \"SendCloud\",\n\t\t\t\t\"carrier\": \"UPS\",\n\t\t\t\t\"service_name\": \"UPS Standard\",\n\t\t\t\t\"service_id\": \"ups:standard\",\n\t\t\t}\n\t\t)\n\n\t\twith patch(REQUESTS_POST) as post, self.assertRaises(frappe.ValidationError):\n\t\t\tcreate_shipment(\n\t\t\t\tshipment=\"does-not-matter\",\n\t\t\t\tpickup_from_type=\"Company\",\n\t\t\t\tdelivery_to_type=\"Customer\",\n\t\t\t\tpickup_address_name=\"does-not-matter\",\n\t\t\t\tdelivery_address_name=\"does-not-matter\",\n\t\t\t\tshipment_parcel=\"[]\",\n\t\t\t\tdescription_of_content=\"Test\",\n\t\t\t\tpickup_date=\"2026-01-01\",\n\t\t\t\tvalue_of_goods=10,\n\t\t\t\tservice_data=service_data,\n\t\t\t)\n\n\t\tpost.assert_not_called()\n"
+    },
+    {
+      "path": "erpnext_shipping/erpnext_shipping/doctype/parcel_service/test_parcel_service.py",
+      "sha": null,
+      "content_sha256": "ace8d06a3ffe81fa4e98324dd03a108bdf161555dc86342e481b7060df51e48e",
+      "score": 87,
+      "content": "# Copyright (c) 2020, Frappe and Contributors\n# See license.txt\n\n# import frappe\nimport unittest\n\n\nclass TestParcelService(unittest.TestCase):\n\tpass\n"
+    },
+    {
+      "path": "erpnext_shipping/erpnext_shipping/doctype/letmeship/test_letmeship.py",
+      "sha": null,
+      "content_sha256": "81037982e662232e55b38511d0a09c6977ccbec1e3e352c5d0dad54ef87b9f8d",
+      "score": 87,
+      "content": "# Copyright (c) 2020, Frappe and Contributors\n# See license.txt\n\n# import frappe\nimport unittest\n\n\nclass TestLetMeShip(unittest.TestCase):\n\tpass\n"
+    },
+    {
+      "path": "erpnext_shipping/erpnext_shipping/doctype/parcel_service_type/test_parcel_service_type.py",
+      "sha": null,
+      "content_sha256": "417c6aa426dddacc7cb3b968f05a01d62d64261362d7ae2ee0a9f569b693bf1f",
+      "score": 87,
+      "content": "# Copyright (c) 2020, Frappe and Contributors\n# See license.txt\n\n# import frappe\nimport unittest\n\n\nclass TestParcelServiceType(unittest.TestCase):\n\tpass\n"
+    },
+    {
+      "path": ".prettierrc.json",
+      "sha": null,
+      "content_sha256": "2a23c9def401078362c56ab16b6dda26d099305e49d56ead81fafea10c724658",
+      "score": 35,
+      "content": "{\n\t\"semi\": true,\n\t\"tabWidth\": 2,\n\t\"useTabs\": true\n}\n"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "sha": null,
+      "content_sha256": "a91ca283619ab514d00d9073464929ec169f5926b432f3862f97c347b91db770",
+      "score": 35,
+      "content": "exclude: \"node_modules|.git\"\ndefault_stages: [pre-commit]\ndefault_install_hook_types: [pre-commit, commit-msg]\nfail_fast: false\n\nrepos:\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v6.0.0\n    hooks:\n      - id: trailing-whitespace\n        files: \"erpnext_shipping.*\"\n        exclude: \".*json$|.*txt$|.*csv|.*md|.*svg\"\n      - id: check-merge-conflict\n      - id: check-ast\n      - id: check-json\n      - id: check-toml\n      - id: check-yaml\n      - id: debug-statements\n\n  - repo: https://github.com/astral-sh/ruff-pre-commit\n    rev: v0.15.20\n    hooks:\n      - id: ruff\n        name: \"Run ruff linter and apply fixes\"\n        args: [\"--fix\"]\n\n      - id: ruff-format\n        name: \"Format Python code\"\n\n  - repo: https://github.com/pre-commit/mirrors-prettier\n    rev: v3.1.0\n    hooks:\n      - id: prettier\n        types_or: [javascript, vue, scss]\n        exclude: |\n          (?x)^(\n              .*node_modules.*\n          )$\n\n  - repo: local\n    hooks:\n      - id: eslint\n        name: eslint\n        language: node\n        entry: eslint\n        types_or: [javascript]\n        args: [\"--quiet\"]\n        additional_dependencies:\n          - \"eslint@10\"\n          - \"@eslint/js\"\n          - \"globals\"\n        exclude: |\n          (?x)^(\n              .*node_modules.*\n          )$\n\n  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook\n    rev: v9.26.0\n    hooks:\n      - id: commitlint\n        stages: [commit-msg]\n        additional_dependencies: [\"@commitlint/config-conventional\"]\n\nci:\n  autoupdate_schedule: weekly\n  skip: []\n  submodules: false\n"
+    },
+    {
+      "path": "erpnext_shipping/property_setters.py",
+      "sha": null,
+      "content_sha256": "ff138d441b1db2f51c3a8999bdc4d4cb7a7e07ad265e8742f0be6a79c48431f5",
+      "score": 33,
+      "content": "def get_property_setters():\n\treturn [\n\t\t# (\"Address\", \"state\", \"hidden\", 1),\n\t\t# (\"Address\", None, \"track_changes\", 1),\n\t]\n"
+    },
+    {
+      "path": "erpnext_shipping/custom_fields.py",
+      "sha": null,
+      "content_sha256": "2965a2c56f5c7c2b1a2cd9848268e4e7a2b24dacc059cd1d645c82b7990528b0",
+      "score": 33,
+      "content": "from .utils import identity as _\n\n\ndef get_custom_fields():\n\treturn {\n\t\t\"Delivery Note\": [\n\t\t\t{\n\t\t\t\t\"fieldname\": \"shipping_sec_break\",\n\t\t\t\t\"label\": _(\"Shipping Details\"),\n\t\t\t\t\"fieldtype\": \"Section Break\",\n\t\t\t\t\"collapsible\": 1,\n\t\t\t\t\"insert_after\": \"sales_team\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"delivery_type\",\n\t\t\t\t\"label\": _(\"Delivery Type\"),\n\t\t\t\t\"fieldtype\": \"Data\",\n\t\t\t\t\"read_only\": 1,\n\t\t\t\t\"translatable\": 0,\n\t\t\t\t\"insert_after\": \"shipping_sec_break\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"parcel_service\",\n\t\t\t\t\"label\": _(\"Parcel Service\"),\n\t\t\t\t\"fieldtype\": \"Data\",  # needs to be \"Data\" for backward compat\n\t\t\t\t\"options\": \"Parcel Service\",\n\t\t\t\t\"read_only\": 1,\n\t\t\t\t\"insert_after\": \"delivery_type\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"parcel_service_type\",\n\t\t\t\t\"label\": _(\"Parcel Service Type\"),\n\t\t\t\t\"fieldtype\": \"Data\",  # needs to be \"Data\" for backward compat\n\t\t\t\t\"options\": \"Parcel Service Type\",\n\t\t\t\t\"read_only\": 1,\n\t\t\t\t\"insert_after\": \"parcel_service\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"shipping_col_break\",\n\t\t\t\t\"fieldtype\": \"Column Break\",\n\t\t\t\t\"insert_after\": \"parcel_service_type\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"tracking_number\",\n\t\t\t\t\"label\": _(\"Tracking Number\"),\n\t\t\t\t\"fieldtype\": \"Data\",\n\t\t\t\t\"read_only\": 1,\n\t\t\t\t\"translatable\": 0,\n\t\t\t\t\"insert_after\": \"shipping_col_break\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"tracking_url\",\n\t\t\t\t\"label\": _(\"Tracking URL\"),\n\t\t\t\t\"fieldtype\": \"Small Text\",\n\t\t\t\t\"read_only\": 1,\n\t\t\t\t\"translatable\": 0,\n\t\t\t\t\"insert_after\": \"tracking_number\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"tracking_status\",\n\t\t\t\t\"label\": _(\"Tracking Status\"),\n\t\t\t\t\"fieldtype\": \"Data\",\n\t\t\t\t\"read_only\": 1,\n\t\t\t\t\"translatable\": 0,\n\t\t\t\t\"insert_after\": \"tracking_url\",\n\t\t\t},\n\t\t\t{\n\t\t\t\t\"fieldname\": \"tracking_status_info\",\n\t\t\t\t\"label\": _(\"Tracking Status Information\"),\n\t\t\t\t\"fieldtype\": \"Data\",\n\t\t\t\t\"read_only\": 1,\n\t\t\t\t\"translatable\": 0,\n\t\t\t\t\"insert_after\": \"tracking_status\",\n\t\t\t},\n\t\t]\n\t}\n\n\ndef get_fields_for_patch(doctype: str, fieldnames: list[str]) -> dict[str, list[dict]]:\n\t\"\"\"Return specific fields that are needed for a patch.\"\"\"\n\treturn {doctype: [field for field in get_custom_fields()[doctype] if field[\"fieldname\"] in fieldnames]}\n"
+    },
+    {
+      "path": "erpnext_shipping/__init__.py",
+      "sha": null,
+      "content_sha256": "cdee089deeede9c3ef15492c748ce67213cd26078dd0c6651fdcc0c449cc7e3e",
+      "score": 33,
+      "content": "__version__ = \"16.0.0\"\n"
+    },
+    {
+      "path": "erpnext_shipping/utils.py",
+      "sha": null,
+      "content_sha256": "9d93051672a1f97191de6e65bd8a04a9b24d588117976e120aeade8425151b96",
+      "score": 33,
+      "content": "from frappe.custom.doctype.customize_form.customize_form import docfield_properties, doctype_properties\nfrom frappe.custom.doctype.property_setter.property_setter import make_property_setter\n\n\ndef identity(value):\n\t\"\"\"Used for dummy translation\"\"\"\n\treturn value\n\n\ndef make_property_setters(property_setters):\n\tfor prop_setter in property_setters:\n\t\tif prop_setter[1]:\n\t\t\tfor_doctype = False\n\t\t\tfieldtype = docfield_properties[prop_setter[2]]\n\t\telse:\n\t\t\tfor_doctype = True\n\t\t\t# Use workaround for field_order property, maybe add to incustomize_form.py (?)\n\t\t\tfieldtype = doctype_properties[prop_setter[2]] if prop_setter[2] != \"field_order\" else \"Data\"\n\n\t\tmake_property_setter(*prop_setter[:4], fieldtype, for_doctype=for_doctype)\n"
+    },
+    {
+      "path": "erpnext_shipping/hooks.py",
+      "sha": null,
+      "content_sha256": "1a92098cefa6a1c83806b983844c100ab7fb9faf17d0cecfc84c2f4582ec4702",
+      "score": 33,
+      "content": "app_name = \"erpnext_shipping\"\napp_title = \"ERPNext Shipping\"\napp_publisher = \"Frappe\"\napp_description = \"A Shipping Integration fir ERPNext\"\napp_icon = \"octicon octicon-file-directory\"\napp_color = \"grey\"\napp_email = \"developers@frappe.io\"\napp_license = \"MIT\"\n\n# Includes in <head>\n# ------------------\n\n# include js, css files in header of desk.html\n# app_include_css = \"/assets/erpnext_shipping/css/erpnext_shipping.css\"\n# app_include_js = \"/assets/erpnext_shipping/js/erpnext_shipping.js\"\n\n# include js, css files in header of web template\n# web_include_css = \"/assets/erpnext_shipping/css/erpnext_shipping.css\"\n# web_include_js = \"/assets/erpnext_shipping/js/erpnext_shipping.js\"\n\n# include custom scss in every website theme (without file extension \".scss\")\n# website_theme_scss = \"erpnext_shipping/public/scss/website\"\n\n# include js, css files in header of web form\n# webform_include_js = {\"doctype\": \"public/js/doctype.js\"}\n# webform_include_css = {\"doctype\": \"public/css/doctype.css\"}\n\n# include js in page\n# page_js = {\"page\" : \"public/js/file.js\"}\n\n# include js in doctype views\ndoctype_js = {\"Shipment\": \"public/js/shipment.js\"}\n# doctype_tree_js = {\"doctype\" : \"public/js/doctype_tree.js\"}\n# doctype_calendar_js = {\"doctype\" : \"public/js/doctype_calendar.js\"}\n\n# Home Pages\n# ----------\n\n# application home page (will override Website Settings)\n# home_page = \"login\"\n\n# website user home page (by Role)\n# role_home_page = {\n# \"Role\": \"home_page\"\n# }\n\n# Generators\n# ----------\n\n# automatically create page for each record of this doctype\n# website_generators = [\"Web Page\"]\n\n# Installation\n# ------------\n\n# before_install = \"erpnext_shipping.install.before_install\"\nafter_install = \"erpnext_shipping.install.after_install\"\n\n# Desk Notifications\n# ------------------\n# See frappe.core.notifications.get_notification_config\n\n# notification_config = \"erpnext_shipping.notifications.get_notification_config\"\n\n# Permissions\n# -----------\n# Permissions evaluated in scripted ways\n\n# permission_query_conditions = {\n# \t\"Event\": \"frappe.desk.doctype.event.event.get_permission_query_conditions\",\n# }\n#\n# has_permission = {\n# \t\"Event\": \"frappe.desk.doctype.event.event.has_permission\",\n# }\n\n# DocType Class\n# ---------------\n# Override standard doctype classes\n\n# override_doctype_class = {\n# \t\"ToDo\": \"custom_app.overrides.CustomToDo\"\n# }\n\n# Document Events\n# ---------------\n# Hook on document methods and events\n\n# doc_events = {\n# \t\"*\": {\n# \t\t\"on_update\": \"method\",\n# \t\t\"on_cancel\": \"method\",\n# \t\t\"on_trash\": \"method\"\n# }\n# }\n\n# Scheduled Tasks\n# ---------------\n\nscheduler_events = {\"daily\": [\"erpnext_shipping.erpnext_shipping.utils.update_tracking_info_daily\"]}\n\n# Testing\n# -------\n\n# before_tests = \"erpnext_shipping.install.before_tests\"\n\n# Overriding Methods\n# ------------------------------\n#\n# override_whitelisted_methods = {\n# \t\"frappe.desk.doctype.event.event.get_events\": \"erpnext_shipping.event.get_events\"\n# }\n#\n# each overriding function accepts a `data` argument;\n# generated from the base implementation of the doctype dashboard,\n# along with any modifications made in other Frappe apps\n# override_doctype_dashboards = {\n# \t\"Task\": \"erpnext_shipping.task.get_dashboard_data\"\n# }\n\n# exempt linked doctypes from being automatically cancelled\n#\n# auto_cancel_exempted_doctypes = [\"Auto Repeat\"]\n\ndoc_events = {\n\t\"Shipment\": {\n\t\t\"validate\": [\n\t\t\t\"erpnext_shipping.erpnext_shipping.utils.validate_phone\",\n\t\t]\n\t},\n}\n"
+    },
+    {
+      "path": "erpnext_shipping/config/docs.py",
+      "sha": null,
+      "content_sha256": "ed1f94c4dac7341cf1f081ea6cd80920d8b2d1d47c4171ee54a36cc96dfe718e",
+      "score": 31,
+      "content": "\"\"\"\nConfiguration for docs\n\"\"\"\n\n# source_link = \"https://github.com/[org_name]/erpnext_shipping\"\n# docs_base_url = \"https://[org_name].github.io/erpnext_shipping\"\n# headline = \"App that does everything\"\n# sub_heading = \"Yes, you got that right the first time, everything\"\n\n\ndef get_context(context):\n\tcontext.brand_html = \"ERPNext Shipping\"\n"
+    },
+    {
+      "path": "erpnext_shipping/config/desktop.py",
+      "sha": null,
+      "content_sha256": "720f78fbb42cdcc3a1865168e4fa17aa31b503760f03ec162db8f9e384641519",
+      "score": 31,
+      "content": "from frappe import _\n\n\ndef get_data():\n\treturn [\n\t\t{\n\t\t\t\"module_name\": \"ERPNext Shipping\",\n\t\t\t\"color\": \"grey\",\n\t\t\t\"icon\": \"octicon octicon-file-directory\",\n\t\t\t\"type\": \"module\",\n\t\t\t\"label\": _(\"ERPNext Shipping\"),\n\t\t}\n\t]\n"
+    },
+    {
+      "path": "erpnext_shipping/public/shipping.bundle.js",
+      "sha": null,
+      "content_sha256": "853439e8c9fe05d4ea249f60bbc20b99d23c356884769aeca92e615b21bde8ee",
+      "score": 31,
+      "content": "import \"./js/shipment_service_selector.html\";\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [
+    {
+      "path": "erpnext_shipping/erpnext_shipping/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "erpnext_shipping/templates/__init__.py",
+      "error": "empty content"
+    },
+    {
+      "path": "erpnext_shipping/config/__init__.py",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 3,
+  "generated_at": "2026-11-15T12:51:11.290084+00:00"
+}

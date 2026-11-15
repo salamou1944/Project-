@@ -1,0 +1,70 @@
+{
+  "canonical_source": "github:windmill-labs/windmill-cli-action",
+  "repo": "windmill-labs/windmill-cli-action",
+  "revision_sha": "72dcb36da970f6bb7dd89dbd63a012d88bbb336c",
+  "default_branch": "main",
+  "pushed_at": "2026-11-13T15:54:08Z",
+  "repo_updated_at": "2026-11-12T14:29:30Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": ".github/workflows/test.yml",
+      "sha": null,
+      "content_sha256": "fd7e608bec0795cc4498967d7b71792687fd3637d8587dd2125b613a5f1ba64a",
+      "score": 186,
+      "content": "name: Test\n\non:\n  push:\n    branches: [main]\n  pull_request:\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\njobs:\n  unit:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-latest, windows-latest]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - uses: actions/checkout@v5\n      - name: Argument handling of scripts/run.sh\n        shell: bash\n        run: bash tests/run_test.sh\n\n  action:\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-latest, windows-latest]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - uses: actions/checkout@v5\n      - name: Install a pinned CLI and run a command\n        uses: ./\n        with:\n          command: version\n          cli-version: 1.868.0\n      - name: wmill is on PATH at the pinned version\n        shell: bash\n        run: |\n          out=\"$(wmill version)\"\n          echo \"$out\"\n          grep -qx 'CLI version: 1.868.0' <<< \"$out\"\n      - name: Install only (no command)\n        uses: ./\n        with:\n          cli-version: 1.868.0\n\n  # Runs only where the WMILL_TEST_TOKEN secret exists (not on fork PRs).\n  # Use a token for a disposable test workspace; the command is read-only.\n  live:\n    runs-on: ubuntu-latest\n    env:\n      HAS_TOKEN: ${{ secrets.WMILL_TEST_TOKEN != '' }}\n    steps:\n      - uses: actions/checkout@v5\n      - name: List scripts of the test workspace\n        if: env.HAS_TOKEN == 'true'\n        uses: ./\n        with:\n          command: script list\n          token: ${{ secrets.WMILL_TEST_TOKEN }}\n          workspace: ${{ vars.WMILL_TEST_WORKSPACE }}\n          base-url: ${{ vars.WMILL_TEST_BASE_URL || 'https://app.windmill.dev' }}\n          cli-version: 1.868.0\n"
+    },
+    {
+      "path": "action.yml",
+      "sha": null,
+      "content_sha256": "91606da58f96772cae8afc9030edc271a6bef61359ba63abc847d44e0d471905",
+      "score": 117,
+      "content": "name: 'Windmill CLI'\ndescription: 'Install the Windmill CLI (wmill) and optionally run a wmill command, e.g. sync push, against a Windmill workspace.'\nauthor: 'Windmill Labs'\nbranding:\n  icon: 'wind'\n  color: 'blue'\n\ninputs:\n  command:\n    description: 'Arguments passed to wmill, for example \"sync push --yes\". Split on whitespace and never evaluated by a shell (no quotes, variables or globs). Leave empty to only install wmill.'\n    required: false\n    default: ''\n  token:\n    [REDACTED] 'Windmill API token. Store it as a secret. When set, --token, --workspace and --base-url are appended to the command.'\n    required: false\n    default: ''\n  workspace:\n    description: 'Windmill workspace id. Required when token is set.'\n    required: false\n    default: ''\n  base-url:\n    description: 'Base URL of the Windmill instance. Set it for self-hosted instances.'\n    required: false\n    default: 'https://app.windmill.dev'\n  cli-version:\n    description: 'Version of the windmill-cli npm package. Pin it (e.g. 1.868.0) for reproducible CI; \"latest\" tracks new releases.'\n    required: false\n    default: 'latest'\n  node-version:\n    description: 'Node.js version used to run wmill.'\n    required: false\n    default: '24'\n  working-directory:\n    description: 'Directory in which to run wmill (the folder holding wmill.yaml).'\n    required: false\n    default: '.'\n\nruns:\n  using: 'composite'\n  steps:\n    - uses: actions/setup-node@v5\n      with:\n        node-version: ${{ inputs.node-version }}\n\n    - name: Install wmill\n      shell: bash\n      env:\n        WMILL_CLI_VERSION: ${{ inputs.cli-version }}\n      run: npm install -g \"windmill-cli@${WMILL_CLI_VERSION}\"\n\n    - name: Run wmill\n      if: ${{ inputs.command != '' }}\n      shell: bash\n      working-directory: ${{ inputs.working-directory }}\n      env:\n        WMILL_COMMAND: ${{ inputs.command }}\n        WMILL_TOKEN: ${{ inputs.token }}\n        WMILL_WORKSPACE: ${{ inputs.workspace }}\n        WMILL_BASE_URL: ${{ inputs.base-url }}\n      run: bash \"$GITHUB_ACTION_PATH/scripts/run.sh\"\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "3a6bb56c9e0e4e7e9ff7ec0abe01ef34244b958daa3a7a11095e78d24b3ec2d1",
+      "score": 100,
+      "content": "# Windmill CLI action\n\nInstalls the [Windmill](https://www.windmill.dev) CLI (`wmill`, npm package [`windmill-cli`](https://www.npmjs.com/package/windmill-cli)) and optionally runs one `wmill` command against a workspace. It replaces the `npm install -g windmill-cli` and `wmill sync push ...` steps of the git sync CI workflows in the [Windmill docs](https://www.windmill.dev/docs/advanced/git_sync).\n\n## Deploy a repository to a workspace on merge\n\n```yaml\nname: Deploy to Windmill\non:\n  push:\n    branches: [main]\n\njobs:\n  deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v5\n      - uses: windmill-labs/windmill-cli-action@v1\n        with:\n          command: sync push --yes --skip-variables --skip-secrets --skip-resources\n          token: ${{ secrets.WMILL_TOKEN }}\n          workspace: my-workspace\n          base-url: https://app.windmill.dev\n          cli-version: 1.868.0\n```\n\n## Install only\n\nLeave `command` empty and call `wmill` in later steps:\n\n```yaml\n      - uses: windmill-labs/windmill-cli-action@v1\n        with:\n          cli-version: 1.868.0\n      - run: wmill sync pull --yes --workspace my-workspace --token \"$WMILL_TOKEN\" --base-url https://app.windmill.dev\n        env:\n          WMILL_TOKEN: ${{ secrets.WMILL_TOKEN }}\n```\n\n## Inputs\n\n| Input | Required | Default | Description |\n| --- | --- | --- | --- |\n| `command` | no | | Arguments passed to `wmill`, e.g. `sync push --yes`. Empty: only install `wmill`. |\n| `token` | no | | Windmill API token; store it as a secret. When set, `--workspace`, `--token` and `--base-url` are appended to the command. |\n| `workspace` | when `token` is set | | Workspace id. |\n| `base-url` | no | `https://app.windmill.dev` | Base URL of the instance; set it for self-hosted Windmill. |\n| `cli-version` | no | `latest` | `windmill-cli` version. Pin it so CI does not change with each release. |\n| `node-version` | no | `24` | Node.js version used to run `wmill`. |\n| `working-directory` | no | `.` | Directory in which `wmill` runs (the folder holding `wmill.yaml`). |\n\n`command` is split on whitespace and passed to `wmill` as separate arguments. It is never evaluated by a shell, so quotes, `$VARIABLES`, `$(...)` and globs are passed literally. For arguments that contain spaces, use the install-only mode and call `wmill` in a `run` step.\n\n## Notes\n\n- With `token` set, the action passes `--base-url`, which makes `wmill` use only the given token and workspace and ignore any stored CLI profile.\n- `sync push` writes every local file selected by `wmill.yaml` to the workspace. Use a dedicated token and the `includes`/`excludes` settings of `wmill.yaml` ([sync docs](https://www.windmill.dev/docs/advanced/cli/sync)) so the repository only manages the paths it owns.\n- Works on Linux, macOS and Windows runners (steps run in `bash`).\n\n## License\n\nApache 2.0, see [LICENSE](LICENSE).\n"
+    },
+    {
+      "path": "tests/run_test.sh",
+      "sha": null,
+      "content_sha256": "e19c16901119ffcfaa364ad6d4659786e36b46496a875add5d3e189f869e9ae1",
+      "score": 93,
+      "content": "#!/usr/bin/env bash\n# Unit tests for scripts/run.sh: a stub `wmill` on PATH records its argv,\n# one argument per line, so each test asserts the exact command line.\nset -euo pipefail\n\nroot=\"$(cd \"$(dirname \"$0\")/..\" && pwd)\"\nwork=\"$(mktemp -d)\"\ntrap 'rm -rf \"$work\"' EXIT\nmkdir -p \"$work/bin\"\ncat > \"$work/bin/wmill\" <<'STUB'\n#!/usr/bin/env bash\nprintf '%s\\n' \"$@\" > \"$WMILL_ARGV_FILE\"\nSTUB\nchmod +x \"$work/bin/wmill\"\nexport PATH=\"$work/bin:$PATH\"\nexport WMILL_ARGV_FILE=\"$work/argv\"\nunset GITHUB_ACTIONS\n\nfailures=0\nrun_case() { # name, expected argv (newline-separated), env assignments...\n  local name=\"$1\" expected=\"$2\"; shift 2\n  rm -f \"$WMILL_ARGV_FILE\"\n  if ! (cd \"$work\" && env -u WMILL_COMMAND -u WMILL_TOKEN -u WMILL_WORKSPACE -u WMILL_BASE_URL \"$@\" bash \"$root/scripts/run.sh\" >/dev/null); then\n    echo \"FAIL $name: run.sh exited non-zero\"; failures=$((failures+1)); return\n  fi\n  local actual; actual=\"$(cat \"$WMILL_ARGV_FILE\" 2>/dev/null || echo '<wmill not called>')\"\n  if [ \"$actual\" = \"$expected\" ]; then echo \"ok   $name\"; else\n    echo \"FAIL $name\"; echo \"  expected: $(printf '%q ' $expected)\"; echo \"  actual:   $(printf '%q ' $actual)\"; failures=$((failures+1)); fi\n}\n\nrun_case \"command with token appends explicit flags\" \\\n\"sync\npush\n--yes\n--workspace\nmy-ws\n--token\nt0k\n--base-url\nhttps://windmill.example.com\" \\\n  WMILL_COMMAND=\"sync push --yes\" WMILL_TOKEN=t0k WMILL_WORKSPACE=my-ws WMILL_BASE_URL=https://windmill.example.com\n\nrun_case \"no token passes the command only\" \\\n\"version\" \\\n  WMILL_COMMAND=\"version\" WMILL_BASE_URL=https://app.windmill.dev\n\nrun_case \"extra whitespace and newlines are separators\" \\\n\"sync\npull\n--yes\" \\\n  WMILL_COMMAND=$'  sync\\tpull \\n --yes  '\n\n# Shell syntax must reach wmill as literal text and never run.\nrun_case \"no shell evaluation\" \\\n'$(touch\nPWNED)\n;\necho\n`id`\n*\n$HOME' \\\n  WMILL_COMMAND='$(touch PWNED) ; echo `id` * $HOME'\nif [ -e \"$work/PWNED\" ]; then echo \"FAIL command substitution was executed\"; failures=$((failures+1)); else echo \"ok   no file created by command substitution\"; fi\n\n# Empty command: success, wmill not called.\nrm -f \"$WMILL_ARGV_FILE\"\nif (cd \"$work\" && WMILL_COMMAND=\"   \" bash \"$root/scripts/run.sh\" >/dev/null) && [ ! -e \"$WMILL_ARGV_FILE\" ]; then\n  echo \"ok   empty command installs only\"; else echo \"FAIL empty command\"; failures=$((failures+1)); fi\n\n# Token without workspace: error, wmill not called.\nrm -f \"$WMILL_ARGV_FILE\"\nif out=\"$(cd \"$work\" && WMILL_COMMAND=\"sync push\" WMILL_TOKEN=t0k WMILL_BASE_URL=https://x.example bash \"$root/scripts/run.sh\" 2>&1)\"; then\n  echo \"FAIL token without workspace should exit non-zero\"; failures=$((failures+1))\nelif [ -e \"$WMILL_ARGV_FILE\" ]; then\n  echo \"FAIL token without workspace called wmill\"; failures=$((failures+1))\nelif [ \"$out\" != \"::error::The 'workspace' input is required when 'token' is set.\" ]; then\n  echo \"FAIL token without workspace: unexpected message: $out\"; failures=$((failures+1))\nelse echo \"ok   token without workspace is rejected\"; fi\n\n# Exit code of wmill is propagated.\nprintf '#!/usr/bin/env bash\\nexit 7\\n' > \"$work/bin/wmill\"\nset +e; (cd \"$work\" && WMILL_COMMAND=\"sync push\" bash \"$root/scripts/run.sh\" >/dev/null 2>&1); code=$?; set -e\nif [ \"$code\" = 7 ]; then echo \"ok   wmill exit code is propagated\"; else echo \"FAIL exit code: expected 7, got $code\"; failures=$((failures+1)); fi\n\nif [ \"$failures\" -ne 0 ]; then echo \"$failures failure(s)\"; exit 1; fi\necho \"all tests passed\"\n"
+    },
+    {
+      "path": "scripts/run.sh",
+      "sha": null,
+      "content_sha256": "065c7a8462403b83f32f899fcc15fc97bc8650db98f16a8cc694371da2be226d",
+      "score": 33,
+      "content": "#!/usr/bin/env bash\n# Runs `wmill <command> [--workspace W --token T --base-url U]`.\n# Inputs come from the environment (set by action.yml):\n#   WMILL_COMMAND    arguments for wmill, split on whitespace, never evaluated\n#   WMILL_TOKEN      optional API token; when set, WMILL_WORKSPACE is required\n#   WMILL_WORKSPACE  workspace id\n#   WMILL_BASE_URL   instance base URL\nset -euo pipefail\n\ncommand_text=\"${WMILL_COMMAND:-}\"\ntoken=\"[REDACTED]}\"\nworkspace=\"${WMILL_WORKSPACE:-}\"\nbase_url=\"${WMILL_BASE_URL:-}\"\n\nif [ -z \"${command_text//[[:space:]]/}\" ]; then\n  echo \"No command given: wmill is installed, nothing to run.\"\n  exit 0\nfi\n\n# Word-split without a shell: no command substitution, variable expansion or globbing.\nargs=()\nIFS=$' \\t\\n' read -r -d '' -a args <<< \"$command_text\" || true\n\nif [ -n \"$token\" ]; then\n  if [ -z \"$workspace\" ]; then\n    echo \"::error::The 'workspace' input is required when 'token' is set.\"\n    exit 1\n  fi\n  if [ -z \"$base_url\" ]; then\n    echo \"::error::The 'base-url' input is empty.\"\n    exit 1\n  fi\n  if [ -n \"${GITHUB_ACTIONS:-}\" ]; then\n    echo \"::add-mask::$token\"\n  fi\n  # Explicit flags, so no stored CLI profile on the runner is used\n  # (--base-url requires --token and --workspace).\n  args+=(--workspace \"$workspace\" --token \"$token\" --base-url \"$base_url\")\nfi\n\nexec wmill \"${args[@]}\"\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-15T12:51:14.347616+00:00"
+}
