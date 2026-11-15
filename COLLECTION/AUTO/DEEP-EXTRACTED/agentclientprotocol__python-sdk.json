@@ -1,7 +1,7 @@
 {
   "canonical_source": "github:agentclientprotocol/python-sdk",
   "repo": "agentclientprotocol/python-sdk",
-  "revision_sha": "9853d8b514d6340000bcbd01ec07808436db80cf",
+  "revision_sha": "da202e0cb367c0c4be1bdeaa74b22f0233659ae9",
   "default_branch": "main",
   "license": "Apache-2.0",
   "description": "Python SDK for ACP clients and agents.",
@@ -13,10 +13,10 @@
     "python",
     "zed"
   ],
-  "source_pushed_at": "2026-11-07T03:38:20Z",
-  "source_updated_at": "2026-11-02T06:18:59Z",
-  "stargazers_count": 345,
-  "size_kb": 2298,
+  "source_pushed_at": "2026-11-12T02:08:33Z",
+  "source_updated_at": "2026-11-15T08:12:12Z",
+  "stargazers_count": 349,
+  "size_kb": 2194,
   "tree_truncated": false,
   "files": [
     {
@@ -351,13 +351,13 @@
     },
     {
       "path": "src/acp/ws/server.py",
-      "sha": "0ae5dcb2b696df22f7458ec427a493b32fa6d25f",
+      "sha": "a11ce20324b77f459fd4b5465518df5a2398d036",
       "bucket": "agent",
-      "source_content_sha256": "e4b1606d44f96c478a761e60f36a640042204af4c6203ddac47e46408bc101ac",
-      "content_sha256": "e4b1606d44f96c478a761e60f36a640042204af4c6203ddac47e46408bc101ac",
+      "source_content_sha256": "9e7be29ea74e0b4d9e69b3419c515a9e0beaebb9ee508d4381c487dfd2bb5eaf",
+      "content_sha256": "9e7be29ea74e0b4d9e69b3419c515a9e0beaebb9ee508d4381c487dfd2bb5eaf",
       "redaction_applied": false,
       "redaction_reasons": [],
-      "content": "\"\"\"Bind a Starlette WebSocket to an ACP agent connection.\"\"\"\n\nfrom __future__ import annotations\n\nimport contextlib\nimport logging\nimport uuid\nfrom typing import TYPE_CHECKING, Any\n\nfrom starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState\n\nfrom .._jsonrpc import decode_message, error_response\nfrom ..agent.connection import AgentSideConnection\nfrom ..exceptions import RequestError\nfrom ..http.protocol import CONNECTION_ID_HEADER\n\nif TYPE_CHECKING:\n    from ..experimental.negotiation import AgentProtocolRouter\n    from ..http.server import AgentFactory\n\n__all__ = [\"handle_websocket\"]\n\n\nclass _WebSocketTransport:\n    \"\"\"Adapt Starlette's WebSocket to the message-level Transport interface.\"\"\"\n\n    def __init__(self, websocket: WebSocket) -> None:\n        self._ws = websocket\n        self._warned_binary = False\n\n    async def send(self, message: dict[str, Any]) -> None:\n        if self._ws.client_state == WebSocketState.DISCONNECTED:\n            raise ConnectionError(\"Transport closed\")\n        await self._ws.send_json(message)\n\n    async def receive(self) -> dict[str, Any] | None:\n        while self._ws.client_state != WebSocketState.DISCONNECTED:\n            event = await self._ws.receive()\n            if event[\"type\"] == \"websocket.disconnect\":\n                return None\n            if event.get(\"text\") is None:\n                if event.get(\"bytes\") is not None and not self._warned_binary:\n                    self._warned_binary = True\n                    logging.warning(\"Ignoring binary WebSocket frame; ACP messages must be sent as text frames\")\n                continue\n            try:\n                message = decode_message(event[\"text\"])\n                if message is not None:\n                    return message\n            except RequestError as error:\n                # A failed write must not discard valid messages buffered by ASGI.\n                if self._ws.application_state == WebSocketState.CONNECTED:\n                    with contextlib.suppress(WebSocketDisconnect):\n                        await self.send(error_response(error))\n        return None\n\n    async def close(self) -> None:\n        if self._ws.client_state == self._ws.application_state == WebSocketState.CONNECTED:\n            await self._ws.close()\n\n\nasync def handle_websocket(agent_factory: AgentFactory | AgentProtocolRouter, websocket: WebSocket) -> None:\n    \"\"\"Run one agent for the lifetime of the socket; disconnect cancels its work.\"\"\"\n    await websocket.accept(headers=[(CONNECTION_ID_HEADER.lower().encode(), uuid.uuid4().hex.encode())])\n    transport = _WebSocketTransport(websocket)\n    from ..experimental.negotiation import AgentProtocolRouter\n\n    if isinstance(agent_factory, AgentProtocolRouter):\n        conn = agent_factory.connect(transport, listening=False)\n    else:\n        conn = AgentSideConnection(agent_factory, transport, listening=False)\n    try:\n        await conn.listen()\n    finally:\n        await conn.close()\n"
+      "content": "\"\"\"Bind a Starlette WebSocket to an ACP agent connection.\"\"\"\n\nfrom __future__ import annotations\n\nimport contextlib\nimport logging\nimport uuid\nfrom typing import TYPE_CHECKING, Any\n\nfrom starlette.websockets import WebSocket, WebSocketDisconnect, WebSocketState\n\nfrom .._jsonrpc import decode_message, error_response\nfrom ..agent.connection import AgentSideConnection\nfrom ..exceptions import RequestError\nfrom ..http.protocol import CONNECTION_ID_HEADER\n\nif TYPE_CHECKING:\n    from ..experimental.negotiation import AgentProtocolRouter\n    from ..http.server import AgentFactory\n\n_logger = logging.getLogger(__name__)\n\n__all__ = [\"handle_websocket\"]\n\n\nclass _WebSocketTransport:\n    \"\"\"Adapt Starlette's WebSocket to the message-level Transport interface.\"\"\"\n\n    def __init__(self, websocket: WebSocket) -> None:\n        self._ws = websocket\n        self._warned_binary = False\n\n    async def send(self, message: dict[str, Any]) -> None:\n        if self._ws.client_state == WebSocketState.DISCONNECTED:\n            raise ConnectionError(\"Transport closed\")\n        await self._ws.send_json(message)\n\n    async def receive(self) -> dict[str, Any] | None:\n        while self._ws.client_state != WebSocketState.DISCONNECTED:\n            event = await self._ws.receive()\n            if event[\"type\"] == \"websocket.disconnect\":\n                return None\n            if event.get(\"text\") is None:\n                if event.get(\"bytes\") is not None and not self._warned_binary:\n                    self._warned_binary = True\n                    _logger.warning(\"Ignoring binary WebSocket frame; ACP messages must be sent as text frames\")\n                continue\n            try:\n                message = decode_message(event[\"text\"])\n                if message is not None:\n                    return message\n            except RequestError as error:\n                # A failed write must not discard valid messages buffered by ASGI.\n                if self._ws.application_state == WebSocketState.CONNECTED:\n                    with contextlib.suppress(WebSocketDisconnect):\n                        await self.send(error_response(error))\n        return None\n\n    async def close(self) -> None:\n        if self._ws.client_state == self._ws.application_state == WebSocketState.CONNECTED:\n            await self._ws.close()\n\n\nasync def handle_websocket(agent_factory: AgentFactory | AgentProtocolRouter, websocket: WebSocket) -> None:\n    \"\"\"Run one agent for the lifetime of the socket; disconnect cancels its work.\"\"\"\n    await websocket.accept(headers=[(CONNECTION_ID_HEADER.lower().encode(), uuid.uuid4().hex.encode())])\n    transport = _WebSocketTransport(websocket)\n    from ..experimental.negotiation import AgentProtocolRouter\n\n    if isinstance(agent_factory, AgentProtocolRouter):\n        conn = agent_factory.connect(transport, listening=False)\n    else:\n        conn = AgentSideConnection(agent_factory, transport, listening=False)\n    try:\n        await conn.listen()\n    finally:\n        await conn.close()\n"
     }
   ],
   "policy": {
@@ -365,5 +365,5 @@
     "max_file_bytes": 50000,
     "max_repo_bytes": 300000
   },
-  "generated_at": "2026-11-08T10:42:43.327198+00:00"
+  "generated_at": "2026-11-15T11:22:50.215029+00:00"
 }
