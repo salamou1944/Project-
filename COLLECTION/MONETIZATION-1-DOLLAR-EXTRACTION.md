@@ -2409,3 +2409,162 @@ Next safe actions:
 5. Require model-specific licences, provider commercial terms, exact quota, region/data-processing review, live synthetic test and failure/latency evidence before any free model enters paid delivery.
 
 No listing, provider, repository capability, outreach or founder reply is counted as a customer or revenue.
+
+
+## 2026-11-14 Revenue + leverage sweep (run crossed UTC midnight)
+
+### 1. AgentMail and existing outreach
+
+All three connected inboxes were checked directly:
+- `api-pilot@agentmail.to`: 8 threads; the AutoMatch thread has 4 messages. Latest inbound remains Aidan Styan's founder reply at 2026-11-12 04:21:21 UTC. Latest outbound is the location/KYC correction at 2026-11-13 04:30:19 UTC. No later reply.
+- `easy@agentmail.to`: 5 threads, all old delivery-failure notices; no new prospect reply.
+- `pastel-realtime-e2e@agentmail.to`: 0 threads.
+- No follow-up sent. AutoMatch remains on hold pending a compliant payout route; no profile/KYC/bank details submitted.
+
+Evidence: AgentMail thread `3567fe94-25c0-4c59-abc5-faa5e11834f4`; last inbound 2026-11-12T04:21:21Z; last outbound 2026-11-13T04:30:19.508Z.
+
+### 2. Fresh Upwork opportunities and application constraints
+
+The connected Upwork freelancer dashboard was checked:
+- Account: Freelancer Basic.
+- Connects balance: 0.
+- Monthly Connects on plan: 0.
+- Earnable Connects tasks: 0.
+- New invitations, offers and messages: 0.
+- No proposals submitted and no Connects purchased.
+
+Fresh/personalized marketplace results were inspected using the Upwork connector; details below are current tool evidence, not search-engine snippets.
+
+**Best narrow workflow match — Simple n8n + AI Gmail deadline extraction**
+- Job ID: `2121411488220145393`
+- URL: https://www.upwork.com/jobs/~022121411488220145393
+- Posted 2026-11-14 UTC; description says max budget $70 and 48–72 hour delivery.
+- Requires n8n Cloud Gmail Trigger, OpenAI/Anthropic extraction, Google Sheets, urgent Slack/email alerts, Error Trigger, duplicate prevention, workflow export and handover.
+- Client record: 4 contracts, 3 written feedback items, 5.0 average feedback score, 67% hire rate, $278.88 spent, 1 active contract. One current open contract is titled “Fix existing n8n Gmail AI workflow.”
+- Application is blocked: `can_apply=false`, required Connects 23, available Connects 0.
+- Material listing inconsistency: the description states a $70 fixed-price maximum, while Upwork's contractTerms returned HOURLY with no hourly budget. Confirm contract type before any future application.
+- The posting also asks for n8n-specific experience; our API/webhook code is adjacent evidence, not a paid-client n8n case study. Do not overstate it.
+
+**n8n social publishing workflow**
+- Job ID: `2121514344203726752`
+- URL: https://www.upwork.com/jobs/~022121514344203726752
+- Posted 2026-11-14 UTC; client asks for n8n video creation and automated publishing to Instagram, TikTok and Facebook.
+- No posted rate/budget; client has no completed contracts/feedback, 6 invitations sent and 3 interviews.
+- Requires 14 Connects; available balance 0. Scope also depends on video-generation and social publishing capabilities not verified as a client delivery. Do not apply.
+
+**AI agent for e-commerce operations**
+- Job ID: `2121705767625912927`
+- URL: https://www.upwork.com/jobs/~022121705767625912927
+- Posted 2026-11-14 UTC; product listings, order management, support workflows and AI video generation.
+- Client record: $5,533 spent, 10 contracts, 4 reviews averaging 3.77, 14% hire rate, 2 active contracts.
+- This posting has 30 invitations, 4 interviews, 0 hires, 20–50 proposal tier; application requires 22 Connects, balance 0.
+- Scope is too broad and includes Higgsfield/Shopify/AI-video work; client history rating and low hire rate make it lower priority. No application.
+
+**AI automation / n8n / Voice AI agency partnership**
+- Job ID: `2121605780151368653`
+- URL: https://www.upwork.com/jobs/~022121605780151368653
+- Agency requests n8n/Make, Voice AI, Twilio, CRM, APIs, Supabase/PostgreSQL, and verifiable case studies/client references.
+- 50+ proposal tier, 30 invitations, 10 interviews, 0 hires. Our own repositories are not paid-client references. Do not apply or misrepresent them.
+
+**Disqualified economics/scope**
+- AI attribution replacement using Grok + server-side Meta/Google conversions: $3/hour despite requiring sGTM/Stape, Meta CAPI, Google Enhanced/Offline Conversions, ServiceM8, delayed offline attribution and production Grok API work. Not economically or capability-qualified.
+- n8n + Apify + OpenAI talent pipeline: $1,200 fixed price but 50+ proposals, 14 invitations, 12 interviews; requires Apify plus People Data Labs/Apollo and screenshots of prior n8n + structured-output work. It can introduce paid third-party delivery costs and we lack the requested case study. Do not apply.
+- Other current results either require French-language delivery, have already hired, are customer-service staffing rather than automation implementation, or do not match verified engineering capability.
+
+No Upwork proposal was submitted because the available Connects balance is zero and no free Connects-earning task/invitation exists. No off-platform contact was made.
+
+### 3. n8n Community / other marketplaces
+
+Fresh search did not establish a new, verifiable buyer with a current budget and scope that we can honestly qualify for without a paid lead credit. Workana and n8n Community results returned in this pass were older posts or lacked current buyer activity evidence. No unsolicited outreach sent.
+
+### 4. mnfst/awesome-free-llm-apis — current source audit
+
+Direct GitHub connector fetch of `mnfst/awesome-free-llm-apis/data.json`:
+- Main branch `lastUpdated`: 2026-11-12.
+- 14 providers.
+- 80 model rows in provider arrays (row count; do not repeat older 82 figure).
+- Main branch still contains OpenRouter `liquid/lfm-2.5-2.6b:free`, despite the newer removal PR.
+
+**Open PR #241 — OpenRouter Liquid model removal**
+- https://github.com/mnfst/awesome-free-llm-apis/pull/241
+- Data sync dated 2026-11-14.
+- Proposes removing `liquid/lfm-2.5-2.6b:free` because it disappeared from OpenRouter's public models list and the 2026-11-14 probe returned HTTP 404 (“no provider serves this model anymore”).
+- PR #241 is open, not yet reflected in main data.json. Do not use the old model ID.
+- OpenRouter's own model page states that this model was going away on 2026-11-13: https://openrouter.ai/liquid/lfm-2.5-2.6b%3Afree
+
+**New model candidate not yet in mnfst main — OpenRouter Liquid LFM3-1.7B (free)**
+- Official model page: https://openrouter.ai/liquid/lfm-3-1.7b%3Afree
+- Listed 2026-11-06; $0/M input and $0/M output, 262,144-token context, up to 8,192 output tokens, function calling and JSON-schema structured outputs.
+- OpenRouter's free-variant cap is 20 requests/minute and 50 requests/day. The 1,000/day tier requires buying at least $10 in credits; we will not buy credits, so use only the 50/day ceiling.
+- Critical data restriction: OpenRouter's model page says prompts and outputs may be retained and used to train Liquid models. Do not send customer, personal, confidential or proprietary data. At most consider public/synthetic test data.
+- Official Liquid model card lists 16 languages including Arabic, tool calling and structured outputs, and warns the small 1.73B model is not recommended for agentic coding or complex multi-step reasoning: https://huggingface.co/LiquidAI/LFM3-1.7B
+- License is Liquid's LFM Open License v1.0, not MIT/Apache 2.0. Liquid's official license page says commercial use is permitted only while the company's annual revenue is below USD 10 million; at/above that threshold a separate commercial license is required. Verify the actual legal entity/group revenue and full license before any paid use: https://www.liquid.ai/lfm-license
+- Possible narrow use only: public-data/synthetic Arabic FAQ classification, short ticket summarization or draft extraction with human review. Not a production/customer-data provider because of training/retention terms and no live API call was made in this sweep.
+
+**Runcrate PR #201 remains open and unmerged**
+- https://github.com/mnfst/awesome-free-llm-apis/pull/201
+- Claims five free models (DeepSeek V4.1 Flash, GLM 5.3 Flash, GLM 5.3, gpt-oss 120B, Qwen3.8 Flash) for a GitHub account at least 30 days old; one shared workspace allowance, per-session and weekly reset, no fixed public RPM/token quota.
+- Runcrate free page: https://www.runcrate.ai/inference/free
+- Runcrate Terms last updated 2026-11-03: https://www.runcrate.ai/terms
+- Terms state service availability is not guaranteed (despite a target), service may be changed/suspended/discontinued, models/instances may run on infrastructure partners, and uploaded data is processed as needed. The general license section does not clearly grant commercial-use rights for the hosted inference API, while the free page says usage may be served by third-party model providers under their own terms.
+- Do not use for paid delivery until Runcrate confirms hosted inference commercial-use rights, data processing/retention and model-specific upstream terms in writing. No account/key or API call created.
+
+**CheapLLM PR #229 is closed and unmerged**
+- https://github.com/mnfst/awesome-free-llm-apis/pull/229
+- Self-disclosed provider operator claimed DeepSeek V4.1 Flash 1017, beta-free and a post-beta minimum of 5,000 input / 1,000 output tokens per rolling hour.
+- The PR is not in main and is not open. Provider terms page could not be independently retrieved during this pass; no API test. Exclude pending current official terms, commercial-use rights, data retention, quota and independent reliability check.
+
+**Recent merged source hygiene**
+- PR #237 removes OpenRouter xingchen-agi/xing4.0-29b-a4b:free and NVIDIA NIM google/gemma-4-31b-it after repeated availability failures: https://github.com/mnfst/awesome-free-llm-apis/pull/237
+- PR #234 removes stale Mistral API recommendations because the free mode no longer includes API access: https://github.com/mnfst/awesome-free-llm-apis/pull/234
+- No provider keys or live inference calls were created.
+
+### 5. Cloudflare Workers AI probe — source correction opened as PR
+
+Repository: https://github.com/salamou1944/Salamou-31
+
+Found that `AI-API-HUB/api-factory/cloudflare-workers-ai-probe.mjs` defaulted to `@cf/meta/llama-3.1-8b-instruct`, which Cloudflare deprecated on 2026-05-30. Cloudflare also marks the FP8 variant for deprecation on 2026-11-20; avoid it as a new default.
+
+Created draft PR #72:
+- https://github.com/salamou1944/Salamou-31/pull/72
+- Branch: `fix/cloudflare-workers-ai-probe-default-glm47-flash-2026-11-14`
+- Commit: `5469a83ee6a0ac757e272538841bed3f5b048c49`
+- Blob: `b5a89ca993038e998bcb316dea2be319cdc82c6b`
+- One-line default change to `@cf/zai-org/glm-4.7-flash`; explicit Free-tier gate, credential requirements, exact-output assertion and `PROVIDER_MODEL` override are preserved.
+- Cloudflare model page verifies 131K context, function calling, reasoning, ZDR, prompt input and response output: https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/
+- Official Z.ai Hugging Face model card identifies GLM-4.7-Flash as MIT licensed and lists 30B-A3B, 16-language capable model card details: https://huggingface.co/zai-org/GLM-4.7-Flash
+- Cloudflare Workers Free allowance is 10,000 Neurons/day; requests above that allocation fail on Workers Free rather than automatically incurring paid usage: https://developers.cloudflare.com/workers-ai/platform/pricing/
+- Model is not among the paid-access-only exceptions listed on the pricing page, but account entitlement must still be verified.
+- PR #72 is draft/open, not merged. Combined commit status currently returns no status checks. No provider credentials were used, no live inference call was made, and no production activation is claimed. Keep the PR unmerged until static/CI checks and a guarded synthetic test in a confirmed Free account pass.
+
+### 6. Existing repository leverage / outstanding blockers
+
+- API Factory remains the reusable core for authentication, OpenAPI, idempotency, quota, usage ledger, provider evidence and durable registry/artifact lifecycle. Its deployment planner is not a deployment executor; historical persistence smoke evidence is not a fresh production smoke.
+- EASY lead-qualification issues remain unchanged: workflow reports `qualified` for any valid response without applying a priority threshold; provider idempotency falls back to `Date.now()` when stable lead ID/email are absent. No EASY source changes were made in this run.
+- The Cloudflare probe correction is a draft PR only, not merged or deployed.
+- No new platform/product started.
+
+### 7. Evidence ledger
+
+- AgentMail new inbound replies since the last sweep: 0.
+- Upwork new invitations/offers/messages: 0.
+- Upwork Connects balance: 0; purchased: 0.
+- New marketplace proposals: 0.
+- External cold outreach: 0.
+- Customers acquired: 0.
+- Accepted referrals: 0.
+- New contracts: 0.
+- Payments/revenue: $0.
+- New LLM keys/accounts: 0.
+- Live LLM inference calls: 0.
+- Upfront spending: $0.
+- Engineering action: one draft GitHub PR (#72) opened to replace a deprecated Cloudflare model default; it is not a customer, contract, deployment or revenue.
+
+Next safe actions:
+1. Keep AutoMatch on hold until a compliant Algeria-compatible payout route is confirmed in writing.
+2. Do not buy Upwork Connects; current high-fit applications require 14–23 Connects and the account balance is zero.
+3. Review/merge PR #72 only after CI/static checks and a guarded synthetic model call in a verified Workers Free account.
+4. If testing LFM3-1.7B via OpenRouter, use only public/synthetic data, remain within 50 requests/day, and verify Liquid's LFM Open License threshold against the legal entity. Do not use customer data because prompts/outputs may be used for training.
+5. Continue excluding Runcrate, CheapLLM and other unmerged providers until current commercial terms, quotas, privacy and live reliability are verified.
+
+No listing, founder reply, outreach, model, repository capability or draft PR is counted as a customer or revenue.
