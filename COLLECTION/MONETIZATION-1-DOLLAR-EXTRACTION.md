@@ -2568,3 +2568,83 @@ Next safe actions:
 5. Continue excluding Runcrate, CheapLLM and other unmerged providers until current commercial terms, quotas, privacy and live reliability are verified.
 
 No listing, founder reply, outreach, model, repository capability or draft PR is counted as a customer or revenue.
+
+
+## Revenue + Leverage Sweep — 2026-11-15 (local; 2026-11-16 UTC)
+
+### 1. Outreach and inbox evidence
+- Directly listed AgentMail threads in `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to` with an after-filter of `2026-11-14T00:00:00Z`: no new inbound threads/replies.
+- AutoMatch thread `a44cbb87-d626-4aaa-95b3-306dc0005b31` remains on hold. The last inbound founder response was the previously recorded eligibility response; our latest correction was sent 2026-11-13. No new reply arrived in this sweep. No additional outbound email was sent.
+- No profile, KYC or bank details submitted. Algeria payout eligibility remains unresolved.
+
+### 2. Fresh marketplace opportunities and qualification
+Upwork account check: Freelancer Basic, **0 Connects**, 0 new invites, and no new proposals. No Connects were purchased; no proposal was submitted.
+
+**Best buyer-quality fit remains the active $150 fixed-price “Complete Email Campaigns, SMS and Lead Follow-Up”** — [job](https://www.upwork.com/jobs/~022120536424756285933). Client record: 4.95/5 from 54 freelancer reviews, 135 contracts, 36 active contracts, $76,439.19 historical spend, 31% hire rate. Scope covers CRM lead follow-up, staff tasks, reply matching, email/SMS, appointment sequences, suppression/unsubscribe handling, idempotency and failure recovery. Application requires 18 Connects; balance is zero; no application was submitted.
+
+**New technically close lead: Amulya Farms & Nursery WhatsApp post-delivery plant-care assistant** — [Upwork job](https://www.upwork.com/jobs/~022122162752331995806). Active; 7 Connects; no budget disclosed; client record shows zero hires, zero reviews and one open job; payment verification was not present in the returned public client record and the listing was not returned by the verified-payment-only search. Scope is a five-plant pilot: QR-to-WhatsApp onboarding, month-long plant-specific care tips, customer questions, photo triage, damaged/wrong-plant complaints with human approval, opt-out, and a simple team view. The business itself has a matching public contact page listing its farm, Mumbai shop and customer-care numbers: https://amulyanursery.com/contact-us/ . This verifies a real business presence, **not** the Upwork buyer's payment method or intent to hire. Do not contact the business off-platform or claim a similar WhatsApp assistant has been deployed; no proposal was submitted because Connects are zero and the client requires prior business WhatsApp-assistant experience.
+
+**Commslayer support audit** — [job](https://www.upwork.com/jobs/~022121547231059994353). $100 fixed, payment-verified client in Australia, but 0 prior hires, 0% hire rate, 12 jobs posted, 2 interviews and 9 Connects required. The brief explicitly asks for direct Commslayer experience plus Shopify/Loop subscription integrations and measured AI-resolution improvements. We have no verified Commslayer/Loop customer case study; not qualified to claim this work.
+
+**WhatsApp + VoIP / GoHighLevel international sales calling** — [job](https://www.upwork.com/jobs/~022121993372951667384). High-trust client record (5.0/5, 750 reviews, 922 contracts, $74,278.15 spend, 100% hire rate, 21 active contracts), but Expert telephony/VoIP, international WhatsApp calling, recordings/transcripts and GHL integration are required; no hourly budget is provided; 11 Connects required. No demonstrated production VoIP/WhatsApp Calling implementation; do not overclaim.
+
+**Other disqualifiers checked**
+- Script.it $50 workflow showcase: requires at least five paid-client automation projects, some within the last six months; no such paid-client evidence exists in our ledger. [Listing](https://www.upwork.com/jobs/~022119417394034806568).
+- StackGo Workflow Automation Engineer: $13–17/hour, full-time six-month commitment, 21 Connects, and explicit 3+ years production HubSpot/API integration requirement plus Sydney overlap. No application and no off-platform contact; the listing explicitly forbids direct outreach. [Listing](https://www.upwork.com/jobs/~022117441599077105703).
+- “Project Fashion promotor” WhatsApp/Perfex CRM build: $1,150 fixed, client has zero hires and zero reviews, 11 Connects, 14 invites and 9 interviews. Scope combines six permanent WhatsApp tokens, multi-channel inbox/publishing, Perfex CRM modules, document/voice order extraction, support, reporting and appointments; budget and delivery risk are poor. [Listing](https://www.upwork.com/jobs/~022120353256171436695).
+- n8n tutor ($20 fixed) and $3/hour AI attribution roles were not selected: either not the requested delivery service or commercially unsuitable.
+- No cold outreach or off-platform contact was sent. Marketplace rules and missing Connects prevent compliant pursuit of the best leads.
+
+### 3. mnfst/awesome-free-llm-apis current delta
+- Fetched upstream `main/data.json`: `lastUpdated=2026-11-12`, 14 providers and 80 model rows.
+- Latest open change at inspection: [PR #244](https://github.com/mnfst/awesome-free-llm-apis/pull/244), opened 2026-11-15, removes `liquid/lfm-2.5-2.6b:free` after the OpenRouter model endpoint returned 404. It is a removal, not a new free-provider/model addition. Earlier [PR #237](https://github.com/mnfst/awesome-free-llm-apis/pull/237) also removed unavailable OpenRouter/NVIDIA models. Do not use a catalog entry merely because it remains in main while a removal PR is open.
+- No new provider key, live inference call, or customer-data test was made.
+- Cloudflare Workers AI `@cf/zai-org/glm-4.7-flash` remains a candidate only within the shared Workers Free allocation (10,000 Neurons/day across Workers AI), not an unlimited free model. Requests beyond the allowance fail on Workers Free; enabling paid billing changes the cost risk. The model page publishes token pricing, so confirm the actual account billing mode and keep paid fallback disabled. Use a customer-owned Cloudflare account for implementation; Cloudflare terms prohibit selling/reselling access to the service. Do not expose our account/API access as a resale product.
+  - Official model: https://developers.cloudflare.com/workers-ai/models/glm-4.7-flash/
+  - Official pricing: https://developers.cloudflare.com/workers-ai/platform/pricing/
+  - Cloudflare terms: https://www.cloudflare.com/terms/
+  - Model licence: https://huggingface.co/zai-org/GLM-4.7-Flash
+- Gemini Free tier is **not suitable for confidential customer data**: Google's current pricing page says Free-tier content may be used to improve Google products; model-specific RPM/TPM/RPD are per project, vary by model and are not guaranteed. Keep `hard_stop=false`, mark `tos_risk=avoid` for customer-data routing, and do not automatically select it for paid delivery.
+  - https://ai.google.dev/gemini-api/docs/pricing
+  - https://ai.google.dev/gemini-api/docs/rate-limits
+- Ollama runtime is MIT-licensed, but local hardware, electricity, storage and operator time remain costs; each downloaded model has its own licence. Do not call local inference “zero cost” or assume all models are commercially usable.
+  - https://github.com/ollama/ollama
+- Runcrate remains an unmerged proposal, not a verified provider. No new provider was activated.
+
+### 4. Repository and reusable open-source leverage
+**Salamou-31 / API Factory**
+- Commit `e3981ddda8d1485b5ccfe698ca39b97791dd4417` pins `modelparams@0.0.72` and adds opt-in exact-catalog validation of model parameters (keys, types, ranges, enum values and model applicability) before provider network I/O. Invalid parameters return HTTP 422 `INVALID_MODEL_PARAMETERS`; tests use a mock provider and assert invalid parameters make no network call. This is a useful reliability/control-plane component, **not** evidence of a live provider or customer deployment.
+- PR #72: https://github.com/salamou1944/Salamou-31/pull/72 . The first API Factory Test run (#582) failed at `test-free-provider-policy.mjs` because Gemini source evidence was dated 2026-10-05 and exceeded the 30-day freshness gate. The Cloudflare model change had passed the preceding build/container checks. I updated the PR branch fixture to use Google's current official pricing source, set Gemini `tos_risk=avoid`, and clarified Ollama's hardware/model-license costs; the PR description was updated.
+- New API Factory Test run #584 was **in progress at the end of this sweep**. Vercel Smoke run #87 completed successfully for public health, staging readiness, fail-closed durable-storage behavior, capability/export contract and unauthenticated-export rejection. This is a platform smoke, not a live LLM inference or paid-customer proof. Do not merge PR #72 until run #584 passes; do not activate a provider without a guarded synthetic live probe.
+
+**EASY**
+- Product repository tree contains no checked-in n8n workflow JSON; the reusable work is currently API/workflow code and support-resolution components, not proof of a production n8n deployment.
+- `src/local-media-executor.mjs` and `requirements-local-media.txt` implement an opt-in local `rembg` runner; `.github/workflows/easy-local-media-real.yml` installs the dependency and runs a real-execution test on explicit workflow/push triggers. No successful run for that specific workflow was verified in this sweep. This can reduce paid background-removal API dependence for e-commerce image preparation, but requires customer-safe input handling, compute capacity, product-integrity checks and an actual smoke before sale.
+- Existing lead-qualification issues remain: qualification status must reflect provider priority rather than any successful response, and the timestamp fallback is not deterministic when a lead has neither ID nor email. Do not market it as production-reliable until corrected.
+
+**agent-skills / MONY**
+- The product-listing free sample is fixture-only (`safe-fixture`), and it does not call a live provider.
+- Paid orders move to `awaiting_payment`; the payment handoff now fails closed as `blocked_payment_provider` when no real billing adapter is configured. Paid generation is rejected until verified payment status exists. This is good anti-fake-revenue control, but means the paid checkout is not yet operational. No payment provider, live checkout, or paid order was verified.
+
+**Open-source candidates in Project-/COLLECTION**
+- [n8n Self-hosted AI Starter Kit](https://github.com/n8n-io/self-hosted-ai-starter-kit): Apache-2.0 starter template, recently updated, combining n8n, PostgreSQL, Qdrant and Ollama. It can reduce integration/bootstrap work on customer-controlled infrastructure; local compute still costs money.
+- n8n itself is fair-code/Sustainable Use License, not OSI open source. Official Help Center article updated 2026-10-06 says consulting/building/running client workflows is allowed when clients cannot access the editor or change workflow logic. A commercial license is required when external users can build/configure workflows, for n8n-as-a-service or white-label access. Keep the sellable offer to implementation/maintenance and customer outcomes; do not sell a customer-facing workflow editor or self-service automation without the correct commercial agreement.
+  - https://support.n8n.io/article/can-i-use-your-license-for-my-use-case
+  - https://n8n.io/legal/self-serve-terms/
+- [Documenso n8n node](https://github.com/documenso/n8n-node): MIT, exposes Documenso API v2 document/template/recipient/field/file/folder operations and webhook triggers. Repository last pushed 2026-02-06 with only 7 stars; treat as a reference until API compatibility and webhook-signature behavior are tested.
+- [Frappe CRM](https://github.com/frappe/crm): actively maintained, 3,987 stars, AGPL-3.0. Candidate for customer-owned CRM deployments; do not embed or modify it inside a closed proprietary service without AGPL/legal review.
+- [OCRmyPDF](https://github.com/ocrmypdf/OCRmyPDF): actively maintained, 35k+ stars, MPL-2.0; local searchable-PDF OCR can avoid per-page hosted OCR fees, subject to Tesseract language packs, system dependencies, compute and accuracy testing.
+- [WhatsApp MCP](https://github.com/pietrozullo/whatsapp-mcp): MIT but connects to a personal WhatsApp Web multi-device account, not the official WhatsApp Business Platform; last pushed 2025-07-13. Do not use for paid business messaging or as a substitute for the official WhatsApp Cloud API.
+- [Browser Use n8n node](https://github.com/browser-use/n8n-nodes-browser-use): MIT and recently updated, but requires a Browser Use Cloud API key and can incur per-run charges; not a zero-upfront default.
+
+### 5. Evidence ledger
+- New AgentMail inbound replies: 0.
+- New marketplace proposals: 0.
+- Connects purchased: 0.
+- New cold outreach: 0.
+- New customers: 0.
+- Accepted contracts/referrals: 0.
+- Payments/revenue: $0.
+- New provider keys/activations/live inference calls: 0.
+- Upfront spending: $0.
+- New repository action: PR #72 updated with evidence-freshness correction; no merge or production deployment performed.
