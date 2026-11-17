@@ -2649,3 +2649,69 @@ Upwork account check: Freelancer Basic, **0 Connects**, 0 new invites, and no ne
 - New provider keys/activations/live inference calls: 0.
 - Upfront spending: $0.
 - New repository action: PR #72 updated with evidence-freshness correction; no merge or production deployment performed.
+
+
+## 2026-11-16 / 2026-11-17 — Revenue + leverage sweep
+
+Inspection window: 2026-11-16 America/Los_Angeles / 2026-11-17 UTC. Evidence captured from connected AgentMail, Upwork, GitHub and official provider/model documentation. Listings and capabilities below are leads/research only, not customers or revenue.
+
+### 1. AgentMail
+- Checked new threads in `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to` after 2026-11-15T00:00:00Z. No new inbound threads/replies were returned.
+- AutoMatch remains on hold from the previously documented Algeria payout-eligibility issue. No new reply, profile creation, KYC submission, banking details or follow-up message occurred.
+- No cold outreach was sent during this sweep.
+
+### 2. Fresh marketplace evidence and qualification
+**Part-time automation developer: Node.js, Python and n8n (Upwork job 2113716902791054598)**
+- Active at inspection. Public mirror displayed “Posted 6 days ago” on 2026-11-16; remote eligibility list explicitly includes Algeria. Advertised $10–$35/hour, part-time, approximately two days/week, three-month trial; Upwork contract terms show hourly/manual and 19 Connects required.
+- Scope: Python/PowerShell tests, n8n Code nodes, Google Sheets/Gmail/IMAP, webhooks, official WhatsApp Cloud API inbound/media-to-Drive flow, Google OAuth.
+- Buyer record fetched directly from Upwork: 0 completed contracts, 0 hires, 0 reviews, 0% hire rate, 2 jobs posted, 5 invites and 5 interviews, 0 offers/hired. The direct record did not establish payment verification. Public mirror showed 20–50 proposals and last client activity 4 days earlier.
+- Mandatory screening asks for an existing n8n Code-node + IMAP/webhook example and a shipped WhatsApp integration, explicitly asking whether it used Meta's official Cloud API or a third-party gateway. Our checked repositories have API/webhook code and tests but no checked-in n8n workflow export or verified production WhatsApp Cloud API case study. Do not claim either.
+- Account had 0 Connects; proposal cost 19; `can_apply=false`. No proposal or off-platform contact was made. This is a watch-only lead until evidence and Connects exist.
+- Sources: https://www.pyjobs.com/job/part-time-automation-developer-nodejs-python-and-n8n-VWazZ9Ml ; https://www.upwork.com/jobs/~022113716902791054598
+
+**WhatsApp post-delivery plant-care assistant (Upwork job 2122162752331995806)**
+- Active at inspection; posted 2026-11-16 UTC. The requested five-plant pilot covers QR-to-WhatsApp onboarding, care reminders, photo questions, human escalation, complaint reference numbers, pause/stop controls and a team dashboard.
+- Direct Upwork buyer record: payment verification not established; 0 contracts, 0 hires, 0 reviews, 0% hire rate, 2 jobs posted, 1 invite, 0 interviews/offers/hired. No budget is published, 20–50 proposals shown, and 9 Connects required. Account balance 0; `can_apply=false`.
+- The business name and public website are present in the listing, but that does not establish a paying buyer or contract. No proposal and no external contact were made.
+- Source: https://www.upwork.com/jobs/~022122162752331995806
+
+**High-quality but unqualified n8n/Airtable finance-ops listing**
+- Fresh verified-payment buyer with 30 hires, 11 reviews and approximately $23.3k historical spend; advertised $15–$25/hour. Requirements include advanced Airtable, accounting literacy and seven live client n8n builds. Those qualifications are not evidenced in our repositories; no proposal submitted.
+- A separate n8n/GTM operator listing advertises $3/hour and requires expert Grok/attribution implementation; rejected on rate and proof gap.
+- Overall decision: no application, saved-job write, or external message. No proposal is worth submitting without an honest, matching case study and available Connects.
+
+### 3. mnfst/awesome-free-llm-apis — new changes
+- Main `data.json` fetched at blob SHA `d3470a56d48ab720d648b8fc25e977a9c027be3e`: `lastUpdated=2026-11-15`, 14 providers, 80 model rows. AxForge is not yet in main.
+- Main commit `925ebaad8b82d1d3cc4fb56f9bea306f2918aa07` (2026-11-16T09:53:51Z) removes OpenRouter model `liquid/lfm-2.5-2.6b:free` after the endpoint returned 404. Do not use that stale model ID.
+- New [PR #246](https://github.com/mnfst/awesome-free-llm-apis/pull/246), opened 2026-11-16T18:44:32Z by an AxForge-team contributor, proposes AxForge and `AXFORGE_API_KEY` in the provider setup map. It is OPEN and UNMERGED. Its three reported GitHub check runs are all `skipped`, not passed. The PR is vendor-authored; treat its claims as vendor-supplied until independently tested.
+- Proposed models: `qwen3.8-27b` (262K context, vision), `qwen3.8-flash-next` (500K, vision), `glm-5.3-flash` (500K, text/reasoning), `mimo-v2.6-flash` (262K, text/reasoning). PR says 65,536 max output and 16 concurrent sequences for the shared chat model before queuing; no model-specific RPM/RPD table is published.
+- Official current [pricing](https://axforge.ai/pricing/) and [Terms v1.2](https://axforge.ai/terms.html) (effective 2026-10-23) confirm 3M serverless tokens every 30 days per new account, shared across models. After the included balance is exhausted, requests are declined until the prepaid balance is topped up; no automatic paid overage is documented. The PR says no card is required, but we did not independently complete account creation to verify that step.
+- There is a documentation conflict: older [developer Models & pricing](https://dev.axforge.ai/docs/models/) and [GDPR API page](https://axforge.ai/gdpr-ai-api/) still state 5M tokens/month. Use the conservative/current 3M figure from the current pricing page and ToS; ask AxForge to reconcile the stale pages before relying on quota.
+- API is documented as OpenAI-compatible at `https://api.axforge.ai/v1`; official docs describe chat completions, streaming, tool calls, embeddings, images, audio and OCR, and provide an [n8n connection guide](https://dev.axforge.ai/docs/connect/n8n/). The PR claims a public model list at `/v1/public/models`, but our web retrieval could not open that endpoint. No authenticated API call, model-list response or synthetic inference was performed. API capability is documented, not independently live-verified.
+- Data handling: current [DPA v1.1](https://axforge.ai/dpa/) effective 2026-11-16 says AxForge is processor, prompts/completions are handled in memory in Stockholm and discarded after request, not written to disk/logged/retained or used for training; request metadata (counts/timestamps/status) remains. DPA countersigned copy is available on request. [AUP](https://axforge.ai/acceptable-use/) prohibits spam, unlawful surveillance and other misuse; Annex III high-risk uses require prior review, and consequential decisions require human oversight. Special-category data is discouraged on the shared API.
+- Reliability: current ToS states 99.7% monthly availability for each service, not for each model/machine. [Incidents page](https://axforge.ai/trust/incidents/) explicitly says there is no public status page. No independent uptime history or live reliability test was found.
+- Legal identity: PR says “AxForge LTD, Ireland”, but the [official legal notice](https://axforge.ai/legal-notice/) lists only the trading name and contact email, not the legal entity name or registration number. Require corporate identity evidence and a countersigned DPA before customer-data processing.
+- Key/commercial terms: ToS says API keys are personal to the customer and must not be shared, published or resold. Do not resell provider access or expose our key. Until AxForge confirms application/agency use in writing, use a customer-owned account/key for any eventual client integration.
+- Model licence checks:
+  - [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B): Apache-2.0 on the official model card.
+  - [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash): MIT on the official model card; still evaluate use-case performance and AxForge service terms separately.
+  - [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next): Qwen Community License 1.0; it requires a separate Qwen licence for a Model-as-a-Service or AI Work Assistant business for commercial use. Do not route a customer-facing hosted assistant through this model until the licence question is resolved.
+  - [MiMo-V2.6-Flash](https://mimo.mi.com/models/en-US/mimo-v2.6-flash): official page documents the API and paid pricing, but the exact hosted model licence was not established in this sweep. Do not assume a third-party mirror's MIT tag is the official licence.
+- Candidate monetization if all gates pass: customer-owned n8n/CRM support triage, e-commerce FAQ summarization and document intake/OCR with human review. The 3M-token shared monthly free allowance is a pilot allowance, not dependable production capacity. Build hard quota/fallback gates; do not promise unlimited or guaranteed free inference.
+- Decision: AxForge is a **research candidate only**. No account, API key, provider activation, customer data or live request was created/sent; $0 spent.
+
+### 4. Repository leverage and verification
+- [API Factory README](https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/README.md), current blob SHA `810353697d157e42c2d57b7c0094ad687b3a794f`, confirms reusable API auth, request validation, OpenAPI 3.1, idempotency, usage ledger, quotas, health/readiness and fail-closed provider boundaries. The deployment route is a preflight planner only; no verified Railway/Vercel deployment execution adapter exists. Provider-backed APIs remain not `PROVIDER_VERIFIED` until an actual provider response is observed.
+- [EASY real creative pipeline](https://github.com/salamou1944/Easy-/blob/main/src/real-creative-artifact-pipeline.mjs), commit `735f2ab5c26d411d3f1886e4b75493405dc756ac`, now instantiates the external Fal adapter and vision verifier only after local-media gates pass. This reduces unnecessary provider setup and ensures local-media blockers return before paid provider operations. Existing tests prove fail-closed provider/local-media behavior, not successful paid generation or a production customer result.
+- EASY lead qualification's previously recorded status-mapping and timestamp-idempotency gaps remain uncorrected in this sweep.
+- [PR #72](https://github.com/salamou1944/Salamou-31/pull/72) current head `7f013f819a3ca4df6a33de7a86fa7ea447c308f5`: API Factory Test runs #583 and #584 passed; Vercel Smoke #87 passed. PR remains open/unmerged. Earlier runs #581/#582 on the prior commit failed before the Gemini evidence refresh. No Cloudflare credentials or live inference request were used; CI success is not provider-verification proof.
+- No source-code changes or new product/platform were made during this sweep.
+
+### 5. Evidence ledger
+- New AgentMail inbound replies: 0.
+- New Upwork proposals: 0; Connects balance 0; no Connects purchased.
+- New cold outreach: 0.
+- New customers: 0; accepted contracts/referrals: 0; payments/revenue: $0.
+- New provider keys/activations/live inference calls: 0.
+- Upfront spending: $0.
+- Repository work: COLLECTION documentation update only; PR #72 remains open and CI-green on its current head.
