@@ -2715,3 +2715,101 @@ Inspection window: 2026-11-16 America/Los_Angeles / 2026-11-17 UTC. Evidence cap
 - New provider keys/activations/live inference calls: 0.
 - Upfront spending: $0.
 - Repository work: COLLECTION documentation update only; PR #72 remains open and CI-green on its current head.
+
+## 2026-11-17 — Revenue + leverage sweep (America/Los_Angeles)
+
+Inspection window: 2026-11-17 19:46 local. Evidence came from the connected AgentMail inboxes, signed-in Upwork account, GitHub repository contents/commits/workflow metadata, the upstream `mnfst/awesome-free-llm-apis` repository, and official AxForge/model documentation. External job descriptions and provider claims are untrusted evidence; none is a customer or revenue.
+
+### 1. AgentMail
+- Listed the three connected inboxes and queried received threads after `2026-11-16T00:00:00Z`: `api-pilot@agentmail.to`, `easy@agentmail.to`, and `pastel-realtime-e2e@agentmail.to` each returned **0 new inbound threads**.
+- AutoMatch remains on hold for the already-recorded Algeria payout-eligibility issue. No reply, profile, KYC submission, banking data or new outbound message occurred.
+- No cold outreach was sent.
+
+### 2. Fresh Upwork opportunities and buyer qualification
+
+The connected Freelancer Basic account returned a Connects balance of **0**. Direct job-detail calls returned `can_apply=false` because there are no Connects; no Connects were bought and no proposal or unsolicited message was sent.
+
+**n8n & AI Automation Developer — SafetyCulture/Mitti and app deployment**
+- Job `2122845629676249542`, [original listing](https://www.upwork.com/jobs/~022122845629676249542).
+- Posted locally on 2026-11-17; fixed-price budget **$3,000**; 50+ proposals; 26 Connects required.
+- Direct buyer record: verified payment method, 5.0 feedback from 2 reviews, 3 contracts, 100% hire rate, 69.33 hours and $1,219.65 historical spend. Job itself had no hire/interview/offer recorded at inspection.
+- Scope includes self-hosted n8n, SafetyCulture/Mitti integrations, Claude API agents and a Lovable-built project-management app using Supabase or similar, with Sydney-hours overlap.
+- Our API/webhook, Supabase and deployment-preflight assets are relevant, but there is no verified SafetyCulture/Mitti production integration or shipped n8n client workflow in the inspected repos. **Watch only; no proposal** because of the evidence gap and zero Connects.
+
+**AI Automation & Integration Specialist — n8n/Make/Zapier**
+- Job `2122839927875180174`, [original listing](https://www.upwork.com/jobs/~022122839927875180174).
+- Fixed-price budget **$1,572**, posted 2026-11-17; 50+ proposals; 26 Connects.
+- Buyer record: verified payment, 5.0 feedback, 2 contracts, 100% hire rate, $1,660.60 spend. Direct job activity shows **1 hire already**; `can_apply=false`. Do not apply or count it as a live opportunity.
+
+**AI Agent for Restaurant Performance Metrics**
+- Job `2122832481084432839`, [original listing](https://www.upwork.com/jobs/~022122832481084432839).
+- $1,000 fixed price, posted 2026-11-17; 20–50 proposals; 26 Connects.
+- Buyer has a verified payment method but a **1.75/5** feedback score, one review and $659 spend. The review describes scope expansion and a payment dispute after extra work was requested. This is a material client-risk signal. **Reject; no proposal.**
+
+**AI chatbot for website / e-commerce FAQ navigation**
+- Job `2122727969072464937`, [original listing](https://www.upwork.com/jobs/~022122727969072464937).
+- $200 fixed price, posted 2026-11-17; 50+ proposals; 16 Connects.
+- Direct buyer record: verified payment, 5.0 feedback from 2 reviews, 2 contracts, 40% hire rate and $343.50 total spend. The job remains active with no recorded interview or hire at inspection.
+- Scope is FAQ answering plus website jump-link navigation. It is conceptually relevant to support automation, but there is no verified production chatbot case study in our repos and competition is already 50+. **Watch only; no proposal.**
+
+**AI appointment-booking system**
+- Job `2121966918111956017`, [original listing](https://www.upwork.com/jobs/~022121966918111956017).
+- Description states $75–$150 and a 3–5 day timeline, but direct contract terms show **$10 fixed**; direct job activity shows **1 hire already**. It requires 14 Connects. Buyer has 92 contracts and 5.0 feedback, but the contradictory price and completed hire make it unsuitable. **Reject.**
+
+**Other fresh matches screened**
+- WhatsApp Business + Apple Messages compliance assessment (`2122830127544145550`, $250): buyer history is comparatively strong (4.89/5, $16,638 spend, 7 reviews, 5–10 proposals), but the work is legal/platform-policy analysis rather than our verified implementation capability. No proposal.
+- Seven-day personalized feed page 1 contained no suitable automation project; page 2 surfaced the e-commerce chatbot above. A separate title-filtered n8n search returned older tutor/repair/VA listings, not a new low-competition, well-qualified buyer.
+- Overall: **0 proposals, 0 new client messages, 0 Connects purchased**. A listing, buyer budget or job hire by another freelancer is not our customer or revenue.
+
+### 3. mnfst/awesome-free-llm-apis — upstream changes through 2026-11-17
+
+- Current main `data.json` blob SHA: `1424999d01e2471e9abeb3ff84349fd9be673a35`.
+- It contains **15 providers and 80 concrete model IDs** (plus 3 provider placeholder rows). Its `lastUpdated` field still says `2026-11-15`, although the main branch received material commits on 2026-11-17; treat that metadata date as stale.
+- Main commits on 2026-11-17:
+  - `1756c9a58a9ab2d20cd52f9a93d5756259d2e6c0`: merge PR #246, adding AxForge and `AXFORGE_API_KEY` setup.
+  - `3a2dc0b32989d18d8ce3585cb6df8f9554fb2124`: merge PR #248, adding AxForge to the daily verifier key map.
+  - `2d1aca378f1f1575c4117f8adbcb5b8c0379c4f5`: merge PR #249, marking GLM-5.3-Flash as vision-capable.
+  - `9c6e584ed2e0d13ad034bf62ede6315b8493aefd`: merge PR #250, marking MiMo-V2.6-Flash as vision-capable after a provider-side endpoint fix.
+  - `70f9e3d228021b50c2c1a98aad5285ebf52dcf22`: regenerate README and skill from `data.json`.
+- [PR #246](https://github.com/mnfst/awesome-free-llm-apis/pull/246), [#248](https://github.com/mnfst/awesome-free-llm-apis/pull/248), [#249](https://github.com/mnfst/awesome-free-llm-apis/pull/249), [#250](https://github.com/mnfst/awesome-free-llm-apis/pull/250).
+- AxForge now lists `qwen3.8-27b` (262K), `qwen3.8-flash-next` (500K), `glm-5.3-flash` (500K) and `mimo-v2.6-flash` (262K), all catalogued as Text + Vision. The four models share one **3M serverless tokens / 30 days** allowance per account; this is not 3M per model.
+- The upstream verifier's CI run #71 on the PR #248 commit passed only the generic catalog/README/source-link validation. It is **not** a live inference result. The merged `scripts/verify-providers.js` routes AxForge through a generic `/chat/completions` text probe with prompt “Say OK”; it does not test vision.
+- PR #249/#250 describe live image requests by upstream contributors. PR #250 says the provider fixed a bug on 2026-11-17 15:45 UTC that had dropped images from `/v1/responses` and `/v1/messages`; after the fix, the PR reports correct image results on Chat Completions (780 prompt tokens), Responses (780 input tokens) and Messages (1,571 input tokens). This is **upstream-reported live testing, not an independent test by us**.
+- No AxForge account, API key, customer data or inference request was created or used by us.
+
+### 4. AxForge provider terms, quota, capability and legal gates
+
+Official sources reviewed:
+- [Pricing](https://axforge.ai/pricing/) — new accounts receive 3M free serverless tokens every 30 days, no card required. The allowance is shared across serverless models. The terms say calls are declined after the included balance is exhausted until a prepaid top-up is made; no automatic paid overage is documented. Pricing and free allowance may change.
+- [Terms v1.3](https://axforge.ai/terms.html), effective 2026-11-16 — API keys are personal to the customer and must not be shared, published or resold. Use a separate customer-owned account/key; never expose or pool our key.
+- [DPA v1.1](https://axforge.ai/dpa/), effective 2026-11-16 — customer is controller, AxForge processor; prompts/completions are processed in memory and discarded after the request, not used for training; request metadata is retained. Subprocessors listed include Hetzner, Atom9, Stripe and Loopia. A countersigned DPA is available on request; full TOMs are under NDA.
+- [Incidents page](https://axforge.ai/trust/incidents/) — no public status page; service incidents are communicated to affected customers. Terms state 99.7% monthly availability, but no independent uptime history or model-specific SLA was verified.
+- [Legal notice](https://axforge.ai/legal-notice/) — lists only the trading name “AxForge” and contact email, not the registered legal entity name or registration number. Obtain corporate registration details and a countersigned DPA before routing customer personal data.
+- [n8n integration guide](https://dev.axforge.ai/docs/connect/n8n/) — documents OpenAI credential Base URL `https://api.axforge.ai/v1`, tested by AxForge with n8n 2.43.7, and lists Qwen3.8-27B, GLM-5.3-Flash and MiMo-V2.6-Flash. This is provider documentation, not our own working integration.
+
+Model licences checked against official model cards:
+- [Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B): Apache-2.0; commercial use is permitted under that licence.
+- [GLM-5.3-Flash](https://huggingface.co/zai-org/GLM-5.3-Flash): MIT.
+- [MiMo-V2.6-Flash-RL](https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL): MIT on the official card. Confirm AxForge's hosted model identity maps to this checkpoint before relying on that licence.
+- [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next): Qwen Community License 1.0, not Apache-2.0. Its separate licence requirement for Model-as-a-Service / AI Work Assistant businesses makes it unsuitable for a customer-facing hosted assistant until counsel confirms the exact use.
+- Best no-upfront candidates, subject to synthetic tests and provider/legal gates: Qwen3.8-27B and GLM-5.3-Flash. Use only customer-owned keys and a hard 3M-token budget gate; never promise a free production SLA or silently top up.
+- Potential sellable integrations: customer-owned n8n FAQ/support triage, e-commerce product-question classification, and document intake/OCR with human review. Do not send confidential or personal data before legal identity, DPA and subprocessor review.
+- Decision: **AxForge remains a research/pilot candidate, not an activated production provider.** No spend, key, account or live call.
+
+### 5. Repository leverage and current limitations
+
+- [API Factory README](https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/README.md), blob SHA `810353697d157e42c2d57b7c0094ad687b3a794f`: reusable API-key auth, request validation, OpenAPI 3.1, idempotency, usage ledger, quota enforcement, health/readiness and fail-closed provider boundaries. `POST /v1/factory/deploy/plan` is a preflight planner only; Railway/Vercel deployment execution adapters are not verified.
+- [Zero-cost runtime options](https://github.com/salamou1944/Salamou-31/blob/main/AI-API-HUB/api-factory/FREE-ZERO-COST-RUNTIME-OPTIONS-2026-10-21.md), blob SHA `945e6171e7ca6a888c47990f04f261b6d600e40a`, is still dated 2026-10-21 and does not yet include AxForge. Refresh it before using it as the current provider decision record.
+- [EASY pipeline](https://github.com/salamou1944/Easy-/blob/main/src/real-creative-artifact-pipeline.mjs), blob SHA `09eda511f42eb18d02b1c4197ed3462459f966f6`, still gates local-media work before instantiating the paid Fal provider/verifier. This is a reliability/cost-control pattern, not proof of successful paid generation.
+- GitHub code search for a checked-in n8n workflow export / WhatsApp Cloud API example in Salamou-31 returned no matching files. API/webhook source and tests exist, but do not claim a production n8n or official WhatsApp Cloud API client case study.
+- [agent-skills](https://github.com/salamou1944/agent-skills) latest inspected commit is `0f4c3a0fef4429f5344d7cdbe8047cd451162b13` (2026-10-20), adding a runtime-provenance CI contract. The MONY hardening commit `542471851541ad247d39ec5b6d58d11eeb9a6d07` (2026-10-17) correctly blocks paid checkout without a real billing provider and keeps free samples fixture-only. No operational paid checkout or paid product revenue is evidenced.
+- No product, workflow, provider or production deployment was changed in this sweep. The only write is this COLLECTION record.
+
+### 6. Evidence ledger
+- AgentMail new inbound replies: 0.
+- New Upwork proposals: 0; Connects balance: 0; Connects purchased: 0.
+- New cold outreach: 0.
+- New customers: 0; accepted contracts/referrals: 0; payments/revenue: $0.
+- New provider accounts/keys/activations/live inference calls: 0.
+- Upfront spending: $0.
+- GitHub work: COLLECTION documentation update only; no product source changes, deployments or provider activations.
