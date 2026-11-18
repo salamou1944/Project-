@@ -2813,3 +2813,17 @@ Model licences checked against official model cards:
 - New provider accounts/keys/activations/live inference calls: 0.
 - Upfront spending: $0.
 - GitHub work: COLLECTION documentation update only; no product source changes, deployments or provider activations.
+
+### 2A. Additional document-automation and e-commerce searches (same 2026-11-17 run)
+
+- Document/OCR/PDF search returned two ABBYY-specific enterprise document-management jobs, not general OCR/PDF automation:
+  - [Senior ABBYY Developer](https://www.upwork.com/jobs/~022117865905622192352), posted 2026-11-04, $20–$40/hour, 10–15 proposals. Buyer has strong history (4.98/5, 19 reviews, $71,035.15 spend), but mandatory ABBYY product experience is not in our verified capability set.
+  - [ABBYY Document Management Specialist](https://www.upwork.com/jobs/~022117250320431686086), posted 2026-11-02, $10–$50/hour, 20–50 proposals and 11 interviews; same buyer and same ABBYY-specific qualification gap.
+  - No suitable low-competition general OCR/PDF-extraction automation buyer was identified. No application.
+
+- E-commerce/Shopify search:
+  - [Klaviyo Integration Specialist (Developer)](https://www.upwork.com/jobs/~022122304316572812329), posted 2026-11-16, $20–$30/hour, 15 Connects, 0 Connects available. Scope is a two-way Shopify SaaS/Klaviyo integration with OAuth, v2024+ Events/Profiles/Lists/Segments/Flows APIs, bidirectional SMS consent, suppression to prevent duplicate abandoned-checkout messages, webhooks, retries and sync-health monitoring. Upwork search marks payment verified, but direct buyer record shows 9 jobs posted, 8 open, 0 hires, 0 contracts, 0 reviews and 0% hire rate. The required shipped Klaviyo v2024+ integration and deep Klaviyo/SMS compliance experience are not evidenced in our repositories. **Do not apply.**
+  - [Shopify Virtual Assistant — Ecommerce & Customer Support](https://www.upwork.com/jobs/~022122899093700482702), posted 2026-11-18 03:46 UTC (2026-11-17 local), $30 fixed, fewer than 5 proposals. The client is payment-verified but has only one job posted and no review/hire history. Scope is manual product listing, inventory, order tracking and email support, not automation implementation. **Not a target offer.**
+  - Other surfaced Shopify/e-commerce listings were manual customer-support, store-testing or sales roles rather than API/automation implementation. No application or message.
+
+These additional searches did not change the decision: 0 proposals, 0 messages, 0 spending.
