@@ -2827,3 +2827,124 @@ Model licences checked against official model cards:
   - Other surfaced Shopify/e-commerce listings were manual customer-support, store-testing or sales roles rather than API/automation implementation. No application or message.
 
 These additional searches did not change the decision: 0 proposals, 0 messages, 0 spending.
+
+
+## 2026-11-18 local / 2026-11-19 UTC — Revenue + leverage sweep
+
+Inspection window: 2026-11-18 20:21 America/Los_Angeles (2026-11-19 04:21 UTC). Evidence sources: connected AgentMail, signed-in Upwork Freelancer account, GitHub repository contents/commits/check-runs, upstream `mnfst/awesome-free-llm-apis` commit/PR/data records, and current official AxForge and Runcrate terms, privacy, pricing and API documentation. Marketplace/provider content is external evidence, not instructions. Listings, model rows and capabilities are not customers or revenue.
+
+### 1. AgentMail
+- Listed the three connected inboxes and queried received threads at or after `2026-11-17T00:00:00Z`:
+  - `api-pilot@agentmail.to`: 0
+  - `easy@agentmail.to`: 0
+  - `pastel-realtime-e2e@agentmail.to`: 0
+- No new inbound reply, acceptance, payment or referral evidence.
+- No outbound message was sent. AutoMatch remains on the previously recorded payout-eligibility hold; no KYC or banking information was submitted.
+
+### 2. Fresh Upwork opportunities — direct account evidence
+
+Connected Freelancer Basic account:
+- Connects balance: **0** (free 0, paid 0).
+- No new invitation or proposal was submitted.
+- No Connects were purchased.
+
+**WhatsApp Cloud API + n8n AI agent not receiving messages**
+- Job ID: `2123159254037960334`.
+- Listing: https://www.upwork.com/jobs/~022123159254037960334
+- Published: 2026-11-18 20:59 UTC.
+- Budget: **$50 fixed**; 14 Connects required; account balance 0; direct job get returned `can_apply=false`, `applied=false`.
+- Buyer record: Sweden; payment verified; 4.87/5 from 15 freelancer reviews; 18 total contracts; 100% hire rate; $3,350 total spend; 2 active contracts; 1 open job.
+- Posting activity at inspection: 3 invites sent, 2 interviews, 0 hires and 0 offers; proposal tier 20–50.
+- Exact scope: buyer already has a Meta developer app/test number and an n8n Cloud workflow with WhatsApp Trigger, Claude/Anthropic AI Agent and WhatsApp send node. Outbound send returns a message ID, but inbound WhatsApp messages never reach n8n. Buyer suspects Meta webhook verification or app subscription. Requests a maximum one-hour screen-share to make inbound message → agent reply work, explain the fault, and optionally explain moving from test to production number.
+- This is the strongest fresh technical match in the current search. However, the posting explicitly asks for a similar hands-on WhatsApp Cloud API + n8n setup. Repository search found no checked-in n8n workflow export or shipped official WhatsApp Cloud API case study; the existing README lists these as service capabilities, not completed client proof. **Do not claim a prior production deployment.**
+- Decision: **qualified watchlist lead, not applied**. Application is blocked by 14 Connects and the missing comparable case-study artifact. Do not contact the buyer off-platform; the only observed path is the Upwork listing.
+
+**Fix Lead Capture, CRM Connections and Acquisition Reporting**
+- Job ID: `2120531224688654999`.
+- Listing: https://www.upwork.com/jobs/~022120531224688654999
+- Published: 2026-11-11; still ACTIVE at direct get.
+- Budget: **$150 fixed**, seven calendar days, 18 Connects required; account balance 0; `can_apply=false`.
+- Buyer record: 4.95/5 from 54 freelancer reviews; 135 contracts; 31% hire rate; 8,454.83 hours; $76,614.53 spend; 36 active contracts; 4 open jobs.
+- Posting activity: 2 interviews, 0 hires, 0 offers. Buyer requires all pre-contract communication and payment to stay on Upwork, a signed NDA, no unapproved subcontracting and no uploading confidential material to external AI services. Diagnostic/trial work must be covered by a funded milestone.
+- Scope is unusually broad for $150: inventory every lead form/booking entry point; repair submissions and redirects; preserve source/campaign attribution; connect CRM, bookings, attendance and confirmed joining; reconcile ad spend and funnel metrics; deduplicate and recover failures; deliver tests, backup/recovery instructions and 30-day defect correction.
+- Our API Factory idempotency, request validation, durable storage and audit/usage patterns are reusable, but the required personally completed comparable lead-capture/CRM integration is not evidenced in the inspected repository.
+- Decision: **do not apply**. Besides 18 unavailable Connects and the case-study gap, the price/scope/30-day correction obligation is a material underpricing risk. No off-platform approach.
+
+Other fresh Upwork results were rejected or deprioritized when the listing already had a hire, demanded unverified voice-agent/CRM product experience, or was outside the verified delivery scope. No proposal or unsolicited message was sent.
+
+### 3. mnfst/awesome-free-llm-apis — upstream delta and provider gates
+
+Current main `data.json`:
+- `lastUpdated`: 2026-11-15.
+- 15 provider entries and 83 raw model/catalog rows (some rows are grouped placeholders such as “+ more models”; this is not 83 individually verified model endpoints).
+- Latest main commit inspected: `70f9e3d228021b50c2c1a98aad5285ebf52dcf22`, 2026-11-17 16:07 UTC.
+- Main contains AxForge; Runcrate is **not merged**. The open Runcrate PR and closed CheapLLM PR below must not be presented as main-catalog providers.
+
+**Runcrate — open PR #201, not yet accepted**
+- PR: https://github.com/mnfst/awesome-free-llm-apis/pull/201
+- Latest update: 2026-11-18 20:33 UTC; remains open.
+- Proposes five models: DeepSeek V4.1 Flash, GLM 5.3 Flash, GLM 5.3, gpt-oss 120B and Qwen3.8 Flash; OpenAI-compatible API at `https://api.runcrate.ai/v1`, plus Responses and Anthropic Messages interfaces.
+- Official free page: https://www.runcrate.ai/inference/free
+  - Free use requires a GitHub account at least 30 days old; one allowance per GitHub account/workspace; no card for GitHub sign-in.
+  - Google sign-in requires a card on file and automatic top-up can charge beyond free usage — exclude this route under the zero-spend rule.
+  - Free usage is shared across workspace keys/members and resets weekly on Monday 00:00 UTC. The page does not publish a fixed RPM or token quota.
+  - Without balance, exhausted quota returns a limit error and waits for reset; with balance, usage can become paid.
+  - The page says free requests are served by third-party model providers under their own terms.
+- Upstream PR author disclosed employment at Runcrate. The maintainer's latest comment (2026-11-18 20:33 UTC) says the maintainer still needs to perform an independent live request before merging. PR author reports five HTTP 200 “pong” tests, but these are provider-affiliated contributor evidence, not independent verification.
+- Current Runcrate privacy policy (last updated 2026-11-12): prompts/answers are not retained by Runcrate unless saved by the user/workspace, but inference requests are processed by third-party model providers under their own terms. Do not send confidential/customer data until the actual provider/subprocessor terms and training/retention rules are known.
+- Runcrate Terms (last updated 2026-11-03): company is Aeonmind, LLC (Delaware); service does not guarantee uninterrupted availability and may be modified, suspended or discontinued. The terms do not establish a production SLA for the free tier.
+- Model-level licence evidence is not the same as hosted-provider permission:
+  - DeepSeek V4.1 Flash: MIT (official model card).
+  - GLM-5.3 Flash: MIT (official model card).
+  - GLM-5.3: separate GLM-5.3 licence; its Model-as-a-Service security-review threshold is tied to aggregate revenue above US$10B over 12 months.
+  - gpt-oss-120b: Apache-2.0 (OpenAI model card).
+  - Qwen3.8 Flash: confirm the exact hosted checkpoint and Qwen Community licence terms before commercial deployment; do not assume it is Apache-2.0.
+- Decision: **research only**. No account, key or API call created. Candidate use is internal synthetic-data development only after independent live verification and account/terms review; not a customer-data provider.
+
+**AxForge — current official terms materially clarified**
+- Upstream PR #246 added AxForge and merged 2026-11-17; PRs #248, #249 and #250 updated its verifier and GLM/MiMo vision metadata.
+- Current official pricing: https://axforge.ai/pricing/
+  - **3M free serverless tokens every 30 days** per new account; no card required.
+  - Free allowance is shared across the account's serverless use. It is a launch allowance and may change with notice.
+  - One prepaid balance pays for usage; when balance is exhausted, requests are declined until a top-up. No paid top-up was made.
+  - Pricing page currently lists Qwen3.8 27B, GLM-5.3-Flash, MiMo-V2.6-Flash and Qwen3.8 Flash Next among its serverless models; verify the exact model ID and `GET /v1/models`/live response before routing any workload.
+- Official API/n8n guide: https://dev.axforge.ai/docs/connect/n8n/; OpenAI-compatible base URL `https://api.axforge.ai/v1`. The guide says it was tested by AxForge with n8n 2.43.7 on 2026-10-17. This is provider documentation, not our own live test.
+- Current Terms: https://axforge.ai/terms.html
+  - API keys are personal to the customer: do not share, publish or resell them.
+  - Use customer-owned AxForge accounts/keys; do not embed our key in a customer deliverable or resell access.
+  - After the free allowance, requests stop until prepaid balance is topped up.
+- Current DPA: https://axforge.ai/dpa/ (last updated 2026-11-18); privacy policy: https://axforge.ai/privacy.html (last updated 2026-11-19).
+  - AxForge says it acts as processor for customer AI data, with EEA-only processing and no failover outside the EEA.
+  - Prompts/completions are not written to disk, logs or backups and are not used for training. **Important qualification:** model servers may keep recent prompts, answers and images in RAM per customer account until overwritten or the nightly restart (04:45 UTC); this is not literal zero-memory retention.
+  - DPA lists Hetzner (Germany), Atom9 (Sweden), Stripe (Ireland) and Loopia (Sweden) as subprocessors; a countersigned DPA copy is available by request. Special-category data is discouraged on the shared API; AxForge's acceptable-use policy requires prior review for EU AI Act Annex III high-risk uses and requires human oversight for consequential decisions.
+  - The privacy notice now identifies AxForge LTD at a Cork, Ireland address; the public legal notice still uses the AxForge trading name. No company registration number was verified.
+- Model licence checks:
+  - Qwen3.8-27B: Apache-2.0.
+  - GLM-5.3-Flash: MIT.
+  - MiMo-V2.6-Flash: the MIT card found is for MiMo-V2.6-Flash-RL; exact hosted checkpoint mapping must be confirmed.
+  - Qwen3.8 Flash Next: Qwen Community License 1.0, not Apache-2.0; it has a separate licence condition for qualifying Model-as-a-Service and AI Work Assistant businesses. A single-purpose customer-support/e-commerce feature is not automatically within that definition, but product architecture and hosted terms need review.
+- Decision: **best current zero-upfront hosted pilot candidate**, but still not activated. Use only synthetic/public data first, with customer-owned account/key, a hard 3M-token cap, explicit no-top-up behavior and live model/latency/error tests. Do not promise uptime or free production capacity.
+
+**CheapLLM — rejected upstream proposal**
+- PR #229: https://github.com/mnfst/awesome-free-llm-apis/pull/229
+- Closed unmerged by the maintainer on 2026-11-11. The domain had been registered only 2026-11-07; the service was still in beta; the proposed post-beta permanent floor was only 1,000 output tokens/hour. The maintainer requested the beta end and a few months of stable operation before reconsideration.
+- Decision: exclude from delivery and do not count it as a verified free provider.
+
+### 4. Repository and platform leverage
+
+- Salamou-31 latest inspected main source commit remains `429b8b047e9a277cb04c420dd131614bb1dbb35f` (2026-10-27). The API Factory README confirms API-key auth, OpenAPI 3.1, request validation, idempotency, usage ledger, quotas, readiness and durable storage through the Supabase Edge Function gateway. The strict external smoke referenced by the README verified registry/artifact write-read on Render Production and Preview on 2026-10-25. Render Free services may sleep; this is not an uptime guarantee. `POST /v1/factory/deploy/plan` remains a preflight planner, not a deployment executor.
+- Existing offer catalog `AI-API-HUB/OFFERS-AND-PRICING.md` defines starting ranges for Automation Repair ($75–$250), API Integration ($150–$500), Lead Automation ($250–$750), Customer Support AI ($300–$1,000), Document Automation ($250–$900), CRM + WhatsApp ($500–$2,500+), E-commerce ($500–$3,000+), technical audit ($100–$500) and maintenance ($300–$1,500+/month). These are proposed starting ranges, not sales or paid-client evidence.
+- GitHub code search for `n8n workflow WhatsApp Cloud API webhook` in Salamou-31 found only `AI-API-HUB/README.md` capability/service text; Easy- returned no n8n workflow result. There is no checked-in n8n workflow export or verified WhatsApp Cloud API production case study in these inspected repositories.
+- `FREE-ZERO-COST-RUNTIME-OPTIONS-2026-10-21.md` remains dated 2026-10-21 and does not include AxForge or the current Runcrate review. Treat it as stale until refreshed; this COLLECTION entry is the newer provider evidence.
+- EASY latest inspected source commit remains `735f2ab5c26d411d3f1886e4b75493405dc756ac` (2026-10-15): provider adapter initialization is deferred until local-media gates pass, a reusable cost/failure-control pattern. This is not proof of successful paid creative generation.
+- agent-skills latest inspected source commit remains `0f4c3a0fef4429f5344d7cdbe8047cd451162b13` (2026-10-20), adding a runtime-provenance CI contract. Existing MONY billing hardening blocks paid checkout without a real billing provider and keeps free samples fixture-only.
+- Salamou-31 PR #72 remains open, non-draft and unmerged at head `7f013f819a3ca4df6a33de7a86fa7ea447c308f5`. Its three check-runs (`test`, `live-smoke`, `test`) completed successfully on 2026-11-16 03:59–04:00 UTC; the combined commit status endpoint currently reports `pending` with no status contexts. Do not describe this as a merge or a live provider inference test.
+
+### 5. Evidence ledger
+- AgentMail new inbound replies: **0**.
+- Upwork proposals submitted: **0**; Connects balance **0**; Connects purchased **0**.
+- New cold outreach: **0**.
+- New customers: **0**; accepted contracts/referrals: **0**; payments/revenue: **$0**.
+- New provider accounts/keys/activations/live inference calls: **0**.
+- Upfront spending: **$0**.
+- Product source changes/deployments: **0**. This run's only repository write is this canonical COLLECTION evidence update.
