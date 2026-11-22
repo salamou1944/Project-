@@ -1,0 +1,1016 @@
+{
+  "canonical_source": "github:Niko1221/apps",
+  "repo": "Niko1221/apps",
+  "revision_sha": "42ecca3909348de521a3dd76894d855fa4e01f8c",
+  "default_branch": "main",
+  "pushed_at": "2026-11-22T09:17:06Z",
+  "repo_updated_at": "2026-11-22T10:13:23Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "firecrawl/templates/redis/deployment.yaml",
+      "sha": null,
+      "content_sha256": "9553ae89c867ac27e52f88754342590343539e9622dc2ede1a361ed9a5555a1a",
+      "score": 236,
+      "content": "﻿---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ .Release.Name }}-redis\n  namespace: {{ .Release.Namespace }}\n  labels:\n    app: firecrawl-redis\nspec:\n  replicas: {{ (index .Values.workloads \"firecrawl-redis\").replicaCount }}\n  selector:\n    matchLabels:\n      app: firecrawl-redis\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: firecrawl-redis\n    spec:\n      securityContext:\n        runAsUser: 1000\n        runAsGroup: 1000\n        fsGroup: 1000\n      initContainers:\n        - name: migrate-appcache-to-appdata\n          image: \"docker.io/beclab/busybox:1.37\"\n          imagePullPolicy: IfNotPresent\n          securityContext:\n            runAsUser: 0\n          command: [\"sh\", \"-c\"]\n          args:\n            - |\n              set -e\n              SOURCE=/old-data\n              DEST=/new-data\n              MARKER=\"${DEST}/.migration_from_appcache_done\"\n              if [ -f \"$MARKER\" ]; then echo \"[migrate] marker present, skip.\"; exit 0; fi\n              if [ -n \"$(ls -A \"$DEST\" 2>/dev/null | grep -v '^\\.migration_from_appcache_done$' || true)\" ]; then\n                echo \"[migrate] appData already has data, skip.\"\n                echo \"skipped existing dest at $(date -Iseconds 2>/dev/null || date)\" > \"$MARKER\"\n                exit 0\n              fi\n              if [ -n \"$(ls -A \"$SOURCE\" 2>/dev/null || true)\" ]; then\n                echo \"[migrate] copying appCache -> appData...\"\n                cp -a \"$SOURCE\"/. \"$DEST\"/\n                echo \"migrated from appCache at $(date -Iseconds 2>/dev/null || date)\" > \"$MARKER\"\n                echo \"[migrate] done; legacy appCache left intact for rollback.\"\n              else\n                echo \"[migrate] no legacy data, fresh install.\"\n                echo \"fresh install at $(date -Iseconds 2>/dev/null || date)\" > \"$MARKER\"\n              fi\n          volumeMounts:\n            - name: redis-data-legacy\n              mountPath: /old-data\n              readOnly: true\n            - name: redis-data\n              mountPath: /new-data\n        - name: init-permissions\n          image: \"docker.io/beclab/aboveos-busybox:1.37.0\"\n          command:\n            - sh\n            - \"-c\"\n            - |\n              echo \"[Init] Fixing permissions on /data...\"\n              chown -R 1000:1000 /data\n              chmod -R 770 /data\n          resources: {}\n          volumeMounts:\n            - name: redis-data\n              mountPath: /data\n          terminationMessagePath: /dev/termination-log\n          terminationMessagePolicy: File\n          imagePullPolicy: Always\n          securityContext:\n            runAsUser: 0\n      containers:\n        - name: firecrawl-redis\n          image: \"docker.io/beclab/aboveos-redis:7\"\n          resources:\n            requests:\n              cpu: 10m\n              memory: 10Mi\n            limits:\n              cpu: 1000m\n              memory: 1000Mi\n          ports:\n            - containerPort: 6379\n          volumeMounts:\n            - mountPath: /data\n              name: redis-data\n      volumes:\n        - name: redis-data-legacy\n          hostPath:\n            type: DirectoryOrCreate\n            path: {{ .Values.userspace.appCache }}/redis\n        - name: redis-data\n          hostPath:\n            path: {{ .Values.userspace.appData }}/redis\n            type: DirectoryOrCreate\n"
+    },
+    {
+      "path": "agentj/files/setup_page.py",
+      "sha": null,
+      "content_sha256": "702112d8d2ff9447a9561e08db448b534e4af25cb214da92c249212fb6c31298",
+      "score": 188,
+      "content": "\"\"\"Agent J on Olares — the setup page behind the app's entrance (stdlib only).\n\nThe entrance is `authLevel: private`: Olares has already signed the owner in before a request reaches this port. The\npage shows where the install stands, takes the seat setup code (ajt_…, or ajh_… issued by another Agent J host when a\nseat moves — P547) or installation code (AJI-…) once, binds this\ncomputer with `agentj login`, and then tells the owner how to add the phone from the account page. A setup code goes to\n`agentj login --seat -` on stdin and never touches the disk; an installation code (the CLI only reads it from a file) is\nwritten 0600 inside Agent J's state directory, which the fenced Agent cannot see, and deleted at once. Neither is logged,\nechoed or kept. A code is taken only while no seat is bound — and while unbound the supervisor (entry.sh) keeps\n`agentj serve`, and so the Agent, stopped. Writes need our own Origin, `application/json` of at most 4 KiB, one at a time.\n\"\"\"\nfrom __future__ import annotations\n\nimport json\nimport os\nimport re\nimport subprocess\nimport threading\nimport time\nfrom http.server import BaseHTTPRequestHandler, ThreadingHTTPServer\nfrom urllib.parse import urlparse\n\nHOME = os.path.expanduser(\"~\")\nOLA = os.path.join(HOME, \".agentj-olares\")\nSTATE = os.environ.get(\"AGENTJ_STATE_DIR\") or os.path.join(HOME, \".local/state/agentj\")\nPORT = int(os.environ.get(\"AGENTJ_SETUP_PORT\", \"8080\"))\nACCOUNT_URL = os.environ.get(\"AGENTJ_ACCOUNT_URL\", \"https://agentj.app/account\")\nCODE = re.compile(r\"AJI-[a-f0-9]{32}|aj[th]_[A-Za-z0-9_-]{43}\")\nLOCK = threading.Lock()\n_cache: dict = {\"t\": 0.0, \"v\": None}\n\n\ndef _run(argv: list[str], timeout: int = 30, stdin: str | None = None) -> tuple[int, str]:\n    try:\n        r = subprocess.run(argv, capture_output=True, text=True, timeout=timeout, input=stdin,\n                           stdin=subprocess.DEVNULL if stdin is None else None)\n        return r.returncode, (r.stdout + r.stderr).strip()\n    except (OSError, subprocess.TimeoutExpired) as e:\n        return 127, type(e).__name__\n\n\ndef _read(name: str) -> str:\n    try:\n        with open(os.path.join(OLA, name), encoding=\"utf-8\") as f:\n            return f.read().strip()\n    except OSError:\n        return \"\"\n\n\ndef terminal_url() -> str:\n    \"\"\"The chart's private entrance, never a request-derived navigation target.\"\"\"\n    value = os.environ.get(\"AGENTJ_OLARES_TERMINAL_URL\", \"\")\n    host = value.removeprefix(\"https://\")\n    labels = host.split(\".\")\n    return value if value.startswith(\"https://\") and host == host.lower() and not host.replace(\".\", \"\").isdigit() and len(host) <= 253 and len(labels) >= 2 and all(\n        re.fullmatch(r\"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\", label) for label in labels) else \"\"\n\n\ndef status() -> dict:\n    if time.time() - _cache[\"t\"] < 3 and _cache[\"v\"]:\n        return _cache[\"v\"]\n    s = {\"phase\": _read(\"phase\") or \"starting\", \"router_model\": _read(\"router-done\"), \"bound\": False}\n    rc, out = _run([\"agentj\", \"--version\"], 10)\n    s[\"version\"] = out.split()[-1] if rc == 0 and out else \"\"\n    if s[\"version\"] and os.path.isdir(STATE):\n        ob = onboarding()\n        s[\"onboarding\"] = ob or {}\n        s[\"bound\"] = bool(ob and ob.get(\"seat\"))\n        if ob is not None:\n            sync_bound(s[\"bound\"])\n        rc, out = _run([\"agentj\", \"name\"], 10)\n        m = re.search(r\"「([^」]{1,40})」\", out) if rc == 0 else None\n        s[\"agent_name\"] = m.group(1) if m else \"\"\n    _cache.update(t=time.time(), v=s)\n    return s\n\n\ndef onboarding() -> dict | None:\n    \"\"\"`agentj onboarding --json`, or None when it could not be read (then nothing is concluded from it).\"\"\"\n    rc, out = _run([\"agentj\", \"onboarding\", \"--json\"], 20)\n    try:\n        ob = json.loads(out.splitlines()[-1]) if rc == 0 and out else None\n    except (ValueError, IndexError):\n        return None\n    return ob if isinstance(ob, dict) and \"seat\" in ob else None\n\n\ndef sync_bound(seat: bool) -> None:\n    \"\"\"Keep the supervisor's `bound` flag in step with the account: data kept from an earlier install starts serve at once;\n    a seat that went away (unlink, transfer) stops serve before a new code can be taken.\"\"\"\n    flag = os.path.join(OLA, \"bound\")\n    if seat and not os.path.exists(flag):\n        _touch(\"bound\")\n    elif not seat and os.path.exists(flag):\n        os.unlink(flag)\n        _cache[\"t\"] = 0\n\n\ndef _sync_loop() -> None:\n    while True:\n        time.sleep(30)\n        if os.path.isdir(STATE):\n            ob = onboarding()\n            if ob is not None:\n                sync_bound(bool(ob.get(\"seat\")))\n\n\ndef _touch(name: str) -> None:\n    with open(os.path.join(OLA, name), \"w\", encoding=\"utf-8\") as f:\n        f.write(str(int(time.time())) + \"\\n\")\n\n\ndef login(body: dict) -> dict:\n    text = body.get(\"code\") if isinstance(body.get(\"code\"), str) else \"\"\n    m = CODE.search(text)\n    if not m:\n        return {\"ok\": False, \"msg\": \"no_code\"}\n    code = m.group(0)\n    if os.path.exists(os.path.join(OLA, \"bound\")):\n        return {\"ok\": False, \"msg\": \"already_bound\"}\n    ob = onboarding()\n    if ob is None or ob.get(\"seat\"):\n        return {\"ok\": False, \"msg\": \"already_bound\" if ob else \"not_ready\"}\n    name = body.get(\"name\") if isinstance(body.get(\"name\"), str) else \"\"\n    name = name.strip()[:32]\n    named = [\"--name\", name] if name else []\n    if code.startswith((\"ajt_\", \"ajh_\")):\n        rc, out = _run([\"agentj\", \"login\", \"--seat\", \"-\"] + named, 90, stdin=code + \"\\n\")\n    else:\n        d = os.path.join(STATE, \"olares-setup\")\n        os.makedirs(d, mode=0o700, exist_ok=True)\n        path = os.path.join(d, f\"code-{os.getpid()}-{time.time_ns()}\")\n        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)\n        try:\n            with os.fdopen(fd, \"w\", encoding=\"utf-8\") as f:\n                f.write(code + \"\\n\")\n            rc, out = _run([\"agentj\", \"login\", \"--install-code-file\", path] + named, 90)\n        finally:\n            try:\n                os.unlink(path)\n            except FileNotFoundError:\n                pass\n    out = out.replace(code, \"…\")\n    if rc == 0:\n        _touch(\"bound\")\n        _touch(\"restart\")\n        _cache[\"t\"] = 0\n    lines = [ln for ln in out.splitlines() if ln.startswith((\"✓\", \"✗\", \"拒绝\", \"连不上\"))] or out.splitlines()[-3:]\n    return {\"ok\": rc == 0, \"exit\": rc, \"msg\": \"\\n\".join(lines)[:1200]}\n\n\nPAGE = \"\"\"<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>Agent J</title><style>\n:root{--bg:#faf9f5;--card:#f0eee6;--ink:#2c2b26;--mute:#858585;--line:#e3dacc;--acc:#629887;--soft:#dbf5ec;--bad:#a23b2a}\n*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Ubuntu,\"PingFang SC\",\"Noto Sans CJK SC\",system-ui,sans-serif}\nmain{max-width:560px;margin:0 auto;padding:28px 18px 48px}h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mute);margin:0 0 20px}\n.step{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}\n.step h2{font-size:16px;margin:0 0 8px;display:flex;gap:8px;align-items:center}.dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}\n.done .dot{background:var(--acc)}.now{border-color:var(--acc)}textarea,input{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:#faf9f5;color:var(--ink)}\n.buyrow{display:flex;justify-content:flex-end;margin-top:12px}.buy{padding:10px 16px;border-radius:10px;background:var(--ink);color:var(--bg);text-decoration:none}.guide{display:block;width:100%;max-height:100px;margin:10px 0}textarea{height:86px;resize:vertical}button{margin-top:10px;font:inherit;font-weight:700;border:0;border-radius:10px;padding:10px 16px;background:var(--ink);color:var(--bg);cursor:pointer}\nbutton:disabled{opacity:.5}.msg{white-space:pre-wrap;margin-top:10px;font-size:14px}.bad{color:var(--bad)}.ok{color:var(--acc)}a{color:var(--ink);text-decoration-color:#71bbde}\n.mute{color:var(--mute);font-size:14px}ol{margin:6px 0 0;padding-left:20px}code{background:var(--soft);padding:1px 5px;border-radius:5px}\n</style></head><body><main>\n<h1>Agent J</h1><p class=\"sub\" data-t=\"sub\"></p>\n<div class=\"step\" id=\"s1\"><h2><span class=\"dot\"></span><span data-t=\"s1\"></span></h2><div class=\"mute\" id=\"s1d\"></div></div>\n<div class=\"step\" id=\"s2\"><h2><span class=\"dot\"></span><span data-t=\"s2\"></span></h2><div id=\"s2d\">\n<p class=\"mute\" data-t=\"s2h\"></p><p><a href=\"https://agentj.app/account\" target=\"_blank\" rel=\"noopener noreferrer\">https://agentj.app/account</a></p><svg class=\"guide\" role=\"img\" aria-labelledby=\"guide-title\" viewBox=\"0 0 480 80\"><title id=\"guide-title\"></title><rect x=\"1\" y=\"1\" width=\"478\" height=\"78\" rx=\"10\" fill=\"#dbf5ec\"/><text x=\"18\" y=\"32\" data-t=\"guide1\" font-size=\"14\"></text><text x=\"18\" y=\"60\" data-t=\"guide2\" font-size=\"14\"></text></svg><textarea id=\"code\" autocomplete=\"off\" spellcheck=\"false\"></textarea>\n<p class=\"mute\" data-t=\"nameh\" style=\"margin:10px 0 4px\"></p><input id=\"name\" maxlength=\"32\" autocomplete=\"off\">\n<button id=\"go\" data-t=\"go\"></button><div class=\"msg\" id=\"m2\"></div><p class=\"mute\" data-t=\"buyh\"></p><div class=\"buyrow\"><a class=\"buy\" href=\"https://agentj.app/account?source=olares&amp;utm_source=olares&amp;utm_medium=setup\" target=\"_blank\" rel=\"noopener noreferrer\" data-t=\"buy\"></a></div></div></div>\n<div class=\"step\" id=\"s3\"><h2><span class=\"dot\"></span><span data-t=\"s3\"></span></h2><div id=\"s3d\" class=\"mute\"></div></div>\n<div class=\"step\" id=\"terminal-card\" hidden><h2 data-t=\"terminal\"></h2><p class=\"mute\" data-t=\"terminal_hint\"></p><a id=\"terminal-link\" target=\"_blank\" rel=\"noopener noreferrer\" data-t=\"terminal_open\"></a></div>\n<p class=\"mute\" data-t=\"foot\"></p>\n</main><script>\nconst zh=(new URLSearchParams(location.search).get('lang')||navigator.language||'').toLowerCase().startsWith('zh');\nconst T=zh?{terminal:'网页终端',terminal_hint:'在 Agent J 自己的容器中查看状态和后台任务。打开后由 Olares 验证你的登录。',terminal_open:'打开网页终端',sub:'在你的 Olares 上运行的 Agent J：用手机指挥这台机器上的 AI Agent。',s1:'安装 Agent J',s2:'绑定你的席位',\ns2h:'在下方账户页的空席位卡上点「复制安装提示词」。整段粘贴就行，不用挑出代码；设置码不会显示或保存。',\nplaceholder:'把复制的整段安装提示粘贴到这里',guide1:'① 空席位卡 → 复制安装提示词',guide2:'② 整段粘贴到下方 → 绑定',buyh:'还没有席位？先注册并购买一个，再回来粘贴。',buy:'购买席位',nameh:'给这个 Agent 起个名字（可不填）',go:'绑定',s3:'添加手机遥控器',foot:'这个页面只在你的 Olares 登录后可见。设置码只用一次，用完即删。',\nph:{starting:'正在启动…','error-image':'应用镜像不完整，已停止（请重新安装或联系我们）',ready:'已安装',serving:'已安装，正在运行'},\npair:a=>`<ol><li>手机打开 <a href=\"${a}\" target=\"_blank\" rel=\"noopener\">${a}</a> 登录</li><li>找到这台 Agent J 主机「${N}」的席位卡，点「添加遥控器」</li><li>用通行密钥确认，按页面提示完成</li></ol>`,\npaired:'手机已配对 ✓ 现在可以在手机上和 Agent 说话了。',model:m=>`模型：Olares Router 上的 ${m}（OpenCode）`,\nno_code:'没找到设置码：请粘贴 ajt_、ajh_ 或 AJI- 开头的码，或整段安装提示词。',already_bound:'这台 Olares 已经绑定了席位。要换席位，先在 Agent J Terminal 里运行 agentj unlink。',not_ready:'Agent J 还没准备好，请稍等再试。',wait:'正在绑定…',bound:'已绑定'}\n:{terminal:'Web terminal',terminal_hint:'View status and background tasks inside Agent J’s own container. Olares verifies your sign-in when you open it.',terminal_open:'Open web terminal',sub:'Agent J on your Olares: direct the AI agent on this machine from your phone.',s1:'Install Agent J',s2:'Bind your seat',\ns2h:'On the account page below, press “Copy installation prompt” on an empty seat card. Paste the entire prompt here; no need to pick out the code. The setup code is never shown or kept.',\nplaceholder:'Paste the entire copied installation prompt here',guide1:'1. Empty seat card → Copy installation prompt',guide2:'2. Paste all of it below → Bind',buyh:'No seat yet? Register and buy one, then come back to paste.',buy:'Buy a seat',nameh:'Name this Agent (optional)',go:'Bind',s3:'Add your phone as a remote',foot:'Only visible after you sign in to your Olares. The code is used once and deleted.',\nph:{starting:'Starting…','error-image':'The app image is incomplete; stopped (reinstall, or contact us)',ready:'Installed',serving:'Installed and running'},\npair:a=>`<ol><li>On your phone open <a href=\"${a}\" target=\"_blank\" rel=\"noopener\">${a}</a> and sign in</li><li>On the seat card of “${N}” choose Add a remote</li><li>Confirm with your passkey and follow the page</li></ol>`,\npaired:'Phone paired ✓ You can talk to the Agent from your phone now.',model:m=>`Model: ${m} on Olares Router (OpenCode)`,\nno_code:'No setup code found: paste the code starting with ajt_, ajh_ or AJI-, or the whole installation prompt.',already_bound:'This Olares is already bound to a seat. To change it, run agentj unlink in Agent J Terminal first.',not_ready:'Agent J is not ready yet; try again in a moment.',wait:'Binding…',bound:'Bound'};\nlet N='';const $=i=>document.getElementById(i);\ndocument.documentElement.lang=zh?'zh-CN':'en';\ndocument.querySelectorAll('[data-t]').forEach(e=>e.textContent=T[e.dataset.t]);\n$('code').placeholder=T.placeholder;$('guide-title').textContent=T.guide1+'; '+T.guide2;\nconst esc=s=>String(s).replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));\nfunction mark(id,state){$(id).classList.toggle('done',state==='done');$(id).classList.toggle('now',state==='now')}\nasync function tick(){let s;try{s=await (await fetch('api/status',{cache:'no-store'})).json()}catch{return}\nconst terminal=s.terminal_url||'';$('terminal-card').hidden=!terminal;if(terminal){$('terminal-link').href=terminal}else{$('terminal-link').removeAttribute('href')}\nN=esc(s.agent_name||'');const inst=!!s.version;mark('s1',inst?'done':'now');\n$('s1d').textContent=(T.ph[s.phase]||s.phase)+(s.version?' · v'+s.version:'')+(s.router_model?' · '+T.model(s.router_model):'');\nmark('s2',s.bound?'done':(inst?'now':''));$('go').disabled=!inst||s.bound;\nif(s.bound){$('s2d').innerHTML='<p class=\"ok\">'+T.bound+(N?' · '+N:'')+'</p>'}\nconst ob=s.onboarding||{};const paired=ob.phone||ob.computer;\nmark('s3',paired?'done':(s.bound?'now':''));$('s3d').innerHTML=s.bound?(paired?'<p class=\"ok\">'+T.paired+'</p>':T.pair(s.account_url||'%ACCOUNT%')):''}\n$('go').onclick=async()=>{const code=$('code').value;$('code').value='';$('go').disabled=true;$('m2').className='msg';$('m2').textContent=T.wait;\nlet r;try{r=await (await fetch('api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,name:$('name').value})})).json()}catch{r={ok:false,msg:'network'}}\n$('m2').className='msg '+(r.ok?'ok':'bad');$('m2').textContent=T[r.msg]||r.msg;$('go').disabled=r.ok;tick()};\ntick();setInterval(tick,4000);\n</script></body></html>\"\"\"\n\n\nclass H(BaseHTTPRequestHandler):\n    server_version = \"agentj-olares\"\n\n    def log_message(self, fmt, *args):          # method + path + status only; never a body\n        pass\n\n    def _send(self, code: int, body: bytes, ctype: str) -> None:\n        self.send_response(code)\n        for k, v in ((\"Content-Type\", ctype), (\"Content-Length\", str(len(body))), (\"Cache-Control\", \"no-store\"),\n                     (\"X-Content-Type-Options\", \"nosniff\"), (\"Referrer-Policy\", \"no-referrer\"),\n                     (\"Content-Security-Policy\", \"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; \"\n                                                \"connect-src 'self'; frame-ancestors 'self' https:\")):\n            self.send_header(k, v)\n        self.end_headers()\n        self.wfile.write(body)\n\n    def _json(self, obj: dict, code: int = 200) -> None:\n        self._send(code, json.dumps(obj, ensure_ascii=False).encode(), \"application/json; charset=utf-8\")\n\n    def do_GET(self):\n        p = urlparse(self.path).path\n        if p in (\"/\", \"/index.html\"):\n            self._send(200, PAGE.replace(\"%ACCOUNT%\", ACCOUNT_URL).encode(), \"text/html; charset=utf-8\")\n        elif p == \"/api/status\":\n            self._json({**status(), \"account_url\": ACCOUNT_URL, \"terminal_url\": terminal_url()})\n        elif p == \"/healthz\":\n            self._send(200, b\"ok\", \"text/plain\")\n        else:\n            self._send(404, b\"\", \"text/plain\")\n\n    def do_POST(self):\n        if urlparse(self.path).path != \"/api/login\":\n            return self._send(404, b\"\", \"text/plain\")\n        origin = self.headers.get(\"Origin\") or \"\"\n        host = self.headers.get(\"X-Forwarded-Host\") or self.headers.get(\"Host\") or \"\"\n        if not origin or urlparse(origin).netloc != host.split(\",\")[0].strip():\n            return self._json({\"ok\": False, \"msg\": \"origin\"}, 403)\n        try:\n            n = int(self.headers.get(\"Content-Length\") or \"0\")\n        except ValueError:\n            n = -1\n        ctype = (self.headers.get(\"Content-Type\") or \"\").split(\";\")[0].strip().lower()\n        if not 0 < n <= 4096 or ctype != \"application/json\":\n            return self._json({\"ok\": False, \"msg\": \"bad_request\"}, 400)\n        try:\n            body = json.loads(self.rfile.read(n))\n        except ValueError:\n            return self._json({\"ok\": False, \"msg\": \"bad_request\"}, 400)\n        if not isinstance(body, dict):\n            return self._json({\"ok\": False, \"msg\": \"bad_request\"}, 400)\n        if not LOCK.acquire(blocking=False):\n            return self._json({\"ok\": False, \"msg\": \"busy\"}, 409)\n        try:\n            self._json(login(body))\n        finally:\n            LOCK.release()\n\n\nif __name__ == \"__main__\":\n    threading.Thread(target=_sync_loop, daemon=True).start()\n    ThreadingHTTPServer((\"0.0.0.0\", PORT), H).serve_forever()\n"
+    },
+    {
+      "path": "hermesagent/templates/webapp-bootstrap.yaml",
+      "sha": null,
+      "content_sha256": "c5e31a430a14f3ea5f6fdf56a5b97098234d5f0a5876d0bae1f4455f213c9669",
+      "score": 188,
+      "content": "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: hermesagent-webapp-bootstrap\n  namespace: \"{{ .Release.Namespace }}\"\ndata:\n  bootstrap.py: |\n    import os\n    import secrets\n    import shutil\n    import subprocess\n    from pathlib import Path\n    from hermes_cli.config import require_readable_config_before_write, save_config\n    from plugins.dashboard_auth.basic import hash_password\n\n    HOME = Path('/opt/data')\n    MANAGED_PLUGINS = [\n        ('advanced-delegation', 'NousResearch/hermes-official-plugins#advanced-delegation',\n         'e404b6816b20237a82f6fbe2749b5a576cf75dba'),\n    ]\n\n\n    def backup_config(config):\n        directory = config.parent / 'olares-webapp-backup'\n        directory.mkdir(mode=0o700, exist_ok=True)\n        backup = directory / config.name\n        if config.exists() and not backup.exists():\n            shutil.copy2(config, backup)\n            backup.chmod(0o600)\n\n\n    def plugin_present(path):\n        # A dangling symlink is user-owned too. Propagate access errors.\n        try:\n            path.lstat()\n        except FileNotFoundError:\n            return False\n        return True\n\n\n    def seed_optional_plugins(default_config):\n        profile = '<unresolved>'\n        try:\n            from hermes_cli.profiles import get_active_profile, resolve_profile_env\n            profile = get_active_profile()\n            home = Path(resolve_profile_env(profile))\n            settings = default_config\n            if home != HOME:\n                settings = require_readable_config_before_write(home / 'config.yaml')\n            disabled = settings.get('plugins', {}).get('disabled', [])\n            if not isinstance(disabled, list):\n                raise ValueError('plugins.disabled must be a list')\n        except (Exception, SystemExit) as exc:\n            print(f'[init-webapp] Cannot read plugin settings for {profile}: {exc}', flush=True)\n            return\n\n        for name, source, revision in MANAGED_PLUGINS:\n            try:\n                if name in disabled or plugin_present(home / 'plugins' / name):\n                    continue\n                subprocess.run([\n                    '/opt/hermes/bin/hermes', '--profile', profile, 'plugins', 'install',\n                    source, '--ref', revision, '--enable', '--yes-deps',\n                ], check=True, timeout=360)\n            except Exception as exc:\n                print(f'[init-webapp] Skipping optional plugin {name} in {profile}: {exc}', flush=True)\n\n\n    def configure_webapp(raw):\n        webapp = raw.setdefault('webapp', {})\n        webapp.setdefault('enabled', True)\n        # This packaged listener has a stable port; non-loopback engages Hermes sign-in.\n        webapp['host'] = '0.0.0.0'\n        webapp['port'] = 19120\n        auth = raw.setdefault('dashboard', {}).setdefault('basic_auth', {})\n        login_dir = HOME / 'webapp'\n        login_dir.mkdir(mode=0o700, exist_ok=True)\n        login_file = login_dir / 'olares-login.txt'\n        if not auth.get('username') or not (auth.get('password_hash') or auth.get('password')):\n            password = [REDACTED]\n            auth.update(username='hermes', password_hash=hash_password(password))\n            # Persist before config: a startup interruption must not leave an unknown password.\n            fd = os.open(login_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)\n            os.fchmod(fd, 0o600)\n            with os.fdopen(fd, 'w') as f:\n                f.write('Hermes Webapp login (private; do not share)\\nUsername: hermes\\nPassword: ' + password + '\\n')\n        if not auth.get('secret'):\n            auth['secret'] = secrets.token_urlsafe(48)\n\n\n    config = HOME / 'config.yaml'\n    raw = require_readable_config_before_write(config)\n    if not isinstance(raw, dict):\n        raise ValueError('config.yaml must be a mapping')\n    backup_config(config)\n    seed_optional_plugins(raw)\n\n    # The installer may have updated the config, even if enabling a plugin failed.\n    raw = require_readable_config_before_write(config)\n    configure_webapp(raw)\n    save_config(raw, strip_defaults=False)\n    print('[init-webapp] Webapp configured; private login: /opt/data/webapp/olares-login.txt')\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "rsshub/templates/browser-less-deployment.yaml",
+      "sha": null,
+      "content_sha256": "8bf793f034804dcf66a634dd1772abd167c1ae8f5b6018b69ed90da083515f2a",
+      "score": 178,
+      "content": "﻿apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  annotations:\n    kompose.cmd: kompose convert\n    kompose.version: 1.26.1 (HEAD)\n  creationTimestamp: null\n  labels:\n    io.kompose.service: browserless\n  name: browserless\n  namespace: {{ .Release.Namespace }}\nspec:\n  replicas: {{ .Values.workloads.browserless.replicaCount }}\n  selector:\n    matchLabels:\n      io.kompose.service: browserless\n  strategy: {}\n  template:\n    metadata:\n      annotations:\n        kompose.cmd: kompose convert\n        kompose.version: 1.26.1 (HEAD)\n      creationTimestamp: null\n      labels:\n        io.kompose.service: browserless\n    spec:\n      containers:\n        - image: beclab/harveyff-browserless-chrome:v0.0.1\n          name: browserless\n          resources: \n            requests:\n              cpu: 25m\n              memory: 300Mi\n            limits:\n              cpu: 1000m\n              memory: 1024Mi\n      restartPolicy: Always\nstatus: {}\n"
+    },
+    {
+      "path": "trustgraph/templates/deployment-api-gateway.yaml",
+      "sha": null,
+      "content_sha256": "d0b469a2abf1833f649044442320193b583b5b943312cc82583fe11f11b3ccc9",
+      "score": 178,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  labels:\n    app: api-gateway\n  name: api-gateway\n  namespace: '{{ .Release.Namespace }}'\nspec:\n  replicas: {{ (index .Values.workloads \"api-gateway\").replicaCount }}\n  selector:\n    matchLabels:\n      app: api-gateway\n  template:\n    metadata:\n      labels:\n        app: api-gateway\n      annotations:\n        trustgraph.olares.com/chart-version: '0.1.26'\n    spec:\n      containers:\n      - command:\n        - python\n        - -c\n        - \"from trustgraph.messaging.translators.iam import IamResponseTranslator\\noriginal_encode = IamResponseTranslator.encode\\ndef encode_with_error(self, response):\\n    result = original_encode(self, response)\\n    if response.error:\\n        result['error'] = {'type': response.error.type, 'message': response.error.message}\\n    return result\\nIamResponseTranslator.encode = encode_with_error\\nfrom trustgraph.messaging.translators.retrieval import GraphRagRequestTranslator\\noriginal_graph_decode = GraphRagRequestTranslator.decode\\ndef graph_decode_with_service_defaults(self, data):\\n    values = dict(data)\\n    for key in ('entity-limit', 'triple-limit', 'max-subgraph-size', 'max-path-length', 'edge-limit', 'max-reranker-input'):\\n        if values.get(key) is None:\\n            values[key] = 0\\n    return original_graph_decode(self, values)\\nGraphRagRequestTranslator.decode = graph_decode_with_service_defaults\\nfrom trustgraph.gateway.service import run\\nrun()\\n\"\n        - --pubsub-backend\n        - pulsar\n        - --pulsar-host\n        - pulsar://pulsar:6650\n        - --timeout\n        - '600'\n        - --port\n        - '8088'\n        - --log-level\n        - INFO\n        - --no-loki-enabled\n        image: docker.io/trustgraph/trustgraph-flow:2.10.10\n        name: api-gateway\n        ports:\n        - containerPort: 8088\n        resources:\n          limits:\n            cpu: '0.5'\n            memory: 512M\n          requests:\n            cpu: '0.1'\n            memory: 96Mi\n        env:\n        - name: HOME\n          value: /tmp\n      enableServiceLinks: false\n      volumes: []\n      securityContext:\n        runAsUser: 1000\n        runAsGroup: 1000\n        fsGroup: 1000\n  strategy:\n    type: Recreate\n"
+    },
+    {
+      "path": "llmfit/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "1c655d3e1fd77988f00951e7d5d3ebb13386589046ffba57b41a682348953b8d",
+      "score": 178,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: {{ .Release.Name }}\n  namespace: {{ .Release.Namespace }}\n  labels:\n    app: llmfit\nspec:\n  replicas: {{ .Values.workloads.llmfit.replicaCount }}\n  selector:\n    matchLabels:\n      app: llmfit\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: llmfit\n    spec:\n      containers:\n      - name: llmfit\n        image: \"beclab/harveyff-llmfit:1.1.16-olares\"\n        imagePullPolicy: IfNotPresent\n        args: [\"serve\", \"--host\", \"0.0.0.0\", \"--port\", \"8787\"]\n        ports:\n        - containerPort: 8787\n        env:\n        - name: LLMFIT_DASHBOARD_HOST\n          value: \"0.0.0.0\"\n        - name: LLMFIT_DASHBOARD_PORT\n          value: \"8787\"\n        - name: LLMFIT_ALLOW_REMOTE\n          value: \"1\"\n        - name: NVIDIA_DRIVER_CAPABILITIES\n          value: all\n        - name: NVIDIA_VISIBLE_DEVICES\n          value: all\n        resources:\n          requests:\n            cpu: 100m\n            memory: 256Mi\n          limits:\n            cpu: \"1\"\n            memory: 512Mi\n        readinessProbe:\n          httpGet:\n            path: /health\n            port: 8787\n          initialDelaySeconds: 5\n          periodSeconds: 10\n          timeoutSeconds: 3\n          successThreshold: 1\n          failureThreshold: 3\n        livenessProbe:\n          httpGet:\n            path: /health\n            port: 8787\n          initialDelaySeconds: 10\n          periodSeconds: 15\n          timeoutSeconds: 5\n          successThreshold: 1\n          failureThreshold: 3\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: llmfit-svc\n  namespace: {{ .Release.Namespace }}\nspec:\n  type: ClusterIP\n  selector:\n    app: llmfit\n  ports:\n  - name: http\n    port: 8787\n    targetPort: 8787\n"
+    },
+    {
+      "path": "openllm/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "2e3398c31043694124b9962d7f98afdbb89c2ccb3fba6c8d3a2ffb6f504b0b8c",
+      "score": 178,
+      "content": "\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  labels:\n    io.kompose.service: openllm\n  name: openllm\n  namespace: {{ .Release.Namespace }}\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      io.kompose.service: openllm\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        io.kompose.network/chrome-default: \"true\"\n        io.kompose.service: openllm\n    spec:\n      containers:\n        - env:\n            - name: PGID\n              value: \"1000\"\n            - name: PUID\n              value: \"1000\"\n            - name: TZ\n              value: Etc/UTC\n          image: \"ghcr.io/bentoml/openllm:0.3.6\"\n          resources:\n            requests:\n              cpu: 500m\n              memory: 12Gi\n            limits:\n              cpu: 1000m\n              memory: 16Gi\n          args: ['start','opt','--model-id','facebook/opt-2.7b']\n          name: openllm\n          ports:\n\n            - containerPort: 3000\n                    \n          volumeMounts:\n                    \n            - mountPath: /appdata\n              name: appdata\n                      \n            - mountPath: /userdata\n              name: userdata\n      \n        - env:\n            - name: PGID\n              value: \"1000\"\n            - name: PUID\n              value: \"1000\"\n            - name: TZ\n              value: Etc/UTC\n          image: \"ghcr.io/bentoml/openllm-ui-clojure:0.3.3\"\n          name: openllm-ui\n          ports:\n\n            - containerPort: 80\n          resources:\n            requests:\n              cpu: 100m\n              memory: 64Mi\n            limits:\n              cpu: 200m\n              memory: 128Mi                    \n\n\n      restartPolicy: Always\n\n      volumes:\n                    \n        - name: appdata\n          hostPath:\n            type: DirectoryOrCreate\n            path: {{ .Values.userspace.appData }}/openllm\n                      \n        - name: userdata\n          hostPath:\n            type: DirectoryOrCreate\n            path: {{ .Values.userspace.userData }}/openllm\n                      \nstatus: {}\n---\napiVersion: v1\nkind: Service\nmetadata:\n  labels:\n    io.kompose.service: openllm\n  name: openllm\n  namespace: {{ .Release.Namespace }}\nspec:\n  ports:\n\n    - name: \"3000\"\n      port: 3000\n      targetPort: 3000\n    - name: \"80\"\n      port: 80\n      targetPort: 80\n  selector:\n    io.kompose.service: openllm\nstatus:\n  loadBalancer: {}\n                  "
+    },
+    {
+      "path": "hindsight/templates/deployment-hindsight-api.yaml",
+      "sha": null,
+      "content_sha256": "3e43ae835b6da2e5d65148269fcf56cfbde857b302099e3d29937d0bea6e9943",
+      "score": 178,
+      "content": "{{- $oe := .Values.olaresEnv | default dict }}\n{{- $apiKey := index $oe \"HINDSIGHT_API_LLM_API_KEY\" | default \"not-required\" }}\n{{- $base := index $oe \"HINDSIGHT_API_LLM_BASE_URL\" | default (printf \"https://router.%s/v1\" .Values.user.zone) }}\n{{- $model := index $oe \"HINDSIGHT_API_LLM_MODEL\" | default \"default-chat\" }}\n{{- $embed := index $oe \"HINDSIGHT_API_EMBEDDINGS_MODEL\" | default \"default-embedding\" }}\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: hindsight\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    app: hindsight-api\n    io.kompose.service: hindsight\nspec:\n  replicas: {{ .Values.workloads.hindsight.replicaCount }}\n  selector:\n    matchLabels:\n      io.kompose.service: hindsight\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: hindsight-api\n        io.kompose.service: hindsight\n    spec:\n      securityContext:\n        runAsUser: 1000\n        runAsGroup: 1000\n      containers:\n      - name: hindsight-api\n        image: docker.io/beclab/vectorize-io-hindsight-api:0.10.2-slim\n        imagePullPolicy: IfNotPresent\n        ports:\n        - name: api\n          containerPort: 8888\n          protocol: TCP\n        env:\n        - name: HINDSIGHT_API_DATABASE_URL\n          valueFrom:\n            secretKeyRef:\n              name: hindsight-secrets\n              key: DATABASE_URL\n        - name: HINDSIGHT_API_WORKER_ID\n          value: hindsight-api\n        - name: HINDSIGHT_API_LLM_PROVIDER\n          value: openai\n        - name: HINDSIGHT_API_LLM_BASE_URL\n          value: {{ $base | quote }}\n        - name: HINDSIGHT_API_LLM_MODEL\n          value: {{ $model | quote }}\n        - name: HINDSIGHT_API_EMBEDDINGS_PROVIDER\n          value: openai\n        - name: HINDSIGHT_API_EMBEDDINGS_OPENAI_BASE_URL\n          value: {{ $base | quote }}\n        - name: HINDSIGHT_API_EMBEDDINGS_OPENAI_MODEL\n          value: {{ $embed | quote }}\n        # The current embedding endpoint accepts one text per request.\n        - name: HINDSIGHT_API_EMBEDDINGS_OPENAI_BATCH_SIZE\n          value: \"1\"\n        - name: HINDSIGHT_API_RERANKER_PROVIDER\n          value: rrf\n        {{- if $apiKey }}\n        - name: HINDSIGHT_API_LLM_API_KEY\n          valueFrom:\n            secretKeyRef:\n              name: hindsight-secrets\n              key: HINDSIGHT_API_LLM_API_KEY\n        {{- end }}\n        startupProbe:\n          httpGet:\n            path: /health\n            port: api\n          periodSeconds: 10\n          failureThreshold: 30\n        readinessProbe:\n          httpGet:\n            path: /health\n            port: api\n          periodSeconds: 15\n          timeoutSeconds: 5\n          failureThreshold: 3\n        resources:\n          requests:\n            cpu: 200m\n            memory: 512Mi\n          limits:\n            cpu: \"1\"\n            memory: 2Gi\n      restartPolicy: Always\n"
+    },
+    {
+      "path": "librechat/templates/meilisearch-deployment.yaml",
+      "sha": null,
+      "content_sha256": "db2ab22f6058df39afc7e685ae7bb4759fe09cbcc5800ce4426ee34ad0375965",
+      "score": 178,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: librechat-meilisearch\n  namespace: '{{ .Release.Namespace }}'\n  labels:\n    app: librechat\n    component: meilisearch\nspec:\n  replicas: {{ (index .Values.workloads \"librechat-meilisearch\").replicaCount }}\n  selector:\n    matchLabels:\n      app: librechat\n      component: meilisearch\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: librechat\n        component: meilisearch\n    spec:\n      containers:\n      - name: meilisearch\n        image: docker.io/getmeili/meilisearch:v1.53.1\n        imagePullPolicy: IfNotPresent\n        ports:\n        - containerPort: 7700\n          name: meilisearch\n        env:\n        - name: MEILI_NO_ANALYTICS\n          value: \"true\"\n        # v1.53 refuses a v1.29 data.ms without this; keep the original hostPath.\n        - name: MEILI_UPGRADE_DB\n          value: \"true\"\n        - name: MEILI_MASTER_KEY\n          valueFrom:\n            secretKeyRef:\n              name: librechat-meilisearch-secret\n              key: master-key\n        volumeMounts:\n        - name: meilisearch-data\n          mountPath: /meili_data\n        startupProbe:\n          httpGet:\n            path: /health\n            port: 7700\n          periodSeconds: 5\n          timeoutSeconds: 5\n          failureThreshold: 120\n        livenessProbe:\n          httpGet:\n            path: /health\n            port: 7700\n          periodSeconds: 10\n          timeoutSeconds: 5\n        readinessProbe:\n          httpGet:\n            path: /health\n            port: 7700\n          periodSeconds: 5\n          timeoutSeconds: 3\n        resources:\n          requests:\n            cpu: 50m\n            memory: 128Mi\n          limits:\n            cpu: 500m\n            memory: 1Gi\n      volumes:\n      - name: meilisearch-data\n        hostPath:\n          path: '{{ .Values.userspace.appData }}/meilisearch'\n          type: DirectoryOrCreate\n      restartPolicy: Always\n\n"
+    },
+    {
+      "path": "localdeepresearch/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "affad431858006e4dff89ef2b37102a7db51ec43a1cfde8035a1bf7c7f18d4ea",
+      "score": 178,
+      "content": "{{- $oe := .Values.olaresEnv | default dict -}}\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: localdeepresearch\n  namespace: {{ .Release.Namespace | quote }}\nspec:\n  replicas: {{ .Values.workloads.localdeepresearch.replicaCount }}\n  strategy: {type: Recreate}\n  selector:\n    matchLabels: {app: localdeepresearch}\n  template:\n    metadata:\n      labels: {app: localdeepresearch}\n    spec:\n      enableServiceLinks: false\n      securityContext: {runAsUser: 1000, runAsGroup: 1000}\n      initContainers:\n        - name: init-permissions\n          image: beclab/aboveos-busybox:1.37.0\n          command: [sh, -ec]\n          args:\n            - |\n              for d in /data /data/logs /data/cache /data/cache/rag_indices /data/research_outputs /data/encrypted_databases /data/config /data/legacy-config; do\n                mkdir -p \"$d\"\n                chown 1000:1000 \"$d\"\n                chmod 700 \"$d\"\n              done\n          securityContext: {runAsUser: 0}\n          resources:\n            requests: {cpu: 10m, memory: 16Mi}\n            limits: {cpu: 100m, memory: 64Mi}\n          volumeMounts:\n            - {name: data, mountPath: /data}\n      containers:\n        - name: localdeepresearch\n          image: localdeepresearch/local-deep-research:1.10.7\n          # Bypass upstream's root chown/setpriv entrypoint; init prepares mounts.\n          command: [python, -c]\n          args:\n            - |\n              import wikipedia\n              wikipedia.set_user_agent(\"LocalDeepResearchOlares/1.10.7 (https://github.com/LearningCircuit/local-deep-research)\")\n              from local_deep_research.web.app import main\n              main()\n          env:\n            - {name: LDR_WEB_HOST, value: \"0.0.0.0\"}\n            - {name: LDR_WEB_PORT, value: \"5000\"}\n            - {name: LDR_DATA_DIR, value: /data}\n            - {name: LDR_LLM_PROVIDER, value: openai_endpoint}\n            - name: LDR_LLM_MODEL\n              value: {{ index $oe \"LDR_LLM_MODEL\" | default \"default-chat\" | quote }}\n            - {name: LDR_SEARCH_TOOL, value: searxng}\n            - name: LDR_SEARCH_ENGINE_WEB_SEARXNG_DEFAULT_PARAMS_INSTANCE_URL\n              value: {{ index $oe \"SEARXNG_URL\" | quote }}\n            - name: LDR_LLM_OPENAI_ENDPOINT_URL\n              value: {{ index $oe \"LDR_LLM_OPENAI_ENDPOINT_URL\" | default (printf \"https://router.%s/v1\" .Values.user.zone) | quote }}\n            {{- with index $oe \"LDR_LLM_OPENAI_ENDPOINT_API_KEY\" }}\n            - name: LDR_LLM_OPENAI_ENDPOINT_API_KEY\n              valueFrom:\n                secretKeyRef: {name: localdeepresearch-model, key: api-key}\n            {{- end }}\n            - {name: MPLCONFIGDIR, value: /data/cache/matplotlib}\n            - {name: HF_HUB_CACHE, value: /data/cache/huggingface/hub}\n            - {name: HF_HUB_DISABLE_IMPLICIT_TOKEN, value: \"1\"}\n          ports: [{name: http, containerPort: 5000}]\n          startupProbe:\n            httpGet: {path: /api/v1/health, port: http}\n            periodSeconds: 5\n            failureThreshold: 60\n          readinessProbe:\n            httpGet: {path: /api/v1/health, port: http}\n            periodSeconds: 10\n          livenessProbe:\n            httpGet: {path: /api/v1/health, port: http}\n            periodSeconds: 30\n            failureThreshold: 5\n          resources:\n            requests: {cpu: 200m, memory: 512Mi}\n            limits: {cpu: \"2\", memory: 4Gi}\n          volumeMounts:\n            - {name: data, mountPath: /data}\n            - {name: data, mountPath: /app/.config/local_deep_research, subPath: legacy-config}\n      volumes:\n        - name: data\n          hostPath:\n            path: {{ .Values.userspace.appData | quote }}\n            type: DirectoryOrCreate\n"
+    },
+    {
+      "path": "filebrowser/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "ffe24b79bc690ffbb6623ab95cc58b1b8d3b93432c6029ba9909ae46f33c9ec8",
+      "score": 178,
+      "content": "# Copyright 2022 bytetrade\n# \n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n# \n#     http://www.apache.org/licenses/LICENSE-2.0\n# \n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\n\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: filebrowser\n  namespace: {{ .Release.Namespace }}\n  labels:\n    app: filebrowser\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: filebrowser\n  template:\n    metadata:\n      labels:\n        app: filebrowser\n    spec:\n      containers:\n      - name: filebrowser\n        image: filebrowser/filebrowser:latest\n        resources:\n          requests:\n            cpu: 100m\n            memory: 64Mi\n          limits:\n            cpu: 500m\n            memory: 128Mi\n        volumeMounts:\n        - name: fb-data\n          mountPath: /appdata\n        - name: userspace-dir\n          mountPath: /data\n        ports:\n        - containerPort: 80\n        env:\n        - name: FB_DATABASE\n          value: /appdata/database/filebrowser.db\n        - name: FB_CONFIG\n          value: /appdata/config/settings.json\n        - name: FB_ROOT\n          value: /data\n        - name: OS_APP_SECRET\n          value: '{{ .Values.os.appSecret }}'\n        - name: OS_APP_KEY\n          value: {{ .Values.os.appKey }}\n        - name: OS_SYSTEM_SERVER\n          value: system-server.user-system-{{ .Values.bfl.username }}\n        command:\n        - /filebrowser\n        - --noauth\n      volumes:\n      - name: userspace-dir\n        hostPath:\n          type: Directory\n          path: {{ .Values.userspace.userData}}\n      - name: fb-data\n        hostPath:\n          type: DirectoryOrCreate\n          path: {{ .Values.userspace.appData}}/filebrowser\n   \n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: filebrowser-service\n  namespace: {{ .Release.Namespace }}\nspec:\n  selector:\n    app: filebrowser\n  type: ClusterIP\n  ports:\n    - protocol: TCP\n      name: fb\n      port: 80\n      targetPort: 80\n"
+    },
+    {
+      "path": "trustgraph/templates/deployment-ddg-mcp-server.yaml",
+      "sha": null,
+      "content_sha256": "5578eca9dcc7b80846425042b646fa16a1dc414393195083dea02f2c5d64f9f6",
+      "score": 178,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  labels:\n    app: ddg-mcp-server\n  name: ddg-mcp-server\n  namespace: '{{ .Release.Namespace }}'\nspec:\n  replicas: {{ (index .Values.workloads \"ddg-mcp-server\").replicaCount }}\n  selector:\n    matchLabels:\n      app: ddg-mcp-server\n  template:\n    metadata:\n      labels:\n        app: ddg-mcp-server\n      annotations:\n        trustgraph.olares.com/chart-version: '0.1.26'\n    spec:\n      containers:\n      - image: docker.io/trustgraph/ddg-mcp-server:0.1.1\n        name: ddg-mcp-server\n        ports:\n        - containerPort: 9870\n        resources:\n          limits:\n            cpu: '0.5'\n            memory: 256M\n          requests:\n            cpu: '0.1'\n            memory: 128Mi\n        env:\n        - name: HOME\n          value: /tmp\n      enableServiceLinks: false\n      volumes: []\n      securityContext:\n        runAsUser: 1000\n        runAsGroup: 1000\n        fsGroup: 1000\n  strategy:\n    type: Recreate\n"
+    },
+    {
+      "path": "vllmgemma312bit/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "9c9805e9ea2a2f5c06fd6ee31fcb77fb5852fcffaccbbe8af5472faa91d05b73",
+      "score": 178,
+      "content": "﻿{{- if and .Values.admin .Values.bfl.username (eq .Values.admin .Values.bfl.username) }}\n{{- $vllmDomainENV := split \",\" .Values.domain.vllmclient -}}\n{{- $vllmDomain := index $vllmDomainENV \"_0\" -}}\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  creationTimestamp: null\n  name: vllm\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    io.kompose.service: vllm\n  annotations:\n    applications.app.bytetrade.io/gpu-inject: \"true\"\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      io.kompose.service: vllm\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      creationTimestamp: null\n      labels:\n        io.kompose.network/chrome-default: \"true\"\n        io.kompose.service: vllm\n    spec:\n      containers:\n        - name: vllm\n          image: \"docker.io/beclab/vllm-vllm-openai:v0.11.0\"\n          command:\n            - /bin/bash\n            - -c\n            - |\n              DONE_FILE=\"/models/gemma-3-12b/.gemma-3-12b-it-quantized-W4A16.done\"\n              echo \"[vllm-wait] Waiting for $DONE_FILE ...\"\n              while [ ! -f \"$DONE_FILE\" ]; do\n                echo \"[vllm-wait] Model not ready, sleeping...\"\n                sleep 10\n              done\n              echo \"[vllm-wait] Detected $DONE_FILE, starting vLLM server.\"\n              \n              echo \"[vllm-start] Starting vLLM server...\"\n              python3 -m vllm.entrypoints.openai.api_server \\\n                --model \"/models/gemma-3-12b\" \\\n                --max-model-len 8000 \\\n                --tensor-parallel-size 1\n          env:\n            - name: PGID\n              value: \"1000\"\n            - name: PUID\n              value: \"1000\"\n            - name: TZ\n              value: Etc/UTC\n            - name: PYTHONUNBUFFERED\n              value: \"1\"\n            - name: VLLM_PORT\n              value: \"8000\"\n          ports:\n            - containerPort: 8000\n          resources:\n            limits:\n              cpu: \"18\"\n              memory: 28Gi\n            requests:\n              cpu: 500m\n              memory: 11Gi\n          volumeMounts:\n            - mountPath: /models/gemma-3-12b\n              name: data\n        - name: download-model\n          image: \"docker.io/beclab/harveyff-hf-downloader:v0.0.15\"\n          env:\n            - name: HF_ENDPOINT\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_SERVICE }}\"\n            - name: HF_TOKEN\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_TOKEN }}\"\n            - name: VLLM_PROXY_TARGET\n              value: http://localhost:8000\n            - name: MODEL_NAME\n              value: /models/gemma-3-12b\n            - name: APP_URL\n              value: \"https://{{ $vllmDomain }}\"\n          args:\n            - \"--repo\"\n            - \"abhishekchohan/gemma-3-12b-it-quantized-W4A16\"\n            - \"--ref\"\n            - \"main\"\n            - \"--outdir\"\n            - \"/data\"\n            - \"--static\"\n            - \"/app/static\"\n            - \"--port\"\n            - \"8090\"\n            - \"--probe-url\"\n            - \"/health\"\n            - \"--done-name\"\n            - \".gemma-3-12b-it-quantized-W4A16.done\"\n          startupProbe:\n            httpGet:\n              path: /ping\n              port: 8090\n            initialDelaySeconds: 5\n            timeoutSeconds: 10\n            periodSeconds: 5\n            failureThreshold: 20\n          livenessProbe:\n            httpGet:\n              path: /ping\n              port: 8090\n              scheme: HTTP\n            initialDelaySeconds: 30\n            timeoutSeconds: 60\n            periodSeconds: 60\n            successThreshold: 1\n            failureThreshold: 10\n          ports:\n            - containerPort: 8090\n              name: http\n          volumeMounts:\n            - name: data\n              mountPath: /data\n          resources:\n            requests:\n              cpu: \"100m\"\n              memory: \"500Mi\"\n            limits:\n              cpu: \"1\"\n              memory: 1Gi\n          terminationMessagePath: /dev/termination-log\n          terminationMessagePolicy: File\n          imagePullPolicy: IfNotPresent\n      volumes:\n        - name: data\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}/Huggingface/gemma312bit\"\n            type: DirectoryOrCreate\n      restartPolicy: Always\nstatus: {}\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  creationTimestamp: null\n  name: download-svc\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    io.kompose.service: vllm\nspec:\n  ports:\n    - name: http\n      port: 8090\n      targetPort: 8090\n  selector:\n    io.kompose.service: vllm\nstatus:\n  loadBalancer: {}\n{{- end }}"
+    },
+    {
+      "path": "vllmgptoss20b/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "194af58cd82778a54979e06ee85f2760800df945ef8efaac80a0594149c9b485",
+      "score": 178,
+      "content": "﻿{{- if and .Values.admin .Values.bfl.username (eq .Values.admin .Values.bfl.username) }}\r\n{{- $vllmDomainENV := split \",\" .Values.domain.vllmclient -}}\r\n{{- $vllmDomain := index $vllmDomainENV \"_0\" -}}\r\n---\r\napiVersion: apps/v1\r\nkind: Deployment\r\nmetadata:\r\n  creationTimestamp: null\r\n  name: vllm\r\n  namespace: \"{{ .Release.Namespace }}\"\r\n  labels:\r\n    io.kompose.service: vllm\r\n  annotations:\r\n    applications.app.bytetrade.io/gpu-inject: \"true\"\r\nspec:\r\n  replicas: 1\r\n  selector:\r\n    matchLabels:\r\n      io.kompose.service: vllm\r\n  strategy:\r\n    type: Recreate\r\n  template:\r\n    metadata:\r\n      creationTimestamp: null\r\n      labels:\r\n        io.kompose.network/chrome-default: \"true\"\r\n        io.kompose.service: vllm\r\n    spec:\r\n      containers:\r\n        - name: vllm\r\n          image: \"docker.io/beclab/vllm-vllm-openai:v0.11.0\"\r\n          command:\r\n            - /bin/bash\r\n            - -c\r\n            - |\r\n              DONE_FILE=\"/models/gpt-oss-20b/.gpt-oss-20b.done\"\r\n              echo \"[vllm-wait] Waiting for $DONE_FILE ...\"\r\n              while [ ! -f \"$DONE_FILE\" ]; do\r\n                echo \"[vllm-wait] Model not ready, sleeping...\"\r\n                sleep 10\r\n              done\r\n              echo \"[vllm-wait] Detected $DONE_FILE, starting vLLM server.\"\r\n              \r\n              echo \"[vllm-start] Starting vLLM server...\"\r\n              python3 -m vllm.entrypoints.openai.api_server \\\r\n                --model \"/models/gpt-oss-20b\" \\\r\n                --max-model-len 8000 \\\r\n                --tensor-parallel-size 1\r\n          env:\r\n            - name: PGID\r\n              value: \"1000\"\r\n            - name: PUID\r\n              value: \"1000\"\r\n            - name: TZ\r\n              value: Etc/UTC\r\n            - name: PYTHONUNBUFFERED\r\n              value: \"1\"\r\n            - name: VLLM_PORT\r\n              value: \"8000\"\r\n          ports:\r\n            - containerPort: 8000\r\n          resources:\r\n            limits:\r\n              cpu: \"18\"\r\n              memory: 28Gi\r\n            requests:\r\n              cpu: 500m\r\n              memory: 24Gi\r\n          volumeMounts:\r\n            - mountPath: /models/gpt-oss-20b\r\n              name: data\r\n        - name: download-model\r\n          image: \"docker.io/beclab/harveyff-hf-downloader:v0.0.15\"\r\n          env:\r\n            - name: HF_ENDPOINT\r\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_SERVICE }}\"\r\n            - name: HF_TOKEN\r\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_TOKEN }}\"\r\n            - name: VLLM_PROXY_TARGET\r\n              value: http://localhost:8000\r\n            - name: MODEL_NAME\r\n              value: /models/gpt-oss-20b\r\n            - name: APP_URL\r\n              value: \"https://{{ $vllmDomain }}\"\r\n          args:\r\n            - \"--repo\"\r\n            - \"openai/gpt-oss-20b\"\r\n            - \"--ref\"\r\n            - \"main\"\r\n            - \"--outdir\"\r\n            - \"/data\"\r\n            - \"--static\"\r\n            - \"/app/static\"\r\n            - \"--port\"\r\n            - \"8090\"\r\n            - \"--probe-url\"\r\n            - \"/health\"\r\n            - \"--done-name\"\r\n            - \".gpt-oss-20b.done\"\r\n          startupProbe:\r\n            httpGet:\r\n              path: /ping\r\n              port: 8090\r\n            initialDelaySeconds: 5\r\n            timeoutSeconds: 10\r\n            periodSeconds: 10\r\n            failureThreshold: 10\r\n          livenessProbe:\r\n            httpGet:\r\n              path: /ping\r\n              port: 8090\r\n              scheme: HTTP\r\n            initialDelaySeconds: 10\r\n            timeoutSeconds: 60\r\n            periodSeconds: 60\r\n            successThreshold: 1\r\n            failureThreshold: 10\r\n          ports:\r\n            - containerPort: 8090\r\n              name: http\r\n          volumeMounts:\r\n            - name: data\r\n              mountPath: /data\r\n          resources:\r\n            requests:\r\n              cpu: \"100m\"\r\n              memory: \"500Mi\"\r\n            limits:\r\n              cpu: \"1\"\r\n              memory: 1Gi\r\n          terminationMessagePath: /dev/termination-log\r\n          terminationMessagePolicy: File\r\n          imagePullPolicy: IfNotPresent\r\n      volumes:\r\n        - name: data\r\n          hostPath:\r\n            path: \"{{ .Values.userspace.userData }}/Huggingface/openaigptoss20b\"\r\n            type: DirectoryOrCreate\r\n      restartPolicy: Always\r\nstatus: {}\r\n\r\n---\r\napiVersion: v1\r\nkind: Service\r\nmetadata:\r\n  creationTimestamp: null\r\n  name: download-svc\r\n  namespace: \"{{ .Release.Namespace }}\"\r\n  labels:\r\n    io.kompose.service: vllm\r\nspec:\r\n  ports:\r\n    - name: http\r\n      port: 8090\r\n      targetPort: 8090\r\n  selector:\r\n    io.kompose.service: vllm\r\nstatus:\r\n  loadBalancer: {}\r\n{{- end }}"
+    },
+    {
+      "path": "litellm/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "169bd4ace247dc5e2ef1d9739313d9e9766ed53b12b14608622e2959589cd963",
+      "score": 178,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: litellm\n  namespace: '{{ .Release.Namespace }}'\n  labels:\n    io.kompose.service: litellm\nspec:\n  replicas: {{ .Values.workloads.litellm.replicaCount }}\n  selector:\n    matchLabels:\n      io.kompose.service: litellm\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        io.kompose.service: litellm\n    spec:\n      initContainers:\n        - name: backup-postgres-before-upgrade\n          image: docker.io/beclab/postgres:17.5-alpine\n          imagePullPolicy: IfNotPresent\n          securityContext:\n            runAsUser: 0\n          command: [\"sh\", \"-c\"]\n          args:\n            - |\n              set -e\n              umask 077\n              mkdir -p /backup/litellm\n              chown 1000:1000 /backup/litellm\n              DEST=/backup/backups/chart-1.0.24\n              MARKER=\"${DEST}/.backup_complete\"\n              mkdir -p \"$DEST\"\n              if [ -f \"$MARKER\" ]; then\n                echo \"[backup] marker present, skip.\"\n                exit 0\n              fi\n              table=$(psql \"$DATABASE_URL\" -tAc \"SELECT to_regclass('public._prisma_migrations')\")\n              if [ -z \"$table\" ]; then\n                echo \"[backup] no _prisma_migrations, skip.\"\n                exit 0\n              fi\n              pg_dump --dbname=\"$DATABASE_URL\" --format=custom --file=\"${DEST}/litellm.dump\"\n              if [ ! -s \"${DEST}/litellm.dump\" ]; then\n                echo \"[backup] dump missing or empty, stop.\"\n                exit 1\n              fi\n              pg_restore --list \"${DEST}/litellm.dump\" >/dev/null\n              echo \"backed up\" > \"$MARKER\"\n              echo \"[backup] wrote ${DEST}/litellm.dump\"\n          env:\n            - name: DATABASE_URL\n              valueFrom:\n                secretKeyRef:\n                  name: {{ .Release.Name }}-secrets\n                  key: DATABASE_URL\n          volumeMounts:\n            - name: appdata\n              mountPath: /backup\n      containers:\n      - args:\n          - --port\n          - \"4000\"\n          - --config\n          - /app/proxy_config.yaml\n        name: litellm\n        image: \"docker.io/beclab/berriai-litellm:v1.106.2\"\n        securityContext:\n          runAsUser: 1000\n          runAsGroup: 1000\n        ports:\n          - containerPort: 4000\n            protocol: TCP\n        env:\n          {{- if and .Values.olaresEnv.LITELLM_MASTER_KEY (ne .Values.olaresEnv.LITELLM_MASTER_KEY \"\") }}\n          - name: LITELLM_MASTER_KEY\n            valueFrom:\n              secretKeyRef:\n                name: {{ .Release.Name }}-secrets\n                key: LITELLM_MASTER_KEY\n          {{- end }}\n          {{- if .Values.olaresEnv.LITELLM_MIGRATE_FROM_MASTER_KEY }}\n          - name: LITELLM_MIGRATE_FROM_MASTER_KEY\n            valueFrom:\n              secretKeyRef:\n                name: {{ .Release.Name }}-secrets\n                key: LITELLM_MIGRATE_FROM_MASTER_KEY\n          {{- end }}\n          # Only a Helm upgrade retaining the historical public default is eligible.\n          # Empty keys and fresh installations never bypass the upstream check.\n          - name: LITELLM_DANGEROUSLY_PERMIT_WEAK_OR_UNSET_MASTER_KEY\n            value: {{ and .Release.IsUpgrade (eq (sha256sum (.Values.olaresEnv.LITELLM_MASTER_KEY | default \"\" | trim)) \"88dc28d0f030c55ed4ab77ed8faf098196cb1c05df778539800c9f1243fe6b4b\") | quote }}\n          - name: UI_USERNAME\n            value: {{ .Values.olaresEnv.UI_USERNAME | quote }}\n          - name: DISABLE_ENV_CREDENTIAL_LOGIN\n            value: {{ eq (lower (toString (.Values.olaresEnv.DISABLE_ENV_CREDENTIAL_LOGIN | default \"false\"))) \"true\" | quote }}\n          - name: UI_PASSWORD\n            valueFrom:\n              secretKeyRef:\n                name: {{ .Release.Name }}-secrets\n                key: UI_PASSWORD\n          {{- if and (hasKey .Values.olaresEnv \"LITELLM_DROP_PARAMS\") (ne (toString .Values.olaresEnv.LITELLM_DROP_PARAMS) \"\") }}\n          - name: LITELLM_DROP_PARAMS\n            value: {{ .Values.olaresEnv.LITELLM_DROP_PARAMS | quote }}\n          {{- end }}\n          - name: STORE_MODEL_IN_DB\n            value: \"true\"\n          - name: DATABASE_URL\n            valueFrom:\n              secretKeyRef:\n                name: {{ .Release.Name }}-secrets\n                key: DATABASE_URL\n          {{- if and (eq (toString .Values.olaresEnv.USE_SYSTEM_SMTP_SETTINGS) \"true\") (eq (toString .Values.olaresEnv.SMTP_ENABLED) \"true\") }}\n          - name: SMTP_HOST\n            value: \"{{ .Values.olaresEnv.SMTP_HOST }}\"\n          - name: SMTP_PORT\n            value: \"{{ .Values.olaresEnv.SMTP_PORT }}\"\n          - name: SMTP_USERNAME\n            value: \"{{ .Values.olaresEnv.SMTP_USERNAME }}\"\n          - name: SMTP_PASSWORD\n            valueFrom:\n              secretKeyRef:\n                name: {{ .Release.Name }}-secrets\n                key: SMTP_PASSWORD\n          - name: SMTP_SENDER_EMAIL\n            value: \"{{ .Values.olaresEnv.SMTP_SENDER_EMAIL }}\"\n          - name: SMTP_TLS\n            value: \"{{ .Values.olaresEnv.SMTP_TLS }}\"\n          {{- end }}\n        volumeMounts:\n          - mountPath: /data\n            name: data\n          - mountPath: /app/proxy_config.yaml\n            subPath: proxy_config.yaml\n            name: init-config\n        resources:\n          limits:\n            cpu: \"4\"\n            memory: 4Gi\n          requests:\n            cpu: 100m\n            memory: 512Mi\n        readinessProbe:\n          httpGet:\n            path: /health/readiness\n            port: 4000\n          initialDelaySeconds: 30\n          periodSeconds: 10\n          timeoutSeconds: 5\n          successThreshold: 1\n          failureThreshold: 10\n        livenessProbe:\n          httpGet:\n            path: /health/liveliness\n            port: 4000\n          initialDelaySeconds: 60\n          periodSeconds: 30\n          timeoutSeconds: 10\n          successThreshold: 1\n          failureThreshold: 5\n        terminationMessagePath: /dev/termination-log\n        terminationMessagePolicy: File\n        imagePullPolicy: IfNotPresent\n      volumes:\n        - name: data\n          hostPath:\n            type: DirectoryOrCreate\n            path: \"{{ .Values.userspace.appData }}/litellm\"\n        - name: appdata\n          hostPath:\n            type: DirectoryOrCreate\n            path: \"{{ .Values.userspace.appData }}\"\n        - name: init-config\n          configMap:\n            name: litellm-config\n            defaultMode: 0755\n            items:\n              - key: proxy_config.yaml\n                path: proxy_config.yaml\n      restartPolicy: Always\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: litellm-svc\n  namespace: '{{ .Release.Namespace }}'\n  labels:\n    io.kompose.service: litellm\nspec:\n  ports:\n  - name: \"litellm\"\n    port: 80\n    targetPort: 4000\n  selector:\n    io.kompose.service: litellm\n\n\n\n\n\n\n\n\n\n\n\n"
+    },
+    {
+      "path": "vllmgemma327bqat/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "fdfc6a1b5182ab542c903444510a32a0460bcc3040738ddfeace6671d4275b65",
+      "score": 178,
+      "content": "﻿{{- if and .Values.admin .Values.bfl.username (eq .Values.admin .Values.bfl.username) }}\n{{- $vllmDomainENV := split \",\" .Values.domain.vllmclient -}}\n{{- $vllmDomain := index $vllmDomainENV \"_0\" -}}\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: vllm\n  namespace: {{ .Release.Namespace }}\n  labels:\n    io.kompose.service: vllm\n  annotations:\n    applications.app.bytetrade.io/gpu-inject: \"true\"\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      io.kompose.service: vllm\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        io.kompose.network/chrome-default: \"true\"\n        io.kompose.service: vllm\n    spec:\n      containers:\n        - name: vllm\n          image: \"docker.io/beclab/vllm-vllm-openai:v0.11.0\"\n          command:\n            - /bin/bash\n            - -c\n            - |\n              DONE_FILE=\"/models/gemma-3-27b/.gemma-3-27b-it-qat-W4A16-G128.done\"\n              echo \"[vllm-wait] Waiting for $DONE_FILE ...\"\n              while [ ! -f \"$DONE_FILE\" ]; do\n                echo \"[vllm-wait] Model not ready, sleeping...\"\n                sleep 10\n              done\n              echo \"[vllm-wait] Detected $DONE_FILE, starting vLLM server.\"\n              \n              echo \"[vllm-start] Starting vLLM server...\"\n              python3 -m vllm.entrypoints.openai.api_server \\\n                --model \"/models/gemma-3-27b\" \\\n                --max-model-len 8000 \\\n                --tensor-parallel-size 1\n          env:\n            - name: PGID\n              value: \"1000\"\n            - name: PUID\n              value: \"1000\"\n            - name: TZ\n              value: Etc/UTC\n            - name: PYTHONUNBUFFERED\n              value: \"1\"\n            - name: VLLM_PORT\n              value: \"8000\"\n          ports:\n            - containerPort: 8000\n          resources:\n            limits:\n              cpu: \"18\"\n              memory: 28Gi\n            requests:\n              cpu: 500m\n              memory: 24Gi\n          volumeMounts:\n            - name: data\n              mountPath: /models/gemma-3-27b\n        - name: download-model\n          image: \"docker.io/beclab/harveyff-hf-downloader:v0.0.15\"\n          env:\n            - name: HF_ENDPOINT\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_SERVICE }}\"\n            - name: HF_TOKEN\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_TOKEN }}\"\n            - name: VLLM_PROXY_TARGET\n              value: http://localhost:8000\n            - name: MODEL_NAME\n              value: /models/gemma-3-27b\n            - name: APP_URL\n              value: \"https://{{ $vllmDomain }}\"\n          args:\n            - \"--repo\"\n            - \"leon-se/gemma-3-27b-it-qat-W4A16-G128\"\n            - \"--ref\"\n            - \"main\"\n            - \"--outdir\"\n            - \"/data\"\n            - \"--static\"\n            - \"/app/static\"\n            - \"--port\"\n            - \"8090\"\n            - \"--probe-url\"\n            - \"/health\"\n            - \"--done-name\"\n            - \".gemma-3-27b-it-qat-W4A16-G128.done\"\n          ports:\n            - name: http\n              containerPort: 8090\n          startupProbe:\n            httpGet:\n              path: /ping\n              port: 8090\n            initialDelaySeconds: 5\n            timeoutSeconds: 10\n            periodSeconds: 10\n            failureThreshold: 10\n          livenessProbe:\n            httpGet:\n              path: /ping\n              port: 8090\n              scheme: HTTP\n            initialDelaySeconds: 10\n            timeoutSeconds: 60\n            periodSeconds: 60\n            successThreshold: 1\n            failureThreshold: 10\n          volumeMounts:\n            - name: data\n              mountPath: /data\n          resources:\n            requests:\n              cpu: 100m\n              memory: 500Mi\n            limits:\n              cpu: \"1\"\n              memory: 1Gi\n          terminationMessagePath: /dev/termination-log\n          terminationMessagePolicy: File\n          imagePullPolicy: IfNotPresent\n      volumes:\n        - name: data\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}/Huggingface/gemma327bqat\"\n            type: DirectoryOrCreate\n      restartPolicy: Always\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: download-svc\n  namespace: {{ .Release.Namespace }}\n  labels:\n    io.kompose.service: vllm\nspec:\n  selector:\n    io.kompose.service: vllm\n  ports:\n    - name: http\n      port: 8090\n      targetPort: 8090\n{{- end }}\n"
+    },
+    {
+      "path": "layatypeddecisionsv3/templates/llm-init.yaml",
+      "sha": null,
+      "content_sha256": "a99adb78dfc2402bda6e665171d55661804bb97847f1010801560c485bf4c4a6",
+      "score": 178,
+      "content": "{{- $oe := .Values.olaresEnv | default dict -}}\n{{- $hfEndpoint := $oe.HF_ENDPOINT | default \"\" -}}\n{{- $hfToken := $oe.HF_TOKEN | default \"\" -}}\n{{- $runStatePath := include \"layatypeddecisionsv3.runStatePath\" . -}}\n{{- $isNvidia := eq (.Values.gpu | default \"cpu\") \"nvidia\" -}}\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: llminit\n  namespace: '{{ .Release.Namespace }}'\n  labels:\n    io.kompose.service: llm-init\nspec:\n  replicas: {{ .Values.workloads.llminit.replicaCount }}\n  selector:\n    matchLabels:\n      io.kompose.service: llm-init\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        io.kompose.service: llm-init\n    spec:\n      enableServiceLinks: false\n      restartPolicy: Always\n      securityContext:\n        runAsUser: 1000\n        runAsGroup: 1000\n      affinity:\n        podAffinity:\n          requiredDuringSchedulingIgnoredDuringExecution:\n            - topologyKey: kubernetes.io/hostname\n              labelSelector:\n                matchExpressions:\n                  - key: app.kubernetes.io/instance\n                    operator: In\n                    values:\n                      - '{{ .Release.Name }}'\n              namespaces:\n                - '{{ .Release.Namespace }}'\n      initContainers:\n        - name: init-permissions\n          image: docker.io/beclab/aboveos-busybox:1.37.0\n          command:\n            - sh\n            - -c\n            - mkdir -p /run/llm-init && chown 1000:1000 /run/llm-init\n          securityContext:\n            runAsUser: 0\n          volumeMounts:\n            - name: run-state\n              mountPath: /run/llm-init\n      containers:\n        - name: llm-init\n          image: '{{ include \"layatypeddecisionsv3.llmInitImage\" . }}'\n          imagePullPolicy: IfNotPresent\n          env:\n            - name: ENGINE_KIND\n              value: systemone\n            - name: MODEL_NAME\n              value: '{{ include \"layatypeddecisionsv3.modelName\" . }}'\n            - name: MODEL_MODE\n              value: system_one\n            - name: MODEL_SOURCE\n              value: 'hf://{{ include \"layatypeddecisionsv3.modelRepo\" . }} --revision {{ include \"layatypeddecisionsv3.modelRevision\" . }}'\n            - name: SYSTEM_ONE_CONTEXT_SIZE\n              value: \"1024\"\n            - name: SYSTEM_ONE_MAX_CHOICE_OPTIONS\n              value: \"20\"\n            - name: SYSTEM_ONE_MAX_SCORE_LEVELS\n              value: \"10\"\n            - name: SYSTEM_ONE_LANGUAGES\n              value: en\n            - name: SYSTEM_ONE_DEFAULT_ELIGIBLE\n              value: \"false\"\n            - name: ENGINE_MAX_CONCURRENCY\n              value: '{{ if $isNvidia }}100{{ else }}1{{ end }}'\n            - name: RUN_DIR\n              value: /run/llm-init\n            - name: PORT\n              value: \"8090\"\n            - name: LOG_LEVEL\n              value: '{{ $oe.LOG_LEVEL | default \"info\" }}'\n            - name: LOG_FORMAT\n              value: json\n{{- if $hfEndpoint }}\n            - name: HF_ENDPOINT\n              value: '{{ $hfEndpoint }}'\n{{- end }}\n{{- if $hfToken }}\n            - name: HF_TOKEN\n              valueFrom:\n                secretKeyRef:\n                  name: {{ .Release.Name }}-secrets\n                  key: HF_TOKEN\n{{- end }}\n          ports:\n            - name: http\n              containerPort: 8090\n          livenessProbe:\n            httpGet:\n              path: /livez\n              port: 8090\n            periodSeconds: 30\n            timeoutSeconds: 5\n          readinessProbe:\n            httpGet:\n              path: /livez\n              port: 8090\n            initialDelaySeconds: 3\n            periodSeconds: 5\n            timeoutSeconds: 3\n          resources:\n            requests:\n              cpu: 100m\n              memory: 256Mi\n            limits:\n              cpu: \"1\"\n              memory: 2Gi\n          volumeMounts:\n            - name: hf-cache\n              mountPath: /cache/hf/hub\n            - name: run-state\n              mountPath: /run/llm-init\n      volumes:\n        - name: hf-cache\n          hostPath:\n            path: '{{ .Values.userspace.appCommon }}/huggingface'\n            type: DirectoryOrCreate\n        - name: run-state\n          hostPath:\n            path: '{{ $runStatePath }}'\n            type: DirectoryOrCreate\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: download-svc\n  namespace: '{{ .Release.Namespace }}'\nspec:\n  selector:\n    io.kompose.service: llm-init\n  ports:\n    - name: http\n      port: 8090\n      targetPort: 8090\n  type: ClusterIP\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: sharedentrances-api\n  namespace: '{{ .Release.Namespace }}'\n  labels:\n    io.kompose.service: llm-init\nspec:\n  selector:\n    io.kompose.service: llm-init\n  ports:\n    - name: http\n      port: 80\n      targetPort: 8090\n  type: ClusterIP\n"
+    },
+    {
+      "path": "vllmqwen330ba3binstruct4bit/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "920ba9b6201774a4389dab6a2f18c6def313af6cd7316b599ba51056d1527107",
+      "score": 178,
+      "content": "﻿{{- if and .Values.admin .Values.bfl.username (eq .Values.admin .Values.bfl.username) }}\n{{- $vllmDomainENV := split \",\" .Values.domain.vllmclient -}}\n{{- $vllmDomain := index $vllmDomainENV \"_0\" -}}\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  creationTimestamp: null\n  name: vllm\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    io.kompose.service: vllm\n  annotations:\n    applications.app.bytetrade.io/gpu-inject: \"true\"\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      io.kompose.service: vllm\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      creationTimestamp: null\n      labels:\n        io.kompose.network/chrome-default: \"true\"\n        io.kompose.service: vllm\n    spec:\n      containers:\n        - name: vllm\n          image: \"docker.io/beclab/vllm-vllm-openai:v0.11.0\"\n          command:\n            - /bin/bash\n            - -c\n            - |\n              DONE_FILE=\"/models/qwen3-30b/.Qwen3-30B-A3B-Instruct-2507-AWQ-4bit.done\"\n              echo \"[vllm-wait] Waiting for $DONE_FILE ...\"\n              while [ ! -f \"$DONE_FILE\" ]; do\n                echo \"[vllm-wait] Model not ready, sleeping...\"\n                sleep 10\n              done\n              echo \"[vllm-wait] Detected $DONE_FILE, starting vLLM server.\"\n              \n              echo \"[vllm-start] Starting vLLM server...\"\n              python3 -m vllm.entrypoints.openai.api_server \\\n                --model \"/models/qwen3-30b\" \\\n                --max-model-len 8000 \\\n                --tensor-parallel-size 1\n          env:\n            - name: PGID\n              value: \"1000\"\n            - name: PUID\n              value: \"1000\"\n            - name: TZ\n              value: Etc/UTC\n            - name: PYTHONUNBUFFERED\n              value: \"1\"\n            - name: VLLM_PORT\n              value: \"8000\"\n          ports:\n            - containerPort: 8000\n          resources:\n            limits:\n              cpu: \"18\"\n              memory: 28Gi\n            requests:\n              cpu: 500m\n              memory: 21Gi\n          volumeMounts:\n            - mountPath: /models/qwen3-30b\n              name: data\n        - name: download-model\n          image: \"docker.io/beclab/harveyff-hf-downloader:v0.0.15\"\n          env:\n            - name: HF_ENDPOINT\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_SERVICE }}\"\n            - name: HF_TOKEN\n              value: \"{{ .Values.olaresEnv.OLARES_USER_HUGGINGFACE_TOKEN }}\"\n            - name: VLLM_PROXY_TARGET\n              value: http://localhost:8000\n            - name: MODEL_NAME\n              value: /models/qwen3-30b\n            - name: APP_URL\n              value: \"https://{{ $vllmDomain }}\"\n          args:\n            - \"--repo\"\n            - \"cpatonn/Qwen3-30B-A3B-Instruct-2507-AWQ-4bit\"\n            - \"--ref\"\n            - \"main\"\n            - \"--outdir\"\n            - \"/data\"\n            - \"--static\"\n            - \"/app/static\"\n            - \"--port\"\n            - \"8090\"\n            - \"--probe-url\"\n            - \"/health\"\n            - \"--done-name\"\n            - \".Qwen3-30B-A3B-Instruct-2507-AWQ-4bit.done\"\n          startupProbe:\n            httpGet:\n              path: /ping\n              port: 8090\n            initialDelaySeconds: 5\n            timeoutSeconds: 10\n            periodSeconds: 10\n            failureThreshold: 10\n          livenessProbe:\n            httpGet:\n              path: /ping\n              port: 8090\n              scheme: HTTP\n            initialDelaySeconds: 10\n            timeoutSeconds: 60\n            periodSeconds: 60\n            successThreshold: 1\n            failureThreshold: 10\n          ports:\n            - containerPort: 8090\n              name: http\n          volumeMounts:\n            - name: data\n              mountPath: /data\n          resources:\n            requests:\n              cpu: \"100m\"\n              memory: \"500Mi\"\n            limits:\n              cpu: \"1\"\n              memory: 1Gi\n          terminationMessagePath: /dev/termination-log\n          terminationMessagePolicy: File\n          imagePullPolicy: IfNotPresent\n      volumes:\n        - name: data\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}/Huggingface/qwen330b\"\n            type: DirectoryOrCreate\n      restartPolicy: Always\nstatus: {}\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  creationTimestamp: null\n  name: download-svc\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    io.kompose.service: vllm\nspec:\n  ports:\n    - name: http\n      port: 8090\n      targetPort: 8090\n  selector:\n    io.kompose.service: vllm\nstatus:\n  loadBalancer: {}\n{{- end }}"
+    },
+    {
+      "path": "librechat/templates/api-deployment.yaml",
+      "sha": null,
+      "content_sha256": "164f592df8abb40888e7276ca7e8a1d2ced4ff55a07f47abfa7930a426b2a56a",
+      "score": 178,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: librechat\n  namespace: '{{ .Release.Namespace }}'\n  labels:\n    app: librechat\n    component: api\nspec:\n  replicas: {{ .Values.workloads.librechat.replicaCount }}\n  selector:\n    matchLabels:\n      app: librechat\n      component: api\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: librechat\n        component: api\n      annotations:\n        checksum/config: {{ include (print $.Template.BasePath \"/configmap.yaml\") . | sha256sum }}\n    spec:\n      enableServiceLinks: false\n      securityContext:\n        runAsUser: 1000\n        runAsGroup: 1000\n      initContainers:\n      - name: init-permissions\n        image: docker.io/beclab/aboveos-busybox:1.37.0\n        imagePullPolicy: IfNotPresent\n        command:\n        - sh\n        - -c\n        - |\n          set -e\n          for d in /app/data /app-config /app/uploads /app/logs /app/skill /app/client/public/images; do\n            mkdir -p \"$d\" && chown 1000:1000 \"$d\"\n          done\n        securityContext:\n          runAsUser: 0\n        volumeMounts:\n        - name: librechat-data\n          mountPath: /app/data\n        - name: api-keys-config\n          mountPath: /app-config\n        - name: librechat-uploads\n          mountPath: /app/uploads\n        - name: librechat-logs\n          mountPath: /app/logs\n        - name: librechat-skill\n          mountPath: /app/skill\n        - name: librechat-images\n          mountPath: /app/client/public/images\n      - name: wait-for-mongodb\n        image: \"docker.io/beclab/wait-for:0.1.0\"\n        args:\n          - '-it'\n          - 'librechat-mongodb:27017'\n        imagePullPolicy: IfNotPresent\n      - name: wait-for-meilisearch\n        image: \"docker.io/beclab/wait-for:0.1.0\"\n        args:\n          - '-it'\n          - 'librechat-meilisearch:7700'\n        imagePullPolicy: IfNotPresent\n      - name: sync-api-keys-to-pvc\n        image: \"docker.io/beclab/aboveos-busybox:1.37.0\"\n        envFrom:\n        - configMapRef:\n            name: librechat-api-keys\n        command:\n          - sh\n          - '-c'\n          - |\n            # Priority: ConfigMap (non-empty) > PVC file > empty\n            # Only non-empty ConfigMap values override PVC\n            mkdir -p /app-config\n            \n            # List of all API keys\n            API_KEYS=\"OPENAI_API_KEY ANTHROPIC_API_KEY GOOGLE_KEY GEMINI_API_KEY ANYSCALE_API_KEY COHERE_API_KEY DEEPSEEK_API_KEY FIREWORKS_API_KEY GROQ_API_KEY HUGGINGFACE_TOKEN MISTRAL_API_KEY OPENROUTER_KEY PERPLEXITY_API_KEY TOGETHERAI_API_KEY XAI_API_KEY BEDROCK_AWS_DEFAULT_REGION BEDROCK_AWS_ACCESS_KEY_ID BEDROCK_AWS_SECRET_ACCESS_KEY PROXY OPENWEATHER_API_KEY\"\n            \n            # Temporary files\n            TMP_FILE=\"/tmp/api-keys.env.tmp\"\n            PVC_TMP=\"/tmp/pvc-values.tmp\"\n            \n            # Load PVC values into temp file (key=value format, skip comments)\n            if [ -f /app-config/api-keys.env ]; then\n              echo \"Loading existing API keys from PVC...\"\n              grep -v '^#' /app-config/api-keys.env | grep -v '^$' > \"$PVC_TMP\" || touch \"$PVC_TMP\"\n            else\n              touch \"$PVC_TMP\"\n            fi\n            \n            # Function to get PVC value for a key\n            get_pvc_value() {\n              local result\n              result=$(grep \"^${1}=\" \"$PVC_TMP\" 2>/dev/null | cut -d'=' -f2- | head -n1)\n              # Return empty string if not found or if result is just whitespace\n              if [ -n \"$result\" ]; then\n                echo \"$result\"\n              else\n                echo \"\"\n              fi\n            }\n            \n            # Create header\n            cat > \"$TMP_FILE\" << 'EOF'\n            # User-configured API Keys\n            # Priority: ConfigMap (non-empty) > PVC file > empty\n            # Edit via: kubectl edit configmap librechat-api-keys (non-empty values only)\n            # Or directly edit this file on PVC\n            EOF\n            \n            # Process each key: ConfigMap (non-empty) > PVC > empty\n            for key in $API_KEYS; do\n              # Get value from ConfigMap (from envFrom)\n              # Use printenv to safely get environment variable value\n              cm_value=$(printenv \"$key\" 2>/dev/null || echo \"\")\n              \n              # Get value from PVC (if exists)\n              pvc_value=$(get_pvc_value \"$key\")\n              \n              # Remove leading/trailing whitespace and quotes\n              cm_value=$(echo \"$cm_value\" | sed 's/^[\"'\\'']//' | sed 's/[\"'\\'']$//' | xargs)\n              pvc_value=$(echo \"$pvc_value\" | sed 's/^[\"'\\'']//' | sed 's/[\"'\\'']$//' | xargs)\n              \n              # Special handling: if value equals key name, treat as empty (invalid state)\n              # This prevents key=KEY_NAME from being written\n              if [ \"$cm_value\" = \"$key\" ]; then\n                cm_value=\"\"\n              fi\n              if [ \"$pvc_value\" = \"$key\" ]; then\n                pvc_value=\"\"\n              fi\n              \n              # Priority: non-empty ConfigMap > PVC > empty\n              if [ -n \"$cm_value\" ] && [ \"$cm_value\" != '\"\"' ] && [ \"$cm_value\" != \"''\" ]; then\n                # ConfigMap has non-empty value, use it (overrides PVC)\n                # Escape special characters in value\n                escaped_value=$(echo \"$cm_value\" | sed 's/\\\\/\\\\\\\\/g' | sed 's/\"/\\\\\"/g' | sed \"s/'/\\\\'/g\")\n                echo \"${key}=${escaped_value}\" >> \"$TMP_FILE\"\n              elif [ -n \"$pvc_value\" ] && [ \"$pvc_value\" != '\"\"' ] && [ \"$pvc_value\" != \"''\" ]; then\n                # PVC has value, use it\n                escaped_value=$(echo \"$pvc_value\" | sed 's/\\\\/\\\\\\\\/g' | sed 's/\"/\\\\\"/g' | sed \"s/'/\\\\'/g\")\n                echo \"${key}=${escaped_value}\" >> \"$TMP_FILE\"\n              else\n                # Both empty, write empty value (not key=key)\n                echo \"${key}=\" >> \"$TMP_FILE\"\n              fi\n            done\n            \n            # Cleanup and replace the original file\n            rm -f \"$PVC_TMP\"\n            mv \"$TMP_FILE\" /app-config/api-keys.env\n        volumeMounts:\n          - name: api-keys-config\n            mountPath: /app-config\n        imagePullPolicy: IfNotPresent\n      containers:\n      - name: librechat-api\n        image: docker.io/librechat/librechat:v0.8.7\n        imagePullPolicy: IfNotPresent\n        ports:\n        - containerPort: 3080\n          name: http\n          protocol: TCP\n        envFrom:\n        - configMapRef:\n            name: librechat-env\n        - configMapRef:\n            name: librechat-api-keys\n        env:\n        # MongoDB connection URI (from ConfigMap)\n        # AI Provider API Keys (from PVC file, fallback to ConfigMap)\n        # MeiliSearch master key (from Secret)\n        # JWT secrets (from Secret)\n        - name: JWT_SECRET\n          valueFrom:\n            secretKeyRef:\n              name: librechat-secrets\n              key: jwt-secret\n        - name: JWT_REFRESH_SECRET\n          valueFrom:\n            secretKeyRef:\n              name: librechat-secrets\n              key: jwt-refresh-secret\n        - name: CREDS_KEY\n          valueFrom:\n            secretKeyRef:\n              name: librechat-secrets\n              key: creds-key\n              optional: true\n        - name: CREDS_IV\n          valueFrom:\n            secretKeyRef:\n              name: librechat-secrets\n              key: creds-iv\n              optional: true\n        - name: MEILI_MASTER_KEY\n          valueFrom:\n            secretKeyRef:\n              name: librechat-meilisearch-secret\n              key: master-key\n        command:\n        - sh\n        - '-c'\n        - |\n          # Load API keys: Priority PVC file > ConfigMap\n          # PVC file values override ConfigMap values\n          if [ -f /app-config/api-keys.env ]; then\n            echo \"Loading API keys from PVC file (overrides ConfigMap)...\"\n            set -a\n            # Load PVC file line by line, ensuring proper key=value format\n            while IFS= read -r line || [ -n \"$line\" ]; do\n              # Skip comments and empty lines\n              case \"$line\" in\n                \\#*|\"\") continue ;;\n              esac\n              # Only process lines with = sign (key=value format)\n              if echo \"$line\" | grep -q '='; then\n                # Extract key and value\n                key=$(echo \"$line\" | cut -d'=' -f1 | xargs)\n                value=$(echo \"$line\" | cut -d'=' -f2- | xargs)\n                # Only export if key is not empty and is a valid identifier\n                if [ -n \"$key\" ] && echo \"$key\" | grep -qE '^[a-zA-Z_][a-zA-Z0-9_]*$'; then\n                  # Special handling for PROXY: if value equals key name, treat as empty\n                  if [ \"$key\" = \"PROXY\" ] && [ \"$value\" = \"PROXY\" ]; then\n                    unset PROXY\n                  # Export the variable, handling empty values correctly\n                  elif [ -n \"$value\" ]; then\n                    export \"${key}=${value}\"\n                  else\n                    # Explicitly unset empty values (especially for PROXY)\n                    if [ \"$key\" = \"PROXY\" ]; then\n                      unset PROXY\n                    else\n                      export \"${key}=\"\n                    fi\n                  fi\n                fi\n              fi\n            done < /app-config/api-keys.env\n            set +a\n          else\n            echo \"PVC file not found, using ConfigMap values...\"\n          fi\n          # Validate PROXY: must be unset or a valid URL\n          if [ -n \"$PROXY\" ]; then\n            # Check if PROXY looks like a valid URL\n            if ! echo \"$PROXY\" | grep -qE '^https?://'; then\n              echo \"Warning: PROXY value '$PROXY' is not a valid URL, unsetting...\"\n              unset PROXY\n            fi\n          fi\n          # Ensure PROXY is unset if it equals the key name (invalid state)\n          if [ \"$PROXY\" = \"PROXY\" ]; then\n            unset PROXY\n          fi\n          # Start the application\n          exec node /app/api/server/index.js\n        volumeMounts:\n        - name: librechat-data\n          mountPath: /app/data\n        - name: librechat-config\n          mountPath: /app/librechat.yaml\n          subPath: librechat.yaml\n          readOnly: true\n        - name: api-keys-config\n          mountPath: /app-config\n        - name: librechat-uploads\n          mountPath: /app/uploads\n        - name: librechat-logs\n          mountPath: /app/logs\n        - name: librechat-skill\n          mountPath: /app/skill\n        - name: librechat-images\n          mountPath: /app/client/public/images\n        livenessProbe:\n          httpGet:\n            path: /livez\n            port: 3080\n          initialDelaySeconds: 10\n          periodSeconds: 30\n          timeoutSeconds: 10\n          failureThreshold: 3\n        readinessProbe:\n          httpGet:\n            path: /readyz\n            port: 3080\n          initialDelaySeconds: 5\n          periodSeconds: 5\n          timeoutSeconds: 5\n          failureThreshold: 6\n        resources:\n          requests:\n            cpu: 300m\n            memory: 512Mi\n          limits:\n            cpu: 2000m\n            memory: 4Gi\n      volumes:\n      - name: librechat-data\n        hostPath:\n          path: '{{ .Values.userspace.appData }}/data'\n          type: DirectoryOrCreate\n      - name: librechat-config\n        configMap:\n          name: librechat-config\n      - name: api-keys-config\n        hostPath:\n          path: '{{ .Values.userspace.appData }}/api-keys-config'\n          type: DirectoryOrCreate\n      - name: librechat-uploads\n        hostPath:\n          path: '{{ .Values.userspace.appData }}/uploads'\n          type: DirectoryOrCreate\n      - name: librechat-logs\n        hostPath:\n          path: '{{ .Values.userspace.appCache }}/logs'\n          type: DirectoryOrCreate\n      - name: librechat-skill\n        hostPath:\n          path: '{{ .Values.userspace.appData }}/skill'\n          type: DirectoryOrCreate\n      - name: librechat-images\n        hostPath:\n          path: '{{ .Values.userspace.appData }}/images'\n          type: DirectoryOrCreate\n      restartPolicy: Always\n"
+    },
+    {
+      "path": "agentj/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "9d942413f5033879a80e1ec8cc70a33dbef4ce21c20649d491edb7678c726025",
+      "score": 178,
+      "content": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: agentj\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    io.kompose.service: agentj\nspec:\n  replicas: {{ .Values.workloads.agentj.replicaCount }}\n  selector:\n    matchLabels:\n      io.kompose.service: agentj\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        io.kompose.service: agentj\n        bytetrade.io/terminal: agentj\n      annotations:\n        # A new chart with changed scripts must restart the pod (a ConfigMap change alone does not).\n        checksum/scripts: {{ include (print $.Template.BasePath \"/configmap.yaml\") . | sha256sum }}\n    spec:\n      # A user-namespaced pod: root inside maps to an unprivileged host uid, and the container may mount a fresh /proc\n      # inside its own namespaces (procMount: Unmasked below). That is exactly what Agent J's fence (bubblewrap) needs\n      # to isolate the Agent from Agent J's keys — without privileged mode or any added capability.\n      # JuiceFS-backed Olares (fs_type jfs, a FUSE file system) is not known to support idmapped mounts (untested), so\n      # there the pod stays in the host user namespace: the fence cannot start and Agent J refuses to launch the Agent\n      # unfenced unless the owner approves that one launch with a passkey on the phone (never silently).\n      {{- if ne (.Values.fs_type | default \"fs\") \"jfs\" }}\n      hostUsers: false\n      {{- end }}\n      securityContext:\n        fsGroup: 1000\n      initContainers:\n      # Olares only lets beclab images run as root (chart lint), so this one step keeps the platform's own Ubuntu image.\n      - name: init-perms\n        image: beclab/ubuntu:24.04@sha256:9f80b61ccafb5e7d49cf66c9c145c34e6f1a8e04347f58813650367944372daf\n        imagePullPolicy: IfNotPresent\n        securityContext:\n          runAsUser: 0\n          runAsGroup: 0\n          readOnlyRootFilesystem: true\n        # Non-recursive: only the two mount points the platform just created as root.\n        command: [\"sh\", \"-c\", \"chown 1000:1000 /opt/data /opt/data/coding && chmod 0750 /opt/data\"]\n        volumeMounts:\n        - { name: app-data, mountPath: /opt/data }\n        - { name: workspace, mountPath: /opt/data/coding }\n      containers:\n      - name: agentj\n        image: {{ include \"agentj.image\" . }}\n        imagePullPolicy: IfNotPresent\n        workingDir: /opt/data\n        command: [\"bash\", \"/opt/agentj-olares/entry.sh\"]\n        securityContext:\n          runAsUser: 1000\n          runAsGroup: 1000\n          allowPrivilegeEscalation: false\n          # Agent J, OpenCode, uv and bubblewrap live in the image; nothing in it is writable at run time.\n          readOnlyRootFilesystem: true\n          capabilities:\n            drop: [\"ALL\"]\n          {{- if ne (.Values.fs_type | default \"fs\") \"jfs\" }}\n          procMount: Unmasked\n          {{- end }}\n        env:\n        - { name: HOME, value: /opt/data }\n        - { name: TZ, value: Etc/UTC }\n        - { name: TERM, value: xterm-256color }\n        - { name: PATH, value: \"/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/data/.local/bin:/opt/data/.opencode/bin\" }\n        - { name: AGENTJ_ACCOUNT_URL, value: {{ .Values.agentj.accountUrl | quote }} }\n        {{- if and .Values.domain .Values.domain.terminal }}\n        - { name: AGENTJ_OLARES_TERMINAL_URL, value: {{ printf \"https://%s\" .Values.domain.terminal | quote }} }\n        {{- end }}\n        # The owner's Router, reached through this app's mesh identity (no key). OLARES_API_KEY is a fixed placeholder\n        # that OpenCode's OpenAI-compatible client insists on; it is not a credential.\n        {{- if .Values.user }}\n        - { name: OLARES_ROUTER_URL, value: {{ printf \"https://router.%s/v1\" .Values.user.zone | quote }} }\n        {{- end }}\n        - { name: OLARES_API_KEY, value: \"olares-in-cluster\" }\n        ports:\n        - { name: setup, containerPort: 8080 }\n        readinessProbe:\n          httpGet: { path: /healthz, port: 8080 }\n          periodSeconds: 10\n        resources:\n          requests: { cpu: 200m, memory: 512Mi }\n          limits: { cpu: \"4\", memory: 8Gi }\n        volumeMounts:\n        - { name: app-data, mountPath: /opt/data }\n        - { name: workspace, mountPath: /opt/data/coding }\n        - { name: scripts, mountPath: /opt/agentj-olares/entry.sh, subPath: entry.sh, readOnly: true }\n        - { name: scripts, mountPath: /opt/agentj-olares/setup_page.py, subPath: setup_page.py, readOnly: true }\n        - { name: scripts, mountPath: /opt/agentj-olares/serve_env.py, subPath: serve_env.py, readOnly: true }\n        - { name: tmp, mountPath: /tmp }\n      volumes:\n      - name: app-data\n        hostPath:\n          path: \"{{ .Values.userspace.appData }}/home\"\n          type: DirectoryOrCreate\n      - name: workspace\n        hostPath:\n          path: \"{{ .Values.userspace.userData }}/AgentJ\"\n          type: DirectoryOrCreate\n      - name: scripts\n        configMap:\n          name: agentj-scripts\n          defaultMode: 0555\n      - name: tmp\n        emptyDir: {}\n"
+    },
+    {
+      "path": "hermesagent/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "5cca34d88fe2ff34ef867237866118728ca7a66c70d2e040becd0003e51b82c9",
+      "score": 178,
+      "content": "# Single supervised runtime container (gateway + dashboard + terminal) + init\n# containers, sharing /opt/data (hostPath). Upstream deprecated the multi-\n# container split (gateway/dashboard separate): dashboard gateway-liveness needs\n# a SHARED PID namespace with the gateway, which K8s can only provide via\n# shareProcessNamespace -- and that breaks s6-overlay (it hard-fails unless it is\n# PID 1). So the supported layout is ONE container: `gateway run` auto-redirects\n# to s6 supervision (auto-restart on crash) and HERMES_DASHBOARD=1 supervises the\n# dashboard alongside it; the Olares terminal exec's into the SAME s6 tree, so\n# the dashboard/Channels/Profiles AND `hermes gateway start/stop/restart` all see\n# and control the real gateway. The `gateway run` CMD becomes a `sleep infinity`\n# heartbeat, so the container stays up (CLI recovery possible) even if the gateway\n# crash-loops.\n#\n# Dashboard auth: Hermes v0.18+ requires auth on non-loopback binds. We bind the\n# dashboard to 127.0.0.1:19119 (no Hermes auth gate) and expose :9119 via an\n# nginx sidecar; Olares entrance authLevel: internal is the sole gate.\n#\n# The s6-overlay v3 image MUST start as root (s6 chowns /run + /opt/data, then\n# s6-setuidgid-drops to hermes); pinning runAsUser breaks that drop, so we start\n# root and let s6 drop to hermes. The custom image bakes hermes at UID/GID 1000\n# (= Olares user-data owner), so no HERMES_UID/GID override is needed: stage2's\n# build-tree chown is a no-op (no overlayfs copy-up on boot) and the runtime\n# identity (1000) can write the Olares user-data mounts.\n#\n# Opt-in Python deps (Feishu, Honcho, Firecrawl, …): rely on upstream\n# HERMES_LAZY_INSTALL_TARGET=/opt/data/lazy-packages (baked in the hermes\n# image). Chart only sets HERMES_HOME=/opt/data; no init-time pip overlays.\n#\n# /opt/hermes is an immutable install tree (read-only). Node/npm writes there\n# fail with EACCES by design. Per upstream Docker guidance, all mutable state\n# goes to /opt/data: we point npm's global prefix at /opt/data/npm-global\n# (NPM_CONFIG_PREFIX) so `npm install -g` and `npx` work and persist, and add\n# that prefix bin to PATH. Local `npm install` works from any writable cwd\n# (e.g. HOME=/opt/data). We do NOT mount over or re-open /opt/hermes.\n{{- $hermesImage := \"beclab/harveyff-hermes-agent:v0.23.3-uid1000-multiarch\" -}}\n{{- $oe := .Values.olaresEnv | default dict }}\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  labels:\n    io.kompose.service: hermesagent\n  name: \"{{ .Release.Name }}\"\n  namespace: \"{{ .Release.Namespace }}\"\nspec:\n  replicas: {{ .Values.workloads.hermesagent.replicaCount }}\n  selector:\n    matchLabels:\n      io.kompose.service: hermesagent\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      annotations:\n        checksum/dashboard-proxy: {{ include (print $.Template.BasePath \"/dashboard-proxy.yaml\") . | sha256sum }}\n        checksum/webapp-bootstrap: {{ include (print $.Template.BasePath \"/webapp-bootstrap.yaml\") . | sha256sum }}\n      labels:\n        io.kompose.service: hermesagent\n        bytetrade.io/terminal: hermesagent\n    spec:\n      # Do NOT set runAsUser (breaks s6's drop); fsGroup keeps volumes at gid 1000.\n      securityContext:\n        fsGroup: 1000\n\n      initContainers:\n        # Chown /opt/data to 1000 before runtime (hostPath may start root-owned).\n        - name: init-chmod-data\n          image: \"beclab/aboveos-busybox:1.37.0\"\n          securityContext:\n            runAsUser: 0\n            runAsGroup: 0\n          command:\n            - sh\n            - \"-c\"\n            - |\n              mkdir -p /opt/data/.olares-cli/data\n              # Writable npm global prefix on the data volume (npm install -g / npx).\n              mkdir -p /opt/data/npm-global/lib/node_modules /opt/data/npm-global/bin\n              # certbot (brew-base): non-root defaults under $HOME=/opt/data; Olares TLS needs RSA.\n              mkdir -p /opt/data/.config/letsencrypt \\\n                       /opt/data/letsencrypt/config \\\n                       /opt/data/letsencrypt/work \\\n                       /opt/data/letsencrypt/logs\n              if [ ! -f /opt/data/.config/letsencrypt/cli.ini ]; then\n                printf '%s\\n' \\\n                  '# Olares hermesagent: certbot paths for non-root (hermes) use.' \\\n                  'config-dir = /opt/data/letsencrypt/config' \\\n                  'work-dir = /opt/data/letsencrypt/work' \\\n                  'logs-dir = /opt/data/letsencrypt/logs' \\\n                  'key-type = rsa' \\\n                  > /opt/data/.config/letsencrypt/cli.ini\n                echo \"[init] seeded certbot cli.ini under /opt/data/.config/letsencrypt\"\n              fi\n              # Prepare only directories created by this initContainer. Do not\n              # recursively widen permissions on user files or SSH private keys.\n              for d in /opt/data /opt/data/.olares-cli /opt/data/.olares-cli/data \\\n                       /opt/data/npm-global /opt/data/npm-global/lib \\\n                       /opt/data/npm-global/lib/node_modules /opt/data/npm-global/bin \\\n                       /opt/data/.config /opt/data/.config/letsencrypt \\\n                       /opt/data/letsencrypt /opt/data/letsencrypt/config \\\n                       /opt/data/letsencrypt/work /opt/data/letsencrypt/logs; do\n                chown 1000:1000 \"$d\"\n                chmod u+rwX \"$d\"\n              done\n              if [ ! -L /opt/data/.ssh ]; then\n                mkdir -p /opt/data/.ssh\n                chown 1000:1000 /opt/data/.ssh\n                chmod 700 /opt/data/.ssh\n                if [ -f /opt/data/.ssh/id_ed25519 ] && [ ! -L /opt/data/.ssh/id_ed25519 ]; then\n                  chown 1000:1000 /opt/data/.ssh/id_ed25519\n                  chmod 600 /opt/data/.ssh/id_ed25519\n                fi\n              fi\n              # Hook interactive shells into drop-to-hermes (kubectl exec is root).\n              MARKER=\"# hermesagent: drop-to-hermes\"\n              for rc in /opt/data/.bashrc /opt/data/.profile; do\n                if [ ! -f \"$rc\" ] || ! grep -qF \"$MARKER\" \"$rc\" 2>/dev/null; then\n                  {\n                    echo \"\"\n                    echo \"$MARKER\"\n                    echo '[ -f /etc/profile.d/99-drop-to-hermes.sh ] && . /etc/profile.d/99-drop-to-hermes.sh'\n                  } >> \"$rc\"\n                fi\n              done\n              # Keep brew + hermes + npm-global on PATH after bash -l resets profile.\n              PATH_MARKER=\"# hermesagent: brew-path\"\n              for rc in /opt/data/.bashrc /opt/data/.profile; do\n                if ! grep -qF \"$PATH_MARKER\" \"$rc\" 2>/dev/null; then\n                  {\n                    echo \"\"\n                    echo \"$PATH_MARKER\"\n                    echo 'export HOMEBREW_PREFIX=\"${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}\"'\n                    echo 'export HOMEBREW_NO_AUTO_UPDATE=\"${HOMEBREW_NO_AUTO_UPDATE:-1}\"'\n                    echo 'export NPM_CONFIG_PREFIX=\"${NPM_CONFIG_PREFIX:-/opt/data/npm-global}\"'\n                    echo 'export NODE_PATH=\"${NODE_PATH:-/opt/data/npm-global/lib/node_modules:/opt/data/node_modules}\"'\n                    echo 'export PATH=\"/opt/data/npm-global/bin:/opt/hermes/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"'\n                  } >> \"$rc\"\n                fi\n              done\n              chown 1000:1000 /opt/data/.bashrc /opt/data/.profile 2>/dev/null || true\n              echo \"[init] /opt/data ready (owner=1000:1000, .olares-cli seeded)\"\n          resources: {}\n          volumeMounts:\n            - mountPath: /opt/data\n              name: app-data-home\n\n        # Materialize Linuxbrew + olares-cli + CLI shims onto the brew-volume.\n        - name: init-install-brew\n          image: \"beclab/harveyff-openclaw-brew-base:2026.9.2-cli\"\n          imagePullPolicy: IfNotPresent\n          securityContext:\n            runAsUser: 0\n            runAsGroup: 0\n          command: [\"/bin/bash\", \"-c\"]\n          args:\n            - |\n              set -uo pipefail\n              if [ ! -d /brew-staging/.linuxbrew ]; then\n                echo \"[init-brew] FATAL: /brew-staging/.linuxbrew missing\"\n                exit 1\n              fi\n              mkdir -p /home/linuxbrew/.linuxbrew\n              if cmp -s /brew-staging/.linuxbrew/.brew-base-build /home/linuxbrew/.linuxbrew/.brew-base-build 2>/dev/null; then\n                echo \"[init-brew] brew base up to date\"\n              else\n                echo \"[init-brew] materializing brew base...\"\n                cp -a /brew-staging/.linuxbrew/. /home/linuxbrew/.linuxbrew/\n              fi\n\n              # drop-to-hermes: interactive root kubectl exec re-execs as hermes (1000).\n              printf '%s\\n' \\\n                '#!/bin/sh' \\\n                '# Olares: drop interactive root shells to hermes (UID 1000).' \\\n                '[ \"${_HERMES_DROP_TO_HERMES:-}\" = 1 ] && return 0' \\\n                '[ \"$(id -u)\" != 0 ] && return 0' \\\n                'case \"$-\" in *i*) ;; *) [ -z \"${PS1:-}\" ] && return 0 ;; esac' \\\n                'S6_SUID=/command/s6-setuidgid' \\\n                '[ -x \"$S6_SUID\" ] || return 0' \\\n                'export _HERMES_DROP_TO_HERMES=1' \\\n                'export HOME=/opt/data' \\\n                'export OLARES_CLI_HOME=\"${OLARES_CLI_HOME:-/opt/data/.olares-cli}\"' \\\n                'export OLARES_CLI_DATA_DIR=\"${OLARES_CLI_DATA_DIR:-/opt/data/.olares-cli/data}\"' \\\n                'export HOMEBREW_PREFIX=\"${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}\"' \\\n                'export HOMEBREW_NO_AUTO_UPDATE=\"${HOMEBREW_NO_AUTO_UPDATE:-1}\"' \\\n                'export NPM_CONFIG_PREFIX=\"${NPM_CONFIG_PREFIX:-/opt/data/npm-global}\"' \\\n                'export NODE_PATH=\"${NODE_PATH:-/opt/data/npm-global/lib/node_modules:/opt/data/node_modules}\"' \\\n                'export PATH=\"/opt/data/npm-global/bin:/opt/hermes/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"' \\\n                'DROP_SHELL=/bin/bash' \\\n                '[ -x \"$DROP_SHELL\" ] || DROP_SHELL=/bin/sh' \\\n                'exec \"$S6_SUID\" hermes \"$DROP_SHELL\" -l' \\\n                > /cli-bin/drop-to-hermes\n              chmod 0755 /cli-bin/drop-to-hermes\n\n              chown -R 1000:1000 /home/linuxbrew || true\n              echo \"[init-brew] done\"\n          resources: {}\n          volumeMounts:\n            - mountPath: /home/linuxbrew\n              name: brew-volume\n            - mountPath: /cli-bin\n              name: cli-bin\n\n        # Flatten olares-* skills from the brew-base image (/skills-staging) into\n        # /opt/data/skills (per-dir refresh; skipped if /skills-staging absent).\n        - name: init-skills\n          image: \"beclab/harveyff-openclaw-brew-base:2026.9.2-cli\"\n          imagePullPolicy: IfNotPresent\n          securityContext:\n            runAsUser: 0\n            runAsGroup: 0\n          command: [\"/bin/sh\", \"-c\"]\n          args:\n            - |\n              set -u\n              if [ ! -d /skills-staging ]; then\n                echo \"[init-skills] /skills-staging not in image; skipping (rebuild brew-base with skills to enable)\"\n                exit 0\n              fi\n              mkdir -p /opt/data/skills\n              chown 1000:1000 /opt/data/skills || true\n              for d in /skills-staging/*/; do\n                name=\"$(basename \"$d\")\"\n                rm -rf \"/opt/data/skills/$name\"\n                cp -a \"$d\" \"/opt/data/skills/$name\"\n                chown -R 1000:1000 \"/opt/data/skills/$name\"\n              done\n              echo \"[init-skills] Olares skills flattened into /opt/data/skills:\"\n              ls -1 /skills-staging\n          resources: {}\n          volumeMounts:\n            - mountPath: /opt/data\n              name: app-data-home\n\n        - name: init-webapp\n          image: \"{{ $hermesImage }}\"\n          imagePullPolicy: IfNotPresent\n          securityContext:\n            runAsUser: 1000\n            runAsGroup: 1000\n          command: [\"/opt/hermes/.venv/bin/python\", \"/opt/olares-bootstrap/bootstrap.py\"]\n          env:\n            - name: HERMES_HOME\n              value: /opt/data\n            - name: HOME\n              value: /opt/data\n          volumeMounts:\n            - name: app-data-home\n              mountPath: /opt/data\n            - name: webapp-bootstrap\n              mountPath: /opt/olares-bootstrap\n              readOnly: true\n\n      containers:\n        # Single supervised runtime: `gateway run` registers the s6 slot,\n        # supervises the gateway (auto-restart on crash), and sleeps as the\n        # container heartbeat; HERMES_DASHBOARD=1 supervises the dashboard in\n        # the same PID namespace so Channels/Profiles/Terminal all see the\n        # real gateway and `hermes gateway start/stop/restart` works natively.\n        - name: hermesagent\n          image: \"{{ $hermesImage }}\"\n          imagePullPolicy: IfNotPresent\n          # Keep the image's entrypoint dispatcher, which starts s6 as PID 1;\n          # only override CMD.\n          args:\n            - gateway\n            - run\n          ports:\n            - name: dashboard\n              containerPort: 19119\n              protocol: TCP\n            - name: gateway\n              containerPort: 8642\n              protocol: TCP\n          env:\n            - name: TERM\n              value: xterm-256color\n            - name: HOME\n              value: /opt/data\n            - name: HERMES_HOME\n              value: /opt/data\n            - name: HERMES_DASHBOARD\n              value: \"1\"\n            # Loopback bind: Hermes skips dashboard auth gate; nginx sidecar\n            # exposes :9119 to the pod network for Olares internal entrance.\n            - name: HERMES_DASHBOARD_HOST\n              value: \"127.0.0.1\"\n            - name: HERMES_DASHBOARD_PORT\n              value: \"19119\"\n            - name: HOMEBREW_PREFIX\n              value: /home/linuxbrew/.linuxbrew\n            - name: HOMEBREW_NO_AUTO_UPDATE\n              value: \"1\"\n            - name: NPM_CONFIG_PREFIX\n              value: /opt/data/npm-global\n            - name: NODE_PATH\n              value: /opt/data/npm-global/lib/node_modules:/opt/data/node_modules\n            - name: PATH\n              value: \"/opt/data/npm-global/bin:/opt/hermes/bin:/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\"\n            - name: OLARES_CLI_HOME\n              value: /opt/data/.olares-cli\n            - name: OLARES_CLI_DATA_DIR\n              value: /opt/data/.olares-cli/data\n            # dash reads $ENV before interactive input (kubectl exec sh).\n            - name: ENV\n              value: /etc/profile.d/99-drop-to-hermes.sh\n            # API server binds 0.0.0.0:8642 only when enabled AND a key is set.\n            {{- $apiEnabled := eq (toString (index $oe \"API_SERVER_ENABLED\")) \"true\" }}\n            {{- $apiKey := index $oe \"HERMES_API_SERVER_KEY\" | default \"\" }}\n            {{- if and $apiEnabled $apiKey }}\n            - name: API_SERVER_ENABLED\n              value: \"true\"\n            - name: API_SERVER_HOST\n              value: \"0.0.0.0\"\n            - name: API_SERVER_KEY\n              valueFrom:\n                secretKeyRef:\n                  name: hermesagent-secrets\n                  key: API_SERVER_KEY\n            {{- $cors := index $oe \"API_SERVER_CORS_ORIGINS\" | default \"\" }}\n            {{- if $cors }}\n            - name: API_SERVER_CORS_ORIGINS\n              value: {{ $cors | quote }}\n            {{- end }}\n            {{- $modelName := index $oe \"API_SERVER_MODEL_NAME\" | default \"\" }}\n            {{- if $modelName }}\n            - name: API_SERVER_MODEL_NAME\n              value: {{ $modelName | quote }}\n            {{- end }}\n            {{- end }}\n            # Optional provider keys from Olares user settings (Settings → Integration).\n            {{- $openai := index $oe \"OPENAI_API_KEY\" | default \"\" }}\n            {{- if $openai }}\n            - name: OPENAI_API_KEY\n              valueFrom:\n                secretKeyRef:\n                  name: hermesagent-secrets\n                  key: OPENAI_API_KEY\n            {{- end }}\n            {{- $anthropic := index $oe \"ANTHROPIC_API_KEY\" | default \"\" }}\n            {{- if $anthropic }}\n            - name: ANTHROPIC_API_KEY\n              valueFrom:\n                secretKeyRef:\n                  name: hermesagent-secrets\n                  key: ANTHROPIC_API_KEY\n            {{- end }}\n            # Messaging allowlists (v0.19 still warns without these on gateways).\n            {{- if eq (toString (index $oe \"GATEWAY_ALLOW_ALL_USERS\" | default \"false\")) \"true\" }}\n            - name: GATEWAY_ALLOW_ALL_USERS\n              value: \"true\"\n            {{- end }}\n            {{- $gwUsers := index $oe \"GATEWAY_ALLOWED_USERS\" | default \"\" }}\n            {{- if $gwUsers }}\n            - name: GATEWAY_ALLOWED_USERS\n              value: {{ $gwUsers | quote }}\n            {{- end }}\n            {{- $tgUsers := index $oe \"TELEGRAM_ALLOWED_USERS\" | default \"\" }}\n            {{- if $tgUsers }}\n            - name: TELEGRAM_ALLOWED_USERS\n              value: {{ $tgUsers | quote }}\n            {{- end }}\n            {{- $dcUsers := index $oe \"DISCORD_ALLOWED_USERS\" | default \"\" }}\n            {{- if $dcUsers }}\n            - name: DISCORD_ALLOWED_USERS\n              value: {{ $dcUsers | quote }}\n            {{- end }}\n            # Cron + busy-input (Quicksilver / v0.19).\n            - name: HERMES_CRON_TIMEOUT\n              value: {{ index $oe \"HERMES_CRON_TIMEOUT\" | default \"600\" | quote }}\n            - name: HERMES_CRON_MAX_PARALLEL\n              value: {{ index $oe \"HERMES_CRON_MAX_PARALLEL\" | default \"4\" | quote }}\n            - name: HERMES_GATEWAY_BUSY_INPUT_MODE\n              value: {{ index $oe \"HERMES_GATEWAY_BUSY_INPUT_MODE\" | default \"queue\" | quote }}\n            - name: HERMES_GATEWAY_BUSY_ACK_ENABLED\n              value: {{ index $oe \"HERMES_GATEWAY_BUSY_ACK_ENABLED\" | default \"true\" | quote }}\n          startupProbe:\n            exec:\n              command: [\"/bin/sh\", \"-c\", \"test -d /opt/data\"]\n            initialDelaySeconds: 10\n            periodSeconds: 10\n            failureThreshold: 60\n          readinessProbe:\n            # The dashboard binds loopback. A kubelet TCP probe targets the Pod\n            # IP, which can fail even while the supervised dashboard is healthy.\n            exec:\n              command:\n                - /opt/hermes/.venv/bin/python3\n                - -c\n                - \"import socket; socket.create_connection(('127.0.0.1', 19119), timeout=3).close()\"\n            periodSeconds: 30\n            timeoutSeconds: 5\n            failureThreshold: 5\n          resources:\n            limits:\n              cpu: \"8\"\n              memory: 20Gi\n            requests:\n              cpu: \"1\"\n              memory: 2Gi\n          volumeMounts:\n            - mountPath: /opt/data\n              name: app-data-home\n            - mountPath: /home/linuxbrew\n              name: brew-volume\n            - mountPath: /dev/shm\n              name: dshm\n            - mountPath: /etc/profile.d/99-drop-to-hermes.sh\n              name: cli-bin\n              subPath: drop-to-hermes\n              readOnly: true\n            {{- if eq (toString .Values.olaresEnv.ALLOW_HOME_DIR_ACCESS) \"true\" }}\n            - mountPath: /home/userdata/home/\n              name: olares-home-dir\n            {{- end }}\n            {{- if eq (toString .Values.olaresEnv.ALLOW_EXTERNAL_DIR_ACCESS) \"true\" }}\n            - mountPath: /home/userdata/external/\n              name: olares-external-dir\n            {{- end }}\n          securityContext:\n            allowPrivilegeEscalation: false\n\n        # TCP/HTTP proxy: pod :9119 → loopback dashboard :19119 (shared net ns).\n        - name: dashboard-proxy\n          image: \"docker.io/beclab/aboveos-nginx:1.27.0\"\n          imagePullPolicy: IfNotPresent\n          ports:\n            - name: dashboard\n              containerPort: 9119\n              protocol: TCP\n          volumeMounts:\n            - name: dashboard-proxy-config\n              mountPath: /etc/nginx/nginx.conf\n              subPath: nginx.conf\n          readinessProbe:\n            tcpSocket:\n              port: 9119\n            initialDelaySeconds: 5\n            periodSeconds: 10\n            timeoutSeconds: 5\n            failureThreshold: 5\n          resources:\n            limits:\n              cpu: 200m\n              memory: 128Mi\n            requests:\n              cpu: 10m\n              memory: 32Mi\n          securityContext:\n            allowPrivilegeEscalation: false\n\n      restartPolicy: Always\n      volumes:\n        - name: webapp-bootstrap\n          configMap:\n            name: hermesagent-webapp-bootstrap\n            defaultMode: 292\n        - name: app-data-home\n          hostPath:\n            path: \"{{ .Values.userspace.appData }}/home\"\n            type: DirectoryOrCreate\n        - name: brew-volume\n          hostPath:\n            path: \"{{ .Values.userspace.appData }}/brew\"\n            type: DirectoryOrCreate\n        - name: cli-bin\n          emptyDir: {}\n        - name: dashboard-proxy-config\n          configMap:\n            name: hermesagent-dashboard-proxy\n            defaultMode: 438\n            items:\n              - key: nginx.conf\n                path: nginx.conf\n        - name: dshm\n          emptyDir:\n            medium: Memory\n            sizeLimit: 1Gi\n        {{- if eq (toString .Values.olaresEnv.ALLOW_HOME_DIR_ACCESS) \"true\" }}\n        - name: olares-home-dir\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}\"\n            type: DirectoryOrCreate\n        {{- end }}\n        {{- if eq (toString .Values.olaresEnv.ALLOW_EXTERNAL_DIR_ACCESS) \"true\" }}\n        - name: olares-external-dir\n          hostPath:\n            path: \"{{ .Values.sharedlib }}\"\n            type: DirectoryOrCreate\n        {{- end }}\n---\napiVersion: v1\nkind: Service\nmetadata:\n  labels:\n    io.kompose.service: hermesagent\n  name: hermesdashboard\n  namespace: \"{{ .Release.Namespace }}\"\nspec:\n  ports:\n    - name: \"9119\"\n      port: 9119\n      targetPort: 9119\n  selector:\n    io.kompose.service: hermesagent\n---\n# Gateway OpenAI-compatible API service (stable DNS; binds only when API key set).\napiVersion: v1\nkind: Service\nmetadata:\n  labels:\n    io.kompose.service: hermesagent\n  name: hermesgateway\n  namespace: \"{{ .Release.Namespace }}\"\nspec:\n  ports:\n    - name: \"8642\"\n      port: 8642\n      targetPort: 8642\n  selector:\n    io.kompose.service: hermesagent\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: hermeswebapp\n  namespace: \"{{ .Release.Namespace }}\"\nspec:\n  ports:\n    - name: webapp\n      port: 9120\n      targetPort: 9120\n  selector:\n    io.kompose.service: hermesagent\n"
+    },
+    {
+      "path": "penpot/templates/mcp/deployment.yaml",
+      "sha": null,
+      "content_sha256": "8b9f980f4f56232f161f2990c632ca31e253f2bd614dbfec9d92cee1105fb540",
+      "score": 176,
+      "content": "---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: penpot-mcp\n  namespace: {{ .Release.Namespace }}\n  labels:\n    app: penpot-mcp\nspec:\n  replicas: {{ (index .Values.workloads \"penpot-mcp\").replicaCount }}\n  selector:\n    matchLabels:\n      app: penpot-mcp\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        app: penpot-mcp\n    spec:\n      containers:\n        - name: penpot-mcp\n          image: \"penpotapp/mcp:2.17\"\n          imagePullPolicy: IfNotPresent\n          env:\n            - name: PENPOT_MCP_SERVER_HOST\n              value: \"0.0.0.0\"\n            - name: NODE_OPTIONS\n              value: \"--max-old-space-size=1536\"\n          ports:\n            - name: mcp-http\n              containerPort: 4401\n              protocol: TCP\n            - name: mcp-ws\n              containerPort: 4402\n              protocol: TCP\n          resources:\n            requests:\n              cpu: 100m\n              memory: 512Mi\n            limits:\n              cpu: 1000m\n              memory: 2Gi\n"
+    },
+    {
+      "path": "vllmgptoss20bv2/vllmgptoss20bv2server/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "549890c3fdc0b97745be9602df25e74d85ab1167828d3acadbb8b5047aaf9f84",
+      "score": 176,
+      "content": "{{- $gpuInfo := include \"GPU.getGPUInfo\" . | fromJson -}}\n{{- $isSparkDGX := $gpuInfo.isSparkDGX -}}\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: vllm\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    io.kompose.service: vllm\n  annotations:\n    applications.app.bytetrade.io/gpu-inject: \"vllm\"\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      io.kompose.service: vllm\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        io.kompose.network/chrome-default: \"true\"\n        io.kompose.service: vllm\n    spec:\n      containers:\n        - name: vllm\n          image: \"docker.io/vllm/vllm-openai:v0.22.0-cu129\"\n          command:\n            - /bin/bash\n            - -c\n            - |\n              DONE_FILE=\"/models/gpt-oss-20b/.gpt-oss-20b.done\"\n              echo \"[vllm-wait] Waiting for $DONE_FILE ...\"\n              while [ ! -f \"$DONE_FILE\" ]; do\n                echo \"[vllm-wait] Model not ready, sleeping...\"\n                sleep 10\n              done\n              echo \"[vllm-wait] Detected $DONE_FILE, starting vLLM server.\"\n              \n              echo \"[vllm-start] Starting vLLM server...\"\n              _MEM_UTILS=\"/usr/local/lib/python3.12/dist-packages/vllm/utils/mem_utils.py\"\n              if [ -f \"$_MEM_UTILS\" ]; then\n                sed -i 's/shared_sysmem_device_mem_sms = .*$/shared_sysmem_device_mem_sms = ()/' \"$_MEM_UTILS\"\n                echo \"[vllm-start] Patched vLLM mem_utils.py (shared_sysmem_device_mem_sms)\"\n              else\n                echo \"[vllm-start] WARN: $_MEM_UTILS missing, mem_utils patch skipped\"\n              fi\n              python3 -m vllm.entrypoints.openai.api_server \\\n                --model \"/models/gpt-oss-20b\" \\\n{{- $gpuMemUtil := \"0.9\" -}}\n{{- $maxModelLen := \"auto\" -}}\n{{- if eq $isSparkDGX \"true\" -}}\n{{- $gpuMemUtil = \"0.88\" -}}\n{{- $maxModelLen = \"8192\" -}}\n{{- end -}}\n{{- with .Values.olaresEnv }}\n                --gpu-memory-utilization {{ .GPU_MEMORY_UTILIZATION | default $gpuMemUtil }} \\\n                --max-model-len {{ .MAX_MODEL_LEN | default $maxModelLen }} \\\n{{- else }}\n                --gpu-memory-utilization {{ $gpuMemUtil }} \\\n                --max-model-len {{ $maxModelLen }} \\\n{{- end }}\n{{- if eq $isSparkDGX \"true\" }}\n                -O0 \\\n                --enforce-eager \\\n                --max-num-seqs 8 \\\n                --no-enable-prefix-caching \\\n{{- else }}\n                -O3 \\\n{{- end }}\n                --tensor-parallel-size 1\n          env:\n            - name: PGID\n              value: \"1000\"\n            - name: PUID\n              value: \"1000\"\n            - name: TZ\n              value: Etc/UTC\n            - name: PYTHONUNBUFFERED\n              value: \"1\"\n            - name: VLLM_PORT\n              value: \"8000\"\n            {{- if eq $isSparkDGX \"true\" }}\n            - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS\n              value: \"1\"\n            {{- end }}\n          ports:\n            - containerPort: 8000\n          resources:\n            limits:\n              cpu: \"18\"\n              memory: 32Gi\n            requests:\n              cpu: 500m\n              memory: 18Gi\n          volumeMounts:\n            - mountPath: /models/gpt-oss-20b\n              name: data\n            - name: vllm-cache\n              mountPath: /root/.cache\n      volumes:\n        - name: data\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}/Huggingface/openaigptoss20b\"\n            type: DirectoryOrCreate\n        - name: vllm-cache\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}/Cache/vllm-gptoss20b\"\n            type: DirectoryOrCreate\n      restartPolicy: Always\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: vllm-svc\n  namespace: \"{{ .Release.Namespace }}\"\n  labels:\n    io.kompose.service: vllm\nspec:\n  ports:\n    - name: http\n      port: 8000\n      targetPort: 8000\n  selector:\n    io.kompose.service: vllm\n"
+    },
+    {
+      "path": "vllmhymt157bv2/vllmhymt157bv2server/templates/deployment.yaml",
+      "sha": null,
+      "content_sha256": "7e4258c45e956d71ea6ec887cf177ed2016b6d25df2edd09d95122a8763371d8",
+      "score": 176,
+      "content": "{{- $gpuInfo := include \"GPU.getGPUInfo\" . | fromJson -}}\n{{- $isSparkDGX := $gpuInfo.isSparkDGX -}}\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: vllm\n  namespace: {{ .Release.Namespace }}\n  labels:\n    io.kompose.service: vllm\n  annotations:\n    applications.app.bytetrade.io/gpu-inject: \"vllm\"\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      io.kompose.service: vllm\n  strategy:\n    type: Recreate\n  template:\n    metadata:\n      labels:\n        io.kompose.network/chrome-default: \"true\"\n        io.kompose.service: vllm\n    spec:\n      containers:\n        - name: vllm\n          image: \"docker.io/vllm/vllm-openai:v0.22.0-cu129\"\n          command:\n            - /bin/bash\n            - -c\n            - |\n              DONE_FILE=\"/models/HY-MT1.5-7B/.HY-MT1.5-7B.done\"\n              echo \"[vllm-wait] Waiting for $DONE_FILE ...\"\n              while [ ! -f \"$DONE_FILE\" ]; do\n                echo \"[vllm-wait] Model not ready, sleeping...\"\n                sleep 10\n              done\n              echo \"[vllm-wait] Detected $DONE_FILE, starting vLLM server.\"\n              \n              echo \"[vllm-start] Starting vLLM server...\"\n              _MEM_UTILS=\"/usr/local/lib/python3.12/dist-packages/vllm/utils/mem_utils.py\"\n              if [ -f \"$_MEM_UTILS\" ]; then\n                sed -i 's/shared_sysmem_device_mem_sms = .*$/shared_sysmem_device_mem_sms = ()/' \"$_MEM_UTILS\"\n                echo \"[vllm-start] Patched vLLM mem_utils.py (shared_sysmem_device_mem_sms)\"\n              else\n                echo \"[vllm-start] WARN: $_MEM_UTILS missing, mem_utils patch skipped\"\n              fi\n              python3 -m vllm.entrypoints.openai.api_server \\\n                --model \"/models/HY-MT1.5-7B\" \\\n{{- $gpuMemUtil := \"0.9\" -}}\n{{- $maxModelLen := \"auto\" -}}\n{{- if eq $isSparkDGX \"true\" -}}\n{{- $gpuMemUtil = \"0.88\" -}}\n{{- $maxModelLen = \"8192\" -}}\n{{- end -}}\n{{- with .Values.olaresEnv }}\n                --gpu-memory-utilization {{ .GPU_MEMORY_UTILIZATION | default $gpuMemUtil }} \\\n                --max-model-len {{ .MAX_MODEL_LEN | default $maxModelLen }} \\\n{{- else }}\n                --gpu-memory-utilization {{ $gpuMemUtil }} \\\n                --max-model-len {{ $maxModelLen }} \\\n{{- end }}\n{{- if eq $isSparkDGX \"true\" }}\n                -O0 \\\n                --enforce-eager \\\n                --max-num-seqs 8 \\\n                --no-enable-prefix-caching \\\n{{- else }}\n                -O3 \\\n{{- end }}\n                --tensor-parallel-size 1\n\n          env:\n            - name: PGID\n              value: \"1000\"\n            - name: PUID\n              value: \"1000\"\n            - name: TZ\n              value: Etc/UTC\n            - name: PYTHONUNBUFFERED\n              value: \"1\"\n            - name: VLLM_PORT\n              value: \"8000\"\n            {{- if eq $isSparkDGX \"true\" }}\n            - name: VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS\n              value: \"1\"\n            {{- end }}\n          ports:\n            - containerPort: 8000\n          resources:\n            limits:\n              cpu: \"18\"\n              memory: 24Gi\n            requests:\n              cpu: 500m\n              memory: 14Gi\n          volumeMounts:\n            - name: data\n              mountPath: /models/HY-MT1.5-7B\n            - name: vllm-cache\n              mountPath: /root/.cache\n      volumes:\n        - name: data\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}/Huggingface/HY-MT1.5-7B\"\n            type: DirectoryOrCreate\n        - name: vllm-cache\n          hostPath:\n            path: \"{{ .Values.userspace.userData }}/Cache/vllm-hymt157b\"\n            type: DirectoryOrCreate\n      restartPolicy: Always\n\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: vllm-svc\n  namespace: {{ .Release.Namespace }}\n  labels:\n    io.kompose.service: vllm\nspec:\n  ports:\n    - name: http\n      port: 8000\n      targetPort: 8000\n  selector:\n    io.kompose.service: vllm\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 136,
+  "sensitive_files_skipped": [
+    {
+      "path": "acestep15v3/templates/secret.yaml",
+      "sha": "f10842a04f540068882883dac30304ef5ddc38d7",
+      "size": 398,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "acestepmusicv3/templates/music-secret.yaml",
+      "sha": "40fa4c71de556f6dfb6cc51bf68f09a1cd031232",
+      "size": 188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "acestepmusicv3/templates/secret.yaml",
+      "sha": "e7f600b4d432c5526c9fa22c2bde943a393a5918",
+      "size": 401,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "affine/templates/secret.yaml",
+      "sha": "d988d8b6ac9656251134726afb2e8f018a234a3c",
+      "size": 562,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "answer/templates/secret.yaml",
+      "sha": "3efe431ba2af6057aed65d1fff89cd151d774152",
+      "size": 354,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "anythingllm/templates/secret.yaml",
+      "sha": "bda8743e602db194ea6474146225419bd69cc37a",
+      "size": 611,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "appsmith/templates/secret.yaml",
+      "sha": "ff68fce18544c0fa4ac0e5fa82a08db3213016fc",
+      "size": 534,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "astrbot/templates/secret.yaml",
+      "sha": "24fb80eaca1671f25ed0fe810056d24da354d1f1",
+      "size": 474,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "bgererankerv2m3/templates/secret.yaml",
+      "sha": "cf15ef6e2df834414bd8a447b641b065af5fd34b",
+      "size": 402,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "bisheng/templates/secret.yaml",
+      "sha": "eb2e52f14bdcd0eff17e51d01cd73f63daad3271",
+      "size": 373,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "blinko/templates/secret.yaml",
+      "sha": "9ccc8913cd24b10b233a5d8a8bc3d9300ec10d9a",
+      "size": 967,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "chaosmesh/templates/secrets-configuration.yaml",
+      "sha": "0ab05a6a4aa6fbc5849c254e182de68e0f2dcac6",
+      "size": 2859,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "claudecode/templates/secret.yaml",
+      "sha": "e793f86bd88b8e21c4e634346cd3f9f214a3addf",
+      "size": 620,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cloudreve/templates/secret.yaml",
+      "sha": "a4bfff1f020047591812d89b6a566fdd0fecb1f9",
+      "size": 595,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cmproxy/templates/secret.yaml",
+      "sha": "37b37cb941f54e742324dfdbfaef6bcc7c74e399",
+      "size": 597,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "coder/templates/secret.yaml",
+      "sha": "b14806d6a8110651fe7b74380b7dafa6ed4c1acb",
+      "size": 736,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "codex/templates/secret.yaml",
+      "sha": "992a899caa13221b6d92670dcf7f7ca0bbe01cf5",
+      "size": 409,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "cognee/templates/secret.yaml",
+      "sha": "e5b4580a81799d79b2360c5d680406285f256f9d",
+      "size": 983,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "context7/templates/secret.yaml",
+      "sha": "248ac5e5a6551fae901b9f5fa47f0482356c9182",
+      "size": 416,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "deepseekocrwebuiv3/templates/secret.yaml",
+      "sha": "b5123d1f1b6dfd57b42bf118ed2897c14a07530b",
+      "size": 405,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "deerflowv2/templates/secret.yaml",
+      "sha": "6c0fdc49b23653a85c8f6e7efcfc5e957f0c47dc",
+      "size": 1285,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "difyv3/templates/api/secret.yaml",
+      "sha": "fa5264dbbb2738dcb765e8a85a40111367285dbc",
+      "size": 3602,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "directus/templates/secret.yaml",
+      "sha": "c67ca0577f131a32b4df0484cdf543dad9171e71",
+      "size": 425,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "docmost/templates/secret.yaml",
+      "sha": "d87005b60b8fb1b68fc7a6b01b48dd725463c434",
+      "size": 1126,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "documenso/templates/secret.yaml",
+      "sha": "35846e5b68a2dc90401fe4ec0bbbe71d9c9813c8",
+      "size": 1571,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "dotsocr/templates/secret.yaml",
+      "sha": "71afbd4c447c11a0aeaadd43aa2df2c62ea720cc",
+      "size": 394,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "embeddinggemmav3/templates/secret.yaml",
+      "sha": "3a6b263db35305e852d12dbe8609c349d1bb0918",
+      "size": 403,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "facefusionv3/templates/secret.yaml",
+      "sha": "fe1737d85302df8fb5086457386654014220845f",
+      "size": 399,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "fastgpt/templates/secret.yaml",
+      "sha": "16a28d0e8e1cc99ce31b89fe9e12f972d19255d9",
+      "size": 884,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "firecrawl/templates/secret.yaml",
+      "sha": "ee7e33c4359bffb7b07b9c8fefd5f1509768eb46",
+      "size": 538,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "fishspeechv3/templates/secret.yaml",
+      "sha": "6e49b0815c857e088c5002e24ec07d337bfde087",
+      "size": 399,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "freetokenqwen3635ba3bnvfp4/templates/secret.yaml",
+      "sha": "891bca6090a669f182fbdcf6ff4ded016d5de6dc",
+      "size": 413,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "frigate/templates/secret.yaml",
+      "sha": "9bb63d69265941eb288500d6372f26a930af5a29",
+      "size": 315,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "ghost/templates/secret.yaml",
+      "sha": "b53406da5ce3b180df6fc89f37bcecbafa28ac02",
+      "size": 304,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "gitea/templates/secret.yaml",
+      "sha": "2aaed130403d8b53a4e591a2f3767d93f96522f7",
+      "size": 311,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "godseyeview/templates/secret.yaml",
+      "sha": "d281caf7028b41a933832b7f2fee825ca7d1cd31",
+      "size": 1105,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "goose/templates/secret.yaml",
+      "sha": "0e816efce2ce9ed350c8beb8449d56b315f58ad1",
+      "size": 673,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "grafana/templates/secret.yaml",
+      "sha": "d159182c9f070fb39265ed06f0878ec15ee94416",
+      "size": 309,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "hasura/templates/secret.yaml",
+      "sha": "4d824dcde791eabe9b031343a72e23b8a90fd327",
+      "size": 297,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "hermesagent/templates/secret.yaml",
+      "sha": "901dc2d31dd7a68ef155c4c6ca5ad8a8e98cb01f",
+      "size": 508,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "hindsight/templates/secret.yaml",
+      "sha": "e0b1fac912571ec0c1c247e620a452ad04bf8a45",
+      "size": 558,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "homebox/templates/secret.yaml",
+      "sha": "629c87aa3caf1497efbad3e1d24af4870a92b086",
+      "size": 644,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "immich/templates/secret.yaml",
+      "sha": "2336a971fff459f7e0e935448fedcc628507552a",
+      "size": 422,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "jinaclipv2embed/templates/secret.yaml",
+      "sha": "188264e96c7ecf13d42d5a4552c8b8f6de4a40c3",
+      "size": 402,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "jupyterhub/templates/secret.yaml",
+      "sha": "72bb670d011f22e481f1551055ddebfb1ff20bf2",
+      "size": 1048,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "karakeep/templates/secret.yaml",
+      "sha": "8aa121782becd3ba53e876973a1517a223390ea3",
+      "size": 537,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "knowledgev3/templates/secrets.yaml",
+      "sha": "8c21be7ee804ffe6d07cdda295a6b118a58cbc2e",
+      "size": 1475,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "lares/templates/nats-secret.yaml",
+      "sha": "57405ed84a9228174a03ac5efdbb18b7c0f8cb4a",
+      "size": 414,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "layatypeddecisionsv3/templates/secret.yaml",
+      "sha": "d90a3068d0768f94f1c14de303d0355cc7d16a3d",
+      "size": 298,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "leantime/templates/secret.yaml",
+      "sha": "eeccd726d98c52d6a2f07e8fa4db9834f6407158",
+      "size": 293,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "levv1/templates/secret.yaml",
+      "sha": "d90a3068d0768f94f1c14de303d0355cc7d16a3d",
+      "size": 298,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "librechat/templates/secrets.yaml",
+      "sha": "69e06b234aa9fde9b8468ba12ba6bb4519a1d78e",
+      "size": 2276,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "librespeed/templates/secret.yaml",
+      "sha": "9b4a42c68f0c10359047e54b0c28c9327daa8825",
+      "size": 434,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "linkwarden/templates/secret.yaml",
+      "sha": "9de992fe90dd7af730310bcc9c3e5f60f513a64c",
+      "size": 727,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "listmonk/templates/secret.yaml",
+      "sha": "2e57e7481b12d8c27b8378974eb165e6acfef502",
+      "size": 301,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "litellm/templates/secret.yaml",
+      "sha": "844ec19847408d9201f754b031dd3733dc41fd80",
+      "size": 735,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "llamacpphymt218bggufv3/templates/secret.yaml",
+      "sha": "dadb69cacf6778cbbe848d294347e4f93d5dffd3",
+      "size": 409,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "llamacppllmbasev3/templates/secret.yaml",
+      "sha": "bcbfe26edcd1fbd661613bc888b6b5957b95f639",
+      "size": 404,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "llamacppqwen3627bggufv3/templates/secret.yaml",
+      "sha": "c76e7d136f3b470c8d38a2fb504da523f3b7f23f",
+      "size": 410,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "llamacppqwen3627bmtpq4kxlv3/templates/secret.yaml",
+      "sha": "132ce40f4d549933f2ce933686dcf055847b86b3",
+      "size": 414,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "llamacppqwen3635ba3bggufv3/templates/secret.yaml",
+      "sha": "e2c3f9753888377555c7ef0abd8d5e0f91b8f2a3",
+      "size": 413,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "llamacppqwen3827bggufv3/templates/secret.yaml",
+      "sha": "dd5f8545879c290f4d448cb6031aac051d9fcd29",
+      "size": 410,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "llamacppqwopus3627v2mtpq4kmv3/templates/secret.yaml",
+      "sha": "b5871881816f60d63e4c9310a0bd61f550cc90b0",
+      "size": 416,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "lobechat/templates/secret.yaml",
+      "sha": "2851273bcf1955a12d9e91383bc5918df7a15398",
+      "size": 557,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "localai/templates/secret.yaml",
+      "sha": "1926a0070a2442cd36d4a1da487fbc96877dd000",
+      "size": 394,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "localdeepresearch/templates/secret.yaml",
+      "sha": "f5eb66593cb358620cf7e14155f3cb0dcd82d2c3",
+      "size": 287,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "mastodon/templates/Secret.yaml",
+      "sha": "a04adf73d73c8b964c6feaa7d12468a6a693ec26",
+      "size": 4256,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "mattermost/templates/secret.yaml",
+      "sha": "c458bae0a8c3770f0b560eebda876e94298745eb",
+      "size": 243,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "mealie/templates/secret.yaml",
+      "sha": "492e6b0acdb0f25a96fa9ccd30a18f07dbbdddbe",
+      "size": 371,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "medusa/templates/secret.yaml",
+      "sha": "4c03beeb04d1fa62cac5a7b576cd0876a1ff7e3c",
+      "size": 1039,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "memos/templates/secret.yaml",
+      "sha": "69ee44d1b56616d9685a62d99f170a5807118da2",
+      "size": 549,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "miniflux/templates/secret.yaml",
+      "sha": "9bb55e12810a5ecea67e19af2005758a1c03fcf7",
+      "size": 469,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nemoclaw/templates/secret-gog-keyring.yaml",
+      "sha": "2c77ac7d1cb63f9a5560e400270ecd745dddcccd",
+      "size": 1054,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nextcloud/templates/office-secret.yaml",
+      "sha": "8a31c9722da20a2ce081433e2ed499c9ae301414",
+      "size": 533,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nextcloud/templates/secret.yaml",
+      "sha": "4f3e9a30f3cbd2bde87001bf8640a0109f6ad795",
+      "size": 383,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nocobase/templates/secret.yaml",
+      "sha": "3bcf4dbf55685ec1fb5c09b43b41f3b23c77cffd",
+      "size": 291,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nocodb/templates/secret.yaml",
+      "sha": "aedd4c41fbd5a372e6a00563bc7ff333c274620e",
+      "size": 851,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "nofx/templates/trade/secret-env.yaml",
+      "sha": "f3fa3e982380fa919fd188e1a98ce6a961c9d4c5",
+      "size": 623,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "novella/templates/secret.yaml",
+      "sha": "310d667ef80d615a08ad0ea3bd29a2555287985d",
+      "size": 457,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "odoo/templates/secret.yaml",
+      "sha": "5f0f712dc71f62c22c71c8845d0b6155f0d9cd57",
+      "size": 284,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "onlyofficev3/templates/secret.yaml",
+      "sha": "f876e61b17d16da73a70a4001e43109fee659740",
+      "size": 348,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "opendesign/templates/secret.yaml",
+      "sha": "ffffef6147bfcc38049733b04a4fc38ec8e450d5",
+      "size": 426,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "opennotebook/templates/secret.yaml",
+      "sha": "ea5c57f52f5e1bde815665fc473b4a62728658a3",
+      "size": 339,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "openwebui/templates/secret.yaml",
+      "sha": "499b295616e9856f5025e81b754589feb23a2329",
+      "size": 396,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "paddleocrhybrid/templates/secret.yaml",
+      "sha": "28d1d5af796855ed723d632d68d709f6e211f715",
+      "size": 402,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "palworld/templates/secret.yaml",
+      "sha": "38b17f20307e08968eec160210bf468b83dca34f",
+      "size": 699,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "paperclip/templates/secret.yaml",
+      "sha": "269d4eeef468c370651b62af9dd335b7b5a4e436",
+      "size": 1080,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "penpot/templates/backend/secret.yaml",
+      "sha": "b7d8b666deabb6d0a7fca8b14016b14e119d6259",
+      "size": 588,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "photoprism/templates/secret.yaml",
+      "sha": "69d52d4b15d1f3df1a37492d60749a29bb3dd33d",
+      "size": 325,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "photoview/templates/secret.yaml",
+      "sha": "7fb1306f7b79792a4e5844b9499768f318c45d34",
+      "size": 401,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "plex/templates/secret.yaml",
+      "sha": "210e9eeef06294ca1934b1d40688cb1ff18cb0e7",
+      "size": 192,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "pool/templates/secret.yaml",
+      "sha": "e4271496b036f9a245baec512f1aac7a7999b582",
+      "size": 518,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "pterodactyl/templates/secret.yaml",
+      "sha": "06e77479b577ec8f920a302df4a206a149b8e248",
+      "size": 654,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "qemu/templates/secret.yaml",
+      "sha": "d884e9f70f9849ca64a0e09d4091c653f34c505a",
+      "size": 421,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "ragflow/templates/secret.yaml",
+      "sha": "65f417d82d1326fbe015841bcdf3d41695d0abe7",
+      "size": 400,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "rallly/templates/secret.yaml",
+      "sha": "e9492fecb69ee4015a4281f76f4d409d6299df69",
+      "size": 472,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "router/templates/secret.yaml",
+      "sha": "2d480aebe082e4e8bc1531619b7da49ae822a7f0",
+      "size": 959,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "rssubscribev3/templates/secrets.yaml",
+      "sha": "a3ab5695b72a05dc7879cee3165ab0d19ee8f5b4",
+      "size": 987,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "seatable/templates/secret.yaml",
+      "sha": "4d1242fc692987ac7bfed31c4e2d4131d29b3a5e",
+      "size": 1252,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "sglangllmbasev3/templates/secret.yaml",
+      "sha": "757695fd315abe1028391e76ca43f834a123528e",
+      "size": 402,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "sglangqwen359bawq4bitv3/templates/secret.yaml",
+      "sha": "56aeaea32f235e8ffbb99b84743cdd033ed011af",
+      "size": 410,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "solidtime/templates/secret.yaml",
+      "sha": "9b52105bbb4ba13919db664af8723fb03fdf98e1",
+      "size": 415,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "speachesv3/templates/secret.yaml",
+      "sha": "e070feba603b7b5a36d5b1a2ced02b12f6def312",
+      "size": 397,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "steamheadless/templates/secret.yaml",
+      "sha": "259ba7517d3b7fb90ff9d7a966bd95cd27b681f0",
+      "size": 398,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "stratahy4flashsq96/templates/secret.yaml",
+      "sha": "b641803b1b59e2461f3c80063edb82b11af3bd18",
+      "size": 405,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "strataqwen38iq3sv3/templates/secret.yaml",
+      "sha": "4db058f6af2b10f4d1a43ddfac52d6cd9e0dd723",
+      "size": 405,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "strataqwen38iq4xsv3/templates/secret.yaml",
+      "sha": "f2802918a77b5147219d08e610b81c16b76465a8",
+      "size": 406,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "strataqwen38swift/templates/secret.yaml",
+      "sha": "4db058f6af2b10f4d1a43ddfac52d6cd9e0dd723",
+      "size": 405,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "supabase/templates/secrets.yaml",
+      "sha": "7442535249a41c72fda88fddd2db6ebe5baca37a",
+      "size": 2005,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "surya2ocr/templates/secret.yaml",
+      "sha": "b367f18fd016637c08e0a0500d15c267ef97de0d",
+      "size": 396,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "teable/templates/secret.yaml",
+      "sha": "7e980b3339b0a49a41b4a11b5fb1b806507083b1",
+      "size": 844,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tensorzero/templates/secret.yaml",
+      "sha": "f446e92dc30f4d5fb29075cb77e2db2f4ebfb94d",
+      "size": 497,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "trek/templates/secret.yaml",
+      "sha": "c2ee901670b2a304d1b0a4209df4886f8cba3e0e",
+      "size": 385,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "trustgraph/templates/iam-secret.yaml",
+      "sha": "963ec58b1634e82d4f697d9cd62078bdf378586a",
+      "size": 551,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "trustgraph/templates/secret.yaml",
+      "sha": "42299978ae1af1a519ce429eefe083b8c2bc17d2",
+      "size": 606,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "twenty/templates/secret.yaml",
+      "sha": "a800a35f6862f365775442641c169019487574c8",
+      "size": 1471,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "udctl/templates/secret.yaml",
+      "sha": "772824dcf0ca1052ccf6e7322748413cb06390b3",
+      "size": 1059,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "unsloth/templates/secret.yaml",
+      "sha": "cf55eda9c92f7823381f05840330bf39bd11dbd7",
+      "size": 423,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "vane/templates/secret.yaml",
+      "sha": "1b0ae348150d8dc1e4c7a0b1ac49866e36542e00",
+      "size": 893,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "vllmgemma412bitawqint4v3/templates/secret.yaml",
+      "sha": "58493965f28672c2175fcafc9c9a366eedd94d87",
+      "size": 411,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "vllmllmbasev3/templates/secret.yaml",
+      "sha": "f49746b423ffdc669674e1386d0ff92a312422d9",
+      "size": 400,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "wewerss/templates/secret.yaml",
+      "sha": "2cd8383edd19472064de4440a23cb0f4e4eaec0f",
+      "size": 511,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "wger/templates/secret.yaml",
+      "sha": "6385deaef2604645abb4e59e73022a65a7ed1dd3",
+      "size": 842,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "wger/templates/sync-secret.yaml",
+      "sha": "68149ec0a04a8110638c6a780c1e19c912485257",
+      "size": 1047,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "whisperservicev3/templates/secret.yaml",
+      "sha": "698bddef38cebf35aa68c7c845c7353874fd779f",
+      "size": 447,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "whisperwebuiv3/templates/secret.yaml",
+      "sha": "81dd84168b093ac9c46038a79715ae5aee965a82",
+      "size": 445,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "windows/templates/secret.yaml",
+      "sha": "82ebd413b21b861f1a3bd77a84fdd15d2f158d25",
+      "size": 382,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "windowsarm/templates/secret.yaml",
+      "sha": "03877b55a51c5c9758fedde3995fbd79a2f3c711",
+      "size": 385,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "wisev3/templates/secrets.yaml",
+      "sha": "8c21be7ee804ffe6d07cdda295a6b118a58cbc2e",
+      "size": 1475,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "wordpress/templates/secret.yaml",
+      "sha": "6b7e3a2c8cd458774eecb3fec81650c0bcffdbf7",
+      "size": 1715,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "wordpresspure/templates/secret.yaml",
+      "sha": "e2c4aee324652802b7e14ea3f644d3f95a9d77cc",
+      "size": 384,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "xinferencev3/templates/actor-secret.yaml",
+      "sha": "80c9e61efa91957079e0b9a3e6acb3aaf2156a85",
+      "size": 409,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "ytdlpv3/templates/secret.yaml",
+      "sha": "6b083304bc5f69162863a4eb1b190a455f1dc8de",
+      "size": 296,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "ytnavigator/templates/secret.yaml",
+      "sha": "2d643f347675d0cecaec7dc05ecfff0e45c86684",
+      "size": 485,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "yue2studio/templates/mcp-secret.yaml",
+      "sha": "5d700e34b1f67a948da6ab74e8abb063264b44a4",
+      "size": 375,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "yue2studio/templates/secret.yaml",
+      "sha": "72978caecb9d1d657e0486a2117729b366202d1f",
+      "size": 191,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-22T13:28:37.541630+00:00"
+}

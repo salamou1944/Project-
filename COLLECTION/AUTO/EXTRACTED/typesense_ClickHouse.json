@@ -1,0 +1,1032 @@
+{
+  "canonical_source": "github:typesense/ClickHouse",
+  "repo": "typesense/ClickHouse",
+  "revision_sha": "aa214cb544c087c152cb49dd2282ad10d63cdc52",
+  "default_branch": "master",
+  "pushed_at": "2025-03-02T03:24:53Z",
+  "repo_updated_at": "2025-05-28T13:23:02Z",
+  "license": "Apache-2.0",
+  "topics": [],
+  "tree_truncated": false,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "tests/ci/install_check.py",
+      "sha": null,
+      "content_sha256": "292a4548cd9e105eb4772ab1ba5b06a4e5c21113232ec9e54b09d210cb3d7fa5",
+      "score": 245,
+      "content": "#!/usr/bin/env python3\n\nimport argparse\nimport logging\nimport subprocess\nimport sys\nfrom pathlib import Path\nfrom shutil import copy2\nfrom typing import Dict\n\nfrom build_download_helper import download_builds_filter\nfrom compress_files import compress_fast\nfrom docker_images_helper import DockerImage, get_docker_image, pull_image\nfrom env_helper import REPO_COPY, REPORT_PATH\nfrom report import FAIL, FAILURE, OK, SUCCESS, JobReport, TestResult, TestResults\nfrom stopwatch import Stopwatch\nfrom tee_popen import TeePopen\n\nRPM_IMAGE = \"clickhouse/install-rpm-test\"\nDEB_IMAGE = \"clickhouse/install-deb-test\"\nTEMP_PATH = Path(f\"{REPO_COPY}/ci/tmp/\")\nLOGS_PATH = TEMP_PATH / \"tests_logs\"\n\n\ndef prepare_test_scripts():\n    server_test = r\"\"\"#!/bin/bash\nset -e\ntrap \"bash -ex /packages/preserve_logs.sh\" ERR\ntest_env='TEST_THE_DEFAULT_PARAMETER=15'\necho \"$test_env\" >> /etc/default/clickhouse\nsystemctl restart clickhouse-server\nclickhouse-client -q 'SELECT version()'\ngrep \"$test_env\" /proc/$(cat /var/run/clickhouse-server/clickhouse-server.pid)/environ\"\"\"\n    initd_test = r\"\"\"#!/bin/bash\nset -e\ntrap \"bash -ex /packages/preserve_logs.sh\" ERR\ntest_env='TEST_THE_DEFAULT_PARAMETER=15'\necho \"$test_env\" >> /etc/default/clickhouse\n/etc/init.d/clickhouse-server start\nclickhouse-client -q 'SELECT version()'\ngrep \"$test_env\" /proc/$(cat /var/run/clickhouse-server/clickhouse-server.pid)/environ\"\"\"\n    keeper_test = r\"\"\"#!/bin/bash\nset -e\ntrap \"bash -ex /packages/preserve_logs.sh\" ERR\nsystemctl start clickhouse-keeper\nfor i in {1..20}; do\n    echo wait for clickhouse-keeper to being up\n    > /dev/tcp/127.0.0.1/9181 2>/dev/null && break || sleep 1\ndone\nfor i in {1..5}; do\n    echo wait for clickhouse-keeper to answer on mntr request\n    {\n        exec 13<>/dev/tcp/127.0.0.1/9181\n        echo mntr >&13\n        cat <&13 | grep zk_version\n    } && break || sleep 1\n    exec 13>&-\ndone\nexec 13>&-\"\"\"\n    binary_test = r\"\"\"#!/bin/bash\nset -e\ntrap \"bash -ex /packages/preserve_logs.sh\" ERR\n/packages/clickhouse.copy install\nclickhouse-server start --daemon\nfor i in {1..5}; do\n    clickhouse-client -q 'SELECT version()' && break || sleep 1\ndone\nclickhouse-keeper start --daemon\nfor i in {1..20}; do\n    echo wait for clickhouse-keeper to being up\n    > /dev/tcp/127.0.0.1/9181 2>/dev/null && break || sleep 1\ndone\nfor i in {1..5}; do\n    echo wait for clickhouse-keeper to answer on mntr request\n    {\n        exec 13<>/dev/tcp/127.0.0.1/9181\n        echo mntr >&13\n        cat <&13 | grep zk_version\n    } && break || sleep 1\n    exec 13>&-\ndone\nexec 13>&-\"\"\"\n    preserve_logs = r\"\"\"#!/bin/bash\njournalctl -u clickhouse-server > /tests_logs/clickhouse-server.service || :\njournalctl -u clickhouse-keeper > /tests_logs/clickhouse-keeper.service || :\ncp /var/log/clickhouse-server/clickhouse-server.* /tests_logs/ || :\ncp /var/log/clickhouse-keeper/clickhouse-keeper.* /tests_logs/ || :\nchmod a+rw -R /tests_logs\nexit 1\n\"\"\"\n    (TEMP_PATH / \"server_test.sh\").write_text(server_test, encoding=\"utf-8\")\n    (TEMP_PATH / \"initd_test.sh\").write_text(initd_test, encoding=\"utf-8\")\n    (TEMP_PATH / \"keeper_test.sh\").write_text(keeper_test, encoding=\"utf-8\")\n    (TEMP_PATH / \"binary_test.sh\").write_text(binary_test, encoding=\"utf-8\")\n    (TEMP_PATH / \"preserve_logs.sh\").write_text(preserve_logs, encoding=\"utf-8\")\n\n\ndef test_install_deb(image: DockerImage) -> TestResults:\n    tests = {\n        \"Install server deb\": r\"\"\"#!/bin/bash -ex\napt-get install /packages/clickhouse-{server,client,common}*deb\nbash -ex /packages/server_test.sh\"\"\",\n        \"Run server init.d\": r\"\"\"#!/bin/bash -ex\napt-get install /packages/clickhouse-{server,client,common}*deb\nbash -ex /packages/initd_test.sh\"\"\",\n        \"Install keeper deb\": r\"\"\"#!/bin/bash -ex\napt-get install /packages/clickhouse-keeper*deb\nbash -ex /packages/keeper_test.sh\"\"\",\n        \"Install clickhouse binary in deb\": r\"bash -ex /packages/binary_test.sh\",\n    }\n    return test_install(image, tests)\n\n\ndef test_install_rpm(image: DockerImage) -> TestResults:\n    # FIXME: I couldn't find why Type=notify is broken in centos:8\n    # systemd just ignores the watchdog completely\n    tests = {\n        \"Install server rpm\": r\"\"\"#!/bin/bash -ex\nyum localinstall --disablerepo=* -y /packages/clickhouse-{server,client,common}*rpm\necho CLICKHOUSE_WATCHDOG_ENABLE=0 > /etc/default/clickhouse-server\nbash -ex /packages/server_test.sh\"\"\",\n        \"Install keeper rpm\": r\"\"\"#!/bin/bash -ex\nyum localinstall --disablerepo=* -y /packages/clickhouse-keeper*rpm\nbash -ex /packages/keeper_test.sh\"\"\",\n        \"Install clickhouse binary in rpm\": r\"bash -ex /packages/binary_test.sh\",\n    }\n    return test_install(image, tests)\n\n\ndef test_install_tgz(image: DockerImage) -> TestResults:\n    # FIXME: I couldn't find why Type=notify is broken in centos:8\n    # systemd just ignores the watchdog completely\n    tests = {\n        f\"Install server tgz in {image}\": r\"\"\"#!/bin/bash -ex\n[ -f /etc/debian_version ] && CONFIGURE=configure || CONFIGURE=\nfor pkg in /packages/clickhouse-{common,client,server}*tgz; do\n    package=${pkg%-*}\n    package=${package##*/}\n    tar xf \"$pkg\"\n    \"/$package/install/doinst.sh\" $CONFIGURE\ndone\n[ -f /etc/yum.conf ] && echo CLICKHOUSE_WATCHDOG_ENABLE=0 > /etc/default/clickhouse-server\nbash -ex /packages/server_test.sh\"\"\",\n        f\"Install keeper tgz in {image}\": r\"\"\"#!/bin/bash -ex\n[ -f /etc/debian_version ] && CONFIGURE=configure || CONFIGURE=\nfor pkg in /packages/clickhouse-keeper*tgz; do\n    package=${pkg%-*}\n    package=${package##*/}\n    tar xf \"$pkg\"\n    \"/$package/install/doinst.sh\" $CONFIGURE\ndone\nbash -ex /packages/keeper_test.sh\"\"\",\n    }\n    return test_install(image, tests)\n\n\ndef test_install(image: DockerImage, tests: Dict[str, str]) -> TestResults:\n    test_results = []  # type: TestResults\n    for name, command in tests.items():\n        stopwatch = Stopwatch()\n        container_name = name.lower().replace(\" \", \"_\").replace(\"/\", \"_\")\n        log_file = TEMP_PATH / f\"{container_name}.log\"\n        logs = [log_file]\n        run_command = (\n            f\"docker run --rm --privileged --detach --cap-add=SYS_PTRACE \"\n            f\"--volume={LOGS_PATH}:/tests_logs --volume={TEMP_PATH}:/packages {image}\"\n        )\n\n        for retry in range(1):\n            for file in LOGS_PATH.glob(\"*\"):\n                file.unlink()\n\n            logging.info(\"Running docker container: `%s`\", run_command)\n            container_id = subprocess.check_output(\n                run_command, shell=True, encoding=\"utf-8\"\n            ).strip()\n            (TEMP_PATH / \"install.sh\").write_text(command)\n            install_command = (\n                f\"docker exec {container_id} bash -ex /packages/install.sh\"\n            )\n            with TeePopen(install_command, log_file) as process:\n                retcode = process.wait()\n                if retcode == 0:\n                    status = OK\n                    subprocess.check_call(\n                        f\"docker kill -s 9 {container_id}\", shell=True\n                    )\n                    break\n\n                status = FAIL\n            copy2(log_file, LOGS_PATH)\n            archive_path = TEMP_PATH / f\"{container_name}-{retry}.tar.gz\"\n            compress_fast(LOGS_PATH, archive_path)\n            logs.append(archive_path)\n            subprocess.check_call(f\"docker kill -s 9 {container_id}\", shell=True)\n\n        test_results.append(TestResult(name, status, stopwatch.duration_seconds, logs))\n\n    return test_results\n\n\ndef parse_args() -> argparse.Namespace:\n    parser = argparse.ArgumentParser(\n        formatter_class=argparse.ArgumentDefaultsHelpFormatter,\n        description=\"The script to check if the packages are able to install\",\n    )\n    parser.add_argument(\n        \"check_name\",\n        help=\"check name, used to download the packages\",\n    )\n    parser.add_argument(\"--download\", default=True, help=argparse.SUPPRESS)\n    parser.add_argument(\n        \"--no-download\",\n        dest=\"download\",\n        action=\"store_false\",\n        default=argparse.SUPPRESS,\n        help=\"if set, the packages won't be downloaded, useful for debug\",\n    )\n    parser.add_argument(\"--deb\", default=True, help=argparse.SUPPRESS)\n    parser.add_argument(\n        \"--no-deb\",\n        dest=\"deb\",\n        action=\"store_false\",\n        default=argparse.SUPPRESS,\n        help=\"if set, the deb packages won't be checked\",\n    )\n    parser.add_argument(\"--rpm\", default=True, help=argparse.SUPPRESS)\n    parser.add_argument(\n        \"--no-rpm\",\n        dest=\"rpm\",\n        action=\"store_false\",\n        default=argparse.SUPPRESS,\n        help=\"if set, the rpm packages won't be checked\",\n    )\n    parser.add_argument(\"--tgz\", default=True, help=argparse.SUPPRESS)\n    parser.add_argument(\n        \"--no-tgz\",\n        dest=\"tgz\",\n        action=\"store_false\",\n        default=argparse.SUPPRESS,\n        help=\"if set, the tgz packages won't be checked\",\n    )\n\n    return parser.parse_args()\n\n\ndef main():\n    logging.basicConfig(level=logging.INFO)\n\n    stopwatch = Stopwatch()\n\n    args = parse_args()\n\n    TEMP_PATH.mkdir(parents=True, exist_ok=True)\n    LOGS_PATH.mkdir(parents=True, exist_ok=True)\n\n    deb_image = pull_image(get_docker_image(DEB_IMAGE))\n    rpm_image = pull_image(get_docker_image(RPM_IMAGE))\n\n    prepare_test_scripts()\n\n    if args.download:\n        print(\"Download packages\")\n\n        def filter_artifacts(path: str) -> bool:\n            is_match = False\n            if args.deb or args.rpm:\n                is_match = is_match or path.endswith(\"/clickhouse\")\n            if args.deb:\n                is_match = is_match or path.endswith(\".deb\")\n            if args.rpm:\n                is_match = is_match or path.endswith(\".rpm\")\n            if args.tgz:\n                is_match = is_match or path.endswith(\".tgz\")\n            # We don't need debug packages, so let's filter them out\n            is_match = is_match and \"-dbg\" not in path\n            return is_match\n\n        download_builds_filter(\n            args.check_name, REPORT_PATH, TEMP_PATH, filter_artifacts\n        )\n\n    test_results = []  # type: TestResults\n    ch_binary = Path(TEMP_PATH) / \"clickhouse\"\n    if ch_binary.exists():\n        # make a copy of clickhouse to avoid redownload of exctracted binary\n        ch_binary.chmod(0o755)\n        ch_copy = ch_binary.parent / \"clickhouse.copy\"\n        copy2(ch_binary, ch_binary.parent / \"clickhouse.copy\")\n        subprocess.check_output(f\"{ch_copy.absolute()} local -q 'SELECT 1'\", shell=True)\n\n    if args.deb:\n        print(\"Test debian\")\n        test_results.extend(test_install_deb(deb_image))\n    if args.rpm:\n        print(\"Test rpm\")\n        test_results.extend(test_install_rpm(rpm_image))\n    if args.tgz:\n        print(\"Test tgz\")\n        test_results.extend(test_install_tgz(deb_image))\n        test_results.extend(test_install_tgz(rpm_image))\n\n    state = SUCCESS\n    description = \"Packages installed successfully\"\n    if FAIL in (result.status for result in test_results):\n        state = FAILURE\n        description = \"Failed to install packages: \" + \", \".join(\n            result.name for result in test_results\n        )\n\n    JobReport(\n        description=description,\n        test_results=test_results,\n        status=state,\n        start_time=stopwatch.start_time_str,\n        duration=stopwatch.duration_seconds,\n        additional_files=[],\n    ).dump()\n\n    if state == FAILURE:\n        sys.exit(1)\n\n\nif __name__ == \"__main__\":\n    main()\n"
+    },
+    {
+      "path": "tests/queries/0_stateless/02345_implicit_transaction.sql",
+      "sha": null,
+      "content_sha256": "522b86f719681f9e24783501d149f141272d100b5e7b40be7b3c8a496d512e63",
+      "score": 243,
+      "content": "-- Tags: no-ordinary-database, no-fasttest\n\nCREATE TABLE landing (n Int64) engine=MergeTree order by n;\nCREATE TABLE target  (n Int64) engine=MergeTree order by n;\nCREATE MATERIALIZED VIEW landing_to_target TO target AS\n    SELECT n + throwIf(n == 3333) AS n\n    FROM landing;\n\nINSERT INTO landing SELECT * FROM numbers(10000); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nSELECT 'no_transaction_landing', count() FROM landing;\nSELECT 'no_transaction_target', count() FROM target;\n\nTRUNCATE TABLE landing;\nTRUNCATE TABLE target;\n\n\nBEGIN TRANSACTION;\nINSERT INTO landing SELECT * FROM numbers(10000); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nROLLBACK;\nSELECT 'after_transaction_landing', count() FROM landing;\nSELECT 'after_transaction_target', count() FROM target;\n\n-- Same but using implicit_transaction\nINSERT INTO landing SETTINGS implicit_transaction=True SELECT * FROM numbers(10000); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nSELECT 'after_implicit_txn_in_query_settings_landing', count() FROM landing;\nSELECT 'after_implicit_txn_in_query_settings_target', count() FROM target;\n\n-- Same but using implicit_transaction in a session\nSET implicit_transaction=True;\nINSERT INTO landing SELECT * FROM numbers(10000); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nSET implicit_transaction=False;\nSELECT 'after_implicit_txn_in_session_landing', count() FROM landing;\nSELECT 'after_implicit_txn_in_session_target', count() FROM target;\n\n-- Reading from incompatible sources with implicit_transaction works the same way as with normal transactions:\n-- Currently reading from system tables inside a transaction is Not implemented:\nSELECT name, value, changed FROM system.settings where name = 'implicit_transaction' SETTINGS implicit_transaction=True; -- { serverError NOT_IMPLEMENTED }\n\n\n-- Verify that you don't have to manually close transactions with implicit_transaction\nSET implicit_transaction=True;\nSELECT throwIf(number == 0) FROM numbers(100); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nSELECT throwIf(number == 0) FROM numbers(100); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nSELECT throwIf(number == 0) FROM numbers(100); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nSELECT throwIf(number == 0) FROM numbers(100); -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nSET implicit_transaction=False;\n\n-- implicit_transaction is ignored when inside a transaction (no recursive transaction error)\nBEGIN TRANSACTION;\nSELECT 'inside_txn_and_implicit', 1 SETTINGS implicit_transaction=True;\nSELECT throwIf(number == 0) FROM numbers(100) SETTINGS implicit_transaction=True; -- { serverError FUNCTION_THROW_IF_VALUE_IS_NON_ZERO }\nROLLBACK;\n\nSELECT 'inside_txn_and_implicit', 1 SETTINGS implicit_transaction=True;\n\n-- You can work with transactions even if `implicit_transaction=True` is set\nSET implicit_transaction=True;\nBEGIN TRANSACTION;\nINSERT INTO target SELECT * FROM numbers(10000);\nSELECT 'in_transaction', count() FROM target;\nROLLBACK;\nSELECT 'out_transaction', count() FROM target;\nSET implicit_transaction=False;\n\n\n-- Verify that the transaction_id column is populated correctly\nSELECT 'Looking_at_transaction_id_True' FORMAT Null SETTINGS implicit_transaction=1;\n-- Verify that the transaction_id column is NOT populated without transaction\nSELECT 'Looking_at_transaction_id_False' FORMAT Null SETTINGS implicit_transaction=0;\nSYSTEM FLUSH LOGS;\n\nSELECT\n    'implicit_True',\n    count() as all,\n    transaction_id = (0,0,'00000000-0000-0000-0000-000000000000') as is_empty\nFROM system.query_log\nWHERE\n    current_database = currentDatabase() AND\n    event_date >= yesterday() AND\n    query LIKE '-- Verify that the transaction_id column is populated correctly%'\nGROUP BY transaction_id\nFORMAT JSONEachRow;\n\nSELECT\n    'implicit_False',\n    count() as all,\n    transaction_id = (0,0,'00000000-0000-0000-0000-000000000000') as is_empty\nFROM system.query_log\nWHERE\n    current_database = currentDatabase() AND\n    event_date >= yesterday() AND\n    query LIKE '-- Verify that the transaction_id column is NOT populated without transaction%'\nGROUP BY transaction_id\nFORMAT JSONEachRow;\n\nSET implicit_transaction=1;\nSET throw_on_unsupported_query_inside_transaction=1;\nSELECT * FROM system.one;\nSELECT * FROM cluster('test_cluster_interserver_secret', system, one);  -- { serverError NOT_IMPLEMENTED }\nSELECT * FROM cluster('test_cluster_two_shards', system, one);  -- { serverError NOT_IMPLEMENTED }\nSET throw_on_unsupported_query_inside_transaction=0;\n-- there's not session in the interserver mode\nSELECT * FROM cluster('test_cluster_interserver_secret', system, one) FORMAT Null;  -- { serverError INVALID_TRANSACTION }\nSELECT * FROM cluster('test_cluster_two_shards', system, one);\n"
+    },
+    {
+      "path": "ci/jobs/scripts/functional_tests/setup_hdfs_minicluster.sh",
+      "sha": null,
+      "content_sha256": "d709c7e6b335b7fe75cddd2caf626fd25f6e71c708972e732deec41c172b3f97",
+      "score": 241,
+      "content": "#!/bin/bash\n# shellcheck disable=SC2024\n\nset -e -x -a -u\n\nls -lha\n\ncd /hadoop-3.3.1\n\nexport JAVA_HOME=/usr\nmkdir -p target/test/data\n\nbin/mapred minicluster -format -nomr -nnport 12222 &\n\nwhile ! nc -z localhost 12222; do\n  sleep 1\ndone\n\nlsof -i :12222\n"
+    },
+    {
+      "path": "ci/jobs/scripts/functional_tests/setup_minio.sh",
+      "sha": null,
+      "content_sha256": "c9c56b72235f4caa86f5cfe12d88de4b29a8e493310cc1efd52778cf513c9aa9",
+      "score": 241,
+      "content": "#!/bin/bash\n\nset -euxf -o pipefail\n\nexport MINIO_ROOT_USER=${MINIO_ROOT_USER:-clickhouse}\nexport MINIO_ROOT_PASSWORD=[REDACTED]}\nTEST_DIR=${2:-/repo/tests/}\n\nif [ -d \"$TEMP_DIR\" ]; then\n  TEST_DIR=$(readlink -f $TEST_DIR)\n  cd \"$TEMP_DIR\"\n  # add / for minio mc in docker\n  PATH=\"/:.:$PATH\"\nfi\n\nusage() {\n  echo $\"Usage: $0 <stateful|stateless> <test_path> (default path: /usr/share/clickhouse-test)\"\n  exit 1\n}\n\ncheck_arg() {\n  local query_dir\n  if [ ! $# -eq 1 ]; then\n    if [ ! $# -eq 2 ]; then\n      echo \"ERROR: need either one or two arguments, <stateful|stateless> <test_path> (default path: /usr/share/clickhouse-test)\"\n      usage\n    fi\n  fi\n  case \"$1\" in\n    stateless)\n      query_dir=\"0_stateless\"\n      ;;\n    stateful)\n      query_dir=\"1_stateful\"\n      ;;\n    *)\n      echo \"unknown test type ${test_type}\"\n      usage\n      ;;\n  esac\n  echo ${query_dir}\n}\n\nfind_arch() {\n  local arch\n  case $(uname -m) in\n    x86_64)\n      arch=\"amd64\"\n      ;;\n    aarch64)\n      arch=\"arm64\"\n      ;;\n    *)\n      echo \"unknown architecture $(uname -m)\";\n      exit 1\n      ;;\n  esac\n  echo ${arch}\n}\n\nfind_os() {\n  local os\n  os=$(uname -s | tr '[:upper:]' '[:lower:]')\n  echo \"${os}\"\n}\n\ndownload_minio() {\n  local os\n  local arch\n  local minio_server_version=${MINIO_SERVER_VERSION:-2024-08-03T04-33-23Z}\n  local minio_client_version=${MINIO_CLIENT_VERSION:-2024-07-31T15-58-33Z}\n\n  os=$(find_os)\n  arch=$(find_arch)\n  wget \"https://dl.min.io/server/minio/release/${os}-${arch}/archive/minio.RELEASE.${minio_server_version}\" -O ./minio\n  wget \"https://dl.min.io/client/mc/release/${os}-${arch}/archive/mc.RELEASE.${minio_client_version}\" -O ./mc\n  chmod +x ./mc ./minio\n}\n\nstart_minio() {\n  pwd\n  mkdir -p ./minio_data\n  minio --version\n  nohup minio server --address \":11111\" ./minio_data &\n  wait_for_it\n  lsof -i :11111\n  sleep 5\n}\n\nsetup_minio() {\n  local test_type=$1\n  echo \"setup_minio(), test_type=$test_type\"\n  mc alias set clickminio http://localhost:11111 clickhouse clickhouse\n  mc admin user add clickminio test testtest\n  mc admin policy attach clickminio readwrite --user=test ||:\n  mc mb --ignore-existing clickminio/test\n  if [ \"$test_type\" = \"stateless\" ]; then\n    echo \"Create @test bucket in minio\"\n    mc anonymous set public clickminio/test\n  fi\n}\n\n# uploads data to minio, by default after unpacking all tests\n# will be in /usr/share/clickhouse-test/queries\nupload_data() {\n  local query_dir=$1\n  local test_path=$2\n  local data_path=${test_path}/queries/${query_dir}/data_minio\n  echo \"upload_data() data_path=$data_path\"\n\n  # iterating over globs will cause redundant file variable to be\n  # a path to a file, not a filename\n  # shellcheck disable=SC2045\n  if [ -d \"${data_path}\" ]; then\n    mc cp --recursive \"${data_path}\"/ clickminio/test/\n  fi\n}\n\nsetup_aws_credentials() {\n  local minio_root_user=${MINIO_ROOT_USER:-clickhouse}\n  local minio_root_password=[REDACTED]}\n  mkdir -p ~/.aws\n  if [[ -f ~/.aws/credentials ]]; then\n    if grep -q \"^\\[default\\]\" ~/.aws/credentials; then\n        echo \"The credentials file contains a [default] section.\"\n        return\n    fi\n  fi\n  cat <<EOT >> ~/.aws/credentials\n[default]\naws_access_key_id=${minio_root_user}\naws_secret_access_key=${minio_root_password}\nEOT\n}\n\nwait_for_it() {\n  local counter=0\n  local max_counter=60\n  local url=\"http://localhost:11111\"\n  local params=(\n    --silent\n    --verbose\n  )\n  while ! curl \"${params[@]}\" \"${url}\" 2>&1 | grep AccessDenied\n  do\n    if [[ ${counter} == \"${max_counter}\" ]]; then\n      echo \"failed to setup minio\"\n      exit 0\n    fi\n    echo \"trying to connect to minio\"\n    sleep 1\n    counter=$((counter + 1))\n  done\n}\n\nmain() {\n  local query_dir\n  query_dir=$(check_arg \"$@\")\n  if ! (minio --version && mc --version); then\n    download_minio\n  fi\n  start_minio\n  setup_minio \"$1\"\n  upload_data \"${query_dir}\" \"$TEST_DIR\"\n  setup_aws_credentials\n}\n\nmain \"$@\"\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "ci/jobs/scripts/functional_tests/setup_ch_cluster.sh",
+      "sha": null,
+      "content_sha256": "5330a2209661642fe69e63fc59d93a920618c374311113bef67b0e1dedc62b36",
+      "score": 241,
+      "content": "#!/bin/bash\n\nset -e -x\n\nclickhouse-client --query \"SHOW DATABASES\"\nclickhouse-client --query \"CREATE DATABASE datasets\"\nclickhouse-client < ./tests/docker_scripts/create.sql\nclickhouse-client --query \"SHOW TABLES FROM datasets\"\n\nUSE_DATABASE_REPLICATED=0\n\nwhile [[ \"$#\" -gt 0 ]]; do\n    case $1 in\n        --database-replicated)\n            echo \"Setup cluster for testing with Database Replicated\"\n            USE_DATABASE_REPLICATED=1\n            ;;\n        *)\n            echo \"Unknown option: $1\"\n            exit 1\n            ;;\n    esac\n    shift\ndone\n\nif [[ \"$USE_DATABASE_REPLICATED\" -eq 1 ]]; then\n    clickhouse-client --query \"CREATE DATABASE test ON CLUSTER 'test_cluster_database_replicated'\n        ENGINE=Replicated('/test/clickhouse/db/test', '{shard}', '{replica}')\"\n\n    clickhouse-client --query \"CREATE TABLE test.hits AS datasets.hits_v1\"\n    clickhouse-client --query \"CREATE TABLE test.visits AS datasets.visits_v1\"\n\n    clickhouse-client --max_memory_usage 10G --query \"INSERT INTO test.hits SELECT * FROM datasets.hits_v1\"\n    clickhouse-client --max_memory_usage 10G --query \"INSERT INTO test.visits SELECT * FROM datasets.visits_v1\"\n\n    clickhouse-client --query \"DROP TABLE datasets.hits_v1\"\n    clickhouse-client --query \"DROP TABLE datasets.visits_v1\"\nelse\n    clickhouse-client --query \"CREATE DATABASE test\"\n    clickhouse-client --query \"SHOW TABLES FROM test\"\n    if [[ -n \"$USE_S3_STORAGE_FOR_MERGE_TREE\" ]] && [[ \"$USE_S3_STORAGE_FOR_MERGE_TREE\" -eq 1 ]]; then\n        clickhouse-client --query \"CREATE TABLE test.hits (WatchID UInt64,  JavaEnable UInt8,  Title String,  GoodEvent Int16,\n            EventTime DateTime,  EventDate Date,  CounterID UInt32,  ClientIP UInt32,  ClientIP6 FixedString(16),  RegionID UInt32,\n            UserID UInt64,  CounterClass Int8,  OS UInt8,  UserAgent UInt8,  URL String,  Referer String,  URLDomain String,\n            RefererDomain String,  Refresh UInt8,  IsRobot UInt8,  RefererCategories Array(UInt16),  URLCategories Array(UInt16),\n            URLRegions Array(UInt32),  RefererRegions Array(UInt32),  ResolutionWidth UInt16,  ResolutionHeight UInt16,  ResolutionDepth UInt8,\n            FlashMajor UInt8, FlashMinor UInt8,  FlashMinor2 String,  NetMajor UInt8,  NetMinor UInt8, UserAgentMajor UInt16,\n            UserAgentMinor FixedString(2),  CookieEnable UInt8, JavascriptEnable UInt8,  IsMobile UInt8,  MobilePhone UInt8,\n            MobilePhoneModel String,  Params String,  IPNetworkID UInt32,  TraficSourceID Int8, SearchEngineID UInt16,\n            SearchPhrase String,  AdvEngineID UInt8,  IsArtifical UInt8,  WindowClientWidth UInt16,  WindowClientHeight UInt16,\n            ClientTimeZone Int16,  ClientEventTime DateTime,  SilverlightVersion1 UInt8, SilverlightVersion2 UInt8,  SilverlightVersion3 UInt32,\n            SilverlightVersion4 UInt16,  PageCharset String,  CodeVersion UInt32,  IsLink UInt8,  IsDownload UInt8,  IsNotBounce UInt8,\n            FUniqID UInt64,  HID UInt32,  IsOldCounter UInt8, IsEvent UInt8,  IsParameter UInt8,  DontCountHits UInt8,  WithHash UInt8,\n            HitColor FixedString(1),  UTCEventTime DateTime,  Age UInt8,  Sex UInt8,  Income UInt8,  Interests UInt16,  Robotness UInt8,\n            GeneralInterests Array(UInt16), RemoteIP UInt32,  RemoteIP6 FixedString(16),  WindowName Int32,  OpenerName Int32,\n            HistoryLength Int16,  BrowserLanguage FixedString(2),  BrowserCountry FixedString(2),  SocialNetwork String,  SocialAction String,\n            HTTPError UInt16, SendTiming Int32,  DNSTiming Int32,  ConnectTiming Int32,  ResponseStartTiming Int32,  ResponseEndTiming Int32,\n            FetchTiming Int32,  RedirectTiming Int32, DOMInteractiveTiming Int32,  DOMContentLoadedTiming Int32,  DOMCompleteTiming Int32,\n            LoadEventStartTiming Int32,  LoadEventEndTiming Int32, NSToDOMContentLoadedTiming Int32,  FirstPaintTiming Int32,\n            RedirectCount Int8, SocialSourceNetworkID UInt8,  SocialSourcePage String,  ParamPrice Int64, ParamOrderID String,\n            ParamCurrency FixedString(3),  ParamCurrencyID UInt16, GoalsReached Array(UInt32),  OpenstatServiceName String,\n            OpenstatCampaignID String,  OpenstatAdID String,  OpenstatSourceID String,  UTMSource String, UTMMedium String,\n            UTMCampaign String,  UTMContent String,  UTMTerm String, FromTag String,  HasGCLID UInt8,  RefererHash UInt64,\n            URLHash UInt64,  CLID UInt32,  YCLID UInt64,  ShareService String,  ShareURL String,  ShareTitle String,\n            ParsedParams Nested(Key1 String,  Key2 String, Key3 String, Key4 String, Key5 String,  ValueDouble Float64),\n            IslandID FixedString(16),  RequestNum UInt32,  RequestTry UInt8) ENGINE = MergeTree() PARTITION BY toYYYYMM(EventDate)\n            ORDER BY (CounterID, EventDate, intHash32(UserID)) SAMPLE BY intHash32(UserID) SETTINGS index_granularity = 8192, storage_policy='s3_cache'\"\n        clickhouse-client --query \"CREATE TABLE test.visits (CounterID UInt32,  StartDate Date,  Sign Int8,  IsNew UInt8,\n            VisitID UInt64,  UserID UInt64,  StartTime DateTime,  Duration UInt32,  UTCStartTime DateTime,  PageViews Int32,\n            Hits Int32,  IsBounce UInt8,  Referer String,  StartURL String,  RefererDomain String,  StartURLDomain String,\n            EndURL String,  LinkURL String,  IsDownload UInt8,  TraficSourceID Int8,  SearchEngineID UInt16,  SearchPhrase String,\n            AdvEngineID UInt8,  PlaceID Int32,  RefererCategories Array(UInt16),  URLCategories Array(UInt16),  URLRegions Array(UInt32),\n            RefererRegions Array(UInt32),  IsYandex UInt8,  GoalReachesDepth Int32,  GoalReachesURL Int32,  GoalReachesAny Int32,\n            SocialSourceNetworkID UInt8,  SocialSourcePage String,  MobilePhoneModel String,  ClientEventTime DateTime,  RegionID UInt32,\n            ClientIP UInt32,  ClientIP6 FixedString(16),  RemoteIP UInt32,  RemoteIP6 FixedString(16),  IPNetworkID UInt32,\n            SilverlightVersion3 UInt32,  CodeVersion UInt32,  ResolutionWidth UInt16,  ResolutionHeight UInt16,  UserAgentMajor UInt16,\n            UserAgentMinor UInt16,  WindowClientWidth UInt16,  WindowClientHeight UInt16,  SilverlightVersion2 UInt8,  SilverlightVersion4 UInt16,\n            FlashVersion3 UInt16,  FlashVersion4 UInt16,  ClientTimeZone Int16,  OS UInt8,  UserAgent UInt8,  ResolutionDepth UInt8,\n            FlashMajor UInt8,  FlashMinor UInt8,  NetMajor UInt8,  NetMinor UInt8,  MobilePhone UInt8,  SilverlightVersion1 UInt8,\n            Age UInt8,  Sex UInt8,  Income UInt8,  JavaEnable UInt8,  CookieEnable UInt8,  JavascriptEnable UInt8,  IsMobile UInt8,\n            BrowserLanguage UInt16,  BrowserCountry UInt16,  Interests UInt16,  Robotness UInt8,  GeneralInterests Array(UInt16),\n            Params Array(String),  Goals Nested(ID UInt32, Serial UInt32, EventTime DateTime,  Price Int64,  OrderID String, CurrencyID UInt32),\n            WatchIDs Array(UInt64),  ParamSumPrice Int64,  ParamCurrency FixedString(3),  ParamCurrencyID UInt16,  ClickLogID UInt64,\n            ClickEventID Int32,  ClickGoodEvent Int32,  ClickEventTime DateTime,  ClickPriorityID Int32,  ClickPhraseID Int32,  ClickPageID Int32,\n            ClickPlaceID Int32,  ClickTypeID Int32,  ClickResourceID Int32,  ClickCost UInt32,  ClickClientIP UInt32,  ClickDomainID UInt32,\n            ClickURL String,  ClickAttempt UInt8,  ClickOrderID UInt32,  ClickBannerID UInt32,  ClickMarketCategoryID UInt32,  ClickMarketPP UInt32,\n            ClickMarketCategoryName String,  ClickMarketPPName String,  ClickAWAPSCampaignName String,  ClickPageName String,  ClickTargetType UInt16,\n            ClickTargetPhraseID UInt64,  ClickContextType UInt8,  ClickSelectType Int8,  ClickOptions String,  ClickGroupBannerID Int32,\n            OpenstatServiceName String,  OpenstatCampaignID String,  OpenstatAdID String,  OpenstatSourceID String,  UTMSource String,\n            UTMMedium String,  UTMCampaign String,  UTMContent String,  UTMTerm String,  FromTag String,  HasGCLID UInt8,  FirstVisit DateTime,\n            PredLastVisit Date,  LastVisit Date,  TotalVisits UInt32,  TraficSource    Nested(ID Int8,  SearchEngineID UInt16, AdvEngineID UInt8,\n            PlaceID UInt16, SocialSourceNetworkID UInt8, Domain String, SearchPhrase String, SocialSourcePage String),  Attendance FixedString(16),\n            CLID UInt32,  YCLID UInt64,  NormalizedRefererHash UInt64,  SearchPhraseHash UInt64,  RefererDomainHash UInt64,  NormalizedStartURLHash UInt64,\n            StartURLDomainHash UInt64,  NormalizedEndURLHash UInt64,  TopLevelDomain UInt64,  URLScheme UInt64,  OpenstatServiceNameHash UInt64,\n            OpenstatCampaignIDHash UInt64,  OpenstatAdIDHash UInt64,  OpenstatSourceIDHash UInt64,  UTMSourceHash UInt64,  UTMMediumHash UInt64,\n            UTMCampaignHash UInt64,  UTMContentHash UInt64,  UTMTermHash UInt64,  FromHash UInt64,  WebVisorEnabled UInt8,  WebVisorActivity UInt32,\n            ParsedParams    Nested(Key1 String,  Key2 String,  Key3 String,  Key4 String, Key5 String, ValueDouble    Float64),\n            Market Nested(Type UInt8, GoalID UInt32, OrderID String,  OrderPrice Int64,  PP UInt32,  DirectPlaceID UInt32,  DirectOrderID  UInt32,\n            DirectBannerID UInt32,  GoodID String, GoodName String, GoodQuantity Int32,  GoodPrice Int64),  IslandID FixedString(16))\n            ENGINE = CollapsingMergeTree(Sign) PARTITION BY toYYYYMM(StartDate) ORDER BY (CounterID, StartDate, intHash32(UserID), VisitID)\n            SAMPLE BY intHash32(UserID) SETTINGS index_granularity = 8192, storage_policy='s3_cache'\"\n\n        clickhouse-client --max_memory_usage 10G --query \"INSERT INTO test.hits SELECT * FROM datasets.hits_v1 SETTINGS enable_filesystem_cache_on_write_operations=0, max_insert_threads=16\"\n        clickhouse-client --max_memory_usage 10G --query \"INSERT INTO test.visits SELECT * FROM datasets.visits_v1 SETTINGS enable_filesystem_cache_on_write_operations=0, max_insert_threads=16\"\n        clickhouse-client --query \"DROP TABLE datasets.visits_v1 SYNC\"\n        clickhouse-client --query \"DROP TABLE datasets.hits_v1 SYNC\"\n    else\n        clickhouse-client --query \"RENAME TABLE datasets.hits_v1 TO test.hits\"\n        clickhouse-client --query \"RENAME TABLE datasets.visits_v1 TO test.visits\"\n    fi\n    clickhouse-client --query \"CREATE TABLE test.hits_s3  (WatchID UInt64, JavaEnable UInt8, Title String, GoodEvent Int16, EventTime DateTime, EventDate Date, CounterID UInt32, ClientIP UInt32, ClientIP6 FixedString(16), RegionID UInt32, UserID UInt64, CounterClass Int8, OS UInt8, UserAgent UInt8, URL String, Referer String, URLDomain String, RefererDomain String, Refresh UInt8, IsRobot UInt8, RefererCategories Array(UInt16), URLCategories Array(UInt16), URLRegions Array(UInt32), RefererRegions Array(UInt32), ResolutionWidth UInt16, ResolutionHeight UInt16, ResolutionDepth UInt8, FlashMajor UInt8, FlashMinor UInt8, FlashMinor2 String, NetMajor UInt8, NetMinor UInt8, UserAgentMajor UInt16, UserAgentMinor FixedString(2), CookieEnable UInt8, JavascriptEnable UInt8, IsMobile UInt8, MobilePhone UInt8, MobilePhoneModel String, Params String, IPNetworkID UInt32, TraficSourceID Int8, SearchEngineID UInt16, SearchPhrase String, AdvEngineID UInt8, IsArtifical UInt8, WindowClientWidth UInt16, WindowClientHeight UInt16, ClientTimeZone Int16, ClientEventTime DateTime, SilverlightVersion1 UInt8, SilverlightVersion2 UInt8, SilverlightVersion3 UInt32, SilverlightVersion4 UInt16, PageCharset String, CodeVersion UInt32, IsLink UInt8, IsDownload UInt8, IsNotBounce UInt8, FUniqID UInt64, HID UInt32, IsOldCounter UInt8, IsEvent UInt8, IsParameter UInt8, DontCountHits UInt8, WithHash UInt8, HitColor FixedString(1), UTCEventTime DateTime, Age UInt8, Sex UInt8, Income UInt8, Interests UInt16, Robotness UInt8, GeneralInterests Array(UInt16), RemoteIP UInt32, RemoteIP6 FixedString(16), WindowName Int32, OpenerName Int32, HistoryLength Int16, BrowserLanguage FixedString(2), BrowserCountry FixedString(2), SocialNetwork String, SocialAction String, HTTPError UInt16, SendTiming Int32, DNSTiming Int32, ConnectTiming Int32, ResponseStartTiming Int32, ResponseEndTiming Int32, FetchTiming Int32, RedirectTiming Int32, DOMInteractiveTiming Int32, DOMContentLoadedTiming Int32, DOMCompleteTiming Int32, LoadEventStartTiming Int32, LoadEventEndTiming Int32, NSToDOMContentLoadedTiming Int32, FirstPaintTiming Int32, RedirectCount Int8, SocialSourceNetworkID UInt8, SocialSourcePage String, ParamPrice Int64, ParamOrderID String, ParamCurrency FixedString(3), ParamCurrencyID UInt16, GoalsReached Array(UInt32), OpenstatServiceName String, OpenstatCampaignID String, OpenstatAdID String, OpenstatSourceID String, UTMSource String, UTMMedium String, UTMCampaign String, UTMContent String, UTMTerm String, FromTag String, HasGCLID UInt8, RefererHash UInt64, URLHash UInt64, CLID UInt32, YCLID UInt64, ShareService String, ShareURL String, ShareTitle String, ParsedParams Nested(Key1 String, Key2 String, Key3 String, Key4 String, Key5 String, ValueDouble Float64), IslandID FixedString(16), RequestNum UInt32, RequestTry UInt8) ENGINE = MergeTree() PARTITION BY toYYYYMM(EventDate) ORDER BY (CounterID, EventDate, intHash32(UserID)) SAMPLE BY intHash32(UserID) SETTINGS index_granularity = 8192, storage_policy='s3_cache'\"\n    # AWS S3 is very inefficient, so increase memory even further:\n    clickhouse-client --max_memory_usage 30G --max_memory_usage_for_user 30G --query \"INSERT INTO test.hits_s3 SELECT * FROM test.hits SETTINGS enable_filesystem_cache_on_write_operations=0, max_insert_threads=16\"\nfi\n\nclickhouse-client --query \"SHOW TABLES FROM test\"\nclickhouse-client --query \"SELECT count() FROM test.hits\"\nclickhouse-client --query \"SELECT count() FROM test.visits\"\n"
+    },
+    {
+      "path": "ci/jobs/scripts/functional_tests/setup_log_cluster.sh",
+      "sha": null,
+      "content_sha256": "7afcaa34c823e38efc61acb622e079fa56e646f847cc14bb0a1a95470394c1eb",
+      "score": 241,
+      "content": "#!/bin/bash\n\nset -e\n# This script sets up export of system log tables to a remote server.\n# Remote tables are created if not exist, and augmented with extra columns,\n# and their names will contain a hash of the table structure,\n# which allows exporting tables from servers of different versions.\n\n# Config file contains KEY=VALUE pairs with any necessary parameters like:\n# CLICKHOUSE_CI_LOGS_HOST - remote host\n# CLICKHOUSE_CI_LOGS_USER - password for user\n# CLICKHOUSE_CI_LOGS_PASSWORD - password for user\nCLICKHOUSE_CI_LOGS_CREDENTIALS=${CLICKHOUSE_CI_LOGS_CREDENTIALS:-/tmp/export-logs-config.sh}\nCLICKHOUSE_CI_LOGS_USER=${CLICKHOUSE_CI_LOGS_USER:-ci}\n\n# Pre-configured destination cluster, where to export the data\nCLICKHOUSE_CI_LOGS_CLUSTER=${CLICKHOUSE_CI_LOGS_CLUSTER:-system_logs_export}\n\nEXTRA_COLUMNS=${EXTRA_COLUMNS:-\"pull_request_number UInt32, commit_sha String, check_start_time DateTime('UTC'), check_name LowCardinality(String), instance_type LowCardinality(String), instance_id String, INDEX ix_pr (pull_request_number) TYPE set(100), INDEX ix_commit (commit_sha) TYPE set(100), INDEX ix_check_time (check_start_time) TYPE minmax, \"}\nEXTRA_COLUMNS_EXPRESSION=${EXTRA_COLUMNS_EXPRESSION:-\"CAST(0 AS UInt32) AS pull_request_number, '' AS commit_sha, now() AS check_start_time, toLowCardinality('') AS check_name, toLowCardinality('') AS instance_type, '' AS instance_id\"}\nEXTRA_ORDER_BY_COLUMNS=${EXTRA_ORDER_BY_COLUMNS:-\"check_name\"}\n\n# trace_log needs more columns for symbolization\nEXTRA_COLUMNS_TRACE_LOG=\"${EXTRA_COLUMNS} symbols Array(LowCardinality(String)), lines Array(LowCardinality(String)), \"\nEXTRA_COLUMNS_EXPRESSION_TRACE_LOG=\"${EXTRA_COLUMNS_EXPRESSION}, arrayMap(x -> demangle(addressToSymbol(x)), trace)::Array(LowCardinality(String)) AS symbols, arrayMap(x -> addressToLine(x), trace)::Array(LowCardinality(String)) AS lines\"\n\n# coverage_log needs more columns for symbolization, but only symbol names (the line numbers are too heavy to calculate)\nEXTRA_COLUMNS_COVERAGE_LOG=\"${EXTRA_COLUMNS} symbols Array(LowCardinality(String)), \"\nEXTRA_COLUMNS_EXPRESSION_COVERAGE_LOG=\"${EXTRA_COLUMNS_EXPRESSION}, arrayDistinct(arrayMap(x -> demangle(addressToSymbol(x)), coverage))::Array(LowCardinality(String)) AS symbols\"\n\n\nfunction __set_connection_args\n{\n    # It's impossible to use a generic $CONNECTION_ARGS string, it's unsafe from word splitting perspective.\n    # That's why we must stick to the generated option\n    CONNECTION_ARGS=(\n        --receive_timeout=45 --send_timeout=45 --secure\n        --user \"${CLICKHOUSE_CI_LOGS_USER}\" --host \"${CLICKHOUSE_CI_LOGS_HOST}\"\n        --password \"${CLICKHOUSE_CI_LOGS_PASSWORD}\"\n    )\n}\n\nfunction __shadow_credentials\n{\n    # The function completely screws the output, it shouldn't be used in normal functions, only in ()\n    # The only way to substitute the env as a plain text is using perl 's/\\Qsomething\\E/another/\n    exec &> >(perl -pe '\n        s(\\Q$ENV{CLICKHOUSE_CI_LOGS_HOST}\\E)[CLICKHOUSE_CI_LOGS_HOST]g;\n        s(\\Q$ENV{CLICKHOUSE_CI_LOGS_USER}\\E)[CLICKHOUSE_CI_LOGS_USER]g;\n        s(\\Q$ENV{CLICKHOUSE_CI_LOGS_PASSWORD}\\E)[CLICKHOUSE_CI_LOGS_PASSWORD]g;\n    ')\n}\n\nfunction check_logs_credentials\n(\n    # The function connects with given credentials, and if it's unable to execute the simplest query, returns exit code\n\n    # First check, if all necessary parameters are set\n    set +x\n    for parameter in CLICKHOUSE_CI_LOGS_HOST CLICKHOUSE_CI_LOGS_USER CLICKHOUSE_CI_LOGS_PASSWORD; do\n      export -p | grep -q \"$parameter\" || {\n        echo \"Credentials parameter $parameter is unset\"\n        return 1\n      }\n    done\n\n    __shadow_credentials\n    __set_connection_args\n    local code\n    # Catch both success and error to not fail on `set -e`\n    clickhouse-client \"${CONNECTION_ARGS[@]}\" -q 'SELECT 1 FORMAT Null' && return 0 || code=$?\n    if [ \"$code\" != 0 ]; then\n        echo 'Failed to connect to CI Logs cluster'\n        return $code\n    fi\n)\n\nfunction config_logs_export_cluster\n(\n    # The function is launched in a separate shell instance to not expose the\n    # exported values from CLICKHOUSE_CI_LOGS_CREDENTIALS\n    set +x\n    if ! [ -r \"${CLICKHOUSE_CI_LOGS_CREDENTIALS}\" ]; then\n        echo \"File $CLICKHOUSE_CI_LOGS_CREDENTIALS does not exist, do not setup\"\n        return\n    fi\n    set -a\n    # shellcheck disable=SC1090\n    source \"${CLICKHOUSE_CI_LOGS_CREDENTIALS}\"\n    set +a\n    __shadow_credentials\n    echo \"Checking if the credentials work\"\n    check_logs_credentials || return 0\n    cluster_config=\"${1:-/etc/clickhouse-server/config.d/system_logs_export.yaml}\"\n    mkdir -p \"$(dirname \"$cluster_config\")\"\n    echo \"remote_servers:\n    ${CLICKHOUSE_CI_LOGS_CLUSTER}:\n        shard:\n            replica:\n                secure: 1\n                user: '${CLICKHOUSE_CI_LOGS_USER}'\n                host: '${CLICKHOUSE_CI_LOGS_HOST}'\n                port: 9440\n                password: '[REDACTED]}'\n\" > \"$cluster_config\"\n    echo \"Cluster ${CLICKHOUSE_CI_LOGS_CLUSTER} is confugured in ${cluster_config}\"\n)\n\nfunction setup_logs_replication\n(\n    # The function is launched in a separate shell instance to not expose the\n    # exported values from CLICKHOUSE_CI_LOGS_CREDENTIALS\n    set +x\n    # disable output\n    if ! [ -r \"${CLICKHOUSE_CI_LOGS_CREDENTIALS}\" ]; then\n        echo \"File $CLICKHOUSE_CI_LOGS_CREDENTIALS does not exist, do not setup\"\n        return 0\n    fi\n    set -a\n    # shellcheck disable=SC1090\n    source \"${CLICKHOUSE_CI_LOGS_CREDENTIALS}\"\n    set +a\n    __shadow_credentials\n    echo \"Checking if the credentials work\"\n    check_logs_credentials || return 0\n    __set_connection_args\n\n    echo \"My hostname is ${HOSTNAME}\"\n\n    echo 'Create all configured system logs'\n    clickhouse-client --query \"SYSTEM FLUSH LOGS\"\n\n    debug_or_sanitizer_build=$(clickhouse-client -q \"WITH ((SELECT value FROM system.build_options WHERE name='BUILD_TYPE') AS build, (SELECT value FROM system.build_options WHERE name='CXX_FLAGS') as flags) SELECT build='Debug' OR flags LIKE '%fsanitize%'\")\n    echo \"Build is debug or sanitizer: $debug_or_sanitizer_build\"\n\n    # We will pre-create a table system.coverage_log.\n    # It is normally created by clickhouse-test rather than the server,\n    # so we will create it in advance to make it be picked up by the next commands:\n\n    clickhouse-client --query \"\n        CREATE TABLE IF NOT EXISTS system.coverage_log\n        (\n            time DateTime COMMENT 'The time of test run',\n            test_name String COMMENT 'The name of the test',\n            coverage Array(UInt64) COMMENT 'An array of addresses of the code (a subset of addresses instrumented for coverage) that were encountered during the test run'\n        ) ENGINE = MergeTree ORDER BY test_name COMMENT 'Contains information about per-test coverage from the CI, but used only for exporting to the CI cluster'\n    \"\n\n    # For each system log table:\n    echo 'Create %_log tables'\n    clickhouse-client --query \"SHOW TABLES FROM system LIKE '%\\\\_log'\" | while read -r table\n    do\n        if [[ \"$table\" = \"trace_log\" ]]\n        then\n            EXTRA_COLUMNS_FOR_TABLE=\"${EXTRA_COLUMNS_TRACE_LOG}\"\n            # Do not try to resolve stack traces in case of debug/sanitizers\n            # build, since it is too slow (flushing of trace_log can take ~1min\n            # with such MV attached)\n            if [[ \"$debug_or_sanitizer_build\" = 1 ]]\n            then\n                EXTRA_COLUMNS_EXPRESSION_FOR_TABLE=\"${EXTRA_COLUMNS_EXPRESSION}\"\n            else\n                EXTRA_COLUMNS_EXPRESSION_FOR_TABLE=\"${EXTRA_COLUMNS_EXPRESSION_TRACE_LOG}\"\n            fi\n        elif [[ \"$table\" = \"coverage_log\" ]]\n        then\n            EXTRA_COLUMNS_FOR_TABLE=\"${EXTRA_COLUMNS_COVERAGE_LOG}\"\n            EXTRA_COLUMNS_EXPRESSION_FOR_TABLE=\"${EXTRA_COLUMNS_EXPRESSION_COVERAGE_LOG}\"\n        else\n            EXTRA_COLUMNS_FOR_TABLE=\"${EXTRA_COLUMNS}\"\n            EXTRA_COLUMNS_EXPRESSION_FOR_TABLE=\"${EXTRA_COLUMNS_EXPRESSION}\"\n        fi\n\n        # Calculate hash of its structure. Note: 4 is the version of extra columns - increment it if extra columns are changed:\n        hash=$(clickhouse-client --query \"\n            SELECT sipHash64(9, groupArray((name, type)))\n            FROM (SELECT name, type FROM system.columns\n                WHERE database = 'system' AND table = '$table'\n                ORDER BY position)\n            \")\n\n        # Create the destination table with adapted name and structure:\n        statement=$(clickhouse-client --format TSVRaw --query \"SHOW CREATE TABLE system.${table}\" | sed -r -e '\n            s/^\\($/('\"$EXTRA_COLUMNS_FOR_TABLE\"'/;\n            s/^ORDER BY (([^\\(].+?)|\\((.+?)\\))$/ORDER BY ('\"$EXTRA_ORDER_BY_COLUMNS\"', \\2\\3)/;\n            s/^CREATE TABLE system\\.\\w+_log$/CREATE TABLE IF NOT EXISTS '\"$table\"'_'\"$hash\"'/;\n            /^TTL /d\n            ')\n\n        echo -e \"Creating remote destination table ${table}_${hash} with statement:\" >&2\n\n        echo \"::group::${table}\"\n        # there's the only way big \"$statement\" can be printed without causing EAGAIN error\n        # cat: write error: Resource temporarily unavailable\n        statement_print=\"${statement}\"\n        if [ \"${#statement_print}\" -gt 4000 ]; then\n          statement_print=\"${statement::1999}\\n…\\n${statement:${#statement}-1999}\"\n        fi\n        echo -e \"$statement_print\"\n        echo \"::endgroup::\"\n\n        echo \"$statement\" | clickhouse-client --database_replicated_initial_query_timeout_sec=10 \\\n            --distributed_ddl_task_timeout=30 --distributed_ddl_output_mode=throw_only_active \\\n            \"${CONNECTION_ARGS[@]}\" || continue\n\n        echo \"Creating table system.${table}_sender\" >&2\n\n        # Create Distributed table and materialized view to watch on the original table:\n        clickhouse-client --query \"\n            CREATE TABLE system.${table}_sender\n            ENGINE = Distributed(${CLICKHOUSE_CI_LOGS_CLUSTER}, default, ${table}_${hash})\n            SETTINGS flush_on_detach=0\n            EMPTY AS\n            SELECT ${EXTRA_COLUMNS_EXPRESSION_FOR_TABLE}, *\n            FROM system.${table}\n        \" || continue\n\n        echo \"Creating materialized view system.${table}_watcher\" >&2\n\n        clickhouse-client --query \"\n            CREATE MATERIALIZED VIEW system.${table}_watcher TO system.${table}_sender AS\n            SELECT ${EXTRA_COLUMNS_EXPRESSION_FOR_TABLE}, *\n            FROM system.${table}\n        \" || continue\n    done\n)\n\nfunction stop_logs_replication\n{\n    echo \"Detach all logs replication\"\n    clickhouse-client --query \"select database||'.'||table from system.tables where database = 'system' and (table like '%_sender' or table like '%_watcher')\" | {\n        tee /dev/stderr\n    } | {\n        timeout --preserve-status --signal TERM --kill-after 5m 15m xargs -n1 -P10 -r -i clickhouse-client --query \"drop table {}\"\n    }\n}\n\n\nwhile [[ \"$#\" -gt 0 ]]; do\n    case $1 in\n        --stop-log-replication)\n            echo \"Stopping log replication...\"\n            stop_logs_replication\n            ;;\n        --setup-logs-replication)\n            echo \"Setting up log replication...\"\n            setup_logs_replication\n            ;;\n        --config-logs-export-cluster)\n            echo \"Configuring logs export for the cluster...\"\n            config_logs_export_cluster \"$2\"\n            shift\n            ;;\n        *)\n            echo \"Unknown option: $1\"\n            echo \"Usage: $0 [--stop-log-replication | --setup-logs-replication | --config-logs-export-cluster ]\"\n            exit 1\n            ;;\n    esac\n    shift\ndone\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "tests/integration/compose/docker_compose_prometheus.yml",
+      "sha": null,
+      "content_sha256": "3b3bdd7be5ba494ac42d37ee9737bead4889f9fac2b5c3f88a03581668e2c337",
+      "score": 234,
+      "content": "services:\n  prometheus_writer:\n    image: prom/prometheus:v2.50.1\n    hostname: ${PROMETHEUS_WRITER_HOSTNAME:-prometheus_writer}\n    restart: always\n    entrypoint: |\n      /bin/sh -c 'truncate -s 0 /etc/prometheus/prometheus.yml\n      cat << EOF >> /etc/prometheus/prometheus.yml\n      global:\n        scrape_interval: 1s\n      scrape_configs:\n        - job_name: \"prometheus\"\n          static_configs:\n            - targets: [\"localhost:${PROMETHEUS_WRITER_PORT}\"]\n      EOF\n      if [ -n \"${PROMETHEUS_REMOTE_WRITE_HANDLER}\" ]; then\n        echo \"remote_write:\" >> /etc/prometheus/prometheus.yml\n        echo \"  - url: \\\"${PROMETHEUS_REMOTE_WRITE_HANDLER}\\\"\" >> /etc/prometheus/prometheus.yml\n      fi\n      #cat \"/etc/prometheus/prometheus.yml\"\n      /bin/prometheus --config.file=\"/etc/prometheus/prometheus.yml\" --storage.tsdb.path=\"/prometheus\" --web.console.libraries=\"/usr/share/prometheus/console_libraries\" --web.console.templates=\"/usr/share/prometheus/consoles\" --web.listen-address=\"0.0.0.0:${PROMETHEUS_WRITER_PORT}\" &> /var/log/prometheus/prometheus.log'\n    expose:\n      - ${PROMETHEUS_WRITER_PORT}\n    healthcheck:\n      test: curl -f \"ttps://localhost:${PROMETHEUS_WRITER_PORT}/api/v1/status/runtimeinfo\" || exit 1\n      interval: 5s\n      timeout: 3s\n      retries: 30\n    volumes:\n      - type: ${PROMETHEUS_WRITER_LOGS_FS:-tmpfs}\n        source: ${PROMETHEUS_WRITER_LOGS:-}\n        target: /var/log/prometheus\n\n  prometheus_reader:\n    image: prom/prometheus:v2.50.1\n    hostname: ${PROMETHEUS_READER_HOSTNAME:-prometheus_reader}\n    restart: always\n    entrypoint: |\n      /bin/sh -c 'truncate -s 0 /etc/prometheus/prometheus.yml\n      if [ -n \"${PROMETHEUS_REMOTE_READ_HANDLER}\" ]; then\n        echo \"remote_read:\" >> /etc/prometheus/prometheus.yml\n        echo \"  - url: \\\"${PROMETHEUS_REMOTE_READ_HANDLER}\\\"\" >> /etc/prometheus/prometheus.yml\n      fi\n      #cat \"/etc/prometheus/prometheus.yml\"\n      /bin/prometheus --config.file=\"/etc/prometheus/prometheus.yml\" --storage.tsdb.path=\"/prometheus\" --web.console.libraries=\"/usr/share/prometheus/console_libraries\" --web.console.templates=\"/usr/share/prometheus/consoles\" --web.listen-address=\"0.0.0.0:${PROMETHEUS_READER_PORT}\" &> /var/log/prometheus/prometheus.log'\n    expose:\n      - ${PROMETHEUS_READER_PORT}\n    healthcheck:\n      test: curl -f \"ttps://localhost:${PROMETHEUS_READER_PORT}/api/v1/status/runtimeinfo\" || exit 1\n      interval: 5s\n      timeout: 3s\n      retries: 30\n    volumes:\n      - type: ${PROMETHEUS_READER_LOGS_FS:-tmpfs}\n        source: ${PROMETHEUS_READER_LOGS:-}\n        target: /var/log/prometheus\n"
+    },
+    {
+      "path": "tests/integration/compose/docker_compose_postgres.yml",
+      "sha": null,
+      "content_sha256": "870672d808bfeeeadba5c86429f2ef792a7bc2eb62432b68cb6631f5d6f9eb58",
+      "score": 234,
+      "content": "services:\n    postgres1:\n        image: postgres\n        command: [\"postgres\", \"-c\", \"wal_level=logical\", \"-c\", \"max_replication_slots=4\", \"-c\", \"logging_collector=on\", \"-c\", \"log_directory=/postgres/logs\", \"-c\", \"log_statement=all\", \"-c\", \"max_connections=200\", \"-c\", \"statement_timeout=180000\"] # statement_timeout: avoid test timeout because of postgres getting unavailable\n        restart: always\n        expose:\n            - ${POSTGRES_PORT:-5432}\n        healthcheck:\n            test: [\"CMD-SHELL\", \"pg_isready -U postgres\"]\n            interval: 10s\n            timeout: 5s\n            retries: 5\n        networks:\n            default:\n                aliases:\n                    - postgre-sql.local\n        environment:\n            POSTGRES_HOST_AUTH_METHOD: \"trust\"\n            POSTGRES_PASSWORD: [REDACTED]\n            PGDATA: /postgres/data\n        volumes:\n            - type: ${POSTGRES_LOGS_FS:-tmpfs}\n              source: ${POSTGRES_DIR:-}\n              target: /postgres/\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "tests/integration/compose/docker_compose_postgresql_java_client.yml",
+      "sha": null,
+      "content_sha256": "183e6f6afd8a2b5aea48797a0cf59b959975cfc1c83e446c5ac7affe25b3abf5",
+      "score": 234,
+      "content": "services:\n  java:\n    image: clickhouse/postgresql-java-client:${DOCKER_POSTGRESQL_JAVA_CLIENT_TAG:-latest}\n    # to keep container running\n    command: sleep infinity\n"
+    },
+    {
+      "path": "tests/integration/compose/docker_compose_redis.yml",
+      "sha": null,
+      "content_sha256": "a742b55da1b0f88a6d0e6d4bd79d17592cec892ca85c848c29f46dadefa3af61",
+      "score": 234,
+      "content": "services:\n    redis1:\n        image: redis\n        restart: always\n        ports:\n            - ${REDIS_EXTERNAL_PORT:-6379}:${REDIS_INTERNAL_PORT:-6379}\n        command: redis-server --requirepass \"clickhouse\" --databases 32\n"
+    },
+    {
+      "path": "tests/integration/compose/docker_compose_postgresql.yml",
+      "sha": null,
+      "content_sha256": "e118ad276b1352ccbdb55931e5535c6ada87d5257cafe4523619fdb0e469bf93",
+      "score": 234,
+      "content": "services:\n  psql:\n    image: postgres:12.2-alpine\n    restart: always\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U postgres\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n    ports:\n      - \"5433:5433\"\n    environment:\n      POSTGRES_HOST_AUTH_METHOD: \"trust\"\n"
+    },
+    {
+      "path": "tests/integration/compose/docker_compose_postgres_cluster.yml",
+      "sha": null,
+      "content_sha256": "b396d1923c5041e665e35830b141408d010323c89b7246ae4e257fac6317846a",
+      "score": 234,
+      "content": "services:\n    postgres2:\n        image: postgres\n        command: [\"postgres\", \"-c\", \"logging_collector=on\", \"-c\", \"log_directory=/postgres/logs\", \"-c\", \"log_filename=postgresql.log\", \"-c\", \"log_statement=all\"]\n        restart: always\n        environment:\n            POSTGRES_HOST_AUTH_METHOD: \"trust\"\n            POSTGRES_PASSWORD: [REDACTED]\n            PGDATA: /postgres/data\n        expose:\n            - ${POSTGRES_PORT:-5432}\n        volumes:\n            - type: ${POSTGRES_LOGS_FS:-tmpfs}\n              source: ${POSTGRES2_DIR:-}\n              target: /postgres/\n    postgres3:\n        image: postgres\n        command: [\"postgres\", \"-c\", \"logging_collector=on\", \"-c\", \"log_directory=/postgres/logs\", \"-c\", \"log_filename=postgresql.log\", \"-c\", \"log_statement=all\"]\n        restart: always\n        environment:\n            POSTGRES_HOST_AUTH_METHOD: \"trust\"\n            POSTGRES_PASSWORD: [REDACTED]\n            PGDATA: /postgres/data\n        expose:\n            - ${POSTGRES_PORT:-5432}\n        volumes:\n            - type: ${POSTGRES_LOGS_FS:-tmpfs}\n              source: ${POSTGRES3_DIR:-}\n              target: /postgres/\n    postgres4:\n        image: postgres\n        command: [\"postgres\", \"-c\", \"logging_collector=on\", \"-c\", \"log_directory=/postgres/logs\", \"-c\", \"log_filename=postgresql.log\", \"-c\", \"log_statement=all\"]\n        restart: always\n        environment:\n            POSTGRES_HOST_AUTH_METHOD: \"trust\"\n            POSTGRES_PASSWORD: [REDACTED]\n            PGDATA: /postgres/data\n        expose:\n            - ${POSTGRES_PORT:-5432}\n        volumes:\n            - type: ${POSTGRES_LOGS_FS:-tmpfs}\n              source: ${POSTGRES4_DIR:-}\n              target: /postgres/\n",
+      "redaction_applied": true,
+      "redaction_reasons": [
+        "secret_assignment"
+      ]
+    },
+    {
+      "path": "tests/queries/0_stateless/helpers/install_predefined_backup.sh",
+      "sha": null,
+      "content_sha256": "1611f2b9fc905581f87b5050602d6071f073e64bdab5522fb99c39609cd00e7e",
+      "score": 229,
+      "content": "#!/usr/bin/env bash\n\n# Copies a test predefined backup from \"/tests/queries/0_stateless/backups/\" folder to the \"backups\" disk,\n# returns the path to the backup relative to that disk.\n#\n# Usage:\n#     install_predefined_backup.sh <filename_in_backups_folder>\n\nHELPERS_DIR=$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\n\nsrc_backup_filename=\"$1\"\nsrc_backup_path=\"$HELPERS_DIR/../backups/${src_backup_filename}\"\n\nbackups_disk_root=$($CLICKHOUSE_CLIENT --query \"SELECT path FROM system.disks WHERE name='backups'\")\n\nif [ -z \"${backups_disk_root}\" ]; then\n    echo \"Disk 'backups' not found\"\n    exit 1\nfi\n\ndest_relative_path=${CLICKHOUSE_DATABASE}/${src_backup_filename}\ndest_path=${backups_disk_root}/${dest_relative_path}\n\nmkdir -p \"$(dirname \"${dest_path}\")\"\nln -s \"${src_backup_path}\" \"${dest_path}\"\n\necho \"${dest_relative_path}\"\n"
+    },
+    {
+      "path": "tests/queries/0_stateless/02416_rename_database_rbac.sh",
+      "sha": null,
+      "content_sha256": "1c247bdb884d84c0f7beb4237ef539cf21b575e3ed36dba5aae36e4298464403",
+      "score": 229,
+      "content": "#!/usr/bin/env bash\n# Tags: no-parallel\n\nCURDIR=$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\n# shellcheck source=../shell_config.sh\n. \"$CURDIR\"/../shell_config.sh\n\n${CLICKHOUSE_CLIENT} --multiline -q \"\"\"\nDROP DATABASE IF EXISTS database_02416;\nCREATE DATABASE database_02416;\n\nDROP USER IF EXISTS user_test_02416;\nCREATE USER user_test_02416 IDENTIFIED WITH plaintext_password BY 'user_test_02416';\n\nGRANT CREATE DATABASE ON *.* TO 'user_test_02416' WITH GRANT OPTION;\nGRANT DROP DATABASE ON *.* TO 'user_test_02416' WITH GRANT OPTION;\nREVOKE DROP DATABASE ON database_02416.* FROM 'user_test_02416';\nGRANT CREATE TABLE ON *.* TO 'user_test_02416' WITH GRANT OPTION;\nGRANT DROP TABLE ON *.* TO 'user_test_02416' WITH GRANT OPTION;\n\"\"\"\n${CLICKHOUSE_CLIENT} --multiline --user user_test_02416 --password user_test_02416 -q \"\"\"\nRENAME DATABASE user_test_02416 to aaaaaaaaa; -- { serverError 497 }\n\"\"\"\n"
+    },
+    {
+      "path": "tests/integration/test_storage_policies/test.py",
+      "sha": null,
+      "content_sha256": "cb3279411b113fba1e6c09d4e3e6d1a744f25444a49106e0093efb62b2fb54c3",
+      "score": 221,
+      "content": "import os\n\nimport pytest\n\nfrom helpers.cluster import ClickHouseCluster\nfrom helpers.test_tools import TSV\n\nSCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))\nCONFIG_DIR = os.path.join(SCRIPT_DIR, \"configs\")\n\ncluster = ClickHouseCluster(__file__)\nnode = cluster.add_instance(\"node\", main_configs=[\"configs/disks.xml\"], stay_alive=True)\n\n\n@pytest.fixture(scope=\"module\")\ndef started_cluster():\n    try:\n        cluster.start()\n        yield cluster\n    finally:\n        cluster.shutdown()\n\n\ndef test_storage_policy_configuration_change(started_cluster):\n    node.query(\n        \"CREATE TABLE a (x UInt64) ENGINE = MergeTree ORDER BY x SETTINGS storage_policy = 'test_policy'\"\n    )\n\n    node.stop_clickhouse()\n    node.copy_file_to_container(\n        os.path.join(CONFIG_DIR, \"disk2_only.xml\"),\n        \"/etc/clickhouse-server/config.d/disks.xml\",\n    )\n    node.start_clickhouse()\n\n    node.stop_clickhouse()\n    node.copy_file_to_container(\n        os.path.join(CONFIG_DIR, \"disks.xml\"),\n        \"/etc/clickhouse-server/config.d/disks.xml\",\n    )\n    node.start_clickhouse()\n"
+    },
+    {
+      "path": "tests/integration/test_storage_kafka/social_pb2.py",
+      "sha": null,
+      "content_sha256": "1bb2d099f8cd961e331f1e8a40a9c58b211bd738330a876235b5eb772f7c42fb",
+      "score": 221,
+      "content": "# -*- coding: utf-8 -*-\n# Generated by the protocol buffer compiler.  DO NOT EDIT!\n# source: clickhouse_path/format_schemas/social.proto\n\"\"\"Generated protocol buffer code.\"\"\"\nfrom google.protobuf.internal import builder as _builder\nfrom google.protobuf import descriptor as _descriptor\nfrom google.protobuf import descriptor_pool as _descriptor_pool\nfrom google.protobuf import symbol_database as _symbol_database\n\n# @@protoc_insertion_point(imports)\n\n_sym_db = _symbol_database.Default()\n\n\nDESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(\n    b'\\n+clickhouse_path/format_schemas/social.proto\"+\\n\\x04User\\x12\\x10\\n\\x08username\\x18\\x01 \\x01(\\t\\x12\\x11\\n\\ttimestamp\\x18\\x02 \\x01(\\x05\\x62\\x06proto3'\n)\n\n_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())\n_builder.BuildTopDescriptorsAndMessages(\n    DESCRIPTOR, \"clickhouse_path.format_schemas.social_pb2\", globals()\n)\nif _descriptor._USE_C_DESCRIPTORS == False:\n    DESCRIPTOR._options = None\n    _USER._serialized_start = 47\n    _USER._serialized_end = 90\n# @@protoc_insertion_point(module_scope)\n"
+    },
+    {
+      "path": "tests/queries/0_stateless/02686_postgres_protocol_decimal_256.sh",
+      "sha": null,
+      "content_sha256": "b585c3e06a706dd7898c43092e0918531e7f17fb4aaa1d720b9eb6ab585841d0",
+      "score": 221,
+      "content": "#!/usr/bin/env bash\n# Tags: no-parallel, no-fasttest\n# Tag no-fasttest: needs psql\n\nCUR_DIR=$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\n# shellcheck source=../shell_config.sh\n. \"$CUR_DIR\"/../shell_config.sh\n\necho \"\nDROP USER IF EXISTS postgresql_user;\nCREATE USER postgresql_user HOST IP '127.0.0.1' IDENTIFIED WITH no_password;\n\" | $CLICKHOUSE_CLIENT\n\npsql --host localhost --port ${CLICKHOUSE_PORT_POSTGRESQL} ${CLICKHOUSE_DATABASE} --user postgresql_user -c \"SELECT 1.23::Decimal256(70) AS test;\"\n"
+    },
+    {
+      "path": "tests/queries/0_stateless/01291_unsupported_conversion_from_decimal.sql",
+      "sha": null,
+      "content_sha256": "f8853c91c76a7d2d2d03f2cf3dae2c9d7be9fa647a85b7927b54596fd797f35b",
+      "score": 221,
+      "content": "SELECT toIntervalSecond(now64()); -- { serverError CANNOT_CONVERT_TYPE }\nSELECT CAST(now64() AS IntervalSecond); -- { serverError CANNOT_CONVERT_TYPE }\n\nSELECT toIntervalSecond(now64()); -- { serverError CANNOT_CONVERT_TYPE }\nSELECT CAST(now64() AS IntervalSecond); -- { serverError CANNOT_CONVERT_TYPE }\n"
+    },
+    {
+      "path": "tests/queries/0_stateless/03300_implicit_privileges_system_databases.sh",
+      "sha": null,
+      "content_sha256": "7b471bf52b38b8414085f198d30a527df457910922ba9bc2a96970396ffda45b",
+      "score": 221,
+      "content": "#!/usr/bin/env bash\n\nCURDIR=$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\n# shellcheck source=../shell_config.sh\n. \"$CURDIR\"/../shell_config.sh\n\nuser=\"user03300_$CLICKHOUSE_DATABASE\"\ndb=${CLICKHOUSE_DATABASE}\ndb2=${CLICKHOUSE_DATABASE}_2\n\n$CLICKHOUSE_CLIENT -m -q \"\nCREATE DATABASE IF NOT EXISTS $db2;\n\nDROP USER IF EXISTS $user;\nCREATE USER $user;\n\nGRANT ALL ON $db.* TO $user;\nGRANT SELECT ON system.databases TO $user;\n\"\n\n$CLICKHOUSE_CLIENT --user \"$user\" -m -q \"\nSELECT DISTINCT name FROM system.databases WHERE database LIKE '$db%' ORDER BY 1\n\"\n\n$CLICKHOUSE_CLIENT -m -q \"\nDROP USER $user;\n\"\n"
+    },
+    {
+      "path": "tests/queries/0_stateless/00101_materialized_views_and_insert_without_explicit_database.sql",
+      "sha": null,
+      "content_sha256": "001dd0336a2de34bd9901c87081cf5673dc255429e955ee5ba8b21d75f201a46",
+      "score": 221,
+      "content": "\nDROP TABLE IF EXISTS test_table;\nDROP TABLE IF EXISTS test_view;\nDROP TABLE IF EXISTS test_view_filtered;\n\nset allow_deprecated_syntax_for_merge_tree=1;\nCREATE TABLE test_table (EventDate Date, CounterID UInt32,  UserID UInt64,  EventTime DateTime('America/Los_Angeles'), UTCEventTime DateTime('UTC')) ENGINE = MergeTree(EventDate, CounterID, 8192);\nCREATE MATERIALIZED VIEW test_view (Rows UInt64,  MaxHitTime DateTime('America/Los_Angeles')) ENGINE = Memory AS SELECT count() AS Rows, max(UTCEventTime) AS MaxHitTime FROM test_table;\nCREATE MATERIALIZED VIEW test_view_filtered (EventDate Date, CounterID UInt32) ENGINE = Memory POPULATE AS SELECT CounterID, EventDate FROM test_table WHERE EventDate < '2013-01-01';\n\nINSERT INTO test_table (EventDate, UTCEventTime) VALUES ('2014-01-02', '2014-01-02 03:04:06');\n\nSELECT * FROM test_table;\nSELECT * FROM test_view;\nSELECT * FROM test_view_filtered;\n\nDROP TABLE test_table;\nDROP TABLE test_view;\nDROP TABLE test_view_filtered;\n\n-- Check only sophisticated constructors and desctructors:\n\nCREATE DATABASE IF NOT EXISTS {CLICKHOUSE_DATABASE_1:Identifier};\n\nUSE {CLICKHOUSE_DATABASE_1:Identifier};\n\nDROP TABLE IF EXISTS tmp;\nDROP TABLE IF EXISTS tmp_mv;\nDROP TABLE IF EXISTS tmp_mv2;\nDROP TABLE IF EXISTS tmp_mv3;\nDROP TABLE IF EXISTS tmp_mv4;\nDROP TABLE IF EXISTS `.inner.tmp_mv`;\nDROP TABLE IF EXISTS `.inner.tmp_mv2`;\nDROP TABLE IF EXISTS `.inner.tmp_mv3`;\nDROP TABLE IF EXISTS `.inner.tmp_mv4`;\n\nCREATE TABLE tmp (date Date, name String) ENGINE = Memory;\nCREATE MATERIALIZED VIEW tmp_mv ENGINE = AggregatingMergeTree(date, (date, name), 8192) AS SELECT date, name, countState() AS cc FROM tmp GROUP BY date, name;\nCREATE TABLE tmp_mv2 AS tmp_mv;\nCREATE TABLE tmp_mv3 AS tmp_mv ENGINE = Memory;\nCREATE MATERIALIZED VIEW tmp_mv4 ENGINE = AggregatingMergeTree(date, date, 8192) POPULATE AS SELECT DISTINCT * FROM tmp_mv;\n\nDROP TABLE tmp_mv;\nDROP TABLE tmp_mv2;\nDROP TABLE tmp_mv3;\nDROP TABLE tmp_mv4;\n\nEXISTS TABLE `.inner.tmp_mv`;\nEXISTS TABLE `.inner.tmp_mv2`;\nEXISTS TABLE `.inner.tmp_mv3`;\nEXISTS TABLE `.inner.tmp_mv4`;\n\nDROP TABLE tmp;\n\nDROP DATABASE {CLICKHOUSE_DATABASE:Identifier};\nDROP DATABASE {CLICKHOUSE_DATABASE_1:Identifier};\n"
+    },
+    {
+      "path": "tests/integration/test_modify_engine_on_restart/test_storage_policies.py",
+      "sha": null,
+      "content_sha256": "dbb589ba394b4f425072fdb69b912cbafd166ae19a3ad60b53b19da2c8f5216b",
+      "score": 221,
+      "content": "import pytest\n\nfrom helpers.cluster import ClickHouseCluster\nfrom test_modify_engine_on_restart.common import check_flags_deleted, set_convert_flags\n\ncluster = ClickHouseCluster(__file__)\nch1 = cluster.add_instance(\n    \"ch1\",\n    main_configs=[\n        \"configs/config.d/clusters.xml\",\n        \"configs/config.d/distributed_ddl.xml\",\n        \"configs/config.d/storage_policies.xml\",\n    ],\n    with_zookeeper=True,\n    with_minio=True,\n    macros={\"replica\": \"node1\"},\n    stay_alive=True,\n)\n\ndatabase_name = \"modify_engine_storage_policies\"\n\n\n@pytest.fixture(scope=\"module\")\ndef started_cluster():\n    try:\n        cluster.start()\n        yield cluster\n\n    finally:\n        cluster.shutdown()\n\n\ndef q(node, query):\n    return node.query(database=database_name, sql=query)\n\n\ndef create_tables():\n    # Implicit jbod (set default in config)\n    q(\n        ch1,\n        \"CREATE TABLE jbod_imp ( A Int64, D Date, S String ) ENGINE MergeTree() PARTITION BY toYYYYMM(D) ORDER BY A;\",\n    )\n\n    # Explicit jbod\n    q(\n        ch1,\n        \"\"\"\n        CREATE TABLE jbod_exp ( A Int64, D Date, S String ) ENGINE MergeTree() PARTITION BY toYYYYMM(D) ORDER BY A\n        SETTINGS storage_policy='jbod';\n        \"\"\",\n    )\n\n    # s3\n    q(\n        ch1,\n        \"\"\"\n        CREATE TABLE s3 ( A Int64, D Date, S String ) ENGINE MergeTree() PARTITION BY toYYYYMM(D) ORDER BY A\n        SETTINGS storage_policy='s3';\n        \"\"\",\n    )\n\n    # Default\n    q(\n        ch1,\n        \"\"\"\n        CREATE TABLE default ( A Int64, D Date, S String ) ENGINE MergeTree() PARTITION BY toYYYYMM(D) ORDER BY A\n        SETTINGS storage_policy='default';\n        \"\"\",\n    )\n\n\ndef check_tables(converted):\n    engine_prefix = \"\"\n    if converted:\n        engine_prefix = \"Replicated\"\n\n    assert (\n        q(\n            ch1,\n            f\"SELECT name, engine FROM system.tables WHERE database = '{database_name}'\",\n        ).strip()\n        == f\"default\\t{engine_prefix}MergeTree\\njbod_exp\\t{engine_prefix}MergeTree\\njbod_imp\\t{engine_prefix}MergeTree\\ns3\\t{engine_prefix}MergeTree\"\n    )\n\n\ndef test_modify_engine_on_restart(started_cluster):\n    ch1.query(\"CREATE DATABASE \" + database_name)\n\n    create_tables()\n\n    check_tables(False)\n\n    ch1.restart_clickhouse()\n\n    check_tables(False)\n\n    set_convert_flags(ch1, database_name, [\"default\", \"jbod_exp\", \"jbod_imp\", \"s3\"])\n\n    ch1.restart_clickhouse()\n\n    check_flags_deleted(ch1, database_name, [\"default\", \"jbod_exp\", \"jbod_imp\", \"s3\"])\n\n    check_tables(True)\n"
+    },
+    {
+      "path": "tests/queries/0_stateless/03009_storage_memory_circ_buffer_usage.sql",
+      "sha": null,
+      "content_sha256": "dd742ef28540c6b9bc5350a2be245db918753c9379632d902c6387304103b935",
+      "score": 221,
+      "content": "SET max_block_size = 65409; -- Default value\n\nDROP TABLE IF EXISTS memory;\nCREATE TABLE memory (i UInt32) ENGINE = Memory SETTINGS min_bytes_to_keep = 4096, max_bytes_to_keep = 16384;\n\nSELECT 'TESTING BYTES';\n/* 1. testing oldest block doesn't get deleted because of min-threshold */\nINSERT INTO memory SELECT * FROM numbers(0, 1600);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\n/* 2. adding block that doesn't get deleted */\nINSERT INTO memory SELECT * FROM numbers(1000, 100);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\n/* 3. testing oldest block gets deleted - 9216 bytes - 1100 */\nINSERT INTO memory SELECT * FROM numbers(9000, 1000);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\n/* 4.check large block over-writes all bytes / rows */\nINSERT INTO memory SELECT * FROM numbers(9000, 10000);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\nDROP TABLE IF EXISTS memory;\nCREATE TABLE memory (i UInt32) ENGINE = Memory SETTINGS min_rows_to_keep = 100, max_rows_to_keep = 1000;\n\nSELECT 'TESTING ROWS';\n/* 1. add normal number of rows */\nINSERT INTO memory SELECT * FROM numbers(0, 50);\nSELECT total_rows FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\n/* 2. table should have 1000 */\nINSERT INTO memory SELECT * FROM numbers(50, 950);\nSELECT total_rows FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\n/* 3. table should have 1020 - removed first 50 */\nINSERT INTO memory SELECT * FROM numbers(2000, 70);\nSELECT total_rows FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\n/* 4. check large block over-writes all rows */\nINSERT INTO memory SELECT * FROM numbers(3000, 1100);\nSELECT total_rows FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\nSELECT 'TESTING NO CIRCULAR-BUFFER';\nDROP TABLE IF EXISTS memory;\nCREATE TABLE memory (i UInt32) ENGINE = Memory;\n\nINSERT INTO memory SELECT * FROM numbers(0, 1600);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\nINSERT INTO memory SELECT * FROM numbers(1000, 100);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\nINSERT INTO memory SELECT * FROM numbers(9000, 1000);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\nINSERT INTO memory SELECT * FROM numbers(9000, 10000);\nSELECT total_bytes FROM system.tables WHERE name = 'memory' and database = currentDatabase();\n\nSELECT 'TESTING INVALID SETTINGS';\nCREATE TABLE faulty_memory (i UInt32) ENGINE = Memory SETTINGS min_rows_to_keep = 100;  -- { serverError SETTING_CONSTRAINT_VIOLATION }\nCREATE TABLE faulty_memory (i UInt32) ENGINE = Memory SETTINGS min_bytes_to_keep = 100; -- { serverError SETTING_CONSTRAINT_VIOLATION }\n\nDROP TABLE memory;"
+    },
+    {
+      "path": "tests/queries/0_stateless/01045_order_by_pk_special_storages.sh",
+      "sha": null,
+      "content_sha256": "d7abde0c49273df2df8a048af51d076433ee79654264c4bd430c058f9d18df23",
+      "score": 221,
+      "content": "#!/usr/bin/env bash\n\nCURDIR=$(cd \"$(dirname \"${BASH_SOURCE[0]}\")\" && pwd)\n# shellcheck source=../shell_config.sh\n. \"$CURDIR\"/../shell_config.sh\n\nset -e\n\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS s1\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS s2\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS m\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS buf\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS mv\"\n\n$CLICKHOUSE_CLIENT -q \"CREATE TABLE s1 (a UInt32, s String) ENGINE = MergeTree ORDER BY a PARTITION BY a % 3 SETTINGS min_bytes_for_wide_part = 0, min_rows_for_wide_part = 0\"\n$CLICKHOUSE_CLIENT -q \"CREATE TABLE s2 (a UInt32, s String) ENGINE = MergeTree ORDER BY a PARTITION BY a % 3 SETTINGS min_bytes_for_wide_part = 0, min_rows_for_wide_part = 0\"\n\n$CLICKHOUSE_CLIENT -q \"CREATE TABLE m (a UInt32, s String) engine = Merge('$CLICKHOUSE_DATABASE', 's[1,2]')\"\n$CLICKHOUSE_CLIENT --optimize_trivial_insert_select 1 -q \"INSERT INTO s1 select (number % 20) * 2 as n, toString(number * number) from numbers(100000)\"\n$CLICKHOUSE_CLIENT --optimize_trivial_insert_select 1 -q \"INSERT INTO s2 select (number % 20) * 2 + 1 as n, toString(number * number * number) from numbers(100000)\"\n\n$CLICKHOUSE_CLIENT -q \"SELECT '---StorageMerge---'\"\n$CLICKHOUSE_CLIENT -q \"SELECT a FROM m ORDER BY a LIMIT 5\"\n$CLICKHOUSE_CLIENT -q \"SELECT a, s FROM m ORDER BY a, s LIMIT 10\"\n\n# Not a single .sql test with max_rows_to_read because it doesn't work with Merge storage\nrows_read=$($CLICKHOUSE_CLIENT -q \"SELECT a FROM m ORDER BY a LIMIT 10 FORMAT JSON\" --max_threads=1 --max_block_size=20 --optimize_read_in_order=1  --allow_prefetched_read_pool_for_remote_filesystem=0  --allow_prefetched_read_pool_for_local_filesystem=0 | grep \"rows_read\" | sed 's/[^0-9]*//g')\n\n# Expected number of read rows with a bit margin\nif [[ $rows_read -lt 500 ]]\n    then echo \"OK\"\nelse\n    echo \"FAIL\"\nfi\n\n$CLICKHOUSE_CLIENT -q \"SELECT '---StorageBuffer---'\"\n$CLICKHOUSE_CLIENT -q \"CREATE TABLE buf (a UInt32, s String) engine = Buffer('$CLICKHOUSE_DATABASE', s2, 16, 10, 100, 10000, 1000000, 10000000, 100000000)\"\n$CLICKHOUSE_CLIENT -q \"SELECT a, s FROM buf ORDER BY a, s LIMIT 10\"\nrows_read=$($CLICKHOUSE_CLIENT -q \"SELECT a FROM buf ORDER BY a LIMIT 10 FORMAT JSON\" --max_threads=1 --max_block_size=20 --optimize_read_in_order=1  --allow_prefetched_read_pool_for_remote_filesystem=0  --allow_prefetched_read_pool_for_local_filesystem=0 | grep \"rows_read\" | sed 's/[^0-9]*//g')\n\n# Expected number of read rows with a bit margin\nif [[ $rows_read -lt 500 ]]\n    then echo \"OK\"\nelse\n    echo \"FAIL\"\nfi\n\n$CLICKHOUSE_CLIENT -q \"SELECT '---MaterializedView---'\"\n$CLICKHOUSE_CLIENT -q \"CREATE MATERIALIZED VIEW mv (a UInt32, s String) engine = MergeTree ORDER BY s SETTINGS min_bytes_for_wide_part = 0, min_rows_for_wide_part = 0 POPULATE AS SELECT a, s FROM s1 WHERE a % 7 = 0\"\n$CLICKHOUSE_CLIENT -q \"SELECT a, s FROM mv ORDER BY s LIMIT 10\"\nrows_read=$($CLICKHOUSE_CLIENT -q \"SELECT a, s FROM mv ORDER BY s LIMIT 10 FORMAT JSON\" --max_threads=1 --max_block_size=20 --optimize_read_in_order=1 --allow_prefetched_read_pool_for_remote_filesystem=0  --allow_prefetched_read_pool_for_local_filesystem=0 | grep \"rows_read\" | sed 's/[^0-9]*//g')\n\nif [[ $rows_read -lt 500 ]]\n    then echo \"OK\"\nelse\n    echo \"FAIL\"\nfi\n\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS s1\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS s2\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS m\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS buf\"\n$CLICKHOUSE_CLIENT -q \"DROP TABLE IF EXISTS mv\"\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 137,
+  "sensitive_files_skipped": [
+    {
+      "path": "docker/test/integration/mysql_php_client/client.key",
+      "sha": "6eddb3295db73623b747370a662e5fc59cf0ceda",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "docker/test/integration/runner/misc/rabbitmq/ca-cert.pem",
+      "sha": "4a7b88f793689879dc1f6b5f973ce1fc678bc6f0",
+      "size": 1976,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "docker/test/integration/runner/misc/rabbitmq/server-cert.pem",
+      "sha": "338de91aa0fb1b96c5325c9391e4ce996b924571",
+      "size": 2017,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "docker/test/integration/runner/misc/rabbitmq/server-key.pem",
+      "sha": "92e93e8fba5ccf6bbfc0aa465074c5be5e8b28ce",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "docker/test/integration/s3_proxy/server.key",
+      "sha": "28a0f4bfde74bb2da67831e5e12a95bc00ffc427",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/config/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/config/server.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/fake_cert.pem",
+      "sha": "aa846f4f49a201288fecdfbedf3c8f753c198040",
+      "size": 2941,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/ca-key.pem",
+      "sha": "793f7e45c1d3ef46db37179bcd7542b7c6283fe7",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/ca.pem",
+      "sha": "b0d39ca2028c16c2d031a349cda84605b38fc8ce",
+      "size": 1281,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/client-cert.pem",
+      "sha": "bfc0789719923e78a14b4e11415116647a7f26cb",
+      "size": 1139,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/client-key.pem",
+      "sha": "d8adb898d32be44ff3b216b742cff4ffa6f042f4",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/client-req.pem",
+      "sha": "bbf09afcdadcf9a50f3427a78debd9da8e8fbbf2",
+      "size": 980,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/server-cert.pem",
+      "sha": "1a705077626808d76d58b1cee920ad517b8fbd93",
+      "size": 1139,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/server-key.pem",
+      "sha": "0e9e8a312bddb8b21635cb7ab78578dd0232c5be",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/helpers/mysql_cert/server-req.pem",
+      "sha": "ede50528d47349116a7b0793d031dae3307d1ce4",
+      "size": 980,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/ca-cert.pem",
+      "sha": "c4f888311267464a6843cda0f457681d1e3efd48",
+      "size": 1976,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/ca-key.pem",
+      "sha": "66d548d0cf55d153ba32b85e47c02308227f6acc",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/client-cert.pem",
+      "sha": "2dd497409c3fe02e3cc150b6eed1914f92f28ef8",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/client-key.pem",
+      "sha": "09c04c1e81545fd65d1f1c62084b671abf3729aa",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/client-req.pem",
+      "sha": "507db7bae6cbad4eda9fa593c0d183af974f231d",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/generate_certs.sh",
+      "sha": "610a1281f8ba00e4632cf1cff7caf2be2916f9d4",
+      "size": 947,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/self-cert.pem",
+      "sha": "7b3832a3b6b45b22e10ddf6f76077203653ecd45",
+      "size": 1984,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_accept_invalid_certificate/certs/self-key.pem",
+      "sha": "10b299a8c0cf27c860b9dad4496bc543562e61b9",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_composable_protocols/configs/server.key",
+      "sha": "6eddb3295db73623b747370a662e5fc59cf0ceda",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_dictionaries_all_layouts_separate_sources/mongo_secure_config/key.pem",
+      "sha": "9444d19a3d2a515fc170425a6edb8565c03db1d1",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_dictionaries_all_layouts_separate_sources/mongo_secure_config/mongo_cert.pem",
+      "sha": "9444d19a3d2a515fc170425a6edb8565c03db1d1",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_dictionaries_ddl/configs/server.key",
+      "sha": "6eddb3295db73623b747370a662e5fc59cf0ceda",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_distributed_ddl/configs_secure/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_distributed_ddl/configs_secure/server.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_distributed_respect_user_timeouts/configs_secure/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_distributed_respect_user_timeouts/configs_secure/server.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_format_avro_confluent/secrets/password",
+      "sha": "a367925c806ae27dc426fad9954663bc017065de",
+      "size": 175,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_format_avro_confluent/secrets/schema_registry_jaas.conf",
+      "sha": "7d0e6e2bf35e771778b908e0a1d3decc6c1fe6a8",
+      "size": 141,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/ca-cert.pem",
+      "sha": "3f9b9661fcb380e3495fb0762f917952f028d8e5",
+      "size": 1976,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/ca-key.pem",
+      "sha": "68517fb0178b2b87188d8600d59b99b2086e55b0",
+      "size": 3268,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/client-cert.pem",
+      "sha": "bb120b19459a63fbda361aa3d4fc552a0765c598",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/client-key.pem",
+      "sha": "b15e6dc2cbbed83a67126f2f1541c5c23bf1e35d",
+      "size": 3268,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/client-req.pem",
+      "sha": "8892ed1f4d9f3b07db03e1d68020495c30ad3ba5",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/server-cert.pem",
+      "sha": "628b2cc758a348cb45950e20b2d501a7ea9b4982",
+      "size": 2017,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/server-key.pem",
+      "sha": "99b9f1805f6263d3eb81d087aa51493c935b4e79",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/server-req.pem",
+      "sha": "08b34a22c972e3bd5745cb08ac6a3d1d41c6047f",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/wrong-client-cert.pem",
+      "sha": "297b9d8382edc3c7e941723c4ed53158395b1e74",
+      "size": 1984,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_grpc_protocol_ssl/configs/wrong-client-key.pem",
+      "sha": "a0e8c04ec456b37d988a8d872c8579df471a48b4",
+      "size": 3268,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_https_replication/configs/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_https_replication/configs/server.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_keeper_internal_secure/configs/WithPassPhrase.key",
+      "sha": "ac20648bb8b1541b7f5f6009f80b14889077ed49",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_keeper_internal_secure/configs/WithoutPassPhrase.key",
+      "sha": "c4e956e317774c8170a7dc6aa6cd5053958310f9",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_keeper_internal_secure/configs/rootCA.pem",
+      "sha": "208259f8f85e646ed58d6a604e41b990c327bbdb",
+      "size": 1350,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_keeper_secure_client/configs/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_keeper_secure_client/configs/server.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_kerberos_auth/secrets/krb.conf",
+      "sha": "88431d685541b27792726581e3c38c05f901db8c",
+      "size": 511,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_mysql_protocol/configs/dhparam.pem",
+      "sha": "fb935b9c89810f0e8d3f9e20138e925adab8ee49",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_mysql_protocol/configs/server.key",
+      "sha": "6eddb3295db73623b747370a662e5fc59cf0ceda",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_postgresql_protocol/configs/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_postgresql_protocol/configs/server.key",
+      "sha": "b3dee82dcda484e2566ce273e5b6337c893e6ca7",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_profile_max_sessions_for_user/configs/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_profile_max_sessions_for_user/configs/server.key",
+      "sha": "b3dee82dcda484e2566ce273e5b6337c893e6ca7",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_certificate/configs/ECcert.key",
+      "sha": "b127f8a53fed0a0e7cba32794d0a2bc0bd290434",
+      "size": 306,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_certificate/configs/WithChain.key",
+      "sha": "eb55458b143f457711fcda0f8d31c20f7b696ae7",
+      "size": 1679,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_certificate/configs/WithPassPhrase.key",
+      "sha": "1e29a4c8fa121bdb934416a5862757c6251dbcdf",
+      "size": 1766,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_certificate/configs/first.key",
+      "sha": "a66bef9ad98cf8404ee4a2ddb9ea1c4a23f92197",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_certificate/configs/second.key",
+      "sha": "007aba24fb64779c8bb97eba79de6c72078fd8fc",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_client_certificate/configs_secure/first_client.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_client_certificate/configs_secure/second_client.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_reload_client_certificate/configs_secure/third_client.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_s3_table_function_with_https_proxy/minio_certs/private.key",
+      "sha": "28a0f4bfde74bb2da67831e5e12a95bc00ffc427",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_s3_with_https/minio_certs/private.key",
+      "sha": "28a0f4bfde74bb2da67831e5e12a95bc00ffc427",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_secure_socket/configs_secure/dhparam.pem",
+      "sha": "2e6cee0798d7a4dd247c0732c25e15c446568a04",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_secure_socket/configs_secure/server.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_server_reload/configs/dhparam.pem",
+      "sha": "fb935b9c89810f0e8d3f9e20138e925adab8ee49",
+      "size": 424,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_server_reload/configs/server.key",
+      "sha": "6eddb3295db73623b747370a662e5fc59cf0ceda",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/ca-cert.pem",
+      "sha": "d1e4a3a88d90edf9a3d900a28f124546c5b3ec11",
+      "size": 1976,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/ca-cert.srl",
+      "sha": "cf47b0dc79c1cc09c1cca0dbe0178964a3f47f42",
+      "size": 41,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/ca-key.pem",
+      "sha": "2dea2ccd837bcce698aab1b7d36aea5b1e300045",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client1-cert.pem",
+      "sha": "068855d96eaa1f2d009332ca17d2691b5aaf62a7",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client1-key.pem",
+      "sha": "8d9b887b033ebc9915352f1fd22e2885a358e8d4",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client1-req.pem",
+      "sha": "d5cd522bc8f561d43e5e339143e62cf25fa71329",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client2-cert.pem",
+      "sha": "9d317f07963ce1dc1b9f008e10df3dc274403ad6",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client2-key.pem",
+      "sha": "ed0d179712c2262d6649f4ba09a058cc722039b4",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client2-req.pem",
+      "sha": "f36eb94205b393696aab4dd9596ae31ad0e6fe55",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client3-cert.pem",
+      "sha": "376c85ab8f719ff0a3120440766fdf7d5fb02b71",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client3-key.pem",
+      "sha": "f88456215fed0bdb2ab0cb798a2c3567718cd4b1",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client3-req.pem",
+      "sha": "7c679b4b3672542cc4ffdaa365daa0bdf7ede07a",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client4-cert.pem",
+      "sha": "5eae58da627fb3af5bf307041e170e7fd66de5ee",
+      "size": 1915,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client4-ext.cnf",
+      "sha": "f8425c275a14675ca37b03c5a908c2e3ad391ea5",
+      "size": 40,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client4-key.pem",
+      "sha": "f1f17525a5193c0018c75fa75cf3394f7e2cd7d0",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client4-req.pem",
+      "sha": "224484f6611cb7d5b6e2905835d4a144914cdc0f",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client5-cert.pem",
+      "sha": "b17baa622628d9c0a9201f5d39499048a187dd27",
+      "size": 2013,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client5-ext.cnf",
+      "sha": "8cb20e70290a60f6d04820d327272c350245b073",
+      "size": 48,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client5-key.pem",
+      "sha": "aa65de6e26c81c1660f96bf99384ab694a6f408d",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client5-req.pem",
+      "sha": "6ad15243bac9aa8138f78f02816f4a90ea654b58",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client6-cert.pem",
+      "sha": "b83c380a3bcddde304f49eff4c0e7cacee759c09",
+      "size": 2013,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client6-ext.cnf",
+      "sha": "d421f4198b40650e916b877143cda4ab1ccf9b8e",
+      "size": 48,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client6-key.pem",
+      "sha": "e56fed5dddf0b7b83ab9ac92dc43155c78ce417b",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/client6-req.pem",
+      "sha": "1723c8c72731d55498763a6c3a789d7a61c28d0d",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/generate_certs.sh",
+      "sha": "e8d649fcff1b0e278464e7cad25e017270a3cf0e",
+      "size": 2858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/server-cert.pem",
+      "sha": "073c6485bd2d9aa723bccd27adda746e72193100",
+      "size": 1931,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/server-ext.cnf",
+      "sha": "49859873222da02d94aa6bf9e0448e8f56557427",
+      "size": 52,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/server-key.pem",
+      "sha": "067adf4e1fc3282a46088cfd5351c9991280736f",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/server-req.pem",
+      "sha": "bd8e2e1fb7f28975c37bed51134d3876cf805399",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/wrong-cert.pem",
+      "sha": "b56a10f8a92eb1fae313c56f9533bda26510c5e2",
+      "size": 1984,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_ssl_cert_authentication/certs/wrong-key.pem",
+      "sha": "3924eac91c267e87501a6302465498ba86e583b8",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_kerberized_kafka/secrets/broker_jaas.conf",
+      "sha": "8a55ec2faa00727e02195890ad86c505903fb03e",
+      "size": 432,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_kerberized_kafka/secrets/krb.conf",
+      "sha": "bda73a285cf8e8380c668eb1b2528214d7d54afc",
+      "size": 533,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_kerberized_kafka/secrets/zookeeper_jaas.conf",
+      "sha": "1b1f8103f425a33a516255fe4b716538e6458051",
+      "size": 450,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_mongodb/mongo_secure_config/key.pem",
+      "sha": "9444d19a3d2a515fc170425a6edb8565c03db1d1",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_mongodb_legacy/mongo_secure_config/key.pem",
+      "sha": "9444d19a3d2a515fc170425a6edb8565c03db1d1",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_mongodb_legacy/mongo_secure_config/mongo_cert.pem",
+      "sha": "9444d19a3d2a515fc170425a6edb8565c03db1d1",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_mysql/certs/ca.pem",
+      "sha": "b0d39ca2028c16c2d031a349cda84605b38fc8ce",
+      "size": 1281,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_mysql/certs/client-cert.pem",
+      "sha": "bfc0789719923e78a14b4e11415116647a7f26cb",
+      "size": 1139,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_storage_mysql/certs/client-key.pem",
+      "sha": "d8adb898d32be44ff3b216b742cff4ffa6f042f4",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_system_start_stop_listen/configs/server.key",
+      "sha": "6eddb3295db73623b747370a662e5fc59cf0ceda",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_table_function_mongodb/mongo_secure_config/key.pem",
+      "sha": "9444d19a3d2a515fc170425a6edb8565c03db1d1",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_table_function_mongodb_legacy/mongo_secure_config/key.pem",
+      "sha": "9444d19a3d2a515fc170425a6edb8565c03db1d1",
+      "size": 3188,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_throttling/minio_certs/private.key",
+      "sha": "28a0f4bfde74bb2da67831e5e12a95bc00ffc427",
+      "size": 1704,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/ca-cert.pem",
+      "sha": "fdb29f6285d02338795968d5fa69dbd4bff41e83",
+      "size": 1976,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/ca-cert.srl",
+      "sha": "a73f2eb97c7659b411dcde2881dbd3e95d9444e2",
+      "size": 41,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/ca-key.pem",
+      "sha": "c8d7e58d04420593351ff946d14fb21aa74b1363",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client1-cert.pem",
+      "sha": "9abb92200e29b7a1de58dfa29eb6f2cf1691a54c",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client1-key.pem",
+      "sha": "bca1ead9916798f6c995410df6b90fd6f150e1f5",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client1-req.pem",
+      "sha": "1479336b3ffa7704719bbe8ea1b5eabfa6f7a91a",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client2-cert.pem",
+      "sha": "dd251e0062e70cebbf23acac6f654d49969208b8",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client2-key.pem",
+      "sha": "19f3f639e75124d7f6d915138b59825b1652f6e7",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client2-req.pem",
+      "sha": "7c6fb44663bbc63e49f5cb355ed1557ad6e07aad",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client3-cert.pem",
+      "sha": "5a569e19a0a87eef15ba555c36cff05dc529ed73",
+      "size": 1858,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client3-key.pem",
+      "sha": "6604b72f17eee2ef99d9011cc6f54d115911a730",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/client3-req.pem",
+      "sha": "84eef937584361d4e282482573c0c8f94eec5720",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/dhparam4096.pem",
+      "sha": "102b8dcc72cd1912fc63cb2f9f4a456bc9c363e0",
+      "size": 769,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/generate_certs.sh",
+      "sha": "d6126d361f59c2ffae23a62fd4289db9f8b6ac0e",
+      "size": 1958,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/server-cert.pem",
+      "sha": "ccd0034b5063a99f44a435c77815881f8d5e77fc",
+      "size": 2017,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/server-ext.cnf",
+      "sha": "49859873222da02d94aa6bf9e0448e8f56557427",
+      "size": 52,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/server-key.pem",
+      "sha": "8569cdc302f8dc512ba542eca2640e0939ca2f28",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/server-req.pem",
+      "sha": "cd3dd397ed65faf2091f75efb200465707a210e3",
+      "size": 1675,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/wrong-cert.pem",
+      "sha": "1ce85f9e8111b228de6e644ab270fc96b0e8c320",
+      "size": 1984,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_tlsv1_3/certs/wrong-key.pem",
+      "sha": "0290e173304c36461fba7f18237f351376adcce1",
+      "size": 3272,
+      "reason": "sensitive_path"
+    },
+    {
+      "path": "tests/integration/test_zookeeper_config/configs_secure/client.key",
+      "sha": "f0fb61ac443fa16a2578947207525a2de38d2858",
+      "size": 1704,
+      "reason": "sensitive_path"
+    }
+  ],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [
+    {
+      "path": "tests/integration/test_storage_policies/__init__.py",
+      "error": "empty content"
+    }
+  ],
+  "fetch_error_count": 1,
+  "generated_at": "2026-11-22T13:28:39.398778+00:00"
+}

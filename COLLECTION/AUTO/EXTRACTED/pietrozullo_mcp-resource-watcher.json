@@ -1,0 +1,41 @@
+{
+  "canonical_source": "github:pietrozullo/mcp-resource-watcher",
+  "repo": "pietrozullo/mcp-resource-watcher",
+  "revision_sha": "9fcba8631f44c536f05f03ea4c761470ec0dc843",
+  "default_branch": "main",
+  "pushed_at": "2026-04-01T16:16:46Z",
+  "repo_updated_at": "2026-04-01T16:17:09Z",
+  "license": null,
+  "topics": [],
+  "tree_truncated": true,
+  "state": "extracted",
+  "extraction_policy": {
+    "max_files": 24,
+    "max_file_bytes": 50000,
+    "max_source_bytes": 300000,
+    "raw_fetch": true,
+    "incremental": true
+  },
+  "files": [
+    {
+      "path": "README.md",
+      "sha": null,
+      "content_sha256": "0e2aa6b24c8b938ab84e64b3c191068ba80ae3d64370cf367114e4fd239d43b5",
+      "score": 100,
+      "content": "# Resource Watcher — MCP resources, subscriptions, and roots\n\n<p>\n  <a href=\"https://github.com/mcp-use/mcp-use\">Built with <b>mcp-use</b></a>\n  &nbsp;\n  <a href=\"https://github.com/mcp-use/mcp-use\">\n    <img src=\"https://img.shields.io/github/stars/mcp-use/mcp-use?style=social\" alt=\"mcp-use stars\">\n  </a>\n</p>\n\nShowcase of MCP resources, resource templates, subscriptions, change notifications, and client root listing. Includes a config panel widget with live updates when resources change.\n\n![Resource Watcher Demo](./repo-assets/demo.gif)\n\n## Try it now\n\nConnect to the hosted instance:\n\n```\nhttps://fragrant-term-zmdks.run.mcp-use.com/mcp\n```\n\nOr open the [Inspector](https://inspector.manufact.com/inspector?autoConnect=https%3A%2F%2Ffragrant-term-zmdks.run.mcp-use.com%2Fmcp) to test it interactively.\n\n### Setup on ChatGPT\n\n1. Open **Settings** > **Apps and Connectors** > **Advanced Settings** and enable **Developer Mode**\n2. Go to **Connectors** > **Create**, name it \"Resource Watcher\", paste the URL above\n3. In a new chat, click **+** > **More** and select the Resource Watcher connector\n\n### Setup on Claude\n\n1. Open **Settings** > **Connectors** > **Add custom connector**\n2. Paste the URL above and save\n\n## Features\n\n- **MCP resources** — static and templated resources with URIs\n- **Subscriptions** — `resources/subscribe` with change notifications\n- **Resource templates** — dynamic resources with URI template params\n- **Client roots** — `server.listRoots()` to discover client workspace roots\n- **Config panel widget** — live config editing with resource sync\n\n## Tools\n\n| Tool | Description |\n|------|-------------|\n| `show-config` | Show the current configuration in a live panel |\n| `update-config` | Update a configuration key/value pair |\n| `toggle-feature` | Toggle a feature flag on or off |\n| `list-roots` | List all client workspace roots |\n\n## Available Widgets\n\n| Widget | Preview |\n|--------|---------|\n| `config-panel` | <img src=\"./repo-assets/widget-resource-dashboard.png\" width=\"500\" /> |\n\n## Local development\n\n```bash\ngit clone https://github.com/mcp-use/mcp-resource-watcher.git\ncd mcp-resource-watcher\nnpm install\nnpm run dev\n```\n\n## Deploy\n\n```bash\nnpx mcp-use deploy\n```\n\n## Built with\n\n- [mcp-use](https://github.com/mcp-use/mcp-use) — MCP server framework\n\n## License\n\nMIT\n"
+    },
+    {
+      "path": "index.ts",
+      "sha": null,
+      "content_sha256": "5788f84c6f0f1fa1d20565ec9d7e2c6a2d1b98114c184c0a1f34a647d7438845",
+      "score": 35,
+      "content": "import { MCPServer, text, widget, object } from \"mcp-use/server\";\nimport { z } from \"zod\";\n\nconst server = new MCPServer({\n  name: \"resource-watcher\",\n  title: \"Resource Watcher\",\n  version: \"1.0.0\",\n  description:\n    \"Resource subscriptions, dynamic lists, and roots — showcasing live resource updates\",\n  baseUrl: process.env.MCP_URL || \"http://localhost:3000\",\n});\n\nlet config: Record<string, string> = {\n  theme: \"light\",\n  language: \"en\",\n  notifications: \"on\",\n};\n\nlet featureFlags: Record<string, boolean> = {\n  darkMode: true,\n  betaFeatures: false,\n};\n\nserver.onRootsChanged(async (roots) => {\n  console.log(\"Client roots changed:\", JSON.stringify(roots));\n});\n\nserver.resource(\n  {\n    name: \"settings\",\n    uri: \"config://settings\",\n    title: \"Application Settings\",\n    description: \"Current application configuration\",\n    mimeType: \"application/json\",\n  },\n  async () => object(config)\n);\n\nserver.tool(\n  {\n    name: \"show-config\",\n    description:\n      \"Display the configuration panel showing current settings and feature flags\",\n    schema: z.object({}),\n    widget: {\n      name: \"config-panel\",\n      invoking: \"Loading config...\",\n      invoked: \"Config loaded\",\n    },\n  },\n  async () => {\n    return widget({\n      props: { config, featureFlags },\n      output: text(\"Config loaded\"),\n    });\n  }\n);\n\nserver.tool(\n  {\n    name: \"update-config\",\n    description: \"Update a configuration setting by key and value\",\n    schema: z.object({\n      key: z.string().describe(\"Configuration key to update\"),\n      value: z.string().describe(\"New value for the key\"),\n    }),\n    widget: {\n      name: \"config-panel\",\n      invoking: \"Updating config...\",\n      invoked: \"Config updated\",\n    },\n  },\n  async ({ key, value }, ctx) => {\n    config[key] = value;\n\n    server.notifyResourceUpdated(\"config://settings\");\n\n    await ctx.sendNotification(\"custom/config-changed\", { key, value });\n\n    return widget({\n      props: { config, featureFlags },\n      output: text(`Updated \"${key}\" to \"${value}\"`),\n    });\n  }\n);\n\nserver.tool(\n  {\n    name: \"toggle-feature\",\n    description: \"Toggle a feature flag on or off\",\n    schema: z.object({\n      feature: z.string().describe(\"Feature flag name\"),\n      enabled: z.boolean().describe(\"Whether to enable the feature\"),\n    }),\n  },\n  async ({ feature, enabled }) => {\n    featureFlags[feature] = enabled;\n\n    await server.sendToolsListChanged();\n\n    return text(\n      `Feature \"${feature}\" ${enabled ? \"enabled\" : \"disabled\"}`\n    );\n  }\n);\n\nserver.tool(\n  {\n    name: \"list-roots\",\n    description: \"List the client workspace roots (if supported by the client)\",\n    schema: z.object({}),\n  },\n  async (_params, ctx) => {\n    try {\n      const roots = await server.listRoots(ctx.session?.sessionId) ?? [];\n      return text(\n        `Client roots (${roots.length}):\\n${roots.map((r: any, i: number) => `  ${i + 1}. ${r.uri ?? r.name ?? JSON.stringify(r)}`).join(\"\\n\")}`\n      );\n    } catch (err: any) {\n      return text(\n        `Could not list roots: ${err.message ?? \"client does not support roots/list\"}`\n      );\n    }\n  }\n);\n\nserver.listen().then(() => console.log(\"Resource Watcher running\"));\n"
+    }
+  ],
+  "sensitive_files_skipped_count": 0,
+  "sensitive_files_skipped": [],
+  "sensitive_files_skipped_truncated": 0,
+  "fetch_errors": [],
+  "fetch_error_count": 0,
+  "generated_at": "2026-11-22T13:28:39.561649+00:00"
+}
